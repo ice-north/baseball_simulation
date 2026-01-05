@@ -777,6 +777,7 @@
       const [inning, setInning] = useState(1);
       const [score, setScore] = useState({ home: 0, away: 0 });
       const [gameOver, setGameOver] = useState(false);  // 試合終了フラグ
+      const [gameStarted, setGameStarted] = useState(false);  // 試合開始フラグ
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -853,7 +854,27 @@
           )
         }));
       };
-      
+
+      // ============================================================
+      // 打順変更関数
+      // ============================================================
+      const moveBattingOrder = (teamType, currentOrder, direction) => {
+        const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
+        setTeam(prev => {
+          const players = [...prev.players];
+          const currentPlayer = players.find(p => p.battingOrder === currentOrder);
+          const targetOrder = direction === 'up' ? currentOrder - 1 : currentOrder + 1;
+          const targetPlayer = players.find(p => p.battingOrder === targetOrder);
+
+          if (currentPlayer && targetPlayer) {
+            currentPlayer.battingOrder = targetOrder;
+            targetPlayer.battingOrder = currentOrder;
+          }
+
+          return { ...prev, players };
+        });
+      };
+
       // ============================================================
       // 現在の打者・投手・捕手管理（対戦モード対応）
       // ============================================================
@@ -2725,141 +2746,6 @@ if (newOuts === 3) {
         </div>
       );
 
-      // 試合結果画面
-      if (gameOver) {
-        const awayPitcher = awayTeam.players.find(p => p.position === 'pitcher');
-        const homePitcher = homeTeam.players.find(p => p.position === 'pitcher');
-        const innings = Math.floor(pitcherStats.outs / 3) + (pitcherStats.outs % 3) / 10;
-        const era = innings > 0 ? ((pitcherStats.runsAllowed * 9) / innings).toFixed(2) : '0.00';
-
-        return (
-          <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800 p-4">
-            <div className="max-w-6xl mx-auto">
-              {/* 試合結果ヘッダー */}
-              <div className="bg-gray-900 rounded-lg p-6 mb-4 text-white text-center">
-                <h1 className="text-3xl font-bold mb-4">🏆 試合終了</h1>
-                <div className="flex justify-center items-center gap-8 text-2xl font-bold">
-                  <div className="text-red-400">
-                    <div>{awayTeam.name}</div>
-                    <div className="text-5xl mt-2">{score.away}</div>
-                  </div>
-                  <div className="text-4xl text-gray-500">-</div>
-                  <div className="text-blue-400">
-                    <div>{homeTeam.name}</div>
-                    <div className="text-5xl mt-2">{score.home}</div>
-                  </div>
-                </div>
-                <div className="mt-4 text-xl">
-                  {score.away > score.home ? `${awayTeam.name} の勝利！` : score.home > score.away ? `${homeTeam.name} の勝利！` : '引き分け'}
-                </div>
-              </div>
-
-              {/* 打撃成績 */}
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="bg-gray-900 rounded-lg p-4 text-white">
-                  <h2 className="text-xl font-bold mb-3 text-red-400">✈️ {awayTeam.name} 打撃成績</h2>
-                  <div className="space-y-2 text-sm">
-                    {awayTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).map(player => {
-                      const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
-                      const avg = stats.atBats > 0 ? (stats.hits / stats.atBats).toFixed(3) : '.000';
-                      return (
-                        <div key={player.id} className="flex justify-between border-b border-gray-700 pb-1">
-                          <span className="font-semibold">{player.name}</span>
-                          <span className="text-gray-400">
-                            {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}本塁打 {stats.rbis || 0}打点 {stats.strikeouts}三振 {avg}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="bg-gray-900 rounded-lg p-4 text-white">
-                  <h2 className="text-xl font-bold mb-3 text-blue-400">🏠 {homeTeam.name} 打撃成績</h2>
-                  <div className="space-y-2 text-sm">
-                    {homeTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).map(player => {
-                      const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
-                      const avg = stats.atBats > 0 ? (stats.hits / stats.atBats).toFixed(3) : '.000';
-                      return (
-                        <div key={player.id} className="flex justify-between border-b border-gray-700 pb-1">
-                          <span className="font-semibold">{player.name}</span>
-                          <span className="text-gray-400">
-                            {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}本塁打 {stats.rbis || 0}打点 {stats.strikeouts}三振 {avg}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* 投手成績 */}
-              <div className="bg-gray-900 rounded-lg p-4 text-white mb-4">
-                <h2 className="text-xl font-bold mb-3">⚡ 投手成績</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-sm">
-                    <div className="font-bold text-red-400 mb-2">{awayPitcher?.name || '投手'} ({awayTeam.name})</div>
-                    <div className="space-y-1 text-gray-400">
-                      <div>投球回: {innings}回</div>
-                      <div>奪三振: {pitcherStats.strikeouts}</div>
-                      <div>四球: {pitcherStats.walks}</div>
-                      <div>失点: {pitcherStats.runsAllowed}</div>
-                      <div>防御率: {era}</div>
-                    </div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="font-bold text-blue-400 mb-2">{homePitcher?.name || '投手'} ({homeTeam.name})</div>
-                    <div className="space-y-1 text-gray-400">
-                      <div>投球回: {innings}回</div>
-                      <div>奪三振: {pitcherStats.strikeouts}</div>
-                      <div>四球: {pitcherStats.walks}</div>
-                      <div>失点: {pitcherStats.runsAllowed}</div>
-                      <div>防御率: {era}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 戻るボタン */}
-              <div className="text-center">
-                <button
-                  onClick={() => {
-                    setGameOver(false);
-                    setInning(1);
-                    setIsTopInning(true);
-                    setOuts(0);
-                    setBases({ first: false, second: false, third: false });
-                    setScore({ away: 0, home: 0 });
-                    setCount({ balls: 0, strikes: 0 });
-                    setBatterStats({ plateAppearances: 0, atBats: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, totalBases: 0, stolenBases: 0, caughtStealing: 0 });
-                    setPitcherStats({ pitches: 0, outs: 0, strikeouts: 0, walks: 0, runsAllowed: 0, errors: 0, wildPitches: 0, doublePlay: 0 });
-
-                    // 各選手のgameStatsをリセット
-                    setAwayTeam(prev => ({
-                      ...prev,
-                      players: prev.players.map(p => ({
-                        ...p,
-                        gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
-                      }))
-                    }));
-                    setHomeTeam(prev => ({
-                      ...prev,
-                      players: prev.players.map(p => ({
-                        ...p,
-                        gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
-                      }))
-                    }));
-                  }}
-                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition"
-                >
-                  新しい試合を開始
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800 p-2">
           {/* 3カラムレイアウト */}
@@ -2896,12 +2782,30 @@ if (newOuts === 3) {
                     return (
                       <div
                         key={player.id}
-                        onClick={() => { setEditingTeam('away'); setSelectedPlayerId(player.id); setEditingPlayer(player); }}
-                        className={`p-2 rounded cursor-pointer transition ${
-                          isCurrentBatter ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'
+                        className={`p-2 rounded transition ${
+                          isCurrentBatter ? 'bg-yellow-500 text-black' : gameStarted ? 'hover:bg-gray-800 cursor-pointer' : 'bg-gray-800'
                         }`}
+                        onClick={gameStarted ? () => { setEditingTeam('away'); setSelectedPlayerId(player.id); setEditingPlayer(player); } : undefined}
                       >
                         <div className="flex items-center gap-1.5">
+                          {!gameStarted && (
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); moveBattingOrder('away', player.battingOrder, 'up'); }}
+                                disabled={player.battingOrder === 1}
+                                className="text-xs px-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); moveBattingOrder('away', player.battingOrder, 'down'); }}
+                                disabled={player.battingOrder === 9}
+                                className="text-xs px-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded"
+                              >
+                                ▼
+                              </button>
+                            </div>
+                          )}
                           <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           <span className="font-bold">{player.name}</span>
@@ -2909,7 +2813,7 @@ if (newOuts === 3) {
                           <span className="flex-1"></span>
                           {isCurrentBatter && <span>⚾</span>}
                         </div>
-                        <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>
+                        <div className={`flex gap-2 text-xs ${!gameStarted ? 'ml-12' : 'ml-6'} mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>
                           <span>M{player.batting.meet}</span>
                           <span>P{player.batting.power}</span>
                           <span>E{player.batting.eye}</span>
@@ -2969,8 +2873,40 @@ if (newOuts === 3) {
             
             {/* ===== 中央カラム: メイン試合画面 ===== */}
             <div className="col-span-6 space-y-2">
-              
+
+              {/* 試合開始前の画面 */}
+              {!gameStarted && (
+                <div className="bg-gray-900 rounded-lg p-8 text-white text-center">
+                  <h2 className="text-3xl font-bold mb-4">⚾ 野球シミュレーター</h2>
+                  <p className="text-gray-400 mb-6">左右のチームの打順を調整してください</p>
+                  <button
+                    onClick={() => {
+                      setGameStarted(true);
+                      // 各選手のgameStatsを初期化
+                      setAwayTeam(prev => ({
+                        ...prev,
+                        players: prev.players.map(p => ({
+                          ...p,
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+                        }))
+                      }));
+                      setHomeTeam(prev => ({
+                        ...prev,
+                        players: prev.players.map(p => ({
+                          ...p,
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+                        }))
+                      }));
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-12 rounded-lg text-xl transition shadow-lg"
+                  >
+                    ⚾ 試合開始
+                  </button>
+                </div>
+              )}
+
               {/* 電光掲示板風スコアボード */}
+              {gameStarted && (
               <div className="bg-black rounded-lg p-1 font-mono border-4 border-gray-800 shadow-2xl">
                 {/* 上段: イニングスコア（電光掲示板風） */}
                 <div className="bg-black rounded-t overflow-hidden p-2">
@@ -3127,8 +3063,10 @@ if (newOuts === 3) {
                   </div>
                 </div>
               </div>
-              
+              )}
+
               {/* 対戦カード & 操作ボタン */}
+              {gameStarted && (
               <div className="bg-white rounded-lg p-3 shadow-lg">
                 <div className="flex items-center justify-between mb-3">
                   {/* 投手情報 */}
@@ -3255,8 +3193,80 @@ if (newOuts === 3) {
                   )}
                 </div>
               </div>
+              )}
+
+              {/* 試合結果（下段に配置） */}
+              {gameOver && (
+                <div className="bg-gray-900 rounded-lg p-4 text-white">
+                  <h3 className="text-2xl font-bold mb-3 text-center text-yellow-400">🏆 試合終了</h3>
+                  <div className="flex justify-center items-center gap-8 text-xl font-bold mb-4">
+                    <div className="text-red-400">
+                      <div>{awayTeam.name}</div>
+                      <div className="text-4xl mt-1">{score.away}</div>
+                    </div>
+                    <div className="text-3xl text-gray-500">-</div>
+                    <div className="text-blue-400">
+                      <div>{homeTeam.name}</div>
+                      <div className="text-4xl mt-1">{score.home}</div>
+                    </div>
+                  </div>
+                  <div className="text-center text-lg mb-3">
+                    {score.away > score.home ? `${awayTeam.name} の勝利！` : score.home > score.away ? `${homeTeam.name} の勝利！` : '引き分け'}
+                  </div>
+
+                  {/* 打撃成績サマリー */}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <h4 className="font-bold text-red-400 mb-2">✈️ {awayTeam.name} 打撃成績</h4>
+                      <div className="space-y-1">
+                        {awayTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).slice(0, 3).map(player => {
+                          const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
+                          return (
+                            <div key={player.id} className="text-xs text-gray-400">
+                              {player.name}: {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}HR {stats.rbis || 0}打点
+                            </div>
+                          );
+                        })}
+                        <div className="text-xs text-gray-500 mt-1">他{awayTeam.players.length - 3}名...</div>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-blue-400 mb-2">🏠 {homeTeam.name} 打撃成績</h4>
+                      <div className="space-y-1">
+                        {homeTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).slice(0, 3).map(player => {
+                          const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
+                          return (
+                            <div key={player.id} className="text-xs text-gray-400">
+                              {player.name}: {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}HR {stats.rbis || 0}打点
+                            </div>
+                          );
+                        })}
+                        <div className="text-xs text-gray-500 mt-1">他{homeTeam.players.length - 3}名...</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-center mt-4">
+                    <button
+                      onClick={() => {
+                        setGameOver(false);
+                        setGameStarted(false);
+                        setInning(1);
+                        setIsTopInning(true);
+                        setOuts(0);
+                        setBases({ first: false, second: false, third: false });
+                        setScore({ away: 0, home: 0 });
+                        setCount({ balls: 0, strikes: 0 });
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                    >
+                      新しい試合
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            
+
             {/* ===== 右カラム: ホームチーム ===== */}
             <div className="col-span-3 bg-gray-900 rounded-lg p-2 text-white">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
@@ -3288,12 +3298,30 @@ if (newOuts === 3) {
                     return (
                       <div
                         key={player.id}
-                        onClick={() => { setEditingTeam('home'); setSelectedPlayerId(player.id); setEditingPlayer(player); }}
-                        className={`p-2 rounded cursor-pointer transition ${
-                          isCurrentBatter ? 'bg-yellow-500 text-black' : 'hover:bg-gray-800'
+                        className={`p-2 rounded transition ${
+                          isCurrentBatter ? 'bg-yellow-500 text-black' : gameStarted ? 'hover:bg-gray-800 cursor-pointer' : 'bg-gray-800'
                         }`}
+                        onClick={gameStarted ? () => { setEditingTeam('home'); setSelectedPlayerId(player.id); setEditingPlayer(player); } : undefined}
                       >
                         <div className="flex items-center gap-1.5">
+                          {!gameStarted && (
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); moveBattingOrder('home', player.battingOrder, 'up'); }}
+                                disabled={player.battingOrder === 1}
+                                className="text-xs px-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); moveBattingOrder('home', player.battingOrder, 'down'); }}
+                                disabled={player.battingOrder === 9}
+                                className="text-xs px-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded"
+                              >
+                                ▼
+                              </button>
+                            </div>
+                          )}
                           <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           <span className="font-bold">{player.name}</span>
@@ -3301,7 +3329,7 @@ if (newOuts === 3) {
                           <span className="flex-1"></span>
                           {isCurrentBatter && <span>⚾</span>}
                         </div>
-                        <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>
+                        <div className={`flex gap-2 text-xs ${!gameStarted ? 'ml-12' : 'ml-6'} mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>
                           <span>M{player.batting.meet}</span>
                           <span>P{player.batting.power}</span>
                           <span>E{player.batting.eye}</span>
