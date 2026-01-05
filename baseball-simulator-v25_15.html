@@ -2307,7 +2307,7 @@ if (newOuts === 3) {
 
       const resetGame = () => {
         setCount({ balls: 0, strikes: 0 });
-        setBases([false, false, false]);
+        setBases({ first: false, second: false, third: false });
         setOuts(0);
         setInning(1);
         setScore({ home: 0, away: 0 });
@@ -3251,14 +3251,8 @@ if (newOuts === 3) {
                   <div className="text-center mt-4">
                     <button
                       onClick={() => {
-                        setGameOver(false);
+                        resetGame();
                         setGameStarted(false);
-                        setInning(1);
-                        setIsTopInning(true);
-                        setOuts(0);
-                        setBases({ first: false, second: false, third: false });
-                        setScore({ away: 0, home: 0 });
-                        setCount({ balls: 0, strikes: 0 });
                       }}
                       className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
                     >
