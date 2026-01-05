@@ -64,28 +64,28 @@
         
         // 【2】タイミング・ウィンドウ (ms)
         // 球速に反比例して「芯」で捉えられる許容時間を計算
-        // 160km/h → 約45ms, 140km/h → 約51ms, 120km/h → 約60ms
+        // 160km/h → 約36ms, 140km/h → 約30ms, 120km/h → 約48ms
         const pitchVelocity = pitch.velocity || pitcher.velocity;
-        let timingWindow = (1000 / (pitchVelocity / 3.6)) * 0.20;  // 0.16→0.20（さらに広げる）
+        let timingWindow = (1000 / (pitchVelocity / 3.6)) * 0.16;  // 0.20→0.16（狭める）
         
         // 読みが当たれば窓が広がる（準備ができている）
         if (isGuessRight) {
-          timingWindow *= 1.2;
+          timingWindow *= 1.4;  // 1.2→1.4（ボーナス強化）
         }
         
         // トンネリング効果で窓が狭まる（錯覚で準備が遅れる）
-        timingWindow *= (1 - tunnelingEffect * 0.2);  // 効果を20%に軽減
+        timingWindow *= (1 - tunnelingEffect * 0.4);  // 0.2→0.4（効果強化）
         
         // 変化球はさらに窓を狭める（軌道予測が難しい）
         if (pitch.type !== 'straight' && pitch.level) {
-          const breakingBallPenalty = (pitch.level / 100) * 0.08;  // 0.10â†’0.08ï¼ˆè»½æ¸›ï¼‰
+          const breakingBallPenalty = (pitch.level / 100) * 0.15;  // 0.08→0.15（強化）
           timingWindow *= (1 - breakingBallPenalty);
         }
         
         // 【3】スイングの誤差発生 (ミリ秒単位)
         // 打者のmeet値が高いほど、誤差のバラツキが抑えられる
-        // Meet 0 → ±8ms, Meet 100 → ±2ms（さらに縮小）
-        const maxError = 8 - (batter.meet * 0.06);  // 10→8, 0.07→0.06
+        // Meet 0 → ±12ms, Meet 100 → ±5ms
+        const maxError = 12 - (batter.meet * 0.07);  // 8→12, 0.06→0.07（誤差拡大）
         
         // 左右相性でミート精度調整
         const meetAdjust = (handEffect.meetBonus || handEffect.meetPenalty || 0) * 0.02;
@@ -97,9 +97,9 @@
         // タイミング誤差がウィンドウ内なら高品質コンタクト
         let meetQuality = Math.max(0, 1 - Math.abs(timingError) / timingWindow);
         
-        // 【5】空振り判定 - ほぼコンタクトできるように
-        // meetQuality が 0.005 以下の時のみ空振り（さらに緩和）
-        const isContact = meetQuality > 0.005;  // 0.01→0.005
+        // 【5】空振り判定
+        // meetQuality が 0.01 以下の時のみ空振り
+        const isContact = meetQuality > 0.01;  // 0.005→0.01（厳格化）
         
         // 【6】打球初速の計算 (物理衝突モデル - 修正版)
         // MLB平均Exit Velocity: 約140km/h (88mph)
@@ -2741,13 +2741,13 @@ if (newOuts === 3) {
                           <span className="font-bold">{player.name}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
-                          {isCurrentBatter && <span>âš¾</span>}
+                          {isCurrentBatter && <span>⚾</span>}
                         </div>
                         <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>
                           <span>M{player.batting.meet}</span>
                           <span>P{player.batting.power}</span>
                           <span>E{player.batting.eye}</span>
-                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : 'text-blue-400'}>âš¡{player.pitching.velocity}km</span>}
+                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
                         </div>
                       </div>
                     );
