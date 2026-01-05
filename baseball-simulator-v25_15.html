@@ -778,6 +778,8 @@
       const [score, setScore] = useState({ home: 0, away: 0 });
       const [gameOver, setGameOver] = useState(false);  // 試合終了フラグ
       const [gameStarted, setGameStarted] = useState(false);  // 試合開始フラグ
+      const [selectedBatterAway, setSelectedBatterAway] = useState(null);  // 打順変更用（アウェイ）
+      const [selectedBatterHome, setSelectedBatterHome] = useState(null);  // 打順変更用（ホーム）
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -795,7 +797,7 @@
       const [teamErrors, setTeamErrors] = useState({ home: 0, away: 0 });
       const [teamRBIs, setTeamRBIs] = useState({ home: 0, away: 0 });
       const [count, setCount] = useState({ balls: 0, strikes: 0 });
-      const [bases, setBases] = useState([false, false, false]);
+      const [bases, setBases] = useState({ first: false, second: false, third: false });
       const [outs, setOuts] = useState(0);
       const [remainingPitches, setRemainingPitches] = useState(0);  // 残り投球数（自動投球用）
       
@@ -856,23 +858,35 @@
       };
 
       // ============================================================
-      // 打順変更関数
+      // 打順変更関数（クリックベース）
       // ============================================================
-      const moveBattingOrder = (teamType, currentOrder, direction) => {
+      const handleBatterClick = (teamType, battingOrder) => {
         const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
-        setTeam(prev => {
-          const players = [...prev.players];
-          const currentPlayer = players.find(p => p.battingOrder === currentOrder);
-          const targetOrder = direction === 'up' ? currentOrder - 1 : currentOrder + 1;
-          const targetPlayer = players.find(p => p.battingOrder === targetOrder);
+        const selectedBatter = teamType === 'home' ? selectedBatterHome : selectedBatterAway;
+        const setSelectedBatter = teamType === 'home' ? setSelectedBatterHome : setSelectedBatterAway;
 
-          if (currentPlayer && targetPlayer) {
-            currentPlayer.battingOrder = targetOrder;
-            targetPlayer.battingOrder = currentOrder;
-          }
+        if (selectedBatter === null) {
+          // 1人目を選択
+          setSelectedBatter(battingOrder);
+        } else if (selectedBatter === battingOrder) {
+          // 同じ選手をクリック -> 選択解除
+          setSelectedBatter(null);
+        } else {
+          // 2人目をクリック -> 入れ替え
+          setTeam(prev => {
+            const players = [...prev.players];
+            const player1 = players.find(p => p.battingOrder === selectedBatter);
+            const player2 = players.find(p => p.battingOrder === battingOrder);
 
-          return { ...prev, players };
-        });
+            if (player1 && player2) {
+              player1.battingOrder = battingOrder;
+              player2.battingOrder = selectedBatter;
+            }
+
+            return { ...prev, players };
+          });
+          setSelectedBatter(null);
+        }
       };
 
       // ============================================================
@@ -2779,45 +2793,40 @@ if (newOuts === 3) {
                     const throwHand = player.physical.throws === 'right' ? '右' : '左';
                     const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
 
+                    const isSelected = !gameStarted && selectedBatterAway === player.battingOrder;
+
                     return (
                       <div
                         key={player.id}
-                        className={`p-2 rounded transition ${
-                          isCurrentBatter ? 'bg-yellow-500 text-black' : gameStarted ? 'hover:bg-gray-800 cursor-pointer' : 'bg-gray-800'
+                        className={`p-2 rounded transition cursor-pointer ${
+                          isCurrentBatter ? 'bg-yellow-500 text-black' :
+                          isSelected ? 'bg-blue-600 text-white' :
+                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700'
                         }`}
-                        onClick={gameStarted ? () => { setEditingTeam('away'); setSelectedPlayerId(player.id); setEditingPlayer(player); } : undefined}
+                        onClick={() => {
+                          if (gameStarted) {
+                            setEditingTeam('away');
+                            setSelectedPlayerId(player.id);
+                            setEditingPlayer(player);
+                          } else {
+                            handleBatterClick('away', player.battingOrder);
+                          }
+                        }}
                       >
                         <div className="flex items-center gap-1.5">
-                          {!gameStarted && (
-                            <div className="flex flex-col gap-0.5">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); moveBattingOrder('away', player.battingOrder, 'up'); }}
-                                disabled={player.battingOrder === 1}
-                                className="text-xs px-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded"
-                              >
-                                ▲
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); moveBattingOrder('away', player.battingOrder, 'down'); }}
-                                disabled={player.battingOrder === 9}
-                                className="text-xs px-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded"
-                              >
-                                ▼
-                              </button>
-                            </div>
-                          )}
-                          <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
+                          <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           <span className="font-bold">{player.name}</span>
-                          <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
                           {isCurrentBatter && <span>⚾</span>}
+                          {isSelected && <span>👆</span>}
                         </div>
-                        <div className={`flex gap-2 text-xs ${!gameStarted ? 'ml-12' : 'ml-6'} mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>
+                        <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
                           <span>M{player.batting.meet}</span>
                           <span>P{player.batting.power}</span>
                           <span>E{player.batting.eye}</span>
-                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
+                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
                         </div>
                       </div>
                     );
@@ -2879,9 +2888,12 @@ if (newOuts === 3) {
                 <div className="bg-gray-900 rounded-lg p-8 text-white text-center">
                   <h2 className="text-3xl font-bold mb-4">⚾ 野球シミュレーター</h2>
                   <p className="text-gray-400 mb-6">左右のチームの打順を調整してください</p>
+                  <p className="text-sm text-blue-400 mb-6">💡 選手をクリックして青色にし、もう1人をクリックすると打順が入れ替わります</p>
                   <button
                     onClick={() => {
                       setGameStarted(true);
+                      setSelectedBatterAway(null);
+                      setSelectedBatterHome(null);
                       // 各選手のgameStatsを初期化
                       setAwayTeam(prev => ({
                         ...prev,
@@ -3253,6 +3265,8 @@ if (newOuts === 3) {
                       onClick={() => {
                         resetGame();
                         setGameStarted(false);
+                        setSelectedBatterAway(null);
+                        setSelectedBatterHome(null);
                       }}
                       className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
                     >
@@ -3291,45 +3305,40 @@ if (newOuts === 3) {
                     const throwHand = player.physical.throws === 'right' ? '右' : '左';
                     const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
 
+                    const isSelected = !gameStarted && selectedBatterHome === player.battingOrder;
+
                     return (
                       <div
                         key={player.id}
-                        className={`p-2 rounded transition ${
-                          isCurrentBatter ? 'bg-yellow-500 text-black' : gameStarted ? 'hover:bg-gray-800 cursor-pointer' : 'bg-gray-800'
+                        className={`p-2 rounded transition cursor-pointer ${
+                          isCurrentBatter ? 'bg-yellow-500 text-black' :
+                          isSelected ? 'bg-blue-600 text-white' :
+                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700'
                         }`}
-                        onClick={gameStarted ? () => { setEditingTeam('home'); setSelectedPlayerId(player.id); setEditingPlayer(player); } : undefined}
+                        onClick={() => {
+                          if (gameStarted) {
+                            setEditingTeam('home');
+                            setSelectedPlayerId(player.id);
+                            setEditingPlayer(player);
+                          } else {
+                            handleBatterClick('home', player.battingOrder);
+                          }
+                        }}
                       >
                         <div className="flex items-center gap-1.5">
-                          {!gameStarted && (
-                            <div className="flex flex-col gap-0.5">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); moveBattingOrder('home', player.battingOrder, 'up'); }}
-                                disabled={player.battingOrder === 1}
-                                className="text-xs px-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded"
-                              >
-                                ▲
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); moveBattingOrder('home', player.battingOrder, 'down'); }}
-                                disabled={player.battingOrder === 9}
-                                className="text-xs px-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded"
-                              >
-                                ▼
-                              </button>
-                            </div>
-                          )}
-                          <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
+                          <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           <span className="font-bold">{player.name}</span>
-                          <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
                           {isCurrentBatter && <span>⚾</span>}
+                          {isSelected && <span>👆</span>}
                         </div>
-                        <div className={`flex gap-2 text-xs ${!gameStarted ? 'ml-12' : 'ml-6'} mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-400'}`}>
+                        <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
                           <span>M{player.batting.meet}</span>
                           <span>P{player.batting.power}</span>
                           <span>E{player.batting.eye}</span>
-                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
+                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
                         </div>
                       </div>
                     );
