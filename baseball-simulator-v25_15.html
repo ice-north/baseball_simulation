@@ -797,7 +797,7 @@
       const [teamErrors, setTeamErrors] = useState({ home: 0, away: 0 });
       const [teamRBIs, setTeamRBIs] = useState({ home: 0, away: 0 });
       const [count, setCount] = useState({ balls: 0, strikes: 0 });
-      const [bases, setBases] = useState({ first: false, second: false, third: false });
+      const [bases, setBases] = useState([false, false, false]);
       const [outs, setOuts] = useState(0);
       const [remainingPitches, setRemainingPitches] = useState(0);  // 残り投球数（自動投球用）
       
@@ -2321,7 +2321,7 @@ if (newOuts === 3) {
 
       const resetGame = () => {
         setCount({ balls: 0, strikes: 0 });
-        setBases({ first: false, second: false, third: false });
+        setBases([false, false, false]);
         setOuts(0);
         setInning(1);
         setScore({ home: 0, away: 0 });
@@ -2777,7 +2777,7 @@ if (newOuts === 3) {
                 {awayTeam.players
                   .sort((a, b) => a.battingOrder - b.battingOrder)
                   .map(player => {
-                    const isCurrentBatter = isTopInning && player.battingOrder === awayTeam.currentBatterOrder;
+                    const isCurrentBatter = gameStarted && isTopInning && player.battingOrder === awayTeam.currentBatterOrder;
                     const isPitcher = player.position === 'pitcher';
                     const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
 
@@ -3289,7 +3289,7 @@ if (newOuts === 3) {
                 {homeTeam.players
                   .sort((a, b) => a.battingOrder - b.battingOrder)
                   .map(player => {
-                    const isCurrentBatter = !isTopInning && player.battingOrder === homeTeam.currentBatterOrder;
+                    const isCurrentBatter = gameStarted && !isTopInning && player.battingOrder === homeTeam.currentBatterOrder;
                     const isPitcher = player.position === 'pitcher';
                     const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
 
