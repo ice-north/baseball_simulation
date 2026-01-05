@@ -3141,9 +3141,10 @@ if (newOuts === 3) {
                   </button>
                 </div>
               </div>
-              
+              )}
+
               {/* 最新結果 */}
-              {lastResult && (
+              {gameStarted && lastResult && (
                 <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-2 text-center">
                   <span className="font-bold text-lg">{lastResult.description}</span>
                   {lastResult.pitchType && (
@@ -3165,8 +3166,9 @@ if (newOuts === 3) {
                   )}
                 </div>
               )}
-              
+
               {/* 投球ログ */}
+              {gameStarted && (
               <div className="bg-white rounded-lg p-2 shadow-lg">
                 <h4 className="font-bold text-sm text-gray-700 mb-1">📝 投球ログ</h4>
                 <div className="max-h-40 overflow-y-auto text-xs space-y-0.5">
