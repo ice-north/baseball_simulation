@@ -234,7 +234,9 @@
         * アウト率は旧モデル基準に調整
         */
       const judgeFielderReach = (battedBall, defense, batter) => {
-        const { exitVelocity, launchAngle, distance, hangTime, direction } = battedBall;
+        // 防御的チェック: defenseがnullまたはundefinedの場合はデフォルト値を使用
+        const safeDefense = defense || {};
+        const { exitVelocity, launchAngle, distance, hangTime, direction } = battedBall || {};
         
         // 本塁打判定（バレルゾーン）
         // MLB基準: 打球速度158km/h以上、角度26-30度で.500以上の打率
@@ -251,7 +253,7 @@
         
         // ポップフライ（60度以上）- 旧モデル: 95-97%アウト
         if (launchAngle >= 60) {
-          const catchProb = 0.95 + (defense.catcher?.defense || 70) / 2000;
+          const catchProb = 0.95 + (safeDefense.catcher?.defense || 70) / 2000;
           if (Math.random() < catchProb) {
             return { result: 'out', bases: 0, description: 'フライアウト（ポップフライ）', isOutfieldFly: false };
           }
@@ -275,7 +277,7 @@
           } else {
             position = 'first';
           }
-          fielder = defense[position] || { defense: 70, speed: 60, arm: 65 };
+          fielder = safeDefense[position] || { defense: 70, speed: 60, arm: 65 };
         } else {
           // 外野
           isOutfield = true;
@@ -286,7 +288,7 @@
           } else {
             position = 'right';
           }
-          fielder = defense[position] || { defense: 70, speed: 65, arm: 70 };
+          fielder = safeDefense[position] || { defense: 70, speed: 65, arm: 70 };
         }
         
         // ===== ゴロの場合（旧モデル: 内野ゴロ98.5%アウト）=====
@@ -1225,6 +1227,135 @@
         }
       };
 
+      /**
+       * 物理演算ベースのコンタクト結果判定（新エンジン）
+       */
+      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null) => {
+        const effectiveBatter = batter || { meet: 60, power: 60, eye: 60, speed: 60 };
+        const effectiveCatcher = catcher || { lead: 50 };
+        const safeCount = count || { balls: 0, strikes: 0 };
+
+        // 前球情報（トンネリング用）
+        const lastPitch = pitchLog.length > 0 ? pitchLog[pitchLog.length - 1] : null;
+        const currentPitch = {
+          type: selectedBall?.type || 'straight',
+          velocity: actualVelocity,
+          level: selectedBall?.level || 100
+        };
+
+        // トンネリング効果を計算
+        const tunnelingEffect = getTunnelingEffect(lastPitch, currentPitch, effectiveCatcher.lead);
+
+        // 【新物理モデル】タイミングウィンドウベースのコンタクト計算
+        const physicsResult = calculatePhysicsContact(
+          pitcher,
+          effectiveBatter,
+          predictionCorrect,
+          currentPitch,
+          tunnelingEffect,
+          handEffect
+        );
+
+        // 空振り判定（物理モデルから）
+        if (!physicsResult.isContact) {
+          return {
+            type: 'swinging_strike',
+            description: `空振り（窓${physicsResult.timingWindow.toFixed(1)}ms/誤差${physicsResult.timingError.toFixed(1)}ms）`,
+            timingWindow: physicsResult.timingWindow,
+            timingError: physicsResult.timingError,
+            pitchType: ballEffects[currentPitch.type]?.name || 'ストレート',
+            velocity: Math.round(actualVelocity)
+          };
+        }
+
+        // ===== ファウル判定（大幅強化）=====
+        // ミート品質が低いほどファウルになりやすい
+        const foulBaseRate = 0.35;  // 基本ファウル率35%
+        const qualityPenalty = (1 - physicsResult.meetQuality) * 0.25;  // 芯を外すほど+25%
+        let foulRate = foulBaseRate + qualityPenalty;
+
+        // 2ストライク時は粘りやすい（ファウル率上昇）
+        if (safeCount.strikes === 2) {
+          foulRate += 0.10;
+        }
+
+        const pitchTypeName = ballEffects[currentPitch.type]?.name || 'ストレート';
+        const roundedVelocity = Math.round(actualVelocity);
+
+        if (Math.random() < foulRate) {
+          if (safeCount.strikes === 2) {
+            return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
+          }
+          return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
+        }
+
+        // 物理演算で打球パラメータを計算
+        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult);
+
+        // 角度によるファウル判定（強化）
+        if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {  // 55%→70%
+          if (safeCount.strikes === 2) {
+            return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
+          }
+          return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
+        }
+
+        // 打球統計を記録
+        const battedBallType = battedBall.launchAngle < 10 ? 'grounder' :
+                               battedBall.launchAngle < 25 ? 'liner' :
+                               battedBall.launchAngle < 50 ? 'fly' : 'popup';
+
+        setBattedBallTypeStats(prev => ({
+          ...prev,
+          [battedBallType]: prev[battedBallType] + 1
+        }));
+
+        // 打球方向を記録
+        let ballDirection;
+        if (battedBall.direction < -20) ballDirection = 'left';
+        else if (battedBall.direction < -5) ballDirection = 'leftCenter';
+        else if (battedBall.direction <= 5) ballDirection = 'center';
+        else if (battedBall.direction <= 20) ballDirection = 'rightCenter';
+        else ballDirection = 'right';
+
+        setBattedBallDirectionStats(prev => ({
+          ...prev,
+          [ballDirection]: prev[ballDirection] + 1
+        }));
+
+        // 時間競合モデルで守備判定
+        const fieldingResult = judgeFielderReach(battedBall, defense, effectiveBatter);
+
+        // 結果を変換して返す
+        const resultMap = {
+          'homerun': { type: 'homerun', description: fieldingResult.description, hit: true },
+          'triple': { type: 'triple', description: fieldingResult.description, hit: true },
+          'double': { type: 'double', description: fieldingResult.description, hit: true },
+          'single': { type: 'single', description: fieldingResult.description, hit: true, isError: fieldingResult.isError },
+          'out': {
+            type: 'out',
+            description: fieldingResult.description,
+            hit: false,
+            isOutfieldFly: fieldingResult.isOutfieldFly,
+            tagupThrowbackChance: fieldingResult.tagupThrowbackChance
+          }
+        };
+
+        const result = resultMap[fieldingResult.result] || resultMap['out'];
+
+        // 打球データを結果に付加（統計ログ用）
+        return {
+          ...result,
+          exitVelocity: battedBall.exitVelocity,
+          launchAngle: battedBall.launchAngle,
+          distance: battedBall.distance,
+          meetQuality: battedBall.meetQuality,
+          v_swing: physicsResult.v_swing,
+          timingWindow: physicsResult.timingWindow,
+          timingError: physicsResult.timingError
+        };
+      };
+
       const simulatePitch = () => {
         // ============================================================
         // 現在の選手データを取得
@@ -1356,7 +1487,6 @@
         let swingProb;
         if (isInStrikeZone) {
           // ストライクゾーン: 早打ち傾向にして投球数を減らす
-        if (isInStrikeZone) {
           if (safeCount.strikes === 2) {
             // 2ストライク: 見逃し三振を避けるため振る
             swingProb = 0.90 + ((100 - batter.eye) / 100) * 0.08;
@@ -1407,135 +1537,6 @@
         // タイミングウィンドウベースの物理判定により、空振りも自然に発生
         const result = determineContactResultPhysics(selectedBall, predictionCorrect, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher);
         return { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity) };
-      };
-
-      /**
-       * 物理演算ベースのコンタクト結果判定（新エンジン）
-       */
-      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null) => {
-        const effectiveBatter = batter || { meet: 60, power: 60, eye: 60, speed: 60 };
-        const effectiveCatcher = catcher || { lead: 50 };
-        const safeCount = count || { balls: 0, strikes: 0 };
-        
-        // 前球情報（トンネリング用）
-        const lastPitch = pitchLog.length > 0 ? pitchLog[pitchLog.length - 1] : null;
-        const currentPitch = {
-          type: selectedBall?.type || 'straight',
-          velocity: actualVelocity,
-          level: selectedBall?.level || 100
-        };
-        
-        // トンネリング効果を計算
-        const tunnelingEffect = getTunnelingEffect(lastPitch, currentPitch, effectiveCatcher.lead);
-        
-        // 【新物理モデル】タイミングウィンドウベースのコンタクト計算
-        const physicsResult = calculatePhysicsContact(
-          pitcher,
-          effectiveBatter,
-          predictionCorrect,
-          currentPitch,
-          tunnelingEffect,
-          handEffect
-        );
-        
-        // 空振り判定（物理モデルから）
-        if (!physicsResult.isContact) {
-          return { 
-            type: 'swinging_strike', 
-            description: `空振り（窓${physicsResult.timingWindow.toFixed(1)}ms/誤差${physicsResult.timingError.toFixed(1)}ms）`,
-            timingWindow: physicsResult.timingWindow,
-            timingError: physicsResult.timingError,
-            pitchType: ballEffects[currentPitch.type]?.name || 'ストレート',
-            velocity: Math.round(actualVelocity)
-          };
-        }
-        
-        // ===== ファウル判定（大幅強化）=====
-        // ミート品質が低いほどファウルになりやすい
-        const foulBaseRate = 0.35;  // 基本ファウル率35%
-        const qualityPenalty = (1 - physicsResult.meetQuality) * 0.25;  // 芯を外すほど+25%
-        let foulRate = foulBaseRate + qualityPenalty;
-        
-        // 2ストライク時は粘りやすい（ファウル率上昇）
-        if (safeCount.strikes === 2) {
-          foulRate += 0.10;
-        }
-        
-        const pitchTypeName = ballEffects[currentPitch.type]?.name || 'ストレート';
-        const roundedVelocity = Math.round(actualVelocity);
-        
-        if (Math.random() < foulRate) {
-          if (safeCount.strikes === 2) {
-            return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
-          }
-          return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
-        }
-        
-        // 物理演算で打球パラメータを計算
-        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult);
-        
-        // 角度によるファウル判定（強化）
-        if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {  // 55%→70%
-          if (safeCount.strikes === 2) {
-            return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
-          }
-          return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
-        }
-        
-        // 打球統計を記録
-        const battedBallType = battedBall.launchAngle < 10 ? 'grounder' : 
-                               battedBall.launchAngle < 25 ? 'liner' : 
-                               battedBall.launchAngle < 50 ? 'fly' : 'popup';
-        
-        setBattedBallTypeStats(prev => ({
-          ...prev,
-          [battedBallType]: prev[battedBallType] + 1
-        }));
-        
-        // 打球方向を記録
-        let ballDirection;
-        if (battedBall.direction < -20) ballDirection = 'left';
-        else if (battedBall.direction < -5) ballDirection = 'leftCenter';
-        else if (battedBall.direction <= 5) ballDirection = 'center';
-        else if (battedBall.direction <= 20) ballDirection = 'rightCenter';
-        else ballDirection = 'right';
-        
-        setBattedBallDirectionStats(prev => ({
-          ...prev,
-          [ballDirection]: prev[ballDirection] + 1
-        }));
-        
-        // 時間競合モデルで守備判定
-        const fieldingResult = judgeFielderReach(battedBall, defense, effectiveBatter);
-        
-        // 結果を変換して返す
-        const resultMap = {
-          'homerun': { type: 'homerun', description: fieldingResult.description, hit: true },
-          'triple': { type: 'triple', description: fieldingResult.description, hit: true },
-          'double': { type: 'double', description: fieldingResult.description, hit: true },
-          'single': { type: 'single', description: fieldingResult.description, hit: true, isError: fieldingResult.isError },
-          'out': { 
-            type: 'out', 
-            description: fieldingResult.description, 
-            hit: false,
-            isOutfieldFly: fieldingResult.isOutfieldFly,
-            tagupThrowbackChance: fieldingResult.tagupThrowbackChance
-          }
-        };
-        
-        const result = resultMap[fieldingResult.result] || resultMap['out'];
-        
-        // 打球データを結果に付加（統計ログ用）
-        return {
-          ...result,
-          exitVelocity: battedBall.exitVelocity,
-          launchAngle: battedBall.launchAngle,
-          distance: battedBall.distance,
-          meetQuality: battedBall.meetQuality,
-          v_swing: physicsResult.v_swing,
-          timingWindow: physicsResult.timingWindow,
-          timingError: physicsResult.timingError
-        };
       };
 
       // 旧determineContactResult（互換性のために残す）
@@ -2374,7 +2375,7 @@ if (newOuts === 3) {
           'right-popup': { total: 0, outs: 0, hits: 0 },
           'right-grounder': { total: 0, outs: 0, hits: 0 }
         });
-      }};
+      };
 
 
       // 指定回数投球を開始
@@ -2396,6 +2397,46 @@ if (newOuts === 3) {
         }
       }, [remainingPitches, gameOver]);
 
+      // --- PositionControl コンポーネント (PitchByPitchSimulator 内部に配置) ---
+      const PositionControl = ({ position, label, defense, setDefense }) => {
+        const [show, setShow] = React.useState(false);
+        if (!defense || !defense[position]) return null;
+
+        return (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShow(!show)}
+              className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 shadow-lg border-2 border-white"
+            >
+              {label}
+            </button>
+            {show && (
+              <div className="absolute z-10 bg-white p-2 rounded shadow-xl border-2 border-blue-600 w-48 text-xs"
+                   style={{left: '50%', transform: 'translateX(-50%)', marginTop: '4px'}}>
+                <div className="mb-1 text-gray-800">
+                  <label className="block font-bold">守:{defense[position].defense}</label>
+                  <input type="range" min="0" max="100" value={defense[position].defense}
+                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], defense: Number(e.target.value)}})}
+                    className="w-full h-1 cursor-pointer" />
+                </div>
+                <div className="mb-1 text-gray-800">
+                  <label className="block font-bold">足:{defense[position].speed}</label>
+                  <input type="range" min="0" max="100" value={defense[position].speed}
+                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], speed: Number(e.target.value)}})}
+                    className="w-full h-1 cursor-pointer" />
+                </div>
+                <div className="text-gray-800">
+                  <label className="block font-bold">肩:{defense[position].arm}</label>
+                  <input type="range" min="0" max="100" value={defense[position].arm}
+                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], arm: Number(e.target.value)}})}
+                    className="w-full h-1 cursor-pointer" />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      };
 
       const renderBases = () => (
         <div className="relative w-full max-w-2xl mx-auto">
@@ -2430,7 +2471,6 @@ if (newOuts === 3) {
                 />
               </div>
               <div>
-                <div>
                 <label className="block text-xs font-semibold mb-1">
                   足: <span className="text-green-600">{defense.first.speed}</span>
                 </label>
@@ -3314,47 +3354,6 @@ if (newOuts === 3) {
         </div>
       );
     }; // PitchByPitchSimulatorの終わり
-
-    // --- ここから PositionControl コンポーネント (外側に配置) ---
-    const PositionControl = ({ position, label, defense, setDefense }) => {
-      const [show, setShow] = React.useState(false);
-      if (!defense || !defense[position]) return null;
-
-      return (
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShow(!show)}
-            className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 shadow-lg border-2 border-white"
-          >
-            {label}
-          </button>
-          {show && (
-            <div className="absolute z-10 bg-white p-2 rounded shadow-xl border-2 border-blue-600 w-48 text-xs"
-                 style={{left: '50%', transform: 'translateX(-50%)', marginTop: '4px'}}>
-              <div className="mb-1 text-gray-800">
-                <label className="block font-bold">守:{defense[position].defense}</label>
-                <input type="range" min="0" max="100" value={defense[position].defense}
-                  onChange={(e) => setDefense({...defense, [position]: {...defense[position], defense: Number(e.target.value)}})}
-                  className="w-full h-1 cursor-pointer" />
-              </div>
-              <div className="mb-1 text-gray-800">
-                <label className="block font-bold">足:{defense[position].speed}</label>
-                <input type="range" min="0" max="100" value={defense[position].speed}
-                  onChange={(e) => setDefense({...defense, [position]: {...defense[position], speed: Number(e.target.value)}})}
-                  className="w-full h-1 cursor-pointer" />
-              </div>
-              <div className="text-gray-800">
-                <label className="block font-bold">肩:{defense[position].arm}</label>
-                <input type="range" min="0" max="100" value={defense[position].arm}
-                  onChange={(e) => setDefense({...defense, [position]: {...defense[position], arm: Number(e.target.value)}})}
-                  className="w-full h-1 cursor-pointer" />
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    };
 
     ReactDOM.render(<PitchByPitchSimulator />, document.getElementById('root'));
   </script>
