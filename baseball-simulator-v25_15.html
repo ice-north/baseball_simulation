@@ -858,6 +858,89 @@
       };
 
       // ============================================================
+      // 守備適性計算関数
+      // ============================================================
+      const calculateDefensiveFitness = (player, position) => {
+        const defense = player.fielding?.defense || 50;
+        const speed = player.physical?.speed || 50;
+        const arm = player.fielding?.arm || 50;
+
+        let fitness = 0;
+        let comments = [];
+
+        switch (position) {
+          case 'pitcher':
+            // 投手は守備力と制球力が重要
+            fitness = defense;
+            if (defense < 30) comments.push('守備力不足');
+            break;
+
+          case 'catcher':
+            // 捕手は守備力とリード、肩が重要
+            fitness = (defense * 0.5 + arm * 0.5);
+            if (defense < 40) comments.push('守備力不足');
+            if (arm < 40) comments.push('肩が弱い');
+            break;
+
+          case 'first':
+            // 一塁は守備力が重要、足はあまり必要ない
+            fitness = defense;
+            if (defense < 30) comments.push('守備力不足');
+            if (speed > 70) comments.push('足が活かせない');
+            break;
+
+          case 'second':
+          case 'short':
+            // 二遊間は守備力、足、肩すべて重要
+            fitness = (defense * 0.4 + speed * 0.3 + arm * 0.3);
+            if (defense < 40) comments.push('守備力不足');
+            if (speed < 40) comments.push('足が遅い');
+            if (arm < 40) comments.push('肩が弱い');
+            break;
+
+          case 'third':
+            // 三塁は守備力と肩が重要
+            fitness = (defense * 0.5 + arm * 0.5);
+            if (defense < 40) comments.push('守備力不足');
+            if (arm < 40) comments.push('肩が弱い');
+            break;
+
+          case 'left':
+          case 'right':
+            // 両翼は足と肩が重要
+            fitness = (defense * 0.3 + speed * 0.4 + arm * 0.3);
+            if (speed < 40) comments.push('足が遅い');
+            if (arm < 40) comments.push('肩が弱い');
+            break;
+
+          case 'center':
+            // センターは特に足が重要
+            fitness = (defense * 0.3 + speed * 0.5 + arm * 0.2);
+            if (speed < 50) comments.push('⚠️足が遅い');
+            if (speed < 30) comments.push('🔴センター不適');
+            if (arm < 30) comments.push('肩が弱い');
+            break;
+
+          default:
+            fitness = 50;
+        }
+
+        // 適性評価
+        let grade = 'C';
+        if (fitness >= 80) grade = 'S';
+        else if (fitness >= 70) grade = 'A';
+        else if (fitness >= 60) grade = 'B';
+        else if (fitness >= 40) grade = 'C';
+        else grade = 'D';
+
+        return {
+          fitness: Math.round(fitness),
+          grade,
+          comments: comments.length > 0 ? comments.join(', ') : '適性良好'
+        };
+      };
+
+      // ============================================================
       // 打順変更関数（クリックベース）
       // ============================================================
       const handleBatterClick = (teamType, battingOrder) => {
@@ -2794,26 +2877,40 @@ if (newOuts === 3) {
                     const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
 
                     const isSelected = !gameStarted && selectedBatterAway === player.battingOrder;
+                    const fitness = calculateDefensiveFitness(player, player.position);
 
                     return (
                       <div
                         key={player.id}
-                        className={`p-2 rounded transition cursor-pointer ${
+                        className={`p-2 rounded transition ${
                           isCurrentBatter ? 'bg-yellow-500 text-black' :
                           isSelected ? 'bg-blue-600 text-white' :
                           gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700'
                         }`}
-                        onClick={() => {
-                          if (gameStarted) {
-                            setEditingTeam('away');
-                            setSelectedPlayerId(player.id);
-                            setEditingPlayer(player);
-                          } else {
-                            handleBatterClick('away', player.battingOrder);
-                          }
-                        }}
                       >
                         <div className="flex items-center gap-1.5">
+                          {!gameStarted && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBatterClick('away', player.battingOrder);
+                              }}
+                              className="text-xs px-1 bg-gray-700 hover:bg-gray-600 rounded"
+                            >
+                              打順
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTeam('away');
+                              setSelectedPlayerId(player.id);
+                              setEditingPlayer(player);
+                            }}
+                            className="text-xs px-1 bg-green-700 hover:bg-green-600 rounded"
+                          >
+                            編集
+                          </button>
                           <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           <span className="font-bold">{player.name}</span>
@@ -2828,6 +2925,17 @@ if (newOuts === 3) {
                           <span>E{player.batting.eye}</span>
                           {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
                         </div>
+                        {!gameStarted && (
+                          <div className={`text-[10px] ml-6 mt-0.5 ${
+                            fitness.grade === 'S' ? 'text-yellow-400' :
+                            fitness.grade === 'A' ? 'text-green-400' :
+                            fitness.grade === 'B' ? 'text-blue-400' :
+                            fitness.grade === 'D' ? 'text-red-400' :
+                            'text-gray-400'
+                          }`}>
+                            守備適性 [{fitness.grade}] {fitness.comments}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -3306,26 +3414,40 @@ if (newOuts === 3) {
                     const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
 
                     const isSelected = !gameStarted && selectedBatterHome === player.battingOrder;
+                    const fitness = calculateDefensiveFitness(player, player.position);
 
                     return (
                       <div
                         key={player.id}
-                        className={`p-2 rounded transition cursor-pointer ${
+                        className={`p-2 rounded transition ${
                           isCurrentBatter ? 'bg-yellow-500 text-black' :
                           isSelected ? 'bg-blue-600 text-white' :
                           gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700'
                         }`}
-                        onClick={() => {
-                          if (gameStarted) {
-                            setEditingTeam('home');
-                            setSelectedPlayerId(player.id);
-                            setEditingPlayer(player);
-                          } else {
-                            handleBatterClick('home', player.battingOrder);
-                          }
-                        }}
                       >
                         <div className="flex items-center gap-1.5">
+                          {!gameStarted && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBatterClick('home', player.battingOrder);
+                              }}
+                              className="text-xs px-1 bg-gray-700 hover:bg-gray-600 rounded"
+                            >
+                              打順
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTeam('home');
+                              setSelectedPlayerId(player.id);
+                              setEditingPlayer(player);
+                            }}
+                            className="text-xs px-1 bg-green-700 hover:bg-green-600 rounded"
+                          >
+                            編集
+                          </button>
                           <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           <span className="font-bold">{player.name}</span>
@@ -3340,6 +3462,17 @@ if (newOuts === 3) {
                           <span>E{player.batting.eye}</span>
                           {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
                         </div>
+                        {!gameStarted && (
+                          <div className={`text-[10px] ml-6 mt-0.5 ${
+                            fitness.grade === 'S' ? 'text-yellow-400' :
+                            fitness.grade === 'A' ? 'text-green-400' :
+                            fitness.grade === 'B' ? 'text-blue-400' :
+                            fitness.grade === 'D' ? 'text-red-400' :
+                            'text-gray-400'
+                          }`}>
+                            守備適性 [{fitness.grade}] {fitness.comments}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -3412,6 +3545,40 @@ if (newOuts === 3) {
                       onChange={(e) => setEditingPlayer({...editingPlayer, name: e.target.value})}
                       className="w-full border border-gray-300 rounded px-3 py-2"
                     />
+                  </div>
+
+                  {/* 守備位置選択 */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">守備位置</label>
+                    <select
+                      value={editingPlayer.position}
+                      onChange={(e) => setEditingPlayer({...editingPlayer, position: e.target.value})}
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    >
+                      <option value="pitcher">投手</option>
+                      <option value="catcher">捕手</option>
+                      <option value="first">一塁手</option>
+                      <option value="second">二塁手</option>
+                      <option value="third">三塁手</option>
+                      <option value="short">遊撃手</option>
+                      <option value="left">左翼手</option>
+                      <option value="center">中堅手</option>
+                      <option value="right">右翼手</option>
+                    </select>
+                    {(() => {
+                      const fitness = calculateDefensiveFitness(editingPlayer, editingPlayer.position);
+                      return (
+                        <div className={`mt-1 text-xs ${
+                          fitness.grade === 'S' ? 'text-yellow-600' :
+                          fitness.grade === 'A' ? 'text-green-600' :
+                          fitness.grade === 'B' ? 'text-blue-600' :
+                          fitness.grade === 'D' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          守備適性: [{fitness.grade}] {fitness.comments}
+                        </div>
+                      );
+                    })()}
                   </div>
                   
                   {/* 打撃能力 */}
