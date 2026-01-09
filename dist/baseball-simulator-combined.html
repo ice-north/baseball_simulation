@@ -998,6 +998,7 @@ const calculateDefensiveFitness = (player, position) => {
       const [selectedPlayerId, setSelectedPlayerId] = useState(null);
       const [editingPlayer, setEditingPlayer] = useState(null);  // 編集中の選手
       const [editingTeam, setEditingTeam] = useState('home');  // 編集中のチーム
+      const [showEditScreen, setShowEditScreen] = useState(false);  // エディット画面表示フラグ
       
       // ============================================================
       // 選手成績更新関数
@@ -3006,24 +3007,18 @@ if (newOuts === 3) {
                     return (
                       <div
                         key={player.id}
+                        onClick={() => {
+                          if (!gameStarted) {
+                            handleBatterClick('away', player.battingOrder);
+                          }
+                        }}
                         className={`p-2 rounded transition ${
                           isCurrentBatter ? 'bg-yellow-500 text-black' :
                           isSelected ? 'bg-blue-600 text-white' :
-                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700'
+                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center gap-1.5">
-                          {!gameStarted && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleBatterClick('away', player.battingOrder);
-                              }}
-                              className="text-xs px-1 bg-gray-700 hover:bg-gray-600 rounded"
-                            >
-                              打順
-                            </button>
-                          )}
                           <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           {!gameStarted ? (
                             <button
@@ -3126,7 +3121,7 @@ if (newOuts === 3) {
                 <div className="bg-gray-900 rounded-lg p-8 text-white text-center">
                   <h2 className="text-3xl font-bold mb-4">⚾ 野球シミュレーター</h2>
                   <p className="text-gray-400 mb-4">左右のチームの打順と守備位置を調整してください</p>
-                  <p className="text-sm text-blue-400 mb-2">💡 <strong>打順ボタン</strong>をクリックして青色にし、もう1人をクリックすると打順が入れ替わります</p>
+                  <p className="text-sm text-blue-400 mb-2">💡 <strong>選手パネル</strong>をクリックして青色にし、もう1人をクリックすると打順が入れ替わります</p>
                   <p className="text-sm text-purple-400 mb-6">🔄 <strong>守備位置</strong>（『中』『二』など）をクリックして紫色にし、もう1人をクリックすると守備位置が入れ替わります</p>
                   <button
                     onClick={() => {
@@ -3154,6 +3149,12 @@ if (newOuts === 3) {
                     className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-12 rounded-lg text-xl transition shadow-lg"
                   >
                     ⚾ 試合開始
+                  </button>
+                  <button
+                    onClick={() => setShowEditScreen(true)}
+                    className="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition shadow-lg"
+                  >
+                    ✏️ エディット
                   </button>
                 </div>
               )}
@@ -3553,24 +3554,18 @@ if (newOuts === 3) {
                     return (
                       <div
                         key={player.id}
+                        onClick={() => {
+                          if (!gameStarted) {
+                            handleBatterClick('home', player.battingOrder);
+                          }
+                        }}
                         className={`p-2 rounded transition ${
                           isCurrentBatter ? 'bg-yellow-500 text-black' :
                           isSelected ? 'bg-blue-600 text-white' :
-                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700'
+                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center gap-1.5">
-                          {!gameStarted && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleBatterClick('home', player.battingOrder);
-                              }}
-                              className="text-xs px-1 bg-gray-700 hover:bg-gray-600 rounded"
-                            >
-                              打順
-                            </button>
-                          )}
                           <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           {!gameStarted ? (
                             <button
@@ -3862,6 +3857,413 @@ if (newOuts === 3) {
                       className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
                     <button onClick={() => { updatePlayer(editingPlayer.id, editingPlayer); setEditingPlayer(null); }}
                       className="px-20 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">保存</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* エディット画面 */}
+          {showEditScreen && (
+            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-4 border-b">
+                    <h2 className="text-2xl font-bold">✏️ 選手エディット</h2>
+                    <button
+                      onClick={() => setShowEditScreen(false)}
+                      className="text-gray-500 hover:text-gray-700 text-3xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  {/* アウェイチーム */}
+                  <div className="mb-8">
+                    <h3 className="text-xl font-bold text-red-500 mb-4">✈️ {awayTeam.name}</h3>
+                    <div className="space-y-6">
+                      {awayTeam.players.map(player => (
+                        <div key={player.id} className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-bold text-lg mb-3">{player.name}</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {/* 打撃能力 */}
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">ミート: <span className="font-bold text-blue-600">{player.batting.meet}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.batting.meet}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setAwayTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, batting: { ...p.batting, meet: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">パワー: <span className="font-bold text-blue-600">{player.batting.power}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.batting.power}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setAwayTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, batting: { ...p.batting, power: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">選球眼: <span className="font-bold text-blue-600">{player.batting.eye}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.batting.eye}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setAwayTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, batting: { ...p.batting, eye: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">走力: <span className="font-bold text-blue-600">{player.physical.speed}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.physical.speed}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setAwayTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, physical: { ...p.physical, speed: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            {/* 守備能力 */}
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">守備: <span className="font-bold text-green-600">{player.fielding.defense}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.fielding.defense}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setAwayTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, fielding: { ...p.fielding, defense: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">肩: <span className="font-bold text-green-600">{player.physical.arm}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.physical.arm}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setAwayTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, physical: { ...p.physical, arm: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            {/* 投手能力（投手のみ） */}
+                            {player.position === 'pitcher' && (
+                              <>
+                                <div>
+                                  <label className="block text-sm text-gray-600 mb-1">球速: <span className="font-bold text-red-600">{player.pitching.velocity}km/h</span></label>
+                                  <input
+                                    type="range"
+                                    min="100"
+                                    max="165"
+                                    value={player.pitching.velocity}
+                                    onChange={(e) => {
+                                      const newValue = parseInt(e.target.value);
+                                      setAwayTeam(prev => ({
+                                        ...prev,
+                                        players: prev.players.map(p =>
+                                          p.id === player.id
+                                            ? { ...p, pitching: { ...p.pitching, velocity: newValue } }
+                                            : p
+                                        )
+                                      }));
+                                    }}
+                                    className="w-full"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm text-gray-600 mb-1">制球: <span className="font-bold text-red-600">{player.pitching.control}</span></label>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={player.pitching.control}
+                                    onChange={(e) => {
+                                      const newValue = parseInt(e.target.value);
+                                      setAwayTeam(prev => ({
+                                        ...prev,
+                                        players: prev.players.map(p =>
+                                          p.id === player.id
+                                            ? { ...p, pitching: { ...p.pitching, control: newValue } }
+                                            : p
+                                        )
+                                      }));
+                                    }}
+                                    className="w-full"
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ホームチーム */}
+                  <div className="mb-8">
+                    <h3 className="text-xl font-bold text-blue-500 mb-4">🏠 {homeTeam.name}</h3>
+                    <div className="space-y-6">
+                      {homeTeam.players.map(player => (
+                        <div key={player.id} className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-bold text-lg mb-3">{player.name}</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {/* 打撃能力 */}
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">ミート: <span className="font-bold text-blue-600">{player.batting.meet}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.batting.meet}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setHomeTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, batting: { ...p.batting, meet: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">パワー: <span className="font-bold text-blue-600">{player.batting.power}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.batting.power}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setHomeTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, batting: { ...p.batting, power: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">選球眼: <span className="font-bold text-blue-600">{player.batting.eye}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.batting.eye}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setHomeTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, batting: { ...p.batting, eye: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">走力: <span className="font-bold text-blue-600">{player.physical.speed}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.physical.speed}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setHomeTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, physical: { ...p.physical, speed: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            {/* 守備能力 */}
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">守備: <span className="font-bold text-green-600">{player.fielding.defense}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.fielding.defense}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setHomeTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, fielding: { ...p.fielding, defense: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">肩: <span className="font-bold text-green-600">{player.physical.arm}</span></label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={player.physical.arm}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value);
+                                  setHomeTeam(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, physical: { ...p.physical, arm: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full"
+                              />
+                            </div>
+                            {/* 投手能力（投手のみ） */}
+                            {player.position === 'pitcher' && (
+                              <>
+                                <div>
+                                  <label className="block text-sm text-gray-600 mb-1">球速: <span className="font-bold text-red-600">{player.pitching.velocity}km/h</span></label>
+                                  <input
+                                    type="range"
+                                    min="100"
+                                    max="165"
+                                    value={player.pitching.velocity}
+                                    onChange={(e) => {
+                                      const newValue = parseInt(e.target.value);
+                                      setHomeTeam(prev => ({
+                                        ...prev,
+                                        players: prev.players.map(p =>
+                                          p.id === player.id
+                                            ? { ...p, pitching: { ...p.pitching, velocity: newValue } }
+                                            : p
+                                        )
+                                      }));
+                                    }}
+                                    className="w-full"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm text-gray-600 mb-1">制球: <span className="font-bold text-red-600">{player.pitching.control}</span></label>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={player.pitching.control}
+                                    onChange={(e) => {
+                                      const newValue = parseInt(e.target.value);
+                                      setHomeTeam(prev => ({
+                                        ...prev,
+                                        players: prev.players.map(p =>
+                                          p.id === player.id
+                                            ? { ...p, pitching: { ...p.pitching, control: newValue } }
+                                            : p
+                                        )
+                                      }));
+                                    }}
+                                    className="w-full"
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 閉じるボタン */}
+                  <div className="flex justify-end sticky bottom-0 bg-white pt-4 border-t">
+                    <button
+                      onClick={() => setShowEditScreen(false)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg"
+                    >
+                      完了
+                    </button>
                   </div>
                 </div>
               </div>
