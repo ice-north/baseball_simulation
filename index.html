@@ -1,0 +1,2914 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>野球シミュレーター v2</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 外部JavaScriptファイルを読み込み -->
+  <script src="js/constants.js"></script>
+  <script src="js/players.js"></script>
+  <script src="js/simulation-logic.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    const PitchByPitchSimulator = () => {
+      // 変化球の効果設定（外部ファイルから読み込み）
+      const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
+
+      const [showSettings, setShowSettings] = useState(false);
+      
+
+      // ============================================================
+      // レギュレーション設定
+      // ============================================================
+      const [maxExtraInnings, setMaxExtraInnings] = useState(12);  // 延長最大回数（変更可能）
+      
+      // ============================================================
+      // 試合状態（先に定義が必要）
+      // ============================================================
+      const [isTopInning, setIsTopInning] = useState(true);
+      const [inning, setInning] = useState(1);
+      const [score, setScore] = useState({ home: 0, away: 0 });
+      const [gameOver, setGameOver] = useState(false);  // 試合終了フラグ
+      const [gameStarted, setGameStarted] = useState(false);  // 試合開始フラグ
+      const [selectedBatterAway, setSelectedBatterAway] = useState(null);  // 打順変更用（アウェイ）
+      const [selectedBatterHome, setSelectedBatterHome] = useState(null);  // 打順変更用（ホーム）
+      // イニングごとの得点（9回まで）
+      const [inningScores, setInningScores] = useState({
+        away: [null, null, null, null, null, null, null, null, null],
+        home: [null, null, null, null, null, null, null, null, null]
+      });
+      // 延長イニングの得点（10回以降）
+      const [extraInningScores, setExtraInningScores] = useState({
+        away: [],
+        home: []
+      });
+      // 現在のイニングの得点（イニング終了時にinningScoresに反映）
+      const [currentInningScore, setCurrentInningScore] = useState({ away: 0, home: 0 });
+      // チーム別安打・エラー・打点
+      const [teamHits, setTeamHits] = useState({ home: 0, away: 0 });
+      const [teamErrors, setTeamErrors] = useState({ home: 0, away: 0 });
+      const [teamRBIs, setTeamRBIs] = useState({ home: 0, away: 0 });
+      const [count, setCount] = useState({ balls: 0, strikes: 0 });
+      const [bases, setBases] = useState([false, false, false]);
+      const [outs, setOuts] = useState(0);
+      const [remainingPitches, setRemainingPitches] = useState(0);  // 残り投球数（自動投球用）
+      
+      // ============================================================
+      // チームシステム（ホーム vs アウェイ対戦機能）
+      // ============================================================
+      const [homeTeam, setHomeTeam] = useState({
+        name: "ホーム",
+        players: createDefaultPlayers(),
+        currentBatterOrder: 1
+      });
+      
+      const [awayTeam, setAwayTeam] = useState({
+        name: "アウェイ",
+        players: createAwayPlayers(),
+        currentBatterOrder: 1
+      });
+      
+      // 互換性のため players を動的に取得
+      const players = isTopInning ? homeTeam.players : awayTeam.players;  // 守備側
+      const setPlayers = isTopInning 
+        ? (fn) => setHomeTeam(prev => ({...prev, players: typeof fn === 'function' ? fn(prev.players) : fn}))
+        : (fn) => setAwayTeam(prev => ({...prev, players: typeof fn === 'function' ? fn(prev.players) : fn}));
+      
+      const [selectedPlayerId, setSelectedPlayerId] = useState(null);
+      const [editingPlayer, setEditingPlayer] = useState(null);  // 編集中の選手
+      const [editingTeam, setEditingTeam] = useState('home');  // 編集中のチーム
+      
+      // ============================================================
+      // 選手成績更新関数
+      // ============================================================
+      const updateBatterStats = (playerId, teamType, statUpdates) => {
+        const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
+        setTeam(prev => ({
+          ...prev,
+          players: prev.players.map(p =>
+            p.id === playerId
+              ? {
+                  ...p,
+                  stats: { ...p.stats, batting: { ...p.stats.batting, ...statUpdates } },
+                  gameStats: { ...p.gameStats, ...statUpdates }
+                }
+              : p
+          )
+        }));
+      };
+      
+      const updatePitcherStats = (playerId, teamType, statUpdates) => {
+        const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
+        setTeam(prev => ({
+          ...prev,
+          players: prev.players.map(p => 
+            p.id === playerId 
+              ? { ...p, stats: { ...p.stats, pitching: { ...p.stats.pitching, ...statUpdates } } }
+              : p
+          )
+        }));
+      };
+
+      // ============================================================
+      // 打順変更関数（クリックベース）
+      // ============================================================
+      const handleBatterClick = (teamType, battingOrder) => {
+        const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
+        const selectedBatter = teamType === 'home' ? selectedBatterHome : selectedBatterAway;
+        const setSelectedBatter = teamType === 'home' ? setSelectedBatterHome : setSelectedBatterAway;
+
+        if (selectedBatter === null) {
+          // 1人目を選択
+          setSelectedBatter(battingOrder);
+        } else if (selectedBatter === battingOrder) {
+          // 同じ選手をクリック -> 選択解除
+          setSelectedBatter(null);
+        } else {
+          // 2人目をクリック -> 入れ替え
+          setTeam(prev => {
+            const players = [...prev.players];
+            const player1 = players.find(p => p.battingOrder === selectedBatter);
+            const player2 = players.find(p => p.battingOrder === battingOrder);
+
+            if (player1 && player2) {
+              player1.battingOrder = battingOrder;
+              player2.battingOrder = selectedBatter;
+            }
+
+            return { ...prev, players };
+          });
+          setSelectedBatter(null);
+        }
+      };
+
+      // ============================================================
+      // 現在の打者・投手・捕手管理（対戦モード対応）
+      // ============================================================
+      
+      // 攻撃チームを取得
+      const getOffenseTeam = () => isTopInning ? awayTeam : homeTeam;
+      const getDefenseTeam = () => isTopInning ? homeTeam : awayTeam;
+      
+      // 現在の打順を取得
+      const currentBatterOrder = isTopInning ? awayTeam.currentBatterOrder : homeTeam.currentBatterOrder;
+      
+      // 現在の打者を取得（攻撃チームから）
+      const getCurrentBatter = () => {
+        const team = getOffenseTeam();
+        return team.players.find(p => p.battingOrder === team.currentBatterOrder) || team.players[0];
+      };
+      
+      // 現在の投手を取得（守備チームから）
+      const getCurrentPitcher = () => {
+        const team = getDefenseTeam();
+        return team.players.find(p => p.position === 'pitcher') || team.players[8];
+      };
+      
+      // 現在の捕手を取得（守備チームから）
+      const getCurrentCatcher = () => {
+        const team = getDefenseTeam();
+        return team.players.find(p => p.position === 'catcher') || team.players[7];
+      };
+      
+      // 次の打者に進む（攻撃チームの打順を進める）
+      const advanceBatter = () => {
+        if (isTopInning) {
+          setAwayTeam(prev => ({
+            ...prev,
+            currentBatterOrder: prev.currentBatterOrder >= 9 ? 1 : prev.currentBatterOrder + 1
+          }));
+        } else {
+          setHomeTeam(prev => ({
+            ...prev,
+            currentBatterOrder: prev.currentBatterOrder >= 9 ? 1 : prev.currentBatterOrder + 1
+          }));
+        }
+      };
+      
+      // 選手編集用の関数
+      // チーム対応の選手更新関数
+      const updatePlayer = (playerId, updates) => {
+        if (editingTeam === 'home') {
+          setHomeTeam(prev => ({
+            ...prev,
+            players: prev.players.map(p => p.id === playerId ? { ...p, ...updates } : p)
+          }));
+        } else {
+          setAwayTeam(prev => ({
+            ...prev,
+            players: prev.players.map(p => p.id === playerId ? { ...p, ...updates } : p)
+          }));
+        }
+      };
+      
+      const updatePlayerBatting = (playerId, battingUpdates) => {
+        if (editingTeam === 'home') {
+          setHomeTeam(prev => ({
+            ...prev,
+            players: prev.players.map(p => 
+              p.id === playerId ? { ...p, batting: { ...p.batting, ...battingUpdates } } : p
+            )
+          }));
+        } else {
+          setAwayTeam(prev => ({
+            ...prev,
+            players: prev.players.map(p => 
+              p.id === playerId ? { ...p, batting: { ...p.batting, ...battingUpdates } } : p
+            )
+          }));
+        }
+      };
+      
+      const updatePlayerFielding = (playerId, fieldingUpdates) => {
+        if (editingTeam === 'home') {
+          setHomeTeam(prev => ({
+            ...prev,
+            players: prev.players.map(p => 
+              p.id === playerId ? { ...p, fielding: { ...p.fielding, ...fieldingUpdates } } : p
+            )
+          }));
+        } else {
+          setAwayTeam(prev => ({
+            ...prev,
+            players: prev.players.map(p => 
+              p.id === playerId ? { ...p, fielding: { ...p.fielding, ...fieldingUpdates } } : p
+            )
+          }));
+        }
+      };
+      
+      const updatePlayerPitching = (playerId, pitchingUpdates) => {
+        if (editingTeam === 'home') {
+          setHomeTeam(prev => ({
+            ...prev,
+            players: prev.players.map(p => 
+              p.id === playerId && p.pitching ? { ...p, pitching: { ...p.pitching, ...pitchingUpdates } } : p
+            )
+          }));
+        } else {
+          setAwayTeam(prev => ({
+            ...prev,
+            players: prev.players.map(p => 
+              p.id === playerId && p.pitching ? { ...p, pitching: { ...p.pitching, ...pitchingUpdates } } : p
+            )
+          }));
+        }
+      };
+      
+      // ============================================================
+      // 既存のstate（互換性のために残す）
+      // ============================================================
+
+      const [batter, setBatter] = useState({
+        name: '打者A',
+        meet: 60,
+        power: 60,
+        eye: 60,
+        speed: 60,  // 走力（成功率に影響）
+        steal: 50,  // 盗塁スキル（試行率と成功率に影響）
+        bats: 'right'  // 'right', 'left', or 'switch'
+      });
+
+      const [pitcher, setPitcher] = useState({
+        name: '投手B',
+        velocity: 145,
+        control: 60,
+        stamina: 200,  // スタミナ追加
+        throws: 'right',  // 'right' or 'left' を追加
+        pitches: [  // breakingBalls → pitches に変更
+          { id: 1, type: 'straight', level: 100 },  // ストレートは常に習得済み
+          { id: 2, type: 'slider', level: 50 },
+          { id: 3, type: 'curve', level: 50 },
+          { id: 4, type: 'fork', level: 50 }
+        ]
+      });
+
+      // 現在のスタミナを管理
+      const [currentStamina, setCurrentStamina] = useState(200);
+
+      const [catcher, setCatcher] = useState({
+        name: 'キャッチャーC',
+        lead: 50,
+        arm: 70,
+        throws: 'right'  // 投げる腕
+      });
+      
+      // 守備パラメータ（ポジション別）
+      const [defense, setDefense] = useState({
+        // バッテリー
+        pitcher: { defense: 60, speed: 60, arm: 60, throws: 'right' },    // 投手
+        catcher: { defense: 60, speed: 60, arm: 60, throws: 'right' },    // 捕手
+        // 内野
+        first: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 一塁手
+        second: { defense: 60, speed: 60, arm: 60, throws: 'right' },     // 二塁手
+        short: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 遊撃手
+        third: { defense: 60, speed: 60, arm: 60, throws: 'right' },      // 三塁手
+        // 外野
+        left: { defense: 60, speed: 60, arm: 60, throws: 'right' },       // 左翼手
+        center: { defense: 60, speed: 60, arm: 60, throws: 'right' },     // 中堅手
+        right: { defense: 60, speed: 60, arm: 60, throws: 'right' }       // 右翼手
+      });
+
+      const [pitchLog, setPitchLog] = useState([]);
+      const [lastResult, setLastResult] = useState(null);
+      const [isAutoSimulating, setIsAutoSimulating] = useState(false);
+      const [statistics, setStatistics] = useState(null);
+      
+      // 直近の投球履歴（球速）
+      const [recentVelocities, setRecentVelocities] = useState([]);
+      
+      // 打者・投手の成績
+      const [batterStats, setBatterStats] = useState({
+        plateAppearances: 0, // 打席数
+        atBats: 0,
+        hits: 0,
+        homeruns: 0,
+        walks: 0,
+        strikeouts: 0,
+        totalBases: 0,
+        stolenBases: 0,       // 盗塁成功数
+        caughtStealing: 0     // 盗塁失敗数
+      });
+      
+      const [pitcherStats, setPitcherStats] = useState({
+        pitches: 0,
+        outs: 0,
+        strikeouts: 0,
+        walks: 0,
+        runsAllowed: 0,
+        errors: 0,  // エラー数
+        wildPitches: 0,  // 暴投数を追加
+        doublePlay: 0  // 併殺打
+      });
+      
+      // 捕手統計を追加
+      const [catcherStats, setCatcherStats] = useState({
+        stolenBasesAllowed: 0,  // 盗塁許可数
+        caughtStealing: 0,      // 盗塁刺
+        wildPitchesBlocked: 0   // 暴投阻止数
+      });
+      
+      // 打球統計
+      const [battedBallStats, setBattedBallStats] = useState({
+        innerGrounder: { total: 0, hits: 0 }, // 内野ゴロ
+        innerLiner: { total: 0, hits: 0 },    // 内野ライナー
+        innerFly: { total: 0, hits: 0 },      // 内野フライ
+        shallowOuter: { total: 0, hits: 0 },  // 浅い外野
+        outerLiner: { total: 0, hits: 0 },    // 外野ライナー
+        shallowFly: { total: 0, hits: 0 },    // 浅いフライ
+        mediumFly: { total: 0, hits: 0 },     // 中堅フライ
+        deepFly: { total: 0, hits: 0 },       // 深いフライ
+        outerGrounder: { total: 0, hits: 0 }, // 外野ゴロ
+        homerun: { total: 0, hits: 0 }        // 本塁打
+      });
+      
+      // 打球タイプ別統計
+      const [battedBallTypeStats, setBattedBallTypeStats] = useState({
+        grounder: 0,  // ゴロ
+        liner: 0,     // ライナー
+        fly: 0,       // フライ
+        popup: 0      // ポップフライ
+      });
+      
+      // 打球方向別統計（5方向）
+      const [battedBallDirectionStats, setBattedBallDirectionStats] = useState({
+        left: 0,        // 左
+        leftCenter: 0,  // 左中間
+        center: 0,      // 中央
+        rightCenter: 0, // 右中間
+        right: 0        // 右
+      });
+      
+      // 打球エリア別統計（方向×タイプ）- 詳細版（5方向×5タイプ）
+      const [battedBallAreaStats, setBattedBallAreaStats] = useState({
+        'left-homerun': { total: 0, outs: 0, hits: 0 },
+        'left-fly': { total: 0, outs: 0, hits: 0 },
+        'left-liner': { total: 0, outs: 0, hits: 0 },
+        'left-popup': { total: 0, outs: 0, hits: 0 },
+        'left-grounder': { total: 0, outs: 0, hits: 0 },
+        'leftCenter-homerun': { total: 0, outs: 0, hits: 0 },
+        'leftCenter-fly': { total: 0, outs: 0, hits: 0 },
+        'leftCenter-liner': { total: 0, outs: 0, hits: 0 },
+        'leftCenter-popup': { total: 0, outs: 0, hits: 0 },
+        'leftCenter-grounder': { total: 0, outs: 0, hits: 0 },
+        'center-homerun': { total: 0, outs: 0, hits: 0 },
+        'center-fly': { total: 0, outs: 0, hits: 0 },
+        'center-liner': { total: 0, outs: 0, hits: 0 },
+        'center-popup': { total: 0, outs: 0, hits: 0 },
+        'center-grounder': { total: 0, outs: 0, hits: 0 },
+        'rightCenter-homerun': { total: 0, outs: 0, hits: 0 },
+        'rightCenter-fly': { total: 0, outs: 0, hits: 0 },
+        'rightCenter-liner': { total: 0, outs: 0, hits: 0 },
+        'rightCenter-popup': { total: 0, outs: 0, hits: 0 },
+        'rightCenter-grounder': { total: 0, outs: 0, hits: 0 },
+        'right-homerun': { total: 0, outs: 0, hits: 0 },
+        'right-fly': { total: 0, outs: 0, hits: 0 },
+        'right-liner': { total: 0, outs: 0, hits: 0 },
+        'right-popup': { total: 0, outs: 0, hits: 0 },
+        'right-grounder': { total: 0, outs: 0, hits: 0 }
+      });
+
+      const addPitch = () => {
+        const newId = pitcher.pitches.length > 0 
+          ? Math.max(...pitcher.pitches.map(b => b.id)) + 1 
+          : 1;
+        setPitcher({
+          ...pitcher,
+          pitches: [...pitcher.pitches, { id: newId, type: 'slider', level: 50 }]
+        });
+      };
+
+      const removePitch = (id) => {
+        // ストレート（id=1）は削除不可
+        if (id === 1) return;
+        setPitcher({
+          ...pitcher,
+          pitches: pitcher.pitches.filter(b => b.id !== id)
+        });
+      };
+
+      const updatePitch = (id, field, value) => {
+        setPitcher({
+          ...pitcher,
+          pitches: pitcher.pitches.map(b => 
+            b.id === id ? { ...b, [field]: value } : b
+          )
+        });
+      };
+
+      const updateBallEffect = (type, field, value) => {
+        setBallEffects({
+          ...ballEffects,
+          [type]: { ...ballEffects[type], [field]: parseFloat(value) }
+        });
+      };
+
+      const getCountAdjustment = (balls, strikes) => {
+        if (balls === 3 && strikes <= 1) {
+          return { strikeZone: 0.7, swingRate: 0.6 };
+        }
+        if (strikes === 2) {
+          return { strikeZone: 1.2, swingRate: 1.3 };
+        }
+        return { strikeZone: 1.0, swingRate: 1.0 };
+      };
+
+      // スタミナによる能力補正を計算
+      const getStaminaPenalty = (currentStamina, maxStamina) => {
+        const staminaRate = currentStamina / maxStamina;
+        
+        let velocityPenalty = 0;
+        let controlPenalty = 0;
+        
+        if (staminaRate < 0.50) {  // 50%未満
+          if (staminaRate >= 0.40) {  // 49-40%
+            velocityPenalty = -5;
+            controlPenalty = -5;
+          } else if (staminaRate >= 0.30) {  // 39-30%
+            velocityPenalty = -10;
+            controlPenalty = -10;
+          } else if (staminaRate >= 0.20) {  // 29-20%
+            velocityPenalty = -15;
+            controlPenalty = -15;
+          } else if (staminaRate >= 0.10) {  // 19-10%
+            velocityPenalty = -20;
+            controlPenalty = -20;
+          } else {  // 9-0%
+            velocityPenalty = -25;
+            controlPenalty = -25;
+          }
+        }
+        
+        return { velocityPenalty, controlPenalty };
+      };
+
+      // 内野手の実効肩力を取得（左投げペナルティ込み）
+      const getInfielderEffectiveArm = (position) => {
+        const player = defense[position];
+        let arm = player.arm;
+        
+        // セカンド・ショート・サードは左投げで-20
+        if ((position === 'second' || position === 'short' || position === 'third') 
+            && player.throws === 'left') {
+          arm = Math.max(0, arm - 20);
+        }
+        
+        return arm;
+      };
+
+      // 左右の相性効果を計算
+      const getHandednessEffect = (pitcherThrows, batterBats) => {
+        // スイッチヒッターの処理
+        let effectiveBats = batterBats;
+        if (batterBats === 'switch') {
+          effectiveBats = pitcherThrows === 'right' ? 'left' : 'right';
+        }
+        
+        // 相性判定
+        const isOppositeHand = (pitcherThrows === 'right' && effectiveBats === 'left') ||
+                               (pitcherThrows === 'left' && effectiveBats === 'right');
+        
+        // 打席別固有補正
+        const isPowerHitter = effectiveBats === 'right';  // 右打者はパワー+2
+        const isContactHitter = effectiveBats === 'left';  // 左打者は内野安打+
+        
+        if (isOppositeHand) {
+          // 有利な組み合わせ（打者有利）
+          return {
+            meetBonus: 5,
+            powerBonus: isPowerHitter ? 2 : 0,  // 右打者のみ+2
+            contactBonus: 0.03,
+            infieldHitBonus: isContactHitter ? 0.05 : 0,  // 左打者のみ+5%
+            label: '打者有利',
+            effectiveBats: effectiveBats
+          };
+        } else {
+          // 不利な組み合わせ（投手有利）
+          return {
+            meetPenalty: -5,
+            powerBonus: isPowerHitter ? 2 : 0,  // 右打者のみ+2
+            contactBonus: -0.03,
+            infieldHitBonus: isContactHitter ? 0.05 : 0,  // 左打者のみ+5%
+            label: '投手有利',
+            effectiveBats: effectiveBats
+          };
+        }
+      };
+
+      /**
+       * 物理演算ベースのコンタクト結果判定（新エンジン）
+       */
+      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null) => {
+        const effectiveBatter = batter || { meet: 60, power: 60, eye: 60, speed: 60 };
+        const effectiveCatcher = catcher || { lead: 50 };
+        const safeCount = count || { balls: 0, strikes: 0 };
+
+        // 前球情報（トンネリング用）
+        const lastPitch = pitchLog.length > 0 ? pitchLog[pitchLog.length - 1] : null;
+        const currentPitch = {
+          type: selectedBall?.type || 'straight',
+          velocity: actualVelocity,
+          level: selectedBall?.level || 100
+        };
+
+        // トンネリング効果を計算
+        const tunnelingEffect = getTunnelingEffect(lastPitch, currentPitch, effectiveCatcher.lead);
+
+        // 【新物理モデル】タイミングウィンドウベースのコンタクト計算
+        const physicsResult = calculatePhysicsContact(
+          pitcher,
+          effectiveBatter,
+          predictionCorrect,
+          currentPitch,
+          tunnelingEffect,
+          handEffect
+        );
+
+        // 空振り判定（物理モデルから）
+        if (!physicsResult.isContact) {
+          return {
+            type: 'swinging_strike',
+            description: `空振り（窓${physicsResult.timingWindow.toFixed(1)}ms/誤差${physicsResult.timingError.toFixed(1)}ms）`,
+            timingWindow: physicsResult.timingWindow,
+            timingError: physicsResult.timingError,
+            pitchType: ballEffects[currentPitch.type]?.name || 'ストレート',
+            velocity: Math.round(actualVelocity)
+          };
+        }
+
+        // ===== ファウル判定（大幅強化）=====
+        // ミート品質が低いほどファウルになりやすい
+        const foulBaseRate = 0.35;  // 基本ファウル率35%
+        const qualityPenalty = (1 - physicsResult.meetQuality) * 0.25;  // 芯を外すほど+25%
+        let foulRate = foulBaseRate + qualityPenalty;
+
+        // 2ストライク時は粘りやすい（ファウル率上昇）
+        if (safeCount.strikes === 2) {
+          foulRate += 0.10;
+        }
+
+        const pitchTypeName = ballEffects[currentPitch.type]?.name || 'ストレート';
+        const roundedVelocity = Math.round(actualVelocity);
+
+        if (Math.random() < foulRate) {
+          if (safeCount.strikes === 2) {
+            return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
+          }
+          return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
+        }
+
+        // 物理演算で打球パラメータを計算
+        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult);
+
+        // 角度によるファウル判定（強化）
+        if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {  // 55%→70%
+          if (safeCount.strikes === 2) {
+            return { type: 'foul_2strike', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
+          }
+          return { type: 'foul', description: 'ファウル', pitchType: pitchTypeName, velocity: roundedVelocity };
+        }
+
+        // 打球統計を記録
+        const battedBallType = battedBall.launchAngle < 10 ? 'grounder' :
+                               battedBall.launchAngle < 25 ? 'liner' :
+                               battedBall.launchAngle < 50 ? 'fly' : 'popup';
+
+        setBattedBallTypeStats(prev => ({
+          ...prev,
+          [battedBallType]: prev[battedBallType] + 1
+        }));
+
+        // 打球方向を記録
+        let ballDirection;
+        if (battedBall.direction < -20) ballDirection = 'left';
+        else if (battedBall.direction < -5) ballDirection = 'leftCenter';
+        else if (battedBall.direction <= 5) ballDirection = 'center';
+        else if (battedBall.direction <= 20) ballDirection = 'rightCenter';
+        else ballDirection = 'right';
+
+        setBattedBallDirectionStats(prev => ({
+          ...prev,
+          [ballDirection]: prev[ballDirection] + 1
+        }));
+
+        // 時間競合モデルで守備判定
+        const fieldingResult = judgeFielderReach(battedBall, defense, effectiveBatter);
+
+        // 結果を変換して返す
+        const resultMap = {
+          'homerun': { type: 'homerun', description: fieldingResult.description, hit: true },
+          'triple': { type: 'triple', description: fieldingResult.description, hit: true },
+          'double': { type: 'double', description: fieldingResult.description, hit: true },
+          'single': { type: 'single', description: fieldingResult.description, hit: true, isError: fieldingResult.isError },
+          'out': {
+            type: 'out',
+            description: fieldingResult.description,
+            hit: false,
+            isOutfieldFly: fieldingResult.isOutfieldFly,
+            tagupThrowbackChance: fieldingResult.tagupThrowbackChance
+          }
+        };
+
+        const result = resultMap[fieldingResult.result] || resultMap['out'];
+
+        // 打球データを結果に付加（統計ログ用）
+        return {
+          ...result,
+          exitVelocity: battedBall.exitVelocity,
+          launchAngle: battedBall.launchAngle,
+          distance: battedBall.distance,
+          meetQuality: battedBall.meetQuality,
+          v_swing: physicsResult.v_swing,
+          timingWindow: physicsResult.timingWindow,
+          timingError: physicsResult.timingError
+        };
+      };
+
+      const simulatePitch = () => {
+        // ============================================================
+        // 現在の選手データを取得
+        // ============================================================
+        const currentBatter = getCurrentBatter();
+        const currentPitcher = getCurrentPitcher();
+        const currentCatcher = getCurrentCatcher();
+        
+        // 選手データから必要な情報を展開
+        const batter = {
+          name: currentBatter.name,
+          meet: currentBatter.batting.meet,
+          power: currentBatter.batting.power,
+          eye: currentBatter.batting.eye,
+          speed: currentBatter.physical.speed,
+          steal: currentBatter.batting.steal,
+          bats: currentBatter.batting.bats
+        };
+        
+        const pitcher = {
+          name: currentPitcher.name,
+          velocity: currentPitcher.pitching.velocity,
+          control: currentPitcher.pitching.control,
+          stamina: currentPitcher.pitching.stamina,
+          throws: currentPitcher.physical.throws,
+          pitches: currentPitcher.pitching.arsenal
+        };
+        
+        const catcher = {
+          name: currentCatcher.name,
+          lead: currentCatcher.catching.lead,
+          arm: currentCatcher.physical.arm,
+          throws: currentCatcher.physical.throws
+        };
+        
+        // 守備データ（守備チームの選手データから構築）
+        const defenseTeam = getDefenseTeam();
+        const defense = {};
+        defenseTeam.players.forEach(player => {
+          defense[player.position] = {
+            defense: player.fielding.defense,
+            speed: player.physical.speed,
+            arm: player.physical.arm,
+            throws: player.physical.throws
+          };
+        });
+        
+        // スタミナを1減らす
+        const newStamina = Math.max(0, currentStamina - 1);
+        setCurrentStamina(newStamina);
+        
+        // スタミナによる能力補正を取得
+        const { velocityPenalty, controlPenalty } = getStaminaPenalty(newStamina, pitcher.stamina);
+        
+        // countのデフォルト値設定
+        const safeCount = count || { balls: 0, strikes: 0 };
+        const adjustment = getCountAdjustment(safeCount.balls, safeCount.strikes);
+        
+        // まず球種を選択（全ての球種から選ぶ）
+        const totalPitchTypes = pitcher.pitches.length;
+        
+        // 新しい予測式: 球種が増えるほど予測が外れやすくなる
+        // 1球種: 100%, 2球種: 48%, 3球種: 29.3%, 4球種: 19%, 5球種: 14%, 6球種: 8.6%
+        let basePredictionRate;
+        if (totalPitchTypes === 1) {
+          basePredictionRate = 1.00;
+        } else {
+          // 球種数に応じて予測率を計算
+          // リード力による追加削減: 2球種以上で、1球種増えるごとに2%削減
+          const leadReduction = (catcher.lead / 100) * 0.02 * (totalPitchTypes - 1);
+          
+          // 基本予測率テーブル
+          const baseRates = {
+            2: 0.50,
+            3: 0.313,
+            4: 0.21,
+            5: 0.16,
+            6: 0.106
+          };
+          
+          basePredictionRate = baseRates[totalPitchTypes] || (0.106 - (totalPitchTypes - 6) * 0.02);
+          basePredictionRate = Math.max(0, basePredictionRate - leadReduction);
+        }
+        
+        const finalPredictionRate = basePredictionRate;
+        const predictionCorrect = Math.random() < finalPredictionRate;
+        
+        // キャッチャーリードで配球を最適化
+        let pitchChoice;
+        let selectedBall;
+        
+        if (catcher.lead > 0) {
+          const leadInfluence = catcher.lead / 100;
+          const ballScores = pitcher.pitches.map((ball, index) => {
+            const effect = ballEffects[ball.type];
+            const levelFactor = ball.level / 100;
+            const score = (effect.whiffBonus + effect.groundballBonus + effect.weakBonus) * levelFactor;
+            return { index, score, ball };
+          });
+          
+          if (Math.random() < leadInfluence) {
+            ballScores.sort((a, b) => b.score - a.score);
+            const topChoices = ballScores.slice(0, Math.max(1, Math.floor(ballScores.length / 2)));
+            const chosen = topChoices[Math.floor(Math.random() * topChoices.length)];
+            pitchChoice = chosen.index;
+          } else {
+            pitchChoice = Math.floor(Math.random() * totalPitchTypes);
+          }
+        } else {
+          pitchChoice = Math.floor(Math.random() * totalPitchTypes);
+        }
+        
+        selectedBall = pitcher.pitches[pitchChoice];
+        
+        // 球種レベルによる制球ペナルティ + スタミナペナルティ
+        // ストレートはペナルティなし
+        let effectiveControl = pitcher.control + controlPenalty;  // スタミナペナルティ適用
+        if (selectedBall && selectedBall.type !== 'straight') {
+          const ballControlPenalty = 30 - (selectedBall.level / 100) * 30; // 元の値に戻す
+          effectiveControl = Math.max(0, effectiveControl - ballControlPenalty);
+        }
+        
+        // ストライクゾーン確率を実効制球で計算（制球の影響を強化）
+        const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65; // 基本値を下げ、制球の影響を大きく
+        const isInStrikeZone = Math.random() < (strikeZoneProb * adjustment.strikeZone);
+        
+        const catcherLeadEffect = (catcher.lead / 100) * 0.10;
+        
+        let swingProb;
+        if (isInStrikeZone) {
+          // ストライクゾーン: 早打ち傾向にして投球数を減らす
+          if (safeCount.strikes === 2) {
+            // 2ストライク: 見逃し三振を避けるため振る
+            swingProb = 0.90 + ((100 - batter.eye) / 100) * 0.08;
+          } else if (safeCount.balls >= 2) {
+            // 有利カウント（2ボール以上）: やや慎重に
+            swingProb = 0.60 + ((100 - batter.eye) / 100) * 0.30;
+          } else {
+            // 通常カウント: 早打ち
+            swingProb = 0.75 + ((100 - batter.eye) / 100) * 0.20;
+          }
+          swingProb = swingProb * (1 - catcherLeadEffect);
+        } else {
+          // ボールゾーン: 選球眼の効果をさらに弱めて出塁率を下げる
+          if (safeCount.strikes === 2) {
+            // 2ストライク: やや振る
+            swingProb = 0.20 + ((100 - batter.eye) / 100) * 0.30;
+          } else {
+            // 通常: ボールでも振る
+            swingProb = 0.15 + ((100 - batter.eye) / 100) * 0.30;
+          }
+          // ボールゾーンではキャッチャーリード効果なし
+        }
+        swingProb *= adjustment.swingRate;
+        
+        const doesSwing = Math.random() < swingProb;
+        
+        // 球種選択を先に行う（見逃し時も球種情報が必要）
+        const pitchTypeName = ballEffects[selectedBall.type].name;
+        let baseVelocity = pitcher.velocity + velocityPenalty;
+        baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
+        const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
+        
+        if (!doesSwing) {
+          const result = isInStrikeZone 
+            ? { type: 'called_strike', description: '見逃しストライク' }
+            : { type: 'ball', description: 'ボール' };
+          return { ...result, pitchType: pitchTypeName, velocity: actualVelocity };
+        }
+        
+        if (!isInStrikeZone) {
+          return { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity };
+        }
+        
+        // 左右の相性効果を取得
+        const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
+        
+        // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる
+        // タイミングウィンドウベースの物理判定により、空振りも自然に発生
+        const result = determineContactResultPhysics(selectedBall, predictionCorrect, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher);
+        return { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity) };
+      };
+
+      // 旧determineContactResult（互換性のために残す）
+      const determineContactResult = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null) => {
+        // 新エンジンに転送
+        return determineContactResultPhysics(selectedBall, predictionCorrect, tempoGroundballBonus, handEffect, actualVelocity, batter, pitcher, defense, null);
+      };
+
+      const advanceRunners = (hitType) => {
+        const newBases = [false, false, false];
+        let runsScored = 0;
+        
+        if (hitType === 'homerun') {
+          runsScored = 1 + bases.filter(b => b).length;
+          // setBases([false, false, false]); ← 削除
+          return { bases: [false, false, false], runsScored };
+        }
+        
+        const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
+        
+        for (let i = 2; i >= 0; i--) {
+          if (bases[i]) {
+            const newBase = i + advancement;
+            if (newBase >= 3) {
+              runsScored++;
+            } else {
+              newBases[newBase] = true;
+            }
+          }
+        }
+        
+        if (advancement < 3) {
+          newBases[advancement - 1] = true;
+        } else {
+          runsScored++;
+        }
+        
+        // setBases(newBases); ← 削除
+        return { bases: newBases, runsScored };
+      };
+
+      const throwPitch = () => {
+        // ガード: countがundefinedの場合は早期リターン
+        if (!count || count.balls === undefined) {
+          console.warn('count is not ready');
+          return;
+        }
+        
+        // 現在の選手データを取得（チーム対応）
+        const currentBatter = getCurrentBatter();
+        const currentPitcher = getCurrentPitcher();
+        const currentCatcher = getCurrentCatcher();
+        const defenseTeam = getDefenseTeam();
+        
+        // ローカル変数として展開
+        const batter = {
+          name: currentBatter.name,
+          meet: currentBatter.batting.meet,
+          power: currentBatter.batting.power,
+          eye: currentBatter.batting.eye,
+          speed: currentBatter.physical.speed,
+          steal: currentBatter.batting.steal,
+          bats: currentBatter.batting.bats
+        };
+        
+        const pitcher = {
+          name: currentPitcher.name,
+          velocity: currentPitcher.pitching.velocity,
+          control: currentPitcher.pitching.control,
+          stamina: currentPitcher.pitching.stamina,
+          throws: currentPitcher.physical.throws,
+          pitches: currentPitcher.pitching.arsenal
+        };
+        
+        const catcher = {
+          name: currentCatcher.name,
+          lead: currentCatcher.catching.lead,
+          arm: currentCatcher.physical.arm,
+          throws: currentCatcher.physical.throws
+        };
+        
+        // 守備データ
+        const defense = {};
+        defenseTeam.players.forEach(player => {
+          defense[player.position] = {
+            defense: player.fielding.defense,
+            speed: player.physical.speed,
+            arm: player.physical.arm,
+            throws: player.physical.throws
+          };
+        });
+        
+        const result = simulatePitch();
+        
+        // 球速履歴を更新（最新2球分のみ保持）
+        setRecentVelocities(prev => {
+          const updated = [...prev, result.velocity];
+          return updated.slice(-2); // 最新2球のみ
+        });
+        
+        // 投手成績の更新
+        setPitcherStats(prev => ({
+          ...prev,
+          pitches: prev.pitches + 1
+        }));
+        
+        // 投手個別の投球数を更新
+        {
+          const currentPitcherPlayer = getCurrentPitcher();
+          const defenseTeamType = isTopInning ? 'home' : 'away';
+          updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
+            pitches: (currentPitcherPlayer.stats?.pitching?.pitches || 0) + 1
+          });
+        }
+        
+        setPitchLog(prev => {
+          const updated = [...prev, {
+            inning,
+            isTop: isTopInning,
+            count: { ...count },
+            result: result.description,
+            pitchType: result.pitchType,
+            velocity: result.velocity,
+            // 打球物理データ（インプレー時のみ）
+            exitVelocity: result.exitVelocity,
+            launchAngle: result.launchAngle,
+            distance: result.distance,
+            meetQuality: result.meetQuality,
+            bases: [...bases],
+            outs
+          }];
+          // 最新50球のみ保持（パフォーマンス最適化）
+          return updated.length > 50 ? updated.slice(-50) : updated;
+        });
+        setLastResult(result);
+        
+        let newCount = { ...count };
+        let newOuts = outs;
+        let newBases = [...bases];
+        let newScore = { ...score };
+        let atBatOver = false;
+        
+        switch (result.type) {
+          case 'ball':
+            newCount.balls++;
+            if (newCount.balls === 4) {
+              // 打者成績: 四球
+              setBatterStats(prev => ({
+                ...prev,
+                plateAppearances: prev.plateAppearances + 1,
+                walks: prev.walks + 1
+              }));
+              setPitcherStats(prev => ({
+                ...prev,
+                walks: prev.walks + 1
+              }));
+              
+              // 選手個別成績を更新
+              {
+                const currentBatterPlayer = getCurrentBatter();
+                const currentPitcherPlayer = getCurrentPitcher();
+                const offenseTeamType = isTopInning ? 'away' : 'home';
+                const defenseTeamType = isTopInning ? 'home' : 'away';
+                
+                updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
+                  walks: (currentBatterPlayer.stats?.batting?.walks || 0) + 1
+                });
+                
+                updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
+                  walks: (currentPitcherPlayer.stats?.pitching?.walks || 0) + 1
+                });
+              }
+              
+              if (bases[0] && bases[1] && bases[2]) {
+                const run = 1;
+                isTopInning ? newScore.away++ : newScore.home++;
+                setPitcherStats(prev => ({
+                  ...prev,
+                  runsAllowed: prev.runsAllowed + run
+                }));
+                
+                // 押し出しの得点も投手成績に
+                {
+                  const currentPitcherPlayer = getCurrentPitcher();
+                  const defenseTeamType = isTopInning ? 'home' : 'away';
+                  updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
+                    runsAllowed: (currentPitcherPlayer.stats?.pitching?.runsAllowed || 0) + 1
+                  });
+                }
+              } else {
+                if (bases[1] && bases[0]) newBases[2] = true;
+                if (bases[0]) newBases[1] = true;
+                newBases[0] = true;
+              }
+              atBatOver = true;
+            }
+            break;
+          case 'called_strike':
+          case 'swinging_strike':
+            newCount.strikes++;
+            if (newCount.strikes === 3) {
+              // 打者成績: 三振
+              setBatterStats(prev => ({
+                ...prev,
+                plateAppearances: prev.plateAppearances + 1,
+                atBats: prev.atBats + 1,
+                strikeouts: prev.strikeouts + 1
+              }));
+              setPitcherStats(prev => ({
+                ...prev,
+                outs: prev.outs + 1,
+                strikeouts: prev.strikeouts + 1
+              }));
+              
+              // 選手個別成績を更新
+              {
+                const currentBatterPlayer = getCurrentBatter();
+                const currentPitcherPlayer = getCurrentPitcher();
+                const offenseTeamType = isTopInning ? 'away' : 'home';
+                const defenseTeamType = isTopInning ? 'home' : 'away';
+                
+                updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
+                  atBats: (currentBatterPlayer.stats?.batting?.atBats || 0) + 1,
+                  strikeouts: (currentBatterPlayer.stats?.batting?.strikeouts || 0) + 1
+                });
+                
+                updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
+                  outs: (currentPitcherPlayer.stats?.pitching?.outs || 0) + 1,
+                  strikeouts: (currentPitcherPlayer.stats?.pitching?.strikeouts || 0) + 1
+                });
+              }
+              
+              newOuts++;
+              atBatOver = true;
+            }
+            break;
+          case 'double_play':
+            // ダブルプレー処理
+            setBatterStats(prev => ({
+              ...prev,
+              plateAppearances: prev.plateAppearances + 1,
+              atBats: prev.atBats + 1
+            }));
+            setPitcherStats(prev => ({
+              ...prev,
+              outs: prev.outs + 2,
+              doublePlay: (prev.doublePlay || 0) + 1  // 併殺打カウント
+            }));
+            newOuts += 2;  // 2アウト追加
+            newBases[0] = false;  // 一塁ランナー消える
+            atBatOver = true;
+            break;
+          case 'foul':
+            newCount.strikes++;
+            break;
+          case 'single':
+          case 'double':
+          case 'triple':
+          case 'homerun':
+            const { bases: updatedBases, runsScored: runs } = advanceRunners(result.type);
+            
+            // 打者成績: ヒット
+            const bases_earned = result.type === 'single' ? 1 : result.type === 'double' ? 2 : result.type === 'triple' ? 3 : 4;
+            setBatterStats(prev => ({
+              ...prev,
+              plateAppearances: prev.plateAppearances + 1,
+              atBats: prev.atBats + 1,
+              hits: prev.hits + 1,
+              homeruns: prev.homeruns + (result.type === 'homerun' ? 1 : 0),
+              totalBases: prev.totalBases + bases_earned
+            }));
+            
+            // 選手個別成績を更新
+            {
+              const currentBatterPlayer = getCurrentBatter();
+              const currentPitcherPlayer = getCurrentPitcher();
+              const offenseTeamType = isTopInning ? 'away' : 'home';
+              const defenseTeamType = isTopInning ? 'home' : 'away';
+              
+              updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
+                atBats: (currentBatterPlayer.stats?.batting?.atBats || 0) + 1,
+                hits: (currentBatterPlayer.stats?.batting?.hits || 0) + 1,
+                homeruns: (currentBatterPlayer.stats?.batting?.homeruns || 0) + (result.type === 'homerun' ? 1 : 0),
+                rbis: (currentBatterPlayer.stats?.batting?.rbis || 0) + runs
+              });
+              
+              updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
+                runsAllowed: (currentPitcherPlayer.stats?.pitching?.runsAllowed || 0) + runs
+              });
+            }
+            
+            // チーム別安打・打点をカウント（エラーの場合はエラーもカウント）
+        if (isTopInning) {
+          setTeamHits(prev => ({ ...prev, away: prev.away + 1 }));
+          setTeamRBIs(prev => ({ ...prev, away: prev.away + runs }));
+          if (result.isError) {
+            setTeamErrors(prev => ({ ...prev, home: prev.home + 1 }));
+          }
+        } else {
+          setTeamHits(prev => ({ ...prev, home: prev.home + 1 }));
+          setTeamRBIs(prev => ({ ...prev, home: prev.home + runs }));
+          if (result.isError) {
+            setTeamErrors(prev => ({ ...prev, away: prev.away + 1 }));
+          }
+        }
+        
+        setPitcherStats(prev => ({
+          ...prev,
+          runsAllowed: prev.runsAllowed + runs
+        }));
+        
+        isTopInning ? (newScore.away += runs) : (newScore.home += runs);
+        newBases = updatedBases;
+        atBatOver = true;
+        break;
+      case 'out':
+        // 打者成績: アウト
+        setBatterStats(prev => ({
+          ...prev,
+          plateAppearances: prev.plateAppearances + 1,
+          atBats: prev.atBats + 1
+        }));
+        setPitcherStats(prev => ({
+          ...prev,
+          outs: prev.outs + 1
+        }));
+        
+        // 選手個別成績を更新
+            {
+              const currentBatterPlayer = getCurrentBatter();
+              const currentPitcherPlayer = getCurrentPitcher();
+              const offenseTeamType = isTopInning ? 'away' : 'home';
+              const defenseTeamType = isTopInning ? 'home' : 'away';
+              
+              updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
+                atBats: (currentBatterPlayer.stats?.batting?.atBats || 0) + 1
+              });
+              
+              updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
+                outs: (currentPitcherPlayer.stats?.pitching?.outs || 0) + 1
+              });
+            }
+            
+            newOuts++;
+            
+            // タッチアップ判定（外野フライのみ）
+        if (result.isOutfieldFly && newOuts < 3) {
+          const throwbackChance = result.tagupThrowbackChance || 0;
+          const runnerSpeed = batter.speed / 100; // 走者の速さ（簡易的に打者と同じ）
+          
+          // 三塁ランナーがいる場合（ホーム進塁）
+          if (newBases[2]) {
+            const tagupSuccess = Math.random() > (throwbackChance - runnerSpeed * 0.3);
+            if (tagupSuccess) {
+              if (isTopInning) {
+                setScore(prev => ({ ...prev, away: prev.away + 1 }));
+              } else {
+                setScore(prev => ({ ...prev, home: prev.home + 1 }));
+              }
+              setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+              newBases[2] = false;
+              setLastResult({ ...result, description: result.description + '（犠牲フライ）' });
+            }
+          }
+          
+          // 二塁ランナーがいる場合（三塁進塁）
+          if (newBases[1]) {
+            const tagupSuccess = Math.random() > (throwbackChance * 0.7 - runnerSpeed * 0.2);
+            if (tagupSuccess) {
+              newBases[2] = true;
+              newBases[1] = false;
+            }
+          }
+          
+          // 一塁ランナーがいる場合（二塁進塁）
+          if (newBases[0]) {
+            const tagupSuccess = Math.random() > (throwbackChance * 0.5 - runnerSpeed * 0.15);
+            if (tagupSuccess) {
+              newBases[1] = true;
+              newBases[0] = false;
+            }
+          }
+        }
+        
+        atBatOver = true;
+        break;
+    }
+    
+    // ワイルドピッチ/パスボール判定
+    if (!atBatOver && newOuts < 3 && (bases[0] || bases[1] || bases[2])) {
+      const pitcherControl = pitcher.control / 100;
+      const catcherDefense = defense.catcher.defense / 100;
+      const velocity = result.velocity || pitcher.velocity;
+      
+      // 基本発生率（制球力で変動）
+      const baseWildPitchRate = (1 - pitcherControl) * 0.025;
+      
+      // 球速ボーナス（140km/h以上で影響）
+      const velocityFactor = Math.max(0, (velocity - 140) / 100);
+      
+      // 捕手守備力で軽減
+      const catcherReduction = catcherDefense * 0.5;
+      
+      // 最終発生率
+          const wildPitchRate = baseWildPitchRate * (1 + velocityFactor) * (1 - catcherReduction);
+          
+          if (Math.random() < wildPitchRate) {
+            // ãƒ¯ã‚¤ãƒ«ãƒ‰ãƒ”ãƒƒãƒç™ºç”Ÿ
+            setPitcherStats(prev => ({ ...prev, wildPitches: prev.wildPitches + 1 }));
+            
+            const catcherArm = defense.catcher.arm / 100;
+            const runnerSpeed = batter.speed / 100;
+            const throwoutChance = Math.max(0, catcherArm * 0.40 - runnerSpeed * 0.20);
+            
+            let wpDescription = '💥 ワイルドピッチ！';
+            
+            // 三塁→ホーム
+            if (newBases[2]) {
+              if (Math.random() < throwoutChance) {
+                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
+                wpDescription += ' 🛡️ 捕手が三塁ランナーを刺した！';
+                newOuts++;
+              } else {
+                isTopInning ? newScore.away++ : newScore.home++;
+                setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+                wpDescription += ' ⚡ 三塁ランナーがホームイン';
+              }
+              newBases[2] = false;
+            }
+            
+            // 二塁→三塁
+            if (newBases[1] && newOuts < 3) {
+              if (Math.random() < throwoutChance) {
+                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
+                wpDescription += ' 🛡️ 二塁ランナーを刺した！';
+                newOuts++;
+              } else {
+                newBases[2] = true;
+                wpDescription += ' ⚡ 二塁ランナーが三塁へ';
+              }
+              newBases[1] = false;
+            }
+            
+            // 一塁→二塁
+            if (newBases[0] && newOuts < 3) {
+              if (Math.random() < throwoutChance) {
+                setCatcherStats(prev => ({ ...prev, wildPitchesBlocked: prev.wildPitchesBlocked + 1 }));
+                wpDescription += ' 🛡️ 一塁ランナーを刺した！';
+                newOuts++;
+              } else {
+                newBases[1] = true;
+                wpDescription += ' ⚡ 一塁ランナーが二塁へ';
+              }
+              newBases[0] = false;
+            }
+            
+            setPitchLog(prev => {
+              const updated = [...prev, { description: wpDescription, isSpecial: true }];
+              return updated.length > 50 ? updated.slice(-50) : updated;
+            });
+          }
+        }
+        
+        // 盗塁判定
+        if (!atBatOver && newOuts < 3 && result.type !== 'foul' && result.type !== 'foul_2strike' && (bases[0] || bases[1])) {
+          const runnerSpeed = batter.speed / 100;
+          const stealSkill = batter.steal / 100;
+          const pitcherControl = pitcher.control / 100;
+          const pitchVelocity = result.velocity || pitcher.velocity;
+          
+          // 盗塁試行率（調整版）
+          const stealSkillBonus = Math.pow(stealSkill, 1.5) * 0.35;  // 0-35%（より試行しやすく）
+          const speedBonus = runnerSpeed * 0.05;  // 0-5%
+          const countBonus = newCount.balls >= 2 ? 0.03 : 0;  // 3%
+          const outsBonus = newOuts === 2 ? 0.02 : 0;  // 2%
+          
+          // 二塁盗塁試行
+          if (bases[0] && !bases[1]) {
+            // 二塁盗塁は正面への送球なので左右ペナルティなし
+            let catcherArm = defense.catcher.arm / 100;
+            let catcherDeterrent = catcherArm * 0.10;  // 捕手の肩による牽制効果 0-10%
+            
+            // 左投手は牽制ボーナス
+            if (pitcher.throws === 'left') {
+              catcherDeterrent += 0.03;  // +3%の牽制ボーナス
+            }
+            
+            const stealAttempt = Math.max(0, stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrent);
+            
+            if (Math.random() < stealAttempt) {
+              // 新しい成功率システム
+              // ステップ1: 走力による基本成功率（20%-80%）
+              const baseRate = 0.20 + runnerSpeed * 0.60;
+              
+              // ステップ2: 各種補正
+              const stealBonus = stealSkill * 0.15;  // 0-15%
+              const velocityEffect = (pitchVelocity - 135) / 350;  // ±10%
+              const controlEffect = pitcherControl * 0.05;  // 0-5%
+              
+              const adjustedRate = baseRate + stealBonus - velocityEffect - controlEffect;
+              
+              // ステップ3: 捕手の肩による阻止（段階的・削減版）
+              let catcherBlock;
+              if (adjustedRate < 0.30) {
+                // 低成功率: 80%阻止
+                catcherBlock = adjustedRate * catcherArm * 0.80;
+              } else if (adjustedRate > 0.60) {
+                // 高成功率: 35%阻止
+                catcherBlock = adjustedRate * catcherArm * 0.35;
+              } else {
+                // 中間: 線形補間（80% → 35%）
+                const t = (adjustedRate - 0.30) / 0.30;
+                catcherBlock = adjustedRate * catcherArm * (0.80 - t * 0.45);
+              }
+              
+              const stealSuccess = Math.max(0.05, Math.min(0.95, adjustedRate - catcherBlock));
+              
+              if (Math.random() < stealSuccess) {
+                // 盗塁成功
+        newBases[1] = true;
+        newBases[0] = false;
+        setCatcherStats(prev => ({ ...prev, stolenBasesAllowed: prev.stolenBasesAllowed + 1 }));
+        setBatterStats(prev => ({ ...prev, stolenBases: prev.stolenBases + 1 }));
+        setPitchLog(prev => {
+          const updated = [...prev, { description: '🏃 盗塁成功！一塁→二塁', isSpecial: true }];
+          return updated.length > 50 ? updated.slice(-50) : updated;
+        });
+      } else {
+        // 盗塁失敗
+        newBases[0] = false;
+        newOuts++;
+        setCatcherStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
+        setBatterStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
+        setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
+        setPitchLog(prev => {
+          const updated = [...prev, { description: '❌ 盗塁失敗、アウト', isSpecial: true }];
+          return updated.length > 50 ? updated.slice(-50) : updated;
+        });
+      }
+    }
+  }
+  
+  // 三塁盗塁試行
+  if (bases[1] && !bases[2] && newOuts < 3) {
+    // 三塁盗塁は体の向きを変える必要があるため左投げペナルティあり
+    let catcherArmForThird = defense.catcher.arm / 100;
+    
+    // 左投げ捕手は三塁送球でペナルティ
+    if (catcher.throws === 'left') {
+      catcherArmForThird = Math.max(0, catcherArmForThird - 0.20);  // -20%
+    }
+    
+    let catcherDeterrentThird = catcherArmForThird * 0.12;
+    
+    // 左投手は牽制ボーナス
+    if (pitcher.throws === 'left') {
+      catcherDeterrentThird += 0.05;
+    }
+    
+    const stealThirdAttempt = Math.max(0, (stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrentThird) * 0.7);
+    
+    if (Math.random() < stealThirdAttempt) {
+      // 新しい成功率システム（三塁盗塁は基本成功率が高い）
+      // ステップ1: 走力による基本成功率（30%-90%）
+      const baseRate = 0.30 + runnerSpeed * 0.60;
+      
+      // ステップ2: 各種補正
+      const stealBonus = stealSkill * 0.12;  // 0-12%
+      const velocityEffect = (pitchVelocity - 135) / 350;  // ±10%
+      const controlEffect = pitcherControl * 0.04;  // 0-4%
+      
+      const adjustedRate = baseRate + stealBonus - velocityEffect - controlEffect;
+      
+      // ステップ3: 捕手の肩による阻止（段階的・削減版）
+              let catcherBlock;
+              if (adjustedRate < 0.30) {
+                catcherBlock = adjustedRate * catcherArmForThird * 0.80;
+              } else if (adjustedRate > 0.60) {
+                catcherBlock = adjustedRate * catcherArmForThird * 0.35;
+              } else {
+                const t = (adjustedRate - 0.30) / 0.30;
+                catcherBlock = adjustedRate * catcherArmForThird * (0.80 - t * 0.45);
+              }
+              
+              const stealThirdSuccess = Math.max(0.05, Math.min(0.95, adjustedRate - catcherBlock));
+              
+              if (Math.random() < stealThirdSuccess) {
+                // 盗塁成功
+        newBases[2] = true;
+        newBases[1] = false;
+        setCatcherStats(prev => ({ ...prev, stolenBasesAllowed: prev.stolenBasesAllowed + 1 }));
+        setBatterStats(prev => ({ ...prev, stolenBases: prev.stolenBases + 1 }));
+        setPitchLog(prev => {
+          const updated = [...prev, { description: '🏃 盗塁成功！二塁→三塁', isSpecial: true }];
+          return updated.length > 50 ? updated.slice(-50) : updated;
+        });
+      } else {
+        // 盗塁失敗
+        newBases[1] = false;
+        newOuts++;
+        setCatcherStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
+        setBatterStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
+        setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
+        setPitchLog(prev => {
+          const updated = [...prev, { description: '❌ 盗塁失敗、アウト', isSpecial: true }];
+          return updated.length > 50 ? updated.slice(-50) : updated;
+        });
+      }
+    }
+  }
+}
+
+if (newOuts === 3) {
+  newOuts = 0;
+  newBases = [false, false, false];
+  
+  // イニング終了時にスタミナ+3回復
+  setCurrentStamina(prev => Math.min(pitcher.stamina, prev + 3));
+  
+  // イニングの得点を記録
+  const currentInn = inning - 1; // 0-indexed
+  if (inning <= 9) {
+    // 9回まで
+            if (isTopInning) {
+              const prevTotal = inningScores.away.slice(0, currentInn).filter(x => x !== null).reduce((a, b) => a + b, 0);
+              const awayInningRuns = newScore.away - prevTotal;
+              setInningScores(prev => {
+                const newAway = [...prev.away];
+                newAway[currentInn] = awayInningRuns;
+                return { ...prev, away: newAway };
+              });
+            } else {
+              const prevTotal = inningScores.home.slice(0, currentInn).filter(x => x !== null).reduce((a, b) => a + b, 0);
+              const homeInningRuns = newScore.home - prevTotal;
+              setInningScores(prev => {
+                const newHome = [...prev.home];
+                newHome[currentInn] = homeInningRuns;
+                return { ...prev, home: newHome };
+              });
+            }
+          } else {
+            // 延長（10回以降）
+            const extraInn = inning - 10; // 0-indexed for extra innings
+            if (isTopInning) {
+              const prevRegular = inningScores.away.filter(x => x !== null).reduce((a, b) => a + b, 0);
+              const prevExtra = extraInningScores.away.reduce((a, b) => a + b, 0);
+              const awayInningRuns = newScore.away - prevRegular - prevExtra;
+              setExtraInningScores(prev => {
+                const newAway = [...prev.away];
+                newAway[extraInn] = awayInningRuns;
+                return { ...prev, away: newAway };
+              });
+            } else {
+              const prevRegular = inningScores.home.filter(x => x !== null).reduce((a, b) => a + b, 0);
+              const prevExtra = extraInningScores.home.reduce((a, b) => a + b, 0);
+              const homeInningRuns = newScore.home - prevRegular - prevExtra;
+              setExtraInningScores(prev => {
+                const newHome = [...prev.home];
+                newHome[extraInn] = homeInningRuns;
+                return { ...prev, home: newHome };
+              });
+            }
+          }
+          
+          // 試合終了判定（3アウト時）
+          if (inning >= 9 && isTopInning && newScore.home > newScore.away) {
+            // 9回表終了時、ホームがリードしていれば試合終了（9回裏不要）
+            setGameOver(true);
+            setLastResult({ description: `試合終了！ ${homeTeam.name} の勝利！` });
+          } else if (inning >= 9 && !isTopInning && newScore.home !== newScore.away) {
+            // 9回裏以降で決着（3アウトで終了）
+            setGameOver(true);
+            setLastResult({ description: `試合終了！ ${newScore.home > newScore.away ? homeTeam.name : awayTeam.name} の勝利！` });
+          } else if (inning >= maxExtraInnings && !isTopInning) {
+            // 延長最大回数で引き分け
+            setGameOver(true);
+            setLastResult({ description: `試合終了！ 延長${maxExtraInnings}回 引き分け` });
+          } else {
+            if (isTopInning) {
+              setIsTopInning(false);
+            } else {
+              setIsTopInning(true);
+              setInning(inning + 1);
+            }
+          }
+        }
+        
+        // サヨナラ勝ち判定（9回裏以降、ホームが得点してリードした瞬間）
+        if (inning >= 9 && !isTopInning && newScore.home > newScore.away && !gameOver) {
+          // 延長の場合は得点を記録
+          if (inning > 9) {
+            const extraInn = inning - 10;
+            const prevRegular = inningScores.home.filter(x => x !== null).reduce((a, b) => a + b, 0);
+            const prevExtra = extraInningScores.home.reduce((a, b) => a + b, 0);
+            const homeInningRuns = newScore.home - prevRegular - prevExtra;
+            setExtraInningScores(prev => {
+              const newHome = [...prev.home];
+              newHome[extraInn] = homeInningRuns;
+              return { ...prev, home: newHome };
+            });
+          } else {
+            // 9回裏サヨナラ
+            const prevTotal = inningScores.home.slice(0, 8).filter(x => x !== null).reduce((a, b) => a + b, 0);
+            const homeInningRuns = newScore.home - prevTotal;
+            setInningScores(prev => {
+              const newHome = [...prev.home];
+              newHome[8] = homeInningRuns;
+              return { ...prev, home: newHome };
+            });
+          }
+          setGameOver(true);
+          setLastResult({ description: `サヨナラ勝ち！ ${homeTeam.name} の勝利！` });
+        }
+        
+        if (atBatOver) {
+          newCount = { balls: 0, strikes: 0 };
+          // 次の打者に進む
+          advanceBatter();
+        }
+        
+        setCount(newCount);
+        setOuts(newOuts);
+        setBases(newBases);
+        setScore(newScore);
+      };
+
+      const resetGame = () => {
+        setCount({ balls: 0, strikes: 0 });
+        setBases([false, false, false]);
+        setOuts(0);
+        setInning(1);
+        setScore({ home: 0, away: 0 });
+        setGameOver(false);  // 試合終了フラグをリセット
+        setRemainingPitches(0);  // 残り投球数をリセット
+        setInningScores({
+          away: [null, null, null, null, null, null, null, null, null],
+          home: [null, null, null, null, null, null, null, null, null]
+        });
+        setExtraInningScores({ away: [], home: [] });  // 延長スコアリセット
+        setCurrentInningScore({ away: 0, home: 0 });
+        setTeamHits({ home: 0, away: 0 });
+        setTeamErrors({ home: 0, away: 0 });
+        setTeamRBIs({ home: 0, away: 0 });
+        setIsTopInning(true);
+        setPitchLog([]);
+        setLastResult(null);
+        setStatistics(null);
+        setRecentVelocities([]);
+        // チームの打順をリセット＆選手成績をリセット
+        setHomeTeam(prev => ({
+          ...prev, 
+          currentBatterOrder: 1,
+          players: prev.players.map(p => ({ ...p, stats: createPlayerStats() }))
+        }));
+        setAwayTeam(prev => ({
+          ...prev, 
+          currentBatterOrder: 1,
+          players: prev.players.map(p => ({ ...p, stats: createPlayerStats() }))
+        }));
+        setCurrentStamina(getCurrentPitcher().pitching.stamina);  // スタミナリセット
+        setBatterStats({
+          plateAppearances: 0,
+          atBats: 0,
+          hits: 0,
+          homeruns: 0,
+          walks: 0,
+          strikeouts: 0,
+          totalBases: 0,
+          stolenBases: 0,
+          caughtStealing: 0
+        });
+        setPitcherStats({
+          pitches: 0,
+          outs: 0,
+          strikeouts: 0,
+          walks: 0,
+          runsAllowed: 0,
+          errors: 0,
+          wildPitches: 0,
+          doublePlay: 0
+        });
+        setCatcherStats({
+          stolenBasesAllowed: 0,
+          caughtStealing: 0,
+          wildPitchesBlocked: 0
+        });
+        setBattedBallStats({
+          innerGrounder: { total: 0, hits: 0 },
+          innerLiner: { total: 0, hits: 0 },
+          innerFly: { total: 0, hits: 0 },
+          shallowOuter: { total: 0, hits: 0 },
+          outerLiner: { total: 0, hits: 0 },
+          shallowFly: { total: 0, hits: 0 },
+          mediumFly: { total: 0, hits: 0 },
+          deepFly: { total: 0, hits: 0 },
+          outerGrounder: { total: 0, hits: 0 },
+          homerun: { total: 0, hits: 0 }
+        });
+        setBattedBallTypeStats({
+          grounder: 0,
+          liner: 0,
+          fly: 0,
+          popup: 0
+        });
+        setBattedBallDirectionStats({
+          left: 0,
+          leftCenter: 0,
+          center: 0,
+          rightCenter: 0,
+          right: 0
+        });
+        setBattedBallAreaStats({
+          'left-homerun': { total: 0, outs: 0, hits: 0 },
+          'left-fly': { total: 0, outs: 0, hits: 0 },
+          'left-liner': { total: 0, outs: 0, hits: 0 },
+          'left-popup': { total: 0, outs: 0, hits: 0 },
+          'left-grounder': { total: 0, outs: 0, hits: 0 },
+          'leftCenter-homerun': { total: 0, outs: 0, hits: 0 },
+          'leftCenter-fly': { total: 0, outs: 0, hits: 0 },
+          'leftCenter-liner': { total: 0, outs: 0, hits: 0 },
+          'leftCenter-popup': { total: 0, outs: 0, hits: 0 },
+          'leftCenter-grounder': { total: 0, outs: 0, hits: 0 },
+          'center-homerun': { total: 0, outs: 0, hits: 0 },
+          'center-fly': { total: 0, outs: 0, hits: 0 },
+          'center-liner': { total: 0, outs: 0, hits: 0 },
+          'center-popup': { total: 0, outs: 0, hits: 0 },
+          'center-grounder': { total: 0, outs: 0, hits: 0 },
+          'rightCenter-homerun': { total: 0, outs: 0, hits: 0 },
+          'rightCenter-fly': { total: 0, outs: 0, hits: 0 },
+          'rightCenter-liner': { total: 0, outs: 0, hits: 0 },
+          'rightCenter-popup': { total: 0, outs: 0, hits: 0 },
+          'rightCenter-grounder': { total: 0, outs: 0, hits: 0 },
+          'right-homerun': { total: 0, outs: 0, hits: 0 },
+          'right-fly': { total: 0, outs: 0, hits: 0 },
+          'right-liner': { total: 0, outs: 0, hits: 0 },
+          'right-popup': { total: 0, outs: 0, hits: 0 },
+          'right-grounder': { total: 0, outs: 0, hits: 0 }
+        });
+      };
+
+
+      // 指定回数投球を開始
+      const multiPitch = (pitchCount) => {
+        setRemainingPitches(pitchCount);
+        setIsAutoSimulating(true);
+      };
+      
+      // 残り投球数がある場合は自動的に投球を続ける
+      React.useEffect(() => {
+        if (remainingPitches > 0 && !gameOver) {
+          const timer = setTimeout(() => {
+            throwPitch();
+            setRemainingPitches(prev => prev - 1);
+          }, 1);  // 1msごとに投球
+          return () => clearTimeout(timer);
+        } else if (remainingPitches === 0 && isAutoSimulating) {
+          setIsAutoSimulating(false);
+        }
+      }, [remainingPitches, gameOver]);
+
+      // --- PositionControl コンポーネント (PitchByPitchSimulator 内部に配置) ---
+      const PositionControl = ({ position, label, defense, setDefense }) => {
+        const [show, setShow] = React.useState(false);
+        if (!defense || !defense[position]) return null;
+
+        return (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShow(!show)}
+              className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 shadow-lg border-2 border-white"
+            >
+              {label}
+            </button>
+            {show && (
+              <div className="absolute z-10 bg-white p-2 rounded shadow-xl border-2 border-blue-600 w-48 text-xs"
+                   style={{left: '50%', transform: 'translateX(-50%)', marginTop: '4px'}}>
+                <div className="mb-1 text-gray-800">
+                  <label className="block font-bold">守:{defense[position].defense}</label>
+                  <input type="range" min="0" max="100" value={defense[position].defense}
+                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], defense: Number(e.target.value)}})}
+                    className="w-full h-1 cursor-pointer" />
+                </div>
+                <div className="mb-1 text-gray-800">
+                  <label className="block font-bold">足:{defense[position].speed}</label>
+                  <input type="range" min="0" max="100" value={defense[position].speed}
+                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], speed: Number(e.target.value)}})}
+                    className="w-full h-1 cursor-pointer" />
+                </div>
+                <div className="text-gray-800">
+                  <label className="block font-bold">肩:{defense[position].arm}</label>
+                  <input type="range" min="0" max="100" value={defense[position].arm}
+                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], arm: Number(e.target.value)}})}
+                    className="w-full h-1 cursor-pointer" />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      const renderBases = () => (
+        <div className="relative w-full max-w-2xl mx-auto">
+          {/* 全ポジション一括設定 */}
+          <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-4 rounded-lg mb-4 shadow-md">
+            <h4 className="font-bold text-sm mb-3 text-purple-800">🌟 全ポジション一括設定</h4>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  守備力: <span className="text-blue-600">{defense.first.defense}</span>
+                </label>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={defense.first.defense}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setDefense({
+                      pitcher: { ...defense.pitcher, defense: val },
+                      catcher: { ...defense.catcher, defense: val },
+                      first: { ...defense.first, defense: val },
+                      second: { ...defense.second, defense: val },
+                      short: { ...defense.short, defense: val },
+                      third: { ...defense.third, defense: val },
+                      left: { ...defense.left, defense: val },
+                      center: { ...defense.center, defense: val },
+                      right: { ...defense.right, defense: val }
+                    });
+                  }}
+                  className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  足: <span className="text-green-600">{defense.first.speed}</span>
+                </label>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={defense.first.speed}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setDefense({
+                      pitcher: { ...defense.pitcher, speed: val },
+                      catcher: { ...defense.catcher, speed: val },
+                      first: { ...defense.first, speed: val },
+                      second: { ...defense.second, speed: val },
+                      short: { ...defense.short, speed: val },
+                      third: { ...defense.third, speed: val },
+                      left: { ...defense.left, speed: val },
+                      center: { ...defense.center, speed: val },
+                      right: { ...defense.right, speed: val }
+                    });
+                  }}
+                  className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  肩: <span className="text-orange-600">{defense.first.arm}</span>
+                </label>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={defense.first.arm}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setDefense({
+                      pitcher: { ...defense.pitcher, arm: val },
+                      catcher: { ...defense.catcher, arm: val },
+                      first: { ...defense.first, arm: val },
+                      second: { ...defense.second, arm: val },
+                      short: { ...defense.short, arm: val },
+                      third: { ...defense.third, arm: val },
+                      left: { ...defense.left, arm: val },
+                      center: { ...defense.center, arm: val },
+                      right: { ...defense.right, arm: val }
+                    });
+                  }}
+                  className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <svg viewBox="0 0 400 350" className="w-full h-full">
+            {/* スタジアム外周（グレー） */}
+            <ellipse cx="200" cy="280" rx="180" ry="140" fill="#9ca3af" />
+            
+            {/* 観客席 */}
+            <path d="M 50 200 Q 200 80 350 200 L 350 320 Q 200 360 50 320 Z" fill="#d1d5db" />
+            
+            {/* スコアボード（センター後方） */}
+            <rect x="160" y="10" width="80" height="35" fill="#1e40af" stroke="#1e3a8a" strokeWidth="2" rx="3" />
+            <rect x="165" y="15" width="70" height="10" fill="#16a34a" opacity="0.8" />
+            
+            {/* ファウルポール（黄色） */}
+            <rect x="30" y="200" width="8" height="80" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1" />
+            <rect x="362" y="200" width="8" height="80" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1" />
+            
+            {/* 外野フェンス（曲線） */}
+            <path d="M 40 260 Q 200 120 360 260" fill="none" stroke="#8b7355" strokeWidth="4" />
+            
+            {/* 外野芝（深緑、ストライプ） */}
+            <defs>
+              <linearGradient id="grassStripes" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#15803d" />
+                <stop offset="10%" stopColor="#16a34a" />
+                <stop offset="20%" stopColor="#15803d" />
+                <stop offset="30%" stopColor="#16a34a" />
+                <stop offset="40%" stopColor="#15803d" />
+                <stop offset="50%" stopColor="#16a34a" />
+                <stop offset="60%" stopColor="#15803d" />
+                <stop offset="70%" stopColor="#16a34a" />
+                <stop offset="80%" stopColor="#15803d" />
+                <stop offset="90%" stopColor="#16a34a" />
+                <stop offset="100%" stopColor="#15803d" />
+              </linearGradient>
+            </defs>
+            <path d="M 40 260 Q 200 120 360 260 L 270 300 L 200 265 L 130 300 Z" fill="url(#grassStripes)" />
+            
+            {/* 内野土（茶色、ダイヤモンド） */}
+            <path d="M 200 310 L 270 250 L 200 190 L 130 250 Z" fill="#d4a574" stroke="#b8956a" strokeWidth="2" />
+            
+            {/* 内野グラス（円弧） */}
+            <ellipse cx="200" cy="310" rx="80" ry="55" fill="#22c55e" opacity="0.6" />
+            
+            {/* ファウルライン（白線） */}
+            <line x1="200" y1="310" x2="40" y2="260" stroke="white" strokeWidth="2.5" />
+            <line x1="200" y1="310" x2="360" y2="260" stroke="white" strokeWidth="2.5" />
+            
+            {/* ベースパス */}
+            <line x1="200" y1="310" x2="270" y2="250" stroke="#b8956a" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" />
+            <line x1="270" y1="250" x2="200" y2="190" stroke="#b8956a" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" />
+            <line x1="200" y1="190" x2="130" y2="250" stroke="#b8956a" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" />
+            <line x1="130" y1="250" x2="200" y2="310" stroke="#b8956a" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" />
+            
+            {/* 投手マウンド */}
+            <ellipse cx="200" cy="280" rx="12" ry="8" fill="#d4a574" stroke="#b8956a" strokeWidth="1.5" />
+            <ellipse cx="200" cy="280" rx="4" ry="3" fill="#b8956a" />
+            
+            {/* ホームベース */}
+            <path d="M 200 310 L 195 305 L 195 300 L 205 300 L 205 305 Z" 
+                  fill="white" stroke="#333" strokeWidth="1.5" />
+            
+            {/* 一塁ベース */}
+            <rect x="265" y="245" width="10" height="10" 
+                  fill={bases[0] ? '#fbbf24' : 'white'} 
+                  stroke="#333" strokeWidth="1.5"
+                  transform="rotate(45 270 250)" />
+            {bases[0] && <circle cx="270" cy="250" r="5" fill="#ef4444" />}
+            
+            {/* 二塁ベース */}
+            <rect x="195" y="185" width="10" height="10" 
+                  fill={bases[1] ? '#fbbf24' : 'white'} 
+                  stroke="#333" strokeWidth="1.5"
+                  transform="rotate(45 200 190)" />
+            {bases[1] && <circle cx="200" cy="190" r="5" fill="#ef4444" />}
+            
+            {/* 三塁ベース */}
+            <rect x="125" y="245" width="10" height="10" 
+                  fill={bases[2] ? '#fbbf24' : 'white'} 
+                  stroke="#333" strokeWidth="1.5"
+                  transform="rotate(45 130 250)" />
+            {bases[2] && <circle cx="130" cy="250" r="5" fill="#ef4444" />}
+            
+            {/* ポジション表示（小さい円） */}
+            {/* 投手 */}
+            <circle cx="200" cy="280" r="3" fill="#1e40af" opacity="0.7" />
+            
+            {/* 捕手 */}
+            <circle cx="200" cy="315" r="3" fill="#dc2626" opacity="0.7" />
+            
+            {/* 一塁手 */}
+            <circle cx="260" cy="260" r="3" fill="#7c3aed" opacity="0.7" />
+            
+            {/* 二塁手 */}
+            <circle cx="230" cy="230" r="3" fill="#7c3aed" opacity="0.7" />
+            
+            {/* 遊撃手 */}
+            <circle cx="170" cy="230" r="3" fill="#7c3aed" opacity="0.7" />
+            
+            {/* 三塁手 */}
+            <circle cx="140" cy="260" r="3" fill="#7c3aed" opacity="0.7" />
+            
+            {/* 左翼手 */}
+            <circle cx="120" cy="200" r="3" fill="#059669" opacity="0.7" />
+            
+            {/* 中堅手 */}
+            <circle cx="200" cy="160" r="3" fill="#059669" opacity="0.7" />
+            
+            {/* 右翼手 */}
+            <circle cx="280" cy="200" r="3" fill="#059669" opacity="0.7" />
+          </svg>
+          
+          {/* ポジション別パラメータ設定UI */}
+          <div className="absolute inset-0 pointer-events-none">
+            {/* 投手 */}
+            <div className="absolute pointer-events-auto" style={{left: '48%', top: '58%'}}>
+              <PositionControl position="pitcher" label="投" />
+            </div>
+            
+            {/* 捕手 */}
+            <div className="absolute pointer-events-auto" style={{left: '48%', top: '72%'}}>
+              <PositionControl position="catcher" label="捕" />
+            </div>
+            
+            {/* 一塁手 */}
+            <div className="absolute pointer-events-auto" style={{left: '68%', top: '52%'}}>
+              <PositionControl position="first" label="一" />
+            </div>
+            
+            {/* 二塁手 */}
+            <div className="absolute pointer-events-auto" style={{left: '60%', top: '38%'}}>
+              <PositionControl position="second" label="二" />
+            </div>
+            
+            {/* 遊撃手 */}
+            <div className="absolute pointer-events-auto" style={{left: '38%', top: '38%'}}>
+              <PositionControl position="short" label="遊" />
+            </div>
+            
+            {/* 三塁手 */}
+            <div className="absolute pointer-events-auto" style={{left: '30%', top: '52%'}}>
+              <PositionControl position="third" label="三" />
+            </div>
+            
+            {/* 左翼手 */}
+            <div className="absolute pointer-events-auto" style={{left: '25%', top: '28%'}}>
+              <PositionControl position="left" label="左" defense={defense} setDefense={setDefense} />
+            </div>
+            
+            {/* 中堅手 */}
+            <div className="absolute pointer-events-auto" style={{left: '48%', top: '15%'}}>
+              <PositionControl position="center" label="中" defense={defense} setDefense={setDefense} />
+            </div>
+            
+            {/* 右翼手 */}
+            <div className="absolute pointer-events-auto" style={{left: '71%', top: '28%'}}>
+              <PositionControl position="right" label="右" defense={defense} setDefense={setDefense} />
+            </div>
+          </div>
+        </div>
+      );
+      
+
+      // アコーディオンセクションのコンポーネント
+      const AccordionSection = ({ title, isExpanded, onToggle, children, bgColor = "bg-blue-50" }) => (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <button
+            onClick={onToggle}
+            className={`w-full px-4 py-3 flex justify-between items-center ${bgColor} hover:opacity-90 transition`}
+          >
+            <span className="font-bold text-gray-800">{title}</span>
+            <span className="text-xl">{isExpanded ? '▼' : '▶'}</span>
+          </button>
+          {isExpanded && (
+            <div className="p-4">
+              {children}
+            </div>
+          )}
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800 p-2">
+          {/* 3カラムレイアウト */}
+          <div className="grid grid-cols-12 gap-2 max-w-[1800px] mx-auto">
+            
+            {/* ===== 左カラム: アウェイチーム ===== */}
+            <div className="col-span-3 bg-gray-900 rounded-lg p-2 text-white">
+              <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
+                <h3 className="font-bold text-red-400">✈️ {awayTeam.name}</h3>
+                <span className="text-2xl font-bold text-red-400">{score?.away || 0}</span>
+              </div>
+              
+              {/* 選手リスト */}
+              <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
+                {awayTeam.players
+                  .sort((a, b) => a.battingOrder - b.battingOrder)
+                  .map(player => {
+                    const isCurrentBatter = gameStarted && isTopInning && player.battingOrder === awayTeam.currentBatterOrder;
+                    const isPitcher = player.position === 'pitcher';
+                    const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+
+                    // 守備位置の色分け
+                    const getPositionColor = (pos) => {
+                      if (pos === 'pitcher') return isCurrentBatter ? 'bg-red-600 text-white' : 'bg-red-600 text-white';  // 🔴 赤
+                      if (pos === 'catcher') return isCurrentBatter ? 'bg-cyan-500 text-white' : 'bg-cyan-600 text-white';  // 🔵 水色
+                      if (['first', 'second', 'third', 'short'].includes(pos)) return isCurrentBatter ? 'bg-yellow-400 text-black' : 'bg-yellow-600 text-white';  // 🟡 黄色
+                      if (['left', 'center', 'right'].includes(pos)) return isCurrentBatter ? 'bg-green-500 text-white' : 'bg-green-600 text-white';  // 🟢 緑
+                      return 'bg-gray-700';
+                    };
+
+                    const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                    const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+
+                    const isSelected = !gameStarted && selectedBatterAway === player.battingOrder;
+                    const fitness = calculateDefensiveFitness(player, player.position);
+
+                    return (
+                      <div
+                        key={player.id}
+                        className={`p-2 rounded transition ${
+                          isCurrentBatter ? 'bg-yellow-500 text-black' :
+                          isSelected ? 'bg-blue-600 text-white' :
+                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          {!gameStarted && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBatterClick('away', player.battingOrder);
+                              }}
+                              className="text-xs px-1 bg-gray-700 hover:bg-gray-600 rounded"
+                            >
+                              打順
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTeam('away');
+                              setSelectedPlayerId(player.id);
+                              setEditingPlayer(player);
+                            }}
+                            className="text-xs px-1 bg-green-700 hover:bg-green-600 rounded"
+                          >
+                            編集
+                          </button>
+                          <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
+                          <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
+                          <span className="font-bold">{player.name}</span>
+                          <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          <span className="flex-1"></span>
+                          {isCurrentBatter && <span>⚾</span>}
+                          {isSelected && <span>👆</span>}
+                        </div>
+                        <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
+                          <span>M{player.batting.meet}</span>
+                          <span>P{player.batting.power}</span>
+                          <span>E{player.batting.eye}</span>
+                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
+                        </div>
+                        {!gameStarted && (
+                          <div className={`text-[10px] ml-6 mt-0.5 ${
+                            fitness.grade === 'S' ? 'text-yellow-400' :
+                            fitness.grade === 'A' ? 'text-green-400' :
+                            fitness.grade === 'B' ? 'text-blue-400' :
+                            fitness.grade === 'D' ? 'text-red-400' :
+                            'text-gray-400'
+                          }`}>
+                            守備適性 [{fitness.grade}] {fitness.comments}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+              
+              {/* アウェイチーム 試合スタッツ */}
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
+                {/* 投手成績 */}
+                <div className="bg-gray-800 rounded p-1.5 mb-1">
+                  <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
+                  <div className="text-xs">
+                    {awayTeam.players.filter(p => p.position === 'pitcher').map(p => {
+                      const s = p.stats?.pitching || {};
+                      const outs = s.outs || 0;
+                      const ip = outs > 0 ? `${Math.floor(outs / 3)}.${outs % 3}` : '0.0';
+                      const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                      return (
+                        <div key={p.id} className="flex justify-between text-gray-300">
+                          <span>{p.name}</span>
+                          <span className="text-gray-400">
+                            {ip}回 {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* 打者成績 */}
+                <div className="bg-gray-800 rounded p-1.5">
+                  <div className="text-[10px] text-red-400 mb-0.5">打撃</div>
+                  <div className="text-xs max-h-24 overflow-y-auto">
+                    {awayTeam.players
+                      .filter(p => p.stats?.batting && (p.stats.batting.atBats > 0 || p.stats.batting.walks > 0))
+                      .sort((a, b) => a.battingOrder - b.battingOrder)
+                      .map(p => {
+                        const s = p.stats.batting;
+                        const avg = s.atBats > 0 ? (s.hits / s.atBats).toFixed(3).slice(1) : '---';
+                        return (
+                          <div key={p.id} className="flex justify-between text-gray-300">
+                            <span className="truncate w-16">{p.name}</span>
+                            <span className="text-gray-400">
+                              {s.hits || 0}-{s.atBats || 0} {avg} {s.homeRuns > 0 ? `${s.homeRuns}HR` : ''} {s.rbi > 0 ? `${s.rbi}打点` : ''}
+                            </span>
+                          </div>
+                        );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* ===== 中央カラム: メイン試合画面 ===== */}
+            <div className="col-span-6 space-y-2">
+
+              {/* 試合開始前の画面 */}
+              {!gameStarted && (
+                <div className="bg-gray-900 rounded-lg p-8 text-white text-center">
+                  <h2 className="text-3xl font-bold mb-4">⚾ 野球シミュレーター</h2>
+                  <p className="text-gray-400 mb-6">左右のチームの打順を調整してください</p>
+                  <p className="text-sm text-blue-400 mb-6">💡 選手をクリックして青色にし、もう1人をクリックすると打順が入れ替わります</p>
+                  <button
+                    onClick={() => {
+                      setGameStarted(true);
+                      setSelectedBatterAway(null);
+                      setSelectedBatterHome(null);
+                      // 各選手のgameStatsを初期化
+                      setAwayTeam(prev => ({
+                        ...prev,
+                        players: prev.players.map(p => ({
+                          ...p,
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+                        }))
+                      }));
+                      setHomeTeam(prev => ({
+                        ...prev,
+                        players: prev.players.map(p => ({
+                          ...p,
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+                        }))
+                      }));
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-12 rounded-lg text-xl transition shadow-lg"
+                  >
+                    ⚾ 試合開始
+                  </button>
+                </div>
+              )}
+
+              {/* 電光掲示板風スコアボード */}
+              {gameStarted && (
+              <div className="bg-black rounded-lg p-1 font-mono border-4 border-gray-800 shadow-2xl">
+                {/* 上段: イニングスコア（電光掲示板風） */}
+                <div className="bg-black rounded-t overflow-hidden p-2">
+                  <table className="w-full text-center text-base">
+                    {/* ヘッダー行 */}
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="py-1.5 px-2 w-24 text-left text-orange-600">TEAM</th>
+                        {inning <= 9 ? (
+                          // 9回まで: 1-9回を表示
+                          [1,2,3,4,5,6,7,8,9].map(i => (
+                            <th key={i} className={`py-1.5 px-1 w-8 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
+                          ))
+                        ) : (
+                          // 延長: 10回以降を表示（最大3イニング分）
+                          [0,1,2].map(i => {
+                            const extraInn = 10 + i;
+                            return (
+                              <th key={i} className={`py-1.5 px-1 w-8 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
+                            );
+                          })
+                        )}
+                        <th className="py-1.5 px-2 w-12 text-orange-400 font-bold border-l border-gray-700">計</th>
+                        <th className="py-1.5 px-2 w-10 text-orange-600">安</th>
+                        <th className="py-1.5 px-2 w-10 text-orange-600">失</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* アウェイチーム */}
+                      <tr className="border-b border-gray-800">
+                        <td className={`py-2 px-2 text-left font-bold ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
+                        {inning <= 9 ? (
+                          // 9回まで
+                          [0,1,2,3,4,5,6,7,8].map(i => (
+                            <td key={i} className="py-2 px-1 text-orange-400 font-bold" style={{textShadow: inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                              {inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? inningScores.away[i] : ''}
+                            </td>
+                          ))
+                        ) : (
+                          // 延長（アウェイ）
+                          [0,1,2].map(i => (
+                            <td key={i} className="py-2 px-1 text-orange-400 font-bold" style={{textShadow: extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                              {extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? extraInningScores.away[i] : ''}
+                            </td>
+                          ))
+                        )}
+                        <td className="py-2 px-2 font-bold text-2xl text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
+                        <td className="py-2 px-2 text-orange-400">{teamHits?.away || 0}</td>
+                        <td className="py-2 px-2 text-orange-400">{teamErrors?.home || 0}</td>
+                      </tr>
+                      {/* ホームチーム */}
+                      <tr>
+                        <td className={`py-2 px-2 text-left font-bold ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
+                        {inning <= 9 ? (
+                          // 9回まで
+                          [0,1,2,3,4,5,6,7,8].map(i => {
+                            const homeScore = inningScores?.home?.[i];
+                            // 9回裏、ホームチームがリードしている場合に「X」を表示する判定
+                            const showX = i === 8 && inning === 9 && !isTopInning && (score?.home || 0) > (score?.away || 0) && homeScore === null;
+                            return (
+                              <td key={i} className="py-2 px-1 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined || showX ? '0 0 6px #fb923c' : 'none'}}>
+                                {showX ? 'X' : (homeScore !== null && homeScore !== undefined ? homeScore : '')}
+                              </td>
+                            );
+                          })
+                        ) : (
+                          // 延長（ホーム）
+                          [0,1,2].map(i => {
+                            const homeScore = extraInningScores?.home?.[i];
+                            return (
+                              <td key={i} className="py-2 px-1 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                                {homeScore !== null && homeScore !== undefined ? homeScore : ''}
+                              </td>
+                            );
+                          })
+                        )}
+                        <td className="py-2 px-2 font-bold text-2xl text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
+                        <td className="py-2 px-2 text-orange-400">{teamHits?.home || 0}</td>
+                        <td className="py-2 px-2 text-orange-400">{teamErrors?.away || 0}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* 下段: BSO + 塁状況 + 投球数 + 球速（固定幅） */}
+                <div className="bg-black p-2 rounded-b flex items-center justify-between border-t border-gray-800">
+                  {/* BSO (3-2-2) 緑・黄・赤 - 固定幅 */}
+                  <div className="flex flex-col gap-0.5 w-24 flex-shrink-0">
+                    <div className="flex items-center gap-1">
+                      <span className="w-4 text-xs text-green-500 font-bold">B</span>
+                      {[0,1,2].map(i => (
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.balls || 0) ? 'bg-green-500 border-green-400' : 'bg-gray-900 border-gray-700'}`} 
+                             style={{boxShadow: i < (count?.balls || 0) ? '0 0 6px #22c55e' : 'none'}} />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-4 text-xs text-yellow-400 font-bold">S</span>
+                      {[0,1].map(i => (
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.strikes || 0) ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                             style={{boxShadow: i < (count?.strikes || 0) ? '0 0 6px #facc15' : 'none'}} />
+                      ))}
+                      <div className="w-4 h-4" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="w-4 text-xs text-red-500 font-bold">O</span>
+                      {[0,1].map(i => (
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < outs ? 'bg-red-500 border-red-400' : 'bg-gray-900 border-gray-700'}`}
+                             style={{boxShadow: i < outs ? '0 0 6px #ef4444' : 'none'}} />
+                      ))}
+                      <div className="w-4 h-4" />
+                    </div>
+                  </div>
+                  
+                  {/* 区切り線 */}
+                  <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
+                  
+                  {/* 塁状況（固定幅） */}
+                  <div className="relative w-16 h-14 flex items-center justify-center flex-shrink-0">
+                    {/* 二塁 */}
+                    <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-5 h-5 rotate-45 border ${bases[1] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                         style={{boxShadow: bases[1] ? '0 0 8px #facc15' : 'none'}} />
+                    {/* 三塁 */}
+                    <div className={`absolute top-1/2 left-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[2] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                         style={{boxShadow: bases[2] ? '0 0 8px #facc15' : 'none'}} />
+                    {/* 一塁 */}
+                    <div className={`absolute top-1/2 right-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[0] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                         style={{boxShadow: bases[0] ? '0 0 8px #facc15' : 'none'}} />
+                  </div>
+                  
+                  {/* 区切り線 */}
+                  <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
+                  
+                  {/* 投手名・投球数（固定幅） */}
+                  <div className="text-center w-20 flex-shrink-0">
+                    <div className="text-orange-500 text-[10px] truncate">{getCurrentPitcher().name}</div>
+                    <div className="text-orange-600 text-xs">投球数</div>
+                    <div className="text-orange-400 text-xl font-bold font-mono" style={{textShadow: '0 0 6px #f97316'}}>
+                      {String(getCurrentPitcher().stats?.pitching?.pitches || 0).padStart(3, ' ')}
+                    </div>
+                  </div>
+                  
+                  {/* 区切り線 */}
+                  <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
+                  
+                  {/* 球種・球速表示（固定幅） */}
+                  <div className="text-center w-20 flex-shrink-0">
+                    <div className="text-orange-500 text-xs truncate">
+                      {pitchLog.length > 0 ? pitchLog[pitchLog.length - 1].pitchType : '---'}
+                    </div>
+                    <div className="text-orange-400 text-2xl font-bold font-mono" style={{textShadow: '0 0 8px #f97316'}}>
+                      {pitchLog.length > 0 ? String(pitchLog[pitchLog.length - 1].velocity).padStart(3, ' ') : '---'}
+                    </div>
+                    <div className="text-orange-500 text-xs">km/h</div>
+                  </div>
+                </div>
+              </div>
+              )}
+
+              {/* 対戦カード & 操作ボタン */}
+              {gameStarted && (
+              <div className="bg-white rounded-lg p-3 shadow-lg">
+                <div className="flex items-center justify-between mb-3">
+                  {/* 投手情報 */}
+                  <div className="text-center flex-1">
+                    <div className="text-xs text-gray-500">投手 ({isTopInning ? homeTeam.name : awayTeam.name})</div>
+                    <div className="font-bold text-xl text-blue-600">{getCurrentPitcher().name}</div>
+                    <div className="text-sm text-gray-600">
+                      {getCurrentPitcher().physical.throws === 'right' ? '右投' : '左投'} | 
+                      {getCurrentPitcher().pitching.velocity}km/h
+                    </div>
+                    <div className="text-sm font-bold text-blue-700">
+                      防御率 {getCurrentPitcher().stats?.pitching?.outs > 0 
+                        ? ((getCurrentPitcher().stats.pitching.runsAllowed * 27) / getCurrentPitcher().stats.pitching.outs).toFixed(2) 
+                        : '-.--'}
+                    </div>
+                    <div className="text-xs text-orange-500 mt-1">
+                      スタミナ: {currentStamina}/{getCurrentPitcher().pitching.stamina}
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                      <div 
+                        className="bg-orange-500 h-1.5 rounded-full" 
+                        style={{width: `${(currentStamina / getCurrentPitcher().pitching.stamina) * 100}%`}}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="text-3xl font-bold text-gray-300 px-4">VS</div>
+                  
+                  {/* 打者情報 */}
+                  <div className="text-center flex-1">
+                    <div className="text-xs text-gray-500">{currentBatterOrder}番打者 ({isTopInning ? awayTeam.name : homeTeam.name})</div>
+                    <div className="font-bold text-xl text-red-600">{getCurrentBatter().name}</div>
+                    <div className="text-sm text-gray-600">
+                      {getCurrentBatter().batting.bats === 'switch' ? '両打' : getCurrentBatter().batting.bats === 'right' ? '右打' : '左打'}
+                    </div>
+                    <div className="text-sm font-bold text-red-700">
+                      {getCurrentBatter().stats?.batting?.atBats > 0 
+                        ? (getCurrentBatter().stats.batting.hits / getCurrentBatter().stats.batting.atBats).toFixed(3) 
+                        : '.000'} | 
+                      {getCurrentBatter().stats?.batting?.homeruns || 0}本 | 
+                      {getCurrentBatter().stats?.batting?.rbis || 0}打点
+                    </div>
+                    <div className="text-xs mt-1">
+                      <span className={`px-2 py-0.5 rounded ${
+                        getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).meetBonus 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 操作ボタン */}
+                <div className="flex justify-center gap-2 flex-wrap">
+                  <button onClick={throwPitch} disabled={isAutoSimulating || gameOver}
+                    className="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 disabled:opacity-50">
+                    ⚾ 1球
+                  </button>
+                  <button onClick={() => multiPitch(10)} disabled={isAutoSimulating || gameOver}
+                    className="bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50">
+                    ⚾×10
+                  </button>
+                  <button onClick={() => multiPitch(1000)} disabled={isAutoSimulating || gameOver}
+                    className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50">
+                    ⚾×1000
+                  </button>
+                  <button onClick={resetGame}
+                    className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700">
+                    🔄 リセット
+                  </button>
+                </div>
+              </div>
+              )}
+
+              {/* 最新結果 */}
+              {gameStarted && lastResult && (
+                <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-2 text-center">
+                  <span className="font-bold text-lg">{lastResult.description}</span>
+                  {lastResult.pitchType && (
+                    <span className="ml-2 text-gray-600">
+                      ({lastResult.pitchType} {lastResult.velocity}km/h)
+                    </span>
+                  )}
+                  {/* 打球物理データ */}
+                  {lastResult.exitVelocity && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      EV: {lastResult.exitVelocity}km/h | LA: {lastResult.launchAngle}° | DIST: {lastResult.distance}m | 芯: {lastResult.meetQuality}%
+                    </div>
+                  )}
+                  {/* タイミングデータ（空振り時など） */}
+                  {lastResult.timingWindow && !lastResult.exitVelocity && (
+                    <div className="text-xs text-red-500 mt-1">
+                      窓: {lastResult.timingWindow}ms | 誤差: {lastResult.timingError}ms
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 投球ログ */}
+              {gameStarted && (
+              <div className="bg-white rounded-lg p-2 shadow-lg">
+                <h4 className="font-bold text-sm text-gray-700 mb-1">📝 投球ログ</h4>
+                <div className="max-h-40 overflow-y-auto text-xs space-y-0.5">
+                  {pitchLog.slice().reverse().slice(0, 20).map((log, i) => (
+                    <div key={i} className={`p-1 rounded ${i === 0 ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                      <span className="text-gray-500">{log.inning}回{log.isTop ? '表' : '裏'}</span>
+                      <span className="mx-1">|</span>
+                      <span className="font-mono">{log.count?.balls || 0}-{log.count?.strikes || 0}</span>
+                      <span className="mx-1">|</span>
+                      <span className="text-blue-600">{log.pitchType}</span>
+                      <span className="text-gray-500 ml-1">{log.velocity}km</span>
+                      <span className="mx-1">→</span>
+                      <span className="font-bold">{log.result}</span>
+                      {/* 打球物理データ（ヒット/アウト時のみ表示） */}
+                      {log.exitVelocity && (
+                        <span className="ml-2 text-gray-400 text-[10px]">
+                          EV:{log.exitVelocity} LA:{log.launchAngle}° {log.distance}m 芯:{log.meetQuality}%
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {pitchLog.length === 0 && (
+                    <div className="text-gray-400 text-center py-2">投球ログがありません</div>
+                  )}
+                </div>
+              </div>
+              )}
+
+              {/* 試合結果（下段に配置） */}
+              {gameOver && (
+                <div className="bg-gray-900 rounded-lg p-4 text-white">
+                  <h3 className="text-2xl font-bold mb-3 text-center text-yellow-400">🏆 試合終了</h3>
+                  <div className="flex justify-center items-center gap-8 text-xl font-bold mb-4">
+                    <div className="text-red-400">
+                      <div>{awayTeam.name}</div>
+                      <div className="text-4xl mt-1">{score.away}</div>
+                    </div>
+                    <div className="text-3xl text-gray-500">-</div>
+                    <div className="text-blue-400">
+                      <div>{homeTeam.name}</div>
+                      <div className="text-4xl mt-1">{score.home}</div>
+                    </div>
+                  </div>
+                  <div className="text-center text-lg mb-3">
+                    {score.away > score.home ? `${awayTeam.name} の勝利！` : score.home > score.away ? `${homeTeam.name} の勝利！` : '引き分け'}
+                  </div>
+
+                  {/* 打撃成績サマリー */}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <h4 className="font-bold text-red-400 mb-2">✈️ {awayTeam.name} 打撃成績</h4>
+                      <div className="space-y-1">
+                        {awayTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).slice(0, 3).map(player => {
+                          const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
+                          return (
+                            <div key={player.id} className="text-xs text-gray-400">
+                              {player.name}: {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}HR {stats.rbis || 0}打点
+                            </div>
+                          );
+                        })}
+                        <div className="text-xs text-gray-500 mt-1">他{awayTeam.players.length - 3}名...</div>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-blue-400 mb-2">🏠 {homeTeam.name} 打撃成績</h4>
+                      <div className="space-y-1">
+                        {homeTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).slice(0, 3).map(player => {
+                          const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
+                          return (
+                            <div key={player.id} className="text-xs text-gray-400">
+                              {player.name}: {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}HR {stats.rbis || 0}打点
+                            </div>
+                          );
+                        })}
+                        <div className="text-xs text-gray-500 mt-1">他{homeTeam.players.length - 3}名...</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-center mt-4">
+                    <button
+                      onClick={() => {
+                        resetGame();
+                        setGameStarted(false);
+                        setSelectedBatterAway(null);
+                        setSelectedBatterHome(null);
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                    >
+                      新しい試合
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ===== 右カラム: ホームチーム ===== */}
+            <div className="col-span-3 bg-gray-900 rounded-lg p-2 text-white">
+              <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
+                <span className="text-2xl font-bold text-blue-400">{score?.home || 0}</span>
+                <h3 className="font-bold text-blue-400">🏠 {homeTeam.name}</h3>
+              </div>
+              
+              {/* 選手リスト */}
+              <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
+                {homeTeam.players
+                  .sort((a, b) => a.battingOrder - b.battingOrder)
+                  .map(player => {
+                    const isCurrentBatter = gameStarted && !isTopInning && player.battingOrder === homeTeam.currentBatterOrder;
+                    const isPitcher = player.position === 'pitcher';
+                    const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+
+                    // 守備位置の色分け
+                    const getPositionColor = (pos) => {
+                      if (pos === 'pitcher') return isCurrentBatter ? 'bg-red-600 text-white' : 'bg-red-600 text-white';  // 🔴 赤
+                      if (pos === 'catcher') return isCurrentBatter ? 'bg-cyan-500 text-white' : 'bg-cyan-600 text-white';  // 🔵 水色
+                      if (['first', 'second', 'third', 'short'].includes(pos)) return isCurrentBatter ? 'bg-yellow-400 text-black' : 'bg-yellow-600 text-white';  // 🟡 黄色
+                      if (['left', 'center', 'right'].includes(pos)) return isCurrentBatter ? 'bg-green-500 text-white' : 'bg-green-600 text-white';  // 🟢 緑
+                      return 'bg-gray-700';
+                    };
+
+                    const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                    const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+
+                    const isSelected = !gameStarted && selectedBatterHome === player.battingOrder;
+                    const fitness = calculateDefensiveFitness(player, player.position);
+
+                    return (
+                      <div
+                        key={player.id}
+                        className={`p-2 rounded transition ${
+                          isCurrentBatter ? 'bg-yellow-500 text-black' :
+                          isSelected ? 'bg-blue-600 text-white' :
+                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          {!gameStarted && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBatterClick('home', player.battingOrder);
+                              }}
+                              className="text-xs px-1 bg-gray-700 hover:bg-gray-600 rounded"
+                            >
+                              打順
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTeam('home');
+                              setSelectedPlayerId(player.id);
+                              setEditingPlayer(player);
+                            }}
+                            className="text-xs px-1 bg-green-700 hover:bg-green-600 rounded"
+                          >
+                            編集
+                          </button>
+                          <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
+                          <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
+                          <span className="font-bold">{player.name}</span>
+                          <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          <span className="flex-1"></span>
+                          {isCurrentBatter && <span>⚾</span>}
+                          {isSelected && <span>👆</span>}
+                        </div>
+                        <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
+                          <span>M{player.batting.meet}</span>
+                          <span>P{player.batting.power}</span>
+                          <span>E{player.batting.eye}</span>
+                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
+                        </div>
+                        {!gameStarted && (
+                          <div className={`text-[10px] ml-6 mt-0.5 ${
+                            fitness.grade === 'S' ? 'text-yellow-400' :
+                            fitness.grade === 'A' ? 'text-green-400' :
+                            fitness.grade === 'B' ? 'text-blue-400' :
+                            fitness.grade === 'D' ? 'text-red-400' :
+                            'text-gray-400'
+                          }`}>
+                            守備適性 [{fitness.grade}] {fitness.comments}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+              
+              {/* ホームチーム試合スタッツ */}
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
+                {/* 投手成績 */}
+                <div className="bg-gray-800 rounded p-1.5 mb-1">
+                  <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
+                  <div className="text-xs">
+                    {homeTeam.players.filter(p => p.position === 'pitcher').map(p => {
+                      const s = p.stats?.pitching || {};
+                      const outs = s.outs || 0;
+                      const ip = outs > 0 ? `${Math.floor(outs / 3)}.${outs % 3}` : '0.0';
+                      const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                      return (
+                        <div key={p.id} className="flex justify-between text-gray-300">
+                          <span>{p.name}</span>
+                          <span className="text-gray-400">
+                            {ip}回 {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* 打者成績 */}
+                <div className="bg-gray-800 rounded p-1.5">
+                  <div className="text-[10px] text-red-400 mb-0.5">打撃</div>
+                  <div className="text-xs max-h-24 overflow-y-auto">
+                    {homeTeam.players
+                      .filter(p => p.stats?.batting && (p.stats.batting.atBats > 0 || p.stats.batting.walks > 0))
+                      .sort((a, b) => a.battingOrder - b.battingOrder)
+                      .map(p => {
+                        const s = p.stats.batting;
+                        const avg = s.atBats > 0 ? (s.hits / s.atBats).toFixed(3).slice(1) : '---';
+                        return (
+                          <div key={p.id} className="flex justify-between text-gray-300">
+                            <span className="truncate w-16">{p.name}</span>
+                            <span className="text-gray-400">
+                              {s.hits || 0}-{s.atBats || 0} {avg} {s.homeRuns > 0 ? `${s.homeRuns}HR` : ''} {s.rbi > 0 ? `${s.rbi}打点` : ''}
+                            </span>
+                          </div>
+                        );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* 選手編集モーダル */}
+          {editingPlayer && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">📝 {editingPlayer.name} を編集</h2>
+                    <button onClick={() => setEditingPlayer(null)} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                  </div>
+                  
+                  {/* 基本情報 */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">名前</label>
+                    <input
+                      type="text"
+                      value={editingPlayer.name}
+                      onChange={(e) => setEditingPlayer({...editingPlayer, name: e.target.value})}
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    />
+                  </div>
+
+                  {/* 守備位置選択 */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">守備位置</label>
+                    <select
+                      value={editingPlayer.position}
+                      onChange={(e) => setEditingPlayer({...editingPlayer, position: e.target.value})}
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    >
+                      <option value="pitcher">投手</option>
+                      <option value="catcher">捕手</option>
+                      <option value="first">一塁手</option>
+                      <option value="second">二塁手</option>
+                      <option value="third">三塁手</option>
+                      <option value="short">遊撃手</option>
+                      <option value="left">左翼手</option>
+                      <option value="center">中堅手</option>
+                      <option value="right">右翼手</option>
+                    </select>
+                    {(() => {
+                      const fitness = calculateDefensiveFitness(editingPlayer, editingPlayer.position);
+                      return (
+                        <div className={`mt-1 text-xs ${
+                          fitness.grade === 'S' ? 'text-yellow-600' :
+                          fitness.grade === 'A' ? 'text-green-600' :
+                          fitness.grade === 'B' ? 'text-blue-600' :
+                          fitness.grade === 'D' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          守備適性: [{fitness.grade}] {fitness.comments}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  
+                  {/* 打撃能力 */}
+                  <div className="mb-4">
+                    <h3 className="font-bold text-sm text-gray-700 mb-2">打撃能力</h3>
+                    <div className="space-y-2">
+                      {[
+                        {key: 'meet', label: 'ミート', color: 'blue'},
+                        {key: 'power', label: 'パワー', color: 'red'},
+                        {key: 'eye', label: '選球眼', color: 'green'},
+                        {key: 'steal', label: '盗塁', color: 'purple'}
+                      ].map(({key, label, color}) => (
+                        <div key={key}>
+                          <label className="block text-xs text-gray-600">{label}: <span className={`font-bold text-${color}-600`}>{editingPlayer.batting[key]}</span></label>
+                          <input type="range" min="0" max="100" value={editingPlayer.batting[key]}
+                            onChange={(e) => setEditingPlayer({...editingPlayer, batting: {...editingPlayer.batting, [key]: parseInt(e.target.value)}})}
+                            className="w-full" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* 身体能力 */}
+                  <div className="mb-4">
+                    <h3 className="font-bold text-sm text-gray-700 mb-2">身体能力</h3>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-gray-600">走力: <span className="font-bold">{editingPlayer.physical.speed}</span></label>
+                        <input type="range" min="0" max="100" value={editingPlayer.physical.speed}
+                          onChange={(e) => setEditingPlayer({...editingPlayer, physical: {...editingPlayer.physical, speed: parseInt(e.target.value)}})}
+                          className="w-full" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600">肩力: <span className="font-bold">{editingPlayer.physical.arm}</span></label>
+                        <input type="range" min="0" max="100" value={editingPlayer.physical.arm}
+                          onChange={(e) => setEditingPlayer({...editingPlayer, physical: {...editingPlayer.physical, arm: parseInt(e.target.value)}})}
+                          className="w-full" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 守備能力 */}
+                  <div className="mb-4">
+                    <h3 className="font-bold text-sm text-gray-700 mb-2">守備能力</h3>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-gray-600">守備力: <span className="font-bold text-yellow-600">{editingPlayer.fielding?.defense || 50}</span></label>
+                        <input type="range" min="0" max="100" value={editingPlayer.fielding?.defense || 50}
+                          onChange={(e) => setEditingPlayer({...editingPlayer, fielding: {...(editingPlayer.fielding || {}), defense: parseInt(e.target.value)}})}
+                          className="w-full" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600">キャッチャーリード: <span className="font-bold text-orange-600">{editingPlayer.catching?.lead || 50}</span></label>
+                        <input type="range" min="0" max="100" value={editingPlayer.catching?.lead || 50}
+                          onChange={(e) => setEditingPlayer({...editingPlayer, catching: {...(editingPlayer.catching || {}), lead: parseInt(e.target.value)}})}
+                          className="w-full" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 投手能力 */}
+                  <div className="mb-4">
+                    <h3 className="font-bold text-sm text-gray-700 mb-2">投手能力</h3>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs text-gray-600">球速: <span className="font-bold">{editingPlayer.pitching.velocity}km/h</span></label>
+                        <input type="range" min="100" max="170" value={editingPlayer.pitching.velocity}
+                          onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, velocity: parseInt(e.target.value)}})}
+                          className="w-full" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600">制球: <span className="font-bold">{editingPlayer.pitching.control}</span></label>
+                        <input type="range" min="0" max="100" value={editingPlayer.pitching.control}
+                          onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, control: parseInt(e.target.value)}})}
+                          className="w-full" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600">スタミナ: <span className="font-bold">{editingPlayer.pitching.stamina}</span></label>
+                        <input type="range" min="50" max="250" value={editingPlayer.pitching.stamina}
+                          onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, stamina: parseInt(e.target.value)}})}
+                          className="w-full" />
+                      </div>
+                    </div>
+
+                    {/* 持ち球 */}
+                    <div className="mt-3">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">持ち球</label>
+                      <div className="space-y-1">
+                        {editingPlayer.pitching.arsenal.map((ball, index) => (
+                          <div key={ball.id} className="flex items-center gap-2 text-sm">
+                            <select
+                              value={ball.type}
+                              onChange={(e) => {
+                                const newArsenal = [...editingPlayer.pitching.arsenal];
+                                newArsenal[index] = {...newArsenal[index], type: e.target.value};
+                                setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
+                              }}
+                              className="border rounded px-2 py-1 text-xs flex-1"
+                            >
+                              {Object.keys(ballEffects).filter(type => 
+                                type === ball.type || !editingPlayer.pitching.arsenal.some((b, i) => i !== index && b.type === type)
+                              ).map(type => (
+                                <option key={type} value={type}>{ballEffects[type].name}</option>
+                              ))}
+                            </select>
+                            <span className="text-xs">Lv.</span>
+                            <input type="number" min="0" max="100" value={ball.level}
+                              onChange={(e) => {
+                                const newArsenal = [...editingPlayer.pitching.arsenal];
+                                newArsenal[index] = {...newArsenal[index], level: parseInt(e.target.value) || 0};
+                                setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
+                              }}
+                              className="border rounded px-2 py-1 w-14 text-xs" />
+                            {index > 0 && (
+                              <button onClick={() => {
+                                const newArsenal = editingPlayer.pitching.arsenal.filter((_, i) => i !== index);
+                                setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
+                              }} className="text-red-500 text-xs">削除</button>
+                            )}
+                          </div>
+                        ))}
+                        {editingPlayer.pitching.arsenal.length < 6 && (
+                          <button onClick={() => {
+                            const usedTypes = editingPlayer.pitching.arsenal.map(b => b.type);
+                            const availableTypes = Object.keys(ballEffects).filter(type => !usedTypes.includes(type));
+                            if (availableTypes.length === 0) { alert('すべての球種を習得済みです'); return; }
+                            const newArsenal = [...editingPlayer.pitching.arsenal, {
+                              id: Math.max(...editingPlayer.pitching.arsenal.map(b => b.id)) + 1,
+                              type: availableTypes[0], level: 50
+                            }];
+                            setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
+                          }} className="text-blue-500 text-xs">+ 球種追加 </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 保存ボタン */}
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setEditingPlayer(null)}
+                      className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
+                    <button onClick={() => { updatePlayer(editingPlayer.id, editingPlayer); setEditingPlayer(null); }}
+                      className="px-20 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">保存</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }; // PitchByPitchSimulatorの終わり
+
+    ReactDOM.render(<PitchByPitchSimulator />, document.getElementById('root'));
+  </script>
+</body>
+</html>
