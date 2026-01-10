@@ -2977,7 +2977,24 @@ if (newOuts === 3) {
                     <div className="space-y-6">
                       {awayTeam.players.map(player => (
                         <div key={player.id} className="bg-gray-50 p-3 rounded-lg">
-                          <h4 className="font-bold mb-2">{player.name}</h4>
+                          <div className="mb-3">
+                            <label className="block text-xs text-gray-600 mb-1">選手名</label>
+                            <input
+                              type="text"
+                              value={player.name}
+                              onChange={(e) => {
+                                const newValue = e.target.value;
+                                const teamSetter = awayTeam.players.find(p => p.id === player.id) ? setAwayTeam : setHomeTeam;
+                                teamSetter(prev => ({
+                                  ...prev,
+                                  players: prev.players.map(p =>
+                                    p.id === player.id ? { ...p, name: newValue } : p
+                                  )
+                                }));
+                              }}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            />
+                          </div>
                           <div className="space-y-2">
                             {/* 打撃能力 */}
                             <div>
@@ -3149,6 +3166,31 @@ if (newOuts === 3) {
                                 }}
                                 className="w-full h-2"
                               />
+                            </div>
+                            {/* 投球フォーム */}
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">投球フォーム: <span className="font-bold text-orange-600">{PITCHING_FORM_EFFECTS[player.pitching.form]?.name || player.pitching.form}</span></label>
+                              <select
+                                value={player.pitching.form}
+                                onChange={(e) => {
+                                  const newValue = e.target.value;
+                                  const teamSetter = awayTeam.players.find(p => p.id === player.id) ? setAwayTeam : setHomeTeam;
+                                  teamSetter(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, pitching: { ...p.pitching, form: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full px-2 py-1 border rounded text-sm"
+                              >
+                                <option value="overhand">オーバースロー</option>
+                                <option value="threeQuarter">スリークォーター</option>
+                                <option value="sidearm">サイドスロー</option>
+                                <option value="submarine">アンダースロー</option>
+                              </select>
                             </div>
                             {/* 変化球 */}
                             <div className="mt-2 pt-2 border-t border-gray-300">
@@ -3199,7 +3241,24 @@ if (newOuts === 3) {
                     <div className="space-y-6">
                       {homeTeam.players.map(player => (
                         <div key={player.id} className="bg-gray-50 p-3 rounded-lg">
-                          <h4 className="font-bold mb-2">{player.name}</h4>
+                          <div className="mb-3">
+                            <label className="block text-xs text-gray-600 mb-1">選手名</label>
+                            <input
+                              type="text"
+                              value={player.name}
+                              onChange={(e) => {
+                                const newValue = e.target.value;
+                                const teamSetter = awayTeam.players.find(p => p.id === player.id) ? setAwayTeam : setHomeTeam;
+                                teamSetter(prev => ({
+                                  ...prev,
+                                  players: prev.players.map(p =>
+                                    p.id === player.id ? { ...p, name: newValue } : p
+                                  )
+                                }));
+                              }}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            />
+                          </div>
                           <div className="space-y-2">
                             {/* 打撃能力 */}
                             <div>
@@ -3371,6 +3430,31 @@ if (newOuts === 3) {
                                 }}
                                 className="w-full h-2"
                               />
+                            </div>
+                            {/* 投球フォーム */}
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">投球フォーム: <span className="font-bold text-orange-600">{PITCHING_FORM_EFFECTS[player.pitching.form]?.name || player.pitching.form}</span></label>
+                              <select
+                                value={player.pitching.form}
+                                onChange={(e) => {
+                                  const newValue = e.target.value;
+                                  const teamSetter = awayTeam.players.find(p => p.id === player.id) ? setAwayTeam : setHomeTeam;
+                                  teamSetter(prev => ({
+                                    ...prev,
+                                    players: prev.players.map(p =>
+                                      p.id === player.id
+                                        ? { ...p, pitching: { ...p.pitching, form: newValue } }
+                                        : p
+                                    )
+                                  }));
+                                }}
+                                className="w-full px-2 py-1 border rounded text-sm"
+                              >
+                                <option value="overhand">オーバースロー</option>
+                                <option value="threeQuarter">スリークォーター</option>
+                                <option value="sidearm">サイドスロー</option>
+                                <option value="submarine">アンダースロー</option>
+                              </select>
                             </div>
                             {/* 変化球 */}
                             <div className="mt-2 pt-2 border-t border-gray-300">

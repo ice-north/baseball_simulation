@@ -27,6 +27,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 40 },
       pitching: {
         velocity: 125, control: 45, stamina: 80,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 30 }
@@ -45,6 +46,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 45 },
       pitching: {
         velocity: 130, control: 50, stamina: 90,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'changeup', level: 40 }
@@ -62,6 +64,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 50 },
       pitching: {
         velocity: 135, control: 45, stamina: 100,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 35 }
@@ -79,6 +82,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 40 },
       pitching: {
         velocity: 130, control: 40, stamina: 90,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'fork', level: 30 }
@@ -96,6 +100,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 45 },
       pitching: {
         velocity: 132, control: 48, stamina: 95,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 35 }
@@ -113,6 +118,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 50 },
       pitching: {
         velocity: 128, control: 50, stamina: 85,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'curve', level: 35 }
@@ -130,6 +136,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 48 },
       pitching: {
         velocity: 135, control: 52, stamina: 100,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 40 }
@@ -147,6 +154,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 70 },
       pitching: {
         velocity: 120, control: 45, stamina: 70,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'sinker', level: 30 }
@@ -164,6 +172,7 @@ const createDefaultPlayers = () => {
       catching: { lead: 55 },
       pitching: {
         velocity: 145, control: 65, stamina: 200,
+        form: 'overhand',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 70 },
@@ -191,6 +200,7 @@ const createAwayPlayers = () => {
       catching: { lead: 35 },
       pitching: {
         velocity: 130, control: 40, stamina: 75,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'curve', level: 25 }
@@ -208,6 +218,7 @@ const createAwayPlayers = () => {
       catching: { lead: 50 },
       pitching: {
         velocity: 125, control: 55, stamina: 85,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'changeup', level: 35 }
@@ -225,6 +236,7 @@ const createAwayPlayers = () => {
       catching: { lead: 45 },
       pitching: {
         velocity: 140, control: 50, stamina: 95,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 40 }
@@ -242,6 +254,7 @@ const createAwayPlayers = () => {
       catching: { lead: 35 },
       pitching: {
         velocity: 125, control: 35, stamina: 80,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'sinker', level: 30 }
@@ -259,6 +272,7 @@ const createAwayPlayers = () => {
       catching: { lead: 50 },
       pitching: {
         velocity: 138, control: 45, stamina: 90,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'fork', level: 35 }
@@ -276,6 +290,7 @@ const createAwayPlayers = () => {
       catching: { lead: 55 },
       pitching: {
         velocity: 132, control: 52, stamina: 88,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 30 }
@@ -293,6 +308,7 @@ const createAwayPlayers = () => {
       catching: { lead: 40 },
       pitching: {
         velocity: 142, control: 48, stamina: 95,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'cutter', level: 40 }
@@ -310,6 +326,7 @@ const createAwayPlayers = () => {
       catching: { lead: 80 },
       pitching: {
         velocity: 115, control: 50, stamina: 65,
+        form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'curve', level: 25 }
@@ -327,6 +344,7 @@ const createAwayPlayers = () => {
       catching: { lead: 50 },
       pitching: {
         velocity: 150, control: 70, stamina: 180,
+        form: 'overhand',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 75 },
