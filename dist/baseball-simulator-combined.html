@@ -4024,7 +4024,7 @@ if (newOuts === 3) {
                               <input
                                 type="range"
                                 min="100"
-                                max="165"
+                                max="170"
                                 value={player.pitching.velocity}
                                 onChange={(e) => {
                                   const newValue = parseInt(e.target.value);
@@ -4060,6 +4060,43 @@ if (newOuts === 3) {
                                 }}
                                 className="w-full h-2"
                               />
+                            </div>
+                            {/* 変化球 */}
+                            <div className="mt-2 pt-2 border-t border-gray-300">
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">変化球</label>
+                              {player.pitching.arsenal.map((ball) => (
+                                <div key={ball.id} className="mb-2">
+                                  <label className="block text-xs text-gray-600 mb-1">
+                                    {BALL_EFFECTS[ball.type]?.name || ball.type}: <span className="font-bold text-purple-600">{ball.level}</span>
+                                  </label>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={ball.level}
+                                    onChange={(e) => {
+                                      const newValue = parseInt(e.target.value);
+                                      setAwayTeam(prev => ({
+                                        ...prev,
+                                        players: prev.players.map(p =>
+                                          p.id === player.id
+                                            ? {
+                                                ...p,
+                                                pitching: {
+                                                  ...p.pitching,
+                                                  arsenal: p.pitching.arsenal.map(b =>
+                                                    b.id === ball.id ? { ...b, level: newValue } : b
+                                                  )
+                                                }
+                                              }
+                                            : p
+                                        )
+                                      }));
+                                    }}
+                                    className="w-full h-2"
+                                  />
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -4209,7 +4246,7 @@ if (newOuts === 3) {
                               <input
                                 type="range"
                                 min="100"
-                                max="165"
+                                max="170"
                                 value={player.pitching.velocity}
                                 onChange={(e) => {
                                   const newValue = parseInt(e.target.value);
@@ -4245,6 +4282,43 @@ if (newOuts === 3) {
                                 }}
                                 className="w-full h-2"
                               />
+                            </div>
+                            {/* 変化球 */}
+                            <div className="mt-2 pt-2 border-t border-gray-300">
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">変化球</label>
+                              {player.pitching.arsenal.map((ball) => (
+                                <div key={ball.id} className="mb-2">
+                                  <label className="block text-xs text-gray-600 mb-1">
+                                    {BALL_EFFECTS[ball.type]?.name || ball.type}: <span className="font-bold text-purple-600">{ball.level}</span>
+                                  </label>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={ball.level}
+                                    onChange={(e) => {
+                                      const newValue = parseInt(e.target.value);
+                                      setHomeTeam(prev => ({
+                                        ...prev,
+                                        players: prev.players.map(p =>
+                                          p.id === player.id
+                                            ? {
+                                                ...p,
+                                                pitching: {
+                                                  ...p.pitching,
+                                                  arsenal: p.pitching.arsenal.map(b =>
+                                                    b.id === ball.id ? { ...b, level: newValue } : b
+                                                  )
+                                                }
+                                              }
+                                            : p
+                                        )
+                                      }));
+                                    }}
+                                    className="w-full h-2"
+                                  />
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
