@@ -595,9 +595,9 @@ const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tunneling
   if (pitchingFormEffect.whiffBonus > 0) {
     // サイドスロー・アンダースローの空振りボーナスは同じ利き腕の打者に対してのみ適用
     // 例: 左サイドスローは左打者に強い、右アンダースローは右打者に強い
+    // スイッチヒッターは常に投手と逆の打席に立つため影響を受けない
     const isSameHandedness = (pitcher.throws === 'right' && batter.bats === 'right') ||
-                              (pitcher.throws === 'left' && batter.bats === 'left') ||
-                              (batter.bats === 'switch');  // スイッチヒッターは常に影響を受ける
+                              (pitcher.throws === 'left' && batter.bats === 'left');
 
     if (isSameHandedness) {
       timingWindow *= (1 - pitchingFormEffect.whiffBonus);  // フォームによる空振りボーナス
