@@ -68,13 +68,13 @@
       // ============================================================
       const [homeTeam, setHomeTeam] = useState({
         name: "ホーム",
-        players: createDefaultPlayers(),
+        players: [...createDefaultPlayers().map(p => ({...p, isStarter: true})), ...createHomeBench()],
         currentBatterOrder: 1
       });
-      
+
       const [awayTeam, setAwayTeam] = useState({
         name: "アウェイ",
-        players: createAwayPlayers(),
+        players: [...createAwayPlayers().map(p => ({...p, isStarter: true})), ...createAwayBench()],
         currentBatterOrder: 1
       });
       
@@ -2085,11 +2085,14 @@ if (newOuts === 3) {
                 <span className="text-2xl font-bold text-red-400">{score?.away || 0}</span>
               </div>
               
-              {/* 選手リスト */}
-              <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
-                {awayTeam.players
-                  .sort((a, b) => a.battingOrder - b.battingOrder)
-                  .map(player => {
+              {/* スタメン選手リスト */}
+              <div className="mb-2">
+                <div className="text-xs text-gray-500 mb-1 px-1">スターティングメンバー</div>
+                <div className="space-y-1 text-sm">
+                  {awayTeam.players
+                    .filter(p => p.isStarter)
+                    .sort((a, b) => a.battingOrder - b.battingOrder)
+                    .map(player => {
                     const isCurrentBatter = gameStarted && isTopInning && player.battingOrder === awayTeam.currentBatterOrder;
                     const isPitcher = player.position === 'pitcher';
                     const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
@@ -2170,8 +2173,42 @@ if (newOuts === 3) {
                       </div>
                     );
                   })}
+                </div>
               </div>
-              
+
+              {/* 控え選手リスト（試合前のみ表示） */}
+              {!gameStarted && (
+                <div className="mb-2">
+                  <div className="text-xs text-gray-500 mb-1 px-1">ベンチメンバー</div>
+                  <div className="space-y-0.5 text-xs max-h-64 overflow-y-auto">
+                    {awayTeam.players
+                      .filter(p => !p.isStarter)
+                      .map(player => {
+                        const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                        const isPitcher = player.position === 'pitcher';
+                        const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                        const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+
+                        return (
+                          <div key={player.id} className="p-1.5 rounded bg-gray-800 hover:bg-gray-700 cursor-pointer">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-5 text-center text-xs font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
+                              <span className="font-medium">{player.name}</span>
+                              <span className="text-gray-500">{throwHand}{batHand}</span>
+                            </div>
+                            <div className="flex gap-2 ml-6 mt-0.5 text-gray-400">
+                              <span>M{player.batting.meet}</span>
+                              <span>P{player.batting.power}</span>
+                              <span>E{player.batting.eye}</span>
+                              {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
               {/* アウェイチーム 試合スタッツ */}
               <div className="mt-2 pt-2 border-t border-gray-700">
                 <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
@@ -2634,11 +2671,14 @@ if (newOuts === 3) {
                 <h3 className="font-bold text-blue-400">🏠 {homeTeam.name}</h3>
               </div>
               
-              {/* 選手リスト */}
-              <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
-                {homeTeam.players
-                  .sort((a, b) => a.battingOrder - b.battingOrder)
-                  .map(player => {
+              {/* スタメン選手リスト */}
+              <div className="mb-2">
+                <div className="text-xs text-gray-500 mb-1 px-1">スターティングメンバー</div>
+                <div className="space-y-1 text-sm">
+                  {homeTeam.players
+                    .filter(p => p.isStarter)
+                    .sort((a, b) => a.battingOrder - b.battingOrder)
+                    .map(player => {
                     const isCurrentBatter = gameStarted && !isTopInning && player.battingOrder === homeTeam.currentBatterOrder;
                     const isPitcher = player.position === 'pitcher';
                     const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
@@ -2719,8 +2759,42 @@ if (newOuts === 3) {
                       </div>
                     );
                   })}
+                </div>
               </div>
-              
+
+              {/* 控え選手リスト（試合前のみ表示） */}
+              {!gameStarted && (
+                <div className="mb-2">
+                  <div className="text-xs text-gray-500 mb-1 px-1">ベンチメンバー</div>
+                  <div className="space-y-0.5 text-xs max-h-64 overflow-y-auto">
+                    {homeTeam.players
+                      .filter(p => !p.isStarter)
+                      .map(player => {
+                        const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                        const isPitcher = player.position === 'pitcher';
+                        const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                        const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+
+                        return (
+                          <div key={player.id} className="p-1.5 rounded bg-gray-800 hover:bg-gray-700 cursor-pointer">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-5 text-center text-xs font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
+                              <span className="font-medium">{player.name}</span>
+                              <span className="text-gray-500">{throwHand}{batHand}</span>
+                            </div>
+                            <div className="flex gap-2 ml-6 mt-0.5 text-gray-400">
+                              <span>M{player.batting.meet}</span>
+                              <span>P{player.batting.power}</span>
+                              <span>E{player.batting.eye}</span>
+                              {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
               {/* ホームチーム試合スタッツ */}
               <div className="mt-2 pt-2 border-t border-gray-700">
                 <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
