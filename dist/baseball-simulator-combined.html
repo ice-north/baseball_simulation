@@ -3313,10 +3313,10 @@ if (newOuts === 3) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800 p-2">
           {/* 3カラムレイアウト */}
-          <div className="grid grid-cols-12 gap-2 max-w-[1800px] mx-auto">
+          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
-            <div className="col-span-4 bg-gray-900 rounded-lg p-2 text-white">
+            <div className="bg-gray-900 rounded-lg p-2 text-white">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
                 <h3 className="font-bold text-red-400">✈️ {awayTeam.name}</h3>
                 <span className="text-2xl font-bold text-red-400">{score?.away || 0}</span>
@@ -3351,6 +3351,7 @@ if (newOuts === 3) {
                           return (
                             <div
                               key={player.id}
+                              onClick={() => handleSubstituteClick('away', player.id)}
                               className={`p-1.5 rounded cursor-pointer transition ${
                                 isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' :
                                 isSelected ? 'bg-blue-600 text-white' :
@@ -3359,13 +3360,19 @@ if (newOuts === 3) {
                             >
                               <div className="flex items-center gap-1">
                                 <button
-                                  onClick={() => handleBatterClick('away', player.battingOrder)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleBatterClick('away', player.battingOrder);
+                                  }}
                                   className="w-4 text-gray-400 text-[10px] hover:text-blue-400 transition"
                                 >
                                   {player.battingOrder}
                                 </button>
                                 <button
-                                  onClick={() => handlePositionClick('away', player.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePositionClick('away', player.id);
+                                  }}
                                   className={`w-5 text-center rounded text-[10px] py-0.5 font-semibold transition ${
                                     isPositionSelected
                                       ? 'bg-purple-600 text-white ring-2 ring-purple-400'
@@ -3374,10 +3381,7 @@ if (newOuts === 3) {
                                 >
                                   {posNames[player.position]}
                                 </button>
-                                <span
-                                  onClick={() => handleSubstituteClick('away', player.id)}
-                                  className="font-medium text-[11px] truncate flex-1 hover:text-orange-300 transition"
-                                >
+                                <span className="font-medium text-[11px] truncate flex-1">
                                   {player.name}
                                 </span>
                                 <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
@@ -3588,7 +3592,7 @@ if (newOuts === 3) {
             </div>
             
             {/* ===== 中央カラム: メイン試合画面 ===== */}
-            <div className="col-span-4 space-y-2">
+            <div className="space-y-2">
 
               {/* 試合開始前の画面 */}
               {!gameStarted && (
@@ -3596,7 +3600,7 @@ if (newOuts === 3) {
                   <h2 className="text-2xl font-bold mb-3">⚾ 野球シミュレーター</h2>
                   <p className="text-xs text-blue-400 mb-1">💡 打順番号クリック → 打順交換</p>
                   <p className="text-xs text-purple-400 mb-1">🔄 守備位置クリック → 守備交換</p>
-                  <p className="text-xs text-orange-400 mb-4">⚡ 選手名クリック → スタメン⇔ベンチ交代</p>
+                  <p className="text-xs text-orange-400 mb-4">⚡ 選手パネルクリック → スタメン⇔ベンチ交代</p>
                   <button
                     onClick={() => {
                       setGameStarted(true);
@@ -3996,7 +4000,7 @@ if (newOuts === 3) {
             </div>
 
             {/* ===== 右カラム: ホームチーム ===== */}
-            <div className="col-span-4 bg-gray-900 rounded-lg p-2 text-white">
+            <div className="bg-gray-900 rounded-lg p-2 text-white">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
                 <span className="text-2xl font-bold text-blue-400">{score?.home || 0}</span>
                 <h3 className="font-bold text-blue-400">🏠 {homeTeam.name}</h3>
@@ -4031,6 +4035,7 @@ if (newOuts === 3) {
                           return (
                             <div
                               key={player.id}
+                              onClick={() => handleSubstituteClick('home', player.id)}
                               className={`p-1.5 rounded cursor-pointer transition ${
                                 isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' :
                                 isSelected ? 'bg-blue-600 text-white' :
@@ -4039,13 +4044,19 @@ if (newOuts === 3) {
                             >
                               <div className="flex items-center gap-1">
                                 <button
-                                  onClick={() => handleBatterClick('home', player.battingOrder)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleBatterClick('home', player.battingOrder);
+                                  }}
                                   className="w-4 text-gray-400 text-[10px] hover:text-blue-400 transition"
                                 >
                                   {player.battingOrder}
                                 </button>
                                 <button
-                                  onClick={() => handlePositionClick('home', player.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePositionClick('home', player.id);
+                                  }}
                                   className={`w-5 text-center rounded text-[10px] py-0.5 font-semibold transition ${
                                     isPositionSelected
                                       ? 'bg-purple-600 text-white ring-2 ring-purple-400'
@@ -4054,10 +4065,7 @@ if (newOuts === 3) {
                                 >
                                   {posNames[player.position]}
                                 </button>
-                                <span
-                                  onClick={() => handleSubstituteClick('home', player.id)}
-                                  className="font-medium text-[11px] truncate flex-1 hover:text-orange-300 transition"
-                                >
+                                <span className="font-medium text-[11px] truncate flex-1">
                                   {player.name}
                                 </span>
                                 <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
