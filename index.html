@@ -801,10 +801,24 @@
         
         if (catcher.lead > 0) {
           const leadInfluence = catcher.lead / 100;
+          const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
           const ballScores = pitcher.pitches.map((ball, index) => {
             const effect = ballEffects[ball.type];
             const levelFactor = ball.level / 100;
-            const score = (effect.whiffBonus + effect.groundballBonus + effect.weakBonus) * levelFactor;
+            let score = (effect.whiffBonus + effect.groundballBonus + effect.weakBonus) * levelFactor;
+
+            // 投球フォームとの相性ボーナスを適用
+            const synergyPitches = FORM_PITCH_SYNERGY[pitcher.form] || [];
+            if (synergyPitches.includes(ball.type)) {
+              // 縦変化の球種
+              if (['curve', 'fork', 'splitter', 'knuckle'].includes(ball.type)) {
+                score += pitchingFormEffect.verticalBreakBonus * levelFactor;
+              }
+              // 横変化の球種
+              if (['slider', 'shoot', 'cutter', 'twoSeam'].includes(ball.type)) {
+                score += pitchingFormEffect.horizontalBreakBonus * levelFactor;
+              }
+            }
             return { index, score, ball };
           });
           
@@ -867,7 +881,10 @@
         
         // 球種選択を先に行う（見逃し時も球種情報が必要）
         const pitchTypeName = ballEffects[selectedBall.type].name;
-        let baseVelocity = pitcher.velocity + velocityPenalty;
+
+        // 投球フォームの効果を適用
+        const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
+        let baseVelocity = pitcher.velocity + velocityPenalty + pitchingFormEffect.velocityBonus;
         baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
         const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
         

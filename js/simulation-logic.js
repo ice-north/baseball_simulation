@@ -59,6 +59,12 @@ const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tunneling
     timingWindow *= (1 - breakingBallPenalty);
   }
 
+  // 投球フォームの効果を適用（珍しいフォームは打ちにくい）
+  const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
+  if (pitchingFormEffect.whiffBonus > 0) {
+    timingWindow *= (1 - pitchingFormEffect.whiffBonus);  // フォームによる空振りボーナス
+  }
+
   // 【3】スイングの誤差発生 (ミリ秒単位)
   // 打者のmeet値が高いほど、誤差のバラツキが抑えられる
   // Meet 0 → ±10ms, Meet 100 → ±5ms
