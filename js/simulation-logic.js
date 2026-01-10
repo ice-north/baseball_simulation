@@ -59,10 +59,18 @@ const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tunneling
     timingWindow *= (1 - breakingBallPenalty);
   }
 
-  // 投球フォームの効果を適用（珍しいフォームは打ちにくい）
+  // 投球フォームの効果を適用（サイドスロー・アンダースローは同じ利き腕の打者に強い）
   const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
   if (pitchingFormEffect.whiffBonus > 0) {
-    timingWindow *= (1 - pitchingFormEffect.whiffBonus);  // フォームによる空振りボーナス
+    // サイドスロー・アンダースローの空振りボーナスは同じ利き腕の打者に対してのみ適用
+    // 例: 左サイドスローは左打者に強い、右アンダースローは右打者に強い
+    const isSameHandedness = (pitcher.throws === 'right' && batter.bats === 'right') ||
+                              (pitcher.throws === 'left' && batter.bats === 'left') ||
+                              (batter.bats === 'switch');  // スイッチヒッターは常に影響を受ける
+
+    if (isSameHandedness) {
+      timingWindow *= (1 - pitchingFormEffect.whiffBonus);  // フォームによる空振りボーナス
+    }
   }
 
   // 【3】スイングの誤差発生 (ミリ秒単位)

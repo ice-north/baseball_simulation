@@ -114,7 +114,8 @@ const BALL_EFFECTS = {
  * velocityBonus: 球速への影響（km/h）
  * verticalBreakBonus: 縦変化への影響（カーブ、フォーク等の効果補正）
  * horizontalBreakBonus: 横変化への影響（スライダー、シュート等の効果補正）
- * whiffBonus: 打者の慣れにくさによる空振り率への影響
+ * whiffBonus: 空振り率への影響（サイドスロー・アンダースローは同じ利き腕の打者に対してのみ適用）
+ *            例: 左サイドスローは左打者に強い、右アンダースローは右打者に強い
  */
 const PITCHING_FORM_EFFECTS = {
   overhand: {
@@ -136,14 +137,14 @@ const PITCHING_FORM_EFFECTS = {
     velocityBonus: -2,
     verticalBreakBonus: -0.05,
     horizontalBreakBonus: 0.15,    // 横の変化球が15%効果的
-    whiffBonus: 0.03               // 慣れていない打者が多い
+    whiffBonus: 0.03               // 同じ利き腕の打者に対して+3%（例: 左サイドは左打者に強い）
   },
   submarine: {
     name: 'アンダースロー',
     velocityBonus: -5,
     verticalBreakBonus: 0.1,       // 浮き上がる軌道でカーブが効く
     horizontalBreakBonus: 0.05,
-    whiffBonus: 0.05               // 非常に珍しいフォーム
+    whiffBonus: 0.05               // 同じ利き腕の打者に対して+5%（例: 右アンダーは右打者に強い）
   }
 };
 
@@ -589,10 +590,18 @@ const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tunneling
     timingWindow *= (1 - breakingBallPenalty);
   }
 
-  // 投球フォームの効果を適用（珍しいフォームは打ちにくい）
+  // 投球フォームの効果を適用（サイドスロー・アンダースローは同じ利き腕の打者に強い）
   const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
   if (pitchingFormEffect.whiffBonus > 0) {
-    timingWindow *= (1 - pitchingFormEffect.whiffBonus);  // フォームによる空振りボーナス
+    // サイドスロー・アンダースローの空振りボーナスは同じ利き腕の打者に対してのみ適用
+    // 例: 左サイドスローは左打者に強い、右アンダースローは右打者に強い
+    const isSameHandedness = (pitcher.throws === 'right' && batter.bats === 'right') ||
+                              (pitcher.throws === 'left' && batter.bats === 'left') ||
+                              (batter.bats === 'switch');  // スイッチヒッターは常に影響を受ける
+
+    if (isSameHandedness) {
+      timingWindow *= (1 - pitchingFormEffect.whiffBonus);  // フォームによる空振りボーナス
+    }
   }
 
   // 【3】スイングの誤差発生 (ミリ秒単位)

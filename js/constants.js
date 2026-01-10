@@ -102,7 +102,8 @@ const BALL_EFFECTS = {
  * velocityBonus: 球速への影響（km/h）
  * verticalBreakBonus: 縦変化への影響（カーブ、フォーク等の効果補正）
  * horizontalBreakBonus: 横変化への影響（スライダー、シュート等の効果補正）
- * whiffBonus: 打者の慣れにくさによる空振り率への影響
+ * whiffBonus: 空振り率への影響（サイドスロー・アンダースローは同じ利き腕の打者に対してのみ適用）
+ *            例: 左サイドスローは左打者に強い、右アンダースローは右打者に強い
  */
 const PITCHING_FORM_EFFECTS = {
   overhand: {
@@ -124,14 +125,14 @@ const PITCHING_FORM_EFFECTS = {
     velocityBonus: -2,
     verticalBreakBonus: -0.05,
     horizontalBreakBonus: 0.15,    // 横の変化球が15%効果的
-    whiffBonus: 0.03               // 慣れていない打者が多い
+    whiffBonus: 0.03               // 同じ利き腕の打者に対して+3%（例: 左サイドは左打者に強い）
   },
   submarine: {
     name: 'アンダースロー',
     velocityBonus: -5,
     verticalBreakBonus: 0.1,       // 浮き上がる軌道でカーブが効く
     horizontalBreakBonus: 0.05,
-    whiffBonus: 0.05               // 非常に珍しいフォーム
+    whiffBonus: 0.05               // 同じ利き腕の打者に対して+5%（例: 右アンダーは右打者に強い）
   }
 };
 
