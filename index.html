@@ -2794,11 +2794,21 @@ if (newOuts === 3) {
                   </div>
                 </div>
               ) : (
-                /* 試合中は現在フィールドにいる選手のみ表示 */
+                /* 試合中/試合終了後は現在フィールドにいる選手のみ表示 */
                 <div className="mb-2">
                   <div className="space-y-1 text-sm">
                     {awayTeam.players
-                      .filter(p => p.isStarter && !p.hasSubbedOut && p.battingOrder > 0)
+                      .filter(p => {
+                        // 試合終了後：実際に出場した選手のみ
+                        if (gameOver) {
+                          const hasBattingStats = p.stats?.batting && (p.stats.batting.atBats > 0 || p.stats.batting.walks > 0 || p.stats.batting.hits > 0);
+                          const hasPitchingStats = p.stats?.pitching && p.stats.pitching.outs > 0;
+                          const isOnField = p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
+                          return hasBattingStats || hasPitchingStats || isOnField;
+                        }
+                        // 試合中：現在フィールドにいる選手
+                        return p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
+                      })
                       .sort((a, b) => a.battingOrder - b.battingOrder)
                       .map(player => {
                     const isCurrentBatter = gameStarted && isTopInning && player.battingOrder === awayTeam.currentBatterOrder;
@@ -2953,22 +2963,35 @@ if (newOuts === 3) {
                 <div className="bg-gray-800 rounded p-1.5 mb-1">
                   <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
                   <div className="text-xs">
-                    {awayTeam.players
-                      .filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0)
-                      .map(p => {
-                      const s = p.stats?.pitching || {};
-                      const outs = s.outs || 0;
-                      const ip = outs > 0 ? `${Math.floor(outs / 3)}.${outs % 3}` : '0.0';
-                      const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                    {(() => {
+                      const pitchers = awayTeam.players.filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0);
+                      const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
+                      const totalIP = totalOuts > 0 ? `${Math.floor(totalOuts / 3)}.${totalOuts % 3}` : '0.0';
                       return (
-                        <div key={p.id} className="flex justify-between text-gray-300">
-                          <span>{p.name}</span>
-                          <span className="text-gray-400">
-                            {ip}回 {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
-                          </span>
-                        </div>
+                        <>
+                          {pitchers.map(p => {
+                            const s = p.stats?.pitching || {};
+                            const outs = s.outs || 0;
+                            const ip = outs > 0 ? `${Math.floor(outs / 3)}.${outs % 3}` : '0.0';
+                            const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                            return (
+                              <div key={p.id} className="flex justify-between text-gray-300">
+                                <span>{p.name}</span>
+                                <span className="text-gray-400">
+                                  {ip}回 {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {pitchers.length > 1 && (
+                            <div className="flex justify-between text-yellow-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
+                              <span>合計イニング</span>
+                              <span>{totalIP}回</span>
+                            </div>
+                          )}
+                        </>
                       );
-                    })}
+                    })()}
                   </div>
                 </div>
                 {/* 打者成績 */}
@@ -3583,11 +3606,21 @@ if (newOuts === 3) {
                   </div>
                 </div>
               ) : (
-                /* 試合中は現在フィールドにいる選手のみ表示 */
+                /* 試合中/試合終了後は現在フィールドにいる選手のみ表示 */
                 <div className="mb-2">
                   <div className="space-y-1 text-sm">
                     {homeTeam.players
-                      .filter(p => p.isStarter && !p.hasSubbedOut && p.battingOrder > 0)
+                      .filter(p => {
+                        // 試合終了後：実際に出場した選手のみ
+                        if (gameOver) {
+                          const hasBattingStats = p.stats?.batting && (p.stats.batting.atBats > 0 || p.stats.batting.walks > 0 || p.stats.batting.hits > 0);
+                          const hasPitchingStats = p.stats?.pitching && p.stats.pitching.outs > 0;
+                          const isOnField = p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
+                          return hasBattingStats || hasPitchingStats || isOnField;
+                        }
+                        // 試合中：現在フィールドにいる選手
+                        return p.isStarter && !p.hasSubbedOut && p.battingOrder > 0;
+                      })
                       .sort((a, b) => a.battingOrder - b.battingOrder)
                       .map(player => {
                       const isCurrentBatter = gameStarted && !isTopInning && player.battingOrder === homeTeam.currentBatterOrder;
@@ -3742,22 +3775,35 @@ if (newOuts === 3) {
                 <div className="bg-gray-800 rounded p-1.5 mb-1">
                   <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
                   <div className="text-xs">
-                    {homeTeam.players
-                      .filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0)
-                      .map(p => {
-                      const s = p.stats?.pitching || {};
-                      const outs = s.outs || 0;
-                      const ip = outs > 0 ? `${Math.floor(outs / 3)}.${outs % 3}` : '0.0';
-                      const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                    {(() => {
+                      const pitchers = homeTeam.players.filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0);
+                      const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
+                      const totalIP = totalOuts > 0 ? `${Math.floor(totalOuts / 3)}.${totalOuts % 3}` : '0.0';
                       return (
-                        <div key={p.id} className="flex justify-between text-gray-300">
-                          <span>{p.name}</span>
-                          <span className="text-gray-400">
-                            {ip}回 {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
-                          </span>
-                        </div>
+                        <>
+                          {pitchers.map(p => {
+                            const s = p.stats?.pitching || {};
+                            const outs = s.outs || 0;
+                            const ip = outs > 0 ? `${Math.floor(outs / 3)}.${outs % 3}` : '0.0';
+                            const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                            return (
+                              <div key={p.id} className="flex justify-between text-gray-300">
+                                <span>{p.name}</span>
+                                <span className="text-gray-400">
+                                  {ip}回 {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {pitchers.length > 1 && (
+                            <div className="flex justify-between text-yellow-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
+                              <span>合計イニング</span>
+                              <span>{totalIP}回</span>
+                            </div>
+                          )}
+                        </>
                       );
-                    })}
+                    })()}
                   </div>
                 </div>
                 {/* 打者成績 */}
