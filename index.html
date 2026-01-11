@@ -2130,8 +2130,8 @@ if (newOuts === 3) {
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800 p-2">
-          {/* 3カラムレイアウト */}
-          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: '5fr 3fr 5fr'}}>
+          {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は中央重視(3-6-3) */}
+          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '3fr 6fr 3fr' : '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
             <div className="bg-gray-900 rounded-lg p-2 text-white">
