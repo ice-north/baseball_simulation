@@ -1383,6 +1383,10 @@ const calculateDefensiveFitness = (player, position) => {
 
         // 試合中：交代済み選手は選択できない
         if (gameStarted && clickedPlayer && clickedPlayer.hasSubbedOut) {
+          // 既に選択されている場合は解除
+          if (selectedSubstitute !== null) {
+            setSelectedSubstitute(null);
+          }
           return;
         }
 
@@ -1394,20 +1398,35 @@ const calculateDefensiveFitness = (player, position) => {
           setSelectedSubstitute(null);
         } else {
           // 2人目の選手をクリック：交代処理
+          // まず現在のチーム状態から選手情報を取得して事前チェック
+          const player1Current = team.players.find(p => p.id === selectedSubstitute);
+          const player2Current = team.players.find(p => p.id === playerId);
+
+          // 試合中：どちらかが交代済みなら処理しない
+          if (gameStarted && (player1Current?.hasSubbedOut || player2Current?.hasSubbedOut)) {
+            setSelectedSubstitute(null);
+            return;
+          }
+
+          // 試合中：スタメン同士の交代（打順変更）は禁止
+          if (gameStarted && player1Current?.isStarter && player2Current?.isStarter) {
+            setSelectedSubstitute(null);
+            return;
+          }
+
           setTeam(prev => {
             const players = [...prev.players];
             const player1 = players.find(p => p.id === selectedSubstitute);
             const player2 = players.find(p => p.id === playerId);
 
             if (player1 && player2) {
-              // 試合中：一度ベンチに下がった選手は戻れない
+              // 念のため再度チェック
               if (gameStarted && (player1.hasSubbedOut || player2.hasSubbedOut)) {
-                return prev; // 交代を実行しない
+                return prev;
               }
 
-              // 試合中：スタメン同士の交代（打順変更）は禁止
               if (gameStarted && player1.isStarter && player2.isStarter) {
-                return prev; // 交代を実行しない
+                return prev;
               }
 
               // スタメンフラグを交換
