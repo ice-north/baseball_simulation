@@ -1467,6 +1467,23 @@ const calculateDefensiveFitness = (player, position) => {
                 player1.position = player2.position;
                 player2.battingOrder = 0;
               }
+
+              // 試合中：投手交代の場合はスタミナをリセット
+              if (gameStarted) {
+                const defenseTeam = isTopInning ? homeTeam : awayTeam;
+                const isDefenseTeamChange = (teamType === 'home' && isTopInning) || (teamType === 'away' && !isTopInning);
+
+                if (isDefenseTeamChange) {
+                  // 守備チームの交代で、投手が交代した場合
+                  const newPitcher = tempStarter ? player2 : player1; // スタメンになった選手
+                  if (newPitcher.position === 'pitcher') {
+                    // 新しい投手のスタミナにリセット（setTeamの後に実行される）
+                    setTimeout(() => {
+                      setCurrentStamina(newPitcher.pitching.stamina);
+                    }, 0);
+                  }
+                }
+              }
             }
             return { ...prev, players };
           });
