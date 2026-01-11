@@ -437,6 +437,10 @@
 
         // 代打判断条件
         const isPitcher = currentBatter.position === 'pitcher';
+
+        // 投手への代打は送らない（投手は投手交代ロジックで対応）
+        if (isPitcher) return;
+
         const battingAvg = currentBatter.stats?.batting?.atBats > 0
           ? currentBatter.stats.batting.hits / currentBatter.stats.batting.atBats
           : 0;
@@ -449,9 +453,8 @@
         const isImportantSituation = isCloseGame && runnersOnBase >= 2; // 接戦でランナー2人以上
         const isLateInning = inning >= 7;
 
-        // 代打を送る条件
-        const shouldPinchHit = (isPitcher && isLateInning && (isCloseGame || runnersOnBase > 0)) ||
-                                (isWeakHitter && isImportantSituation && isLateInning);
+        // 代打を送る条件（野手のみ）
+        const shouldPinchHit = isWeakHitter && isImportantSituation && isLateInning;
 
         if (!shouldPinchHit) return;
 
@@ -470,7 +473,7 @@
           selectedPinchHitter = availablePinchHitters[0];
         }
 
-        // 代打交代を実行
+        // 代打交代を実行（野手のみ）
         setTeam(prev => {
           const players = [...prev.players];
           const oldBatter = players.find(p => p.id === currentBatter.id);
@@ -2785,11 +2788,11 @@ if (newOuts === 3) {
                   </div>
                 </div>
               ) : (
-                /* 試合中はスタメンのみ表示（従来の表示） */
+                /* 試合中は現在フィールドにいる選手のみ表示 */
                 <div className="mb-2">
                   <div className="space-y-1 text-sm">
                     {awayTeam.players
-                      .filter(p => p.isStarter)
+                      .filter(p => p.isStarter && !p.hasSubbedOut && p.battingOrder > 0)
                       .sort((a, b) => a.battingOrder - b.battingOrder)
                       .map(player => {
                     const isCurrentBatter = gameStarted && isTopInning && player.battingOrder === awayTeam.currentBatterOrder;
@@ -3574,11 +3577,11 @@ if (newOuts === 3) {
                   </div>
                 </div>
               ) : (
-                /* 試合中はスタメンのみ表示（従来の表示） */
+                /* 試合中は現在フィールドにいる選手のみ表示 */
                 <div className="mb-2">
                   <div className="space-y-1 text-sm">
                     {homeTeam.players
-                      .filter(p => p.isStarter)
+                      .filter(p => p.isStarter && !p.hasSubbedOut && p.battingOrder > 0)
                       .sort((a, b) => a.battingOrder - b.battingOrder)
                       .map(player => {
                       const isCurrentBatter = gameStarted && !isTopInning && player.battingOrder === homeTeam.currentBatterOrder;
