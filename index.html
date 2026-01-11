@@ -46,6 +46,7 @@
       const [selectedSubstituteHome, setSelectedSubstituteHome] = useState(null);  // 選手交代用（ホーム）
       const [showBenchAway, setShowBenchAway] = useState(false);  // ベンチ表示切り替え（アウェイ）
       const [showBenchHome, setShowBenchHome] = useState(false);  // ベンチ表示切り替え（ホーム）
+      const [autoManagerMode, setAutoManagerMode] = useState(true);  // 監督AI自動采配モード
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -336,6 +337,73 @@
       const getCurrentCatcher = () => {
         const team = getDefenseTeam();
         return team.players.find(p => p.isStarter && p.position === 'catcher') || team.players[7];
+      };
+
+      // ============================================================
+      // 監督AI：自動投手交代ロジック
+      // ============================================================
+      const autoSubstitutePitcher = () => {
+        if (!autoManagerMode || !gameStarted) return;
+
+        const defenseTeam = getDefenseTeam();
+        const currentPitcher = getCurrentPitcher();
+        const teamType = isTopInning ? 'home' : 'away';
+        const setTeam = isTopInning ? setHomeTeam : setAwayTeam;
+
+        // スタミナチェック（20%以下で交代）
+        const staminaRate = currentStamina / currentPitcher.pitching.stamina;
+        const shouldSubstitute = staminaRate <= 0.2;
+
+        if (!shouldSubstitute) return;
+
+        // 交代候補の投手を選択
+        const availablePitchers = defenseTeam.players.filter(p =>
+          !p.isStarter &&
+          p.position === 'pitcher' &&
+          !p.hasSubbedOut
+        );
+
+        if (availablePitchers.length === 0) return; // 交代可能な投手がいない
+
+        // イニング数に応じて投手を選択
+        let selectedPitcher;
+        if (inning >= 9) {
+          // 9回以降：クローザー（名前に「クローザー」を含む）
+          selectedPitcher = availablePitchers.find(p => p.name.includes('クローザー'));
+        } else if (inning >= 7) {
+          // 7-8回：セットアッパー
+          selectedPitcher = availablePitchers.find(p => p.name.includes('セットアッパー'));
+        }
+
+        // 該当する投手がいなければ、最初の未登板投手を選択
+        if (!selectedPitcher) {
+          selectedPitcher = availablePitchers[0];
+        }
+
+        // 投手交代を実行
+        setTeam(prev => {
+          const players = [...prev.players];
+          const oldPitcher = players.find(p => p.id === currentPitcher.id);
+          const newPitcher = players.find(p => p.id === selectedPitcher.id);
+
+          if (oldPitcher && newPitcher) {
+            // 交代処理
+            oldPitcher.isStarter = false;
+            oldPitcher.hasSubbedOut = true;
+            oldPitcher.battingOrder = 0;
+
+            newPitcher.isStarter = true;
+            newPitcher.battingOrder = currentPitcher.battingOrder;
+            newPitcher.position = 'pitcher';
+
+            // スタミナをリセット
+            setTimeout(() => {
+              setCurrentStamina(newPitcher.pitching.stamina);
+            }, 0);
+          }
+
+          return { ...prev, players };
+        });
       };
       
       // 次の打者に進む（攻撃チームの打順を進める）
@@ -1754,6 +1822,11 @@ if (newOuts === 3) {
         setOuts(newOuts);
         setBases(newBases);
         setScore(newScore);
+
+        // 投球後に監督AIによる自動交代をチェック
+        setTimeout(() => {
+          autoSubstitutePitcher();
+        }, 100);
       };
 
       const resetGame = () => {
@@ -2555,6 +2628,34 @@ if (newOuts === 3) {
                   <p className="text-xs text-blue-400 mb-1">💡 打順番号クリック → 打順交換</p>
                   <p className="text-xs text-purple-400 mb-1">🔄 守備位置クリック → 守備交換</p>
                   <p className="text-xs text-orange-400 mb-4">⚡ 選手パネルクリック → スタメン⇔ベンチ交代</p>
+
+                  {/* 監督AI設定 */}
+                  <div className="mb-6 p-3 bg-gray-800 rounded-lg">
+                    <div className="flex items-center justify-center gap-3">
+                      <span className="text-sm font-semibold">🤖 監督AI</span>
+                      <button
+                        onClick={() => setAutoManagerMode(!autoManagerMode)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          autoManagerMode ? 'bg-green-600' : 'bg-gray-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            autoManagerMode ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                      <span className={`text-xs ${autoManagerMode ? 'text-green-400' : 'text-gray-400'}`}>
+                        {autoManagerMode ? 'ON (自動采配)' : 'OFF (手動采配)'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-2 text-center">
+                      {autoManagerMode
+                        ? '投手のスタミナが20%以下になると自動的に交代します'
+                        : '選手交代は手動で行います'}
+                    </p>
+                  </div>
+
                   <button
                     onClick={() => {
                       setGameStarted(true);
@@ -2826,6 +2927,14 @@ if (newOuts === 3) {
                   <button onClick={resetGame}
                     className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700">
                     🔄 リセット
+                  </button>
+                  <button
+                    onClick={() => setAutoManagerMode(!autoManagerMode)}
+                    className={`px-3 py-2 rounded text-sm font-semibold transition ${
+                      autoManagerMode ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    🤖 {autoManagerMode ? 'AI ON' : 'AI OFF'}
                   </button>
                 </div>
               </div>
