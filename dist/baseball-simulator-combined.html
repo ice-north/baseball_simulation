@@ -1374,8 +1374,17 @@ const calculateDefensiveFitness = (player, position) => {
       // 選手交代ハンドラー
       const handleSubstituteClick = (teamType, playerId) => {
         const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
+        const team = teamType === 'home' ? homeTeam : awayTeam;
         const selectedSubstitute = teamType === 'home' ? selectedSubstituteHome : selectedSubstituteAway;
         const setSelectedSubstitute = teamType === 'home' ? setSelectedSubstituteHome : setSelectedSubstituteAway;
+
+        // クリックされた選手を取得
+        const clickedPlayer = team.players.find(p => p.id === playerId);
+
+        // 試合中：交代済み選手は選択できない
+        if (gameStarted && clickedPlayer && clickedPlayer.hasSubbedOut) {
+          return;
+        }
 
         if (selectedSubstitute === null) {
           // 最初の選手を選択
@@ -1396,6 +1405,11 @@ const calculateDefensiveFitness = (player, position) => {
                 return prev; // 交代を実行しない
               }
 
+              // 試合中：スタメン同士の交代（打順変更）は禁止
+              if (gameStarted && player1.isStarter && player2.isStarter) {
+                return prev; // 交代を実行しない
+              }
+
               // スタメンフラグを交換
               const tempStarter = player1.isStarter;
               player1.isStarter = player2.isStarter;
@@ -1412,7 +1426,7 @@ const calculateDefensiveFitness = (player, position) => {
                 }
               }
 
-              // スタメン同士の交代の場合は、打順とポジションも交換
+              // スタメン同士の交代の場合は、打順とポジションも交換（試合前のみ）
               if (tempStarter && player2.isStarter) {
                 const tempOrder = player1.battingOrder;
                 const tempPosition = player1.position;
