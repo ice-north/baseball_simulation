@@ -44,6 +44,8 @@
       const [selectedPositionHome, setSelectedPositionHome] = useState(null);  // 守備位置変更用（ホーム）
       const [selectedSubstituteAway, setSelectedSubstituteAway] = useState(null);  // 選手交代用（アウェイ）
       const [selectedSubstituteHome, setSelectedSubstituteHome] = useState(null);  // 選手交代用（ホーム）
+      const [showBenchAway, setShowBenchAway] = useState(false);  // ベンチ表示切り替え（アウェイ）
+      const [showBenchHome, setShowBenchHome] = useState(false);  // ベンチ表示切り替え（ホーム）
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -2296,20 +2298,24 @@ if (newOuts === 3) {
 
                     const isSelected = !gameStarted && selectedBatterAway === player.battingOrder;
                     const isPositionSelected = !gameStarted && selectedPositionAway === player.id;
+                    const isSubSelected = gameStarted && selectedSubstituteAway === player.id;
                     const fitness = calculateDefensiveFitness(player, player.position);
 
                     return (
                       <div
                         key={player.id}
                         onClick={() => {
-                          if (!gameStarted) {
+                          if (gameStarted) {
+                            handleSubstituteClick('away', player.id);
+                          } else {
                             handleBatterClick('away', player.battingOrder);
                           }
                         }}
-                        className={`p-2 rounded transition ${
+                        className={`p-2 rounded transition cursor-pointer ${
                           isCurrentBatter ? 'bg-yellow-500 text-black' :
+                          isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' :
                           isSelected ? 'bg-blue-600 text-white' :
-                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700 cursor-pointer'
+                          'hover:bg-gray-800'
                         }`}
                       >
                         <div className="flex items-center gap-1.5">
@@ -2335,6 +2341,7 @@ if (newOuts === 3) {
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
                           {isCurrentBatter && <span>⚾</span>}
+                          {isSubSelected && <span className="text-orange-300">⚡</span>}
                           {isSelected && <span>👆</span>}
                           {isPositionSelected && <span>🔄</span>}
                         </div>
@@ -2358,6 +2365,53 @@ if (newOuts === 3) {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* 試合中の選手交代アコーディオン */}
+                <div className="mt-2">
+                  <button
+                    onClick={() => setShowBenchAway(!showBenchAway)}
+                    className="w-full p-2 bg-gray-800 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
+                  >
+                    <span>⚡ 選手交代</span>
+                    <span>{showBenchAway ? '▼' : '▶'}</span>
+                  </button>
+
+                  {showBenchAway && (
+                    <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
+                      {awayTeam.players
+                        .filter(p => !p.isStarter)
+                        .map(player => {
+                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                          const isPitcher = player.position === 'pitcher';
+                          const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+                          const isSubSelected = selectedSubstituteAway === player.id;
+
+                          return (
+                            <div
+                              key={player.id}
+                              onClick={() => handleSubstituteClick('away', player.id)}
+                              className={`p-1.5 rounded cursor-pointer transition ${
+                                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1">
+                                <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
+                                <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
+                                <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
+                                {isSubSelected && <span className="text-orange-300">⚡</span>}
+                              </div>
+                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
+                                <span>M{player.batting.meet}</span>
+                                <span>P{player.batting.power}</span>
+                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
               </div>
               )}
@@ -2980,20 +3034,24 @@ if (newOuts === 3) {
 
                     const isSelected = !gameStarted && selectedBatterHome === player.battingOrder;
                     const isPositionSelected = !gameStarted && selectedPositionHome === player.id;
+                    const isSubSelected = gameStarted && selectedSubstituteHome === player.id;
                     const fitness = calculateDefensiveFitness(player, player.position);
 
                     return (
                       <div
                         key={player.id}
                         onClick={() => {
-                          if (!gameStarted) {
+                          if (gameStarted) {
+                            handleSubstituteClick('home', player.id);
+                          } else {
                             handleBatterClick('home', player.battingOrder);
                           }
                         }}
-                        className={`p-2 rounded transition ${
+                        className={`p-2 rounded transition cursor-pointer ${
                           isCurrentBatter ? 'bg-yellow-500 text-black' :
+                          isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' :
                           isSelected ? 'bg-blue-600 text-white' :
-                          gameStarted ? 'hover:bg-gray-800' : 'hover:bg-gray-700 cursor-pointer'
+                          'hover:bg-gray-800'
                         }`}
                       >
                         <div className="flex items-center gap-1.5">
@@ -3019,6 +3077,7 @@ if (newOuts === 3) {
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
                           {isCurrentBatter && <span>⚾</span>}
+                          {isSubSelected && <span className="text-orange-300">⚡</span>}
                           {isSelected && <span>👆</span>}
                           {isPositionSelected && <span>🔄</span>}
                         </div>
@@ -3042,6 +3101,53 @@ if (newOuts === 3) {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* 試合中の選手交代アコーディオン */}
+                <div className="mt-2">
+                  <button
+                    onClick={() => setShowBenchHome(!showBenchHome)}
+                    className="w-full p-2 bg-gray-800 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
+                  >
+                    <span>⚡ 選手交代</span>
+                    <span>{showBenchHome ? '▼' : '▶'}</span>
+                  </button>
+
+                  {showBenchHome && (
+                    <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
+                      {homeTeam.players
+                        .filter(p => !p.isStarter)
+                        .map(player => {
+                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                          const isPitcher = player.position === 'pitcher';
+                          const throwHand = player.physical.throws === 'right' ? '右' : '左';
+                          const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
+                          const isSubSelected = selectedSubstituteHome === player.id;
+
+                          return (
+                            <div
+                              key={player.id}
+                              onClick={() => handleSubstituteClick('home', player.id)}
+                              className={`p-1.5 rounded cursor-pointer transition ${
+                                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1">
+                                <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
+                                <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
+                                <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
+                                {isSubSelected && <span className="text-orange-300">⚡</span>}
+                              </div>
+                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
+                                <span>M{player.batting.meet}</span>
+                                <span>P{player.batting.power}</span>
+                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
               </div>
               )}
