@@ -560,6 +560,149 @@
         }
       };
 
+      // ============================================================
+      // 監督AI：盗塁判断ロジック（Phase 3）
+      // ============================================================
+      const autoStealingDecision = (runner, situation) => {
+        if (!autoManagerMode || !gameStarted) return 1.0; // 監督AIオフの場合は通常の試行率
+
+        const { scoreDiff, isCloseGame, outs, batterType, runnerSteal } = situation;
+
+        // 基本倍率
+        let stealMultiplier = 1.0;
+
+        // 状況による調整
+        // 1. 得点差による判断
+        if (isCloseGame) {
+          stealMultiplier *= 1.3; // 接戦では積極的
+        } else if (scoreDiff >= 4) {
+          stealMultiplier *= 0.5; // 大差では消極的
+        }
+
+        // 2. アウトカウントによる判断
+        if (outs === 0) {
+          stealMultiplier *= 1.2; // ノーアウトは積極的
+        } else if (outs === 2) {
+          stealMultiplier *= 0.6; // 2アウトは消極的
+        }
+
+        // 3. 打者の能力による判断
+        if (batterType === 'pitcher' || batterType === 'weak') {
+          stealMultiplier *= 1.5; // 弱打者の時は積極的
+        } else if (batterType === 'strong') {
+          stealMultiplier *= 0.4; // 強打者の時は消極的
+        }
+
+        // 4. ランナーの盗塁能力による判断
+        if (runnerSteal >= 70) {
+          stealMultiplier *= 1.4; // 高い盗塁能力は積極的
+        } else if (runnerSteal < 40) {
+          stealMultiplier *= 0.3; // 低い盗塁能力は消極的
+        }
+
+        // 5. イニングによる判断
+        if (inning >= 7 && isCloseGame) {
+          stealMultiplier *= 1.3; // 終盤の接戦では積極的
+        }
+
+        return stealMultiplier;
+      };
+
+      // ============================================================
+      // 監督AI：投手起用最適化（Phase 3）
+      // ============================================================
+      const autoOptimizePitcherUsage = () => {
+        if (!autoManagerMode || !gameStarted) return;
+
+        // 7回以降の投手起用を最適化
+        if (inning < 7) return;
+
+        const defenseTeam = getDefenseTeam();
+        const currentPitcher = getCurrentPitcher();
+        const teamType = isTopInning ? 'home' : 'away';
+        const setTeam = isTopInning ? setHomeTeam : setAwayTeam;
+
+        // スコア判定
+        const isLeading = isTopInning
+          ? score.home > score.away
+          : score.away > score.home;
+        const scoreDiff = Math.abs(score.home - score.away);
+        const isCloseGame = scoreDiff <= 2;
+
+        // 投手のタイプを判断（名前から）
+        const isCloser = currentPitcher.name.includes('抑え') || currentPitcher.name.includes('クローザー');
+        const isSetup = currentPitcher.name.includes('セットアッパー') || currentPitcher.name.includes('8回');
+
+        // 9回表（アウェイ守備）または9回裏（ホーム守備）でリードしている場合
+        const isNinthInning = (inning === 9 && isTopInning) || (inning === 9 && !isTopInning);
+        const isEighthInning = (inning === 8 && isTopInning) || (inning === 8 && !isTopInning);
+
+        // 抑え投手の起用判断
+        if (isNinthInning && isLeading && scoreDiff <= 3 && !isCloser) {
+          // 9回でリード、3点差以内で抑え投手でない場合、抑え投手を探す
+          const closerPitcher = defenseTeam.players.find(p =>
+            p.position === 'pitcher' &&
+            !p.hasSubbedOut &&
+            !p.isStarter &&
+            (p.name.includes('抑え') || p.name.includes('クローザー'))
+          );
+
+          if (closerPitcher) {
+            // 抑え投手に交代
+            setTeam(prev => {
+              const players = [...prev.players];
+              const oldPitcher = players.find(p => p.id === currentPitcher.id);
+              const newPitcher = players.find(p => p.id === closerPitcher.id);
+
+              if (oldPitcher && newPitcher) {
+                oldPitcher.isStarter = false;
+                oldPitcher.hasSubbedOut = true;
+
+                newPitcher.isStarter = true;
+                newPitcher.hasSubbedOut = false;
+
+                // 新投手のスタミナをセット
+                setCurrentStamina(newPitcher.pitching.stamina);
+              }
+
+              return { ...prev, players };
+            });
+          }
+        }
+
+        // セットアッパーの起用判断
+        if (isEighthInning && isLeading && scoreDiff <= 3 && !isSetup && !isCloser) {
+          // 8回でリード、3点差以内でセットアッパーでない場合
+          const setupPitcher = defenseTeam.players.find(p =>
+            p.position === 'pitcher' &&
+            !p.hasSubbedOut &&
+            !p.isStarter &&
+            (p.name.includes('セットアッパー') || p.name.includes('8回'))
+          );
+
+          if (setupPitcher) {
+            // セットアッパーに交代
+            setTeam(prev => {
+              const players = [...prev.players];
+              const oldPitcher = players.find(p => p.id === currentPitcher.id);
+              const newPitcher = players.find(p => p.id === setupPitcher.id);
+
+              if (oldPitcher && newPitcher) {
+                oldPitcher.isStarter = false;
+                oldPitcher.hasSubbedOut = true;
+
+                newPitcher.isStarter = true;
+                newPitcher.hasSubbedOut = false;
+
+                setCurrentStamina(newPitcher.pitching.stamina);
+              }
+
+              return { ...prev, players };
+            });
+          }
+        }
+      };
+
       // 次の打者に進む（攻撃チームの打順を進める）
       const advanceBatter = () => {
         if (isTopInning) {
@@ -1744,8 +1887,32 @@
               catcherDeterrent += 0.03;  // +3%の牽制ボーナス
             }
             
-            const stealAttempt = Math.max(0, stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrent);
-            
+            let stealAttempt = Math.max(0, stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrent);
+
+            // 監督AI：盗塁判断（Phase 3）
+            if (autoManagerMode) {
+              const batterAvg = batter.stats?.batting?.atBats > 0
+                ? batter.stats.batting.hits / batter.stats.batting.atBats
+                : (batter.batting?.contact || 50) / 200; // 成績がない場合は能力値から推定
+              const isPitcher = batter.position === 'pitcher';
+              const isWeakBatter = batterAvg < 0.200 || isPitcher;
+              const isStrongBatter = batterAvg > 0.300 && batter.batting?.power > 50;
+
+              const batterType = isPitcher ? 'pitcher' : isWeakBatter ? 'weak' : isStrongBatter ? 'strong' : 'normal';
+              const scoreDiff = Math.abs(score.home - score.away);
+              const isCloseGame = scoreDiff <= 3;
+
+              const stealMultiplier = autoStealingDecision(batter, {
+                scoreDiff,
+                isCloseGame,
+                outs: newOuts,
+                batterType,
+                runnerSteal: batter.steal
+              });
+
+              stealAttempt *= stealMultiplier;
+            }
+
             if (Math.random() < stealAttempt) {
               // 新しい成功率システム
               // ステップ1: 走力による基本成功率（20%-80%）
@@ -1816,8 +1983,32 @@
       catcherDeterrentThird += 0.05;
     }
     
-    const stealThirdAttempt = Math.max(0, (stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrentThird) * 0.7);
-    
+    let stealThirdAttempt = Math.max(0, (stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrentThird) * 0.7);
+
+    // 監督AI：盗塁判断（Phase 3）
+    if (autoManagerMode) {
+      const batterAvg = batter.stats?.batting?.atBats > 0
+        ? batter.stats.batting.hits / batter.stats.batting.atBats
+        : (batter.batting?.contact || 50) / 200;
+      const isPitcher = batter.position === 'pitcher';
+      const isWeakBatter = batterAvg < 0.200 || isPitcher;
+      const isStrongBatter = batterAvg > 0.300 && batter.batting?.power > 50;
+
+      const batterType = isPitcher ? 'pitcher' : isWeakBatter ? 'weak' : isStrongBatter ? 'strong' : 'normal';
+      const scoreDiff = Math.abs(score.home - score.away);
+      const isCloseGame = scoreDiff <= 3;
+
+      const stealMultiplier = autoStealingDecision(batter, {
+        scoreDiff,
+        isCloseGame,
+        outs: newOuts,
+        batterType,
+        runnerSteal: batter.steal
+      });
+
+      stealThirdAttempt *= stealMultiplier * 1.2; // 三塁盗塁はやや積極的
+    }
+
     if (Math.random() < stealThirdAttempt) {
       // 新しい成功率システム（三塁盗塁は基本成功率が高い）
       // ステップ1: 走力による基本成功率（30%-90%）
@@ -1937,16 +2128,18 @@ if (newOuts === 3) {
           } else {
             if (isTopInning) {
               setIsTopInning(false);
-              // イニング切り替え後に守備固めをチェック
+              // イニング切り替え後に守備固めと投手起用最適化をチェック
               setTimeout(() => {
                 autoDefensiveSubstitution();
+                autoOptimizePitcherUsage();
               }, 100);
             } else {
               setIsTopInning(true);
               setInning(inning + 1);
-              // イニング切り替え後に守備固めをチェック
+              // イニング切り替え後に守備固めと投手起用最適化をチェック
               setTimeout(() => {
                 autoDefensiveSubstitution();
+                autoOptimizePitcherUsage();
               }, 100);
             }
           }
@@ -2018,18 +2211,24 @@ if (newOuts === 3) {
         setLastResult(null);
         setStatistics(null);
         setRecentVelocities([]);
-        // チームの打順をリセット＆選手成績をリセット
-        setHomeTeam(prev => ({
-          ...prev, 
-          currentBatterOrder: 1,
-          players: prev.players.map(p => ({ ...p, stats: createPlayerStats() }))
-        }));
-        setAwayTeam(prev => ({
-          ...prev, 
-          currentBatterOrder: 1,
-          players: prev.players.map(p => ({ ...p, stats: createPlayerStats() }))
-        }));
-        setCurrentStamina(getCurrentPitcher().pitching.stamina);  // スタミナリセット
+        // チームを完全に初期状態に戻す（選手の位置・打順・交代フラグなども全てリセット）
+        setHomeTeam({
+          name: "ホーム",
+          players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false}))],
+          currentBatterOrder: 1
+        });
+        setAwayTeam({
+          name: "アウェイ",
+          players: [...createAwayPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false})), ...createAwayBench().map(p => ({...p, hasSubbedOut: false}))],
+          currentBatterOrder: 1
+        });
+        // スタミナリセット（新しい投手で）
+        setTimeout(() => {
+          const homePitcher = createDefaultPlayers().find(p => p.position === 'pitcher');
+          if (homePitcher) {
+            setCurrentStamina(homePitcher.pitching.stamina);
+          }
+        }, 100);
         setBatterStats({
           plateAppearances: 0,
           atBats: 0,
