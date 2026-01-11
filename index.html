@@ -312,13 +312,13 @@
       // 現在の投手を取得（守備チームから）
       const getCurrentPitcher = () => {
         const team = getDefenseTeam();
-        return team.players.find(p => p.position === 'pitcher') || team.players[8];
+        return team.players.find(p => p.isStarter && p.position === 'pitcher') || team.players[8];
       };
-      
+
       // 現在の捕手を取得（守備チームから）
       const getCurrentCatcher = () => {
         const team = getDefenseTeam();
-        return team.players.find(p => p.position === 'catcher') || team.players[7];
+        return team.players.find(p => p.isStarter && p.position === 'catcher') || team.players[7];
       };
       
       // 次の打者に進む（攻撃チームの打順を進める）
