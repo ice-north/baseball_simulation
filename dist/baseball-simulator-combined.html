@@ -1435,12 +1435,13 @@ const calculateDefensiveFitness = (player, position) => {
               player2.isStarter = tempStarter;
 
               // 試合中：ベンチに下がった選手にフラグを設定
+              // 注意：スタメン同士の交代は既に禁止しているので、必ず一方がスタメンで一方がベンチ
               if (gameStarted) {
-                if (tempStarter && !player2.isStarter) {
-                  // player1がベンチに下がった
+                if (tempStarter) {
+                  // player1が元々スタメンだった → player1がベンチに下がった
                   player1.hasSubbedOut = true;
-                } else if (!tempStarter && player2.isStarter) {
-                  // player2がベンチに下がった
+                } else {
+                  // player2が元々スタメンだった → player2がベンチに下がった
                   player2.hasSubbedOut = true;
                 }
               }
