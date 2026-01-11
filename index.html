@@ -660,9 +660,12 @@
               if (oldPitcher && newPitcher) {
                 oldPitcher.isStarter = false;
                 oldPitcher.hasSubbedOut = true;
+                oldPitcher.battingOrder = 0;
 
                 newPitcher.isStarter = true;
                 newPitcher.hasSubbedOut = false;
+                newPitcher.battingOrder = currentPitcher.battingOrder;
+                newPitcher.position = 'pitcher';
 
                 // 新投手のスタミナをセット
                 setCurrentStamina(newPitcher.pitching.stamina);
@@ -693,9 +696,12 @@
               if (oldPitcher && newPitcher) {
                 oldPitcher.isStarter = false;
                 oldPitcher.hasSubbedOut = true;
+                oldPitcher.battingOrder = 0;
 
                 newPitcher.isStarter = true;
                 newPitcher.hasSubbedOut = false;
+                newPitcher.battingOrder = currentPitcher.battingOrder;
+                newPitcher.position = 'pitcher';
 
                 setCurrentStamina(newPitcher.pitching.stamina);
               }
