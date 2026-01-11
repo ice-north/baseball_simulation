@@ -1254,13 +1254,13 @@ const calculateDefensiveFitness = (player, position) => {
       // ============================================================
       const [homeTeam, setHomeTeam] = useState({
         name: "ホーム",
-        players: [...createDefaultPlayers().map(p => ({...p, isStarter: true})), ...createHomeBench()],
+        players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false}))],
         currentBatterOrder: 1
       });
 
       const [awayTeam, setAwayTeam] = useState({
         name: "アウェイ",
-        players: [...createAwayPlayers().map(p => ({...p, isStarter: true})), ...createAwayBench()],
+        players: [...createAwayPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false})), ...createAwayBench().map(p => ({...p, hasSubbedOut: false}))],
         currentBatterOrder: 1
       });
       
@@ -1391,10 +1391,26 @@ const calculateDefensiveFitness = (player, position) => {
             const player2 = players.find(p => p.id === playerId);
 
             if (player1 && player2) {
+              // 試合中：一度ベンチに下がった選手は戻れない
+              if (gameStarted && (player1.hasSubbedOut || player2.hasSubbedOut)) {
+                return prev; // 交代を実行しない
+              }
+
               // スタメンフラグを交換
               const tempStarter = player1.isStarter;
               player1.isStarter = player2.isStarter;
               player2.isStarter = tempStarter;
+
+              // 試合中：ベンチに下がった選手にフラグを設定
+              if (gameStarted) {
+                if (tempStarter && !player2.isStarter) {
+                  // player1がベンチに下がった
+                  player1.hasSubbedOut = true;
+                } else if (!tempStarter && player2.isStarter) {
+                  // player2がベンチに下がった
+                  player2.hasSubbedOut = true;
+                }
+              }
 
               // スタメン同士の交代の場合は、打順とポジションも交換
               if (tempStarter && player2.isStarter) {
@@ -3428,19 +3444,25 @@ if (newOuts === 3) {
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                           const isSubSelected = selectedSubstituteAway === player.id;
+                          const isSubbedOut = player.hasSubbedOut;
 
                           return (
                             <div
                               key={player.id}
-                              onClick={() => handleSubstituteClick('away', player.id)}
-                              className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'
+                              onClick={() => !isSubbedOut && handleSubstituteClick('away', player.id)}
+                              className={`p-1.5 rounded transition ${
+                                isSubbedOut
+                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
+                                  : isSubSelected
+                                    ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer'
+                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
                                 <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
                                 <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
                                 <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
+                                {isSubbedOut && <span className="text-red-400 text-[10px]">交代済</span>}
                                 {isSubSelected && <span className="text-orange-300">⚡</span>}
                               </div>
                               <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
@@ -3481,23 +3503,25 @@ if (newOuts === 3) {
                     const isSelected = !gameStarted && selectedBatterAway === player.battingOrder;
                     const isPositionSelected = !gameStarted && selectedPositionAway === player.id;
                     const isSubSelected = gameStarted && selectedSubstituteAway === player.id;
+                    const isSubbedOut = player.hasSubbedOut;
                     const fitness = calculateDefensiveFitness(player, player.position);
 
                     return (
                       <div
                         key={player.id}
                         onClick={() => {
-                          if (gameStarted) {
+                          if (gameStarted && !isSubbedOut) {
                             handleSubstituteClick('away', player.id);
-                          } else {
+                          } else if (!gameStarted) {
                             handleBatterClick('away', player.battingOrder);
                           }
                         }}
-                        className={`p-2 rounded transition cursor-pointer ${
-                          isCurrentBatter ? 'bg-yellow-500 text-black' :
-                          isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' :
-                          isSelected ? 'bg-blue-600 text-white' :
-                          'hover:bg-gray-800'
+                        className={`p-2 rounded transition ${
+                          isSubbedOut ? 'opacity-50 cursor-not-allowed' :
+                          isCurrentBatter ? 'bg-yellow-500 text-black cursor-pointer' :
+                          isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer' :
+                          isSelected ? 'bg-blue-600 text-white cursor-pointer' :
+                          'hover:bg-gray-800 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center gap-1.5">
@@ -3522,6 +3546,7 @@ if (newOuts === 3) {
                           <span className="font-bold">{player.name}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
+                          {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                           {isCurrentBatter && <span>⚾</span>}
                           {isSubSelected && <span className="text-orange-300">⚡</span>}
                           {isSelected && <span>👆</span>}
@@ -3569,19 +3594,25 @@ if (newOuts === 3) {
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                           const isSubSelected = selectedSubstituteAway === player.id;
+                          const isSubbedOut = player.hasSubbedOut;
 
                           return (
                             <div
                               key={player.id}
-                              onClick={() => handleSubstituteClick('away', player.id)}
-                              className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'
+                              onClick={() => !isSubbedOut && handleSubstituteClick('away', player.id)}
+                              className={`p-1.5 rounded transition ${
+                                isSubbedOut
+                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
+                                  : isSubSelected
+                                    ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer'
+                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
                                 <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
                                 <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
                                 <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
+                                {isSubbedOut && <span className="text-red-400 text-[10px]">交代済</span>}
                                 {isSubSelected && <span className="text-orange-300">⚡</span>}
                               </div>
                               <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
@@ -4164,19 +4195,25 @@ if (newOuts === 3) {
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                           const isSubSelected = selectedSubstituteHome === player.id;
+                          const isSubbedOut = player.hasSubbedOut;
 
                           return (
                             <div
                               key={player.id}
-                              onClick={() => handleSubstituteClick('home', player.id)}
-                              className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'
+                              onClick={() => !isSubbedOut && handleSubstituteClick('home', player.id)}
+                              className={`p-1.5 rounded transition ${
+                                isSubbedOut
+                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
+                                  : isSubSelected
+                                    ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer'
+                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
                                 <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
                                 <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
                                 <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
+                                {isSubbedOut && <span className="text-red-400 text-[10px]">交代済</span>}
                                 {isSubSelected && <span className="text-orange-300">⚡</span>}
                               </div>
                               <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
@@ -4217,23 +4254,25 @@ if (newOuts === 3) {
                     const isSelected = !gameStarted && selectedBatterHome === player.battingOrder;
                     const isPositionSelected = !gameStarted && selectedPositionHome === player.id;
                     const isSubSelected = gameStarted && selectedSubstituteHome === player.id;
+                    const isSubbedOut = player.hasSubbedOut;
                     const fitness = calculateDefensiveFitness(player, player.position);
 
                     return (
                       <div
                         key={player.id}
                         onClick={() => {
-                          if (gameStarted) {
+                          if (gameStarted && !isSubbedOut) {
                             handleSubstituteClick('home', player.id);
-                          } else {
+                          } else if (!gameStarted) {
                             handleBatterClick('home', player.battingOrder);
                           }
                         }}
-                        className={`p-2 rounded transition cursor-pointer ${
-                          isCurrentBatter ? 'bg-yellow-500 text-black' :
-                          isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' :
-                          isSelected ? 'bg-blue-600 text-white' :
-                          'hover:bg-gray-800'
+                        className={`p-2 rounded transition ${
+                          isSubbedOut ? 'opacity-50 cursor-not-allowed' :
+                          isCurrentBatter ? 'bg-yellow-500 text-black cursor-pointer' :
+                          isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer' :
+                          isSelected ? 'bg-blue-600 text-white cursor-pointer' :
+                          'hover:bg-gray-800 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center gap-1.5">
@@ -4258,6 +4297,7 @@ if (newOuts === 3) {
                           <span className="font-bold">{player.name}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
+                          {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                           {isCurrentBatter && <span>⚾</span>}
                           {isSubSelected && <span className="text-orange-300">⚡</span>}
                           {isSelected && <span>👆</span>}
@@ -4305,19 +4345,25 @@ if (newOuts === 3) {
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                           const isSubSelected = selectedSubstituteHome === player.id;
+                          const isSubbedOut = player.hasSubbedOut;
 
                           return (
                             <div
                               key={player.id}
-                              onClick={() => handleSubstituteClick('home', player.id)}
-                              className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'
+                              onClick={() => !isSubbedOut && handleSubstituteClick('home', player.id)}
+                              className={`p-1.5 rounded transition ${
+                                isSubbedOut
+                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
+                                  : isSubSelected
+                                    ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer'
+                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
                                 <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
                                 <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
                                 <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
+                                {isSubbedOut && <span className="text-red-400 text-[10px]">交代済</span>}
                                 {isSubSelected && <span className="text-orange-300">⚡</span>}
                               </div>
                               <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
