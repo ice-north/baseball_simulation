@@ -365,6 +365,15 @@
         return 'bg-gray-500';                       // D級
       };
 
+      // 能力値のテキスト色を取得（0-100）
+      const getAbilityTextColor = (value) => {
+        if (value >= 80) return 'text-red-400';      // S級
+        if (value >= 70) return 'text-orange-400';   // A級
+        if (value >= 60) return 'text-yellow-400';   // B級
+        if (value >= 50) return 'text-green-400';    // C級
+        return 'text-gray-400';                       // D級
+      };
+
       // 能力値バーを表示するコンポーネント（コンパクト版）
       const AbilityBar = ({ label, value }) => (
         <div className="flex items-center gap-0.5">
@@ -2845,17 +2854,9 @@ if (newOuts === 3) {
                           return (
                             <div
                               key={player.id}
-                              onClick={() => {
-                                // 控え選手が選択されていればスタメン/控え入れ替え、それ以外は打順変更
-                                if (selectedSubstituteAway !== null) {
-                                  handleSubstituteClick('away', player.id);
-                                } else {
-                                  handleBatterClick('away', player.battingOrder);
-                                }
-                              }}
+                              onClick={() => handleSubstituteClick('away', player.id)}
                               className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' :
-                                isSelected ? 'bg-blue-600 text-white' :
+                                isSubSelected ? 'bg-blue-600 text-white ring-2 ring-blue-400' :
                                 'bg-gray-800 hover:bg-gray-700'
                               }`}
                             >
@@ -2882,29 +2883,29 @@ if (newOuts === 3) {
                                 >
                                   {posNames[player.position]}
                                 </button>
-                                <span className="font-medium text-sm truncate flex-1">
+                                <span className="font-medium text-base truncate flex-1">
                                   {player.name}
                                 </span>
-                                <span className="text-[9px] text-gray-600 font-mono">#{player.number || player.id}</span>
-<span className="text-xs text-gray-500 font-semibold">{throwHand}{batHand}</span>
-                                {isSubSelected && <span className="text-orange-300">⚡</span>}
+                                <span className="text-[10px] text-gray-600 font-mono">#{player.number || player.id}</span>
+<span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
+                                {isSubSelected && <span className="text-blue-300">👆</span>}
                                 {isSelected && <span className="text-blue-300">👆</span>}
                                 {isPositionSelected && <span className="text-purple-300">🔄</span>}
                               </div>
                               <div className="ml-9 mt-0.5">
-                                <div className="flex gap-3 text-[9px] text-gray-500">
-                                  <span className="w-6 text-center">ミ</span>
-                                  <span className="w-6 text-center">パ</span>
-                                  <span className="w-6 text-center">走</span>
-                                  <span className="w-6 text-center">肩</span>
-                                  <span className="w-6 text-center">守</span>
+                                <div className="flex gap-3 text-[10px] text-gray-500">
+                                  <span className="w-7 text-center">ミ</span>
+                                  <span className="w-7 text-center">パ</span>
+                                  <span className="w-7 text-center">走</span>
+                                  <span className="w-7 text-center">肩</span>
+                                  <span className="w-7 text-center">守</span>
                                 </div>
-                                <div className="flex gap-3 text-[11px] text-white font-semibold">
-                                  <span className="w-6 text-center">{player.batting.meet}</span>
-                                  <span className="w-6 text-center">{player.batting.power}</span>
-                                  <span className="w-6 text-center">{player.physical.speed}</span>
-                                  <span className="w-6 text-center">{player.physical.arm}</span>
-                                  <span className="w-6 text-center">{player.fielding.defense}</span>
+                                <div className="flex gap-3 text-sm font-bold">
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.batting.meet)}`}>{player.batting.meet}</span>
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.batting.power)}`}>{player.batting.power}</span>
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.physical.speed)}`}>{player.physical.speed}</span>
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.physical.arm)}`}>{player.physical.arm}</span>
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.fielding.defense)}`}>{player.fielding.defense}</span>
                                 </div>
                               </div>
                             </div>
@@ -2935,16 +2936,16 @@ if (newOuts === 3) {
                                 isSubbedOut
                                   ? 'bg-gray-900 opacity-50 cursor-not-allowed'
                                   : isSubSelected
-                                    ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer'
+                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
                                     : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
-                                <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
-                                <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
-                                <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
-                                {isSubbedOut && <span className="text-red-400 text-[10px]">交代済</span>}
-                                {isSubSelected && <span className="text-orange-300">⚡</span>}
+                                <span className="w-6 text-center text-xs font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
+                                <span className="font-medium text-sm truncate flex-1">{player.name}</span>
+                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
+                                {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
+                                {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
                               <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
                                 <span>M{player.batting.meet}</span>
@@ -3095,16 +3096,16 @@ if (newOuts === 3) {
                                 isSubbedOut
                                   ? 'bg-gray-900 opacity-50 cursor-not-allowed'
                                   : isSubSelected
-                                    ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer'
+                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
                                     : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
-                                <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
-                                <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
-                                <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
-                                {isSubbedOut && <span className="text-red-400 text-[10px]">交代済</span>}
-                                {isSubSelected && <span className="text-orange-300">⚡</span>}
+                                <span className="w-6 text-center text-xs font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
+                                <span className="font-medium text-sm truncate flex-1">{player.name}</span>
+                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
+                                {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
+                                {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
                               <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
                                 <span>M{player.batting.meet}</span>
@@ -3258,9 +3259,8 @@ if (newOuts === 3) {
               {!gameStarted && (
                 <div className="bg-gray-900 rounded-lg p-4 text-white text-center">
                   <h2 className="text-2xl font-bold mb-3">⚾ 野球シミュレーター</h2>
-                  <p className="text-xs text-blue-400 mb-1">💡 打順番号クリック → 打順交換</p>
-                  <p className="text-xs text-purple-400 mb-1">🔄 守備位置クリック → 守備交換</p>
-                  <p className="text-xs text-orange-400 mb-4">⚡ 選手パネルクリック → スタメン⇔ベンチ交代</p>
+                  <p className="text-sm text-blue-400 mb-1">👆 選手パネルクリック → スタメン⇔ベンチ交代</p>
+                  <p className="text-sm text-purple-400 mb-4">🔄 守備位置クリック → 守備交換</p>
 
                   {/* 監督AI設定 */}
                   <div className="mb-6 p-3 bg-gray-800 rounded-lg">
@@ -3741,17 +3741,9 @@ if (newOuts === 3) {
                           return (
                             <div
                               key={player.id}
-                              onClick={() => {
-                                // 控え選手が選択されていればスタメン/控え入れ替え、それ以外は打順変更
-                                if (selectedSubstituteHome !== null) {
-                                  handleSubstituteClick('home', player.id);
-                                } else {
-                                  handleBatterClick('home', player.battingOrder);
-                                }
-                              }}
+                              onClick={() => handleSubstituteClick('home', player.id)}
                               className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400' :
-                                isSelected ? 'bg-blue-600 text-white' :
+                                isSubSelected ? 'bg-blue-600 text-white ring-2 ring-blue-400' :
                                 'bg-gray-800 hover:bg-gray-700'
                               }`}
                             >
@@ -3778,29 +3770,29 @@ if (newOuts === 3) {
                                 >
                                   {posNames[player.position]}
                                 </button>
-                                <span className="font-medium text-sm truncate flex-1">
+                                <span className="font-medium text-base truncate flex-1">
                                   {player.name}
                                 </span>
-                                <span className="text-[9px] text-gray-600 font-mono">#{player.number || player.id}</span>
-<span className="text-xs text-gray-500 font-semibold">{throwHand}{batHand}</span>
-                                {isSubSelected && <span className="text-orange-300">⚡</span>}
+                                <span className="text-[10px] text-gray-600 font-mono">#{player.number || player.id}</span>
+<span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
+                                {isSubSelected && <span className="text-blue-300">👆</span>}
                                 {isSelected && <span className="text-blue-300">👆</span>}
                                 {isPositionSelected && <span className="text-purple-300">🔄</span>}
                               </div>
                               <div className="ml-9 mt-0.5">
-                                <div className="flex gap-3 text-[9px] text-gray-500">
-                                  <span className="w-6 text-center">ミ</span>
-                                  <span className="w-6 text-center">パ</span>
-                                  <span className="w-6 text-center">走</span>
-                                  <span className="w-6 text-center">肩</span>
-                                  <span className="w-6 text-center">守</span>
+                                <div className="flex gap-3 text-[10px] text-gray-500">
+                                  <span className="w-7 text-center">ミ</span>
+                                  <span className="w-7 text-center">パ</span>
+                                  <span className="w-7 text-center">走</span>
+                                  <span className="w-7 text-center">肩</span>
+                                  <span className="w-7 text-center">守</span>
                                 </div>
-                                <div className="flex gap-3 text-[11px] text-white font-semibold">
-                                  <span className="w-6 text-center">{player.batting.meet}</span>
-                                  <span className="w-6 text-center">{player.batting.power}</span>
-                                  <span className="w-6 text-center">{player.physical.speed}</span>
-                                  <span className="w-6 text-center">{player.physical.arm}</span>
-                                  <span className="w-6 text-center">{player.fielding.defense}</span>
+                                <div className="flex gap-3 text-sm font-bold">
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.batting.meet)}`}>{player.batting.meet}</span>
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.batting.power)}`}>{player.batting.power}</span>
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.physical.speed)}`}>{player.physical.speed}</span>
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.physical.arm)}`}>{player.physical.arm}</span>
+                                  <span className={`w-7 text-center ${getAbilityTextColor(player.fielding.defense)}`}>{player.fielding.defense}</span>
                                 </div>
                               </div>
                             </div>
