@@ -437,10 +437,6 @@
 
         // 代打判断条件
         const isPitcher = currentBatter.position === 'pitcher';
-
-        // 投手への代打は送らない（投手は投手交代ロジックで対応）
-        if (isPitcher) return;
-
         const battingAvg = currentBatter.stats?.batting?.atBats > 0
           ? currentBatter.stats.batting.hits / currentBatter.stats.batting.atBats
           : 0;
@@ -453,8 +449,9 @@
         const isImportantSituation = isCloseGame && runnersOnBase >= 2; // 接戦でランナー2人以上
         const isLateInning = inning >= 7;
 
-        // 代打を送る条件（野手のみ）
-        const shouldPinchHit = isWeakHitter && isImportantSituation && isLateInning;
+        // 代打を送る条件（投手と弱打者）
+        const shouldPinchHit = (isPitcher && isLateInning && (isCloseGame || runnersOnBase > 0)) ||
+                                (isWeakHitter && isImportantSituation && isLateInning);
 
         if (!shouldPinchHit) return;
 
@@ -473,20 +470,74 @@
           selectedPinchHitter = availablePinchHitters[0];
         }
 
-        // 代打交代を実行（野手のみ）
+        // 代打交代を実行
         setTeam(prev => {
           const players = [...prev.players];
           const oldBatter = players.find(p => p.id === currentBatter.id);
           const newBatter = players.find(p => p.id === selectedPinchHitter.id);
 
           if (oldBatter && newBatter) {
-            oldBatter.isStarter = false;
-            oldBatter.hasSubbedOut = true;
-            oldBatter.battingOrder = 0;
+            // 投手への代打の場合は二重交代
+            if (isPitcher) {
+              // 新しい投手を探す
+              const newPitcher = players.find(p =>
+                p.position === 'pitcher' &&
+                !p.isStarter &&
+                !p.hasSubbedOut &&
+                p.id !== oldBatter.id
+              );
 
-            newBatter.isStarter = true;
-            newBatter.battingOrder = currentBatter.battingOrder;
-            newBatter.position = currentBatter.position;
+              if (newPitcher) {
+                // 代打選手の元のポジションを取得（ベンチ選手の元のポジション）
+                const pinchHitterOriginalPosition = newBatter.position;
+
+                // そのポジションにいる現在の野手を探す
+                const fieldPlayerToReplace = players.find(p =>
+                  p.isStarter &&
+                  p.position === pinchHitterOriginalPosition &&
+                  p.id !== oldBatter.id
+                );
+
+                // 元の投手を交代させる
+                oldBatter.isStarter = false;
+                oldBatter.hasSubbedOut = true;
+                oldBatter.battingOrder = 0;
+
+                // 代打選手が投手の打順を引き継ぎ、元のポジションで守備につく
+                newBatter.isStarter = true;
+                newBatter.battingOrder = currentBatter.battingOrder;
+                // positionは元のまま（'first', 'left'など）
+
+                // 元のポジションにいた野手を退かせる（いる場合のみ）
+                if (fieldPlayerToReplace) {
+                  fieldPlayerToReplace.isStarter = false;
+                  fieldPlayerToReplace.hasSubbedOut = true;
+                  fieldPlayerToReplace.battingOrder = 0;
+                }
+
+                // 新投手を投手として起用
+                newPitcher.isStarter = true;
+                newPitcher.battingOrder = fieldPlayerToReplace ? fieldPlayerToReplace.battingOrder : 0;
+                newPitcher.position = 'pitcher';
+
+                // スタミナリセット
+                setTimeout(() => {
+                  setCurrentStamina(newPitcher.pitching.stamina);
+                }, 0);
+              } else {
+                // 新しい投手がいない場合は代打を送らない
+                return prev;
+              }
+            } else {
+              // 野手への代打の場合
+              oldBatter.isStarter = false;
+              oldBatter.hasSubbedOut = true;
+              oldBatter.battingOrder = 0;
+
+              newBatter.isStarter = true;
+              newBatter.battingOrder = currentBatter.battingOrder;
+              newBatter.position = currentBatter.position;
+            }
           }
 
           return { ...prev, players };
