@@ -347,6 +347,10 @@
 
         const defenseTeam = getDefenseTeam();
         const currentPitcher = getCurrentPitcher();
+
+        // 投手が見つからない場合はスキップ（既に交代処理中の可能性）
+        if (!currentPitcher || !currentPitcher.pitching) return;
+
         const teamType = isTopInning ? 'home' : 'away';
         const setTeam = isTopInning ? setHomeTeam : setAwayTeam;
 
@@ -673,6 +677,10 @@
 
         const defenseTeam = getDefenseTeam();
         const currentPitcher = getCurrentPitcher();
+
+        // 投手が見つからない場合はスキップ（既に交代処理中の可能性）
+        if (!currentPitcher || !currentPitcher.pitching) return;
+
         const teamType = isTopInning ? 'home' : 'away';
         const setTeam = isTopInning ? setHomeTeam : setAwayTeam;
 
@@ -2188,18 +2196,24 @@ if (newOuts === 3) {
           } else {
             if (isTopInning) {
               setIsTopInning(false);
-              // イニング切り替え後に守備固めと投手起用最適化をチェック
+              // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
               setTimeout(() => {
                 autoDefensiveSubstitution();
-                autoOptimizePitcherUsage();
+                // 守備固めの後、投手起用最適化を実行
+                setTimeout(() => {
+                  autoOptimizePitcherUsage();
+                }, 200);
               }, 100);
             } else {
               setIsTopInning(true);
               setInning(inning + 1);
-              // イニング切り替え後に守備固めと投手起用最適化をチェック
+              // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
               setTimeout(() => {
                 autoDefensiveSubstitution();
-                autoOptimizePitcherUsage();
+                // 守備固めの後、投手起用最適化を実行
+                setTimeout(() => {
+                  autoOptimizePitcherUsage();
+                }, 200);
               }, 100);
             }
           }
