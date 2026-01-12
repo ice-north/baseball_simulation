@@ -47,6 +47,7 @@
       const [showBenchAway, setShowBenchAway] = useState(false);  // ベンチ表示切り替え（アウェイ）
       const [showBenchHome, setShowBenchHome] = useState(false);  // ベンチ表示切り替え（ホーム）
       const [autoManagerMode, setAutoManagerMode] = useState(true);  // 監督AI自動采配モード
+      const isSubstituting = React.useRef(false);  // 交代処理中フラグ（二重実行防止）
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -345,6 +346,9 @@
       const autoSubstitutePitcher = () => {
         if (!autoManagerMode || !gameStarted) return;
 
+        // 交代処理中の場合はスキップ（二重実行防止）
+        if (isSubstituting.current) return;
+
         const defenseTeam = getDefenseTeam();
         const currentPitcher = getCurrentPitcher();
 
@@ -402,6 +406,9 @@
           selectedPitcher = availablePitchers[0];
         }
 
+        // 交代処理開始フラグを立てる
+        isSubstituting.current = true;
+
         // 投手交代を実行
         setTeam(prev => {
           const players = [...prev.players];
@@ -436,6 +443,11 @@
 
           return { ...prev, players };
         });
+
+        // 交代処理完了後にフラグを解除（状態更新を待つために遅延）
+        setTimeout(() => {
+          isSubstituting.current = false;
+        }, 100);
       };
 
       // ============================================================
@@ -443,6 +455,9 @@
       // ============================================================
       const autoSubstitutePinchHitter = () => {
         if (!autoManagerMode || !gameStarted) return;
+
+        // 交代処理中の場合はスキップ（二重実行防止）
+        if (isSubstituting.current) return;
 
         const offenseTeam = getOffenseTeam();
         const currentBatter = getCurrentBatter();
@@ -487,6 +502,9 @@
           selectedPinchHitter = availablePinchHitters[0];
         }
 
+        // 交代処理開始フラグを立てる
+        isSubstituting.current = true;
+
         // 代打交代を実行（野手のみ）
         setTeam(prev => {
           const players = [...prev.players];
@@ -515,6 +533,11 @@
 
           return { ...prev, players };
         });
+
+        // 交代処理完了後にフラグを解除（状態更新を待つために遅延）
+        setTimeout(() => {
+          isSubstituting.current = false;
+        }, 100);
       };
 
       // ============================================================
@@ -522,6 +545,9 @@
       // ============================================================
       const autoDefensiveSubstitution = () => {
         if (!autoManagerMode || !gameStarted) return;
+
+        // 交代処理中の場合はスキップ（二重実行防止）
+        if (isSubstituting.current) return;
 
         // 7回以降、リードしている時のみ守備固め
         if (inning < 7) return;
@@ -562,6 +588,9 @@
             const defender = availableDefenders[0];
 
             if (defender) {
+              // 交代処理開始フラグを立てる
+              isSubstituting.current = true;
+
               // 守備固め交代を実行
               setTeam(prev => {
                 const players = [...prev.players];
@@ -590,6 +619,11 @@
 
                 return { ...prev, players };
               });
+
+              // 交代処理完了後にフラグを解除（状態更新を待つために遅延）
+              setTimeout(() => {
+                isSubstituting.current = false;
+              }, 100);
 
               break; // 1人だけ交代
             }
@@ -651,6 +685,9 @@
       const autoOptimizePitcherUsage = () => {
         if (!autoManagerMode || !gameStarted) return;
 
+        // 交代処理中の場合はスキップ（二重実行防止）
+        if (isSubstituting.current) return;
+
         // 7回以降の投手起用を最適化
         if (inning < 7) return;
 
@@ -689,6 +726,9 @@
           );
 
           if (closerPitcher) {
+            // 交代処理開始フラグを立てる
+            isSubstituting.current = true;
+
             // 抑え投手に交代
             setTeam(prev => {
               const players = [...prev.players];
@@ -721,6 +761,11 @@
 
               return { ...prev, players };
             });
+
+            // 交代処理完了後にフラグを解除（状態更新を待つために遅延）
+            setTimeout(() => {
+              isSubstituting.current = false;
+            }, 100);
           }
         }
 
@@ -735,6 +780,9 @@
           );
 
           if (setupPitcher) {
+            // 交代処理開始フラグを立てる
+            isSubstituting.current = true;
+
             // セットアッパーに交代
             setTeam(prev => {
               const players = [...prev.players];
@@ -766,6 +814,11 @@
 
               return { ...prev, players };
             });
+
+            // 交代処理完了後にフラグを解除（状態更新を待つために遅延）
+            setTimeout(() => {
+              isSubstituting.current = false;
+            }, 100);
           }
         }
       };
@@ -2263,6 +2316,9 @@ if (newOuts === 3) {
       };
 
       const resetGame = () => {
+        // 交代処理中フラグをクリア
+        isSubstituting.current = false;
+
         setCount({ balls: 0, strikes: 0 });
         setBases([false, false, false]);
         setOuts(0);
@@ -3407,18 +3463,22 @@ if (newOuts === 3) {
               {/* 最新結果 */}
               {gameStarted && lastResult && (
                 <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-2 text-center">
-                  <span className="font-bold text-lg">{lastResult.description}</span>
-                  {lastResult.pitchType && (
-                    <span className="ml-2 text-gray-600">
-                      ({lastResult.pitchType} {lastResult.velocity}km/h)
-                    </span>
-                  )}
-                  {/* 打球物理データ */}
-                  {lastResult.exitVelocity && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      EV: {lastResult.exitVelocity}km/h | LA: {lastResult.launchAngle}° | DIST: {lastResult.distance}m | 芯: {lastResult.meetQuality}%
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div>
+                      <span className="font-bold text-lg">{lastResult.description}</span>
+                      {lastResult.pitchType && (
+                        <span className="ml-2 text-gray-600 text-sm">
+                          ({lastResult.pitchType} {lastResult.velocity}km/h)
+                        </span>
+                      )}
                     </div>
-                  )}
+                    {/* 打球物理データ */}
+                    {lastResult.exitVelocity && (
+                      <div className="text-[10px] text-gray-500">
+                        EV:{lastResult.exitVelocity} LA:{lastResult.launchAngle}° {lastResult.distance}m 芯:{lastResult.meetQuality}%
+                      </div>
+                    )}
+                  </div>
                   {/* タイミングデータ（空振り時など） */}
                   {lastResult.timingWindow && !lastResult.exitVelocity && (
                     <div className="text-xs text-red-500 mt-1">
