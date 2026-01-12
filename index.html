@@ -422,6 +422,16 @@
             setTimeout(() => {
               setCurrentStamina(newPitcher.pitching.stamina);
             }, 0);
+
+            // 試合ログに交代を記録
+            setGameLog(prev => {
+              const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
+              const updated = [...prev, {
+                description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamName}: 投手交代 ${oldPitcher.name} → ${newPitcher.name}`,
+                isSpecial: true
+              }];
+              return updated.length > 50 ? updated.slice(-50) : updated;
+            });
           }
 
           return { ...prev, players };
@@ -491,6 +501,16 @@
             newBatter.isStarter = true;
             newBatter.battingOrder = currentBatter.battingOrder;
             newBatter.position = currentBatter.position;
+
+            // 試合ログに交代を記録
+            setGameLog(prev => {
+              const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
+              const updated = [...prev, {
+                description: `🏏 [${inning}回${isTopInning ? '表' : '裏'}] ${teamName}: 代打 ${newBatter.name} (${oldBatter.name} → 交代)`,
+                isSpecial: true
+              }];
+              return updated.length > 50 ? updated.slice(-50) : updated;
+            });
           }
 
           return { ...prev, players };
@@ -556,6 +576,16 @@
                   newPlayer.isStarter = true;
                   newPlayer.battingOrder = starter.battingOrder;
                   newPlayer.position = starter.position;
+
+                  // 試合ログに交代を記録
+                  setGameLog(prev => {
+                    const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
+                    const updated = [...prev, {
+                      description: `🛡️ [${inning}回${isTopInning ? '裏' : '表'}] ${teamName}: 守備固め ${newPlayer.name} (${oldPlayer.name} → 交代)`,
+                      isSpecial: true
+                    }];
+                    return updated.length > 50 ? updated.slice(-50) : updated;
+                  });
                 }
 
                 return { ...prev, players };
@@ -677,6 +707,16 @@
 
                 // 新投手のスタミナをセット
                 setCurrentStamina(newPitcher.pitching.stamina);
+
+                // 試合ログに交代を記録
+                setGameLog(prev => {
+                  const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
+                  const updated = [...prev, {
+                    description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamName}: 抑え投手起用 ${oldPitcher.name} → ${newPitcher.name}`,
+                    isSpecial: true
+                  }];
+                  return updated.length > 50 ? updated.slice(-50) : updated;
+                });
               }
 
               return { ...prev, players };
@@ -712,6 +752,16 @@
                 newPitcher.position = 'pitcher';
 
                 setCurrentStamina(newPitcher.pitching.stamina);
+
+                // 試合ログに交代を記録
+                setGameLog(prev => {
+                  const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
+                  const updated = [...prev, {
+                    description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamName}: セットアッパー起用 ${oldPitcher.name} → ${newPitcher.name}`,
+                    isSpecial: true
+                  }];
+                  return updated.length > 50 ? updated.slice(-50) : updated;
+                });
               }
 
               return { ...prev, players };
@@ -859,7 +909,7 @@
         right: { defense: 60, speed: 60, arm: 60, throws: 'right' }       // 右翼手
       });
 
-      const [pitchLog, setPitchLog] = useState([]);
+      const [gameLog, setGameLog] = useState([]);
       const [lastResult, setLastResult] = useState(null);
       const [isAutoSimulating, setIsAutoSimulating] = useState(false);
       const [statistics, setStatistics] = useState(null);
@@ -1094,7 +1144,7 @@
         const safeCount = count || { balls: 0, strikes: 0 };
 
         // 前球情報（トンネリング用）
-        const lastPitch = pitchLog.length > 0 ? pitchLog[pitchLog.length - 1] : null;
+        const lastPitch = gameLog.length > 0 ? gameLog[gameLog.length - 1] : null;
         const currentPitch = {
           type: selectedBall?.type || 'straight',
           velocity: actualVelocity,
@@ -1532,7 +1582,7 @@
           });
         }
         
-        setPitchLog(prev => {
+        setGameLog(prev => {
           const updated = [...prev, {
             inning,
             isTop: isTopInning,
@@ -1873,7 +1923,7 @@
               newBases[0] = false;
             }
             
-            setPitchLog(prev => {
+            setGameLog(prev => {
               const updated = [...prev, { description: wpDescription, isSpecial: true }];
               return updated.length > 50 ? updated.slice(-50) : updated;
             });
@@ -1964,7 +2014,7 @@
         newBases[0] = false;
         setCatcherStats(prev => ({ ...prev, stolenBasesAllowed: prev.stolenBasesAllowed + 1 }));
         setBatterStats(prev => ({ ...prev, stolenBases: prev.stolenBases + 1 }));
-        setPitchLog(prev => {
+        setGameLog(prev => {
           const updated = [...prev, { description: '🏃 盗塁成功！一塁→二塁', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
         });
@@ -1975,7 +2025,7 @@
         setCatcherStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
         setBatterStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
         setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
-        setPitchLog(prev => {
+        setGameLog(prev => {
           const updated = [...prev, { description: '❌ 盗塁失敗、アウト', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
         });
@@ -2057,7 +2107,7 @@
         newBases[1] = false;
         setCatcherStats(prev => ({ ...prev, stolenBasesAllowed: prev.stolenBasesAllowed + 1 }));
         setBatterStats(prev => ({ ...prev, stolenBases: prev.stolenBases + 1 }));
-        setPitchLog(prev => {
+        setGameLog(prev => {
           const updated = [...prev, { description: '🏃 盗塁成功！二塁→三塁', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
         });
@@ -2068,7 +2118,7 @@
         setCatcherStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
         setBatterStats(prev => ({ ...prev, caughtStealing: prev.caughtStealing + 1 }));
         setPitcherStats(prev => ({ ...prev, outs: prev.outs + 1 }));
-        setPitchLog(prev => {
+        setGameLog(prev => {
           const updated = [...prev, { description: '❌ 盗塁失敗、アウト', isSpecial: true }];
           return updated.length > 50 ? updated.slice(-50) : updated;
         });
@@ -2230,7 +2280,7 @@ if (newOuts === 3) {
         setTeamErrors({ home: 0, away: 0 });
         setTeamRBIs({ home: 0, away: 0 });
         setIsTopInning(true);
-        setPitchLog([]);
+        setGameLog([]);
         setLastResult(null);
         setStatistics(null);
         setRecentVelocities([]);
@@ -3257,10 +3307,10 @@ if (newOuts === 3) {
                   {/* 球種・球速表示（固定幅） */}
                   <div className="text-center w-20 flex-shrink-0">
                     <div className="text-orange-500 text-xs truncate">
-                      {pitchLog.length > 0 ? pitchLog[pitchLog.length - 1].pitchType : '---'}
+                      {gameLog.length > 0 ? gameLog[gameLog.length - 1].pitchType : '---'}
                     </div>
                     <div className="text-orange-400 text-2xl font-bold font-mono" style={{textShadow: '0 0 8px #f97316'}}>
-                      {pitchLog.length > 0 ? String(pitchLog[pitchLog.length - 1].velocity).padStart(3, ' ') : '---'}
+                      {gameLog.length > 0 ? String(gameLog[gameLog.length - 1].velocity).padStart(3, ' ') : '---'}
                     </div>
                     <div className="text-orange-500 text-xs">km/h</div>
                   </div>
@@ -3378,31 +3428,37 @@ if (newOuts === 3) {
                 </div>
               )}
 
-              {/* 投球ログ */}
+              {/* 試合ログ */}
               {gameStarted && (
               <div className="bg-white rounded-lg p-2 shadow-lg">
-                <h4 className="font-bold text-sm text-gray-700 mb-1">📝 投球ログ</h4>
+                <h4 className="font-bold text-sm text-gray-700 mb-1">📝 試合ログ</h4>
                 <div className="max-h-40 overflow-y-auto text-xs space-y-0.5">
-                  {pitchLog.slice().reverse().slice(0, 20).map((log, i) => (
+                  {gameLog.slice().reverse().slice(0, 20).map((log, i) => (
                     <div key={i} className={`p-1 rounded ${i === 0 ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                      <span className="text-gray-500">{log.inning}回{log.isTop ? '表' : '裏'}</span>
-                      <span className="mx-1">|</span>
-                      <span className="font-mono">{log.count?.balls || 0}-{log.count?.strikes || 0}</span>
-                      <span className="mx-1">|</span>
-                      <span className="text-blue-600">{log.pitchType}</span>
-                      <span className="text-gray-500 ml-1">{log.velocity}km</span>
-                      <span className="mx-1">→</span>
-                      <span className="font-bold">{log.result}</span>
-                      {/* 打球物理データ（ヒット/アウト時のみ表示） */}
-                      {log.exitVelocity && (
-                        <span className="ml-2 text-gray-400 text-[10px]">
-                          EV:{log.exitVelocity} LA:{log.launchAngle}° {log.distance}m 芯:{log.meetQuality}%
-                        </span>
+                      {log.isSpecial ? (
+                        <span className="font-bold text-purple-600">{log.description}</span>
+                      ) : (
+                        <>
+                          <span className="text-gray-500">{log.inning}回{log.isTop ? '表' : '裏'}</span>
+                          <span className="mx-1">|</span>
+                          <span className="font-mono">{log.count?.balls || 0}-{log.count?.strikes || 0}</span>
+                          <span className="mx-1">|</span>
+                          <span className="text-blue-600">{log.pitchType}</span>
+                          <span className="text-gray-500 ml-1">{log.velocity}km</span>
+                          <span className="mx-1">→</span>
+                          <span className="font-bold">{log.result}</span>
+                          {/* 打球物理データ（ヒット/アウト時のみ表示） */}
+                          {log.exitVelocity && (
+                            <span className="ml-2 text-gray-400 text-[10px]">
+                              EV:{log.exitVelocity} LA:{log.launchAngle}° {log.distance}m 芯:{log.meetQuality}%
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}
-                  {pitchLog.length === 0 && (
-                    <div className="text-gray-400 text-center py-2">投球ログがありません</div>
+                  {gameLog.length === 0 && (
+                    <div className="text-gray-400 text-center py-2">試合ログがありません</div>
                   )}
                 </div>
               </div>
