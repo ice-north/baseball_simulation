@@ -147,15 +147,21 @@
           // 同じ選手をクリック -> 選択解除
           setSelectedBatter(null);
         } else {
-          // 2人目をクリック -> 入れ替え
+          // 2人目をクリック -> 打順と守備位置を入れ替え
           setTeam(prev => {
             const players = [...prev.players];
             const player1 = players.find(p => p.battingOrder === selectedBatter);
             const player2 = players.find(p => p.battingOrder === battingOrder);
 
             if (player1 && player2) {
+              // 打順を入れ替え
               player1.battingOrder = battingOrder;
               player2.battingOrder = selectedBatter;
+
+              // 守備位置も入れ替え
+              const tempPosition = player1.position;
+              player1.position = player2.position;
+              player2.position = tempPosition;
             }
 
             return { ...prev, players };
@@ -2885,22 +2891,9 @@ if (newOuts === 3) {
                               <div className="ml-9 space-y-0.5">
                                 <AbilityBar label="M" value={player.batting.meet} />
                                 <AbilityBar label="P" value={player.batting.power} />
-                                {isPitcher && <AbilityBar label="球" value={Math.min(100, Math.round((player.pitching.velocity - 100) * 2))} />}
+                                <AbilityBar label="S" value={player.physical.speed} />
+                                <AbilityBar label="D" value={player.fielding.defense} />
                               </div>
-                              {(() => {
-                                const fitness = calculateDefensiveFitness(player, player.position);
-                                return (
-                                  <div className={`text-[9px] ml-9 mt-0.5 ${
-                                    fitness.grade === 'S' ? 'text-yellow-400' :
-                                    fitness.grade === 'A' ? 'text-green-400' :
-                                    fitness.grade === 'B' ? 'text-blue-400' :
-                                    fitness.grade === 'D' ? 'text-red-400' :
-                                    'text-gray-400'
-                                  }`}>
-                                    守備[{fitness.grade}]
-                                  </div>
-                                );
-                              })()}
                             </div>
                           );
                         })}
@@ -3114,44 +3107,70 @@ if (newOuts === 3) {
               </div>
               )}
 
-              {/* アウェイチーム 試合スタッツ */}
+              {/* アウェイチーム 試合スタッツ/投手詳細 */}
               <div className="mt-2 pt-2 border-t border-gray-700">
-                <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
-                {/* 投手成績 */}
-                <div className="bg-gray-800 rounded p-1.5 mb-1">
-                  <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
-                  <div className="text-xs">
+                {gameStarted ? (
+                  <>
+                    <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
+                    {/* 投手成績 */}
+                    <div className="bg-gray-800 rounded p-1.5 mb-1">
+                      <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
+                      <div className="text-xs">
+                        {(() => {
+                          const pitchers = awayTeam.players.filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0);
+                          const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
+                          const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
+                          return (
+                            <>
+                              {pitchers.map(p => {
+                                const s = p.stats?.pitching || {};
+                                const outs = s.outs || 0;
+                                const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
+                                const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                                return (
+                                  <div key={p.id} className="flex justify-between text-gray-300">
+                                    <span>{p.name}</span>
+                                    <span className="text-gray-400">
+                                      {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {pitchers.length > 1 && (
+                                <div className="flex justify-between text-yellow-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
+                                  <span>合計イニング</span>
+                                  <span>{totalIP}</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs text-gray-400 mb-1">⚾ 先発投手</div>
                     {(() => {
-                      const pitchers = awayTeam.players.filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0);
-                      const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
-                      const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
+                      const pitcher = awayTeam.players.find(p => p.position === 'pitcher' && p.battingOrder === 9);
+                      if (!pitcher) return null;
                       return (
-                        <>
-                          {pitchers.map(p => {
-                            const s = p.stats?.pitching || {};
-                            const outs = s.outs || 0;
-                            const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
-                            const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
-                            return (
-                              <div key={p.id} className="flex justify-between text-gray-300">
-                                <span>{p.name}</span>
-                                <span className="text-gray-400">
-                                  {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
-                                </span>
-                              </div>
-                            );
-                          })}
-                          {pitchers.length > 1 && (
-                            <div className="flex justify-between text-yellow-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
-                              <span>合計イニング</span>
-                              <span>{totalIP}</span>
-                            </div>
-                          )}
-                        </>
+                        <div className="bg-gray-800 rounded p-1.5">
+                          <div className="text-sm text-white mb-1">{pitcher.name} #{pitcher.number || pitcher.id}</div>
+                          <div className="space-y-0.5">
+                            <AbilityBar label="球速" value={Math.min(100, Math.round((pitcher.pitching.velocity - 100) * 2))} />
+                            <AbilityBar label="制球" value={pitcher.pitching.control} />
+                            <AbilityBar label="体力" value={Math.min(100, Math.round(pitcher.pitching.stamina / 2))} />
+                          </div>
+                          <div className="mt-1 text-[10px] text-gray-400">
+                            {pitcher.pitching.velocity}km/h |
+                            {pitcher.physical.throws === 'right' ? ' 右投' : ' 左投'}
+                          </div>
+                        </div>
                       );
                     })()}
-                  </div>
-                </div>
+                  </>
+                )}
                 {/* 打者成績 */}
                 <div className="bg-gray-800 rounded p-1.5">
                   <div className="text-[10px] text-red-400 mb-0.5">打撃</div>
@@ -3708,22 +3727,9 @@ if (newOuts === 3) {
                               <div className="ml-9 space-y-0.5">
                                 <AbilityBar label="M" value={player.batting.meet} />
                                 <AbilityBar label="P" value={player.batting.power} />
-                                {isPitcher && <AbilityBar label="球" value={Math.min(100, Math.round((player.pitching.velocity - 100) * 2))} />}
+                                <AbilityBar label="S" value={player.physical.speed} />
+                                <AbilityBar label="D" value={player.fielding.defense} />
                               </div>
-                              {(() => {
-                                const fitness = calculateDefensiveFitness(player, player.position);
-                                return (
-                                  <div className={`text-[9px] ml-9 mt-0.5 ${
-                                    fitness.grade === 'S' ? 'text-yellow-400' :
-                                    fitness.grade === 'A' ? 'text-green-400' :
-                                    fitness.grade === 'B' ? 'text-blue-400' :
-                                    fitness.grade === 'D' ? 'text-red-400' :
-                                    'text-gray-400'
-                                  }`}>
-                                    守備[{fitness.grade}]
-                                  </div>
-                                );
-                              })()}
                             </div>
                           );
                         })}
@@ -3937,44 +3943,70 @@ if (newOuts === 3) {
               </div>
               )}
 
-              {/* ホームチーム試合スタッツ */}
+              {/* ホームチーム試合スタッツ/投手詳細 */}
               <div className="mt-2 pt-2 border-t border-gray-700">
-                <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
-                {/* 投手成績 */}
-                <div className="bg-gray-800 rounded p-1.5 mb-1">
-                  <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
-                  <div className="text-xs">
+                {gameStarted ? (
+                  <>
+                    <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
+                    {/* 投手成績 */}
+                    <div className="bg-gray-800 rounded p-1.5 mb-1">
+                      <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
+                      <div className="text-xs">
+                        {(() => {
+                          const pitchers = homeTeam.players.filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0);
+                          const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
+                          const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
+                          return (
+                            <>
+                              {pitchers.map(p => {
+                                const s = p.stats?.pitching || {};
+                                const outs = s.outs || 0;
+                                const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
+                                const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
+                                return (
+                                  <div key={p.id} className="flex justify-between text-gray-300">
+                                    <span>{p.name}</span>
+                                    <span className="text-gray-400">
+                                      {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {pitchers.length > 1 && (
+                                <div className="flex justify-between text-yellow-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
+                                  <span>合計イニング</span>
+                                  <span>{totalIP}</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs text-gray-400 mb-1">⚾ 先発投手</div>
                     {(() => {
-                      const pitchers = homeTeam.players.filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0);
-                      const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
-                      const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
+                      const pitcher = homeTeam.players.find(p => p.position === 'pitcher' && p.battingOrder === 9);
+                      if (!pitcher) return null;
                       return (
-                        <>
-                          {pitchers.map(p => {
-                            const s = p.stats?.pitching || {};
-                            const outs = s.outs || 0;
-                            const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
-                            const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
-                            return (
-                              <div key={p.id} className="flex justify-between text-gray-300">
-                                <span>{p.name}</span>
-                                <span className="text-gray-400">
-                                  {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
-                                </span>
-                              </div>
-                            );
-                          })}
-                          {pitchers.length > 1 && (
-                            <div className="flex justify-between text-yellow-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
-                              <span>合計イニング</span>
-                              <span>{totalIP}</span>
-                            </div>
-                          )}
-                        </>
+                        <div className="bg-gray-800 rounded p-1.5">
+                          <div className="text-sm text-white mb-1">{pitcher.name} #{pitcher.number || pitcher.id}</div>
+                          <div className="space-y-0.5">
+                            <AbilityBar label="球速" value={Math.min(100, Math.round((pitcher.pitching.velocity - 100) * 2))} />
+                            <AbilityBar label="制球" value={pitcher.pitching.control} />
+                            <AbilityBar label="体力" value={Math.min(100, Math.round(pitcher.pitching.stamina / 2))} />
+                          </div>
+                          <div className="mt-1 text-[10px] text-gray-400">
+                            {pitcher.pitching.velocity}km/h |
+                            {pitcher.physical.throws === 'right' ? ' 右投' : ' 左投'}
+                          </div>
+                        </div>
                       );
                     })()}
-                  </div>
-                </div>
+                  </>
+                )}
                 {/* 打者成績 */}
                 <div className="bg-gray-800 rounded p-1.5">
                   <div className="text-[10px] text-red-400 mb-0.5">打撃</div>
