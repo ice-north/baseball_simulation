@@ -12,6 +12,13 @@ const createPlayerStats = () => ({
 });
 
 /**
+ * 選手に背番号を割り当てる（IDをそのまま使用）
+ */
+const assignJerseyNumbers = (players) => {
+  return players.map(p => ({ ...p, number: p.id }));
+};
+
+/**
  * ホームチーム用のデフォルト選手を生成
  */
 const createDefaultPlayers = () => {
@@ -437,17 +444,8 @@ const createHomeBench = () => {
       batting: { meet: 38, power: 32, eye: 48, bats: 'right', steal: 18 },
       physical: { speed: 44, arm: 52, throws: 'right' }, fielding: { defense: 56 }, catching: { lead: 52 },
       pitching: { velocity: 142, control: 62, stamina: 160, form: 'threeQuarter',
-        arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'slider', level: 65 }, { id: 3, type: 'fork', level: 55 }, { id: 4, type: 'changeup', level: 50 }] } },
-    { id: 25, name: '敗戦処理', position: 'pitcher', isStarter: false, battingOrder: 0,
-      batting: { meet: 34, power: 28, eye: 42, bats: 'right', steal: 16 },
-      physical: { speed: 40, arm: 48, throws: 'right' }, fielding: { defense: 52 }, catching: { lead: 46 },
-      pitching: { velocity: 130, control: 52, stamina: 120, form: 'threeQuarter',
-        arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'curve', level: 48 }, { id: 3, type: 'changeup', level: 45 }] } },
-    { id: 26, name: '中継ぎ右腕', position: 'pitcher', isStarter: false, battingOrder: 0,
-      batting: { meet: 32, power: 26, eye: 40, bats: 'right', steal: 14 },
-      physical: { speed: 40, arm: 50, throws: 'right' }, fielding: { defense: 50 }, catching: { lead: 44 },
-      pitching: { velocity: 145, control: 64, stamina: 95, form: 'threeQuarter',
-        arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'splitter', level: 68 }, { id: 3, type: 'slider', level: 58 }] } }
+        arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'slider', level: 65 }, { id: 3, type: 'fork', level: 55 }, { id: 4, type: 'changeup', level: 50 }] } }
+    // 合計: 控え野手8人 + 控え投手7人 = 15人（スタメン9人と合わせて24人）
   ].map(p => ({ ...p, stats: p.stats || createPlayerStats() }));
 };
 
@@ -532,16 +530,7 @@ const createAwayBench = () => {
       batting: { meet: 40, power: 34, eye: 50, bats: 'right', steal: 20 },
       physical: { speed: 46, arm: 54, throws: 'right' }, fielding: { defense: 58 }, catching: { lead: 54 },
       pitching: { velocity: 144, control: 64, stamina: 165, form: 'threeQuarter',
-        arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'slider', level: 68 }, { id: 3, type: 'fork', level: 58 }, { id: 4, type: 'changeup', level: 52 }] } },
-    { id: 25, name: 'ビハインド要員', position: 'pitcher', isStarter: false, battingOrder: 0,
-      batting: { meet: 36, power: 30, eye: 44, bats: 'right', steal: 18 },
-      physical: { speed: 42, arm: 50, throws: 'right' }, fielding: { defense: 54 }, catching: { lead: 48 },
-      pitching: { velocity: 132, control: 54, stamina: 125, form: 'threeQuarter',
-        arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'curve', level: 50 }, { id: 3, type: 'changeup', level: 48 }] } },
-    { id: 26, name: '中継ぎエース', position: 'pitcher', isStarter: false, battingOrder: 0,
-      batting: { meet: 34, power: 28, eye: 42, bats: 'right', steal: 16 },
-      physical: { speed: 42, arm: 52, throws: 'right' }, fielding: { defense: 52 }, catching: { lead: 46 },
-      pitching: { velocity: 148, control: 66, stamina: 98, form: 'threeQuarter',
-        arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'splitter', level: 70 }, { id: 3, type: 'slider', level: 60 }] } }
+        arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'slider', level: 68 }, { id: 3, type: 'fork', level: 58 }, { id: 4, type: 'changeup', level: 52 }] } }
+    // 合計: 控え野手8人 + 控え投手7人 = 15人（スタメン9人と合わせて24人）
   ].map(p => ({ ...p, stats: p.stats || createPlayerStats() }));
 };
