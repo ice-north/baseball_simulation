@@ -289,15 +289,15 @@
                 player2.battingOrder = player1.battingOrder;
                 player2.position = player1.position;
                 player1.battingOrder = 0;
-                // ベンチに下がる選手の守備位置を元に戻す
-                player1.position = player1.originalPosition || player1.position;
+                // ベンチに下がる選手の守備位置を最高適正ポジションに戻す
+                player1.position = getBestFitPosition(player1);
               } else {
                 // player2がスタメンだった → player1がスタメンになる
                 player1.battingOrder = player2.battingOrder;
                 player1.position = player2.position;
                 player2.battingOrder = 0;
-                // ベンチに下がる選手の守備位置を元に戻す
-                player2.position = player2.originalPosition || player2.position;
+                // ベンチに下がる選手の守備位置を最高適正ポジションに戻す
+                player2.position = getBestFitPosition(player2);
               }
 
               // 試合中：投手交代の場合はスタミナをリセット
@@ -378,6 +378,25 @@
         if (value >= 50) return 'text-green-400';    // C級
         if (value >= 40) return 'text-blue-400';     // D級
         return 'text-gray-400';                       // E級
+      };
+
+      // 選手の最高適正ポジションを取得
+      const getBestFitPosition = (player) => {
+        if (!player.positionFitness) return player.originalPosition || player.position;
+
+        const positions = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+        let bestPosition = player.originalPosition || player.position;
+        let maxFitness = 0;
+
+        positions.forEach(pos => {
+          const fitness = player.positionFitness[pos] || 0;
+          if (fitness > maxFitness) {
+            maxFitness = fitness;
+            bestPosition = pos;
+          }
+        });
+
+        return bestPosition;
       };
 
       // 能力値バーを表示するコンポーネント（コンパクト版）
@@ -2846,7 +2865,7 @@ if (newOuts === 3) {
                           const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
                           const getPositionColor = (pos) => {
                             if (pos === 'pitcher') return 'bg-red-600 text-white';
-                            if (pos === 'catcher') return 'bg-cyan-600 text-white';
+                            if (pos === 'catcher') return 'bg-blue-600 text-white';
                             if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';
                             if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';
                             return 'bg-gray-700';
@@ -2881,7 +2900,7 @@ if (newOuts === 3) {
                                     e.stopPropagation();
                                     handlePositionClick('away', player.id);
                                   }}
-                                  className={`w-5 text-center rounded text-xs py-0.5 font-bold transition ${
+                                  className={`w-6 text-center rounded text-sm py-0.5 font-bold transition ${
                                     isPositionSelected
                                       ? 'bg-purple-600 text-white ring-2 ring-purple-400'
                                       : getPositionColor(player.position) + ' hover:opacity-80'
@@ -2997,7 +3016,7 @@ if (newOuts === 3) {
                     // 守備位置の色分け
                     const getPositionColor = (pos) => {
                       if (pos === 'pitcher') return isCurrentBatter ? 'bg-red-600 text-white' : 'bg-red-600 text-white';  // 🔴 赤
-                      if (pos === 'catcher') return isCurrentBatter ? 'bg-cyan-500 text-white' : 'bg-cyan-600 text-white';  // 🔵 水色
+                      if (pos === 'catcher') return isCurrentBatter ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white';  // 🔵 青
                       if (['first', 'second', 'third', 'short'].includes(pos)) return isCurrentBatter ? 'bg-yellow-400 text-black' : 'bg-yellow-600 text-white';  // 🟡 黄色
                       if (['left', 'center', 'right'].includes(pos)) return isCurrentBatter ? 'bg-green-500 text-white' : 'bg-green-600 text-white';  // 🟢 緑
                       return 'bg-gray-700';
@@ -3047,7 +3066,7 @@ if (newOuts === 3) {
                               {posNames[player.position]}
                             </button>
                           ) : (
-                            <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
+                            <span className={`w-6 text-center rounded text-sm py-0.5 font-bold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           )}
                           <span className="font-bold">{player.name}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
@@ -3751,7 +3770,7 @@ if (newOuts === 3) {
                           const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
                           const getPositionColor = (pos) => {
                             if (pos === 'pitcher') return 'bg-red-600 text-white';
-                            if (pos === 'catcher') return 'bg-cyan-600 text-white';
+                            if (pos === 'catcher') return 'bg-blue-600 text-white';
                             if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';
                             if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';
                             return 'bg-gray-700';
@@ -3786,7 +3805,7 @@ if (newOuts === 3) {
                                     e.stopPropagation();
                                     handlePositionClick('home', player.id);
                                   }}
-                                  className={`w-5 text-center rounded text-xs py-0.5 font-bold transition ${
+                                  className={`w-6 text-center rounded text-sm py-0.5 font-bold transition ${
                                     isPositionSelected
                                       ? 'bg-purple-600 text-white ring-2 ring-purple-400'
                                       : getPositionColor(player.position) + ' hover:opacity-80'
@@ -3838,6 +3857,14 @@ if (newOuts === 3) {
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                           const isSubSelected = selectedSubstituteHome === player.id;
                           const isSubbedOut = player.hasSubbedOut;
+                          // 守備位置の色分け
+                          const getPositionColor = (pos) => {
+                            if (pos === 'pitcher') return 'bg-red-600 text-white';  // 投：赤
+                            if (pos === 'catcher') return 'bg-blue-600 text-white';  // 捕：青
+                            if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';  // 内野：黄
+                            if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';  // 外野：緑
+                            return 'bg-gray-700 text-white';
+                          };
 
                           return (
                             <div
@@ -3847,16 +3874,16 @@ if (newOuts === 3) {
                                 isSubbedOut
                                   ? 'bg-gray-900 opacity-50 cursor-not-allowed'
                                   : isSubSelected
-                                    ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer'
+                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
                                     : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
-                                <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
-                                <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
-                                <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
-                                {isSubbedOut && <span className="text-red-400 text-[10px]">交代済</span>}
-                                {isSubSelected && <span className="text-orange-300">⚡</span>}
+                                <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
+                                <span className="font-medium text-sm truncate flex-1">{player.name}</span>
+                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
+                                {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
+                                {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
                               <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
                                 <span>M{player.batting.meet}</span>
@@ -3894,7 +3921,7 @@ if (newOuts === 3) {
                     // 守備位置の色分け
                     const getPositionColor = (pos) => {
                       if (pos === 'pitcher') return isCurrentBatter ? 'bg-red-600 text-white' : 'bg-red-600 text-white';  // 🔴 赤
-                      if (pos === 'catcher') return isCurrentBatter ? 'bg-cyan-500 text-white' : 'bg-cyan-600 text-white';  // 🔵 水色
+                      if (pos === 'catcher') return isCurrentBatter ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white';  // 🔵 青
                       if (['first', 'second', 'third', 'short'].includes(pos)) return isCurrentBatter ? 'bg-yellow-400 text-black' : 'bg-yellow-600 text-white';  // 🟡 黄色
                       if (['left', 'center', 'right'].includes(pos)) return isCurrentBatter ? 'bg-green-500 text-white' : 'bg-green-600 text-white';  // 🟢 緑
                       return 'bg-gray-700';
@@ -3944,7 +3971,7 @@ if (newOuts === 3) {
                               {posNames[player.position]}
                             </button>
                           ) : (
-                            <span className={`w-6 text-center rounded text-xs py-0.5 font-semibold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
+                            <span className={`w-6 text-center rounded text-sm py-0.5 font-bold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           )}
                           <span className="font-bold">{player.name}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
@@ -3998,6 +4025,14 @@ if (newOuts === 3) {
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                           const isSubSelected = selectedSubstituteHome === player.id;
                           const isSubbedOut = player.hasSubbedOut;
+                          // 守備位置の色分け
+                          const getPositionColor = (pos) => {
+                            if (pos === 'pitcher') return 'bg-red-600 text-white';  // 投：赤
+                            if (pos === 'catcher') return 'bg-blue-600 text-white';  // 捕：青
+                            if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';  // 内野：黄
+                            if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';  // 外野：緑
+                            return 'bg-gray-700 text-white';
+                          };
 
                           return (
                             <div
@@ -4007,16 +4042,16 @@ if (newOuts === 3) {
                                 isSubbedOut
                                   ? 'bg-gray-900 opacity-50 cursor-not-allowed'
                                   : isSubSelected
-                                    ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer'
+                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
                                     : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
-                                <span className="w-5 text-center text-[10px] font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
-                                <span className="font-medium text-[11px] truncate flex-1">{player.name}</span>
-                                <span className="text-[10px] text-gray-500">{throwHand}{batHand}</span>
-                                {isSubbedOut && <span className="text-red-400 text-[10px]">交代済</span>}
-                                {isSubSelected && <span className="text-orange-300">⚡</span>}
+                                <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
+                                <span className="font-medium text-sm truncate flex-1">{player.name}</span>
+                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
+                                {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
+                                {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
                               <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
                                 <span>M{player.batting.meet}</span>
