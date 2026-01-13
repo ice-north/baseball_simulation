@@ -80,13 +80,13 @@
       // ============================================================
       const [homeTeam, setHomeTeam] = useState({
         name: "ホーム",
-        players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false}))],
+        players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
         currentBatterOrder: 1
       });
 
       const [awayTeam, setAwayTeam] = useState({
         name: "アウェイ",
-        players: [...createAwayPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false})), ...createAwayBench().map(p => ({...p, hasSubbedOut: false}))],
+        players: [...createAwayPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createAwayBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
         currentBatterOrder: 1
       });
       
@@ -289,11 +289,15 @@
                 player2.battingOrder = player1.battingOrder;
                 player2.position = player1.position;
                 player1.battingOrder = 0;
+                // ベンチに下がる選手の守備位置を元に戻す
+                player1.position = player1.originalPosition || player1.position;
               } else {
                 // player2がスタメンだった → player1がスタメンになる
                 player1.battingOrder = player2.battingOrder;
                 player1.position = player2.position;
                 player2.battingOrder = 0;
+                // ベンチに下がる選手の守備位置を元に戻す
+                player2.position = player2.originalPosition || player2.position;
               }
 
               // 試合中：投手交代の場合はスタミナをリセット
@@ -367,11 +371,13 @@
 
       // 能力値のテキスト色を取得（0-100）
       const getAbilityTextColor = (value) => {
+        if (value >= 90) return 'text-pink-400';     // SS級
         if (value >= 80) return 'text-red-400';      // S級
         if (value >= 70) return 'text-orange-400';   // A級
         if (value >= 60) return 'text-yellow-400';   // B級
         if (value >= 50) return 'text-green-400';    // C級
-        return 'text-gray-400';                       // D級
+        if (value >= 40) return 'text-blue-400';     // D級
+        return 'text-gray-400';                       // E級
       };
 
       // 能力値バーを表示するコンポーネント（コンパクト版）
@@ -2391,12 +2397,12 @@ if (newOuts === 3) {
         // チームを完全に初期状態に戻す（選手の位置・打順・交代フラグなども全てリセット）
         setHomeTeam({
           name: "ホーム",
-          players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false}))],
+          players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
           currentBatterOrder: 1
         });
         setAwayTeam({
           name: "アウェイ",
-          players: [...createAwayPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false})), ...createAwayBench().map(p => ({...p, hasSubbedOut: false}))],
+          players: [...createAwayPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createAwayBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
           currentBatterOrder: 1
         });
         // スタミナリセット（新しい投手で）
@@ -2866,7 +2872,7 @@ if (newOuts === 3) {
                                     e.stopPropagation();
                                     handleBatterClick('away', player.battingOrder);
                                   }}
-                                  className="w-4 text-gray-400 text-[10px] hover:text-blue-400 transition"
+                                  className="w-4 text-gray-400 text-xs hover:text-blue-400 transition font-bold"
                                 >
                                   {player.battingOrder}
                                 </button>
@@ -2875,7 +2881,7 @@ if (newOuts === 3) {
                                     e.stopPropagation();
                                     handlePositionClick('away', player.id);
                                   }}
-                                  className={`w-5 text-center rounded text-[10px] py-0.5 font-semibold transition ${
+                                  className={`w-5 text-center rounded text-xs py-0.5 font-bold transition ${
                                     isPositionSelected
                                       ? 'bg-purple-600 text-white ring-2 ring-purple-400'
                                       : getPositionColor(player.position) + ' hover:opacity-80'
@@ -2886,14 +2892,14 @@ if (newOuts === 3) {
                                 <span className="font-medium text-base truncate flex-1">
                                   {player.name}
                                 </span>
-                                <span className="text-[10px] text-gray-600 font-mono">#{player.number || player.id}</span>
+                                <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
 <span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                                 {isSelected && <span className="text-blue-300">👆</span>}
                                 {isPositionSelected && <span className="text-purple-300">🔄</span>}
                               </div>
                               <div className="ml-9 mt-0.5">
-                                <div className="flex gap-3 text-[10px] text-gray-500">
+                                <div className="flex gap-3 text-xs text-gray-500 font-bold">
                                   <span className="w-7 text-center">ミ</span>
                                   <span className="w-7 text-center">パ</span>
                                   <span className="w-7 text-center">走</span>
@@ -2927,6 +2933,14 @@ if (newOuts === 3) {
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                           const isSubSelected = selectedSubstituteAway === player.id;
                           const isSubbedOut = player.hasSubbedOut;
+                          // 守備位置の色分け
+                          const getPositionColor = (pos) => {
+                            if (pos === 'pitcher') return 'bg-red-600 text-white';  // 投：赤
+                            if (pos === 'catcher') return 'bg-blue-600 text-white';  // 捕：青
+                            if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';  // 内野：黄
+                            if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';  // 外野：緑
+                            return 'bg-gray-700 text-white';
+                          };
 
                           return (
                             <div
@@ -2941,7 +2955,7 @@ if (newOuts === 3) {
                               }`}
                             >
                               <div className="flex items-center gap-1">
-                                <span className="w-6 text-center text-xs font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
+                                <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
                                 <span className="font-medium text-sm truncate flex-1">{player.name}</span>
                                 <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
@@ -3087,6 +3101,14 @@ if (newOuts === 3) {
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
                           const isSubSelected = selectedSubstituteAway === player.id;
                           const isSubbedOut = player.hasSubbedOut;
+                          // 守備位置の色分け
+                          const getPositionColor = (pos) => {
+                            if (pos === 'pitcher') return 'bg-red-600 text-white';  // 投：赤
+                            if (pos === 'catcher') return 'bg-blue-600 text-white';  // 捕：青
+                            if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';  // 内野：黄
+                            if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';  // 外野：緑
+                            return 'bg-gray-700 text-white';
+                          };
 
                           return (
                             <div
@@ -3101,7 +3123,7 @@ if (newOuts === 3) {
                               }`}
                             >
                               <div className="flex items-center gap-1">
-                                <span className="w-6 text-center text-xs font-semibold bg-gray-700 rounded">{posNames[player.position]}</span>
+                                <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
                                 <span className="font-medium text-sm truncate flex-1">{player.name}</span>
                                 <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
@@ -3178,12 +3200,14 @@ if (newOuts === 3) {
                         straight: 'ストレート',
                         slider: 'スライダー',
                         curveball: 'カーブ',
+                        curve: 'カーブ',
                         changeup: 'チェンジアップ',
                         fork: 'フォーク',
                         sinker: 'シンカー',
                         cutter: 'カッター',
                         splitter: 'スプリット',
-                        knuckleball: 'ナックル'
+                        knuckleball: 'ナックル',
+                        shoot: 'シュート'
                       };
                       const getValueColor = (val) => {
                         if (val >= 80) return 'text-red-400';
@@ -3753,7 +3777,7 @@ if (newOuts === 3) {
                                     e.stopPropagation();
                                     handleBatterClick('home', player.battingOrder);
                                   }}
-                                  className="w-4 text-gray-400 text-[10px] hover:text-blue-400 transition"
+                                  className="w-4 text-gray-400 text-xs hover:text-blue-400 transition font-bold"
                                 >
                                   {player.battingOrder}
                                 </button>
@@ -3762,7 +3786,7 @@ if (newOuts === 3) {
                                     e.stopPropagation();
                                     handlePositionClick('home', player.id);
                                   }}
-                                  className={`w-5 text-center rounded text-[10px] py-0.5 font-semibold transition ${
+                                  className={`w-5 text-center rounded text-xs py-0.5 font-bold transition ${
                                     isPositionSelected
                                       ? 'bg-purple-600 text-white ring-2 ring-purple-400'
                                       : getPositionColor(player.position) + ' hover:opacity-80'
@@ -3773,14 +3797,14 @@ if (newOuts === 3) {
                                 <span className="font-medium text-base truncate flex-1">
                                   {player.name}
                                 </span>
-                                <span className="text-[10px] text-gray-600 font-mono">#{player.number || player.id}</span>
+                                <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
 <span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                                 {isSelected && <span className="text-blue-300">👆</span>}
                                 {isPositionSelected && <span className="text-purple-300">🔄</span>}
                               </div>
                               <div className="ml-9 mt-0.5">
-                                <div className="flex gap-3 text-[10px] text-gray-500">
+                                <div className="flex gap-3 text-xs text-gray-500 font-bold">
                                   <span className="w-7 text-center">ミ</span>
                                   <span className="w-7 text-center">パ</span>
                                   <span className="w-7 text-center">走</span>
@@ -4065,12 +4089,14 @@ if (newOuts === 3) {
                         straight: 'ストレート',
                         slider: 'スライダー',
                         curveball: 'カーブ',
+                        curve: 'カーブ',
                         changeup: 'チェンジアップ',
                         fork: 'フォーク',
                         sinker: 'シンカー',
                         cutter: 'カッター',
                         splitter: 'スプリット',
-                        knuckleball: 'ナックル'
+                        knuckleball: 'ナックル',
+                        shoot: 'シュート'
                       };
                       const getValueColor = (val) => {
                         if (val >= 80) return 'text-red-400';
