@@ -236,8 +236,9 @@
             return;
           }
 
-          // 試合中：スタメン同士の交代（打順変更）は禁止
-          if (gameStarted && player1Current?.isStarter && player2Current?.isStarter) {
+          // スタメン同士の交代は禁止（試合前・試合中問わず）
+          // 打順変更は handleBatterClick、守備位置変更は handlePositionClick を使用
+          if (player1Current?.isStarter && player2Current?.isStarter) {
             setSelectedSubstitute(null);
             return;
           }
@@ -250,10 +251,6 @@
             if (player1 && player2) {
               // 念のため再度チェック
               if (gameStarted && (player1.hasSubbedOut || player2.hasSubbedOut)) {
-                return prev;
-              }
-
-              if (gameStarted && player1.isStarter && player2.isStarter) {
                 return prev;
               }
 
@@ -274,17 +271,8 @@
                 }
               }
 
-              // スタメン同士の交代の場合は、打順とポジションも交換（試合前のみ）
-              if (tempStarter && player2.isStarter) {
-                const tempOrder = player1.battingOrder;
-                const tempPosition = player1.position;
-                player1.battingOrder = player2.battingOrder;
-                player1.position = player2.position;
-                player2.battingOrder = tempOrder;
-                player2.position = tempPosition;
-              }
               // スタメンと控えの交代の場合は、控えがスタメンの打順・ポジションを引き継ぐ
-              else if (tempStarter) {
+              if (tempStarter) {
                 // player1がスタメンだった → player2がスタメンになる
                 player2.battingOrder = player1.battingOrder;
                 player2.position = player1.position;
@@ -382,12 +370,17 @@
 
       // 選手の最高適正ポジションを取得
       const getBestFitPosition = (player) => {
-        if (!player.positionFitness) return player.originalPosition || player.position;
+        // positionFitnessが存在しない場合、originalPositionまたは現在のpositionを返す
+        if (!player.positionFitness) {
+          console.warn('positionFitness not found for player:', player.name);
+          return player.originalPosition || player.position;
+        }
 
         const positions = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
-        let bestPosition = player.originalPosition || player.position;
+        let bestPosition = player.position; // デフォルトは現在のposition
         let maxFitness = 0;
 
+        // 最高適正値のポジションを探す
         positions.forEach(pos => {
           const fitness = player.positionFitness[pos] || 0;
           if (fitness > maxFitness) {
@@ -396,6 +389,7 @@
           }
         });
 
+        console.log(`getBestFitPosition for ${player.name}: ${bestPosition} (fitness: ${maxFitness})`);
         return bestPosition;
       };
 
