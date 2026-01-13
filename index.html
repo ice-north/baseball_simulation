@@ -243,7 +243,7 @@
           }
 
           setTeam(prev => {
-            const players = [...prev.players];
+            const players = prev.players.map(p => ({...p})); // ディープコピー
             const player1 = players.find(p => p.id === selectedSubstitute);
             const player2 = players.find(p => p.id === playerId);
 
@@ -3174,7 +3174,7 @@ if (newOuts === 3) {
                       <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
                       <div className="text-xs">
                         {(() => {
-                          const pitchers = awayTeam.players.filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0);
+                          const pitchers = awayTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
                           const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
                           const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
                           return (
@@ -3521,10 +3521,16 @@ if (newOuts === 3) {
                   {/* 球種・球速表示（固定幅） */}
                   <div className="text-center w-20 flex-shrink-0">
                     <div className="text-orange-500 text-xs truncate">
-                      {gameLog.length > 0 ? gameLog[gameLog.length - 1].pitchType : '---'}
+                      {(() => {
+                        const lastPitch = [...gameLog].reverse().find(log => log.velocity !== undefined);
+                        return lastPitch ? lastPitch.pitchType : '---';
+                      })()}
                     </div>
                     <div className="text-orange-400 text-2xl font-bold font-mono" style={{textShadow: '0 0 8px #f97316'}}>
-                      {gameLog.length > 0 ? String(gameLog[gameLog.length - 1].velocity).padStart(3, ' ') : '---'}
+                      {(() => {
+                        const lastPitch = [...gameLog].reverse().find(log => log.velocity !== undefined);
+                        return lastPitch ? String(lastPitch.velocity).padStart(3, ' ') : '---';
+                      })()}
                     </div>
                     <div className="text-orange-500 text-xs">km/h</div>
                   </div>
@@ -4079,7 +4085,7 @@ if (newOuts === 3) {
                       <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
                       <div className="text-xs">
                         {(() => {
-                          const pitchers = homeTeam.players.filter(p => p.position === 'pitcher' && (p.stats?.pitching?.outs || 0) > 0);
+                          const pitchers = homeTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
                           const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
                           const totalIP = totalOuts > 0 ? formatInnings(totalOuts) : '0回0/3';
                           return (
