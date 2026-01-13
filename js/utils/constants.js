@@ -154,3 +154,42 @@ const BABIP_CALIBRATION = 0.32;
 
 // 反発係数（バットとボールの衝突）
 const COR = 0.45;
+
+/**
+ * ポジション名（日本語表記）
+ */
+const POSITION_NAMES = {
+  pitcher: '投',
+  catcher: '捕',
+  first: '一',
+  second: '二',
+  third: '三',
+  short: '遊',
+  left: '左',
+  center: '中',
+  right: '右'
+};
+
+/**
+ * ポジション別の色設定（背景色）
+ */
+const POSITION_COLORS = {
+  pitcher: 'bg-red-600 text-white',
+  catcher: 'bg-blue-600 text-white',
+  first: 'bg-yellow-600 text-white',
+  second: 'bg-yellow-600 text-white',
+  third: 'bg-yellow-600 text-white',
+  short: 'bg-yellow-600 text-white',
+  left: 'bg-green-600 text-white',
+  center: 'bg-green-600 text-white',
+  right: 'bg-green-600 text-white'
+};
+
+/**
+ * 利き手ラベル（日本語表記）
+ */
+const HAND_LABELS = {
+  right: '右',
+  left: '左',
+  switch: '両'
+};

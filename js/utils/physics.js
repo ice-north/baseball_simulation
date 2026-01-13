@@ -1,0 +1,170 @@
+// ============================================================
+// ユーティリティ関数 - physics.js
+// 物理演算、統計、表示関連のヘルパー関数
+// ============================================================
+
+/**
+ * イニング数を分数形式で表示（例: 7回2/3）
+ * @param {number} outs - アウト数
+ * @returns {string} フォーマットされたイニング表記
+ */
+const formatInnings = (outs) => {
+  if (outs === 0) return '0回0/3';
+  const fullInnings = Math.floor(outs / 3);
+  const partialOuts = outs % 3;
+  return `${fullInnings}回${partialOuts}/3`;
+};
+
+/**
+ * 能力値の背景色を取得（0-100）
+ * @param {number} value - 能力値
+ * @returns {string} Tailwind CSSクラス名
+ */
+const getAbilityColor = (value) => {
+  if (value >= 80) return 'bg-red-500';      // S級
+  if (value >= 70) return 'bg-orange-500';   // A級
+  if (value >= 60) return 'bg-yellow-500';   // B級
+  if (value >= 50) return 'bg-green-500';    // C級
+  return 'bg-gray-500';                       // D級
+};
+
+/**
+ * 能力値のテキスト色を取得（0-100）
+ * @param {number} value - 能力値
+ * @returns {string} Tailwind CSSクラス名
+ */
+const getAbilityTextColor = (value) => {
+  if (value >= 90) return 'text-pink-400';     // SS級
+  if (value >= 80) return 'text-red-400';      // S級
+  if (value >= 70) return 'text-orange-400';   // A級
+  if (value >= 60) return 'text-yellow-400';   // B級
+  if (value >= 50) return 'text-green-400';    // C級
+  if (value >= 40) return 'text-blue-400';     // D級
+  return 'text-gray-400';                       // E級
+};
+
+/**
+ * 選手の最高適正ポジションを取得
+ * @param {Object} player - 選手オブジェクト
+ * @returns {string} ポジション名
+ */
+const getBestFitPosition = (player) => {
+  // positionFitnessが存在しない場合、originalPositionまたは現在のpositionを返す
+  if (!player.positionFitness) {
+    console.warn('positionFitness not found for player:', player.name);
+    return player.originalPosition || player.position;
+  }
+
+  const positions = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  let bestPosition = player.position; // デフォルトは現在のposition
+  let maxFitness = 0;
+
+  // 最高適正値のポジションを探す
+  positions.forEach(pos => {
+    const fitness = player.positionFitness[pos] || 0;
+    if (fitness > maxFitness) {
+      maxFitness = fitness;
+      bestPosition = pos;
+    }
+  });
+
+  console.log(`getBestFitPosition for ${player.name}: ${bestPosition} (fitness: ${maxFitness})`);
+  return bestPosition;
+};
+
+/**
+ * スタミナによる能力補正を計算
+ * @param {number} currentStamina - 現在のスタミナ
+ * @param {number} maxStamina - 最大スタミナ
+ * @returns {Object} { velocityPenalty, controlPenalty }
+ */
+const getStaminaPenalty = (currentStamina, maxStamina) => {
+  const staminaRate = currentStamina / maxStamina;
+
+  let velocityPenalty = 0;
+  let controlPenalty = 0;
+
+  if (staminaRate < 0.50) {  // 50%未満
+    if (staminaRate >= 0.40) {  // 49-40%
+      velocityPenalty = -5;
+      controlPenalty = -5;
+    } else if (staminaRate >= 0.30) {  // 39-30%
+      velocityPenalty = -10;
+      controlPenalty = -10;
+    } else if (staminaRate >= 0.20) {  // 29-20%
+      velocityPenalty = -15;
+      controlPenalty = -15;
+    } else if (staminaRate >= 0.10) {  // 19-10%
+      velocityPenalty = -20;
+      controlPenalty = -20;
+    } else {  // 9-0%
+      velocityPenalty = -25;
+      controlPenalty = -25;
+    }
+  }
+
+  return { velocityPenalty, controlPenalty };
+};
+
+/**
+ * 内野手の実効肩力を取得（左投げペナルティ込み）
+ * @param {string} position - ポジション名
+ * @param {Object} defense - 守備配置オブジェクト
+ * @returns {number} 実効肩力
+ */
+const getInfielderEffectiveArm = (position, defense) => {
+  const player = defense[position];
+  let arm = player.arm;
+
+  // セカンド・ショート・サードは左投げで-20
+  if ((position === 'second' || position === 'short' || position === 'third')
+      && player.throws === 'left') {
+    arm = Math.max(0, arm - 20);
+  }
+
+  return arm;
+};
+
+/**
+ * 左右の相性効果を計算
+ * @param {string} pitcherThrows - 投手の投げ手（'right'/'left'）
+ * @param {string} batterBats - 打者の打席（'right'/'left'/'switch'）
+ * @returns {Object} 相性効果オブジェクト
+ */
+const getHandednessEffect = (pitcherThrows, batterBats) => {
+  // スイッチヒッターの処理
+  let effectiveBats = batterBats;
+  if (batterBats === 'switch') {
+    effectiveBats = pitcherThrows === 'right' ? 'left' : 'right';
+  }
+
+  // 相性判定
+  const isOppositeHand = (pitcherThrows === 'right' && effectiveBats === 'left') ||
+                         (pitcherThrows === 'left' && effectiveBats === 'right');
+
+  // 打席別固有補正
+  const isPowerHitter = effectiveBats === 'right';  // 右打者はパワー+2
+  const isContactHitter = effectiveBats === 'left';  // 左打者は内野安打+
+
+  if (isOppositeHand) {
+    // 有利な組み合わせ（打者有利）
+    return {
+      meetBonus: 5,
+      powerBonus: isPowerHitter ? 2 : 0,  // 右打者のみ+2
+      contactBonus: 0.03,
+      infieldHitBonus: isContactHitter ? 0.05 : 0,  // 左打者のみ+5%
+      label: '打者有利',
+      effectiveBats: effectiveBats
+    };
+  } else {
+    // 不利な組み合わせ（投手有利）
+    return {
+      meetPenalty: -5,
+      powerBonus: isPowerHitter ? 2 : 0,  // 右打者のみ+2
+      contactBonus: -0.03,
+      infieldHitBonus: isContactHitter ? 0.05 : 0,  // 左打者のみ+5%
+      label: '投手有利',
+      effectiveBats: effectiveBats
+    };
+  }
+};
