@@ -236,9 +236,8 @@
             return;
           }
 
-          // スタメン同士の交代は禁止（試合前・試合中問わず）
-          // 打順変更は handleBatterClick、守備位置変更は handlePositionClick を使用
-          if (player1Current?.isStarter && player2Current?.isStarter) {
+          // 試合中：スタメン同士の打順変更は禁止（野球のルール）
+          if (gameStarted && player1Current?.isStarter && player2Current?.isStarter) {
             setSelectedSubstitute(null);
             return;
           }
@@ -254,53 +253,62 @@
                 return prev;
               }
 
-              // スタメンフラグを交換
-              const tempStarter = player1.isStarter;
-              player1.isStarter = player2.isStarter;
-              player2.isStarter = tempStarter;
-
-              // 試合中：ベンチに下がった選手にフラグを設定
-              // 注意：スタメン同士の交代は既に禁止しているので、必ず一方がスタメンで一方がベンチ
-              if (gameStarted) {
-                if (tempStarter) {
-                  // player1が元々スタメンだった → player1がベンチに下がった
-                  player1.hasSubbedOut = true;
-                } else {
-                  // player2が元々スタメンだった → player2がベンチに下がった
-                  player2.hasSubbedOut = true;
-                }
-              }
-
-              // スタメンと控えの交代の場合は、控えがスタメンの打順・ポジションを引き継ぐ
-              if (tempStarter) {
-                // player1がスタメンだった → player2がスタメンになる
-                player2.battingOrder = player1.battingOrder;
-                player2.position = player1.position;
-                player1.battingOrder = 0;
-                // ベンチに下がる選手の守備位置を最高適正ポジションに戻す
-                player1.position = getBestFitPosition(player1);
-              } else {
-                // player2がスタメンだった → player1がスタメンになる
+              // 試合前：スタメン同士の場合は打順のみ交換（守備位置はそのまま）
+              if (player1.isStarter && player2.isStarter) {
+                const tempOrder = player1.battingOrder;
                 player1.battingOrder = player2.battingOrder;
-                player1.position = player2.position;
-                player2.battingOrder = 0;
-                // ベンチに下がる選手の守備位置を最高適正ポジションに戻す
-                player2.position = getBestFitPosition(player2);
+                player2.battingOrder = tempOrder;
+                // 守備位置はそのまま、isStarterフラグも変更なし
               }
+              // スタメンと控えの場合：交代処理
+              else {
+                // スタメンフラグを交換
+                const tempStarter = player1.isStarter;
+                player1.isStarter = player2.isStarter;
+                player2.isStarter = tempStarter;
 
-              // 試合中：投手交代の場合はスタミナをリセット
-              if (gameStarted) {
-                const defenseTeam = isTopInning ? homeTeam : awayTeam;
-                const isDefenseTeamChange = (teamType === 'home' && isTopInning) || (teamType === 'away' && !isTopInning);
+                // 試合中：ベンチに下がった選手にフラグを設定
+                if (gameStarted) {
+                  if (tempStarter) {
+                    // player1が元々スタメンだった → player1がベンチに下がった
+                    player1.hasSubbedOut = true;
+                  } else {
+                    // player2が元々スタメンだった → player2がベンチに下がった
+                    player2.hasSubbedOut = true;
+                  }
+                }
 
-                if (isDefenseTeamChange) {
-                  // 守備チームの交代で、投手が交代した場合
-                  const newPitcher = tempStarter ? player2 : player1; // スタメンになった選手
-                  if (newPitcher.position === 'pitcher') {
-                    // 新しい投手のスタミナにリセット（setTeamの後に実行される）
-                    setTimeout(() => {
-                      setCurrentStamina(newPitcher.pitching.stamina);
-                    }, 0);
+                // スタメンと控えの交代：控えがスタメンの打順・ポジションを引き継ぐ
+                if (tempStarter) {
+                  // player1がスタメンだった → player2がスタメンになる
+                  player2.battingOrder = player1.battingOrder;
+                  player2.position = player1.position;
+                  player1.battingOrder = 0;
+                  // ベンチに下がる選手の守備位置を最高適正ポジションに戻す
+                  player1.position = getBestFitPosition(player1);
+                } else {
+                  // player2がスタメンだった → player1がスタメンになる
+                  player1.battingOrder = player2.battingOrder;
+                  player1.position = player2.position;
+                  player2.battingOrder = 0;
+                  // ベンチに下がる選手の守備位置を最高適正ポジションに戻す
+                  player2.position = getBestFitPosition(player2);
+                }
+
+                // 試合中：投手交代の場合はスタミナをリセット
+                if (gameStarted) {
+                  const defenseTeam = isTopInning ? homeTeam : awayTeam;
+                  const isDefenseTeamChange = (teamType === 'home' && isTopInning) || (teamType === 'away' && !isTopInning);
+
+                  if (isDefenseTeamChange) {
+                    // 守備チームの交代で、投手が交代した場合
+                    const newPitcher = tempStarter ? player2 : player1; // スタメンになった選手
+                    if (newPitcher.position === 'pitcher') {
+                      // 新しい投手のスタミナにリセット（setTeamの後に実行される）
+                      setTimeout(() => {
+                        setCurrentStamina(newPitcher.pitching.stamina);
+                      }, 0);
+                    }
                   }
                 }
               }
