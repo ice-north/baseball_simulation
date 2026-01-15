@@ -97,13 +97,33 @@
       const [editingTeam, setEditingTeam] = useState('home');  // 編集中のチーム
       const [showEditScreen, setShowEditScreen] = useState(false);  // エディット画面表示フラグ
       
-      // 選手成績更新関数（gameState.jsのラッパー）
-      const updateBatterStatsLocal = (playerId, teamType, statUpdates) => {
-        updateBatterStats(playerId, teamType, statUpdates, setHomeTeam, setAwayTeam);
+      // 選手成績更新関数（元の定義を維持）
+      const updateBatterStats = (playerId, teamType, statUpdates) => {
+        const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
+        setTeam(prev => ({
+          ...prev,
+          players: prev.players.map(p =>
+            p.id === playerId
+              ? {
+                  ...p,
+                  stats: { ...p.stats, batting: { ...p.stats.batting, ...statUpdates } },
+                  gameStats: { ...p.gameStats, ...statUpdates }
+                }
+              : p
+          )
+        }));
       };
 
-      const updatePitcherStatsLocal = (playerId, teamType, statUpdates) => {
-        updatePitcherStats(playerId, teamType, statUpdates, setHomeTeam, setAwayTeam);
+      const updatePitcherStats = (playerId, teamType, statUpdates) => {
+        const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
+        setTeam(prev => ({
+          ...prev,
+          players: prev.players.map(p =>
+            p.id === playerId
+              ? { ...p, stats: { ...p.stats, pitching: { ...p.stats.pitching, ...statUpdates } } }
+              : p
+          )
+        }));
       };
 
       // 打順変更関数（クリックベース）
