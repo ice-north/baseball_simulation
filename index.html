@@ -27,9 +27,7 @@
       const [showSettings, setShowSettings] = useState(false);
       
 
-      // ============================================================
       // レギュレーション設定（拡張可能な設定）
-      // ============================================================
       const [maxExtraInnings, setMaxExtraInnings] = useState(12);  // 延長最大回数（変更可能）
       const [rosterConfig, setRosterConfig] = useState({
         starters: 9,           // スタメン人数
@@ -38,9 +36,7 @@
         useDH: false           // DH制の有無（false: 投手も打席に, true: 指名打者制）
       });
 
-      // ============================================================
       // 試合状態（先に定義が必要）
-      // ============================================================
       const [isTopInning, setIsTopInning] = useState(true);
       const [inning, setInning] = useState(1);
       const [score, setScore] = useState({ home: 0, away: 0 });
@@ -77,9 +73,7 @@
       const [outs, setOuts] = useState(0);
       const [remainingPitches, setRemainingPitches] = useState(0);  // 残り投球数（自動投球用）
       
-      // ============================================================
       // チームシステム（ホーム vs アウェイ対戦機能）
-      // ============================================================
       const [homeTeam, setHomeTeam] = useState({
         name: "ホーム",
         players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
@@ -103,9 +97,7 @@
       const [editingTeam, setEditingTeam] = useState('home');  // 編集中のチーム
       const [showEditScreen, setShowEditScreen] = useState(false);  // エディット画面表示フラグ
       
-      // ============================================================
       // 選手成績更新関数（gameState.jsのラッパー）
-      // ============================================================
       const updateBatterStatsLocal = (playerId, teamType, statUpdates) => {
         updateBatterStats(playerId, teamType, statUpdates, setHomeTeam, setAwayTeam);
       };
@@ -114,9 +106,7 @@
         updatePitcherStats(playerId, teamType, statUpdates, setHomeTeam, setAwayTeam);
       };
 
-      // ============================================================
       // 打順変更関数（クリックベース）
-      // ============================================================
       const handleBatterClick = (teamType, battingOrder) => {
         const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
         const selectedBatter = teamType === 'home' ? selectedBatterHome : selectedBatterAway;
@@ -148,9 +138,7 @@
         }
       };
 
-      // ============================================================
       // 守備位置変更関数（クリックベース）
-      // ============================================================
       const handlePositionClick = (teamType, playerId) => {
         const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
         const selectedPosition = teamType === 'home' ? selectedPositionHome : selectedPositionAway;
@@ -301,9 +289,7 @@
         }
       };
 
-      // ============================================================
       // 現在の打者・投手・捕手管理（対戦モード対応）
-      // ============================================================
       
       // 攻撃チームを取得
       const getOffenseTeam = () => isTopInning ? awayTeam : homeTeam;
@@ -347,9 +333,7 @@
         </div>
       );
 
-      // ============================================================
       // 監督AI：自動投手交代ロジック（Phase 2: 状況判断強化版）
-      // ============================================================
       const autoSubstitutePitcher = () => {
         if (!autoManagerMode || !gameStarted) return;
 
@@ -457,9 +441,7 @@
         }, 100);
       };
 
-      // ============================================================
       // 監督AI：代打ロジック（Phase 2）
-      // ============================================================
       const autoSubstitutePinchHitter = () => {
         if (!autoManagerMode || !gameStarted) return;
 
@@ -547,9 +529,7 @@
         }, 100);
       };
 
-      // ============================================================
       // 監督AI：守備固めロジック（Phase 2）
-      // ============================================================
       const autoDefensiveSubstitution = () => {
         if (!autoManagerMode || !gameStarted) return;
 
@@ -638,9 +618,7 @@
         }
       };
 
-      // ============================================================
       // 監督AI：盗塁判断ロジック（Phase 3）
-      // ============================================================
       const autoStealingDecision = (runner, situation) => {
         if (!autoManagerMode || !gameStarted) return 1.0; // 監督AIオフの場合は通常の試行率
 
@@ -686,9 +664,7 @@
         return stealMultiplier;
       };
 
-      // ============================================================
       // 監督AI：投手起用最適化（Phase 3）
-      // ============================================================
       const autoOptimizePitcherUsage = () => {
         if (!autoManagerMode || !gameStarted) return;
 
@@ -915,9 +891,7 @@
         }
       };
       
-      // ============================================================
       // 既存のstate（互換性のために残す）
-      // ============================================================
 
       const [batter, setBatter] = useState({
         name: '打者A',
@@ -1246,9 +1220,7 @@
       };
 
       const simulatePitch = () => {
-        // ============================================================
         // 現在の選手データを取得
-        // ============================================================
         const currentBatter = getCurrentBatter();
         const currentPitcher = getCurrentPitcher();
         const currentCatcher = getCurrentCatcher();
@@ -2365,7 +2337,6 @@ if (newOuts === 3) {
           'right-grounder': { total: 0, outs: 0, hits: 0 }
         });
       };
-
 
       // 指定回数投球を開始
       const multiPitch = (pitchCount) => {
