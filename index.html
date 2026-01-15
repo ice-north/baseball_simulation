@@ -21,6 +21,10 @@
     const { useState } = React;
 
     const PitchByPitchSimulator = () => {
+      // 画面モード管理
+      const [screenMode, setScreenMode] = useState('game'); // 'game' or 'management'
+      const [managementView, setManagementView] = useState('edit'); // 'edit', 'schedule', 'team', 'stats', 'save'
+
       // 変化球の効果設定（外部ファイルから読み込み）
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
 
@@ -2684,8 +2688,184 @@ if (newOuts === 3) {
         </div>
       );
 
+      // サイドバーコンポーネント
+      const Sidebar = () => (
+        <div className="w-64 bg-gray-900 text-white h-screen fixed left-0 top-0 p-4 flex flex-col">
+          <h2 className="text-2xl font-bold mb-6 text-green-400">⚾ 野球シミュレーター</h2>
+
+          {/* メニュー */}
+          <nav className="flex-1 space-y-2">
+            <button
+              onClick={() => setScreenMode('game')}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'game' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              🎮 試合画面
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('edit');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'edit' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              ✏️ エディット（開発用）
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('schedule');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'schedule' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+              disabled
+            >
+              📅 日程進行 <span className="text-xs text-gray-500">(準備中)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('team');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'team' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+              disabled
+            >
+              👥 チーム情報 <span className="text-xs text-gray-500">(準備中)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('stats');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'stats' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+              disabled
+            >
+              📊 シーズン成績 <span className="text-xs text-gray-500">(準備中)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('save');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'save' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+              disabled
+            >
+              💾 セーブ＆ロード <span className="text-xs text-gray-500">(準備中)</span>
+            </button>
+          </nav>
+
+          <div className="mt-auto text-xs text-gray-500 border-t border-gray-700 pt-4">
+            v2.6.0 - 管理画面追加
+          </div>
+        </div>
+      );
+
+      // エディット画面コンポーネント
+      const EditScreen = () => {
+        const [editingTeam, setEditingTeam] = useState('home');
+        const team = editingTeam === 'home' ? homeTeam : awayTeam;
+        const setTeam = editingTeam === 'home' ? setHomeTeam : setAwayTeam;
+
+        return (
+          <div className="p-8">
+            <h1 className="text-3xl font-bold mb-6 text-white">エディット画面（開発用）</h1>
+
+            {/* チーム選択 */}
+            <div className="mb-6 flex gap-4">
+              <button
+                onClick={() => setEditingTeam('home')}
+                className={`px-6 py-3 rounded font-bold transition ${
+                  editingTeam === 'home' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                🏠 ホームチーム
+              </button>
+              <button
+                onClick={() => setEditingTeam('away')}
+                className={`px-6 py-3 rounded font-bold transition ${
+                  editingTeam === 'away' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                ✈️ アウェイチーム
+              </button>
+            </div>
+
+            {/* チーム名変更 */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-bold mb-4 text-white">チーム名</h2>
+              <input
+                type="text"
+                value={team.name}
+                onChange={(e) => setTeam(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full max-w-md px-4 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-green-500 focus:outline-none"
+                placeholder="チーム名を入力"
+              />
+            </div>
+
+            {/* 選手一覧 */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h2 className="text-xl font-bold mb-4 text-white">選手一覧</h2>
+              <div className="text-sm text-gray-400 mb-4">※ 今後、選手能力値の編集機能を追加予定</div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {team.players.map((player) => (
+                  <div key={player.id} className="bg-gray-700 rounded p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-bold text-white">{player.name}</span>
+                      <span className="text-xs text-gray-400">#{player.number}</span>
+                    </div>
+                    <div className="text-sm text-gray-300">
+                      <div>ポジション: {POSITION_NAMES[player.position] || player.position}</div>
+                      <div>打: {player.batting.meet} / 力: {player.batting.power}</div>
+                      {player.pitching && <div>球速: {player.pitching.velocity}km/h</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // 管理画面のルーター
+      const ManagementScreen = () => {
+        if (managementView === 'edit') return <EditScreen />;
+        // 他のビューは今後追加
+        return <div className="p-8 text-white">準備中...</div>;
+      };
+
       return (
-        <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800 p-2">
+        <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
+          {screenMode === 'management' && <Sidebar />}
+
+          <div className={screenMode === 'management' ? 'ml-64' : ''}>
+            {screenMode === 'game' ? (
+              <div className="p-2">
+          {/* 管理画面へボタン */}
+          <div className="max-w-[1800px] mx-auto mb-2 flex justify-end">
+            <button
+              onClick={() => setScreenMode('management')}
+              className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded transition"
+            >
+              ⚙️ 管理画面へ
+            </button>
+          </div>
+
           {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は中央重視(3-6-3) */}
           <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '3fr 6fr 3fr' : '5fr 3fr 5fr'}}>
 
@@ -4814,6 +4994,11 @@ if (newOuts === 3) {
               </div>
             </div>
           )}
+              </div>
+            ) : (
+              <ManagementScreen />
+            )}
+          </div>
         </div>
       );
     }; // PitchByPitchSimulatorの終わり
