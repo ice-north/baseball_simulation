@@ -2962,10 +2962,154 @@ if (newOuts === 3) {
         );
       };
 
+      // オートシミュレーション: 1試合を自動実行（簡易版）
+      const autoSimulateGame = (homeTeamName, awayTeamName) => {
+        // 簡易的なチーム強さ指標（後で各チームの選手データから計算可能）
+        const teamStrength = {
+          'ホーム': 50,
+          '巨人': 55,
+          '阪神': 52,
+          '中日': 48,
+          'ヤクルト': 51,
+          'DeNA': 49,
+          '広島': 50
+        };
+
+        const homeStrength = teamStrength[homeTeamName] || 50;
+        const awayStrength = teamStrength[awayTeamName] || 50;
+
+        // ホームアドバンテージ
+        const adjustedHomeStrength = homeStrength + 3;
+
+        // 得点期待値（0-10点の範囲で正規分布的に）
+        const generateScore = (strength) => {
+          const baseExpectation = (strength / 100) * 5; // 0-5点の期待値
+          let score = 0;
+          // 9イニング分の得点チャンスをシミュレート
+          for (let i = 0; i < 9; i++) {
+            const rand = Math.random();
+            if (rand < baseExpectation / 9) {
+              // 得点発生
+              const runsThisInning = Math.floor(Math.random() * 4) + 1; // 1-4点
+              score += runsThisInning;
+            }
+          }
+          return score;
+        };
+
+        let homeScore = generateScore(adjustedHomeStrength);
+        let awayScore = generateScore(awayStrength);
+
+        // 同点の場合は延長戦シミュレーション（最大3回）
+        let extraInnings = 0;
+        while (homeScore === awayScore && extraInnings < 3) {
+          if (Math.random() < 0.5) homeScore++;
+          else awayScore++;
+          extraInnings++;
+        }
+
+        // 結果判定
+        let result;
+        if (homeScore > awayScore) {
+          result = `${homeTeamName} ${homeScore}-${awayScore}`;
+        } else if (awayScore > homeScore) {
+          result = `${awayTeamName} ${awayScore}-${homeScore}`;
+        } else {
+          result = `引分 ${homeScore}-${awayScore}`;
+        }
+
+        return {
+          homeScore,
+          awayScore,
+          result,
+          winner: homeScore > awayScore ? homeTeamName : awayScore > homeScore ? awayTeamName : null
+        };
+      };
+
+      // その日の全試合を自動実行
+      const autoSimulateDailyGames = () => {
+        const currentDateStr = `${currentDate.month}/${currentDate.day}`;
+        const todaysGames = allGames[currentDateStr];
+
+        if (!todaysGames || todaysGames.length === 0) {
+          return; // 試合がない日
+        }
+
+        // 各試合をシミュレート
+        const updatedGames = todaysGames.map(game => {
+          const gameResult = autoSimulateGame(game.home, game.away);
+          return {
+            ...game,
+            result: gameResult.result,
+            homeScore: gameResult.homeScore,
+            awayScore: gameResult.awayScore
+          };
+        });
+
+        // allGamesを更新
+        setAllGames(prev => ({
+          ...prev,
+          [currentDateStr]: updatedGames
+        }));
+
+        // カレンダーの結果も更新
+        setCalendar(prev => prev.map(day => {
+          if (day.date === currentDateStr) {
+            // この日の自チームの試合を探す
+            const myGame = updatedGames.find(g => g.home === 'ホーム' || g.away === 'ホーム');
+            if (myGame) {
+              const isHome = myGame.home === 'ホーム';
+              const won = (isHome && myGame.homeScore > myGame.awayScore) ||
+                          (!isHome && myGame.awayScore > myGame.homeScore);
+              const draw = myGame.homeScore === myGame.awayScore;
+              return {
+                ...day,
+                result: won ? '○' : draw ? '引' : '●'
+              };
+            }
+          }
+          return day;
+        }));
+
+        // リーグ順位表を更新
+        setLeagueStandings(prev => {
+          const updated = [...prev];
+          updatedGames.forEach(game => {
+            const homeTeam = updated.find(t => t.team === game.home);
+            const awayTeam = updated.find(t => t.team === game.away);
+
+            if (homeTeam && awayTeam) {
+              if (game.homeScore > game.awayScore) {
+                homeTeam.wins++;
+                awayTeam.losses++;
+              } else if (game.awayScore > game.homeScore) {
+                awayTeam.wins++;
+                homeTeam.losses++;
+              } else {
+                homeTeam.draws++;
+                awayTeam.draws++;
+              }
+            }
+          });
+
+          // 勝率で並び替え
+          updated.sort((a, b) => {
+            const winPctA = a.wins + a.losses > 0 ? a.wins / (a.wins + a.losses) : 0;
+            const winPctB = b.wins + b.losses > 0 ? b.wins / (b.wins + b.losses) : 0;
+            return winPctB - winPctA;
+          });
+
+          return updated;
+        });
+      };
+
       // 日程進行処理
       const advanceDate = () => {
         const currentDateStr = `${currentDate.month}/${currentDate.day}`;
         const currentIndex = calendar.findIndex(day => day.date === currentDateStr);
+
+        // 現在の日の試合を全て自動実行
+        autoSimulateDailyGames();
 
         if (currentIndex < calendar.length - 1) {
           // 次の日へ
