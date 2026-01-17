@@ -3190,7 +3190,7 @@ if (newOuts === 3) {
             )}
 
             {scheduleTab === 'batting' && (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-4 gap-4">
                 <RankingTable title="打率ランキング" data={dummyRankingData} valueLabel="打率" />
                 <RankingTable title="本塁打ランキング" data={dummyRankingData} valueLabel="本塁打" />
                 <RankingTable title="打点ランキング" data={dummyRankingData} valueLabel="打点" />
@@ -3199,7 +3199,7 @@ if (newOuts === 3) {
             )}
 
             {scheduleTab === 'pitching' && (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-4 gap-4">
                 <RankingTable title="防御率ランキング" data={dummyRankingData} valueLabel="防御率" />
                 <RankingTable title="勝利数ランキング" data={dummyRankingData} valueLabel="勝利" />
                 <RankingTable title="ホールドランキング" data={dummyRankingData} valueLabel="ホールド" />
