@@ -73,6 +73,85 @@
         value: '---'
       }));
 
+      // 全チーム対戦カードデータ（日付ごと）
+      const [allGames, setAllGames] = useState({
+        '4/1': [
+          { home: '巨人', away: 'ホーム', result: null },
+          { home: '阪神', away: '中日', result: null },
+          { home: 'DeNA', away: 'ヤクルト', result: null },
+        ],
+        '4/2': [
+          { home: '巨人', away: 'ホーム', result: null },
+          { home: '阪神', away: '中日', result: null },
+          { home: 'DeNA', away: 'ヤクルト', result: null },
+        ],
+        '4/4': [
+          { home: '阪神', away: 'ホーム', result: null },
+          { home: '中日', away: '巨人', result: null },
+          { home: '広島', away: 'ヤクルト', result: null },
+        ],
+        '4/5': [
+          { home: '阪神', away: 'ホーム', result: null },
+          { home: '中日', away: '巨人', result: null },
+          { home: '広島', away: 'ヤクルト', result: null },
+        ],
+        '4/7': [
+          { home: '中日', away: 'ホーム', result: null },
+          { home: '巨人', away: 'DeNA', result: null },
+          { home: 'ヤクルト', away: '阪神', result: null },
+        ],
+        '4/8': [
+          { home: '中日', away: 'ホーム', result: null },
+          { home: '巨人', away: 'DeNA', result: null },
+          { home: 'ヤクルト', away: '阪神', result: null },
+        ],
+        '4/9': [
+          { home: '中日', away: 'ホーム', result: null },
+          { home: '巨人', away: 'DeNA', result: null },
+          { home: 'ヤクルト', away: '阪神', result: null },
+        ],
+        '4/11': [
+          { home: 'ヤクルト', away: 'ホーム', result: null },
+          { home: '広島', away: '巨人', result: null },
+          { home: '中日', away: 'DeNA', result: null },
+        ],
+        '4/12': [
+          { home: 'ヤクルト', away: 'ホーム', result: null },
+          { home: '広島', away: '巨人', result: null },
+          { home: '中日', away: 'DeNA', result: null },
+        ],
+        '4/14': [
+          { home: 'DeNA', away: 'ホーム', result: null },
+          { home: '阪神', away: '広島', result: null },
+          { home: 'ヤクルト', away: '中日', result: null },
+        ],
+        '4/15': [
+          { home: 'DeNA', away: 'ホーム', result: null },
+          { home: '阪神', away: '広島', result: null },
+          { home: 'ヤクルト', away: '中日', result: null },
+        ],
+        '4/16': [
+          { home: 'DeNA', away: 'ホーム', result: null },
+          { home: '阪神', away: '広島', result: null },
+          { home: 'ヤクルト', away: '中日', result: null },
+        ],
+        '4/18': [
+          { home: '広島', away: 'ホーム', result: null },
+          { home: '巨人', away: '阪神', result: null },
+          { home: 'DeNA', away: '中日', result: null },
+        ],
+        '4/19': [
+          { home: '広島', away: 'ホーム', result: null },
+          { home: '巨人', away: '阪神', result: null },
+          { home: 'DeNA', away: '中日', result: null },
+        ],
+        '4/20': [
+          { home: '広島', away: 'ホーム', result: null },
+          { home: '巨人', away: '阪神', result: null },
+          { home: 'DeNA', away: '中日', result: null },
+        ],
+      });
+
       // 変化球の効果設定（外部ファイルから読み込み）
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
 
@@ -2911,53 +2990,129 @@ if (newOuts === 3) {
           </div>
         );
 
+        // 日程進行処理
+        const advanceDate = () => {
+          const currentDateStr = `${currentDate.month}/${currentDate.day}`;
+          const currentIndex = calendar.findIndex(day => day.date === currentDateStr);
+
+          if (currentIndex < calendar.length - 1) {
+            // 次の日へ
+            const nextDay = calendar[currentIndex + 1];
+            const [month, day] = nextDay.date.split('/').map(Number);
+            setCurrentDate({ month, day });
+
+            // 週の最後（インデックスが6,13,20...）に達したら、カレンダーを1週間分シフト
+            if ((currentIndex + 1) % 7 === 6) {
+              // 次の週のデータを生成（ダミー実装）
+              const newWeek = Array.from({ length: 7 }, (_, i) => {
+                const newDay = calendar[calendar.length - 7 + i].date.split('/');
+                const newDate = parseInt(newDay[1]) + 7;
+                return {
+                  date: `${newDay[0]}/${newDate}`,
+                  opponent: i % 3 === 2 ? null : `vs ${['巨人', '阪神', '中日'][i % 3]}`,
+                  result: null
+                };
+              });
+
+              setCalendar(prev => [...prev.slice(7), ...newWeek]);
+            }
+          }
+        };
+
         return (
           <div className="p-8 max-w-7xl mx-auto">
             {/* ヘッダー */}
             <div className="mb-8 flex justify-between items-center">
               <h1 className="text-4xl font-bold text-white">{seasonYear}年目</h1>
-              <button
-                onClick={() => setScreenMode('game')}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition"
-              >
-                🎮 試合開始
-              </button>
+              <div className="flex gap-4">
+                <button
+                  onClick={advanceDate}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition"
+                >
+                  ⏩ 日程進行
+                </button>
+                <button
+                  onClick={() => setScreenMode('game')}
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition"
+                >
+                  🎮 試合開始
+                </button>
+              </div>
             </div>
 
             {/* カレンダー（3行×7列） */}
             <div className="bg-gray-800 rounded-lg p-6 mb-8">
               <h2 className="text-2xl font-bold mb-4 text-white">4月の試合日程</h2>
               <div className="grid grid-cols-7 gap-2">
-                {calendar.slice(0, 21).map((day, index) => (
-                  <div
-                    key={index}
-                    className={`p-4 rounded-lg text-center transition ${
-                      day.opponent
-                        ? 'bg-gray-700 hover:bg-gray-600 cursor-pointer'
-                        : 'bg-gray-900'
-                    }`}
-                  >
-                    <div className="text-xs text-gray-400 mb-1">{day.date}</div>
-                    {day.opponent ? (
-                      <>
-                        <div className="text-sm text-white font-bold mb-1">{day.opponent}</div>
-                        {day.result ? (
-                          <div className={`text-lg font-bold ${
-                            day.result === '○' ? 'text-green-400' :
-                            day.result === '●' ? 'text-red-400' :
-                            'text-yellow-400'
-                          }`}>
-                            {day.result}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-gray-500">未消化</div>
-                        )}
-                      </>
+                {calendar.slice(0, 21).map((day, index) => {
+                  const isCurrentDate = day.date === `${currentDate.month}/${currentDate.day}`;
+                  return (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg text-center transition ${
+                        isCurrentDate
+                          ? 'bg-orange-600 border-2 border-orange-400'
+                          : day.opponent
+                          ? 'bg-gray-700 hover:bg-gray-600 cursor-pointer'
+                          : 'bg-gray-900'
+                      }`}
+                    >
+                      <div className={`text-xs mb-1 ${isCurrentDate ? 'text-white font-bold' : 'text-gray-400'}`}>
+                        {day.date}
+                      </div>
+                      {day.opponent ? (
+                        <>
+                          <div className="text-sm text-white font-bold mb-1">{day.opponent}</div>
+                          {day.result ? (
+                            <div className={`text-lg font-bold ${
+                              day.result === '○' ? 'text-green-400' :
+                              day.result === '●' ? 'text-red-400' :
+                              'text-yellow-400'
+                            }`}>
+                              {day.result}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-500">未消化</div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-xs text-gray-600">休養日</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 本日の対戦カード */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-8">
+              <h2 className="text-2xl font-bold mb-4 text-white">
+                {currentDate.month}/{currentDate.day} の対戦カード
+              </h2>
+              <div className="grid grid-cols-3 gap-4">
+                {(allGames[`${currentDate.month}/${currentDate.day}`] || []).map((game, index) => (
+                  <div key={index} className="bg-gray-700 rounded-lg p-4 text-center">
+                    <div className="flex items-center justify-center gap-4">
+                      <div className="text-white font-bold text-lg">{game.away}</div>
+                      <div className="text-gray-400">vs</div>
+                      <div className="text-white font-bold text-lg">{game.home}</div>
+                    </div>
+                    {game.result ? (
+                      <div className="mt-2 text-sm">
+                        <span className="text-gray-300">結果: </span>
+                        <span className="text-green-400 font-bold">{game.result}</span>
+                      </div>
                     ) : (
-                      <div className="text-xs text-gray-600">休養日</div>
+                      <div className="mt-2 text-sm text-gray-500">未消化</div>
                     )}
                   </div>
                 ))}
+                {(!allGames[`${currentDate.month}/${currentDate.day}`] ||
+                  allGames[`${currentDate.month}/${currentDate.day}`].length === 0) && (
+                  <div className="col-span-3 text-center text-gray-500 py-4">
+                    本日は試合がありません（休養日）
+                  </div>
+                )}
               </div>
             </div>
 
