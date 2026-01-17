@@ -24,6 +24,7 @@
       // 画面モード管理
       const [screenMode, setScreenMode] = useState('management'); // 'game' or 'management'
       const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save'
+      const [scheduleTab, setScheduleTab] = useState('league'); // 'league', 'batting', 'pitching'
 
       // シーズンデータ
       const [seasonYear, setSeasonYear] = useState(1); // 何年目か
@@ -63,6 +64,14 @@
         { team: 'DeNA', wins: 0, losses: 0, draws: 0 },
         { team: '広島', wins: 0, losses: 0, draws: 0 },
       ]);
+
+      // 個人成績ランキング（ダミーデータ - 各10位まで）
+      const dummyRankingData = Array.from({ length: 10 }, (_, i) => ({
+        rank: i + 1,
+        name: `選手${i + 1}`,
+        team: ['ホーム', '巨人', '阪神', '中日', 'ヤクルト', 'DeNA', '広島'][i % 7],
+        value: '---'
+      }));
 
       // 変化球の効果設定（外部ファイルから読み込み）
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
@@ -2875,6 +2884,33 @@ if (newOuts === 3) {
 
       // 日程進行画面コンポーネント
       const ScheduleScreen = () => {
+        // ランキング表示用コンポーネント
+        const RankingTable = ({ title, data, valueLabel }) => (
+          <div className="bg-gray-800 rounded-lg p-4">
+            <h3 className="text-lg font-bold mb-3 text-white">{title}</h3>
+            <table className="w-full text-white text-sm">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left py-1 w-12">順位</th>
+                  <th className="text-left py-1">選手名</th>
+                  <th className="text-left py-1 w-20">チーム</th>
+                  <th className="text-right py-1 w-16">{valueLabel}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((player, index) => (
+                  <tr key={index} className="border-b border-gray-700">
+                    <td className="py-1">{player.rank}</td>
+                    <td className="py-1">{player.name}</td>
+                    <td className="py-1 text-xs">{player.team}</td>
+                    <td className="text-right py-1">{player.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+
         return (
           <div className="p-8 max-w-7xl mx-auto">
             {/* ヘッダー */}
@@ -2925,83 +2961,92 @@ if (newOuts === 3) {
               </div>
             </div>
 
-            {/* 成績表示エリア */}
-            <div className="grid grid-cols-2 gap-6">
-              {/* リーグ勝敗表 */}
+            {/* タブ切り替えボタン */}
+            <div className="flex gap-4 mb-6">
+              <button
+                onClick={() => setScheduleTab('league')}
+                className={`px-6 py-3 rounded-lg font-bold transition ${
+                  scheduleTab === 'league'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                📊 リーグ順位
+              </button>
+              <button
+                onClick={() => setScheduleTab('batting')}
+                className={`px-6 py-3 rounded-lg font-bold transition ${
+                  scheduleTab === 'batting'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                ⚾ 打撃成績
+              </button>
+              <button
+                onClick={() => setScheduleTab('pitching')}
+                className={`px-6 py-3 rounded-lg font-bold transition ${
+                  scheduleTab === 'pitching'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                🥎 投手成績
+              </button>
+            </div>
+
+            {/* タブコンテンツ */}
+            {scheduleTab === 'league' && (
               <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">リーグ順位表</h2>
-                <table className="w-full text-white text-sm">
+                <h2 className="text-2xl font-bold mb-4 text-white">リーグ順位表</h2>
+                <table className="w-full text-white">
                   <thead>
                     <tr className="border-b border-gray-700">
-                      <th className="text-left py-2">順位</th>
-                      <th className="text-left py-2">チーム</th>
-                      <th className="text-center py-2">勝</th>
-                      <th className="text-center py-2">敗</th>
-                      <th className="text-center py-2">分</th>
+                      <th className="text-left py-3 text-lg">順位</th>
+                      <th className="text-left py-3 text-lg">チーム</th>
+                      <th className="text-center py-3 text-lg">勝</th>
+                      <th className="text-center py-3 text-lg">敗</th>
+                      <th className="text-center py-3 text-lg">分</th>
+                      <th className="text-center py-3 text-lg">勝率</th>
                     </tr>
                   </thead>
                   <tbody>
                     {leagueStandings.map((team, index) => (
                       <tr key={index} className="border-b border-gray-700">
-                        <td className="py-2">{index + 1}</td>
-                        <td className="py-2">{team.team}</td>
-                        <td className="text-center py-2">{team.wins}</td>
-                        <td className="text-center py-2">{team.losses}</td>
-                        <td className="text-center py-2">{team.draws}</td>
+                        <td className="py-3 text-lg font-bold">{index + 1}</td>
+                        <td className="py-3 text-lg font-bold">{team.team}</td>
+                        <td className="text-center py-3 text-lg">{team.wins}</td>
+                        <td className="text-center py-3 text-lg">{team.losses}</td>
+                        <td className="text-center py-3 text-lg">{team.draws}</td>
+                        <td className="text-center py-3 text-lg">
+                          {team.wins + team.losses > 0
+                            ? (team.wins / (team.wins + team.losses)).toFixed(3)
+                            : '.000'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            )}
 
-              {/* 個人成績（打率順位） */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">打率ランキング</h2>
-                <div className="text-sm text-gray-400">※ 試合消化後に表示されます</div>
+            {scheduleTab === 'batting' && (
+              <div className="grid grid-cols-2 gap-6">
+                <RankingTable title="打率ランキング" data={dummyRankingData} valueLabel="打率" />
+                <RankingTable title="本塁打ランキング" data={dummyRankingData} valueLabel="本塁打" />
+                <RankingTable title="打点ランキング" data={dummyRankingData} valueLabel="打点" />
+                <RankingTable title="盗塁ランキング" data={dummyRankingData} valueLabel="盗塁" />
               </div>
+            )}
 
-              {/* ホームラン順位 */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">本塁打ランキング</h2>
-                <div className="text-sm text-gray-400">※ 試合消化後に表示されます</div>
+            {scheduleTab === 'pitching' && (
+              <div className="grid grid-cols-2 gap-6">
+                <RankingTable title="防御率ランキング" data={dummyRankingData} valueLabel="防御率" />
+                <RankingTable title="勝利数ランキング" data={dummyRankingData} valueLabel="勝利" />
+                <RankingTable title="ホールドランキング" data={dummyRankingData} valueLabel="ホールド" />
+                <RankingTable title="セーブランキング" data={dummyRankingData} valueLabel="セーブ" />
               </div>
-
-              {/* 打点順位 */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">打点ランキング</h2>
-                <div className="text-sm text-gray-400">※ 試合消化後に表示されます</div>
-              </div>
-
-              {/* 盗塁順位 */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">盗塁ランキング</h2>
-                <div className="text-sm text-gray-400">※ 試合消化後に表示されます</div>
-              </div>
-
-              {/* 防御率順位 */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">防御率ランキング</h2>
-                <div className="text-sm text-gray-400">※ 試合消化後に表示されます</div>
-              </div>
-
-              {/* 勝利数順位 */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">勝利数ランキング</h2>
-                <div className="text-sm text-gray-400">※ 試合消化後に表示されます</div>
-              </div>
-
-              {/* ホールド順位 */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">ホールドランキング</h2>
-                <div className="text-sm text-gray-400">※ 試合消化後に表示されます</div>
-              </div>
-
-              {/* セーブ順位 */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-white">セーブランキング</h2>
-                <div className="text-sm text-gray-400">※ 試合消化後に表示されます</div>
-              </div>
-            </div>
+            )}
           </div>
         );
       };
