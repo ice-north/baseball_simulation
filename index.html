@@ -76,79 +76,79 @@
       // 全チーム対戦カードデータ（日付ごと）
       const [allGames, setAllGames] = useState({
         '4/1': [
-          { home: '巨人', away: 'ホーム', result: null },
-          { home: '阪神', away: '中日', result: null },
-          { home: 'DeNA', away: 'ヤクルト', result: null },
+          { home: '巨人', away: 'ホーム', homePitcher: '菅野', awayPitcher: 'ロケット', result: null },
+          { home: '阪神', away: '中日', homePitcher: '藤浪', awayPitcher: '柳', result: null },
+          { home: 'DeNA', away: 'ヤクルト', homePitcher: '今永', awayPitcher: '小川', result: null },
         ],
         '4/2': [
-          { home: '巨人', away: 'ホーム', result: null },
-          { home: '阪神', away: '中日', result: null },
-          { home: 'DeNA', away: 'ヤクルト', result: null },
+          { home: '巨人', away: 'ホーム', homePitcher: '戸郷', awayPitcher: 'クレバー', result: null },
+          { home: '阪神', away: '中日', homePitcher: '青柳', awayPitcher: '大野', result: null },
+          { home: 'DeNA', away: 'ヤクルト', homePitcher: '東', awayPitcher: '高橋', result: null },
         ],
         '4/4': [
-          { home: '阪神', away: 'ホーム', result: null },
-          { home: '中日', away: '巨人', result: null },
-          { home: '広島', away: 'ヤクルト', result: null },
+          { home: '阪神', away: 'ホーム', homePitcher: '藤浪', awayPitcher: 'ロケット', result: null },
+          { home: '中日', away: '巨人', homePitcher: '柳', awayPitcher: '菅野', result: null },
+          { home: '広島', away: 'ヤクルト', homePitcher: '大瀬良', awayPitcher: '小川', result: null },
         ],
         '4/5': [
-          { home: '阪神', away: 'ホーム', result: null },
-          { home: '中日', away: '巨人', result: null },
-          { home: '広島', away: 'ヤクルト', result: null },
+          { home: '阪神', away: 'ホーム', homePitcher: '青柳', awayPitcher: 'クレバー', result: null },
+          { home: '中日', away: '巨人', homePitcher: '大野', awayPitcher: '戸郷', result: null },
+          { home: '広島', away: 'ヤクルト', homePitcher: '森下', awayPitcher: '高橋', result: null },
         ],
         '4/7': [
-          { home: '中日', away: 'ホーム', result: null },
-          { home: '巨人', away: 'DeNA', result: null },
-          { home: 'ヤクルト', away: '阪神', result: null },
+          { home: '中日', away: 'ホーム', homePitcher: '柳', awayPitcher: 'ロケット', result: null },
+          { home: '巨人', away: 'DeNA', homePitcher: '菅野', awayPitcher: '今永', result: null },
+          { home: 'ヤクルト', away: '阪神', homePitcher: '小川', awayPitcher: '藤浪', result: null },
         ],
         '4/8': [
-          { home: '中日', away: 'ホーム', result: null },
-          { home: '巨人', away: 'DeNA', result: null },
-          { home: 'ヤクルト', away: '阪神', result: null },
+          { home: '中日', away: 'ホーム', homePitcher: '大野', awayPitcher: 'クレバー', result: null },
+          { home: '巨人', away: 'DeNA', homePitcher: '戸郷', awayPitcher: '東', result: null },
+          { home: 'ヤクルト', away: '阪神', homePitcher: '高橋', awayPitcher: '青柳', result: null },
         ],
         '4/9': [
-          { home: '中日', away: 'ホーム', result: null },
-          { home: '巨人', away: 'DeNA', result: null },
-          { home: 'ヤクルト', away: '阪神', result: null },
+          { home: '中日', away: 'ホーム', homePitcher: '小笠原', awayPitcher: 'ロケット', result: null },
+          { home: '巨人', away: 'DeNA', homePitcher: '高橋', awayPitcher: '濱口', result: null },
+          { home: 'ヤクルト', away: '阪神', homePitcher: '石川', awayPitcher: '西', result: null },
         ],
         '4/11': [
-          { home: 'ヤクルト', away: 'ホーム', result: null },
-          { home: '広島', away: '巨人', result: null },
-          { home: '中日', away: 'DeNA', result: null },
+          { home: 'ヤクルト', away: 'ホーム', homePitcher: '小川', awayPitcher: 'ロケット', result: null },
+          { home: '広島', away: '巨人', homePitcher: '大瀬良', awayPitcher: '菅野', result: null },
+          { home: '中日', away: 'DeNA', homePitcher: '柳', awayPitcher: '今永', result: null },
         ],
         '4/12': [
-          { home: 'ヤクルト', away: 'ホーム', result: null },
-          { home: '広島', away: '巨人', result: null },
-          { home: '中日', away: 'DeNA', result: null },
+          { home: 'ヤクルト', away: 'ホーム', homePitcher: '高橋', awayPitcher: 'クレバー', result: null },
+          { home: '広島', away: '巨人', homePitcher: '森下', awayPitcher: '戸郷', result: null },
+          { home: '中日', away: 'DeNA', homePitcher: '大野', awayPitcher: '東', result: null },
         ],
         '4/14': [
-          { home: 'DeNA', away: 'ホーム', result: null },
-          { home: '阪神', away: '広島', result: null },
-          { home: 'ヤクルト', away: '中日', result: null },
+          { home: 'DeNA', away: 'ホーム', homePitcher: '今永', awayPitcher: 'ロケット', result: null },
+          { home: '阪神', away: '広島', homePitcher: '藤浪', awayPitcher: '大瀬良', result: null },
+          { home: 'ヤクルト', away: '中日', homePitcher: '小川', awayPitcher: '柳', result: null },
         ],
         '4/15': [
-          { home: 'DeNA', away: 'ホーム', result: null },
-          { home: '阪神', away: '広島', result: null },
-          { home: 'ヤクルト', away: '中日', result: null },
+          { home: 'DeNA', away: 'ホーム', homePitcher: '東', awayPitcher: 'クレバー', result: null },
+          { home: '阪神', away: '広島', homePitcher: '青柳', awayPitcher: '森下', result: null },
+          { home: 'ヤクルト', away: '中日', homePitcher: '高橋', awayPitcher: '大野', result: null },
         ],
         '4/16': [
-          { home: 'DeNA', away: 'ホーム', result: null },
-          { home: '阪神', away: '広島', result: null },
-          { home: 'ヤクルト', away: '中日', result: null },
+          { home: 'DeNA', away: 'ホーム', homePitcher: '濱口', awayPitcher: 'ロケット', result: null },
+          { home: '阪神', away: '広島', homePitcher: '西', awayPitcher: '九里', result: null },
+          { home: 'ヤクルト', away: '中日', homePitcher: '石川', awayPitcher: '小笠原', result: null },
         ],
         '4/18': [
-          { home: '広島', away: 'ホーム', result: null },
-          { home: '巨人', away: '阪神', result: null },
-          { home: 'DeNA', away: '中日', result: null },
+          { home: '広島', away: 'ホーム', homePitcher: '大瀬良', awayPitcher: 'ロケット', result: null },
+          { home: '巨人', away: '阪神', homePitcher: '菅野', awayPitcher: '藤浪', result: null },
+          { home: 'DeNA', away: '中日', homePitcher: '今永', awayPitcher: '柳', result: null },
         ],
         '4/19': [
-          { home: '広島', away: 'ホーム', result: null },
-          { home: '巨人', away: '阪神', result: null },
-          { home: 'DeNA', away: '中日', result: null },
+          { home: '広島', away: 'ホーム', homePitcher: '森下', awayPitcher: 'クレバー', result: null },
+          { home: '巨人', away: '阪神', homePitcher: '戸郷', awayPitcher: '青柳', result: null },
+          { home: 'DeNA', away: '中日', homePitcher: '東', awayPitcher: '大野', result: null },
         ],
         '4/20': [
-          { home: '広島', away: 'ホーム', result: null },
-          { home: '巨人', away: '阪神', result: null },
-          { home: 'DeNA', away: '中日', result: null },
+          { home: '広島', away: 'ホーム', homePitcher: '九里', awayPitcher: 'ロケット', result: null },
+          { home: '巨人', away: '阪神', homePitcher: '高橋', awayPitcher: '西', result: null },
+          { home: 'DeNA', away: '中日', homePitcher: '濱口', awayPitcher: '小笠原', result: null },
         ],
       });
 
@@ -2824,6 +2824,7 @@ if (newOuts === 3) {
           <nav className="flex-1 space-y-2">
             <button
               onClick={() => {
+                advanceDate();
                 setScreenMode('management');
                 setManagementView('schedule');
               }}
@@ -2961,6 +2962,35 @@ if (newOuts === 3) {
         );
       };
 
+      // 日程進行処理
+      const advanceDate = () => {
+        const currentDateStr = `${currentDate.month}/${currentDate.day}`;
+        const currentIndex = calendar.findIndex(day => day.date === currentDateStr);
+
+        if (currentIndex < calendar.length - 1) {
+          // 次の日へ
+          const nextDay = calendar[currentIndex + 1];
+          const [month, day] = nextDay.date.split('/').map(Number);
+          setCurrentDate({ month, day });
+
+          // 土曜日から日曜日に移動するとき（インデックス6→7, 13→14, 20→21）にカレンダーを1週間分シフト
+          if (currentIndex === 6 || currentIndex === 13 || currentIndex === 20) {
+            // 次の週のデータを生成（ダミー実装）
+            const newWeek = Array.from({ length: 7 }, (_, i) => {
+              const newDay = calendar[calendar.length - 7 + i].date.split('/');
+              const newDate = parseInt(newDay[1]) + 7;
+              return {
+                date: `${newDay[0]}/${newDate}`,
+                opponent: i % 3 === 2 ? null : `vs ${['巨人', '阪神', '中日'][i % 3]}`,
+                result: null
+              };
+            });
+
+            setCalendar(prev => [...prev.slice(7), ...newWeek]);
+          }
+        }
+      };
+
       // 日程進行画面コンポーネント
       const ScheduleScreen = () => {
         // ランキング表示用コンポーネント
@@ -2990,54 +3020,17 @@ if (newOuts === 3) {
           </div>
         );
 
-        // 日程進行処理
-        const advanceDate = () => {
-          const currentDateStr = `${currentDate.month}/${currentDate.day}`;
-          const currentIndex = calendar.findIndex(day => day.date === currentDateStr);
-
-          if (currentIndex < calendar.length - 1) {
-            // 次の日へ
-            const nextDay = calendar[currentIndex + 1];
-            const [month, day] = nextDay.date.split('/').map(Number);
-            setCurrentDate({ month, day });
-
-            // 週の最後（インデックスが6,13,20...）に達したら、カレンダーを1週間分シフト
-            if ((currentIndex + 1) % 7 === 6) {
-              // 次の週のデータを生成（ダミー実装）
-              const newWeek = Array.from({ length: 7 }, (_, i) => {
-                const newDay = calendar[calendar.length - 7 + i].date.split('/');
-                const newDate = parseInt(newDay[1]) + 7;
-                return {
-                  date: `${newDay[0]}/${newDate}`,
-                  opponent: i % 3 === 2 ? null : `vs ${['巨人', '阪神', '中日'][i % 3]}`,
-                  result: null
-                };
-              });
-
-              setCalendar(prev => [...prev.slice(7), ...newWeek]);
-            }
-          }
-        };
-
         return (
           <div className="p-8 max-w-7xl mx-auto">
             {/* ヘッダー */}
             <div className="mb-8 flex justify-between items-center">
               <h1 className="text-4xl font-bold text-white">{seasonYear}年目</h1>
-              <div className="flex gap-4">
-                <button
-                  onClick={advanceDate}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition"
-                >
-                  ⏩ 日程進行
-                </button>
-                <button
-                  onClick={() => setScreenMode('game')}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition"
-                >
-                  🎮 試合開始
-                </button>
-              </div>
+              <button
+                onClick={() => setScreenMode('game')}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition"
+              >
+                🎮 試合開始
+              </button>
             </div>
 
             {/* カレンダー（3行×7列） */}
@@ -3091,19 +3084,30 @@ if (newOuts === 3) {
               </h2>
               <div className="grid grid-cols-3 gap-4">
                 {(allGames[`${currentDate.month}/${currentDate.day}`] || []).map((game, index) => (
-                  <div key={index} className="bg-gray-700 rounded-lg p-4 text-center">
-                    <div className="flex items-center justify-center gap-4">
+                  <div key={index} className="bg-gray-700 rounded-lg p-4">
+                    <div className="flex items-center justify-center gap-4 mb-3">
                       <div className="text-white font-bold text-lg">{game.away}</div>
                       <div className="text-gray-400">vs</div>
                       <div className="text-white font-bold text-lg">{game.home}</div>
                     </div>
+                    <div className="flex items-center justify-center gap-4 text-sm text-gray-300 mb-2">
+                      <div className="text-right flex-1">
+                        <div className="text-xs text-gray-500">先発</div>
+                        <div className="text-yellow-400 font-bold">{game.awayPitcher}</div>
+                      </div>
+                      <div className="text-gray-600">⚾</div>
+                      <div className="text-left flex-1">
+                        <div className="text-xs text-gray-500">先発</div>
+                        <div className="text-yellow-400 font-bold">{game.homePitcher}</div>
+                      </div>
+                    </div>
                     {game.result ? (
-                      <div className="mt-2 text-sm">
+                      <div className="mt-2 text-sm text-center">
                         <span className="text-gray-300">結果: </span>
                         <span className="text-green-400 font-bold">{game.result}</span>
                       </div>
                     ) : (
-                      <div className="mt-2 text-sm text-gray-500">未消化</div>
+                      <div className="mt-2 text-sm text-gray-500 text-center">未消化</div>
                     )}
                   </div>
                 ))}
