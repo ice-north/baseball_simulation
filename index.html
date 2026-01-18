@@ -3014,64 +3014,370 @@ if (newOuts === 3) {
         );
       };
 
-      // オートシミュレーション: 1試合を自動実行（簡易版）
+      // オートシミュレーション: 1試合を一球ごとの物理演算で完全実行
       const autoSimulateGame = (homeTeamName, awayTeamName) => {
-        // 簡易的なチーム強さ指標（後で各チームの選手データから計算可能）
-        const teamStrength = {
-          'チームA': 52,
-          'チームB': 50,
-          'チームC': 48,
-          'チームD': 51
-        };
-
-        const homeStrength = teamStrength[homeTeamName] || 50;
-        const awayStrength = teamStrength[awayTeamName] || 50;
-
-        // ホームアドバンテージ
-        const adjustedHomeStrength = homeStrength + 3;
-
-        // 得点期待値（0-10点の範囲で正規分布的に）
-        const generateScore = (strength) => {
-          const baseExpectation = (strength / 100) * 5; // 0-5点の期待値
-          let score = 0;
-          // 9イニング分の得点チャンスをシミュレート
-          for (let i = 0; i < 9; i++) {
-            const rand = Math.random();
-            if (rand < baseExpectation / 9) {
-              // 得点発生
-              const runsThisInning = Math.floor(Math.random() * 4) + 1; // 1-4点
-              score += runsThisInning;
-            }
-          }
-          return score;
-        };
-
-        let homeScore = generateScore(adjustedHomeStrength);
-        let awayScore = generateScore(awayStrength);
-
-        // 同点の場合は延長戦シミュレーション（最大3回）
-        let extraInnings = 0;
-        while (homeScore === awayScore && extraInnings < 3) {
-          if (Math.random() < 0.5) homeScore++;
-          else awayScore++;
-          extraInnings++;
+        // TEAMS_DATAからチームデータを取得
+        if (!window.TEAMS_DATA || !window.TEAMS_DATA[homeTeamName] || !window.TEAMS_DATA[awayTeamName]) {
+          console.error('チームデータが見つかりません');
+          return { homeScore: 0, awayScore: 0, result: '0-0', winner: null };
         }
 
-        // 結果判定
+        const homeTeamData = JSON.parse(JSON.stringify(window.TEAMS_DATA[homeTeamName]));
+        const awayTeamData = JSON.parse(JSON.stringify(window.TEAMS_DATA[awayTeamName]));
+
+        // 試合状態の初期化
+        let gameState = {
+          inning: 1,
+          isTopInning: true,
+          outs: 0,
+          bases: [false, false, false],
+          score: { home: 0, away: 0 },
+          count: { balls: 0, strikes: 0 },
+          homeTeam: {
+            ...homeTeamData,
+            currentBatterOrder: 1,
+            players: homeTeamData.players.map(p => ({
+              ...p,
+              currentStamina: p.pitching?.stamina || 100,
+              gameStats: {
+                batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0 },
+                pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
+              }
+            }))
+          },
+          awayTeam: {
+            ...awayTeamData,
+            currentBatterOrder: 1,
+            players: awayTeamData.players.map(p => ({
+              ...p,
+              currentStamina: p.pitching?.stamina || 100,
+              gameStats: {
+                batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0 },
+                pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
+              }
+            }))
+          }
+        };
+
+        // 現在の打者を取得
+        const getCurrentBatter = (team) => {
+          return team.players.find(p => p.battingOrder === team.currentBatterOrder) || team.players[0];
+        };
+
+        // 現在の投手を取得
+        const getCurrentPitcher = (team) => {
+          const pitcher = team.players.find(p => p.position === 'pitcher' && (p.battingOrder === 9 || p.isStarter || p.battingOrder === 0));
+          return pitcher || team.players.find(p => p.pitching);
+        };
+
+        // 現在の捕手を取得
+        const getCurrentCatcher = (team) => {
+          return team.players.find(p => p.position === 'catcher') || team.players[0];
+        };
+
+        // 守備データを構築
+        const buildDefense = (team) => {
+          const defense = {};
+          team.players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9).forEach(player => {
+            defense[player.position] = {
+              defense: player.fielding?.defense || 50,
+              speed: player.physical?.speed || 50,
+              arm: player.physical?.arm || 50,
+              throws: player.physical?.throws || 'right'
+            };
+          });
+          return defense;
+        };
+
+        // 一球シミュレーション（純粋関数版）
+        const simulateOnePitch = (batter, pitcher, catcher, defense, count, pitcherStamina, bases) => {
+          // スタミナ補正
+          const staminaPenalty = getStaminaPenalty(pitcherStamina, pitcher.pitching.stamina);
+          const adjustment = getCountAdjustment(count.balls, count.strikes);
+
+          // 球種選択
+          const pitches = pitcher.pitching.arsenal || [{ id: 1, type: 'straight', level: 100 }];
+          const pitchChoice = Math.floor(Math.random() * pitches.length);
+          const selectedBall = pitches[pitchChoice];
+
+          // 制球判定
+          let effectiveControl = pitcher.pitching.control + staminaPenalty.controlPenalty;
+          if (selectedBall.type !== 'straight') {
+            const ballControlPenalty = 30 - (selectedBall.level / 100) * 30;
+            effectiveControl = Math.max(0, effectiveControl - ballControlPenalty);
+          }
+
+          const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65;
+          const isInStrikeZone = Math.random() < (strikeZoneProb * adjustment.strikeZone);
+
+          // スイング判定
+          let swingProb;
+          if (isInStrikeZone) {
+            if (count.strikes === 2) {
+              swingProb = 0.90 + ((100 - batter.batting.eye) / 100) * 0.08;
+            } else if (count.balls >= 2) {
+              swingProb = 0.60 + ((100 - batter.batting.eye) / 100) * 0.30;
+            } else {
+              swingProb = 0.75 + ((100 - batter.batting.eye) / 100) * 0.20;
+            }
+          } else {
+            if (count.strikes === 2) {
+              swingProb = 0.20 + ((100 - batter.batting.eye) / 100) * 0.30;
+            } else {
+              swingProb = 0.15 + ((100 - batter.batting.eye) / 100) * 0.30;
+            }
+          }
+          swingProb *= adjustment.swingRate;
+
+          const doesSwing = Math.random() < swingProb;
+
+          if (!doesSwing) {
+            return isInStrikeZone
+              ? { type: 'called_strike', description: '見逃しストライク' }
+              : { type: 'ball', description: 'ボール' };
+          }
+
+          if (!isInStrikeZone) {
+            return { type: 'swinging_strike', description: '空振り' };
+          }
+
+          // コンタクト判定（簡易版）
+          const predictionCorrect = Math.random() < 0.3;
+          const handEffect = getHandednessEffect(pitcher.physical.throws, batter.batting.bats);
+
+          // 打球タイプを決定
+          const meetQuality = (batter.batting.meet / 100) * (predictionCorrect ? 1.2 : 0.8);
+          const contactRoll = Math.random();
+
+          if (contactRoll > meetQuality) {
+            // 凡打・アウト
+            const outRoll = Math.random();
+            if (outRoll < 0.15) return { type: 'foul', description: 'ファール' };
+            if (outRoll < 0.25 && bases[0]) return { type: 'double_play', description: '併殺打' };
+            return { type: 'out', description: 'アウト' };
+          }
+
+          // 安打判定
+          const powerFactor = batter.batting.power / 100;
+          const hitRoll = Math.random();
+
+          if (hitRoll < powerFactor * 0.05) return { type: 'homerun', description: 'ホームラン！' };
+          if (hitRoll < powerFactor * 0.15) return { type: 'triple', description: '三塁打' };
+          if (hitRoll < powerFactor * 0.30) return { type: 'double', description: '二塁打' };
+          return { type: 'single', description: 'ヒット' };
+        };
+
+        // 走者進塁処理
+        const advanceRunners = (hitType, bases) => {
+          const newBases = [false, false, false];
+          let runsScored = 0;
+
+          if (hitType === 'homerun') {
+            runsScored = 1 + bases.filter(b => b).length;
+            return { bases: [false, false, false], runsScored };
+          }
+
+          const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
+
+          for (let i = 2; i >= 0; i--) {
+            if (bases[i]) {
+              const newBase = i + advancement;
+              if (newBase >= 3) {
+                runsScored++;
+              } else {
+                newBases[newBase] = true;
+              }
+            }
+          }
+
+          if (advancement < 3) {
+            newBases[advancement - 1] = true;
+          } else {
+            runsScored++;
+          }
+
+          return { bases: newBases, runsScored };
+        };
+
+        // 打席シミュレーション
+        const simulateAtBat = () => {
+          const offenseTeam = gameState.isTopInning ? gameState.awayTeam : gameState.homeTeam;
+          const defenseTeam = gameState.isTopInning ? gameState.homeTeam : gameState.awayTeam;
+
+          const batter = getCurrentBatter(offenseTeam);
+          const pitcher = getCurrentPitcher(defenseTeam);
+          const catcher = getCurrentCatcher(defenseTeam);
+          const defense = buildDefense(defenseTeam);
+
+          let atBatOver = false;
+          let pitchCount = 0;
+          const maxPitches = 20; // 無限ループ防止
+
+          while (!atBatOver && pitchCount < maxPitches) {
+            pitchCount++;
+
+            // 投手のスタミナを取得
+            const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
+            const pitcherStamina = pitcherData.currentStamina;
+
+            // 一球シミュレーション
+            const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases);
+
+            // スタミナ減少
+            pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
+            pitcherData.gameStats.pitching.pitches++;
+
+            // 結果処理
+            switch (result.type) {
+              case 'ball':
+                gameState.count.balls++;
+                if (gameState.count.balls === 4) {
+                  // 四球
+                  batter.gameStats.batting.walks++;
+                  pitcher.gameStats.pitching.walks++;
+                  if (gameState.bases[0] && gameState.bases[1] && gameState.bases[2]) {
+                    if (gameState.isTopInning) gameState.score.away++;
+                    else gameState.score.home++;
+                    pitcher.gameStats.pitching.runsAllowed++;
+                  } else {
+                    if (gameState.bases[1] && gameState.bases[0]) gameState.bases[2] = true;
+                    if (gameState.bases[0]) gameState.bases[1] = true;
+                    gameState.bases[0] = true;
+                  }
+                  atBatOver = true;
+                }
+                break;
+
+              case 'called_strike':
+              case 'swinging_strike':
+                gameState.count.strikes++;
+                if (gameState.count.strikes === 3) {
+                  // 三振
+                  batter.gameStats.batting.atBats++;
+                  batter.gameStats.batting.strikeouts++;
+                  pitcher.gameStats.pitching.outs++;
+                  pitcher.gameStats.pitching.strikeouts++;
+                  gameState.outs++;
+                  atBatOver = true;
+                }
+                break;
+
+              case 'foul':
+                if (gameState.count.strikes < 2) {
+                  gameState.count.strikes++;
+                }
+                break;
+
+              case 'out':
+                batter.gameStats.batting.atBats++;
+                pitcher.gameStats.pitching.outs++;
+                gameState.outs++;
+                atBatOver = true;
+                break;
+
+              case 'double_play':
+                batter.gameStats.batting.atBats++;
+                pitcher.gameStats.pitching.outs += 2;
+                gameState.outs += 2;
+                gameState.bases[0] = false;
+                atBatOver = true;
+                break;
+
+              case 'single':
+              case 'double':
+              case 'triple':
+              case 'homerun':
+                const { bases: newBases, runsScored } = advanceRunners(result.type, gameState.bases);
+                batter.gameStats.batting.atBats++;
+                batter.gameStats.batting.hits++;
+                batter.gameStats.batting.rbis += runsScored;
+                if (result.type === 'homerun') batter.gameStats.batting.homeruns++;
+
+                if (gameState.isTopInning) gameState.score.away += runsScored;
+                else gameState.score.home += runsScored;
+
+                pitcher.gameStats.pitching.runsAllowed += runsScored;
+                gameState.bases = newBases;
+                atBatOver = true;
+                break;
+            }
+          }
+
+          // カウントリセット & 打順進行
+          gameState.count = { balls: 0, strikes: 0 };
+          offenseTeam.currentBatterOrder++;
+          if (offenseTeam.currentBatterOrder > 9) offenseTeam.currentBatterOrder = 1;
+        };
+
+        // イニングシミュレーション
+        const simulateInning = () => {
+          gameState.outs = 0;
+          gameState.bases = [false, false, false];
+
+          while (gameState.outs < 3) {
+            simulateAtBat();
+          }
+
+          // イニング終了処理
+          if (gameState.isTopInning) {
+            gameState.isTopInning = false;
+          } else {
+            gameState.isTopInning = true;
+            gameState.inning++;
+          }
+
+          // 投手スタミナ回復
+          [gameState.homeTeam, gameState.awayTeam].forEach(team => {
+            const pitcher = getCurrentPitcher(team);
+            if (pitcher) {
+              const pitcherData = team.players.find(p => p.id === pitcher.id);
+              if (pitcherData) {
+                pitcherData.currentStamina = Math.min(
+                  pitcherData.currentStamina + 3,
+                  pitcher.pitching.stamina
+                );
+              }
+            }
+          });
+        };
+
+        // 試合実行
+        while (gameState.inning <= 9 || (gameState.inning > 9 && gameState.score.home === gameState.score.away)) {
+          // 9回裏でホームリードなら終了
+          if (gameState.inning === 9 && !gameState.isTopInning && gameState.score.home > gameState.score.away) {
+            break;
+          }
+
+          // 延長12回まで
+          if (gameState.inning > 12) break;
+
+          simulateInning();
+        }
+
+        // 試合結果
+        const homeScore = gameState.score.home;
+        const awayScore = gameState.score.away;
         let result;
+        let winner;
+
         if (homeScore > awayScore) {
           result = `${homeTeamName} ${homeScore}-${awayScore}`;
+          winner = homeTeamName;
         } else if (awayScore > homeScore) {
           result = `${awayTeamName} ${awayScore}-${homeScore}`;
+          winner = awayTeamName;
         } else {
           result = `引分 ${homeScore}-${awayScore}`;
+          winner = null;
         }
 
         return {
           homeScore,
           awayScore,
           result,
-          winner: homeScore > awayScore ? homeTeamName : awayScore > homeScore ? awayTeamName : null
+          winner,
+          homeTeam: gameState.homeTeam,
+          awayTeam: gameState.awayTeam
         };
       };
 
