@@ -3,13 +3,7 @@
 // 4チーム分の選手データ
 // ============================================================
 
-/**
- * 選手の成績初期値を作成
- */
-const createPlayerStats = () => ({
-  batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0 },
-  pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
-});
+// 注: createPlayerStats() は players.js で定義済み
 
 /**
  * チームデータ構造
