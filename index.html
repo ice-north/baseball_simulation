@@ -26,129 +26,125 @@
       const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save'
       const [scheduleTab, setScheduleTab] = useState('league'); // 'league', 'batting', 'pitching'
 
+      // リーグ構成設定（拡張可能な設計）
+      const [leagueConfig, setLeagueConfig] = useState({
+        format: 'single', // 'single', 'dual', 'triple' (1リーグ、2リーグ、3部制)
+        teamsPerLeague: 4, // リーグあたりのチーム数
+        leagues: [
+          {
+            name: 'リーグ',
+            teams: ['チームA', 'チームB', 'チームC', 'チームD']
+          }
+        ]
+      });
+
+      // 全チームリスト（リーグ構成から自動生成）
+      const allTeams = leagueConfig.leagues.flatMap(league => league.teams);
+
       // シーズンデータ
       const [seasonYear, setSeasonYear] = useState(1); // 何年目か
       const [currentDate, setCurrentDate] = useState({ month: 4, day: 1 }); // 現在の日付
-      const [calendar, setCalendar] = useState([
-        // ダミーデータ（21日間 = 3週間）
-        { date: '4/1', opponent: 'vs 巨人', result: null },
-        { date: '4/2', opponent: 'vs 巨人', result: null },
-        { date: '4/3', opponent: null, result: null }, // 休養日
-        { date: '4/4', opponent: 'vs 阪神', result: null },
-        { date: '4/5', opponent: 'vs 阪神', result: null },
-        { date: '4/6', opponent: null, result: null },
-        { date: '4/7', opponent: '@ 中日', result: null },
-        { date: '4/8', opponent: '@ 中日', result: null },
-        { date: '4/9', opponent: '@ 中日', result: null },
-        { date: '4/10', opponent: null, result: null },
-        { date: '4/11', opponent: 'vs ヤクルト', result: null },
-        { date: '4/12', opponent: 'vs ヤクルト', result: null },
-        { date: '4/13', opponent: null, result: null },
-        { date: '4/14', opponent: '@ DeNA', result: null },
-        { date: '4/15', opponent: '@ DeNA', result: null },
-        { date: '4/16', opponent: '@ DeNA', result: null },
-        { date: '4/17', opponent: null, result: null },
-        { date: '4/18', opponent: 'vs 広島', result: null },
-        { date: '4/19', opponent: 'vs 広島', result: null },
-        { date: '4/20', opponent: 'vs 広島', result: null },
-        { date: '4/21', opponent: null, result: null },
-      ]);
 
-      // リーグ成績（ダミーデータ）
-      const [leagueStandings, setLeagueStandings] = useState([
-        { team: 'ホーム', wins: 0, losses: 0, draws: 0 },
-        { team: '巨人', wins: 0, losses: 0, draws: 0 },
-        { team: '阪神', wins: 0, losses: 0, draws: 0 },
-        { team: '中日', wins: 0, losses: 0, draws: 0 },
-        { team: 'ヤクルト', wins: 0, losses: 0, draws: 0 },
-        { team: 'DeNA', wins: 0, losses: 0, draws: 0 },
-        { team: '広島', wins: 0, losses: 0, draws: 0 },
-      ]);
+      // カレンダー生成関数（4チーム用）
+      const generateInitialCalendar = () => {
+        const playerTeam = 'チームA'; // プレイヤーのチーム
+        const opponents = allTeams.filter(t => t !== playerTeam);
+
+        const schedule = [];
+        let dateCounter = 1;
+
+        // 各対戦相手と3試合ずつ（ホーム1.5試合、アウェイ1.5試合）
+        opponents.forEach((opponent, oppIndex) => {
+          // ホーム2試合
+          for (let i = 0; i < 2; i++) {
+            schedule.push({ date: `4/${dateCounter++}`, opponent: `vs ${opponent}`, result: null });
+          }
+          // 休養日
+          schedule.push({ date: `4/${dateCounter++}`, opponent: null, result: null });
+
+          // アウェイ2試合
+          for (let i = 0; i < 2; i++) {
+            schedule.push({ date: `4/${dateCounter++}`, opponent: `@ ${opponent}`, result: null });
+          }
+          // 休養日
+          schedule.push({ date: `4/${dateCounter++}`, opponent: null, result: null });
+        });
+
+        return schedule.slice(0, 21); // 3週間分
+      };
+
+      const [calendar, setCalendar] = useState(generateInitialCalendar());
+
+      // リーグ成績（動的生成）
+      const [leagueStandings, setLeagueStandings] = useState(
+        allTeams.map(team => ({ team, wins: 0, losses: 0, draws: 0 }))
+      );
 
       // 個人成績ランキング（ダミーデータ - 各10位まで）
       const dummyRankingData = Array.from({ length: 10 }, (_, i) => ({
         rank: i + 1,
         name: `選手${i + 1}`,
-        team: ['ホーム', '巨人', '阪神', '中日', 'ヤクルト', 'DeNA', '広島'][i % 7],
+        team: allTeams[i % allTeams.length],
         value: '---'
       }));
 
-      // 全チーム対戦カードデータ（日付ごと）
+      // 全チーム対戦カードデータ（日付ごと）- 4チーム制
       const [allGames, setAllGames] = useState({
         '4/1': [
-          { home: '巨人', away: 'ホーム', homePitcher: '菅野', awayPitcher: 'ロケット', result: null },
-          { home: '阪神', away: '中日', homePitcher: '藤浪', awayPitcher: '柳', result: null },
-          { home: 'DeNA', away: 'ヤクルト', homePitcher: '今永', awayPitcher: '小川', result: null },
+          { home: 'チームB', away: 'チームA', homePitcher: '投手B1', awayPitcher: 'ロケット', result: null },
+          { home: 'チームC', away: 'チームD', homePitcher: '投手C1', awayPitcher: '投手D1', result: null },
         ],
         '4/2': [
-          { home: '巨人', away: 'ホーム', homePitcher: '戸郷', awayPitcher: 'クレバー', result: null },
-          { home: '阪神', away: '中日', homePitcher: '青柳', awayPitcher: '大野', result: null },
-          { home: 'DeNA', away: 'ヤクルト', homePitcher: '東', awayPitcher: '高橋', result: null },
+          { home: 'チームB', away: 'チームA', homePitcher: '投手B2', awayPitcher: 'クレバー', result: null },
+          { home: 'チームD', away: 'チームC', homePitcher: '投手D2', awayPitcher: '投手C2', result: null },
         ],
         '4/4': [
-          { home: '阪神', away: 'ホーム', homePitcher: '藤浪', awayPitcher: 'ロケット', result: null },
-          { home: '中日', away: '巨人', homePitcher: '柳', awayPitcher: '菅野', result: null },
-          { home: '広島', away: 'ヤクルト', homePitcher: '大瀬良', awayPitcher: '小川', result: null },
+          { home: 'チームA', away: 'チームB', homePitcher: 'ロケット', awayPitcher: '投手B1', result: null },
+          { home: 'チームC', away: 'チームD', homePitcher: '投手C1', awayPitcher: '投手D1', result: null },
         ],
         '4/5': [
-          { home: '阪神', away: 'ホーム', homePitcher: '青柳', awayPitcher: 'クレバー', result: null },
-          { home: '中日', away: '巨人', homePitcher: '大野', awayPitcher: '戸郷', result: null },
-          { home: '広島', away: 'ヤクルト', homePitcher: '森下', awayPitcher: '高橋', result: null },
+          { home: 'チームA', away: 'チームB', homePitcher: 'クレバー', awayPitcher: '投手B2', result: null },
+          { home: 'チームD', away: 'チームC', homePitcher: '投手D2', awayPitcher: '投手C2', result: null },
         ],
         '4/7': [
-          { home: '中日', away: 'ホーム', homePitcher: '柳', awayPitcher: 'ロケット', result: null },
-          { home: '巨人', away: 'DeNA', homePitcher: '菅野', awayPitcher: '今永', result: null },
-          { home: 'ヤクルト', away: '阪神', homePitcher: '小川', awayPitcher: '藤浪', result: null },
+          { home: 'チームC', away: 'チームA', homePitcher: '投手C1', awayPitcher: 'ロケット', result: null },
+          { home: 'チームB', away: 'チームD', homePitcher: '投手B1', awayPitcher: '投手D1', result: null },
         ],
         '4/8': [
-          { home: '中日', away: 'ホーム', homePitcher: '大野', awayPitcher: 'クレバー', result: null },
-          { home: '巨人', away: 'DeNA', homePitcher: '戸郷', awayPitcher: '東', result: null },
-          { home: 'ヤクルト', away: '阪神', homePitcher: '高橋', awayPitcher: '青柳', result: null },
+          { home: 'チームC', away: 'チームA', homePitcher: '投手C2', awayPitcher: 'クレバー', result: null },
+          { home: 'チームD', away: 'チームB', homePitcher: '投手D2', awayPitcher: '投手B2', result: null },
         ],
-        '4/9': [
-          { home: '中日', away: 'ホーム', homePitcher: '小笠原', awayPitcher: 'ロケット', result: null },
-          { home: '巨人', away: 'DeNA', homePitcher: '高橋', awayPitcher: '濱口', result: null },
-          { home: 'ヤクルト', away: '阪神', homePitcher: '石川', awayPitcher: '西', result: null },
+        '4/10': [
+          { home: 'チームA', away: 'チームC', homePitcher: 'ロケット', awayPitcher: '投手C1', result: null },
+          { home: 'チームB', away: 'チームD', homePitcher: '投手B1', awayPitcher: '投手D1', result: null },
         ],
         '4/11': [
-          { home: 'ヤクルト', away: 'ホーム', homePitcher: '小川', awayPitcher: 'ロケット', result: null },
-          { home: '広島', away: '巨人', homePitcher: '大瀬良', awayPitcher: '菅野', result: null },
-          { home: '中日', away: 'DeNA', homePitcher: '柳', awayPitcher: '今永', result: null },
+          { home: 'チームA', away: 'チームC', homePitcher: 'クレバー', awayPitcher: '投手C2', result: null },
+          { home: 'チームD', away: 'チームB', homePitcher: '投手D2', awayPitcher: '投手B2', result: null },
         ],
-        '4/12': [
-          { home: 'ヤクルト', away: 'ホーム', homePitcher: '高橋', awayPitcher: 'クレバー', result: null },
-          { home: '広島', away: '巨人', homePitcher: '森下', awayPitcher: '戸郷', result: null },
-          { home: '中日', away: 'DeNA', homePitcher: '大野', awayPitcher: '東', result: null },
+        '4/13': [
+          { home: 'チームD', away: 'チームA', homePitcher: '投手D1', awayPitcher: 'ロケット', result: null },
+          { home: 'チームB', away: 'チームC', homePitcher: '投手B1', awayPitcher: '投手C1', result: null },
         ],
         '4/14': [
-          { home: 'DeNA', away: 'ホーム', homePitcher: '今永', awayPitcher: 'ロケット', result: null },
-          { home: '阪神', away: '広島', homePitcher: '藤浪', awayPitcher: '大瀬良', result: null },
-          { home: 'ヤクルト', away: '中日', homePitcher: '小川', awayPitcher: '柳', result: null },
-        ],
-        '4/15': [
-          { home: 'DeNA', away: 'ホーム', homePitcher: '東', awayPitcher: 'クレバー', result: null },
-          { home: '阪神', away: '広島', homePitcher: '青柳', awayPitcher: '森下', result: null },
-          { home: 'ヤクルト', away: '中日', homePitcher: '高橋', awayPitcher: '大野', result: null },
+          { home: 'チームD', away: 'チームA', homePitcher: '投手D2', awayPitcher: 'クレバー', result: null },
+          { home: 'チームC', away: 'チームB', homePitcher: '投手C2', awayPitcher: '投手B2', result: null },
         ],
         '4/16': [
-          { home: 'DeNA', away: 'ホーム', homePitcher: '濱口', awayPitcher: 'ロケット', result: null },
-          { home: '阪神', away: '広島', homePitcher: '西', awayPitcher: '九里', result: null },
-          { home: 'ヤクルト', away: '中日', homePitcher: '石川', awayPitcher: '小笠原', result: null },
+          { home: 'チームA', away: 'チームD', homePitcher: 'ロケット', awayPitcher: '投手D1', result: null },
+          { home: 'チームB', away: 'チームC', homePitcher: '投手B1', awayPitcher: '投手C1', result: null },
         ],
-        '4/18': [
-          { home: '広島', away: 'ホーム', homePitcher: '大瀬良', awayPitcher: 'ロケット', result: null },
-          { home: '巨人', away: '阪神', homePitcher: '菅野', awayPitcher: '藤浪', result: null },
-          { home: 'DeNA', away: '中日', homePitcher: '今永', awayPitcher: '柳', result: null },
+        '4/17': [
+          { home: 'チームA', away: 'チームD', homePitcher: 'クレバー', awayPitcher: '投手D2', result: null },
+          { home: 'チームC', away: 'チームB', homePitcher: '投手C2', awayPitcher: '投手B2', result: null },
         ],
         '4/19': [
-          { home: '広島', away: 'ホーム', homePitcher: '森下', awayPitcher: 'クレバー', result: null },
-          { home: '巨人', away: '阪神', homePitcher: '戸郷', awayPitcher: '青柳', result: null },
-          { home: 'DeNA', away: '中日', homePitcher: '東', awayPitcher: '大野', result: null },
+          { home: 'チームB', away: 'チームA', homePitcher: '投手B1', awayPitcher: 'ロケット', result: null },
+          { home: 'チームC', away: 'チームD', homePitcher: '投手C1', awayPitcher: '投手D1', result: null },
         ],
         '4/20': [
-          { home: '広島', away: 'ホーム', homePitcher: '九里', awayPitcher: 'ロケット', result: null },
-          { home: '巨人', away: '阪神', homePitcher: '高橋', awayPitcher: '西', result: null },
-          { home: 'DeNA', away: '中日', homePitcher: '濱口', awayPitcher: '小笠原', result: null },
+          { home: 'チームD', away: 'チームC', homePitcher: '投手D2', awayPitcher: '投手C2', result: null },
+          { home: 'チームA', away: 'チームB', homePitcher: 'クレバー', awayPitcher: '投手B2', result: null },
         ],
       });
 
@@ -2966,13 +2962,10 @@ if (newOuts === 3) {
       const autoSimulateGame = (homeTeamName, awayTeamName) => {
         // 簡易的なチーム強さ指標（後で各チームの選手データから計算可能）
         const teamStrength = {
-          'ホーム': 50,
-          '巨人': 55,
-          '阪神': 52,
-          '中日': 48,
-          'ヤクルト': 51,
-          'DeNA': 49,
-          '広島': 50
+          'チームA': 52,
+          'チームB': 50,
+          'チームC': 48,
+          'チームD': 51
         };
 
         const homeStrength = teamStrength[homeTeamName] || 50;
@@ -3056,9 +3049,9 @@ if (newOuts === 3) {
         setCalendar(prev => prev.map(day => {
           if (day.date === currentDateStr) {
             // この日の自チームの試合を探す
-            const myGame = updatedGames.find(g => g.home === 'ホーム' || g.away === 'ホーム');
+            const myGame = updatedGames.find(g => g.home === 'チームA' || g.away === 'チームA');
             if (myGame) {
-              const isHome = myGame.home === 'ホーム';
+              const isHome = myGame.home === 'チームA';
               const won = (isHome && myGame.homeScore > myGame.awayScore) ||
                           (!isHome && myGame.awayScore > myGame.homeScore);
               const draw = myGame.homeScore === myGame.awayScore;
@@ -3226,7 +3219,7 @@ if (newOuts === 3) {
               <h2 className="text-2xl font-bold mb-4 text-white">
                 {currentDate.month}/{currentDate.day} の対戦カード
               </h2>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 {(allGames[`${currentDate.month}/${currentDate.day}`] || []).map((game, index) => (
                   <div key={index} className="bg-gray-700 rounded-lg p-4">
                     <div className="flex items-center justify-center gap-4 mb-3">
@@ -3257,7 +3250,7 @@ if (newOuts === 3) {
                 ))}
                 {(!allGames[`${currentDate.month}/${currentDate.day}`] ||
                   allGames[`${currentDate.month}/${currentDate.day}`].length === 0) && (
-                  <div className="col-span-3 text-center text-gray-500 py-4">
+                  <div className="col-span-2 text-center text-gray-500 py-4">
                     本日は試合がありません（休養日）
                   </div>
                 )}
