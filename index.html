@@ -2957,6 +2957,7 @@ if (newOuts === 3) {
 
         // 選手編集を開始
         const startEditPlayer = (player) => {
+          console.log('選手編集を開始:', player.name);
           setEditingPlayer(player);
           setEditFormData(JSON.parse(JSON.stringify(player)));
         };
@@ -3007,14 +3008,27 @@ if (newOuts === 3) {
 
         // 変更を保存
         const savePlayerEdit = () => {
-          if (!editFormData || !editingPlayer) return;
+          if (!editFormData || !editingPlayer) {
+            console.error('編集データが見つかりません');
+            return;
+          }
+
+          console.log('保存中:', editFormData.name, editFormData);
 
           // TEAMS_DATAを更新
           const playerIndex = window.TEAMS_DATA[editingTeam].players.findIndex(p => p.id === editingPlayer.id);
           if (playerIndex !== -1) {
             window.TEAMS_DATA[editingTeam].players[playerIndex] = editFormData;
-            console.log(`✅ ${editFormData.name}の能力値を更新しました`);
+            console.log(`✅ ${editFormData.name}の能力値を更新しました (インデックス: ${playerIndex})`);
+            console.log('更新後のデータ:', window.TEAMS_DATA[editingTeam].players[playerIndex]);
+
+            // 画面を更新するため、state を変更
             cancelEdit();
+
+            // 強制的に再レンダリングをトリガー
+            alert(`${editFormData.name}の能力値を保存しました！\n\n変更内容はTEAMS_DATAに反映されています。`);
+          } else {
+            console.error('選手が見つかりません:', editingPlayer.id);
           }
         };
 
@@ -3330,11 +3344,20 @@ if (newOuts === 3) {
         // TEAMS_DATAからチームデータを取得
         if (!window.TEAMS_DATA || !window.TEAMS_DATA[homeTeamName] || !window.TEAMS_DATA[awayTeamName]) {
           console.error('チームデータが見つかりません');
-          return { homeScore: 0, awayScore: 0, result: '0-0', winner: null };
+          return { homeScore: 0, awayScore: 0, result: '引分 0-0', winner: null };
         }
 
         const homeTeamData = JSON.parse(JSON.stringify(window.TEAMS_DATA[homeTeamName]));
         const awayTeamData = JSON.parse(JSON.stringify(window.TEAMS_DATA[awayTeamName]));
+
+        console.log(`  ${homeTeamName}: ${homeTeamData.players.length}人`);
+        console.log(`  ${awayTeamName}: ${awayTeamData.players.length}人`);
+
+        // 先発投手を確認
+        const homePitchers = homeTeamData.players.filter(p => p.battingOrder === 9);
+        const awayPitchers = awayTeamData.players.filter(p => p.battingOrder === 9);
+        console.log(`  ${homeTeamName}投手(打順9):`, homePitchers.map(p => p.name).join(', '));
+        console.log(`  ${awayTeamName}投手(打順9):`, awayPitchers.map(p => p.name).join(', '));
 
         // 試合状態の初期化
         let gameState = {
@@ -3377,8 +3400,16 @@ if (newOuts === 3) {
 
         // 現在の投手を取得
         const getCurrentPitcher = (team) => {
-          const pitcher = team.players.find(p => p.position === 'pitcher' && (p.battingOrder === 9 || p.isStarter || p.battingOrder === 0));
-          return pitcher || team.players.find(p => p.pitching);
+          // 先発投手は打順9番
+          const pitcher = team.players.find(p => p.battingOrder === 9 && p.position === 'pitcher');
+          if (pitcher) return pitcher;
+
+          // 見つからない場合は投手能力を持つ選手を探す
+          const reliever = team.players.find(p => p.position === 'pitcher' && p.pitching);
+          if (reliever) return reliever;
+
+          // それでも見つからない場合は最初の投手能力を持つ選手
+          return team.players.find(p => p.pitching);
         };
 
         // 現在の捕手を取得
@@ -3520,6 +3551,15 @@ if (newOuts === 3) {
           const catcher = getCurrentCatcher(defenseTeam);
           const defense = buildDefense(defenseTeam);
 
+          if (!batter) {
+            console.error('打者が取得できません', offenseTeam);
+            return;
+          }
+          if (!pitcher) {
+            console.error('投手が取得できません', defenseTeam);
+            return;
+          }
+
           let atBatOver = false;
           let pitchCount = 0;
           const maxPitches = 20; // 無限ループ防止
@@ -3625,8 +3665,17 @@ if (newOuts === 3) {
           gameState.outs = 0;
           gameState.bases = [false, false, false];
 
-          while (gameState.outs < 3) {
+          const inningLabel = `${gameState.inning}回${gameState.isTopInning ? '表' : '裏'}`;
+          const offenseTeam = gameState.isTopInning ? gameState.awayTeam.name : gameState.homeTeam.name;
+
+          let atBats = 0;
+          while (gameState.outs < 3 && atBats < 30) {  // 無限ループ防止
             simulateAtBat();
+            atBats++;
+          }
+
+          if (atBats >= 30) {
+            console.error(`${inningLabel}: 無限ループ検出`);
           }
 
           // イニング終了処理
@@ -3683,6 +3732,7 @@ if (newOuts === 3) {
         }
 
         console.log(`✅ 試合終了: ${awayTeamName} ${awayScore} - ${homeScore} ${homeTeamName} (${gameState.inning}回)`);
+        console.log(`   スコア詳細: away=${gameState.score.away}, home=${gameState.score.home}`);
 
         return {
           homeScore,
