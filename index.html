@@ -3431,8 +3431,8 @@ if (newOuts === 3) {
           return defense;
         };
 
-        // 一球シミュレーション（通常の試合と同じ物理エンジンを使用）
-        const simulateOnePitch = (batter, pitcher, catcher, defense, count, pitcherStamina, bases) => {
+        // 一球シミュレーション（simulation-logic.jsの物理エンジンを使用）
+        const simulateOnePitch = (batter, pitcher, catcher, defense, count, pitcherStamina, bases, lastPitch) => {
           // スタミナ補正
           const staminaPenalty = getStaminaPenalty(pitcherStamina, pitcher.pitching.stamina);
           const adjustment = getCountAdjustment(count.balls, count.strikes);
@@ -3486,46 +3486,70 @@ if (newOuts === 3) {
             return { type: 'swinging_strike', description: '空振り' };
           }
 
-          // コンタクト判定（通常の試合と同じ物理エンジンを使用）
+          // === コンタクト判定（simulation-logic.jsの物理エンジンを使用）===
           const predictionCorrect = Math.random() < 0.3;
           const handEffect = getHandednessEffect(pitcher.physical.throws, batter.batting.bats);
 
-          // 打者・投手・捕手データを整形
-          const batterData = {
-            meet: batter.batting.meet,
-            power: batter.batting.power,
-            eye: batter.batting.eye,
-            speed: batter.physical.speed,
-            bats: batter.batting.bats
+          // トンネリング効果を計算
+          const currentPitch = {
+            type: selectedBall.type,
+            velocity: actualVelocity,
+            level: selectedBall.level
           };
+          const tunnelingEffect = getTunnelingEffect(lastPitch, currentPitch, catcher.catching.lead);
 
-          const pitcherData = {
-            velocity: pitcher.pitching.velocity,
-            control: pitcher.pitching.control,
-            stamina: pitcher.pitching.stamina,
-            throws: pitcher.physical.throws
-          };
-
-          const catcherData = {
-            lead: catcher.catching.lead,
-            arm: catcher.physical.arm,
-            throws: catcher.physical.throws
-          };
-
-          // 通常の試合画面と同じ物理エンジンを使用
-          const contactResult = determineContactResultPhysics(
-            selectedBall,
+          // 物理コンタクト計算（simulation-logic.jsの関数を使用）
+          const physicsResult = calculatePhysicsContact(
+            pitcher.pitching,
+            batter.batting,
             predictionCorrect,
-            0, // tempoGroundballBonus
-            handEffect,
-            actualVelocity,
-            batterData,
-            pitcherData,
-            defense,
-            catcherData
+            currentPitch,
+            tunnelingEffect,
+            handEffect
           );
 
-          return contactResult;
+          // 空振り判定
+          if (!physicsResult.isContact) {
+            return { type: 'swinging_strike', description: '空振り' };
+          }
+
+          // ファウル判定
+          const foulBaseRate = 0.35;
+          const qualityPenalty = (1 - physicsResult.meetQuality) * 0.25;
+          let foulRate = foulBaseRate + qualityPenalty;
+          if (count.strikes === 2) {
+            foulRate += 0.10;
+          }
+
+          if (Math.random() < foulRate) {
+            return { type: count.strikes === 2 ? 'foul_2strike' : 'foul', description: 'ファール' };
+          }
+
+          // 打球パラメータ計算（simulation-logic.jsの関数を使用）
+          const battedBall = calculateBattedBallPhysics(
+            batter.batting,
+            pitcher.pitching,
+            currentPitch,
+            physicsResult
+          );
+
+          // 角度によるファウル判定
+          if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {
+            return { type: count.strikes === 2 ? 'foul_2strike' : 'foul', description: 'ファール' };
+          }
+
+          // 守備判定（simulation-logic.jsの関数を使用）
+          const fieldingResult = judgeFielderReach(battedBall, defense, batter.batting);
+
+          // 結果を返す
+          return {
+            type: fieldingResult.result,
+            description: fieldingResult.description,
+            isError: fieldingResult.isError,
+            isOutfieldFly: fieldingResult.isOutfieldFly,
+            tagupThrowbackChance: fieldingResult.tagupThrowbackChance,
+            lastPitch: currentPitch // 次回のトンネリング効果のために保存
+          };
         };
 
         // 走者進塁処理
@@ -3582,6 +3606,7 @@ if (newOuts === 3) {
           let atBatOver = false;
           let pitchCount = 0;
           const maxPitches = 20; // 無限ループ防止
+          let lastPitch = null; // トンネリング効果のために前球を記録
 
           while (!atBatOver && pitchCount < maxPitches) {
             pitchCount++;
@@ -3590,8 +3615,13 @@ if (newOuts === 3) {
             const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
             const pitcherStamina = pitcherData.currentStamina;
 
-            // 一球シミュレーション
-            const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases);
+            // 一球シミュレーション（simulation-logic.jsの物理エンジンを使用）
+            const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, lastPitch);
+
+            // 次回のトンネリング効果のために今回の投球を記録
+            if (result.lastPitch) {
+              lastPitch = result.lastPitch;
+            }
 
             // スタミナ減少
             pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
@@ -3633,9 +3663,11 @@ if (newOuts === 3) {
                 break;
 
               case 'foul':
+              case 'foul_2strike':
                 if (gameState.count.strikes < 2) {
                   gameState.count.strikes++;
                 }
+                // 2ストライク時のファウルはカウント変わらず
                 break;
 
               case 'out':
@@ -3705,16 +3737,43 @@ if (newOuts === 3) {
             gameState.inning++;
           }
 
-          // 投手スタミナ回復
+          // 投手スタミナ回復 & AI監督機能（投手交代判定）
           [gameState.homeTeam, gameState.awayTeam].forEach(team => {
             const pitcher = getCurrentPitcher(team);
             if (pitcher) {
               const pitcherData = team.players.find(p => p.id === pitcher.id);
               if (pitcherData) {
+                // スタミナ回復（イニング間の休憩）
                 pitcherData.currentStamina = Math.min(
                   pitcherData.currentStamina + 3,
                   pitcher.pitching.stamina
                 );
+
+                // AI監督: スタミナ20%以下で投手交代
+                const staminaRate = pitcherData.currentStamina / pitcher.pitching.stamina;
+                if (staminaRate < 0.20 && gameState.inning >= 5) {
+                  // リリーフ投手を探す（投手で打順が0または控え）
+                  const reliever = team.players.find(p =>
+                    p.position === 'pitcher' &&
+                    p.battingOrder === 0 &&
+                    p.id !== pitcher.id &&
+                    p.currentStamina > pitcher.pitching.stamina * 0.5
+                  );
+
+                  if (reliever) {
+                    // 投手交代
+                    console.log(`   🔄 投手交代: ${team.name} ${pitcher.name}(スタミナ${Math.round(staminaRate * 100)}%) → ${reliever.name}`);
+
+                    // 先発投手を控えに
+                    pitcherData.battingOrder = 0;
+                    pitcherData.position = 'pitcher';
+
+                    // リリーフ投手をマウンドに
+                    const relieverData = team.players.find(p => p.id === reliever.id);
+                    relieverData.battingOrder = 9;
+                    relieverData.position = 'pitcher';
+                  }
+                }
               }
             }
           });
