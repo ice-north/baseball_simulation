@@ -88,14 +88,6 @@
         allTeams.map(team => ({ team, wins: 0, losses: 0, draws: 0 }))
       );
 
-      // 個人成績ランキング（ダミーデータ - 各10位まで）
-      const dummyRankingData = Array.from({ length: 10 }, (_, i) => ({
-        rank: i + 1,
-        name: `選手${i + 1}`,
-        team: allTeams[i % allTeams.length],
-        value: '---'
-      }));
-
       // 全チーム対戦カードデータ（日付ごと）- 4チーム制
       const [allGames, setAllGames] = useState({
         '4/1': [
@@ -2894,9 +2886,8 @@ if (newOuts === 3) {
               className={`w-full text-left px-4 py-3 rounded transition ${
                 screenMode === 'management' && managementView === 'stats' ? 'bg-green-600' : 'hover:bg-gray-800'
               }`}
-              disabled
             >
-              📊 選手成績 <span className="text-xs text-gray-500">(準備中)</span>
+              📊 選手成績
             </button>
 
             <button
@@ -3812,6 +3803,81 @@ if (newOuts === 3) {
         console.log(`✅ 試合終了: ${awayTeamName} ${awayScore} - ${homeScore} ${homeTeamName} (${gameState.inning}回)`);
         console.log(`   スコア詳細: away=${gameState.score.away}, home=${gameState.score.home}`);
 
+        // 試合終了後、選手のシーズン成績と通算成績を更新
+        const updatePlayerSeasonStats = (team, isWinner) => {
+          team.players.forEach(player => {
+            if (!player.gameStats) return;
+
+            // TEAMS_DATAの該当選手を取得（参照を更新）
+            const teamData = window.TEAMS_DATA[team.name];
+            if (!teamData) return;
+
+            const playerData = teamData.players.find(p => p.id === player.id);
+            if (!playerData) return;
+
+            // 打撃成績の集計
+            if (player.gameStats.batting.atBats > 0) {
+              const b = player.gameStats.batting;
+              const season = playerData.seasonStats.batting;
+              const career = playerData.careerStats.batting;
+
+              season.games++;
+              season.atBats += b.atBats;
+              season.hits += b.hits;
+              season.homeruns += b.homeruns;
+              season.rbis += b.rbis;
+              season.walks += b.walks;
+              season.strikeouts += b.strikeouts;
+
+              career.games++;
+              career.atBats += b.atBats;
+              career.hits += b.hits;
+              career.homeruns += b.homeruns;
+              career.rbis += b.rbis;
+              career.walks += b.walks;
+              career.strikeouts += b.strikeouts;
+            }
+
+            // 投手成績の集計
+            if (player.gameStats.pitching.outs > 0) {
+              const p = player.gameStats.pitching;
+              const season = playerData.seasonStats.pitching;
+              const career = playerData.careerStats.pitching;
+
+              season.games++;
+              season.inningsPitched += p.outs;
+              season.runsAllowed += p.runsAllowed;
+              season.earnedRuns += p.runsAllowed; // 簡易版：全て自責点とする
+              season.strikeouts += p.strikeouts;
+              season.walks += p.walks;
+              season.pitches += p.pitches;
+
+              career.games++;
+              career.inningsPitched += p.outs;
+              career.runsAllowed += p.runsAllowed;
+              career.earnedRuns += p.runsAllowed;
+              career.strikeouts += p.strikeouts;
+              career.walks += p.walks;
+              career.pitches += p.pitches;
+
+              // 勝敗の判定（簡易版：先発投手のみ）
+              if (player.battingOrder === 9 && p.outs >= 15) { // 5イニング以上投げた先発
+                if (isWinner) {
+                  season.wins++;
+                  career.wins++;
+                } else if (isWinner === false) { // 引き分けではない
+                  season.losses++;
+                  career.losses++;
+                }
+              }
+            }
+          });
+        };
+
+        // ホームチームとアウェイチームの成績を更新
+        updatePlayerSeasonStats(gameState.homeTeam, winner === homeTeamName ? true : winner === awayTeamName ? false : null);
+        updatePlayerSeasonStats(gameState.awayTeam, winner === awayTeamName ? true : winner === homeTeamName ? false : null);
+
         return {
           homeScore,
           awayScore,
@@ -3934,8 +4000,376 @@ if (newOuts === 3) {
         }
       };
 
+      // 選手成績画面コンポーネント
+      const PlayerStatsScreen = () => {
+        const [statsTab, setStatsTab] = useState('season'); // 'season' or 'career'
+        const [statsType, setStatsType] = useState('batting'); // 'batting' or 'pitching'
+
+        // 全選手のシーズン成績を取得
+        const getAllPlayerStats = () => {
+          const allPlayers = [];
+          Object.keys(window.TEAMS_DATA || {}).forEach(teamName => {
+            const team = window.TEAMS_DATA[teamName];
+            team.players.forEach(player => {
+              allPlayers.push({
+                ...player,
+                teamName: team.name
+              });
+            });
+          });
+          return allPlayers;
+        };
+
+        const allPlayers = getAllPlayerStats();
+
+        // 打撃成績でソート
+        const battingStats = allPlayers
+          .filter(p => {
+            const stats = statsTab === 'season' ? p.seasonStats?.batting : p.careerStats?.batting;
+            return stats && stats.atBats > 0;
+          })
+          .map(p => {
+            const stats = statsTab === 'season' ? p.seasonStats.batting : p.careerStats.batting;
+            const avg = stats.atBats > 0 ? (stats.hits / stats.atBats).toFixed(3) : '.000';
+            return { ...p, stats, avg: parseFloat(avg) };
+          })
+          .sort((a, b) => b.avg - a.avg)
+          .slice(0, 20);
+
+        // 投手成績でソート（防御率順）
+        const pitchingStats = allPlayers
+          .filter(p => {
+            const stats = statsTab === 'season' ? p.seasonStats?.pitching : p.careerStats?.pitching;
+            return stats && stats.inningsPitched > 0;
+          })
+          .map(p => {
+            const stats = statsTab === 'season' ? p.seasonStats.pitching : p.careerStats.pitching;
+            const era = stats.inningsPitched > 0
+              ? ((stats.earnedRuns * 27) / stats.inningsPitched).toFixed(2)
+              : '0.00';
+            const ip = (stats.inningsPitched / 3).toFixed(1);
+            return { ...p, stats, era: parseFloat(era), ip };
+          })
+          .sort((a, b) => a.era - b.era)
+          .slice(0, 20);
+
+        return (
+          <div className="p-8">
+            <h1 className="text-3xl font-bold mb-6 text-white">選手成績</h1>
+
+            {/* タブ選択 */}
+            <div className="mb-6 flex gap-4">
+              <button
+                onClick={() => setStatsTab('season')}
+                className={`px-6 py-3 rounded font-bold transition ${
+                  statsTab === 'season' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                シーズン成績
+              </button>
+              <button
+                onClick={() => setStatsTab('career')}
+                className={`px-6 py-3 rounded font-bold transition ${
+                  statsTab === 'career' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                通算成績
+              </button>
+            </div>
+
+            {/* 成績タイプ選択 */}
+            <div className="mb-6 flex gap-4">
+              <button
+                onClick={() => setStatsType('batting')}
+                className={`px-6 py-3 rounded font-bold transition ${
+                  statsType === 'batting' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                打撃成績
+              </button>
+              <button
+                onClick={() => setStatsType('pitching')}
+                className={`px-6 py-3 rounded font-bold transition ${
+                  statsType === 'pitching' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                投手成績
+              </button>
+            </div>
+
+            {/* 打撃成績テーブル */}
+            {statsType === 'batting' && (
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h2 className="text-xl font-bold mb-4 text-white">
+                  {statsTab === 'season' ? 'シーズン' : '通算'}打撃成績 (上位20名)
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-white text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="py-2 px-3 text-left">順位</th>
+                        <th className="py-2 px-3 text-left">選手名</th>
+                        <th className="py-2 px-3 text-left">チーム</th>
+                        <th className="py-2 px-3 text-right">試合</th>
+                        <th className="py-2 px-3 text-right">打席</th>
+                        <th className="py-2 px-3 text-right">安打</th>
+                        <th className="py-2 px-3 text-right">本塁打</th>
+                        <th className="py-2 px-3 text-right">打点</th>
+                        <th className="py-2 px-3 text-right">四球</th>
+                        <th className="py-2 px-3 text-right">三振</th>
+                        <th className="py-2 px-3 text-right font-bold">打率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {battingStats.map((player, index) => (
+                        <tr key={player.id + player.teamName} className="border-b border-gray-700 hover:bg-gray-700">
+                          <td className="py-2 px-3">{index + 1}</td>
+                          <td className="py-2 px-3 font-bold">{player.name}</td>
+                          <td className="py-2 px-3">{player.teamName}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.games}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.atBats}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.hits}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.homeruns}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.rbis}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.walks}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
+                          <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.avg.toFixed(3)}</td>
+                        </tr>
+                      ))}
+                      {battingStats.length === 0 && (
+                        <tr>
+                          <td colSpan="11" className="py-8 text-center text-gray-500">
+                            まだ打撃成績がありません。試合を進行してください。
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 投手成績テーブル */}
+            {statsType === 'pitching' && (
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h2 className="text-xl font-bold mb-4 text-white">
+                  {statsTab === 'season' ? 'シーズン' : '通算'}投手成績 (上位20名)
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-white text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="py-2 px-3 text-left">順位</th>
+                        <th className="py-2 px-3 text-left">選手名</th>
+                        <th className="py-2 px-3 text-left">チーム</th>
+                        <th className="py-2 px-3 text-right">試合</th>
+                        <th className="py-2 px-3 text-right">勝</th>
+                        <th className="py-2 px-3 text-right">敗</th>
+                        <th className="py-2 px-3 text-right">イニング</th>
+                        <th className="py-2 px-3 text-right">失点</th>
+                        <th className="py-2 px-3 text-right">奪三振</th>
+                        <th className="py-2 px-3 text-right">与四球</th>
+                        <th className="py-2 px-3 text-right font-bold">防御率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pitchingStats.map((player, index) => (
+                        <tr key={player.id + player.teamName} className="border-b border-gray-700 hover:bg-gray-700">
+                          <td className="py-2 px-3">{index + 1}</td>
+                          <td className="py-2 px-3 font-bold">{player.name}</td>
+                          <td className="py-2 px-3">{player.teamName}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.games}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.wins}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.losses}</td>
+                          <td className="py-2 px-3 text-right">{player.ip}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.runsAllowed}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
+                          <td className="py-2 px-3 text-right">{player.stats.walks}</td>
+                          <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.era.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      {pitchingStats.length === 0 && (
+                        <tr>
+                          <td colSpan="11" className="py-8 text-center text-gray-500">
+                            まだ投手成績がありません。試合を進行してください。
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      };
+
       // 日程進行画面コンポーネント
       const ScheduleScreen = () => {
+        // 全選手の成績を取得してランキング形式に変換
+        const getAllPlayersStats = () => {
+          const allPlayers = [];
+          Object.keys(window.TEAMS_DATA || {}).forEach(teamName => {
+            const team = window.TEAMS_DATA[teamName];
+            team.players.forEach(player => {
+              allPlayers.push({ ...player, teamName: team.name });
+            });
+          });
+          return allPlayers;
+        };
+
+        // 打率ランキング
+        const getBattingAverageRanking = () => {
+          const players = getAllPlayersStats()
+            .filter(p => p.seasonStats?.batting?.atBats > 0)
+            .map(p => {
+              const stats = p.seasonStats.batting;
+              const avg = stats.hits / stats.atBats;
+              return {
+                rank: 0,
+                name: p.name,
+                team: p.teamName,
+                value: avg.toFixed(3),
+                sortValue: avg
+              };
+            })
+            .sort((a, b) => b.sortValue - a.sortValue)
+            .slice(0, 10);
+
+          players.forEach((p, i) => p.rank = i + 1);
+          return players;
+        };
+
+        // 本塁打ランキング
+        const getHomeRunRanking = () => {
+          const players = getAllPlayersStats()
+            .filter(p => p.seasonStats?.batting?.homeruns > 0)
+            .map(p => ({
+              rank: 0,
+              name: p.name,
+              team: p.teamName,
+              value: p.seasonStats.batting.homeruns,
+              sortValue: p.seasonStats.batting.homeruns
+            }))
+            .sort((a, b) => b.sortValue - a.sortValue)
+            .slice(0, 10);
+
+          players.forEach((p, i) => p.rank = i + 1);
+          return players;
+        };
+
+        // 打点ランキング
+        const getRBIRanking = () => {
+          const players = getAllPlayersStats()
+            .filter(p => p.seasonStats?.batting?.rbis > 0)
+            .map(p => ({
+              rank: 0,
+              name: p.name,
+              team: p.teamName,
+              value: p.seasonStats.batting.rbis,
+              sortValue: p.seasonStats.batting.rbis
+            }))
+            .sort((a, b) => b.sortValue - a.sortValue)
+            .slice(0, 10);
+
+          players.forEach((p, i) => p.rank = i + 1);
+          return players;
+        };
+
+        // 盗塁ランキング
+        const getStolenBaseRanking = () => {
+          const players = getAllPlayersStats()
+            .filter(p => p.seasonStats?.batting?.stolenBases > 0)
+            .map(p => ({
+              rank: 0,
+              name: p.name,
+              team: p.teamName,
+              value: p.seasonStats.batting.stolenBases,
+              sortValue: p.seasonStats.batting.stolenBases
+            }))
+            .sort((a, b) => b.sortValue - a.sortValue)
+            .slice(0, 10);
+
+          players.forEach((p, i) => p.rank = i + 1);
+          return players;
+        };
+
+        // 防御率ランキング
+        const getERARanking = () => {
+          const players = getAllPlayersStats()
+            .filter(p => p.seasonStats?.pitching?.inningsPitched > 0)
+            .map(p => {
+              const stats = p.seasonStats.pitching;
+              const era = (stats.earnedRuns * 27) / stats.inningsPitched;
+              return {
+                rank: 0,
+                name: p.name,
+                team: p.teamName,
+                value: era.toFixed(2),
+                sortValue: era
+              };
+            })
+            .sort((a, b) => a.sortValue - b.sortValue)
+            .slice(0, 10);
+
+          players.forEach((p, i) => p.rank = i + 1);
+          return players;
+        };
+
+        // 勝利数ランキング
+        const getWinsRanking = () => {
+          const players = getAllPlayersStats()
+            .filter(p => p.seasonStats?.pitching?.wins > 0)
+            .map(p => ({
+              rank: 0,
+              name: p.name,
+              team: p.teamName,
+              value: p.seasonStats.pitching.wins,
+              sortValue: p.seasonStats.pitching.wins
+            }))
+            .sort((a, b) => b.sortValue - a.sortValue)
+            .slice(0, 10);
+
+          players.forEach((p, i) => p.rank = i + 1);
+          return players;
+        };
+
+        // ホールドランキング
+        const getHoldsRanking = () => {
+          const players = getAllPlayersStats()
+            .filter(p => p.seasonStats?.pitching?.holds > 0)
+            .map(p => ({
+              rank: 0,
+              name: p.name,
+              team: p.teamName,
+              value: p.seasonStats.pitching.holds,
+              sortValue: p.seasonStats.pitching.holds
+            }))
+            .sort((a, b) => b.sortValue - a.sortValue)
+            .slice(0, 10);
+
+          players.forEach((p, i) => p.rank = i + 1);
+          return players;
+        };
+
+        // セーブランキング
+        const getSavesRanking = () => {
+          const players = getAllPlayersStats()
+            .filter(p => p.seasonStats?.pitching?.saves > 0)
+            .map(p => ({
+              rank: 0,
+              name: p.name,
+              team: p.teamName,
+              value: p.seasonStats.pitching.saves,
+              sortValue: p.seasonStats.pitching.saves
+            }))
+            .sort((a, b) => b.sortValue - a.sortValue)
+            .slice(0, 10);
+
+          players.forEach((p, i) => p.rank = i + 1);
+          return players;
+        };
+
         // ランキング表示用コンポーネント
         const RankingTable = ({ title, data, valueLabel }) => (
           <div className="bg-gray-800 rounded-lg p-4">
@@ -3950,14 +4384,20 @@ if (newOuts === 3) {
                 </tr>
               </thead>
               <tbody>
-                {data.map((player, index) => (
-                  <tr key={index} className="border-b border-gray-700">
-                    <td className="py-1">{player.rank}</td>
-                    <td className="py-1">{player.name}</td>
-                    <td className="py-1 text-xs">{player.team}</td>
-                    <td className="text-right py-1">{player.value}</td>
+                {data.length > 0 ? (
+                  data.map((player, index) => (
+                    <tr key={index} className="border-b border-gray-700">
+                      <td className="py-1">{player.rank}</td>
+                      <td className="py-1">{player.name}</td>
+                      <td className="py-1 text-xs">{player.team}</td>
+                      <td className="text-right py-1">{player.value}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="py-4 text-center text-gray-500">データなし</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -4134,19 +4574,19 @@ if (newOuts === 3) {
 
             {scheduleTab === 'batting' && (
               <div className="grid grid-cols-4 gap-4">
-                <RankingTable title="打率ランキング" data={dummyRankingData} valueLabel="打率" />
-                <RankingTable title="本塁打ランキング" data={dummyRankingData} valueLabel="本塁打" />
-                <RankingTable title="打点ランキング" data={dummyRankingData} valueLabel="打点" />
-                <RankingTable title="盗塁ランキング" data={dummyRankingData} valueLabel="盗塁" />
+                <RankingTable title="打率ランキング" data={getBattingAverageRanking()} valueLabel="打率" />
+                <RankingTable title="本塁打ランキング" data={getHomeRunRanking()} valueLabel="本塁打" />
+                <RankingTable title="打点ランキング" data={getRBIRanking()} valueLabel="打点" />
+                <RankingTable title="盗塁ランキング" data={getStolenBaseRanking()} valueLabel="盗塁" />
               </div>
             )}
 
             {scheduleTab === 'pitching' && (
               <div className="grid grid-cols-4 gap-4">
-                <RankingTable title="防御率ランキング" data={dummyRankingData} valueLabel="防御率" />
-                <RankingTable title="勝利数ランキング" data={dummyRankingData} valueLabel="勝利" />
-                <RankingTable title="ホールドランキング" data={dummyRankingData} valueLabel="ホールド" />
-                <RankingTable title="セーブランキング" data={dummyRankingData} valueLabel="セーブ" />
+                <RankingTable title="防御率ランキング" data={getERARanking()} valueLabel="防御率" />
+                <RankingTable title="勝利数ランキング" data={getWinsRanking()} valueLabel="勝利" />
+                <RankingTable title="ホールドランキング" data={getHoldsRanking()} valueLabel="ホールド" />
+                <RankingTable title="セーブランキング" data={getSavesRanking()} valueLabel="セーブ" />
               </div>
             )}
           </div>
@@ -4156,6 +4596,7 @@ if (newOuts === 3) {
       // 管理画面のルーター
       const ManagementScreen = () => {
         if (managementView === 'schedule') return <ScheduleScreen />;
+        if (managementView === 'stats') return <PlayerStatsScreen />;
         if (managementView === 'edit') return <EditScreen />;
         // 他のビューは今後追加
         return <div className="p-8 text-white">準備中...</div>;

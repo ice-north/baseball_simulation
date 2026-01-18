@@ -12,6 +12,72 @@ const createPlayerStats = () => ({
 });
 
 /**
+ * シーズン成績の初期値を作成
+ */
+const createSeasonStats = () => ({
+  batting: {
+    games: 0,
+    atBats: 0,
+    hits: 0,
+    doubles: 0,
+    triples: 0,
+    homeruns: 0,
+    rbis: 0,
+    walks: 0,
+    strikeouts: 0,
+    stolenBases: 0
+  },
+  pitching: {
+    games: 0,
+    wins: 0,
+    losses: 0,
+    saves: 0,
+    holds: 0,
+    inningsPitched: 0, // アウト数で記録（3アウト=1イニング）
+    runsAllowed: 0,
+    earnedRuns: 0,
+    hits: 0,
+    homeruns: 0,
+    walks: 0,
+    strikeouts: 0,
+    pitches: 0
+  }
+});
+
+/**
+ * 通算成績の初期値を作成
+ */
+const createCareerStats = () => ({
+  batting: {
+    games: 0,
+    atBats: 0,
+    hits: 0,
+    doubles: 0,
+    triples: 0,
+    homeruns: 0,
+    rbis: 0,
+    walks: 0,
+    strikeouts: 0,
+    stolenBases: 0
+  },
+  pitching: {
+    games: 0,
+    wins: 0,
+    losses: 0,
+    saves: 0,
+    holds: 0,
+    inningsPitched: 0,
+    runsAllowed: 0,
+    earnedRuns: 0,
+    hits: 0,
+    homeruns: 0,
+    walks: 0,
+    strikeouts: 0,
+    pitches: 0
+  }
+});
+
+/**
  * 選手に背番号を割り当てる（IDをそのまま使用）
  */
 const assignJerseyNumbers = (players) => {

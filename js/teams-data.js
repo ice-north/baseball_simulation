@@ -448,7 +448,9 @@ const initializeTeamsData = () => {
     TEAMS_DATA[teamName].players = TEAMS_DATA[teamName].players.map((p, i) => ({
       ...p,
       number: p.id,
-      stats: p.stats || createPlayerStats()
+      stats: p.stats || createPlayerStats(),
+      seasonStats: p.seasonStats || createSeasonStats(),
+      careerStats: p.careerStats || createCareerStats()
     }));
   });
 };
