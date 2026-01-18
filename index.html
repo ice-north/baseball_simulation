@@ -3016,6 +3016,8 @@ if (newOuts === 3) {
 
       // オートシミュレーション: 1試合を一球ごとの物理演算で完全実行
       const autoSimulateGame = (homeTeamName, awayTeamName) => {
+        console.log(`🏟️ 試合開始: ${awayTeamName} @ ${homeTeamName}`);
+
         // TEAMS_DATAからチームデータを取得
         if (!window.TEAMS_DATA || !window.TEAMS_DATA[homeTeamName] || !window.TEAMS_DATA[awayTeamName]) {
           console.error('チームデータが見つかりません');
@@ -3371,6 +3373,8 @@ if (newOuts === 3) {
           winner = null;
         }
 
+        console.log(`✅ 試合終了: ${awayTeamName} ${awayScore} - ${homeScore} ${homeTeamName} (${gameState.inning}回)`);
+
         return {
           homeScore,
           awayScore,
@@ -3387,8 +3391,11 @@ if (newOuts === 3) {
         const todaysGames = allGames[currentDateStr];
 
         if (!todaysGames || todaysGames.length === 0) {
+          console.log(`📅 ${currentDateStr}: 試合なし`);
           return; // 試合がない日
         }
+
+        console.log(`📅 ${currentDateStr}: ${todaysGames.length}試合を物理シミュレーションで実行`);
 
         // 各試合をシミュレート
         const updatedGames = todaysGames.map(game => {
