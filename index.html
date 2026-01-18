@@ -12,15 +12,23 @@
   <script src="js/utils/constants.js"></script>
   <script src="js/utils/physics.js"></script>
   <script src="js/players.js"></script>
+  <script src="js/teams-data.js"></script>
   <script src="js/simulation-logic.js"></script>
   <script src="js/game/gameState.js"></script>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
     const PitchByPitchSimulator = () => {
+      // チームデータの初期化
+      useEffect(() => {
+        if (typeof initializeTeamsData === 'function') {
+          initializeTeamsData();
+        }
+      }, []);
+
       // 画面モード管理
       const [screenMode, setScreenMode] = useState('management'); // 'game' or 'management'
       const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save'
@@ -2893,9 +2901,23 @@ if (newOuts === 3) {
 
       // エディット画面コンポーネント
       const EditScreen = () => {
-        const [editingTeam, setEditingTeam] = useState('home');
-        const team = editingTeam === 'home' ? homeTeam : awayTeam;
-        const setTeam = editingTeam === 'home' ? setHomeTeam : setAwayTeam;
+        const [editingTeam, setEditingTeam] = useState('チームA');
+
+        // TEAMS_DATAからチーム情報を取得
+        const getTeamData = (teamName) => {
+          if (window.TEAMS_DATA && window.TEAMS_DATA[teamName]) {
+            return window.TEAMS_DATA[teamName];
+          }
+          return { name: teamName, players: [] };
+        };
+
+        const team = getTeamData(editingTeam);
+        const teamColors = {
+          'チームA': 'bg-blue-600',
+          'チームB': 'bg-red-600',
+          'チームC': 'bg-green-600',
+          'チームD': 'bg-yellow-600'
+        };
 
         return (
           <div className="p-8">
@@ -2903,56 +2925,56 @@ if (newOuts === 3) {
 
             {/* チーム選択 */}
             <div className="mb-6 flex gap-4">
-              <button
-                onClick={() => setEditingTeam('home')}
-                className={`px-6 py-3 rounded font-bold transition ${
-                  editingTeam === 'home' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                🏠 ホームチーム
-              </button>
-              <button
-                onClick={() => setEditingTeam('away')}
-                className={`px-6 py-3 rounded font-bold transition ${
-                  editingTeam === 'away' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                ✈️ アウェイチーム
-              </button>
+              {['チームA', 'チームB', 'チームC', 'チームD'].map((teamName) => (
+                <button
+                  key={teamName}
+                  onClick={() => setEditingTeam(teamName)}
+                  className={`px-6 py-3 rounded font-bold transition ${
+                    editingTeam === teamName
+                      ? `${teamColors[teamName]} text-white`
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {teamName}
+                </button>
+              ))}
             </div>
 
-            {/* チーム名変更 */}
+            {/* チーム情報 */}
             <div className="bg-gray-800 rounded-lg p-6 mb-6">
-              <h2 className="text-xl font-bold mb-4 text-white">チーム名</h2>
-              <input
-                type="text"
-                value={team.name}
-                onChange={(e) => setTeam(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full max-w-md px-4 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-green-500 focus:outline-none"
-                placeholder="チーム名を入力"
-              />
+              <h2 className="text-xl font-bold mb-4 text-white">チーム情報</h2>
+              <div className="text-white">
+                <div className="mb-2">チーム名: <span className="font-bold">{team.name}</span></div>
+                <div className="text-sm text-gray-400">選手数: {team.players.length}人</div>
+              </div>
             </div>
 
             {/* 選手一覧 */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold mb-4 text-white">選手一覧</h2>
+              <h2 className="text-xl font-bold mb-4 text-white">選手一覧（{team.players.length}人）</h2>
               <div className="text-sm text-gray-400 mb-4">※ 今後、選手能力値の編集機能を追加予定</div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {team.players.map((player) => (
-                  <div key={player.id} className="bg-gray-700 rounded p-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-white">{player.name}</span>
-                      <span className="text-xs text-gray-400">#{player.number}</span>
+              {team.players.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  選手データがありません。ページをリロードしてください。
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {team.players.map((player) => (
+                    <div key={player.id} className="bg-gray-700 rounded p-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-bold text-white">{player.name}</span>
+                        <span className="text-xs text-gray-400">#{player.number || player.id}</span>
+                      </div>
+                      <div className="text-sm text-gray-300">
+                        <div>ポジション: {POSITION_NAMES[player.position] || player.position}</div>
+                        <div>打: {player.batting?.meet || 0} / 力: {player.batting?.power || 0}</div>
+                        {player.pitching && <div>球速: {player.pitching.velocity}km/h</div>}
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-300">
-                      <div>ポジション: {POSITION_NAMES[player.position] || player.position}</div>
-                      <div>打: {player.batting.meet} / 力: {player.batting.power}</div>
-                      {player.pitching && <div>球速: {player.pitching.velocity}km/h</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         );
