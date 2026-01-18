@@ -210,16 +210,50 @@
       
       // チームシステム（ホーム vs アウェイ対戦機能）
       const [homeTeam, setHomeTeam] = useState({
-        name: "ホーム",
-        players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
+        name: "チームA",
+        players: [],
         currentBatterOrder: 1
       });
 
       const [awayTeam, setAwayTeam] = useState({
-        name: "アウェイ",
-        players: [...createAwayPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createAwayBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
+        name: "チームB",
+        players: [],
         currentBatterOrder: 1
       });
+
+      // TEAMS_DATAからチームデータを初期化
+      useEffect(() => {
+        if (window.TEAMS_DATA) {
+          const teamAData = window.TEAMS_DATA['チームA'];
+          const teamBData = window.TEAMS_DATA['チームB'];
+
+          if (teamAData && teamAData.players && teamAData.players.length > 0) {
+            setHomeTeam({
+              name: "チームA",
+              players: teamAData.players.map(p => ({
+                ...p,
+                isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+                hasSubbedOut: false,
+                originalPosition: p.position
+              })),
+              currentBatterOrder: 1
+            });
+          }
+
+          if (teamBData && teamBData.players && teamBData.players.length > 0) {
+            setAwayTeam({
+              name: "チームB",
+              players: teamBData.players.map(p => ({
+                ...p,
+                isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+                hasSubbedOut: false,
+                originalPosition: p.position
+              })),
+              currentBatterOrder: 1
+            });
+          }
+        }
+      }, []);
       
       // 互換性のため players を動的に取得
       const players = isTopInning ? homeTeam.players : awayTeam.players;  // 守備側
