@@ -3483,29 +3483,44 @@ if (newOuts === 3) {
             return { type: 'swinging_strike', description: '空振り' };
           }
 
-          // コンタクト判定（簡易版）
+          // コンタクト判定（改良版 - 守備処理を追加）
           const predictionCorrect = Math.random() < 0.3;
           const handEffect = getHandednessEffect(pitcher.physical.throws, batter.batting.bats);
 
-          // 打球タイプを決定
+          // ミート成功判定
           const meetQuality = (batter.batting.meet / 100) * (predictionCorrect ? 1.2 : 0.8);
           const contactRoll = Math.random();
 
           if (contactRoll > meetQuality) {
-            // 凡打・アウト
+            // ミート失敗 → 凡打・アウト
             const outRoll = Math.random();
             if (outRoll < 0.15) return { type: 'foul', description: 'ファール' };
             if (outRoll < 0.25 && bases[0]) return { type: 'double_play', description: '併殺打' };
             return { type: 'out', description: 'アウト' };
           }
 
-          // 安打判定
+          // ミート成功 → 打球判定
           const powerFactor = batter.batting.power / 100;
           const hitRoll = Math.random();
 
+          // 守備処理（打球が捕球される確率）
+          const defenseQuality = defense ? 0.65 : 0.60; // 守備力を考慮
+          const isFielded = Math.random() < defenseQuality;
+
+          if (isFielded) {
+            // 守備成功 → アウト
+            const doublePlayChance = bases[0] ? 0.15 : 0;
+            if (Math.random() < doublePlayChance) {
+              return { type: 'double_play', description: '併殺打' };
+            }
+            return { type: 'out', description: 'アウト' };
+          }
+
+          // 守備失敗 → 安打
+          // パワーに応じて長打の確率が変わる
           if (hitRoll < powerFactor * 0.05) return { type: 'homerun', description: 'ホームラン！' };
-          if (hitRoll < powerFactor * 0.15) return { type: 'triple', description: '三塁打' };
-          if (hitRoll < powerFactor * 0.30) return { type: 'double', description: '二塁打' };
+          if (hitRoll < powerFactor * 0.12) return { type: 'triple', description: '三塁打' };
+          if (hitRoll < powerFactor * 0.25) return { type: 'double', description: '二塁打' };
           return { type: 'single', description: 'ヒット' };
         };
 
@@ -3669,13 +3684,13 @@ if (newOuts === 3) {
           const offenseTeam = gameState.isTopInning ? gameState.awayTeam.name : gameState.homeTeam.name;
 
           let atBats = 0;
-          while (gameState.outs < 3 && atBats < 30) {  // 無限ループ防止
+          while (gameState.outs < 3 && atBats < 50) {  // 無限ループ防止（打席数制限）
             simulateAtBat();
             atBats++;
           }
 
-          if (atBats >= 30) {
-            console.error(`${inningLabel}: 無限ループ検出`);
+          if (atBats >= 50) {
+            console.error(`${inningLabel}: 異常な打席数（${atBats}打席）。強制終了します。`);
           }
 
           // イニング終了処理
