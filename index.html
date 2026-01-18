@@ -3431,16 +3431,19 @@ if (newOuts === 3) {
           return defense;
         };
 
-        // 一球シミュレーション（純粋関数版）
+        // 一球シミュレーション（通常の試合と同じ物理エンジンを使用）
         const simulateOnePitch = (batter, pitcher, catcher, defense, count, pitcherStamina, bases) => {
           // スタミナ補正
           const staminaPenalty = getStaminaPenalty(pitcherStamina, pitcher.pitching.stamina);
           const adjustment = getCountAdjustment(count.balls, count.strikes);
 
-          // 球種選択
+          // 球種選択（簡易版：ランダム）
           const pitches = pitcher.pitching.arsenal || [{ id: 1, type: 'straight', level: 100 }];
           const pitchChoice = Math.floor(Math.random() * pitches.length);
           const selectedBall = pitches[pitchChoice];
+
+          // 球速計算（スタミナペナルティ適用）
+          const actualVelocity = pitcher.pitching.velocity + staminaPenalty.velocityPenalty;
 
           // 制球判定
           let effectiveControl = pitcher.pitching.control + staminaPenalty.controlPenalty;
@@ -3483,45 +3486,46 @@ if (newOuts === 3) {
             return { type: 'swinging_strike', description: '空振り' };
           }
 
-          // コンタクト判定（改良版 - 守備処理を追加）
+          // コンタクト判定（通常の試合と同じ物理エンジンを使用）
           const predictionCorrect = Math.random() < 0.3;
           const handEffect = getHandednessEffect(pitcher.physical.throws, batter.batting.bats);
 
-          // ミート成功判定
-          const meetQuality = (batter.batting.meet / 100) * (predictionCorrect ? 1.2 : 0.8);
-          const contactRoll = Math.random();
+          // 打者・投手・捕手データを整形
+          const batterData = {
+            meet: batter.batting.meet,
+            power: batter.batting.power,
+            eye: batter.batting.eye,
+            speed: batter.physical.speed,
+            bats: batter.batting.bats
+          };
 
-          if (contactRoll > meetQuality) {
-            // ミート失敗 → 凡打・アウト
-            const outRoll = Math.random();
-            if (outRoll < 0.15) return { type: 'foul', description: 'ファール' };
-            if (outRoll < 0.25 && bases[0]) return { type: 'double_play', description: '併殺打' };
-            return { type: 'out', description: 'アウト' };
-          }
+          const pitcherData = {
+            velocity: pitcher.pitching.velocity,
+            control: pitcher.pitching.control,
+            stamina: pitcher.pitching.stamina,
+            throws: pitcher.physical.throws
+          };
 
-          // ミート成功 → 打球判定
-          const powerFactor = batter.batting.power / 100;
-          const hitRoll = Math.random();
+          const catcherData = {
+            lead: catcher.catching.lead,
+            arm: catcher.physical.arm,
+            throws: catcher.physical.throws
+          };
 
-          // 守備処理（打球が捕球される確率）
-          const defenseQuality = defense ? 0.65 : 0.60; // 守備力を考慮
-          const isFielded = Math.random() < defenseQuality;
+          // 通常の試合画面と同じ物理エンジンを使用
+          const contactResult = determineContactResultPhysics(
+            selectedBall,
+            predictionCorrect,
+            0, // tempoGroundballBonus
+            handEffect,
+            actualVelocity,
+            batterData,
+            pitcherData,
+            defense,
+            catcherData
+          );
 
-          if (isFielded) {
-            // 守備成功 → アウト
-            const doublePlayChance = bases[0] ? 0.15 : 0;
-            if (Math.random() < doublePlayChance) {
-              return { type: 'double_play', description: '併殺打' };
-            }
-            return { type: 'out', description: 'アウト' };
-          }
-
-          // 守備失敗 → 安打
-          // パワーに応じて長打の確率が変わる
-          if (hitRoll < powerFactor * 0.05) return { type: 'homerun', description: 'ホームラン！' };
-          if (hitRoll < powerFactor * 0.12) return { type: 'triple', description: '三塁打' };
-          if (hitRoll < powerFactor * 0.25) return { type: 'double', description: '二塁打' };
-          return { type: 'single', description: 'ヒット' };
+          return contactResult;
         };
 
         // 走者進塁処理
