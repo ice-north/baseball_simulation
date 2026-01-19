@@ -2924,6 +2924,157 @@ if (newOuts === 3) {
         </div>
       );
 
+      // AIオーダー編成関数
+      const generateOptimalLineup = (teamName) => {
+        if (!window.TEAMS_DATA || !window.TEAMS_DATA[teamName]) {
+          console.error('チームデータが見つかりません:', teamName);
+          return;
+        }
+
+        const team = window.TEAMS_DATA[teamName];
+        console.log(`🤖 ${teamName}のAIオーダー編成を開始`);
+
+        // 野手と投手を分ける
+        const fielders = team.players.filter(p => !p.position || p.position !== 'pitcher');
+        const pitchers = team.players.filter(p => p.position === 'pitcher');
+
+        // 野手を総合力でソート（打撃+走力+守備）
+        const rankedFielders = fielders.map(p => {
+          const battingPower = (p.batting.meet + p.batting.power + p.batting.eye) / 3;
+          const fieldingPower = (p.fielding.defense + p.physical.speed + p.physical.arm) / 3;
+          const totalPower = battingPower * 0.6 + fieldingPower * 0.4;
+          return { ...p, totalPower, battingPower };
+        }).sort((a, b) => b.totalPower - a.totalPower);
+
+        // 守備位置を決定（positionFitnessを考慮）
+        const positions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
+        const assigned = new Set();
+        const positionAssignments = {};
+
+        // 各ポジションに最適な選手を割り当て
+        positions.forEach(pos => {
+          let bestPlayer = null;
+          let bestScore = -1;
+
+          rankedFielders.forEach(player => {
+            if (assigned.has(player.id)) return;
+
+            const fitness = player.positionFitness?.[pos] || 50;
+            const fieldingAbility = pos === 'catcher' ? player.catching?.lead || 0 : player.fielding.defense;
+            const score = fitness * 0.7 + fieldingAbility * 0.3;
+
+            if (score > bestScore) {
+              bestScore = score;
+              bestPlayer = player;
+            }
+          });
+
+          if (bestPlayer) {
+            positionAssignments[pos] = bestPlayer;
+            assigned.add(bestPlayer.id);
+          }
+        });
+
+        // 打順を決定（セイバーメトリクス的な配置）
+        const lineupOrder = [];
+
+        // 1番: 出塁率重視（選球眼が高い選手）
+        const leadoffCandidates = Object.values(positionAssignments)
+          .sort((a, b) => (b.batting.eye + b.physical.speed) - (a.batting.eye + a.physical.speed));
+        if (leadoffCandidates[0]) lineupOrder.push(leadoffCandidates[0]);
+
+        // 2番: コンタクト重視
+        const secondCandidates = Object.values(positionAssignments)
+          .filter(p => !lineupOrder.includes(p))
+          .sort((a, b) => b.batting.meet - a.batting.meet);
+        if (secondCandidates[0]) lineupOrder.push(secondCandidates[0]);
+
+        // 3-5番: 強打者（パワー+ミート）
+        const cleanupCandidates = Object.values(positionAssignments)
+          .filter(p => !lineupOrder.includes(p))
+          .sort((a, b) => b.battingPower - a.battingPower);
+        for (let i = 0; i < 3 && i < cleanupCandidates.length; i++) {
+          lineupOrder.push(cleanupCandidates[i]);
+        }
+
+        // 6-8番: 残りの選手
+        const remainingFielders = Object.values(positionAssignments)
+          .filter(p => !lineupOrder.includes(p))
+          .sort((a, b) => b.totalPower - a.totalPower);
+        remainingFielders.forEach(p => lineupOrder.push(p));
+
+        // 9番: 投手
+        const starterPitcher = pitchers.find(p => p.pitching.stamina >= 80) || pitchers[0];
+        if (starterPitcher) lineupOrder.push(starterPitcher);
+
+        // TEAMS_DATAに反映
+        team.players.forEach(p => {
+          p.battingOrder = 0; // リセット
+        });
+
+        lineupOrder.forEach((player, index) => {
+          const teamPlayer = team.players.find(p => p.id === player.id);
+          if (teamPlayer) {
+            teamPlayer.battingOrder = index + 1;
+
+            // ポジション割り当て
+            if (index < 8) {
+              const assignedPos = Object.entries(positionAssignments).find(([_, p]) => p.id === player.id);
+              if (assignedPos) {
+                teamPlayer.position = assignedPos[0];
+              }
+            } else {
+              teamPlayer.position = 'pitcher';
+            }
+          }
+        });
+
+        console.log(`✅ ${teamName}のオーダー編成完了`);
+        console.log('打順:', lineupOrder.map((p, i) => `${i + 1}. ${p.name} (${p.position})`).join(', '));
+      };
+
+      // 投手ローテーション生成関数
+      const generatePitchingRotation = (teamName) => {
+        if (!window.TEAMS_DATA || !window.TEAMS_DATA[teamName]) {
+          console.error('チームデータが見つかりません:', teamName);
+          return;
+        }
+
+        const team = window.TEAMS_DATA[teamName];
+        const pitchers = team.players.filter(p => p.position === 'pitcher' || p.pitching?.stamina > 0);
+
+        // スタミナでソート
+        const sortedPitchers = pitchers.sort((a, b) => (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0));
+
+        // 先発ローテーション（スタミナ80以上）
+        const starters = sortedPitchers.filter(p => p.pitching?.stamina >= 80).slice(0, 5);
+
+        // 中継ぎ・抑え（スタミナ80未満）
+        const relievers = sortedPitchers.filter(p => p.pitching?.stamina < 80);
+
+        // ローテーション情報を保存
+        if (!team.pitchingRotation) {
+          team.pitchingRotation = {};
+        }
+
+        team.pitchingRotation.starters = starters.map(p => p.id);
+        team.pitchingRotation.relievers = relievers.map(p => p.id);
+        team.pitchingRotation.currentStarterIndex = 0;
+
+        console.log(`✅ ${teamName}の投手ローテーション設定完了`);
+        console.log('先発:', starters.map(p => p.name).join(', '));
+        console.log('リリーフ:', relievers.map(p => p.name).join(', '));
+      };
+
+      // 全チームのAIオーダー編成を実行
+      const generateAllTeamsLineup = () => {
+        ['チームA', 'チームB', 'チームC', 'チームD'].forEach(teamName => {
+          generateOptimalLineup(teamName);
+          generatePitchingRotation(teamName);
+        });
+        alert('全チームのAIオーダー編成と投手ローテーションを設定しました！');
+      };
+
       // エディット画面コンポーネント
       const EditScreen = () => {
         const [editingTeam, setEditingTeam] = useState('チームA');
@@ -3050,6 +3201,28 @@ if (newOuts === 3) {
               <div className="text-white">
                 <div className="mb-2">チーム名: <span className="font-bold">{team.name}</span></div>
                 <div className="text-sm text-gray-400">選手数: {team.players.length}人</div>
+              </div>
+
+              {/* AIオーダー編成ボタン */}
+              <div className="mt-4 flex gap-3">
+                <button
+                  onClick={() => {
+                    generateOptimalLineup(editingTeam);
+                    generatePitchingRotation(editingTeam);
+                    alert(`${editingTeam}のAIオーダー編成と投手ローテーションを設定しました！\n\nページをリロードすると反映されます。`);
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-bold transition"
+                >
+                  🤖 AIオーダー編成
+                </button>
+                <button
+                  onClick={() => {
+                    generateAllTeamsLineup();
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-bold transition"
+                >
+                  🤖 全チーム一括編成
+                </button>
               </div>
             </div>
 
@@ -3442,6 +3615,46 @@ if (newOuts === 3) {
 
         console.log(`  ${homeTeamName}: ${homeTeamData.players.length}人`);
         console.log(`  ${awayTeamName}: ${awayTeamData.players.length}人`);
+
+        // 投手ローテーションから先発投手を選択
+        const selectStarterFromRotation = (teamData, teamName) => {
+          const rotation = teamData.pitchingRotation;
+          if (!rotation || !rotation.starters || rotation.starters.length === 0) {
+            console.log(`  ⚠️ ${teamName}は投手ローテーション未設定、打順9の投手を使用`);
+            return teamData.players.find(p => p.battingOrder === 9);
+          }
+
+          // ローテーションインデックスを取得
+          const index = rotation.currentStarterIndex || 0;
+          const starterId = rotation.starters[index];
+          const starter = teamData.players.find(p => p.id === starterId);
+
+          if (starter) {
+            console.log(`  🎯 ${teamName}先発: ${starter.name} (ローテ${index + 1}/${rotation.starters.length}番手)`);
+
+            // 次回のローテーションインデックスを更新
+            window.TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
+              (index + 1) % rotation.starters.length;
+
+            // 先発投手を打順9、ポジションpitcherに設定
+            teamData.players.forEach(p => {
+              if (p.id === starterId) {
+                p.battingOrder = 9;
+                p.position = 'pitcher';
+              } else if (p.battingOrder === 9 && p.id !== starterId) {
+                p.battingOrder = 0; // 他の投手をベンチに
+              }
+            });
+
+            return starter;
+          }
+
+          console.log(`  ⚠️ ${teamName}のローテーション投手が見つかりません、打順9を使用`);
+          return teamData.players.find(p => p.battingOrder === 9);
+        };
+
+        selectStarterFromRotation(homeTeamData, homeTeamName);
+        selectStarterFromRotation(awayTeamData, awayTeamName);
 
         // 先発投手を確認
         const homePitchers = homeTeamData.players.filter(p => p.battingOrder === 9);
