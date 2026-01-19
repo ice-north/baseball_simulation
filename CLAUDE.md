@@ -3,7 +3,74 @@
 ## 現在のブランチ
 `claude/check-branch-version-6u0MJ`
 
-## 最新の実装内容（2026-01-15）
+## 最新の実装内容
+
+### 2026-01-19: 日程管理システム実装
+
+#### 7. シーズン日程管理システム（新規実装）
+**独立リーグモデルの年間スケジュール管理**
+
+**実装した機能**：
+1. **シーズンフェーズシステム**
+   - 春季キャンプ（1-2月）
+   - レギュラーシーズン（3-9月）
+   - プレーオフ（10月前半）
+   - ドラフト（10月後半）
+   - トライアウト（11月）
+   - オフシーズン（12月）- レギュレーション変更可能
+
+2. **日程生成ロジック**
+   - ラウンドロビン方式の総当たり戦
+   - 投手ローテーション自動割り当て
+   - 年間試合数設定可能（デフォルト60試合）
+   - 試合日判定（月曜休み）
+
+3. **レギュレーション設定**
+   - DH制のON/OFF
+   - 年間試合数（チームあたり）
+   - チーム数（2-12チーム）
+   - プレーオフ形式（single/double/none）
+   - 延長最大回数
+   - ロスター構成（スタメン・控え野手・控え投手）
+
+4. **日付進行機能**
+   - 1日ずつ進行
+   - 次の試合日まで進行
+   - 次のフェーズまでスキップ
+   - 指定日へジャンプ
+
+5. **プリセット設定**
+   - 独立リーグ（4チーム、60試合、DH無し）
+   - プロ野球（6チーム、143試合、DH有り）
+   - 高校野球（8チーム、40試合、DH無し）
+   - 大学野球（6チーム、52試合、DH有り）
+
+**新規追加モジュール**：
+- `js/season/seasonManager.js` - シーズンデータ管理、日付処理
+- `js/season/scheduleGenerator.js` - 日程自動生成、投手ローテーション
+- `js/season/calendarUI.js` - カレンダー表示補助関数
+- `js/season/regulationSettings.js` - レギュレーション設定・検証
+- `js/season/dateProgression.js` - 日付進行・フェーズ遷移
+
+**データ構造**：
+```javascript
+seasonData = {
+  year: 1,                        // シーズン年数
+  currentDate: {year, month, day}, // 現在の日付
+  phase: 'regular_season',         // 現在のフェーズ
+  schedule: [...],                 // 試合スケジュール
+  results: [...],                  // 試合結果
+  standings: [...],                // 順位表
+  settings: {                      // レギュレーション
+    useDH: false,
+    gamesPerSeason: 60,
+    teamsCount: 4,
+    playoffFormat: 'single'
+  }
+}
+```
+
+### 2026-01-15: 試合画面改善
 
 ### 完了した機能
 
@@ -89,11 +156,18 @@
 └── js/
     ├── players.js
     ├── simulation-logic.js
+    ├── teams-data.js
     ├── utils/
     │   ├── constants.js
     │   └── physics.js
-    └── game/
-        └── gameState.js
+    ├── game/
+    │   └── gameState.js
+    └── season/
+        ├── seasonManager.js
+        ├── scheduleGenerator.js
+        ├── calendarUI.js
+        ├── regulationSettings.js
+        └── dateProgression.js
 ```
 
 ## 技術的なポイント
