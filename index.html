@@ -1274,13 +1274,13 @@
       /**
        * 物理演算ベースのコンタクト結果判定（新エンジン）
        */
-      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null) => {
+      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null, lastPitchArg = null) => {
         const effectiveBatter = batter || { meet: 60, power: 60, eye: 60, speed: 60 };
         const effectiveCatcher = catcher || { lead: 50 };
         const safeCount = count || { balls: 0, strikes: 0 };
 
-        // 前球情報（トンネリング用）
-        const lastPitch = gameLog.length > 0 ? gameLog[gameLog.length - 1] : null;
+        // 前球情報（トンネリング用） - 引数で渡された場合はそれを使用、なければgameLogから取得
+        const lastPitch = lastPitchArg !== null ? lastPitchArg : (gameLog.length > 0 ? gameLog[gameLog.length - 1] : null);
         const currentPitch = {
           type: selectedBall?.type || 'straight',
           velocity: actualVelocity,
@@ -1400,12 +1400,144 @@
         };
       };
 
+      // 共通投球シミュレーション関数（通常試合・自動シミュレーション共用）
+      const simulateSinglePitch = (batter, pitcher, catcher, defense, count, currentStamina, lastPitch = null) => {
+        // スタミナを1減らす
+        const newStamina = Math.max(0, currentStamina - 1);
+
+        // スタミナによる能力補正を取得
+        const { velocityPenalty, controlPenalty } = getStaminaPenalty(newStamina, pitcher.stamina);
+
+        // countのデフォルト値設定
+        const safeCount = count || { balls: 0, strikes: 0 };
+        const adjustment = getCountAdjustment(safeCount.balls, safeCount.strikes);
+
+        // まず球種を選択（全ての球種から選ぶ）
+        const totalPitchTypes = pitcher.pitches.length;
+
+        // 新しい予測式: 球種が増えるほど予測が外れやすくなる
+        let basePredictionRate;
+        if (totalPitchTypes === 1) {
+          basePredictionRate = 1.00;
+        } else {
+          const leadReduction = (catcher.lead / 100) * 0.02 * (totalPitchTypes - 1);
+          const baseRates = { 2: 0.50, 3: 0.313, 4: 0.21, 5: 0.16, 6: 0.106 };
+          basePredictionRate = baseRates[totalPitchTypes] || (0.106 - (totalPitchTypes - 6) * 0.02);
+          basePredictionRate = Math.max(0, basePredictionRate - leadReduction);
+        }
+
+        const finalPredictionRate = basePredictionRate;
+        const predictionCorrect = Math.random() < finalPredictionRate;
+
+        // キャッチャーリードで配球を最適化
+        let pitchChoice;
+        let selectedBall;
+
+        if (catcher.lead > 0) {
+          const leadInfluence = catcher.lead / 100;
+          const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
+          const ballScores = pitcher.pitches.map((ball, index) => {
+            const effect = ballEffects[ball.type];
+            const levelFactor = ball.level / 100;
+            let score = (effect.whiffBonus + effect.groundballBonus + effect.weakBonus) * levelFactor;
+
+            // 投球フォームとの相性ボーナスを適用
+            const synergyPitches = FORM_PITCH_SYNERGY[pitcher.form] || [];
+            if (synergyPitches.includes(ball.type)) {
+              if (['curve', 'fork', 'splitter', 'knuckle'].includes(ball.type)) {
+                score += pitchingFormEffect.verticalBreakBonus * levelFactor;
+              }
+              if (['slider', 'shoot', 'cutter', 'twoSeam'].includes(ball.type)) {
+                score += pitchingFormEffect.horizontalBreakBonus * levelFactor;
+              }
+            }
+            return { index, score, ball };
+          });
+
+          if (Math.random() < leadInfluence) {
+            ballScores.sort((a, b) => b.score - a.score);
+            const topChoices = ballScores.slice(0, Math.max(1, Math.floor(ballScores.length / 2)));
+            const chosen = topChoices[Math.floor(Math.random() * topChoices.length)];
+            pitchChoice = chosen.index;
+          } else {
+            pitchChoice = Math.floor(Math.random() * totalPitchTypes);
+          }
+        } else {
+          pitchChoice = Math.floor(Math.random() * totalPitchTypes);
+        }
+
+        selectedBall = pitcher.pitches[pitchChoice];
+
+        // 球種レベルによる制球ペナルティ + スタミナペナルティ
+        let effectiveControl = pitcher.control + controlPenalty;
+        if (selectedBall && selectedBall.type !== 'straight') {
+          const ballControlPenalty = 30 - (selectedBall.level / 100) * 30;
+          effectiveControl = Math.max(0, effectiveControl - ballControlPenalty);
+        }
+
+        // ストライクゾーン確率を実効制球で計算
+        const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65;
+        const isInStrikeZone = Math.random() < (strikeZoneProb * adjustment.strikeZone);
+
+        const catcherLeadEffect = (catcher.lead / 100) * 0.10;
+
+        let swingProb;
+        if (isInStrikeZone) {
+          if (safeCount.strikes === 2) {
+            swingProb = 0.90 + ((100 - batter.eye) / 100) * 0.08;
+          } else if (safeCount.balls >= 2) {
+            swingProb = 0.60 + ((100 - batter.eye) / 100) * 0.30;
+          } else {
+            swingProb = 0.75 + ((100 - batter.eye) / 100) * 0.20;
+          }
+          swingProb = swingProb * (1 - catcherLeadEffect);
+        } else {
+          if (safeCount.strikes === 2) {
+            swingProb = 0.20 + ((100 - batter.eye) / 100) * 0.30;
+          } else {
+            swingProb = 0.15 + ((100 - batter.eye) / 100) * 0.30;
+          }
+        }
+        swingProb *= adjustment.swingRate;
+
+        const doesSwing = Math.random() < swingProb;
+
+        const pitchTypeName = ballEffects[selectedBall.type].name;
+
+        // 投球フォームの効果を適用
+        const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
+        let baseVelocity = pitcher.velocity + velocityPenalty + pitchingFormEffect.velocityBonus;
+        baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
+        const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
+
+        if (!doesSwing) {
+          const result = isInStrikeZone
+            ? { type: 'called_strike', description: '見逃しストライク' }
+            : { type: 'ball', description: 'ボール' };
+          return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity }, newStamina };
+        }
+
+        if (!isInStrikeZone) {
+          return {
+            result: { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity },
+            newStamina
+          };
+        }
+
+        // 左右の相性効果を取得
+        const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
+
+        // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる
+        const result = determineContactResultPhysics(selectedBall, predictionCorrect, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher, lastPitch);
+        return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity) }, newStamina };
+      };
+
       const simulatePitch = () => {
         // 現在の選手データを取得
         const currentBatter = getCurrentBatter();
         const currentPitcher = getCurrentPitcher();
         const currentCatcher = getCurrentCatcher();
-        
+
         // 選手データから必要な情報を展開
         const batter = {
           name: currentBatter.name,
@@ -1423,7 +1555,8 @@
           control: currentPitcher.pitching.control,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
-          pitches: currentPitcher.pitching.arsenal
+          pitches: currentPitcher.pitching.arsenal,
+          form: currentPitcher.pitching.form
         };
         
         const catcher = {
@@ -1444,158 +1577,17 @@
             throws: player.physical.throws
           };
         });
-        
-        // スタミナを1減らす
-        const newStamina = Math.max(0, currentStamina - 1);
+
+        // 前球情報を取得
+        const lastPitch = gameLog.length > 0 ? gameLog[gameLog.length - 1] : null;
+
+        // 共通関数を呼び出し
+        const { result, newStamina } = simulateSinglePitch(batter, pitcher, catcher, defense, count, currentStamina, lastPitch);
+
+        // スタミナを更新
         setCurrentStamina(newStamina);
-        
-        // スタミナによる能力補正を取得
-        const { velocityPenalty, controlPenalty } = getStaminaPenalty(newStamina, pitcher.stamina);
-        
-        // countのデフォルト値設定
-        const safeCount = count || { balls: 0, strikes: 0 };
-        const adjustment = getCountAdjustment(safeCount.balls, safeCount.strikes);
-        
-        // まず球種を選択（全ての球種から選ぶ）
-        const totalPitchTypes = pitcher.pitches.length;
-        
-        // 新しい予測式: 球種が増えるほど予測が外れやすくなる
-        // 1球種: 100%, 2球種: 48%, 3球種: 29.3%, 4球種: 19%, 5球種: 14%, 6球種: 8.6%
-        let basePredictionRate;
-        if (totalPitchTypes === 1) {
-          basePredictionRate = 1.00;
-        } else {
-          // 球種数に応じて予測率を計算
-          // リード力による追加削減: 2球種以上で、1球種増えるごとに2%削減
-          const leadReduction = (catcher.lead / 100) * 0.02 * (totalPitchTypes - 1);
-          
-          // 基本予測率テーブル
-          const baseRates = {
-            2: 0.50,
-            3: 0.313,
-            4: 0.21,
-            5: 0.16,
-            6: 0.106
-          };
-          
-          basePredictionRate = baseRates[totalPitchTypes] || (0.106 - (totalPitchTypes - 6) * 0.02);
-          basePredictionRate = Math.max(0, basePredictionRate - leadReduction);
-        }
-        
-        const finalPredictionRate = basePredictionRate;
-        const predictionCorrect = Math.random() < finalPredictionRate;
-        
-        // キャッチャーリードで配球を最適化
-        let pitchChoice;
-        let selectedBall;
-        
-        if (catcher.lead > 0) {
-          const leadInfluence = catcher.lead / 100;
-          const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-          const ballScores = pitcher.pitches.map((ball, index) => {
-            const effect = ballEffects[ball.type];
-            const levelFactor = ball.level / 100;
-            let score = (effect.whiffBonus + effect.groundballBonus + effect.weakBonus) * levelFactor;
 
-            // 投球フォームとの相性ボーナスを適用
-            const synergyPitches = FORM_PITCH_SYNERGY[pitcher.form] || [];
-            if (synergyPitches.includes(ball.type)) {
-              // 縦変化の球種
-              if (['curve', 'fork', 'splitter', 'knuckle'].includes(ball.type)) {
-                score += pitchingFormEffect.verticalBreakBonus * levelFactor;
-              }
-              // 横変化の球種
-              if (['slider', 'shoot', 'cutter', 'twoSeam'].includes(ball.type)) {
-                score += pitchingFormEffect.horizontalBreakBonus * levelFactor;
-              }
-            }
-            return { index, score, ball };
-          });
-          
-          if (Math.random() < leadInfluence) {
-            ballScores.sort((a, b) => b.score - a.score);
-            const topChoices = ballScores.slice(0, Math.max(1, Math.floor(ballScores.length / 2)));
-            const chosen = topChoices[Math.floor(Math.random() * topChoices.length)];
-            pitchChoice = chosen.index;
-          } else {
-            pitchChoice = Math.floor(Math.random() * totalPitchTypes);
-          }
-        } else {
-          pitchChoice = Math.floor(Math.random() * totalPitchTypes);
-        }
-        
-        selectedBall = pitcher.pitches[pitchChoice];
-        
-        // 球種レベルによる制球ペナルティ + スタミナペナルティ
-        // ストレートはペナルティなし
-        let effectiveControl = pitcher.control + controlPenalty;  // スタミナペナルティ適用
-        if (selectedBall && selectedBall.type !== 'straight') {
-          const ballControlPenalty = 30 - (selectedBall.level / 100) * 30; // 元の値に戻す
-          effectiveControl = Math.max(0, effectiveControl - ballControlPenalty);
-        }
-        
-        // ストライクゾーン確率を実効制球で計算（制球の影響を強化）
-        const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65; // 基本値を下げ、制球の影響を大きく
-        const isInStrikeZone = Math.random() < (strikeZoneProb * adjustment.strikeZone);
-        
-        const catcherLeadEffect = (catcher.lead / 100) * 0.10;
-        
-        let swingProb;
-        if (isInStrikeZone) {
-          // ストライクゾーン: 早打ち傾向にして投球数を減らす
-          if (safeCount.strikes === 2) {
-            // 2ストライク: 見逃し三振を避けるため振る
-            swingProb = 0.90 + ((100 - batter.eye) / 100) * 0.08;
-          } else if (safeCount.balls >= 2) {
-            // 有利カウント（2ボール以上）: やや慎重に
-            swingProb = 0.60 + ((100 - batter.eye) / 100) * 0.30;
-          } else {
-            // 通常カウント: 早打ち
-            swingProb = 0.75 + ((100 - batter.eye) / 100) * 0.20;
-          }
-          swingProb = swingProb * (1 - catcherLeadEffect);
-        } else {
-          // ボールゾーン: 選球眼の効果をさらに弱めて出塁率を下げる
-          if (safeCount.strikes === 2) {
-            // 2ストライク: やや振る
-            swingProb = 0.20 + ((100 - batter.eye) / 100) * 0.30;
-          } else {
-            // 通常: ボールでも振る
-            swingProb = 0.15 + ((100 - batter.eye) / 100) * 0.30;
-          }
-          // ボールゾーンではキャッチャーリード効果なし
-        }
-        swingProb *= adjustment.swingRate;
-        
-        const doesSwing = Math.random() < swingProb;
-        
-        // 球種選択を先に行う（見逃し時も球種情報が必要）
-        const pitchTypeName = ballEffects[selectedBall.type].name;
-
-        // 投球フォームの効果を適用
-        const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-        let baseVelocity = pitcher.velocity + velocityPenalty + pitchingFormEffect.velocityBonus;
-        baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
-        const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
-        
-        if (!doesSwing) {
-          const result = isInStrikeZone 
-            ? { type: 'called_strike', description: '見逃しストライク' }
-            : { type: 'ball', description: 'ボール' };
-          return { ...result, pitchType: pitchTypeName, velocity: actualVelocity };
-        }
-        
-        if (!isInStrikeZone) {
-          return { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity };
-        }
-        
-        // 左右の相性効果を取得
-        const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
-        
-        // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる
-        // タイミングウィンドウベースの物理判定により、空振りも自然に発生
-        const result = determineContactResultPhysics(selectedBall, predictionCorrect, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher);
-        return { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity) };
+        return result;
       };
 
       // 旧determineContactResult（互換性のために残す）
@@ -1672,7 +1664,8 @@
           control: currentPitcher.pitching.control,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
-          pitches: currentPitcher.pitching.arsenal
+          pitches: currentPitcher.pitching.arsenal,
+          form: currentPitcher.pitching.form
         };
         
         const catcher = {
@@ -3734,9 +3727,9 @@ if (newOuts === 3) {
           return defense;
         };
 
-        // 一球シミュレーション（通常試合のsimulatePitch関数と完全に同じロジック）
+        // 一球シミュレーション（通常試合と完全に同じロジックを使用）
         const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, lastPitch) => {
-          // ★通常試合と同じデータ構造に変換
+          // データ構造を構築
           const batter = {
             name: batterPlayer.name,
             meet: batterPlayer.batting.meet,
@@ -3764,187 +3757,10 @@ if (newOuts === 3) {
             throws: catcherPlayer.physical.throws
           };
 
-          // スタミナによる能力補正を取得
-          const { velocityPenalty, controlPenalty } = getStaminaPenalty(pitcherStamina, pitcher.stamina);
+          // 共通関数を呼ぶ
+          const { result } = simulateSinglePitch(batter, pitcher, catcher, defense, count, pitcherStamina, lastPitch);
 
-          // countのデフォルト値設定
-          const safeCount = count || { balls: 0, strikes: 0 };
-          const adjustment = getCountAdjustment(safeCount.balls, safeCount.strikes);
-
-          // まず球種を選択（全ての球種から選ぶ）
-          const totalPitchTypes = pitcher.pitches.length;
-
-          // 新しい予測式: 球種が増えるほど予測が外れやすくなる
-          let basePredictionRate;
-          if (totalPitchTypes === 1) {
-            basePredictionRate = 1.00;
-          } else {
-            const leadReduction = (catcher.lead / 100) * 0.02 * (totalPitchTypes - 1);
-            const baseRates = { 2: 0.50, 3: 0.313, 4: 0.21, 5: 0.16, 6: 0.106 };
-            basePredictionRate = baseRates[totalPitchTypes] || (0.106 - (totalPitchTypes - 6) * 0.02);
-            basePredictionRate = Math.max(0, basePredictionRate - leadReduction);
-          }
-
-          const finalPredictionRate = basePredictionRate;
-          const predictionCorrect = Math.random() < finalPredictionRate;
-
-          // キャッチャーリードで配球を最適化
-          let pitchChoice;
-          let selectedBall;
-
-          if (catcher.lead > 0) {
-            const leadInfluence = catcher.lead / 100;
-            const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-            const ballScores = pitcher.pitches.map((ball, index) => {
-              const effect = ballEffects[ball.type] || ballEffects.straight;
-              const levelFactor = ball.level / 100;
-              let score = (effect.whiffBonus + effect.groundballBonus + effect.weakBonus) * levelFactor;
-
-              const synergyPitches = FORM_PITCH_SYNERGY[pitcher.form] || [];
-              if (synergyPitches.includes(ball.type)) {
-                if (['curve', 'fork', 'splitter', 'knuckle'].includes(ball.type)) {
-                  score += pitchingFormEffect.verticalBreakBonus * levelFactor;
-                }
-                if (['slider', 'shoot', 'cutter', 'twoSeam'].includes(ball.type)) {
-                  score += pitchingFormEffect.horizontalBreakBonus * levelFactor;
-                }
-              }
-              return { index, score, ball };
-            });
-
-            if (Math.random() < leadInfluence) {
-              ballScores.sort((a, b) => b.score - a.score);
-              const topChoices = ballScores.slice(0, Math.max(1, Math.floor(ballScores.length / 2)));
-              const chosen = topChoices[Math.floor(Math.random() * topChoices.length)];
-              pitchChoice = chosen.index;
-            } else {
-              pitchChoice = Math.floor(Math.random() * totalPitchTypes);
-            }
-          } else {
-            pitchChoice = Math.floor(Math.random() * totalPitchTypes);
-          }
-
-          selectedBall = pitcher.pitches[pitchChoice];
-
-          // 球種レベルによる制球ペナルティ + スタミナペナルティ
-          let effectiveControl = pitcher.control + controlPenalty;
-          if (selectedBall && selectedBall.type !== 'straight') {
-            const ballControlPenalty = 30 - (selectedBall.level / 100) * 30;
-            effectiveControl = Math.max(0, effectiveControl - ballControlPenalty);
-          }
-
-          // ストライクゾーン確率を実効制球で計算
-          const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65;
-          const isInStrikeZone = Math.random() < (strikeZoneProb * adjustment.strikeZone);
-
-          const catcherLeadEffect = (catcher.lead / 100) * 0.10;
-
-          let swingProb;
-          if (isInStrikeZone) {
-            if (safeCount.strikes === 2) {
-              swingProb = 0.90 + ((100 - batter.eye) / 100) * 0.08;
-            } else if (safeCount.balls >= 2) {
-              swingProb = 0.60 + ((100 - batter.eye) / 100) * 0.30;
-            } else {
-              swingProb = 0.75 + ((100 - batter.eye) / 100) * 0.20;
-            }
-            swingProb = swingProb * (1 - catcherLeadEffect);
-          } else {
-            if (safeCount.strikes === 2) {
-              swingProb = 0.20 + ((100 - batter.eye) / 100) * 0.30;
-            } else {
-              swingProb = 0.15 + ((100 - batter.eye) / 100) * 0.30;
-            }
-          }
-          swingProb *= adjustment.swingRate;
-
-          const doesSwing = Math.random() < swingProb;
-
-          // 投球フォームの効果を適用
-          const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-          let baseVelocity = pitcher.velocity + velocityPenalty + pitchingFormEffect.velocityBonus;
-          const ballEffect = ballEffects[selectedBall.type] || ballEffects.straight;
-          baseVelocity -= ballEffect.velocityMinus;
-          const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
-
-          if (!doesSwing) {
-            return isInStrikeZone
-              ? { type: 'called_strike', description: '見逃しストライク' }
-              : { type: 'ball', description: 'ボール' };
-          }
-
-          // ★ 通常試合と同じ：ボールゾーンでスイングしたら必ず空振り
-          if (!isInStrikeZone) {
-            return { type: 'swinging_strike', description: '空振り（ボール球）' };
-          }
-
-          // 左右の相性効果を取得
-          const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
-
-          // トンネリング効果を計算
-          const currentPitch = {
-            type: selectedBall.type,
-            velocity: actualVelocity,
-            level: selectedBall.level
-          };
-          const tunnelingEffect = getTunnelingEffect(lastPitch, currentPitch, catcher.lead);
-
-          // 【新物理モデル】タイミングウィンドウベースのコンタクト計算
-          // ★通常試合と同じ: pitcherPlayerではなくフラット化したpitcherオブジェクトを渡す
-          const physicsResult = calculatePhysicsContact(
-            pitcher,
-            batter,
-            predictionCorrect,
-            currentPitch,
-            tunnelingEffect,
-            handEffect
-          );
-
-          // 空振り判定
-          if (!physicsResult.isContact) {
-            return { type: 'swinging_strike', description: '空振り' };
-          }
-
-          // ファウル判定
-          const foulBaseRate = 0.35;
-          const qualityPenalty = (1 - physicsResult.meetQuality) * 0.25;
-          let foulRate = foulBaseRate + qualityPenalty;
-
-          if (safeCount.strikes === 2) {
-            foulRate += 0.10;
-          }
-
-          if (Math.random() < foulRate) {
-            return { type: safeCount.strikes === 2 ? 'foul_2strike' : 'foul', description: 'ファール' };
-          }
-
-          // 物理演算で打球パラメータを計算
-          // ★通常試合と同じ: batterとpitcherを使う
-          const battedBall = calculateBattedBallPhysics(
-            batter,
-            pitcher,
-            currentPitch,
-            physicsResult
-          );
-
-          // 角度によるファウル判定
-          if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {
-            return { type: safeCount.strikes === 2 ? 'foul_2strike' : 'foul', description: 'ファール' };
-          }
-
-          // 時間競合モデルで守備判定
-          // ★通常試合と同じ: batterを使う
-          const fieldingResult = judgeFielderReach(battedBall, defense, batter);
-
-          // 結果を返す
-          return {
-            type: fieldingResult.result,
-            description: fieldingResult.description,
-            isError: fieldingResult.isError,
-            isOutfieldFly: fieldingResult.isOutfieldFly,
-            tagupThrowbackChance: fieldingResult.tagupThrowbackChance,
-            lastPitch: currentPitch // 次回のトンネリング効果のために保存
-          };
+          return result;
         };
 
         // 走者進塁処理
