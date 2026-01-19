@@ -36,7 +36,7 @@
 
       // 画面モード管理
       const [screenMode, setScreenMode] = useState('management'); // 'game' or 'management'
-      const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save'
+      const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save', 'regulations'
       const [scheduleTab, setScheduleTab] = useState('league'); // 'league', 'batting', 'pitching'
 
       // リーグ構成設定（拡張可能な設計）
@@ -54,104 +54,53 @@
       // 全チームリスト（リーグ構成から自動生成）
       const allTeams = leagueConfig.leagues.flatMap(league => league.teams);
 
-      // シーズンデータ
-      const [seasonYear, setSeasonYear] = useState(1); // 何年目か
-      const [currentDate, setCurrentDate] = useState({ month: 4, day: 1 }); // 現在の日付
+      // === 新システム: シーズンデータ統合管理 ===
+      const [seasonData, setSeasonData] = useState(null);
+      const [selectedMonth, setSelectedMonth] = useState(3); // カレンダー表示月
 
-      // カレンダー生成関数（4チーム用）
-      const generateInitialCalendar = () => {
-        const playerTeam = 'チームA'; // プレイヤーのチーム
-        const opponents = allTeams.filter(t => t !== playerTeam);
+      // シーズンデータの初期化
+      useEffect(() => {
+        if (!seasonData && typeof createSeasonData === 'function') {
+          const newSeasonData = createSeasonData(1);
 
-        const schedule = [];
-        let dateCounter = 1;
+          // スケジュール生成
+          const schedule = generateFullSeasonSchedule({
+            teams: allTeams,
+            gamesPerSeason: 60,
+            startDate: { year: 2024, month: 3, day: 1 },
+            endDate: { year: 2024, month: 9, day: 30 }
+          });
 
-        // 各対戦相手と3試合ずつ（ホーム1.5試合、アウェイ1.5試合）
-        opponents.forEach((opponent, oppIndex) => {
-          // ホーム2試合
-          for (let i = 0; i < 2; i++) {
-            schedule.push({ date: `4/${dateCounter++}`, opponent: `vs ${opponent}`, result: null });
+          // 順位表初期化
+          const standings = initializeStandings(allTeams);
+
+          // 投手ローテーションを割り当て（TEAMS_DATAから取得）
+          const teamRosters = {};
+          if (window.TEAMS_DATA) {
+            allTeams.forEach(teamName => {
+              if (window.TEAMS_DATA[teamName]) {
+                teamRosters[teamName] = window.TEAMS_DATA[teamName].players || [];
+              }
+            });
+
+            // 投手割り当て
+            newSeasonData.schedule = assignPitchersToSchedule(schedule, teamRosters, 5);
+          } else {
+            newSeasonData.schedule = schedule;
           }
-          // 休養日
-          schedule.push({ date: `4/${dateCounter++}`, opponent: null, result: null });
 
-          // アウェイ2試合
-          for (let i = 0; i < 2; i++) {
-            schedule.push({ date: `4/${dateCounter++}`, opponent: `@ ${opponent}`, result: null });
-          }
-          // 休養日
-          schedule.push({ date: `4/${dateCounter++}`, opponent: null, result: null });
-        });
+          newSeasonData.standings = standings;
+          newSeasonData.settings.teamsCount = allTeams.length;
 
-        return schedule.slice(0, 21); // 3週間分
-      };
+          setSeasonData(newSeasonData);
+        }
+      }, [allTeams.join(',')]);
 
-      const [calendar, setCalendar] = useState(generateInitialCalendar());
-
-      // リーグ成績（動的生成）
-      const [leagueStandings, setLeagueStandings] = useState(
-        allTeams.map(team => ({ team, wins: 0, losses: 0, draws: 0 }))
-      );
-
-      // 全チーム対戦カードデータ（日付ごと）- 4チーム制
-      const [allGames, setAllGames] = useState({
-        '4/1': [
-          { home: 'チームB', away: 'チームA', homePitcher: '投手B1', awayPitcher: 'ロケット', result: null },
-          { home: 'チームC', away: 'チームD', homePitcher: '投手C1', awayPitcher: '投手D1', result: null },
-        ],
-        '4/2': [
-          { home: 'チームB', away: 'チームA', homePitcher: '投手B2', awayPitcher: 'クレバー', result: null },
-          { home: 'チームD', away: 'チームC', homePitcher: '投手D2', awayPitcher: '投手C2', result: null },
-        ],
-        '4/4': [
-          { home: 'チームA', away: 'チームB', homePitcher: 'ロケット', awayPitcher: '投手B1', result: null },
-          { home: 'チームC', away: 'チームD', homePitcher: '投手C1', awayPitcher: '投手D1', result: null },
-        ],
-        '4/5': [
-          { home: 'チームA', away: 'チームB', homePitcher: 'クレバー', awayPitcher: '投手B2', result: null },
-          { home: 'チームD', away: 'チームC', homePitcher: '投手D2', awayPitcher: '投手C2', result: null },
-        ],
-        '4/7': [
-          { home: 'チームC', away: 'チームA', homePitcher: '投手C1', awayPitcher: 'ロケット', result: null },
-          { home: 'チームB', away: 'チームD', homePitcher: '投手B1', awayPitcher: '投手D1', result: null },
-        ],
-        '4/8': [
-          { home: 'チームC', away: 'チームA', homePitcher: '投手C2', awayPitcher: 'クレバー', result: null },
-          { home: 'チームD', away: 'チームB', homePitcher: '投手D2', awayPitcher: '投手B2', result: null },
-        ],
-        '4/10': [
-          { home: 'チームA', away: 'チームC', homePitcher: 'ロケット', awayPitcher: '投手C1', result: null },
-          { home: 'チームB', away: 'チームD', homePitcher: '投手B1', awayPitcher: '投手D1', result: null },
-        ],
-        '4/11': [
-          { home: 'チームA', away: 'チームC', homePitcher: 'クレバー', awayPitcher: '投手C2', result: null },
-          { home: 'チームD', away: 'チームB', homePitcher: '投手D2', awayPitcher: '投手B2', result: null },
-        ],
-        '4/13': [
-          { home: 'チームD', away: 'チームA', homePitcher: '投手D1', awayPitcher: 'ロケット', result: null },
-          { home: 'チームB', away: 'チームC', homePitcher: '投手B1', awayPitcher: '投手C1', result: null },
-        ],
-        '4/14': [
-          { home: 'チームD', away: 'チームA', homePitcher: '投手D2', awayPitcher: 'クレバー', result: null },
-          { home: 'チームC', away: 'チームB', homePitcher: '投手C2', awayPitcher: '投手B2', result: null },
-        ],
-        '4/16': [
-          { home: 'チームA', away: 'チームD', homePitcher: 'ロケット', awayPitcher: '投手D1', result: null },
-          { home: 'チームB', away: 'チームC', homePitcher: '投手B1', awayPitcher: '投手C1', result: null },
-        ],
-        '4/17': [
-          { home: 'チームA', away: 'チームD', homePitcher: 'クレバー', awayPitcher: '投手D2', result: null },
-          { home: 'チームC', away: 'チームB', homePitcher: '投手C2', awayPitcher: '投手B2', result: null },
-        ],
-        '4/19': [
-          { home: 'チームB', away: 'チームA', homePitcher: '投手B1', awayPitcher: 'ロケット', result: null },
-          { home: 'チームC', away: 'チームD', homePitcher: '投手C1', awayPitcher: '投手D1', result: null },
-        ],
-        '4/20': [
-          { home: 'チームD', away: 'チームC', homePitcher: '投手D2', awayPitcher: '投手C2', result: null },
-          { home: 'チームA', away: 'チームB', homePitcher: 'クレバー', awayPitcher: '投手B2', result: null },
-        ],
-      });
+      // 後方互換性のため、既存の変数名でもアクセス可能にする
+      const seasonYear = seasonData?.year || 1;
+      const currentDate = seasonData?.currentDate || { year: 2024, month: 3, day: 1 };
+      const currentPhase = seasonData?.phase || SEASON_PHASES.REGULAR_SEASON;
+      const leagueStandings = seasonData?.standings || [];
 
       // 変化球の効果設定（外部ファイルから読み込み）
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
@@ -2852,7 +2801,6 @@ if (newOuts === 3) {
           <nav className="flex-1 space-y-2">
             <button
               onClick={() => {
-                advanceDate();
                 setScreenMode('management');
                 setManagementView('schedule');
               }}
@@ -2902,6 +2850,18 @@ if (newOuts === 3) {
             </button>
 
             <div className="border-t border-gray-700 my-4"></div>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('regulations');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'regulations' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              ⚙️ レギュレーション設定
+            </button>
 
             <button
               onClick={() => {
@@ -4628,25 +4588,119 @@ if (newOuts === 3) {
           </div>
         );
 
+        // 日付進行ハンドラー
+        const handleProgressDate = (days) => {
+          if (!seasonData) return;
+          const newSeasonData = progressDate(seasonData, days);
+          setSeasonData(newSeasonData);
+        };
+
+        const handleProgressToNextGame = () => {
+          if (!seasonData) return;
+          const newSeasonData = progressToNextGame(seasonData, 'チームA');
+          setSeasonData(newSeasonData);
+        };
+
+        const handleProgressToNextPhase = () => {
+          if (!seasonData) return;
+          const newSeasonData = progressToNextPhase(seasonData);
+          setSeasonData(newSeasonData);
+        };
+
+        // 当月のカレンダーデータを生成
+        const calendarData = seasonData && selectedMonth
+          ? generateTeamCalendar(seasonData.schedule, 'チームA', currentDate.year, selectedMonth)
+          : [];
+
+        // 当日の試合を取得
+        const todayGames = seasonData
+          ? getScheduleByDate(seasonData.schedule, currentDate)
+          : [];
+
+        // フェーズ情報を取得
+        const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
+          ? PHASE_INFO[currentPhase]
+          : { name: '', color: 'bg-gray-100', description: '' };
+
         return (
           <div className="p-8 max-w-7xl mx-auto">
             {/* ヘッダー */}
             <div className="mb-8 flex justify-between items-center">
-              <h1 className="text-4xl font-bold text-white">{seasonYear}年目</h1>
-              <button
-                onClick={() => setScreenMode('game')}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition"
-              >
-                🎮 試合開始
-              </button>
+              <div>
+                <h1 className="text-4xl font-bold text-white">{seasonYear}年目</h1>
+                <div className="mt-2 flex items-center gap-3">
+                  <div className="text-lg text-gray-300">
+                    {currentDate.year}年{currentDate.month}月{currentDate.day}日
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-sm font-bold ${phaseInfo.color} text-gray-800`}>
+                    {phaseInfo.name}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleProgressDate(1)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition text-sm"
+                >
+                  ➡️ 1日進める
+                </button>
+                <button
+                  onClick={handleProgressToNextGame}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold transition text-sm"
+                >
+                  ⏩ 次の試合日
+                </button>
+                <button
+                  onClick={handleProgressToNextPhase}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold transition text-sm"
+                >
+                  🔄 次フェーズ
+                </button>
+                <button
+                  onClick={() => setScreenMode('game')}
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition"
+                >
+                  🎮 試合開始
+                </button>
+              </div>
             </div>
 
-            {/* カレンダー（3行×7列） */}
+            {/* カレンダー月選択 */}
+            <div className="mb-4 flex gap-2">
+              {[3, 4, 5, 6, 7, 8, 9].map(month => (
+                <button
+                  key={month}
+                  onClick={() => setSelectedMonth(month)}
+                  className={`px-4 py-2 rounded font-bold transition ${
+                    selectedMonth === month
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {month}月
+                </button>
+              ))}
+            </div>
+
+            {/* カレンダー */}
             <div className="bg-gray-800 rounded-lg p-6 mb-8">
-              <h2 className="text-2xl font-bold mb-4 text-white">4月の試合日程</h2>
+              <h2 className="text-2xl font-bold mb-4 text-white">{selectedMonth}月の試合日程（チームA）</h2>
               <div className="grid grid-cols-7 gap-2">
-                {calendar.slice(0, 21).map((day, index) => {
-                  const isCurrentDate = day.date === `${currentDate.month}/${currentDate.day}`;
+                <div className="text-center text-gray-400 font-bold py-2">日</div>
+                <div className="text-center text-gray-400 font-bold py-2">月</div>
+                <div className="text-center text-gray-400 font-bold py-2">火</div>
+                <div className="text-center text-gray-400 font-bold py-2">水</div>
+                <div className="text-center text-gray-400 font-bold py-2">木</div>
+                <div className="text-center text-gray-400 font-bold py-2">金</div>
+                <div className="text-center text-gray-400 font-bold py-2">土</div>
+                {calendarData.map((day, index) => {
+                  if (!day.day) {
+                    return <div key={index} className="p-4"></div>;
+                  }
+                  const isCurrentDate = day.date &&
+                    day.date.year === currentDate.year &&
+                    day.date.month === currentDate.month &&
+                    day.date.day === currentDate.day;
                   return (
                     <div
                       key={index}
@@ -4659,11 +4713,11 @@ if (newOuts === 3) {
                       }`}
                     >
                       <div className={`text-xs mb-1 ${isCurrentDate ? 'text-white font-bold' : 'text-gray-400'}`}>
-                        {day.date}
+                        {day.day}日
                       </div>
                       {day.opponent ? (
                         <>
-                          <div className="text-sm text-white font-bold mb-1">{day.opponent}</div>
+                          <div className="text-sm text-white font-bold mb-1">{day.venue} {day.opponent}</div>
                           {day.result ? (
                             <div className={`text-lg font-bold ${
                               day.result === '○' ? 'text-green-400' :
@@ -4691,7 +4745,7 @@ if (newOuts === 3) {
                 {currentDate.month}/{currentDate.day} の対戦カード
               </h2>
               <div className="grid grid-cols-2 gap-4">
-                {(allGames[`${currentDate.month}/${currentDate.day}`] || []).map((game, index) => (
+                {todayGames.length > 0 ? todayGames.map((game, index) => (
                   <div key={index} className="bg-gray-700 rounded-lg p-4">
                     <div className="flex items-center justify-center gap-4 mb-3">
                       <div className="text-white font-bold text-lg">{game.away}</div>
@@ -4701,26 +4755,26 @@ if (newOuts === 3) {
                     <div className="flex items-center justify-center gap-4 text-sm text-gray-300 mb-2">
                       <div className="text-right flex-1">
                         <div className="text-xs text-gray-500">先発</div>
-                        <div className="text-yellow-400 font-bold">{game.awayPitcher}</div>
+                        <div className="text-yellow-400 font-bold">{game.awayPitcher || '未定'}</div>
                       </div>
                       <div className="text-gray-600">⚾</div>
                       <div className="text-left flex-1">
                         <div className="text-xs text-gray-500">先発</div>
-                        <div className="text-yellow-400 font-bold">{game.homePitcher}</div>
+                        <div className="text-yellow-400 font-bold">{game.homePitcher || '未定'}</div>
                       </div>
                     </div>
                     {game.result ? (
                       <div className="mt-2 text-sm text-center">
                         <span className="text-gray-300">結果: </span>
-                        <span className="text-green-400 font-bold">{game.result}</span>
+                        <span className="text-green-400 font-bold">
+                          {game.result.awayScore} - {game.result.homeScore}
+                        </span>
                       </div>
                     ) : (
                       <div className="mt-2 text-sm text-gray-500 text-center">未消化</div>
                     )}
                   </div>
-                ))}
-                {(!allGames[`${currentDate.month}/${currentDate.day}`] ||
-                  allGames[`${currentDate.month}/${currentDate.day}`].length === 0) && (
+                )) : (
                   <div className="col-span-2 text-center text-gray-500 py-4">
                     本日は試合がありません（休養日）
                   </div>
@@ -4818,10 +4872,185 @@ if (newOuts === 3) {
         );
       };
 
+      // レギュレーション設定画面
+      const RegulationsScreen = () => {
+        if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
+
+        const canModify = canModifyRegulations(currentPhase);
+        const [tempSettings, setTempSettings] = React.useState(seasonData.settings);
+
+        const handleApplyPreset = (presetName) => {
+          const presetRegulations = applyPreset(presetName);
+          setTempSettings(presetRegulations);
+        };
+
+        const handleSaveSettings = () => {
+          const validation = validateRegulations(tempSettings);
+          if (!validation.valid) {
+            alert('設定エラー:\n' + validation.errors.join('\n'));
+            return;
+          }
+          setSeasonData({ ...seasonData, settings: tempSettings });
+          alert('レギュレーション設定を保存しました');
+        };
+
+        return (
+          <div className="p-8 max-w-4xl mx-auto">
+            <h1 className="text-3xl font-bold mb-6 text-white">レギュレーション設定</h1>
+
+            {!canModify && (
+              <div className="bg-yellow-900 border-2 border-yellow-600 rounded-lg p-4 mb-6">
+                <p className="text-yellow-200 font-bold">
+                  ⚠️ レギュレーション変更はオフシーズン（12月）のみ可能です
+                </p>
+                <p className="text-yellow-300 text-sm mt-2">
+                  現在のフェーズ: {phaseInfo.name}
+                </p>
+              </div>
+            )}
+
+            {/* プリセット選択 */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-bold mb-4 text-white">プリセット</h2>
+              <div className="grid grid-cols-2 gap-4">
+                {Object.keys(REGULATION_PRESETS).map(presetKey => {
+                  const preset = REGULATION_PRESETS[presetKey];
+                  return (
+                    <button
+                      key={presetKey}
+                      onClick={() => handleApplyPreset(presetKey)}
+                      disabled={!canModify}
+                      className={`p-4 rounded-lg text-left transition ${
+                        canModify
+                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                          : 'bg-gray-900 text-gray-600 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="font-bold text-lg mb-2">{preset.name}</div>
+                      <div className="text-sm text-gray-400">
+                        {preset.regulations.teamsCount}チーム / {preset.regulations.gamesPerSeason}試合
+                        {preset.regulations.useDH ? ' / DH制' : ''}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 詳細設定 */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h2 className="text-xl font-bold mb-4 text-white">詳細設定</h2>
+
+              <div className="space-y-4">
+                {/* DH制 */}
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold">DH制（指名打者制度）</label>
+                  <input
+                    type="checkbox"
+                    checked={tempSettings.useDH}
+                    onChange={(e) => setTempSettings({ ...tempSettings, useDH: e.target.checked })}
+                    disabled={!canModify}
+                    className="w-6 h-6"
+                  />
+                </div>
+
+                {/* チーム数 */}
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold">チーム数</label>
+                  <input
+                    type="number"
+                    value={tempSettings.teamsCount}
+                    onChange={(e) => setTempSettings({ ...tempSettings, teamsCount: parseInt(e.target.value) })}
+                    disabled={!canModify}
+                    min="2"
+                    max="12"
+                    className="bg-gray-700 text-white px-4 py-2 rounded w-24"
+                  />
+                </div>
+
+                {/* 年間試合数 */}
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold">年間試合数（チームあたり）</label>
+                  <input
+                    type="number"
+                    value={tempSettings.gamesPerSeason}
+                    onChange={(e) => setTempSettings({ ...tempSettings, gamesPerSeason: parseInt(e.target.value) })}
+                    disabled={!canModify}
+                    min="6"
+                    max="200"
+                    className="bg-gray-700 text-white px-4 py-2 rounded w-24"
+                  />
+                </div>
+
+                {/* プレーオフ形式 */}
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold">プレーオフ形式</label>
+                  <select
+                    value={tempSettings.playoffFormat}
+                    onChange={(e) => setTempSettings({ ...tempSettings, playoffFormat: e.target.value })}
+                    disabled={!canModify}
+                    className="bg-gray-700 text-white px-4 py-2 rounded"
+                  >
+                    <option value="single">1位 vs 2位</option>
+                    <option value="double">4チームトーナメント</option>
+                    <option value="none">プレーオフなし</option>
+                  </select>
+                </div>
+                <div className="text-sm text-gray-400 pl-4">
+                  {getPlayoffFormatDescription(tempSettings.playoffFormat)}
+                </div>
+
+                {/* 延長最大回数 */}
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold">延長最大回数</label>
+                  <input
+                    type="number"
+                    value={tempSettings.maxExtraInnings}
+                    onChange={(e) => setTempSettings({ ...tempSettings, maxExtraInnings: parseInt(e.target.value) })}
+                    disabled={!canModify}
+                    min="0"
+                    max="30"
+                    className="bg-gray-700 text-white px-4 py-2 rounded w-24"
+                  />
+                </div>
+              </div>
+
+              {/* 保存ボタン */}
+              <div className="mt-6">
+                <button
+                  onClick={handleSaveSettings}
+                  disabled={!canModify}
+                  className={`w-full py-3 rounded-lg font-bold transition ${
+                    canModify
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-gray-900 text-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  設定を保存
+                </button>
+              </div>
+            </div>
+
+            {/* 現在の設定 */}
+            <div className="bg-gray-800 rounded-lg p-6 mt-6">
+              <h2 className="text-xl font-bold mb-4 text-white">現在の設定</h2>
+              <div className="space-y-2 text-white">
+                <div>DH制: {seasonData.settings.useDH ? '有効' : '無効'}</div>
+                <div>チーム数: {seasonData.settings.teamsCount}チーム</div>
+                <div>年間試合数: {seasonData.settings.gamesPerSeason}試合</div>
+                <div>プレーオフ: {getPlayoffFormatDescription(seasonData.settings.playoffFormat)}</div>
+                <div>延長最大: {seasonData.settings.maxExtraInnings}回</div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
       // 管理画面のルーター
       const ManagementScreen = () => {
         if (managementView === 'schedule') return <ScheduleScreen />;
         if (managementView === 'stats') return <PlayerStatsScreen />;
+        if (managementView === 'regulations') return <RegulationsScreen />;
         if (managementView === 'edit') return <EditScreen />;
         // 他のビューは今後追加
         return <div className="p-8 text-white">準備中...</div>;
