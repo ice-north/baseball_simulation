@@ -20,6 +20,7 @@
   <script src="js/season/calendarUI.js"></script>
   <script src="js/season/regulationSettings.js"></script>
   <script src="js/season/dateProgression.js"></script>
+  <script src="js/season/tryoutSystem.js"></script>
   <script src="js/game/autoSimulation.js"></script>
 </head>
 <body>
@@ -2826,6 +2827,18 @@ if (newOuts === 3) {
             <button
               onClick={() => {
                 setScreenMode('management');
+                setManagementView('tryout');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'tryout' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              🎯 トライアウト
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
                 setManagementView('stats');
               }}
               className={`w-full text-left px-4 py-3 rounded transition ${
@@ -3030,6 +3043,202 @@ if (newOuts === 3) {
           generatePitchingRotation(teamName);
         });
         alert('全チームのAIオーダー編成と投手ローテーションを設定しました！');
+      };
+
+      // トライアウト画面コンポーネント
+      const TryoutScreen = ({ seasonData, allTeams }) => {
+        const [tryoutCandidates, setTryoutCandidates] = useState([]);
+        const [draftOrder, setDraftOrder] = useState([]);
+        const [currentPick, setCurrentPick] = useState(0);
+        const [userRoster, setUserRoster] = useState([]);
+        const [filterPosition, setFilterPosition] = useState('all');
+        const [filterRank, setFilterRank] = useState('all');
+
+        // 初期化: トライアウト候補者を生成
+        useEffect(() => {
+          if (tryoutCandidates.length === 0 && typeof window.generateTryoutCandidates === 'function') {
+            const year = seasonData?.year || 1;
+            const teamCount = allTeams.length;
+            const candidates = window.generateTryoutCandidates(year, teamCount);
+            setTryoutCandidates(candidates);
+
+            // ドラフト順序を生成（24ラウンド）
+            const teams = ['ユーザー', ...allTeams.slice(1)]; // 最初のチームをユーザーとする
+            const order = window.generateSnakeDraftOrder(teams, 24);
+            setDraftOrder(order);
+          }
+        }, [seasonData, allTeams, tryoutCandidates.length]);
+
+        // 選手選択処理
+        const handleSelectPlayer = (player) => {
+          if (currentPick >= draftOrder.length) {
+            alert('ドラフトは終了しました');
+            return;
+          }
+
+          const currentTeam = draftOrder[currentPick].team;
+
+          if (currentTeam === 'ユーザー') {
+            // ユーザーの選択
+            setUserRoster([...userRoster, player]);
+            setTryoutCandidates(tryoutCandidates.filter(c => c.id !== player.id));
+            setCurrentPick(currentPick + 1);
+          }
+        };
+
+        // AI自動選択
+        useEffect(() => {
+          if (currentPick >= draftOrder.length || tryoutCandidates.length === 0) return;
+
+          const currentTeam = draftOrder[currentPick].team;
+
+          if (currentTeam !== 'ユーザー') {
+            // AIの自動選択
+            setTimeout(() => {
+              const selected = window.selectPlayerForAI(tryoutCandidates, {});
+              if (selected) {
+                setTryoutCandidates(tryoutCandidates.filter(c => c.id !== selected.id));
+                setCurrentPick(currentPick + 1);
+              }
+            }, 500); // 0.5秒待機して選択
+          }
+        }, [currentPick, draftOrder, tryoutCandidates]);
+
+        // フィルター処理
+        const filteredCandidates = tryoutCandidates.filter(player => {
+          if (filterPosition !== 'all' && player.position !== filterPosition) return false;
+          if (filterRank !== 'all') {
+            const rank = window.calculatePlayerRank(player);
+            if (rank !== filterRank) return false;
+          }
+          return true;
+        });
+
+        const currentTeam = currentPick < draftOrder.length ? draftOrder[currentPick].team : null;
+        const isUserTurn = currentTeam === 'ユーザー';
+
+        return (
+          <div className="p-8">
+            <div className="max-w-7xl mx-auto">
+              <h1 className="text-3xl font-bold text-white mb-6">🎯 トライアウト</h1>
+
+              {/* ドラフト状況 */}
+              <div className="bg-gray-800 rounded-lg p-6 mb-6">
+                <div className="grid grid-cols-3 gap-4 text-white">
+                  <div>
+                    <div className="text-sm text-gray-400">現在のピック</div>
+                    <div className="text-2xl font-bold">{currentPick + 1} / {draftOrder.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-400">指名チーム</div>
+                    <div className="text-2xl font-bold">{currentTeam || '終了'}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-400">獲得選手数</div>
+                    <div className="text-2xl font-bold">{userRoster.length} 人</div>
+                  </div>
+                </div>
+                {isUserTurn && (
+                  <div className="mt-4 text-green-400 font-bold">
+                    ✅ あなたの指名順です。選手を選択してください。
+                  </div>
+                )}
+                {!isUserTurn && currentTeam && (
+                  <div className="mt-4 text-yellow-400 font-bold">
+                    ⏳ {currentTeam} が選択中...
+                  </div>
+                )}
+              </div>
+
+              {/* フィルター */}
+              <div className="bg-gray-800 rounded-lg p-4 mb-6 flex gap-4">
+                <select
+                  value={filterPosition}
+                  onChange={(e) => setFilterPosition(e.target.value)}
+                  className="bg-gray-700 text-white px-4 py-2 rounded"
+                >
+                  <option value="all">全ポジション</option>
+                  <option value="pitcher">投手</option>
+                  <option value="catcher">捕手</option>
+                  <option value="first">一塁</option>
+                  <option value="second">二塁</option>
+                  <option value="third">三塁</option>
+                  <option value="short">遊撃</option>
+                  <option value="left">左翼</option>
+                  <option value="center">中堅</option>
+                  <option value="right">右翼</option>
+                </select>
+                <select
+                  value={filterRank}
+                  onChange={(e) => setFilterRank(e.target.value)}
+                  className="bg-gray-700 text-white px-4 py-2 rounded"
+                >
+                  <option value="all">全ランク</option>
+                  <option value="S">S級</option>
+                  <option value="A">A級</option>
+                  <option value="B">B級</option>
+                  <option value="C">C級</option>
+                  <option value="D">D級</option>
+                </select>
+                <div className="text-white ml-auto self-center">
+                  候補者: {filteredCandidates.length} 人
+                </div>
+              </div>
+
+              {/* 候補者リスト */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredCandidates.map(player => {
+                  const rank = window.calculatePlayerRank(player);
+                  const rankColor = {
+                    S: 'text-pink-400',
+                    A: 'text-red-400',
+                    B: 'text-orange-400',
+                    C: 'text-yellow-400',
+                    D: 'text-gray-400'
+                  }[rank];
+
+                  return (
+                    <div
+                      key={player.id}
+                      className={`bg-gray-800 rounded-lg p-4 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition`}
+                      onClick={() => isUserTurn && handleSelectPlayer(player)}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <div className="text-white font-bold">{player.name}</div>
+                          <div className="text-sm text-gray-400">{player.age}歳 | {player.position}</div>
+                        </div>
+                        <div className={`text-2xl font-bold ${rankColor}`}>{rank}</div>
+                      </div>
+                      <div className="text-sm text-gray-300">
+                        {player.position === 'pitcher' ? (
+                          <div>球速: {player.pitching.velocity}km/h | 制球: {player.pitching.control}</div>
+                        ) : (
+                          <div>ミート: {player.batting.meet} | パワー: {player.batting.power}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 獲得選手リスト */}
+              {userRoster.length > 0 && (
+                <div className="mt-8">
+                  <h2 className="text-2xl font-bold text-white mb-4">獲得した選手 ({userRoster.length}人)</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {userRoster.map(player => (
+                      <div key={player.id} className="bg-gray-700 rounded p-2 text-white text-sm">
+                        <div className="font-bold">{player.name}</div>
+                        <div className="text-xs text-gray-400">{player.position}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
       };
 
       const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, allTeams }) => {
@@ -4429,6 +4638,10 @@ if (newOuts === 3) {
           allTeams={allTeams}
           selectedMonth={selectedMonth}
           setSelectedMonth={setSelectedMonth}
+        />;
+        if (managementView === 'tryout') return <TryoutScreen
+          seasonData={seasonData}
+          allTeams={allTeams}
         />;
         if (managementView === 'stats') return <PlayerStatsScreen
           seasonData={seasonData}
