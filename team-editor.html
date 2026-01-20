@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チーム/選手エディター - 野球シミュレーター</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // デフォルトの選手テンプレート
+    const createDefaultPlayer = (id) => ({
+      id,
+      name: `選手${id}`,
+      position: 'center',
+      battingOrder: 0,
+      isStarter: false,
+      batting: { meet: 50, power: 50, eye: 50, bats: 'right', steal: 50 },
+      physical: { speed: 50, arm: 50, throws: 'right' },
+      fielding: { defense: 50 },
+      catching: { lead: 50 },
+      pitching: {
+        velocity: 140,
+        control: 50,
+        stamina: 100,
+        form: 'threeQuarter',
+        arsenal: [
+          { id: 1, type: 'straight', level: 100 },
+          { id: 2, type: 'slider', level: 50 }
+        ]
+      },
+      positionFitness: {
+        pitcher: 50, catcher: 50, first: 50,
+        second: 50, third: 50, short: 50,
+        left: 50, center: 50, right: 50
+      },
+      seasonStats: {
+        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
+        pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
+      },
+      careerStats: {
+        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
+        pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
+      }
+    });
+
+    // ランダム選手生成
+    const generateRandomPlayer = (id) => {
+      const positions = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+      const position = positions[Math.floor(Math.random() * positions.length)];
+      const isPitcher = position === 'pitcher';
+
+      const player = createDefaultPlayer(id);
+      player.name = `選手${id}`;
+      player.position = position;
+      player.batting.bats = Math.random() > 0.7 ? 'left' : Math.random() > 0.9 ? 'switch' : 'right';
+      player.physical.throws = Math.random() > 0.8 ? 'left' : 'right';
+
+      if (isPitcher) {
+        // 投手の場合
+        player.batting.meet = Math.floor(Math.random() * 30) + 20; // 20-50
+        player.batting.power = Math.floor(Math.random() * 30) + 15; // 15-45
+        player.batting.eye = Math.floor(Math.random() * 30) + 30; // 30-60
+        player.batting.steal = Math.floor(Math.random() * 20) + 10; // 10-30
+        player.physical.speed = Math.floor(Math.random() * 30) + 35; // 35-65
+        player.physical.arm = Math.floor(Math.random() * 30) + 45; // 45-75
+        player.fielding.defense = Math.floor(Math.random() * 30) + 45; // 45-75
+        player.catching.lead = Math.floor(Math.random() * 30) + 45; // 45-75
+        player.pitching.velocity = Math.floor(Math.random() * 25) + 135; // 135-160
+        player.pitching.control = Math.floor(Math.random() * 40) + 50; // 50-90
+        player.pitching.stamina = Math.floor(Math.random() * 80) + 120; // 120-200
+        player.positionFitness.pitcher = 100;
+      } else {
+        // 野手の場合
+        player.batting.meet = Math.floor(Math.random() * 50) + 40; // 40-90
+        player.batting.power = Math.floor(Math.random() * 50) + 35; // 35-85
+        player.batting.eye = Math.floor(Math.random() * 50) + 40; // 40-90
+        player.batting.steal = Math.floor(Math.random() * 60) + 20; // 20-80
+        player.physical.speed = Math.floor(Math.random() * 50) + 40; // 40-90
+        player.physical.arm = Math.floor(Math.random() * 50) + 40; // 40-90
+        player.fielding.defense = Math.floor(Math.random() * 50) + 40; // 40-90
+        player.catching.lead = position === 'catcher' ? Math.floor(Math.random() * 40) + 50 : Math.floor(Math.random() * 30) + 30;
+        player.pitching.velocity = Math.floor(Math.random() * 20) + 115; // 115-135
+        player.pitching.control = Math.floor(Math.random() * 30) + 35; // 35-65
+        player.pitching.stamina = Math.floor(Math.random() * 50) + 50; // 50-100
+        player.positionFitness[position] = 100;
+
+        // 隣接ポジションに適性を付与
+        const positionGroups = {
+          catcher: ['first'],
+          first: ['catcher', 'third'],
+          second: ['short', 'third'],
+          third: ['first', 'second', 'short'],
+          short: ['second', 'third'],
+          left: ['center', 'right'],
+          center: ['left', 'right'],
+          right: ['left', 'center']
+        };
+
+        if (positionGroups[position]) {
+          positionGroups[position].forEach(adj => {
+            player.positionFitness[adj] = Math.floor(Math.random() * 30) + 60; // 60-90
+          });
+        }
+      }
+
+      return player;
+    };
+
+    const TeamEditor = () => {
+      const [teams, setTeams] = useState({});
+      const [selectedTeam, setSelectedTeam] = useState(null);
+      const [editingPlayer, setEditingPlayer] = useState(null);
+      const [newTeamName, setNewTeamName] = useState('');
+
+      // チーム追加
+      const addTeam = () => {
+        if (!newTeamName.trim()) {
+          alert('チーム名を入力してください');
+          return;
+        }
+        if (teams[newTeamName]) {
+          alert('同じ名前のチームが既に存在します');
+          return;
+        }
+        setTeams({
+          ...teams,
+          [newTeamName]: {
+            name: newTeamName,
+            players: []
+          }
+        });
+        setNewTeamName('');
+      };
+
+      // チーム削除
+      const deleteTeam = (teamName) => {
+        if (!confirm(`${teamName}を削除しますか？`)) return;
+        const newTeams = { ...teams };
+        delete newTeams[teamName];
+        setTeams(newTeams);
+        if (selectedTeam === teamName) setSelectedTeam(null);
+      };
+
+      // 選手追加
+      const addPlayer = (random = false) => {
+        if (!selectedTeam) return;
+        const team = teams[selectedTeam];
+        const newId = team.players.length > 0 ? Math.max(...team.players.map(p => p.id)) + 1 : 1;
+        const newPlayer = random ? generateRandomPlayer(newId) : createDefaultPlayer(newId);
+
+        setTeams({
+          ...teams,
+          [selectedTeam]: {
+            ...team,
+            players: [...team.players, newPlayer]
+          }
+        });
+      };
+
+      // 選手削除
+      const deletePlayer = (playerId) => {
+        if (!confirm('この選手を削除しますか？')) return;
+        const team = teams[selectedTeam];
+        setTeams({
+          ...teams,
+          [selectedTeam]: {
+            ...team,
+            players: team.players.filter(p => p.id !== playerId)
+          }
+        });
+        if (editingPlayer?.id === playerId) setEditingPlayer(null);
+      };
+
+      // 選手編集保存
+      const savePlayer = (updatedPlayer) => {
+        const team = teams[selectedTeam];
+        setTeams({
+          ...teams,
+          [selectedTeam]: {
+            ...team,
+            players: team.players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p)
+          }
+        });
+        setEditingPlayer(null);
+      };
+
+      // JSONエクスポート
+      const exportJSON = () => {
+        const dataStr = JSON.stringify(teams, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'teams-data.json';
+        link.click();
+      };
+
+      // JSONインポート
+      const importJSON = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            setTeams(data);
+            alert('データを読み込みました');
+          } catch (error) {
+            alert('JSONファイルの読み込みに失敗しました: ' + error.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      // デフォルトデータのロード
+      const loadDefaultData = async () => {
+        if (!confirm('デフォルトの4チームデータを読み込みますか？\n（現在のデータは上書きされます）')) return;
+
+        try {
+          const response = await fetch('js/teams-data.js');
+          const text = await response.text();
+
+          // teams-data.jsからデータを抽出（簡易的な方法）
+          alert('デフォルトデータの読み込み機能は後ほど実装されます。\n現在は手動でインポートしてください。');
+        } catch (error) {
+          alert('デフォルトデータの読み込みに失敗しました');
+        }
+      };
+
+      const selectedTeamData = selectedTeam ? teams[selectedTeam] : null;
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6">
+          <div className="max-w-7xl mx-auto">
+            {/* ヘッダー */}
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold mb-2">⚾ チーム/選手エディター</h1>
+              <p className="text-gray-400">野球シミュレーター用のチーム・選手データを編集</p>
+            </div>
+
+            {/* アクション */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <div className="flex gap-4 flex-wrap">
+                <button
+                  onClick={exportJSON}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition"
+                >
+                  📥 JSONエクスポート
+                </button>
+                <label className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition cursor-pointer">
+                  📤 JSONインポート
+                  <input type="file" accept=".json" onChange={importJSON} className="hidden" />
+                </label>
+                <button
+                  onClick={loadDefaultData}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold transition"
+                >
+                  🔄 デフォルトデータ読込
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-12 gap-6">
+              {/* 左カラム: チーム一覧 */}
+              <div className="col-span-3">
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h2 className="text-xl font-bold mb-4">チーム一覧 ({Object.keys(teams).length})</h2>
+
+                  {/* チーム追加 */}
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      value={newTeamName}
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      placeholder="チーム名"
+                      className="w-full bg-gray-700 text-white px-3 py-2 rounded mb-2"
+                      onKeyPress={(e) => e.key === 'Enter' && addTeam()}
+                    />
+                    <button
+                      onClick={addTeam}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-bold transition"
+                    >
+                      ➕ チーム追加
+                    </button>
+                  </div>
+
+                  {/* チームリスト */}
+                  <div className="space-y-2">
+                    {Object.keys(teams).length === 0 ? (
+                      <div className="text-center text-gray-500 py-8">
+                        チームがありません
+                      </div>
+                    ) : (
+                      Object.keys(teams).map(teamName => (
+                        <div
+                          key={teamName}
+                          className={`p-3 rounded cursor-pointer transition ${
+                            selectedTeam === teamName
+                              ? 'bg-blue-600'
+                              : 'bg-gray-700 hover:bg-gray-600'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div onClick={() => setSelectedTeam(teamName)}>
+                              <div className="font-bold">{teamName}</div>
+                              <div className="text-sm text-gray-400">{teams[teamName].players.length}人</div>
+                            </div>
+                            <button
+                              onClick={() => deleteTeam(teamName)}
+                              className="text-red-400 hover:text-red-300 px-2"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 右カラム: 選手一覧・編集 */}
+              <div className="col-span-9">
+                {!selectedTeam ? (
+                  <div className="bg-gray-800 rounded-lg p-8 text-center">
+                    <div className="text-gray-500 text-xl">左側からチームを選択してください</div>
+                  </div>
+                ) : editingPlayer ? (
+                  <PlayerEditForm
+                    player={editingPlayer}
+                    onSave={savePlayer}
+                    onCancel={() => setEditingPlayer(null)}
+                  />
+                ) : (
+                  <div className="bg-gray-800 rounded-lg p-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-2xl font-bold">
+                        {selectedTeamData.name} の選手 ({selectedTeamData.players.length}人)
+                      </h2>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => addPlayer(false)}
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-bold transition"
+                        >
+                          ➕ 選手追加
+                        </button>
+                        <button
+                          onClick={() => addPlayer(true)}
+                          className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-bold transition"
+                        >
+                          🎲 ランダム生成
+                        </button>
+                      </div>
+                    </div>
+
+                    {selectedTeamData.players.length === 0 ? (
+                      <div className="text-center text-gray-500 py-12">
+                        選手がいません。「➕ 選手追加」または「🎲 ランダム生成」で追加してください。
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {selectedTeamData.players.map(player => (
+                          <div
+                            key={player.id}
+                            className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600 transition cursor-pointer"
+                            onClick={() => setEditingPlayer(player)}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <div className="font-bold text-lg">{player.name}</div>
+                                <div className="text-sm text-gray-400">#{player.id}</div>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deletePlayer(player.id);
+                                }}
+                                className="text-red-400 hover:text-red-300"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                            <div className="text-sm space-y-1">
+                              <div>ポジション: {player.position}</div>
+                              <div>打: {player.batting.meet} / 力: {player.batting.power}</div>
+                              {player.position === 'pitcher' && (
+                                <div>球速: {player.pitching.velocity}km/h</div>
+                              )}
+                            </div>
+                            <div className="mt-2 text-xs text-blue-400">クリックして編集</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // 選手編集フォーム（次に実装）
+    const PlayerEditForm = ({ player, onSave, onCancel }) => {
+      const [formData, setFormData] = useState(JSON.parse(JSON.stringify(player)));
+
+      const updateField = (category, field, value) => {
+        setFormData(prev => ({
+          ...prev,
+          [category]: {
+            ...prev[category],
+            [field]: value
+          }
+        }));
+      };
+
+      return (
+        <div className="bg-gray-800 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">{formData.name} の編集</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={onCancel}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded font-bold transition"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => onSave(formData)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-bold transition"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto pr-2">
+            {/* 基本情報 */}
+            <div className="bg-gray-700 rounded p-4">
+              <h3 className="text-lg font-bold mb-4">基本情報</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">名前</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">ポジション</label>
+                  <select
+                    value={formData.position}
+                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  >
+                    <option value="pitcher">投手</option>
+                    <option value="catcher">捕手</option>
+                    <option value="first">一塁</option>
+                    <option value="second">二塁</option>
+                    <option value="third">三塁</option>
+                    <option value="short">遊撃</option>
+                    <option value="left">左翼</option>
+                    <option value="center">中堅</option>
+                    <option value="right">右翼</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 打撃能力 */}
+            <div className="bg-gray-700 rounded p-4">
+              <h3 className="text-lg font-bold mb-4">打撃能力</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">ミート (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.batting.meet}
+                    onChange={(e) => updateField('batting', 'meet', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">パワー (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.batting.power}
+                    onChange={(e) => updateField('batting', 'power', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">選球眼 (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.batting.eye}
+                    onChange={(e) => updateField('batting', 'eye', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">打席</label>
+                  <select
+                    value={formData.batting.bats}
+                    onChange={(e) => updateField('batting', 'bats', e.target.value)}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  >
+                    <option value="right">右打ち</option>
+                    <option value="left">左打ち</option>
+                    <option value="switch">スイッチ</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">盗塁 (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.batting.steal}
+                    onChange={(e) => updateField('batting', 'steal', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 身体能力 */}
+            <div className="bg-gray-700 rounded p-4">
+              <h3 className="text-lg font-bold mb-4">身体能力</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">走力 (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.physical.speed}
+                    onChange={(e) => updateField('physical', 'speed', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">肩力 (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.physical.arm}
+                    onChange={(e) => updateField('physical', 'arm', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">投げ手</label>
+                  <select
+                    value={formData.physical.throws}
+                    onChange={(e) => updateField('physical', 'throws', e.target.value)}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  >
+                    <option value="right">右投げ</option>
+                    <option value="left">左投げ</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 守備能力 */}
+            <div className="bg-gray-700 rounded p-4">
+              <h3 className="text-lg font-bold mb-4">守備・捕手能力</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">守備力 (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.fielding.defense}
+                    onChange={(e) => updateField('fielding', 'defense', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">リード (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.catching.lead}
+                    onChange={(e) => updateField('catching', 'lead', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 投手能力 */}
+            <div className="bg-gray-700 rounded p-4 md:col-span-2">
+              <h3 className="text-lg font-bold mb-4">投手能力</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">球速 (km/h)</label>
+                  <input
+                    type="number"
+                    min="80"
+                    max="170"
+                    value={formData.pitching.velocity}
+                    onChange={(e) => updateField('pitching', 'velocity', Math.max(80, Math.min(170, parseInt(e.target.value) || 140)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">制球力 (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.pitching.control}
+                    onChange={(e) => updateField('pitching', 'control', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">スタミナ (0-200)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="200"
+                    value={formData.pitching.stamina}
+                    onChange={(e) => updateField('pitching', 'stamina', Math.max(0, Math.min(200, parseInt(e.target.value) || 0)))}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">投球フォーム</label>
+                  <select
+                    value={formData.pitching.form}
+                    onChange={(e) => updateField('pitching', 'form', e.target.value)}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  >
+                    <option value="overhand">オーバースロー</option>
+                    <option value="threeQuarter">スリークォーター</option>
+                    <option value="sidearm">サイドスロー</option>
+                    <option value="submarine">アンダースロー</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* ポジション適正 */}
+            <div className="bg-gray-700 rounded p-4 md:col-span-2">
+              <h3 className="text-lg font-bold mb-4">守備位置適正 (0-100)</h3>
+              <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+                {[
+                  { key: 'pitcher', label: '投手' },
+                  { key: 'catcher', label: '捕手' },
+                  { key: 'first', label: '一塁' },
+                  { key: 'second', label: '二塁' },
+                  { key: 'third', label: '三塁' },
+                  { key: 'short', label: '遊撃' },
+                  { key: 'left', label: '左翼' },
+                  { key: 'center', label: '中堅' },
+                  { key: 'right', label: '右翼' }
+                ].map(pos => (
+                  <div key={pos.key}>
+                    <label className="block text-xs text-gray-300 mb-1">{pos.label}</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.positionFitness[pos.key]}
+                      onChange={(e) => {
+                        const numValue = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                        setFormData(prev => ({
+                          ...prev,
+                          positionFitness: {
+                            ...prev.positionFitness,
+                            [pos.key]: numValue
+                          }
+                        }));
+                      }}
+                      className="w-full bg-gray-600 text-white px-2 py-1 rounded text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<TeamEditor />, document.getElementById('root'));
+  </script>
+</body>
+</html>
