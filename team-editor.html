@@ -688,8 +688,18 @@
                   <button
                     onClick={() => {
                       const newArsenal = [...(formData.pitching.arsenal || [])];
+                      const usedTypes = newArsenal.map(p => p.type);
+                      const availableTypes = ['straight', 'twoSeam', 'slider', 'curve', 'fork', 'changeup',
+                                              'sinker', 'shoot', 'cutter', 'splitter', 'palm', 'knuckle']
+                        .filter(type => !usedTypes.includes(type));
+
+                      if (availableTypes.length === 0) {
+                        alert('すべての変化球が登録済みです');
+                        return;
+                      }
+
                       const newId = newArsenal.length > 0 ? Math.max(...newArsenal.map(p => p.id)) + 1 : 1;
-                      newArsenal.push({ id: newId, type: 'slider', level: 50 });
+                      newArsenal.push({ id: newId, type: availableTypes[0], level: 50 });
                       setFormData(prev => ({
                         ...prev,
                         pitching: { ...prev.pitching, arsenal: newArsenal }
@@ -701,7 +711,28 @@
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {(formData.pitching.arsenal || []).map((pitch, index) => (
+                  {(formData.pitching.arsenal || []).map((pitch, index) => {
+                    // 他の変化球で既に使用されている球種を取得
+                    const usedTypes = formData.pitching.arsenal
+                      .filter((_, i) => i !== index)
+                      .map(p => p.type);
+
+                    const allPitchTypes = [
+                      { value: 'straight', label: 'ストレート' },
+                      { value: 'twoSeam', label: 'ツーシーム' },
+                      { value: 'slider', label: 'スライダー' },
+                      { value: 'curve', label: 'カーブ' },
+                      { value: 'fork', label: 'フォーク' },
+                      { value: 'changeup', label: 'チェンジアップ' },
+                      { value: 'sinker', label: 'シンカー' },
+                      { value: 'shoot', label: 'シュート' },
+                      { value: 'cutter', label: 'カッター' },
+                      { value: 'splitter', label: 'スプリッター' },
+                      { value: 'palm', label: 'パーム' },
+                      { value: 'knuckle', label: 'ナックル' }
+                    ];
+
+                    return (
                     <div key={pitch.id} className="flex gap-2 items-center">
                       <select
                         value={pitch.type}
@@ -715,18 +746,15 @@
                         }}
                         className="flex-1 bg-gray-600 text-white px-2 py-1 rounded text-sm"
                       >
-                        <option value="straight">ストレート</option>
-                        <option value="twoSeam">ツーシーム</option>
-                        <option value="slider">スライダー</option>
-                        <option value="curve">カーブ</option>
-                        <option value="fork">フォーク</option>
-                        <option value="changeup">チェンジアップ</option>
-                        <option value="sinker">シンカー</option>
-                        <option value="shoot">シュート</option>
-                        <option value="cutter">カッター</option>
-                        <option value="splitter">スプリッター</option>
-                        <option value="palm">パーム</option>
-                        <option value="knuckle">ナックル</option>
+                        {allPitchTypes.map(type => (
+                          <option
+                            key={type.value}
+                            value={type.value}
+                            disabled={usedTypes.includes(type.value)}
+                          >
+                            {type.label}{usedTypes.includes(type.value) ? ' (使用済み)' : ''}
+                          </option>
+                        ))}
                       </select>
                       <input
                         type="number"
@@ -757,7 +785,8 @@
                         🗑️
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                   {(!formData.pitching.arsenal || formData.pitching.arsenal.length === 0) && (
                     <div className="text-sm text-gray-400 text-center py-2">
                       変化球が登録されていません
