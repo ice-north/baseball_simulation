@@ -632,7 +632,7 @@
             {/* 投手能力 */}
             <div className="bg-gray-700 rounded p-4 md:col-span-2">
               <h3 className="text-lg font-bold mb-4">投手能力</h3>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">球速 (km/h)</label>
                   <input
@@ -678,6 +678,91 @@
                     <option value="sidearm">サイドスロー</option>
                     <option value="submarine">アンダースロー</option>
                   </select>
+                </div>
+              </div>
+
+              {/* 変化球 */}
+              <div className="border-t border-gray-600 pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-bold">変化球</h4>
+                  <button
+                    onClick={() => {
+                      const newArsenal = [...(formData.pitching.arsenal || [])];
+                      const newId = newArsenal.length > 0 ? Math.max(...newArsenal.map(p => p.id)) + 1 : 1;
+                      newArsenal.push({ id: newId, type: 'slider', level: 50 });
+                      setFormData(prev => ({
+                        ...prev,
+                        pitching: { ...prev.pitching, arsenal: newArsenal }
+                      }));
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    ➕ 追加
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {(formData.pitching.arsenal || []).map((pitch, index) => (
+                    <div key={pitch.id} className="flex gap-2 items-center">
+                      <select
+                        value={pitch.type}
+                        onChange={(e) => {
+                          const newArsenal = [...formData.pitching.arsenal];
+                          newArsenal[index].type = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            pitching: { ...prev.pitching, arsenal: newArsenal }
+                          }));
+                        }}
+                        className="flex-1 bg-gray-600 text-white px-2 py-1 rounded text-sm"
+                      >
+                        <option value="straight">ストレート</option>
+                        <option value="twoSeam">ツーシーム</option>
+                        <option value="slider">スライダー</option>
+                        <option value="curve">カーブ</option>
+                        <option value="fork">フォーク</option>
+                        <option value="changeup">チェンジアップ</option>
+                        <option value="sinker">シンカー</option>
+                        <option value="shoot">シュート</option>
+                        <option value="cutter">カッター</option>
+                        <option value="splitter">スプリッター</option>
+                        <option value="palm">パーム</option>
+                        <option value="knuckle">ナックル</option>
+                      </select>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={pitch.level}
+                        onChange={(e) => {
+                          const newArsenal = [...formData.pitching.arsenal];
+                          newArsenal[index].level = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                          setFormData(prev => ({
+                            ...prev,
+                            pitching: { ...prev.pitching, arsenal: newArsenal }
+                          }));
+                        }}
+                        className="w-20 bg-gray-600 text-white px-2 py-1 rounded text-sm"
+                        placeholder="Lv"
+                      />
+                      <button
+                        onClick={() => {
+                          const newArsenal = formData.pitching.arsenal.filter((_, i) => i !== index);
+                          setFormData(prev => ({
+                            ...prev,
+                            pitching: { ...prev.pitching, arsenal: newArsenal }
+                          }));
+                        }}
+                        className="text-red-400 hover:text-red-300 px-2"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
+                  {(!formData.pitching.arsenal || formData.pitching.arsenal.length === 0) && (
+                    <div className="text-sm text-gray-400 text-center py-2">
+                      変化球が登録されていません
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
