@@ -14,15 +14,16 @@ window.generateTryoutCandidates = function(year, teamCount) {
   const totalCandidates = teamCount * candidatesPerTeam;
   const candidates = [];
 
-  const positions = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
   const surnames = ['佐藤', '鈴木', '高橋', '田中', '渡辺', '伊藤', '山本', '中村', '小林', '加藤',
                     '吉田', '山田', '佐々木', '山口', '松本', '井上', '木村', '林', '斎藤', '清水'];
   const givenNames = ['太郎', '次郎', '三郎', '四郎', '健', '勇', '誠', '翔', '大輝', '隼人',
                       '翼', '颯', '陸', '蓮', '湊', '律', '奏', '樹', '海斗', '悠真'];
 
   for (let i = 1; i <= totalCandidates; i++) {
-    const position = positions[Math.floor(Math.random() * positions.length)];
-    const isPitcher = position === 'pitcher';
+    // 投手と野手を1:1の比率で生成
+    const isPitcher = Math.random() < 0.5;
+    const position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
 
     // ランダムな名前生成
     const surname = surnames[Math.floor(Math.random() * surnames.length)];
@@ -37,27 +38,28 @@ window.generateTryoutCandidates = function(year, teamCount) {
       battingOrder: 0,
       isStarter: false,
       batting: {
-        meet: isPitcher ? Math.floor(Math.random() * 30) + 20 : Math.floor(Math.random() * 50) + 40,
-        power: isPitcher ? Math.floor(Math.random() * 30) + 15 : Math.floor(Math.random() * 50) + 35,
-        eye: isPitcher ? Math.floor(Math.random() * 30) + 30 : Math.floor(Math.random() * 50) + 40,
+        // 独立リーグ設定：能力値を全体的に低く
+        meet: isPitcher ? Math.floor(Math.random() * 26) + 15 : Math.floor(Math.random() * 41) + 30,  // 投手15-40、野手30-70
+        power: isPitcher ? Math.floor(Math.random() * 26) + 10 : Math.floor(Math.random() * 41) + 25, // 投手10-35、野手25-65
+        eye: isPitcher ? Math.floor(Math.random() * 26) + 25 : Math.floor(Math.random() * 41) + 30,   // 投手25-50、野手30-70
         bats: Math.random() > 0.7 ? 'left' : Math.random() > 0.9 ? 'switch' : 'right',
-        steal: isPitcher ? Math.floor(Math.random() * 20) + 10 : Math.floor(Math.random() * 60) + 20
+        steal: isPitcher ? Math.floor(Math.random() * 16) + 10 : Math.floor(Math.random() * 51) + 20  // 投手10-25、野手20-70
       },
       physical: {
-        speed: isPitcher ? Math.floor(Math.random() * 30) + 35 : Math.floor(Math.random() * 50) + 40,
-        arm: isPitcher ? Math.floor(Math.random() * 30) + 45 : Math.floor(Math.random() * 50) + 40,
+        speed: isPitcher ? Math.floor(Math.random() * 26) + 30 : Math.floor(Math.random() * 41) + 30, // 投手30-55、野手30-70
+        arm: isPitcher ? Math.floor(Math.random() * 26) + 40 : Math.floor(Math.random() * 41) + 30,   // 投手40-65、野手30-70
         throws: Math.random() > 0.8 ? 'left' : 'right'
       },
       fielding: {
-        defense: isPitcher ? Math.floor(Math.random() * 30) + 45 : Math.floor(Math.random() * 50) + 40
+        defense: isPitcher ? Math.floor(Math.random() * 26) + 40 : Math.floor(Math.random() * 41) + 30 // 投手40-65、野手30-70
       },
       catching: {
-        lead: position === 'catcher' ? Math.floor(Math.random() * 40) + 50 : Math.floor(Math.random() * 30) + 30
+        lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 40 : Math.floor(Math.random() * 26) + 25 // 捕手40-75、その他25-50
       },
       pitching: {
-        velocity: isPitcher ? Math.floor(Math.random() * 25) + 135 : Math.floor(Math.random() * 20) + 115,
-        control: isPitcher ? Math.floor(Math.random() * 40) + 50 : Math.floor(Math.random() * 30) + 35,
-        stamina: isPitcher ? Math.floor(Math.random() * 80) + 120 : Math.floor(Math.random() * 50) + 50,
+        velocity: isPitcher ? Math.floor(Math.random() * 21) + 125 : Math.floor(Math.random() * 16) + 110, // 投手125-145、野手110-125
+        control: isPitcher ? Math.floor(Math.random() * 31) + 40 : Math.floor(Math.random() * 26) + 30,    // 投手40-70、野手30-55
+        stamina: isPitcher ? Math.floor(Math.random() * 61) + 100 : Math.floor(Math.random() * 41) + 50,   // 投手100-160、野手50-90
         form: ['overhand', 'threeQuarter', 'sidearm', 'submarine'][Math.floor(Math.random() * 4)],
         arsenal: isPitcher ? generateRandomArsenal() : [
           { id: 1, type: 'straight', level: 100 },

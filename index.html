@@ -3052,14 +3052,29 @@ if (newOuts === 3) {
         const [currentPick, setCurrentPick] = useState(0);
         const [userRoster, setUserRoster] = useState([]);
         const [positionTab, setPositionTab] = useState('all'); // 'all', 'pitcher', 'catcher', 'infielder', 'outfielder'
-        const [filterRank, setFilterRank] = useState('all');
+
+        // ポジション名をカタカナに変換
+        const getPositionName = (position) => {
+          const positionNames = {
+            pitcher: 'ピッチャー',
+            catcher: 'キャッチャー',
+            first: 'ファースト',
+            second: 'セカンド',
+            third: 'サード',
+            short: 'ショート',
+            left: 'レフト',
+            center: 'センター',
+            right: 'ライト'
+          };
+          return positionNames[position] || position;
+        };
 
         // 能力値をランク化（S/A/B/C/D）
         const getAbilityRank = (value, isPitcherVelocity = false, isStamina = false) => {
           let adjustedValue = value;
           if (isPitcherVelocity) {
-            // 球速は130基準で調整
-            adjustedValue = (value - 130) * 2.5;
+            // 球速は115基準で調整（独立リーグ設定）
+            adjustedValue = (value - 115) * 2.5;
           } else if (isStamina) {
             // スタミナは200が最大なので半分に
             adjustedValue = value / 2;
@@ -3136,11 +3151,6 @@ if (newOuts === 3) {
             if (positionTab !== 'all') {
               const category = getPositionCategory(player.position);
               if (category !== positionTab) return false;
-            }
-            // ランクフィルター
-            if (filterRank !== 'all') {
-              const rank = window.calculatePlayerRank(player);
-              if (rank !== filterRank) return false;
             }
             return true;
           })
@@ -3221,27 +3231,15 @@ if (newOuts === 3) {
                 </div>
               </div>
 
-              {/* ランクフィルター */}
+              {/* 候補者数表示 */}
               <div className="bg-gray-800 rounded-lg p-4 mb-6 flex gap-4">
-                <select
-                  value={filterRank}
-                  onChange={(e) => setFilterRank(e.target.value)}
-                  className="bg-gray-700 text-white px-4 py-2 rounded"
-                >
-                  <option value="all">全ランク</option>
-                  <option value="S">S級</option>
-                  <option value="A">A級</option>
-                  <option value="B">B級</option>
-                  <option value="C">C級</option>
-                  <option value="D">D級</option>
-                </select>
                 <div className="text-white ml-auto self-center">
                   候補者: {filteredCandidates.length} 人
                 </div>
               </div>
 
-              {/* 候補者リスト */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* 候補者リスト（4グリッド） */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {filteredCandidates.map(player => {
                   const overallRank = window.calculatePlayerRank(player);
                   const isPitcher = player.position === 'pitcher';
@@ -3255,7 +3253,7 @@ if (newOuts === 3) {
                       <div className="flex justify-between items-start mb-3">
                         <div>
                           <div className="text-white font-bold text-lg">{player.name}</div>
-                          <div className="text-sm text-gray-400">{player.age}歳 | {player.position}</div>
+                          <div className="text-sm text-gray-400">{player.age}歳 | {getPositionName(player.position)}</div>
                         </div>
                         <div className="text-center">
                           <div className="text-xs text-gray-400">総合</div>
@@ -3323,7 +3321,7 @@ if (newOuts === 3) {
                     {userRoster.map(player => (
                       <div key={player.id} className="bg-gray-700 rounded p-2 text-white text-sm">
                         <div className="font-bold">{player.name}</div>
-                        <div className="text-xs text-gray-400">{player.position}</div>
+                        <div className="text-xs text-gray-400">{getPositionName(player.position)}</div>
                       </div>
                     ))}
                   </div>
