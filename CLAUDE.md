@@ -1,9 +1,70 @@
 # 野球シミュレーター開発状況
 
 ## 現在のブランチ
-`claude/check-branch-version-6u0MJ`
+`claude/review-baseball-simulator-hSqpn`
 
 ## 最新の実装内容
+
+### 2026-01-20: 大規模リファクタリング完了
+
+#### 9. UIコンポーネントとロジックの外部ファイル化（最新）
+**index.htmlの大幅な削減とコード整理**
+
+**実施内容**：
+1. **UIコンポーネントの外部化**（約1,389行削減）
+   - `js/components/EditScreen.js` - 編集画面（523行）
+   - `js/components/ScheduleScreen.js` - スケジュール画面（485行）
+   - `js/components/PlayerStatsScreen.js` - 成績画面（204行）
+   - `js/components/RegulationsScreen.js` - 設定画面（177行）
+
+2. **ゲームロジックの外部化**（約625行削減）
+   - `js/game/autoSimulation.js` - 自動シミュレーション機能
+     - `autoSimulateGame()` - 1試合の完全物理演算
+     - `autoSimulateDailyGames()` - 当日全試合の実行
+     - `advanceDate()` - 日程進行処理
+
+3. **Propsベースの設計に変更**
+   - 各コンポーネントは必要なstateとsetterをpropsとして受け取る
+   - window.ComponentName形式でグローバルに公開
+   - Reactのベストプラクティスに準拠
+
+**削減結果**：
+- **index.html**: 7,220行 → 5,224行（1,996行削減、27.6%削減）
+- **外部ファイル**: 2,014行（components: 1,389行、autoSimulation: 625行）
+- **総行数**: 8,865行（全ファイル含む）
+
+**ファイル構成**：
+```
+/baseball_simulation
+├── index.html (5,224行) - メインアプリケーション
+├── js/
+│   ├── components/ (NEW)
+│   │   ├── EditScreen.js
+│   │   ├── PlayerStatsScreen.js
+│   │   ├── ScheduleScreen.js
+│   │   └── RegulationsScreen.js
+│   ├── game/
+│   │   ├── gameState.js
+│   │   └── autoSimulation.js (NEW)
+│   ├── season/
+│   │   ├── seasonManager.js
+│   │   ├── scheduleGenerator.js
+│   │   ├── calendarUI.js
+│   │   ├── regulationSettings.js
+│   │   └── dateProgression.js
+│   ├── utils/
+│   │   ├── constants.js
+│   │   └── physics.js
+│   ├── players.js
+│   ├── teams-data.js
+│   └── simulation-logic.js
+```
+
+**メリット**：
+- メンテナンス性の大幅向上
+- コードの再利用性向上
+- ファイルサイズの削減によるロード時間改善
+- 将来的なモジュール化への布石
 
 ### 2026-01-19: シーズン日程管理システム統合完了
 
@@ -186,29 +247,52 @@ seasonData = {
 ## ファイル構成
 
 ### メインファイル
-- `index.html` (4,979行) - メインアプリケーション（React）
-- `js/players.js` (583行) - 選手データ定義（24人ロスター）
+- `index.html` (5,224行) - メインアプリケーション（React）
+- `js/players.js` - 選手データ定義（24人ロスター）
+- `js/teams-data.js` - チームデータ管理
 
-### モジュール（新規追加）
-- `js/utils/constants.js` - 変化球効果、投球フォーム効果、ポジション定義
-- `js/utils/physics.js` - 物理演算・表示ユーティリティ
+### UIコンポーネント（2026-01-20追加）
+- `js/components/EditScreen.js` (523行) - 選手編集画面
+- `js/components/ScheduleScreen.js` (485行) - スケジュール・順位表画面
+- `js/components/PlayerStatsScreen.js` (204行) - 選手成績画面
+- `js/components/RegulationsScreen.js` (177行) - レギュレーション設定画面
+
+### ゲームロジック
 - `js/simulation-logic.js` - 物理計算ロジック
 - `js/game/gameState.js` - ゲーム状態管理ヘルパー
+- `js/game/autoSimulation.js` (625行) - 自動シミュレーション（2026-01-20追加）
+
+### シーズン管理
+- `js/season/seasonManager.js` - シーズンデータ管理
+- `js/season/scheduleGenerator.js` - 日程自動生成
+- `js/season/calendarUI.js` - カレンダー表示補助
+- `js/season/regulationSettings.js` - レギュレーション設定
+- `js/season/dateProgression.js` - 日付進行・フェーズ遷移
+
+### ユーティリティ
+- `js/utils/constants.js` - 定数定義（変化球効果、投球フォーム効果、ポジション定義）
+- `js/utils/physics.js` - 物理演算・表示ユーティリティ
 
 ### ディレクトリ構造
 ```
 /baseball_simulation
-├── index.html
+├── index.html (5,224行)
 ├── CLAUDE.md
 └── js/
     ├── players.js
     ├── simulation-logic.js
     ├── teams-data.js
+    ├── components/ ← NEW
+    │   ├── EditScreen.js
+    │   ├── PlayerStatsScreen.js
+    │   ├── RegulationsScreen.js
+    │   └── ScheduleScreen.js
     ├── utils/
     │   ├── constants.js
     │   └── physics.js
     ├── game/
-    │   └── gameState.js
+    │   ├── gameState.js
+    │   └── autoSimulation.js ← NEW
     └── season/
         ├── seasonManager.js
         ├── scheduleGenerator.js
