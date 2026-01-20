@@ -18,6 +18,7 @@
     const createDefaultPlayer = (id) => ({
       id,
       name: `選手${id}`,
+      age: 20,  // デフォルト年齢
       position: 'center',
       battingOrder: 0,
       isStarter: false,
@@ -40,6 +41,12 @@
         second: 50, third: 50, short: 50,
         left: 50, center: 50, right: 50
       },
+      professionalCareer: {
+        isDrafted: false,      // プロ入りしたか
+        draftYear: null,       // ドラフトされた年
+        draftTeam: null,       // ドラフト先チーム名
+        achievements: []       // 獲得タイトル（首位打者、盗塁王など）
+      },
       seasonStats: {
         batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
         pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
@@ -58,6 +65,7 @@
 
       const player = createDefaultPlayer(id);
       player.name = `選手${id}`;
+      player.age = Math.floor(Math.random() * 8) + 18;  // 18-25歳
       player.position = position;
       player.batting.bats = Math.random() > 0.7 ? 'left' : Math.random() > 0.9 ? 'switch' : 'right';
       player.physical.throws = Math.random() > 0.8 ? 'left' : 'right';
@@ -376,7 +384,7 @@
                             <div className="flex justify-between items-start mb-2">
                               <div>
                                 <div className="font-bold text-lg">{player.name}</div>
-                                <div className="text-sm text-gray-400">#{player.id}</div>
+                                <div className="text-sm text-gray-400">#{player.id} | {player.age || 20}歳</div>
                               </div>
                               <button
                                 onClick={(e) => {
@@ -454,6 +462,17 @@
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full bg-gray-600 text-white px-3 py-2 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">年齢</label>
+                  <input
+                    type="number"
+                    min="15"
+                    max="50"
+                    value={formData.age || 20}
+                    onChange={(e) => setFormData({ ...formData, age: Math.max(15, Math.min(50, parseInt(e.target.value) || 20)) })}
                     className="w-full bg-gray-600 text-white px-3 py-2 rounded"
                   />
                 </div>

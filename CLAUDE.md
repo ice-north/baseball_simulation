@@ -5,6 +5,55 @@
 
 ## 最新の実装内容
 
+### 2026-01-20: 年間サイクルシステム Phase 1 実装
+
+#### 11. Phase 1: データ構造の拡張（最新）
+**選手データに年齢・プロキャリア情報を追加**
+
+**実施内容**：
+1. **選手データ構造の拡張**（team-editor.html）
+   - `age` プロパティを追加（デフォルト: 20歳、ランダム: 18-25歳）
+   - `professionalCareer` オブジェクトを追加
+     - `isDrafted`: プロ入りフラグ（初期値: false）
+     - `draftYear`: ドラフトされた年（初期値: null）
+     - `draftTeam`: ドラフト先チーム名（初期値: null）
+     - `achievements`: 獲得タイトル配列（首位打者、盗塁王など）
+
+2. **UIの更新**
+   - 選手カードに年齢表示を追加（例: "#1 | 20歳"）
+   - 選手編集フォームに年齢入力欄を追加（15-50歳）
+   - ランダム選手生成時に18-25歳の年齢を自動設定
+
+3. **データ構造例**：
+```javascript
+const player = {
+  id: 1,
+  name: '韋駄天',
+  age: 20,              // NEW
+  position: 'center',
+  batting: { ... },
+  physical: { ... },
+  fielding: { ... },
+  catching: { ... },
+  pitching: { ... },
+  positionFitness: { ... },
+  professionalCareer: {  // NEW
+    isDrafted: false,
+    draftYear: null,
+    draftTeam: null,
+    achievements: []
+  },
+  seasonStats: { ... },
+  careerStats: { ... }
+};
+```
+
+**次のステップ（Phase 2-5）**：
+- **Phase 2**: トライアウトシステム（選手獲得）
+- **Phase 3**: プロドラフトシステム（殿堂入り）
+- **Phase 4**: 解雇システム（選手整理）
+- **Phase 5**: 年間進行システム（シーズンループ）
+
 ### 2026-01-20: チーム/選手エディターツール追加
 
 #### 10. スタンドアロンのチーム/選手エディター（最新）
