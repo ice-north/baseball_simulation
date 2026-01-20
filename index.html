@@ -3051,8 +3051,35 @@ if (newOuts === 3) {
         const [draftOrder, setDraftOrder] = useState([]);
         const [currentPick, setCurrentPick] = useState(0);
         const [userRoster, setUserRoster] = useState([]);
-        const [filterPosition, setFilterPosition] = useState('all');
+        const [positionTab, setPositionTab] = useState('all'); // 'all', 'pitcher', 'catcher', 'infielder', 'outfielder'
         const [filterRank, setFilterRank] = useState('all');
+
+        // 能力値をランク化（S/A/B/C/D）
+        const getAbilityRank = (value, isPitcherVelocity = false, isStamina = false) => {
+          let adjustedValue = value;
+          if (isPitcherVelocity) {
+            // 球速は130基準で調整
+            adjustedValue = (value - 130) * 2.5;
+          } else if (isStamina) {
+            // スタミナは200が最大なので半分に
+            adjustedValue = value / 2;
+          }
+
+          if (adjustedValue >= 90) return 'S';
+          if (adjustedValue >= 80) return 'A';
+          if (adjustedValue >= 70) return 'B';
+          if (adjustedValue >= 60) return 'C';
+          return 'D';
+        };
+
+        // ポジションカテゴリ判定
+        const getPositionCategory = (position) => {
+          if (position === 'pitcher') return 'pitcher';
+          if (position === 'catcher') return 'catcher';
+          if (['first', 'second', 'third', 'short'].includes(position)) return 'infielder';
+          if (['left', 'center', 'right'].includes(position)) return 'outfielder';
+          return 'all';
+        };
 
         // 初期化: トライアウト候補者を生成
         useEffect(() => {
@@ -3063,7 +3090,7 @@ if (newOuts === 3) {
             setTryoutCandidates(candidates);
 
             // ドラフト順序を生成（24ラウンド）
-            const teams = ['ユーザー', ...allTeams.slice(1)]; // 最初のチームをユーザーとする
+            const teams = ['ユーザー', ...allTeams.slice(1)];
             const order = window.generateSnakeDraftOrder(teams, 24);
             setDraftOrder(order);
           }
@@ -3079,7 +3106,6 @@ if (newOuts === 3) {
           const currentTeam = draftOrder[currentPick].team;
 
           if (currentTeam === 'ユーザー') {
-            // ユーザーの選択
             setUserRoster([...userRoster, player]);
             setTryoutCandidates(tryoutCandidates.filter(c => c.id !== player.id));
             setCurrentPick(currentPick + 1);
@@ -3093,29 +3119,49 @@ if (newOuts === 3) {
           const currentTeam = draftOrder[currentPick].team;
 
           if (currentTeam !== 'ユーザー') {
-            // AIの自動選択
             setTimeout(() => {
               const selected = window.selectPlayerForAI(tryoutCandidates, {});
               if (selected) {
                 setTryoutCandidates(tryoutCandidates.filter(c => c.id !== selected.id));
                 setCurrentPick(currentPick + 1);
               }
-            }, 500); // 0.5秒待機して選択
+            }, 500);
           }
         }, [currentPick, draftOrder, tryoutCandidates]);
 
-        // フィルター処理
-        const filteredCandidates = tryoutCandidates.filter(player => {
-          if (filterPosition !== 'all' && player.position !== filterPosition) return false;
-          if (filterRank !== 'all') {
-            const rank = window.calculatePlayerRank(player);
-            if (rank !== filterRank) return false;
-          }
-          return true;
-        });
+        // フィルター＆ソート処理
+        const filteredCandidates = tryoutCandidates
+          .filter(player => {
+            // ポジションタブフィルター
+            if (positionTab !== 'all') {
+              const category = getPositionCategory(player.position);
+              if (category !== positionTab) return false;
+            }
+            // ランクフィルター
+            if (filterRank !== 'all') {
+              const rank = window.calculatePlayerRank(player);
+              if (rank !== filterRank) return false;
+            }
+            return true;
+          })
+          .sort((a, b) => {
+            // ランク順にソート（S→A→B→C→D）
+            const rankOrder = { S: 5, A: 4, B: 3, C: 2, D: 1 };
+            const rankA = window.calculatePlayerRank(a);
+            const rankB = window.calculatePlayerRank(b);
+            return rankOrder[rankB] - rankOrder[rankA];
+          });
 
         const currentTeam = currentPick < draftOrder.length ? draftOrder[currentPick].team : null;
         const isUserTurn = currentTeam === 'ユーザー';
+
+        const getRankColor = (rank) => ({
+          S: 'text-pink-400',
+          A: 'text-red-400',
+          B: 'text-orange-400',
+          C: 'text-yellow-400',
+          D: 'text-gray-400'
+        }[rank]);
 
         return (
           <div className="p-8">
@@ -3150,24 +3196,33 @@ if (newOuts === 3) {
                 )}
               </div>
 
-              {/* フィルター */}
+              {/* ポジションタブ */}
+              <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                <div className="flex gap-2">
+                  {[
+                    { key: 'all', label: '全選手' },
+                    { key: 'pitcher', label: '投手' },
+                    { key: 'catcher', label: '捕手' },
+                    { key: 'infielder', label: '内野手' },
+                    { key: 'outfielder', label: '外野手' }
+                  ].map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setPositionTab(tab.key)}
+                      className={`px-4 py-2 rounded font-bold transition ${
+                        positionTab === tab.key
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ランクフィルター */}
               <div className="bg-gray-800 rounded-lg p-4 mb-6 flex gap-4">
-                <select
-                  value={filterPosition}
-                  onChange={(e) => setFilterPosition(e.target.value)}
-                  className="bg-gray-700 text-white px-4 py-2 rounded"
-                >
-                  <option value="all">全ポジション</option>
-                  <option value="pitcher">投手</option>
-                  <option value="catcher">捕手</option>
-                  <option value="first">一塁</option>
-                  <option value="second">二塁</option>
-                  <option value="third">三塁</option>
-                  <option value="short">遊撃</option>
-                  <option value="left">左翼</option>
-                  <option value="center">中堅</option>
-                  <option value="right">右翼</option>
-                </select>
                 <select
                   value={filterRank}
                   onChange={(e) => setFilterRank(e.target.value)}
@@ -3188,14 +3243,8 @@ if (newOuts === 3) {
               {/* 候補者リスト */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredCandidates.map(player => {
-                  const rank = window.calculatePlayerRank(player);
-                  const rankColor = {
-                    S: 'text-pink-400',
-                    A: 'text-red-400',
-                    B: 'text-orange-400',
-                    C: 'text-yellow-400',
-                    D: 'text-gray-400'
-                  }[rank];
+                  const overallRank = window.calculatePlayerRank(player);
+                  const isPitcher = player.position === 'pitcher';
 
                   return (
                     <div
@@ -3203,20 +3252,64 @@ if (newOuts === 3) {
                       className={`bg-gray-800 rounded-lg p-4 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition`}
                       onClick={() => isUserTurn && handleSelectPlayer(player)}
                     >
-                      <div className="flex justify-between items-start mb-2">
+                      <div className="flex justify-between items-start mb-3">
                         <div>
-                          <div className="text-white font-bold">{player.name}</div>
+                          <div className="text-white font-bold text-lg">{player.name}</div>
                           <div className="text-sm text-gray-400">{player.age}歳 | {player.position}</div>
                         </div>
-                        <div className={`text-2xl font-bold ${rankColor}`}>{rank}</div>
+                        <div className="text-center">
+                          <div className="text-xs text-gray-400">総合</div>
+                          <div className={`text-2xl font-bold ${getRankColor(overallRank)}`}>{overallRank}</div>
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-300">
-                        {player.position === 'pitcher' ? (
-                          <div>球速: {player.pitching.velocity}km/h | 制球: {player.pitching.control}</div>
-                        ) : (
-                          <div>ミート: {player.batting.meet} | パワー: {player.batting.power}</div>
-                        )}
-                      </div>
+
+                      {isPitcher ? (
+                        // 投手表示
+                        <div className="text-sm space-y-1">
+                          <div className="text-gray-300">
+                            {player.physical.throws === 'left' ? '左投げ' : '右投げ'} | {
+                              player.pitching.form === 'overhand' ? 'オーバー' :
+                              player.pitching.form === 'threeQuarter' ? 'スリークォーター' :
+                              player.pitching.form === 'sidearm' ? 'サイド' : 'アンダー'
+                            }
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            <span className={getRankColor(getAbilityRank(player.pitching.velocity, true))}>
+                              球速{getAbilityRank(player.pitching.velocity, true)}
+                            </span>
+                            <span className={getRankColor(getAbilityRank(player.pitching.control))}>
+                              制球{getAbilityRank(player.pitching.control)}
+                            </span>
+                            <span className={getRankColor(getAbilityRank(player.pitching.stamina, false, true))}>
+                              スタミナ{getAbilityRank(player.pitching.stamina, false, true)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        // 野手表示
+                        <div className="text-sm space-y-1">
+                          <div className="text-gray-300">
+                            {player.batting.bats === 'left' ? '左打ち' : player.batting.bats === 'switch' ? 'スイッチ' : '右打ち'}
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            <span className={getRankColor(getAbilityRank(player.batting.meet))}>
+                              ミート{getAbilityRank(player.batting.meet)}
+                            </span>
+                            <span className={getRankColor(getAbilityRank(player.batting.power))}>
+                              パワー{getAbilityRank(player.batting.power)}
+                            </span>
+                            <span className={getRankColor(getAbilityRank(player.physical.speed))}>
+                              走力{getAbilityRank(player.physical.speed)}
+                            </span>
+                            <span className={getRankColor(getAbilityRank(player.physical.arm))}>
+                              肩{getAbilityRank(player.physical.arm)}
+                            </span>
+                            <span className={getRankColor(getAbilityRank(player.fielding.defense))}>
+                              守備{getAbilityRank(player.fielding.defense)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
