@@ -5,44 +5,33 @@
 
 ## 最新の実装内容
 
-### 2026-01-20: 大規模リファクタリング完了
+### 2026-01-20: ゲームロジックの外部ファイル化完了
 
-#### 9. UIコンポーネントとロジックの外部ファイル化（最新）
-**index.htmlの大幅な削減とコード整理**
+#### 9. ゲームロジックの外部ファイル化（最新）
+**自動シミュレーション機能の分離とCORS問題の解決**
 
 **実施内容**：
-1. **UIコンポーネントの外部化**（約1,389行削減）
-   - `js/components/EditScreen.js` - 編集画面（523行）
-   - `js/components/ScheduleScreen.js` - スケジュール画面（485行）
-   - `js/components/PlayerStatsScreen.js` - 成績画面（204行）
-   - `js/components/RegulationsScreen.js` - 設定画面（177行）
-
-2. **ゲームロジックの外部化**（約625行削減）
+1. **ゲームロジックの外部化**（625行）
    - `js/game/autoSimulation.js` - 自動シミュレーション機能
      - `autoSimulateGame()` - 1試合の完全物理演算
      - `autoSimulateDailyGames()` - 当日全試合の実行
      - `advanceDate()` - 日程進行処理
 
-3. **Propsベースの設計に変更**
-   - 各コンポーネントは必要なstateとsetterをpropsとして受け取る
-   - window.ComponentName形式でグローバルに公開
-   - Reactのベストプラクティスに準拠
+2. **CORSエラー対応**
+   - UIコンポーネントはBabelスタンドアロン版の制限により外部JSXファイル化不可
+   - file://プロトコルでの外部JSX読み込みはCORSエラーが発生
+   - UIコンポーネントはindex.html内に整理・統合して配置
 
-**削減結果**：
-- **index.html**: 7,220行 → 5,224行（1,996行削減、27.6%削減）
-- **外部ファイル**: 2,014行（components: 1,389行、autoSimulation: 625行）
-- **総行数**: 8,865行（全ファイル含む）
+**最終結果**：
+- **index.html**: 7,220行 → 6,608行（612行削減、8.5%削減）
+- **外部ファイル**: 625行（autoSimulation.js）
+- **総行数**: 8,247行（全ファイル含む）
 
 **ファイル構成**：
 ```
 /baseball_simulation
-├── index.html (5,224行) - メインアプリケーション
+├── index.html (6,608行) - メインアプリケーション
 ├── js/
-│   ├── components/ (NEW)
-│   │   ├── EditScreen.js
-│   │   ├── PlayerStatsScreen.js
-│   │   ├── ScheduleScreen.js
-│   │   └── RegulationsScreen.js
 │   ├── game/
 │   │   ├── gameState.js
 │   │   └── autoSimulation.js (NEW)
@@ -60,11 +49,18 @@
 │   └── simulation-logic.js
 ```
 
+**技術的制約と学び**：
+- **Babelスタンドアロン版の制限**: 外部JSXファイルの読み込み非対応（CORSエラー）
+- **file://プロトコルの制限**: XMLHttpRequestによる外部ファイル読み込み不可
+- **解決策**:
+  - 通常のJavaScriptファイルのみ外部化可能
+  - JSXコンポーネントはindex.html内に配置
+  - または、Vite/WebpackなどのビルドツールとHTTPサーバーの導入が必要
+
 **メリット**：
-- メンテナンス性の大幅向上
-- コードの再利用性向上
-- ファイルサイズの削減によるロード時間改善
-- 将来的なモジュール化への布石
+- 自動シミュレーション機能の保守性向上
+- file://プロトコルでも正常動作（開発環境不要）
+- 将来的なビルドツール導入への布石
 
 ### 2026-01-19: シーズン日程管理システム統合完了
 
@@ -247,15 +243,10 @@ seasonData = {
 ## ファイル構成
 
 ### メインファイル
-- `index.html` (5,224行) - メインアプリケーション（React）
+- `index.html` (6,608行) - メインアプリケーション（React）
+  - UIコンポーネント（EditScreen, ScheduleScreen, PlayerStatsScreen, RegulationsScreen）を内包
 - `js/players.js` - 選手データ定義（24人ロスター）
 - `js/teams-data.js` - チームデータ管理
-
-### UIコンポーネント（2026-01-20追加）
-- `js/components/EditScreen.js` (523行) - 選手編集画面
-- `js/components/ScheduleScreen.js` (485行) - スケジュール・順位表画面
-- `js/components/PlayerStatsScreen.js` (204行) - 選手成績画面
-- `js/components/RegulationsScreen.js` (177行) - レギュレーション設定画面
 
 ### ゲームロジック
 - `js/simulation-logic.js` - 物理計算ロジック
@@ -276,23 +267,18 @@ seasonData = {
 ### ディレクトリ構造
 ```
 /baseball_simulation
-├── index.html (5,224行)
+├── index.html (6,608行)
 ├── CLAUDE.md
 └── js/
     ├── players.js
     ├── simulation-logic.js
     ├── teams-data.js
-    ├── components/ ← NEW
-    │   ├── EditScreen.js
-    │   ├── PlayerStatsScreen.js
-    │   ├── RegulationsScreen.js
-    │   └── ScheduleScreen.js
     ├── utils/
     │   ├── constants.js
     │   └── physics.js
     ├── game/
     │   ├── gameState.js
-    │   └── autoSimulation.js ← NEW
+    │   └── autoSimulation.js ← NEW (2026-01-20)
     └── season/
         ├── seasonManager.js
         ├── scheduleGenerator.js
@@ -300,6 +286,8 @@ seasonData = {
         ├── regulationSettings.js
         └── dateProgression.js
 ```
+
+**注意**: UIコンポーネント（EditScreen等）はBabelスタンドアロン版の制限によりindex.html内に配置
 
 ## 技術的なポイント
 
