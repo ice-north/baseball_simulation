@@ -15,20 +15,14 @@ window.generateTryoutCandidates = function(year, teamCount) {
   const candidates = [];
 
   const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
-  const surnames = ['佐藤', '鈴木', '高橋', '田中', '渡辺', '伊藤', '山本', '中村', '小林', '加藤',
-                    '吉田', '山田', '佐々木', '山口', '松本', '井上', '木村', '林', '斎藤', '清水'];
-  const givenNames = ['太郎', '次郎', '三郎', '四郎', '健', '勇', '誠', '翔', '大輝', '隼人',
-                      '翼', '颯', '陸', '蓮', '湊', '律', '奏', '樹', '海斗', '悠真'];
 
   for (let i = 1; i <= totalCandidates; i++) {
     // 投手と野手を1:1の比率で生成
     const isPitcher = Math.random() < 0.5;
     const position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
 
-    // ランダムな名前生成
-    const surname = surnames[Math.floor(Math.random() * surnames.length)];
-    const givenName = givenNames[Math.floor(Math.random() * givenNames.length)];
-    const name = `${surname} ${givenName}`;
+    // ランダムな名前生成（選手名データベースから3000×3000の重み付き選択）
+    const name = window.generateRandomPlayerName();
 
     const player = {
       id: i,
