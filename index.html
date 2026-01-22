@@ -4577,20 +4577,20 @@ if (newOuts === 3) {
 };
 
 // ロスター管理画面
-const RosterScreen = ({ allTeams, setAllTeams }) => {
+const RosterScreen = () => {
   const [selectedTeam, setSelectedTeam] = useState('チームA');
   const [releaseConfirm, setReleaseConfirm] = useState(null);
+  const [updateTrigger, setUpdateTrigger] = useState(0); // 再レンダリング用
 
+  const allTeams = window.TEAMS_DATA || {};
   const team = allTeams[selectedTeam];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
 
   const handleRelease = (playerId) => {
     const updatedTeam = window.releasePlayer(team, playerId);
-    setAllTeams({
-      ...allTeams,
-      [selectedTeam]: updatedTeam
-    });
+    window.TEAMS_DATA[selectedTeam] = updatedTeam;
     setReleaseConfirm(null);
+    setUpdateTrigger(prev => prev + 1); // 再レンダリング
   };
 
   return (
@@ -4708,7 +4708,7 @@ const RosterScreen = ({ allTeams, setAllTeams }) => {
 };
 
 // オフシーズン画面
-const OffSeasonScreen = ({ seasonData, setSeasonData, allTeams, setAllTeams }) => {
+const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
   const [processing, setProcessing] = useState(false);
   const [seasonResults, setSeasonResults] = useState(null);
 
@@ -4721,10 +4721,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, allTeams, setAllTeams }) =
     setProcessing(true);
 
     try {
+      const allTeams = window.TEAMS_DATA || {};
       const result = window.advanceToNextYear(seasonData, allTeams);
       setSeasonResults(result);
       setSeasonData(result.newSeasonData);
-      setAllTeams(result.updatedTeams);
+      // window.TEAMS_DATAを更新
+      Object.keys(result.updatedTeams).forEach(teamName => {
+        window.TEAMS_DATA[teamName] = result.updatedTeams[teamName];
+      });
     } catch (error) {
       console.error('年度進行エラー:', error);
       alert('年度進行中にエラーが発生しました');
@@ -5074,15 +5078,10 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, allTeams, setAllTeams }) =
           seasonData={seasonData}
           allTeams={allTeams}
         />;
-        if (managementView === 'roster') return <RosterScreen
-          allTeams={allTeams}
-          setAllTeams={setAllTeams}
-        />;
+        if (managementView === 'roster') return <RosterScreen />;
         if (managementView === 'offseason') return <OffSeasonScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}
-          allTeams={allTeams}
-          setAllTeams={setAllTeams}
         />;
         if (managementView === 'stats') return <PlayerStatsScreen
           seasonData={seasonData}
