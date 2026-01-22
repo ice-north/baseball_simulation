@@ -39,7 +39,8 @@
       }, []);
 
       // 画面モード管理
-      const [screenMode, setScreenMode] = useState('management'); // 'game' or 'management'
+      const [screenMode, setScreenMode] = useState('start'); // 'start', 'game', 'management'
+      const [gameFlowState, setGameFlowState] = useState('title'); // 'title', 'newgame_regulations', 'newgame_tryout', 'newgame_camp', 'season'
       const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save', 'regulations'
       const [scheduleTab, setScheduleTab] = useState('league'); // 'league', 'batting', 'pitching'
 
@@ -62,43 +63,39 @@
       const [seasonData, setSeasonData] = useState(null);
       const [selectedMonth, setSelectedMonth] = useState(3); // カレンダー表示月
 
-      // シーズンデータの初期化
-      useEffect(() => {
-        if (!seasonData && typeof createSeasonData === 'function') {
-          const newSeasonData = createSeasonData(1);
+      // シーズンデータの初期化（NEW GAMEフローから呼ばれる）
+      const initializeNewGame = (regulations) => {
+        const newSeasonData = createSeasonData(1);
 
-          // スケジュール生成
-          const schedule = generateFullSeasonSchedule({
-            teams: allTeams,
-            gamesPerSeason: 60,
-            startDate: { year: 2024, month: 3, day: 1 },
-            endDate: { year: 2024, month: 9, day: 30 }
-          });
+        // レギュレーション設定を適用
+        newSeasonData.settings = { ...regulations };
 
-          // 順位表初期化
-          const standings = initializeStandings(allTeams);
-
-          // 投手ローテーションを割り当て（TEAMS_DATAから取得）
-          const teamRosters = {};
-          if (window.TEAMS_DATA) {
-            allTeams.forEach(teamName => {
-              if (window.TEAMS_DATA[teamName]) {
-                teamRosters[teamName] = window.TEAMS_DATA[teamName].players || [];
-              }
-            });
-
-            // 投手割り当て
-            newSeasonData.schedule = assignPitchersToSchedule(schedule, teamRosters, 5);
-          } else {
-            newSeasonData.schedule = schedule;
-          }
-
-          newSeasonData.standings = standings;
-          newSeasonData.settings.teamsCount = allTeams.length;
-
-          setSeasonData(newSeasonData);
+        // チーム数に応じてリーグ構成を更新
+        const teamCount = regulations.teamsCount || 4;
+        const teamNames = [];
+        for (let i = 0; i < teamCount; i++) {
+          teamNames.push(`チーム${String.fromCharCode(65 + i)}`); // A, B, C, D...
         }
-      }, [allTeams.join(',')]);
+
+        setLeagueConfig({
+          format: 'single',
+          teamsPerLeague: teamCount,
+          leagues: [{ name: 'リーグ', teams: teamNames }]
+        });
+
+        // スケジュール生成
+        const schedule = generateFullSeasonSchedule({
+          teams: teamNames,
+          gamesPerSeason: regulations.gamesPerSeason || 60,
+          startDate: { year: 2024, month: 3, day: 1 },
+          endDate: { year: 2024, month: 9, day: 30 }
+        });
+
+        newSeasonData.schedule = schedule;
+        newSeasonData.standings = initializeStandings(teamNames);
+
+        setSeasonData(newSeasonData);
+      };
 
       // 後方互換性のため、既存の変数名でもアクセス可能にする
       const seasonYear = seasonData?.year || 1;
@@ -3072,12 +3069,13 @@ if (newOuts === 3) {
       };
 
       // トライアウト画面コンポーネント
-      const TryoutScreen = ({ seasonData, allTeams }) => {
+      const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete }) => {
         const [tryoutCandidates, setTryoutCandidates] = useState([]);
         const [draftOrder, setDraftOrder] = useState([]);
         const [currentPick, setCurrentPick] = useState(0);
         const [userRoster, setUserRoster] = useState([]);
         const [positionTab, setPositionTab] = useState('all'); // 'all', 'pitcher', 'catcher', 'infielder', 'outfielder'
+        const [draftComplete, setDraftComplete] = useState(false);
 
         // ポジション名をカタカナに変換
         const getPositionName = (position) => {
@@ -3125,17 +3123,18 @@ if (newOuts === 3) {
         // 初期化: トライアウト候補者を生成
         useEffect(() => {
           if (tryoutCandidates.length === 0 && typeof window.generateTryoutCandidates === 'function') {
-            const year = seasonData?.year || 1;
-            const teamCount = allTeams.length;
+            // isInitialTryoutがtrueならyear=1（30人×チーム数）、falseならyear=2（15人×チーム数）
+            const year = isInitialTryout ? 1 : (seasonData?.year || 1);
+            const teamCount = Object.keys(allTeams).length || 4;
             const candidates = window.generateTryoutCandidates(year, teamCount);
             setTryoutCandidates(candidates);
 
             // ドラフト順序を生成（24ラウンド）
-            const teams = ['ユーザー', ...allTeams.slice(1)];
+            const teams = ['ユーザー', ...Object.keys(allTeams).slice(1)];
             const order = window.generateSnakeDraftOrder(teams, 24);
             setDraftOrder(order);
           }
-        }, [seasonData, allTeams, tryoutCandidates.length]);
+        }, [seasonData, allTeams, tryoutCandidates.length, isInitialTryout]);
 
         // 選手選択処理
         const handleSelectPlayer = (player) => {
@@ -3169,6 +3168,17 @@ if (newOuts === 3) {
             }, 500);
           }
         }, [currentPick, draftOrder, tryoutCandidates]);
+
+        // ドラフト完了検出
+        useEffect(() => {
+          if (currentPick >= draftOrder.length && !draftComplete) {
+            setDraftComplete(true);
+            // 初期トライアウトの場合は自動的にキャンプへ進む
+            if (isInitialTryout && onComplete) {
+              setTimeout(() => onComplete(), 1000);
+            }
+          }
+        }, [currentPick, draftOrder.length, draftComplete, onComplete, isInitialTryout]);
 
         // フィルター＆ソート処理
         const filteredCandidates = tryoutCandidates
@@ -4293,20 +4303,108 @@ if (newOuts === 3) {
   // 日付進行ハンドラー
   const handleProgressDate = (days) => {
     if (!seasonData) return;
-    const newSeasonData = progressDate(seasonData, days);
+    let newSeasonData = progressDate(seasonData, days);
+
+    // 新しい日付の試合を自動シミュレーション
+    newSeasonData = simulateGamesOnDate(newSeasonData);
+
     setSeasonData(newSeasonData);
   };
 
   const handleProgressToNextGame = () => {
     if (!seasonData) return;
-    const newSeasonData = progressToNextGame(seasonData, 'チームA');
+    let newSeasonData = progressToNextGame(seasonData, 'チームA');
+
+    // 試合日まで進んだら、その日の試合を自動シミュレーション
+    newSeasonData = simulateGamesOnDate(newSeasonData);
+
     setSeasonData(newSeasonData);
   };
 
   const handleProgressToNextPhase = () => {
     if (!seasonData) return;
-    const newSeasonData = progressToNextPhase(seasonData);
+    let newSeasonData = progressToNextPhase(seasonData);
+
+    // フェーズ遷移時に途中の全試合を自動シミュレーション
+    newSeasonData = simulateAllRemainingGames(newSeasonData);
+
     setSeasonData(newSeasonData);
+  };
+
+  // 指定日の試合を自動シミュレーション
+  const simulateGamesOnDate = (seasonData) => {
+    const currentDate = seasonData.currentDate;
+    const todayGames = getScheduleByDate(seasonData.schedule, currentDate);
+
+    if (todayGames.length === 0) return seasonData;
+
+    let updatedSeasonData = { ...seasonData };
+
+    todayGames.forEach(game => {
+      // 既に結果がある場合はスキップ
+      if (game.result) return;
+
+      // チームデータの存在確認
+      const homeTeam = window.TEAMS_DATA?.[game.home];
+      const awayTeam = window.TEAMS_DATA?.[game.away];
+
+      if (!homeTeam || !awayTeam) return;
+
+      // 試合をシミュレーション（チーム名を渡す）
+      const gameResult = window.autoSimulateGame?.(game.home, game.away);
+
+      if (gameResult) {
+        // 試合結果を記録
+        const result = {
+          date: currentDate,
+          home: game.home,
+          away: game.away,
+          homeScore: gameResult.homeScore,
+          awayScore: gameResult.awayScore
+        };
+
+        updatedSeasonData = recordGameResult(updatedSeasonData, result);
+      }
+    });
+
+    return updatedSeasonData;
+  };
+
+  // フェーズ内の全未消化試合を自動シミュレーション
+  const simulateAllRemainingGames = (seasonData) => {
+    let updatedSeasonData = { ...seasonData };
+    const currentPhase = seasonData.phase;
+
+    // 現在フェーズの全試合を取得
+    const phaseGames = seasonData.schedule.filter(game => {
+      // フェーズが一致し、まだ結果がない試合
+      const gamePhase = getCurrentPhase(game.date.month, game.date.day);
+      return gamePhase === currentPhase && !game.result;
+    });
+
+    phaseGames.forEach(game => {
+      const homeTeam = window.TEAMS_DATA?.[game.home];
+      const awayTeam = window.TEAMS_DATA?.[game.away];
+
+      if (!homeTeam || !awayTeam) return;
+
+      // 試合をシミュレーション（チーム名を渡す）
+      const gameResult = window.autoSimulateGame?.(game.home, game.away);
+
+      if (gameResult) {
+        const result = {
+          date: game.date,
+          home: game.home,
+          away: game.away,
+          homeScore: gameResult.homeScore,
+          awayScore: gameResult.awayScore
+        };
+
+        updatedSeasonData = recordGameResult(updatedSeasonData, result);
+      }
+    });
+
+    return updatedSeasonData;
   };
 
   // 当月のカレンダーデータを生成
@@ -4880,6 +4978,171 @@ const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"
           >
             {seasonData.year}年目を開始
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// スタート画面
+const StartScreen = ({ onNewGame, onContinue, onEdit }) => {
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-6xl font-bold text-white mb-4">⚾ 野球シミュレーター</h1>
+        <p className="text-xl text-gray-400 mb-12">Baseball Management Simulator</p>
+
+        <div className="space-y-4">
+          <button
+            onClick={onNewGame}
+            className="w-80 bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg"
+          >
+            NEW GAME
+          </button>
+
+          <button
+            onClick={onContinue}
+            disabled
+            className="w-80 bg-gray-600 text-gray-400 px-8 py-4 rounded-lg font-bold text-2xl cursor-not-allowed shadow-lg"
+          >
+            CONTINUE
+          </button>
+
+          <button
+            onClick={onEdit}
+            disabled
+            className="w-80 bg-gray-600 text-gray-400 px-8 py-4 rounded-lg font-bold text-2xl cursor-not-allowed shadow-lg"
+          >
+            EDIT
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-500 mt-8">CONTINUEとEDITは開発中です</p>
+      </div>
+    </div>
+  );
+};
+
+// NEW GAME用レギュレーション設定画面
+const NewGameRegulationsScreen = ({ onComplete }) => {
+  const [tempSettings, setTempSettings] = useState({
+    useDH: false,
+    gamesPerSeason: 60,
+    teamsCount: 4,
+    playoffFormat: 'single',
+    maxExtraInnings: 12
+  });
+
+  const handleApplyPreset = (presetName) => {
+    const presets = {
+      independent: { useDH: false, gamesPerSeason: 60, teamsCount: 4, playoffFormat: 'single', maxExtraInnings: 12 },
+      pro: { useDH: true, gamesPerSeason: 143, teamsCount: 6, playoffFormat: 'double', maxExtraInnings: 12 },
+      highschool: { useDH: false, gamesPerSeason: 40, teamsCount: 8, playoffFormat: 'none', maxExtraInnings: 15 },
+      college: { useDH: true, gamesPerSeason: 52, teamsCount: 6, playoffFormat: 'single', maxExtraInnings: 12 }
+    };
+    setTempSettings(presets[presetName]);
+  };
+
+  const handleStart = () => {
+    onComplete(tempSettings);
+  };
+
+  return (
+    <div className="p-8 bg-gray-900 min-h-screen">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-4xl font-bold text-white mb-8">⚙️ レギュレーション設定</h1>
+
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-bold mb-4 text-white">プリセット選択</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button onClick={() => handleApplyPreset('independent')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition">
+              独立リーグ
+            </button>
+            <button onClick={() => handleApplyPreset('pro')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition">
+              プロ野球
+            </button>
+            <button onClick={() => handleApplyPreset('highschool')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition">
+              高校野球
+            </button>
+            <button onClick={() => handleApplyPreset('college')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition">
+              大学野球
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-bold mb-4 text-white">詳細設定</h2>
+          <div className="space-y-4 text-white">
+            <div className="flex items-center justify-between">
+              <label className="font-medium">DH制</label>
+              <select value={tempSettings.useDH ? 'true' : 'false'} onChange={(e) => setTempSettings({...tempSettings, useDH: e.target.value === 'true'})} className="bg-gray-700 rounded px-3 py-2">
+                <option value="true">有効</option>
+                <option value="false">無効</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="font-medium">チーム数</label>
+              <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => setTempSettings({...tempSettings, teamsCount: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24" />
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="font-medium">年間試合数</label>
+              <input type="number" min="10" max="200" value={tempSettings.gamesPerSeason} onChange={(e) => setTempSettings({...tempSettings, gamesPerSeason: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24" />
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="font-medium">プレーオフ形式</label>
+              <select value={tempSettings.playoffFormat} onChange={(e) => setTempSettings({...tempSettings, playoffFormat: e.target.value})} className="bg-gray-700 rounded px-3 py-2">
+                <option value="single">1位vs2位</option>
+                <option value="double">4チーム</option>
+                <option value="none">なし</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="font-medium">延長最大回数</label>
+              <input type="number" min="9" max="20" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({...tempSettings, maxExtraInnings: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24" />
+            </div>
+          </div>
+        </div>
+
+        <div className="text-center">
+          <button onClick={handleStart} className="bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-lg font-bold text-xl transition">
+            設定完了 - トライアウトへ
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// キャンプ画面
+const CampScreen = ({ onComplete }) => {
+  return (
+    <div className="p-8 bg-gray-900 min-h-screen">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-4xl font-bold text-white mb-8">🏕️ 春季キャンプ</h1>
+
+        <div className="bg-gray-800 rounded-lg p-8 mb-6 text-center">
+          <div className="text-6xl mb-4">⚾</div>
+          <h2 className="text-2xl font-bold text-white mb-4">新シーズンに向けて準備中...</h2>
+          <p className="text-gray-300 mb-8">
+            選手たちは春季キャンプで調整を行っています。<br/>
+            （育成システムは今後実装予定）
+          </p>
+        </div>
+
+        <div className="bg-gray-700 rounded-lg p-6 mb-8">
+          <h3 className="text-lg font-bold text-white mb-3">キャンプメニュー（開発中）</h3>
+          <div className="space-y-2 text-gray-400">
+            <div>• 基礎トレーニング</div>
+            <div>• 実戦形式練習</div>
+            <div>• ポジション練習</div>
+            <div>• コンディション調整</div>
+          </div>
+        </div>
+
+        <div className="text-center">
+          <button onClick={onComplete} className="bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-lg font-bold text-xl transition">
+            キャンプ終了 - シーズン開始
           </button>
         </div>
       </div>
@@ -7255,7 +7518,52 @@ const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
       );
     }; // PitchByPitchSimulatorの終わり
 
-    ReactDOM.render(<PitchByPitchSimulator />, document.getElementById('root'));
+    // ゲームフロー統合コンポーネント
+    const GameFlowController = () => {
+      // スタート画面
+      if (screenMode === 'start' && gameFlowState === 'title') {
+        return <StartScreen
+          onNewGame={() => setGameFlowState('newgame_regulations')}
+          onContinue={() => alert('開発中')}
+          onEdit={() => alert('開発中')}
+        />;
+      }
+
+      // NEW GAME: レギュレーション設定
+      if (screenMode === 'start' && gameFlowState === 'newgame_regulations') {
+        return <NewGameRegulationsScreen
+          onComplete={(regulations) => {
+            initializeNewGame(regulations);
+            setGameFlowState('newgame_tryout');
+          }}
+        />;
+      }
+
+      // NEW GAME: 初期トライアウト
+      if (screenMode === 'start' && gameFlowState === 'newgame_tryout') {
+        return <TryoutScreen
+          seasonData={seasonData}
+          allTeams={window.TEAMS_DATA || {}}
+          isInitialTryout={true}
+          onComplete={() => setGameFlowState('newgame_camp')}
+        />;
+      }
+
+      // NEW GAME: キャンプ
+      if (screenMode === 'start' && gameFlowState === 'newgame_camp') {
+        return <CampScreen
+          onComplete={() => {
+            setScreenMode('management');
+            setGameFlowState('season');
+          }}
+        />;
+      }
+
+      // 通常ゲーム画面
+      return <PitchByPitchSimulator />;
+    };
+
+    ReactDOM.render(<GameFlowController />, document.getElementById('root'));
   </script>
 </body>
 </html>
