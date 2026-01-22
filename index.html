@@ -22,6 +22,7 @@
   <script src="js/season/regulationSettings.js"></script>
   <script src="js/season/dateProgression.js"></script>
   <script src="js/season/tryoutSystem.js"></script>
+  <script src="js/season/yearProgressionSystem.js"></script>
   <script src="js/game/autoSimulation.js"></script>
 </head>
 <body>
@@ -2840,6 +2841,30 @@ if (newOuts === 3) {
             <button
               onClick={() => {
                 setScreenMode('management');
+                setManagementView('roster');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'roster' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              👥 ロスター管理
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('offseason');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'offseason' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              🏆 オフシーズン
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
                 setManagementView('stats');
               }}
               className={`w-full text-left px-4 py-3 rounded transition ${
@@ -3317,7 +3342,14 @@ if (newOuts === 3) {
               {/* 獲得選手リスト */}
               {userRoster.length > 0 && (
                 <div className="mt-8">
-                  <h2 className="text-2xl font-bold text-white mb-4">獲得した選手 ({userRoster.length}人)</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-2xl font-bold text-white">獲得した選手 ({userRoster.length}人)</h2>
+                    {userRoster.length > 24 && (
+                      <div className="bg-red-900 border border-red-700 rounded px-4 py-2">
+                        <span className="text-red-200 font-bold">⚠️ 24人を超えています！ロスター管理で解雇が必要です</span>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                     {userRoster.map(player => (
                       <div key={player.id} className="bg-gray-700 rounded p-2 text-white text-sm">
@@ -4544,6 +4576,313 @@ if (newOuts === 3) {
   );
 };
 
+// ロスター管理画面
+const RosterScreen = ({ allTeams, setAllTeams }) => {
+  const [selectedTeam, setSelectedTeam] = useState('チームA');
+  const [releaseConfirm, setReleaseConfirm] = useState(null);
+
+  const team = allTeams[selectedTeam];
+  if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
+
+  const handleRelease = (playerId) => {
+    const updatedTeam = window.releasePlayer(team, playerId);
+    setAllTeams({
+      ...allTeams,
+      [selectedTeam]: updatedTeam
+    });
+    setReleaseConfirm(null);
+  };
+
+  return (
+    <div className="p-8">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-6">👥 ロスター管理</h1>
+
+        {/* チーム選択 */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <label className="block text-sm font-medium text-gray-300 mb-2">チーム選択</label>
+          <select
+            value={selectedTeam}
+            onChange={(e) => setSelectedTeam(e.target.value)}
+            className="w-full bg-gray-700 text-white rounded px-4 py-2"
+          >
+            {Object.keys(allTeams).map(teamName => (
+              <option key={teamName} value={teamName}>{teamName}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* ロスター情報 */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <div className="grid grid-cols-2 gap-4 text-white">
+            <div>
+              <div className="text-sm text-gray-400">総人数</div>
+              <div className="text-2xl font-bold">{team.players.length} / 24人</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400">状態</div>
+              <div className={`text-2xl font-bold ${team.players.length > 24 ? 'text-red-400' : 'text-green-400'}`}>
+                {team.players.length > 24 ? `${team.players.length - 24}人超過` : '正常'}
+              </div>
+            </div>
+          </div>
+          {team.players.length > 24 && (
+            <div className="mt-4 p-4 bg-red-900 border border-red-700 rounded">
+              <p className="text-red-200">⚠️ ロスターが24人を超えています。選手を解雇してください。</p>
+            </div>
+          )}
+        </div>
+
+        {/* 選手リスト */}
+        <div className="bg-gray-800 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-white mb-4">選手一覧</h2>
+          <div className="space-y-2">
+            {team.players.map(player => {
+              const battingAvg = player.seasonStats.batting.atBats > 0
+                ? (player.seasonStats.batting.hits / player.seasonStats.batting.atBats).toFixed(3)
+                : '.000';
+              const era = player.seasonStats.pitching.inningsPitched > 0
+                ? ((player.seasonStats.pitching.earnedRuns * 27) / player.seasonStats.pitching.inningsPitched).toFixed(2)
+                : '-.--';
+
+              return (
+                <div key={player.id} className="bg-gray-700 rounded p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="text-white">
+                      <div className="font-bold">{player.name}</div>
+                      <div className="text-sm text-gray-400">
+                        {POSITION_NAMES[player.position]} | {player.age}歳 |
+                        {player.physical?.throws && ` 投${player.physical.throws === 'left' ? '左' : '右'}`}
+                        {player.batting?.bats && ` 打${player.batting.bats === 'left' ? '左' : player.batting.bats === 'switch' ? '両' : '右'}`}
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-300">
+                      {player.position === 'pitcher' ? (
+                        <span>防{era} {player.seasonStats.pitching.wins}勝{player.seasonStats.pitching.losses}敗</span>
+                      ) : (
+                        <span>打率{battingAvg} {player.seasonStats.batting.homeruns}本 {player.seasonStats.batting.rbis}打点</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setReleaseConfirm(player.id)}
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition"
+                  >
+                    解雇
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 解雇確認ダイアログ */}
+        {releaseConfirm !== null && (
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-gray-800 rounded-lg p-8 max-w-md">
+              <h3 className="text-xl font-bold text-white mb-4">選手解雇の確認</h3>
+              <p className="text-gray-300 mb-6">
+                {team.players.find(p => p.id === releaseConfirm)?.name} を解雇しますか？
+                この操作は取り消せません。
+              </p>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => handleRelease(releaseConfirm)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded font-bold transition"
+                >
+                  解雇する
+                </button>
+                <button
+                  onClick={() => setReleaseConfirm(null)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded font-bold transition"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// オフシーズン画面
+const OffSeasonScreen = ({ seasonData, setSeasonData, allTeams, setAllTeams }) => {
+  const [processing, setProcessing] = useState(false);
+  const [seasonResults, setSeasonResults] = useState(null);
+
+  const handleAdvanceYear = () => {
+    if (!window.advanceToNextYear) {
+      alert('年間進行システムが読み込まれていません');
+      return;
+    }
+
+    setProcessing(true);
+
+    try {
+      const result = window.advanceToNextYear(seasonData, allTeams);
+      setSeasonResults(result);
+      setSeasonData(result.newSeasonData);
+      setAllTeams(result.updatedTeams);
+    } catch (error) {
+      console.error('年度進行エラー:', error);
+      alert('年度進行中にエラーが発生しました');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  if (!seasonResults) {
+    return (
+      <div className="p-8">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-6">🏆 オフシーズン</h1>
+
+          <div className="bg-gray-800 rounded-lg p-8 text-center">
+            <h2 className="text-2xl font-bold text-white mb-4">
+              {seasonData.year}年目のシーズンを終了しますか？
+            </h2>
+            <p className="text-gray-300 mb-8">
+              シーズン終了処理を実行すると、以下の処理が行われます：<br/>
+              1. 表彰（首位打者・本塁打王など）<br/>
+              2. 選手の年齢+1<br/>
+              3. 引退処理（40歳以上、成績不振など）<br/>
+              4. シーズン成績を通算成績に加算<br/>
+              5. 次年度（{seasonData.year + 1}年目）へ移行
+            </p>
+            <button
+              onClick={handleAdvanceYear}
+              disabled={processing}
+              className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition disabled:bg-gray-600"
+            >
+              {processing ? '処理中...' : `${seasonData.year + 1}年目へ進む`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 結果表示
+  return (
+    <div className="p-8">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-6">🏆 {seasonData.year - 1}年目 シーズン結果</h1>
+
+        {/* 優勝チーム */}
+        {seasonResults.awards.champion && (
+          <div className="bg-gradient-to-r from-yellow-600 to-yellow-500 rounded-lg p-8 mb-6 text-center">
+            <div className="text-4xl mb-2">🏆</div>
+            <h2 className="text-3xl font-bold text-white mb-2">優勝</h2>
+            <div className="text-5xl font-bold text-white">{seasonResults.awards.champion}</div>
+          </div>
+        )}
+
+        {/* 個人タイトル */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <h2 className="text-2xl font-bold text-white mb-4">📊 個人タイトル</h2>
+          <div className="grid grid-cols-2 gap-4">
+            {seasonResults.awards.battingChampion && (
+              <div className="bg-gray-700 rounded p-4">
+                <div className="text-yellow-400 font-bold mb-1">首位打者</div>
+                <div className="text-white text-lg">{seasonResults.awards.battingChampion.name}</div>
+                <div className="text-gray-400 text-sm">{seasonResults.awards.battingChampion.team} | {seasonResults.awards.battingChampion.avg}</div>
+              </div>
+            )}
+            {seasonResults.awards.homeRunKing && (
+              <div className="bg-gray-700 rounded p-4">
+                <div className="text-yellow-400 font-bold mb-1">本塁打王</div>
+                <div className="text-white text-lg">{seasonResults.awards.homeRunKing.name}</div>
+                <div className="text-gray-400 text-sm">{seasonResults.awards.homeRunKing.team} | {seasonResults.awards.homeRunKing.homeruns}本</div>
+              </div>
+            )}
+            {seasonResults.awards.rbiKing && (
+              <div className="bg-gray-700 rounded p-4">
+                <div className="text-yellow-400 font-bold mb-1">打点王</div>
+                <div className="text-white text-lg">{seasonResults.awards.rbiKing.name}</div>
+                <div className="text-gray-400 text-sm">{seasonResults.awards.rbiKing.team} | {seasonResults.awards.rbiKing.rbis}打点</div>
+              </div>
+            )}
+            {seasonResults.awards.stolenBaseKing && (
+              <div className="bg-gray-700 rounded p-4">
+                <div className="text-yellow-400 font-bold mb-1">盗塁王</div>
+                <div className="text-white text-lg">{seasonResults.awards.stolenBaseKing.name}</div>
+                <div className="text-gray-400 text-sm">{seasonResults.awards.stolenBaseKing.team} | {seasonResults.awards.stolenBaseKing.stolenBases}盗塁</div>
+              </div>
+            )}
+            {seasonResults.awards.eraChampion && (
+              <div className="bg-gray-700 rounded p-4">
+                <div className="text-yellow-400 font-bold mb-1">最優秀防御率</div>
+                <div className="text-white text-lg">{seasonResults.awards.eraChampion.name}</div>
+                <div className="text-gray-400 text-sm">{seasonResults.awards.eraChampion.team} | {seasonResults.awards.eraChampion.era}</div>
+              </div>
+            )}
+            {seasonResults.awards.winsLeader && (
+              <div className="bg-gray-700 rounded p-4">
+                <div className="text-yellow-400 font-bold mb-1">最多勝</div>
+                <div className="text-white text-lg">{seasonResults.awards.winsLeader.name}</div>
+                <div className="text-gray-400 text-sm">{seasonResults.awards.winsLeader.team} | {seasonResults.awards.winsLeader.wins}勝</div>
+              </div>
+            )}
+            {seasonResults.awards.savesLeader && (
+              <div className="bg-gray-700 rounded p-4">
+                <div className="text-yellow-400 font-bold mb-1">最多セーブ</div>
+                <div className="text-white text-lg">{seasonResults.awards.savesLeader.name}</div>
+                <div className="text-gray-400 text-sm">{seasonResults.awards.savesLeader.team} | {seasonResults.awards.savesLeader.saves}S</div>
+              </div>
+            )}
+            {seasonResults.awards.strikeoutKing && (
+              <div className="bg-gray-700 rounded p-4">
+                <div className="text-yellow-400 font-bold mb-1">最多奪三振</div>
+                <div className="text-white text-lg">{seasonResults.awards.strikeoutKing.name}</div>
+                <div className="text-gray-400 text-sm">{seasonResults.awards.strikeoutKing.team} | {seasonResults.awards.strikeoutKing.strikeouts}K</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 引退選手 */}
+        {seasonResults.retirements.length > 0 && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <h2 className="text-2xl font-bold text-white mb-4">👋 引退選手</h2>
+            <div className="space-y-2">
+              {seasonResults.retirements.map((retirement, idx) => (
+                <div key={idx} className={`rounded p-4 ${retirement.hallOfFame ? 'bg-yellow-900 border border-yellow-600' : 'bg-gray-700'}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-white font-bold">
+                        {retirement.hallOfFame && '🏛️ '}
+                        {retirement.name} ({retirement.age}歳)
+                      </div>
+                      <div className="text-sm text-gray-400">
+                        {retirement.team} | {POSITION_NAMES[retirement.position]} | {retirement.reason}
+                      </div>
+                    </div>
+                    {retirement.hallOfFame && (
+                      <div className="text-yellow-400 font-bold">殿堂入り</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 次へ進むボタン */}
+        <div className="text-center">
+          <button
+            onClick={() => setSeasonResults(null)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"
+          >
+            {seasonData.year}年目を開始
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // レギュレーション設定画面
       const RegulationsScreen = ({ seasonData, setSeasonData }) => {
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
@@ -4734,6 +5073,16 @@ if (newOuts === 3) {
         if (managementView === 'tryout') return <TryoutScreen
           seasonData={seasonData}
           allTeams={allTeams}
+        />;
+        if (managementView === 'roster') return <RosterScreen
+          allTeams={allTeams}
+          setAllTeams={setAllTeams}
+        />;
+        if (managementView === 'offseason') return <OffSeasonScreen
+          seasonData={seasonData}
+          setSeasonData={setSeasonData}
+          allTeams={allTeams}
+          setAllTeams={setAllTeams}
         />;
         if (managementView === 'stats') return <PlayerStatsScreen
           seasonData={seasonData}
