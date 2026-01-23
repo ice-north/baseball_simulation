@@ -73,6 +73,8 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
 
       // シーズンデータの初期化（NEW GAMEフローから呼ばれる）
       const initializeNewGame = (regulations) => {
+        console.log('🎮 NEW GAME開始: レギュレーション', regulations);
+
         const newSeasonData = createSeasonData(1);
 
         // レギュレーション設定を適用
@@ -91,6 +93,10 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
           leagues: [{ name: 'リーグ', teams: teamNames }]
         });
 
+        // チームデータを初期化
+        console.log('👥 チームデータ初期化中...');
+        initializeTeamsData();
+
         // スケジュール生成
         const schedule = generateFullSeasonSchedule({
           teams: teamNames,
@@ -103,6 +109,7 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
         newSeasonData.standings = initializeStandings(teamNames);
 
         setSeasonData(newSeasonData);
+        console.log('✅ NEW GAME初期化完了');
       };
 
       // 後方互換性のため、既存の変数名でもアクセス可能にする
@@ -5395,7 +5402,7 @@ const CampScreen = ({ onComplete }) => {
       if (screenMode === 'start' && gameFlowState === 'newgame_tryout') {
         return <TryoutScreen
           seasonData={seasonData}
-          allTeams={window.TEAMS_DATA || {}}
+          allTeams={TEAMS_DATA}
           isInitialTryout={true}
           onComplete={() => setGameFlowState('newgame_camp')}
         />;
