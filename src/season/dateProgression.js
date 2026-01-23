@@ -9,7 +9,7 @@
  * @param {number} days - 進める日数（7: 1週間、30: 1ヶ月目安）
  * @returns {Object} 更新されたシーズンデータ
  */
-const progressDate = (seasonData, days = 1) => {
+export const progressDate = (seasonData, days = 1) => {
   const newDate = advanceDate(seasonData.currentDate, days);
   const newPhase = getCurrentPhase(newDate.month, newDate.day);
 
@@ -26,7 +26,7 @@ const progressDate = (seasonData, days = 1) => {
  * @param {string} teamName - チーム名（オプション）
  * @returns {Object} 更新されたシーズンデータ
  */
-const progressToNextGame = (seasonData, teamName = null) => {
+export const progressToNextGame = (seasonData, teamName = null) => {
   const nextGame = getNextGame(seasonData.schedule, seasonData.currentDate, teamName);
 
   if (!nextGame) {
@@ -49,7 +49,7 @@ const progressToNextGame = (seasonData, teamName = null) => {
  * @param {Object} seasonData - シーズンデータ
  * @returns {Object} 更新されたシーズンデータ
  */
-const progressToNextPhase = (seasonData) => {
+export const progressToNextPhase = (seasonData) => {
   const currentMonth = seasonData.currentDate.month;
   let targetDate;
 
@@ -106,7 +106,7 @@ const progressToNextPhase = (seasonData) => {
  * @param {Object} targetDate - 目標日付 {year, month, day}
  * @returns {Object} 更新されたシーズンデータ
  */
-const progressToDate = (seasonData, targetDate) => {
+export const progressToDate = (seasonData, targetDate) => {
   const newPhase = getCurrentPhase(targetDate.month, targetDate.day);
 
   return {
@@ -127,7 +127,7 @@ const progressToDate = (seasonData, targetDate) => {
  *   - awayScore: アウェイ得点
  * @returns {Object} 更新されたシーズンデータ
  */
-const recordGameResult = (seasonData, gameResult) => {
+export const recordGameResult = (seasonData, gameResult) => {
   // スケジュールの該当試合を更新
   const updatedSchedule = seasonData.schedule.map(game => {
     if (
@@ -168,7 +168,7 @@ const recordGameResult = (seasonData, gameResult) => {
  * @param {string} newPhase - 新しいフェーズ
  * @returns {Object} 更新されたシーズンデータ
  */
-const handlePhaseTransition = (seasonData, newPhase) => {
+export const handlePhaseTransition = (seasonData, newPhase) => {
   let updatedSeasonData = { ...seasonData, phase: newPhase };
 
   switch (newPhase) {
@@ -212,7 +212,7 @@ const handlePhaseTransition = (seasonData, newPhase) => {
  * @param {Object} seasonData - シーズンデータ
  * @returns {Object} 新しいシーズンデータ
  */
-const startNewSeason = (seasonData) => {
+export const startNewSeason = (seasonData) => {
   const newYear = seasonData.year + 1;
   const newSeasonData = createSeasonData(newYear);
 
@@ -235,12 +235,3 @@ const startNewSeason = (seasonData) => {
 };
 
 // ES module exports
-export {
-  progressDate,
-  progressToNextGame,
-  progressToNextPhase,
-  progressToDate,
-  recordGameResult,
-  handlePhaseTransition,
-  startNewSeason
-};

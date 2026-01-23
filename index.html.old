@@ -1,44 +1,36 @@
-import React, { useState, useEffect, useRef } from 'react';
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>野球シミュレーター v2</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 外部JavaScriptファイルを読み込み -->
+  <script src="js/utils/constants.js"></script>
+  <script src="js/utils/physics.js"></script>
+  <script src="js/players.js"></script>
+  <script src="js/teams-data.js"></script>
+  <script src="js/data/playerNames.js"></script>
+  <script src="js/simulation-logic.js"></script>
+  <script src="js/game/gameState.js"></script>
+  <script src="js/season/seasonManager.js"></script>
+  <script src="js/season/scheduleGenerator.js"></script>
+  <script src="js/season/calendarUI.js"></script>
+  <script src="js/season/regulationSettings.js"></script>
+  <script src="js/season/dateProgression.js"></script>
+  <script src="js/season/tryoutSystem.js"></script>
+  <script src="js/season/yearProgressionSystem.js"></script>
+  <script src="js/game/autoSimulation.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
 
-// Utility imports
-import {
-  BALL_EFFECTS,
-  PITCHING_FORM_EFFECTS,
-  FORM_PITCH_SYNERGY,
-  POSITION_NAMES,
-  POSITION_COLORS,
-  HAND_LABELS
-} from './utils/constants.js';
-
-import {
-  formatInnings,
-  getAbilityColor,
-  getAbilityTextColor,
-  getBestFitPosition,
-  getStaminaPenalty,
-  getInfielderEffectiveArm,
-  getHandednessEffect
-} from './utils/physics.js';
-
-// Data imports
-import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
-import { initializeTeamsData, TEAMS_DATA, setAllTeams, getAllTeams } from './teams-data.js';
-import { generateRandomPlayerName } from './data/playerNames.js';
-
-// Game logic imports
-import { simulatePlay, calculatePhysicsContact, calculateWinProbability, calculateDefensiveFitness } from './simulation-logic.js';
-import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate } from './game/autoSimulation.js';
-
-// Season management imports
-import { createSeasonData, SEASON_PHASES, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
-import { generateFullSeasonSchedule, assignPitchersToSchedule } from './season/scheduleGenerator.js';
-import { getMonthlyGames, generateCalendarData } from './season/calendarUI.js';
-import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations } from './season/regulationSettings.js';
-import { progressDate, progressToNextGame, progressToNextPhase } from './season/dateProgression.js';
-import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
-import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges } from './season/yearProgressionSystem.js';
-
-    const App = () => {
+    const PitchByPitchSimulator = () => {
       // チームデータの初期化
       useEffect(() => {
         if (typeof initializeTeamsData === 'function') {
@@ -7563,6 +7555,9 @@ const CampScreen = ({ onComplete }) => {
           </div>
         </div>
       );
-    };
+    }; // PitchByPitchSimulatorの終わり
 
-export default App;
+    ReactDOM.render(<PitchByPitchSimulator />, document.getElementById('root'));
+  </script>
+</body>
+</html>

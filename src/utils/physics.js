@@ -8,7 +8,7 @@
  * @param {number} outs - アウト数
  * @returns {string} フォーマットされたイニング表記
  */
-const formatInnings = (outs) => {
+export const formatInnings = (outs) => {
   if (outs === 0) return '0回0/3';
   const fullInnings = Math.floor(outs / 3);
   const partialOuts = outs % 3;
@@ -20,7 +20,7 @@ const formatInnings = (outs) => {
  * @param {number} value - 能力値
  * @returns {string} Tailwind CSSクラス名
  */
-const getAbilityColor = (value) => {
+export const getAbilityColor = (value) => {
   if (value >= 80) return 'bg-red-500';      // S級
   if (value >= 70) return 'bg-orange-500';   // A級
   if (value >= 60) return 'bg-yellow-500';   // B級
@@ -33,7 +33,7 @@ const getAbilityColor = (value) => {
  * @param {number} value - 能力値
  * @returns {string} Tailwind CSSクラス名
  */
-const getAbilityTextColor = (value) => {
+export const getAbilityTextColor = (value) => {
   if (value >= 90) return 'text-pink-400';     // SS級
   if (value >= 80) return 'text-red-400';      // S級
   if (value >= 70) return 'text-orange-400';   // A級
@@ -48,7 +48,7 @@ const getAbilityTextColor = (value) => {
  * @param {Object} player - 選手オブジェクト
  * @returns {string} ポジション名
  */
-const getBestFitPosition = (player) => {
+export const getBestFitPosition = (player) => {
   // positionFitnessが存在しない場合、originalPositionまたは現在のpositionを返す
   if (!player.positionFitness) {
     console.warn('positionFitness not found for player:', player.name);
@@ -78,7 +78,7 @@ const getBestFitPosition = (player) => {
  * @param {number} maxStamina - 最大スタミナ
  * @returns {Object} { velocityPenalty, controlPenalty }
  */
-const getStaminaPenalty = (currentStamina, maxStamina) => {
+export const getStaminaPenalty = (currentStamina, maxStamina) => {
   const staminaRate = currentStamina / maxStamina;
 
   let velocityPenalty = 0;
@@ -112,7 +112,7 @@ const getStaminaPenalty = (currentStamina, maxStamina) => {
  * @param {Object} defense - 守備配置オブジェクト
  * @returns {number} 実効肩力
  */
-const getInfielderEffectiveArm = (position, defense) => {
+export const getInfielderEffectiveArm = (position, defense) => {
   const player = defense[position];
   let arm = player.arm;
 
@@ -131,7 +131,7 @@ const getInfielderEffectiveArm = (position, defense) => {
  * @param {string} batterBats - 打者の打席（'right'/'left'/'switch'）
  * @returns {Object} 相性効果オブジェクト
  */
-const getHandednessEffect = (pitcherThrows, batterBats) => {
+export const getHandednessEffect = (pitcherThrows, batterBats) => {
   // スイッチヒッターの処理
   let effectiveBats = batterBats;
   if (batterBats === 'switch') {
@@ -170,12 +170,3 @@ const getHandednessEffect = (pitcherThrows, batterBats) => {
 };
 
 // ES module exports
-export {
-  formatInnings,
-  getAbilityColor,
-  getAbilityTextColor,
-  getBestFitPosition,
-  getStaminaPenalty,
-  getInfielderEffectiveArm,
-  getHandednessEffect
-};

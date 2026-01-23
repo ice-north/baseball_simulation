@@ -11,7 +11,7 @@
  * @param {Object} currentDate - 現在日付
  * @returns {Object} カレンダー情報
  */
-const generateCalendarMonth = (year, month, schedule, currentDate) => {
+export const generateCalendarMonth = (year, month, schedule, currentDate) => {
   const calendar = generateMonthCalendar(year, month, schedule);
   const phase = getCurrentPhase(month, 1);
   const phaseInfo = PHASE_INFO[phase];
@@ -30,7 +30,7 @@ const generateCalendarMonth = (year, month, schedule, currentDate) => {
  * @param {Object} date - 日付
  * @returns {Array} その日の試合配列
  */
-const getGamesForDate = (schedule, date) => {
+export const getGamesForDate = (schedule, date) => {
   return getScheduleByDate(schedule, date);
 };
 
@@ -42,7 +42,7 @@ const getGamesForDate = (schedule, date) => {
  * @param {number} month - 月
  * @returns {Array} チーム別カレンダー
  */
-const generateTeamCalendar = (schedule, teamName, year, month) => {
+export const generateTeamCalendar = (schedule, teamName, year, month) => {
   const teamSchedule = getTeamSchedule(schedule, teamName);
   const calendar = generateMonthCalendar(year, month, teamSchedule);
 
@@ -77,7 +77,7 @@ const generateTeamCalendar = (schedule, teamName, year, month) => {
  * @param {Array} calendar - カレンダー配列
  * @returns {Array} 週配列 [[日, 月, ..., 土], ...]
  */
-const splitIntoWeeks = (calendar) => {
+export const splitIntoWeeks = (calendar) => {
   const weeks = [];
   for (let i = 0; i < calendar.length; i += 7) {
     weeks.push(calendar.slice(i, i + 7));
@@ -90,7 +90,7 @@ const splitIntoWeeks = (calendar) => {
  * @param {string} phase - フェーズ
  * @returns {string} Tailwind CSSクラス
  */
-const getPhaseColor = (phase) => {
+export const getPhaseColor = (phase) => {
   const colors = {
     [SEASON_PHASES.SPRING_CAMP]: 'bg-green-700',
     [SEASON_PHASES.REGULAR_SEASON]: 'bg-blue-700',
@@ -107,7 +107,7 @@ const getPhaseColor = (phase) => {
  * @param {string} result - '○', '●', '△'
  * @returns {Object} {text, color}
  */
-const getResultMark = (result) => {
+export const getResultMark = (result) => {
   const marks = {
     '○': { text: '○', color: 'text-green-400' },
     '●': { text: '●', color: 'text-red-400' },
@@ -117,11 +117,3 @@ const getResultMark = (result) => {
 };
 
 // ES module exports
-export {
-  generateCalendarMonth,
-  getGamesForDate,
-  generateTeamCalendar,
-  splitIntoWeeks,
-  getPhaseColor,
-  getResultMark
-};

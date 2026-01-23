@@ -10,7 +10,7 @@
  * @param {Object} awayTeam - アウェイチーム
  * @returns {Object} 攻撃チーム
  */
-const getOffenseTeam = (isTopInning, homeTeam, awayTeam) => {
+export const getOffenseTeam = (isTopInning, homeTeam, awayTeam) => {
   return isTopInning ? awayTeam : homeTeam;
 };
 
@@ -21,7 +21,7 @@ const getOffenseTeam = (isTopInning, homeTeam, awayTeam) => {
  * @param {Object} awayTeam - アウェイチーム
  * @returns {Object} 守備チーム
  */
-const getDefenseTeam = (isTopInning, homeTeam, awayTeam) => {
+export const getDefenseTeam = (isTopInning, homeTeam, awayTeam) => {
   return isTopInning ? homeTeam : awayTeam;
 };
 
@@ -30,7 +30,7 @@ const getDefenseTeam = (isTopInning, homeTeam, awayTeam) => {
  * @param {Object} offenseTeam - 攻撃チーム
  * @returns {Object} 現在の打者
  */
-const getCurrentBatter = (offenseTeam) => {
+export const getCurrentBatter = (offenseTeam) => {
   return offenseTeam.players.find(p => p.battingOrder === offenseTeam.currentBatterOrder) || offenseTeam.players[0];
 };
 
@@ -39,7 +39,7 @@ const getCurrentBatter = (offenseTeam) => {
  * @param {Object} defenseTeam - 守備チーム
  * @returns {Object} 現在の投手
  */
-const getCurrentPitcher = (defenseTeam) => {
+export const getCurrentPitcher = (defenseTeam) => {
   return defenseTeam.players.find(p => p.isStarter && p.position === 'pitcher') || defenseTeam.players[8];
 };
 
@@ -48,7 +48,7 @@ const getCurrentPitcher = (defenseTeam) => {
  * @param {Object} defenseTeam - 守備チーム
  * @returns {Object} 現在の捕手
  */
-const getCurrentCatcher = (defenseTeam) => {
+export const getCurrentCatcher = (defenseTeam) => {
   return defenseTeam.players.find(p => p.isStarter && p.position === 'catcher') || defenseTeam.players[7];
 };
 
@@ -60,7 +60,7 @@ const getCurrentCatcher = (defenseTeam) => {
  * @param {Function} setHomeTeam - ホームチームのsetter
  * @param {Function} setAwayTeam - アウェイチームのsetter
  */
-const updateBatterStats = (playerId, teamType, statUpdates, setHomeTeam, setAwayTeam) => {
+export const updateBatterStats = (playerId, teamType, statUpdates, setHomeTeam, setAwayTeam) => {
   const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
   setTeam(prev => ({
     ...prev,
@@ -84,7 +84,7 @@ const updateBatterStats = (playerId, teamType, statUpdates, setHomeTeam, setAway
  * @param {Function} setHomeTeam - ホームチームのsetter
  * @param {Function} setAwayTeam - アウェイチームのsetter
  */
-const updatePitcherStats = (playerId, teamType, statUpdates, setHomeTeam, setAwayTeam) => {
+export const updatePitcherStats = (playerId, teamType, statUpdates, setHomeTeam, setAwayTeam) => {
   const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
   setTeam(prev => ({
     ...prev,
@@ -97,12 +97,3 @@ const updatePitcherStats = (playerId, teamType, statUpdates, setHomeTeam, setAwa
 };
 
 // ES module exports
-export {
-  getOffenseTeam,
-  getDefenseTeam,
-  getCurrentBatter,
-  getCurrentPitcher,
-  getCurrentCatcher,
-  updateBatterStats,
-  updatePitcherStats
-};

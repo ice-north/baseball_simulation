@@ -6,7 +6,7 @@
 /**
  * 選手の成績初期値を作成
  */
-const createPlayerStats = () => ({
+export const createPlayerStats = () => ({
   batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0 },
   pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
 });
@@ -14,7 +14,7 @@ const createPlayerStats = () => ({
 /**
  * シーズン成績の初期値を作成
  */
-const createSeasonStats = () => ({
+export const createSeasonStats = () => ({
   batting: {
     games: 0,
     atBats: 0,
@@ -47,7 +47,7 @@ const createSeasonStats = () => ({
 /**
  * 通算成績の初期値を作成
  */
-const createCareerStats = () => ({
+export const createCareerStats = () => ({
   batting: {
     games: 0,
     atBats: 0,
@@ -80,14 +80,14 @@ const createCareerStats = () => ({
 /**
  * 選手に背番号を割り当てる（IDをそのまま使用）
  */
-const assignJerseyNumbers = (players) => {
+export const assignJerseyNumbers = (players) => {
   return players.map(p => ({ ...p, number: p.id }));
 };
 
 /**
  * ホームチーム用のデフォルト選手を生成
  */
-const createDefaultPlayers = () => {
+export const createDefaultPlayers = () => {
   return [
     {
       id: 1,
@@ -269,7 +269,7 @@ const createDefaultPlayers = () => {
 /**
  * アウェイチーム用のデフォルト選手を生成
  */
-const createAwayPlayers = () => {
+export const createAwayPlayers = () => {
   return [
     {
       id: 1,
@@ -449,7 +449,7 @@ const createAwayPlayers = () => {
 /**
  * ホームチーム用の控え選手を生成
  */
-const createHomeBench = () => {
+export const createHomeBench = () => {
   return [
     // 控え野手（1-8番）
     { id: 10, name: '代打の切り札', position: 'first', isStarter: false, battingOrder: 0,
@@ -550,7 +550,7 @@ const createHomeBench = () => {
 /**
  * アウェイチーム用の控え選手を生成
  */
-const createAwayBench = () => {
+export const createAwayBench = () => {
   return [
     // 控え野手（1-8番）
     { id: 10, name: '代打職人', position: 'first', isStarter: false, battingOrder: 0,
@@ -649,13 +649,3 @@ const createAwayBench = () => {
 };
 
 // ES module exports
-export {
-  createPlayerStats,
-  createSeasonStats,
-  createCareerStats,
-  assignJerseyNumbers,
-  createDefaultPlayers,
-  createAwayPlayers,
-  createHomeBench,
-  createAwayBench
-};

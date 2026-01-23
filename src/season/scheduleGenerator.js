@@ -8,7 +8,7 @@
  * @param {Array} teams - チーム配列
  * @returns {Array} 対戦カード配列 [{home, away}, ...]
  */
-const generateRoundRobin = (teams) => {
+export const generateRoundRobin = (teams) => {
   const matchups = [];
   const n = teams.length;
 
@@ -53,7 +53,7 @@ const generateRoundRobin = (teams) => {
  *   - endDate: 終了日 {year, month, day}
  * @returns {Array} スケジュール配列
  */
-const generateFullSeasonSchedule = (config) => {
+export const generateFullSeasonSchedule = (config) => {
   const { teams, gamesPerSeason = 60, startDate, endDate } = config;
   const teamsCount = teams.length;
 
@@ -130,7 +130,7 @@ const generateFullSeasonSchedule = (config) => {
  * @param {number} rotation - ローテーション人数（通常4-6人）
  * @returns {Array} ローテーション配列
  */
-const generatePitcherRotation = (pitchers, rotation = 5) => {
+export const generatePitcherRotation = (pitchers, rotation = 5) => {
   // スタミナと能力でソート
   const sortedPitchers = [...pitchers]
     .filter(p => p.pitching && p.pitching.stamina > 100)
@@ -150,7 +150,7 @@ const generatePitcherRotation = (pitchers, rotation = 5) => {
  * @param {number} rotationSize - ローテーション人数
  * @returns {Array} 投手が割り当てられたスケジュール
  */
-const assignPitchersToSchedule = (schedule, teamRosters, rotationSize = 5) => {
+export const assignPitchersToSchedule = (schedule, teamRosters, rotationSize = 5) => {
   // 各チームのローテーションを生成
   const rotations = {};
   Object.keys(teamRosters).forEach(teamName => {
@@ -191,7 +191,7 @@ const assignPitchersToSchedule = (schedule, teamRosters, rotationSize = 5) => {
  * @param {string} teamName - チーム名
  * @returns {Array} チーム別スケジュール
  */
-const getTeamSchedule = (schedule, teamName) => {
+export const getTeamSchedule = (schedule, teamName) => {
   return schedule.filter(game => game.home === teamName || game.away === teamName);
 };
 
@@ -201,7 +201,7 @@ const getTeamSchedule = (schedule, teamName) => {
  * @param {Object} date - 日付 {year, month, day}
  * @returns {Array} その日の試合
  */
-const getScheduleByDate = (schedule, date) => {
+export const getScheduleByDate = (schedule, date) => {
   return schedule.filter(game =>
     game.date.year === date.year &&
     game.date.month === date.month &&
@@ -216,7 +216,7 @@ const getScheduleByDate = (schedule, date) => {
  * @param {number} month - 月
  * @returns {Array} その月の試合
  */
-const getScheduleByMonth = (schedule, year, month) => {
+export const getScheduleByMonth = (schedule, year, month) => {
   return schedule.filter(game =>
     game.date.year === year &&
     game.date.month === month
@@ -230,7 +230,7 @@ const getScheduleByMonth = (schedule, year, month) => {
  * @param {string} teamName - チーム名（オプション）
  * @returns {Object} 次の試合
  */
-const getNextGame = (schedule, currentDate, teamName = null) => {
+export const getNextGame = (schedule, currentDate, teamName = null) => {
   let filteredSchedule = schedule.filter(game => !game.result); // 未実施の試合
 
   if (teamName) {
@@ -252,7 +252,7 @@ const getNextGame = (schedule, currentDate, teamName = null) => {
  * @param {string} teamName - チーム名（オプション）
  * @returns {Object} {total: 総試合数, played: 実施済み, remaining: 残り}
  */
-const countGames = (schedule, teamName = null) => {
+export const countGames = (schedule, teamName = null) => {
   let filteredSchedule = schedule;
 
   if (teamName) {
@@ -269,14 +269,3 @@ const countGames = (schedule, teamName = null) => {
 };
 
 // ES module exports
-export {
-  generateRoundRobin,
-  generateFullSeasonSchedule,
-  generatePitcherRotation,
-  assignPitchersToSchedule,
-  getTeamSchedule,
-  getScheduleByDate,
-  getScheduleByMonth,
-  getNextGame,
-  countGames
-};

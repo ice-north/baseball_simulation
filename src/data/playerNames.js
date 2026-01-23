@@ -6010,7 +6010,7 @@ export const PLAYER_NAMES = {
 };
 
 // ヘルパー関数: 重み付きランダム選択
-const weightedRandomSelect = (items) => {
+export const weightedRandomSelect = (items) => {
   const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
   let random = Math.random() * totalWeight;
 

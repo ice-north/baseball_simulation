@@ -12,7 +12,7 @@
  * @param {number} tunnelingEffect - トンネリング効果（0-0.2程度）
  * @param {Object} handEffect - 左右相性効果
  */
-const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tunnelingEffect = 0, handEffect = {}) => {
+export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tunnelingEffect = 0, handEffect = {}) => {
   // 【1】スイングスピードの算出 (Powerを物理量へ)
   // Power 0 → 100km/h, Power 100 → 140km/h
   let v_swing = 100 + (batter.power * 0.4);
@@ -130,7 +130,7 @@ const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tunneling
  * トンネリング（軌道錯覚）効果の計算
  * 前球との軌道・速度の連動性が打者のタイミングに影響
  */
-const getTunnelingEffect = (lastPitch, currentPitch, catcherLead) => {
+export const getTunnelingEffect = (lastPitch, currentPitch, catcherLead) => {
   if (!lastPitch) return 0;
 
   // 球速差による錯覚効果
@@ -149,7 +149,7 @@ const getTunnelingEffect = (lastPitch, currentPitch, catcherLead) => {
 /**
  * 打出し角度の計算（コンタクト品質から）
  */
-const calculateLaunchAngle = (meetQuality, batter) => {
+export const calculateLaunchAngle = (meetQuality, batter) => {
   let baseLaunchAngle;
 
   if (meetQuality > 0.8) {
@@ -179,7 +179,7 @@ const calculateLaunchAngle = (meetQuality, batter) => {
 /**
  * 物理エンジン：打球パラメータの計算
  */
-const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult) => {
+export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult) => {
   const { exitVelocity, meetQuality } = physicsResult;
 
   // 打出し角度
@@ -223,7 +223,7 @@ const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult) => {
  * 野手が打球地点に物理的に到達できるかで判定
  * アウト率は旧モデル基準に調整
  */
-const judgeFielderReach = (battedBall, defense, batter) => {
+export const judgeFielderReach = (battedBall, defense, batter) => {
   // 防御的チェック: defenseがnullまたはundefinedの場合はデフォルト値を使用
   const safeDefense = defense || {};
   const { exitVelocity, launchAngle, distance, hangTime, direction } = battedBall || {};
@@ -392,7 +392,7 @@ const judgeFielderReach = (battedBall, defense, batter) => {
  * 守備適性計算関数
  * 選手の能力に基づいて各守備位置への適性を計算
  */
-const calculateDefensiveFitness = (player, position) => {
+export const calculateDefensiveFitness = (player, position) => {
   const defense = player.fielding?.defense || 50;
   const speed = player.physical?.speed || 50;
   const arm = player.fielding?.arm || 50;
@@ -473,11 +473,3 @@ const calculateDefensiveFitness = (player, position) => {
 };
 
 // ES module exports
-export {
-  calculatePhysicsContact,
-  getTunnelingEffect,
-  calculateLaunchAngle,
-  calculateBattedBallPhysics,
-  judgeFielderReach,
-  calculateDefensiveFitness
-};

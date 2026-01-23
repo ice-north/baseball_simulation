@@ -8,7 +8,7 @@
 /**
  * チームデータ構造
  */
-const TEAMS_DATA = {
+export const TEAMS_DATA = {
   'チームA': {
     name: 'チームA',
     players: [] // 後で設定
@@ -30,7 +30,7 @@ const TEAMS_DATA = {
 /**
  * チームAの選手データ（元のホームチーム）
  */
-const createTeamAPlayers = () => {
+export const createTeamAPlayers = () => {
   // 元のcreateDefaultPlayers()のデータを使用
   return window.createDefaultPlayers ? window.createDefaultPlayers() : [];
 };
@@ -38,7 +38,7 @@ const createTeamAPlayers = () => {
 /**
  * チームAのベンチ
  */
-const createTeamABench = () => {
+export const createTeamABench = () => {
   // 元のcreateHomeBench()のデータを使用
   return window.createHomeBench ? window.createHomeBench() : [];
 };
@@ -46,7 +46,7 @@ const createTeamABench = () => {
 /**
  * チームBの選手データ（元のアウェイチーム）
  */
-const createTeamBPlayers = () => {
+export const createTeamBPlayers = () => {
   // 元のcreateAwayPlayers()のデータを使用
   return window.createAwayPlayers ? window.createAwayPlayers() : [];
 };
@@ -54,7 +54,7 @@ const createTeamBPlayers = () => {
 /**
  * チームBのベンチ
  */
-const createTeamBBench = () => {
+export const createTeamBBench = () => {
   // 元のcreateAwayBench()のデータを使用
   return window.createAwayBench ? window.createAwayBench() : [];
 };
@@ -62,7 +62,7 @@ const createTeamBBench = () => {
 /**
  * チームCの選手データ（新規作成）
  */
-const createTeamCPlayers = () => {
+export const createTeamCPlayers = () => {
   return [
     { id: 1, name: 'スピードスター', position: 'center', battingOrder: 1,
       batting: { meet: 72, power: 48, eye: 68, bats: 'right', steal: 80 },
@@ -133,7 +133,7 @@ const createTeamCPlayers = () => {
 /**
  * チームCのベンチ
  */
-const createTeamCBench = () => {
+export const createTeamCBench = () => {
   return [
     { id: 10, name: 'セカンドエース', position: 'pitcher', isStarter: false, battingOrder: 0,
       batting: { meet: 38, power: 32, eye: 48, bats: 'right', steal: 20 },
@@ -246,7 +246,7 @@ const createTeamCBench = () => {
 /**
  * チームDの選手データ（新規作成）
  */
-const createTeamDPlayers = () => {
+export const createTeamDPlayers = () => {
   return [
     { id: 1, name: 'リードオフマン', position: 'center', battingOrder: 1,
       batting: { meet: 74, power: 46, eye: 70, bats: 'left', steal: 82 },
@@ -317,7 +317,7 @@ const createTeamDPlayers = () => {
 /**
  * チームDのベンチ
  */
-const createTeamDBench = () => {
+export const createTeamDBench = () => {
   return [
     { id: 10, name: '先発二番手', position: 'pitcher', isStarter: false, battingOrder: 0,
       batting: { meet: 36, power: 30, eye: 46, bats: 'right', steal: 18 },
@@ -430,7 +430,7 @@ const createTeamDBench = () => {
 /**
  * 全チームデータを初期化
  */
-const initializeTeamsData = () => {
+export const initializeTeamsData = () => {
   // players.jsの関数が読み込まれているか確認
   if (typeof createDefaultPlayers === 'function') {
     TEAMS_DATA['チームA'].players = [...createDefaultPlayers(), ...createHomeBench()];
@@ -456,11 +456,3 @@ const initializeTeamsData = () => {
 };
 
 // ES module exports
-export {
-  TEAMS_DATA,
-  initializeTeamsData,
-  createTeamCPlayers,
-  createTeamCBench,
-  createTeamDPlayers,
-  createTeamDBench
-};

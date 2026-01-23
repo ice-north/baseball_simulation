@@ -86,7 +86,7 @@ export function generateTryoutCandidates(year, teamCount) {
 /**
  * ランダムな変化球を生成
  */
-const generateRandomArsenal = () => {
+export const generateRandomArsenal = () => {
   const pitchTypes = ['straight', 'twoSeam', 'slider', 'curve', 'fork', 'changeup',
                       'sinker', 'shoot', 'cutter', 'splitter', 'palm', 'knuckle'];
   const arsenalSize = Math.floor(Math.random() * 3) + 2; // 2-4種類
@@ -113,7 +113,7 @@ const generateRandomArsenal = () => {
 /**
  * ポジション適性を生成
  */
-const generatePositionFitness = (mainPosition) => {
+export const generatePositionFitness = (mainPosition) => {
   const fitness = {
     pitcher: 30, catcher: 30, first: 30,
     second: 30, third: 30, short: 30,

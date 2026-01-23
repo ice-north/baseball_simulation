@@ -6,7 +6,7 @@
 /**
  * シーズンフェーズ定義
  */
-const SEASON_PHASES = {
+export const SEASON_PHASES = {
   SPRING_CAMP: 'spring_camp',      // 1-2月：春季キャンプ
   REGULAR_SEASON: 'regular_season', // 3-9月：レギュラーシーズン
   PLAYOFFS: 'playoffs',             // 10月前半：優勝決定シリーズ
@@ -18,7 +18,7 @@ const SEASON_PHASES = {
 /**
  * フェーズ情報の定義
  */
-const PHASE_INFO = {
+export const PHASE_INFO = {
   [SEASON_PHASES.SPRING_CAMP]: {
     name: '春季キャンプ',
     months: [1, 2],
@@ -62,14 +62,14 @@ const PHASE_INFO = {
 /**
  * 月の日数を取得
  */
-const getDaysInMonth = (year, month) => {
+export const getDaysInMonth = (year, month) => {
   return new Date(year, month, 0).getDate();
 };
 
 /**
  * 現在のフェーズを取得
  */
-const getCurrentPhase = (month, day) => {
+export const getCurrentPhase = (month, day) => {
   if (month >= 1 && month <= 2) {
     return SEASON_PHASES.SPRING_CAMP;
   } else if (month >= 3 && month <= 9) {
@@ -89,7 +89,7 @@ const getCurrentPhase = (month, day) => {
 /**
  * シーズン初期データ作成
  */
-const createSeasonData = (year = 1) => {
+export const createSeasonData = (year = 1) => {
   return {
     year,                           // シーズン年数
     currentDate: { year: 2024, month: 1, day: 1 },  // 現在の日付
@@ -112,7 +112,7 @@ const createSeasonData = (year = 1) => {
  * @param {number} days - 進める日数
  * @returns {Object} 新しい日付
  */
-const advanceDate = (currentDate, days = 1) => {
+export const advanceDate = (currentDate, days = 1) => {
   let { year, month, day } = currentDate;
 
   day += days;
@@ -134,7 +134,7 @@ const advanceDate = (currentDate, days = 1) => {
  * 日付を比較
  * @returns {number} -1: date1が前, 0: 同じ, 1: date1が後
  */
-const compareDates = (date1, date2) => {
+export const compareDates = (date1, date2) => {
   if (date1.year !== date2.year) return date1.year - date2.year;
   if (date1.month !== date2.month) return date1.month - date2.month;
   return date1.day - date2.day;
@@ -143,14 +143,14 @@ const compareDates = (date1, date2) => {
 /**
  * 日付を文字列に変換
  */
-const formatDate = (date) => {
+export const formatDate = (date) => {
   return `${date.year}/${date.month}/${date.day}`;
 };
 
 /**
  * 日付から曜日を取得（0:日曜日 - 6:土曜日）
  */
-const getDayOfWeek = (date) => {
+export const getDayOfWeek = (date) => {
   return new Date(date.year, date.month - 1, date.day).getDay();
 };
 
@@ -159,7 +159,7 @@ const getDayOfWeek = (date) => {
  * - レギュラーシーズン：火・水・木・金・土・日（月曜休み）
  * - プレーオフ：全日
  */
-const isGameDay = (date, phase) => {
+export const isGameDay = (date, phase) => {
   const dayOfWeek = getDayOfWeek(date);
 
   if (phase === SEASON_PHASES.REGULAR_SEASON) {
@@ -178,7 +178,7 @@ const isGameDay = (date, phase) => {
  * @param {number} startYear - 開始年
  * @returns {Array} スケジュール配列
  */
-const generateRegularSeasonSchedule = (teams, gamesPerOpponent = 20, startYear = 2024) => {
+export const generateRegularSeasonSchedule = (teams, gamesPerOpponent = 20, startYear = 2024) => {
   const schedule = [];
   const teamsCount = teams.length;
 
@@ -240,7 +240,7 @@ const generateRegularSeasonSchedule = (teams, gamesPerOpponent = 20, startYear =
  * @param {number} year - 年
  * @returns {Array} プレーオフスケジュール
  */
-const generatePlayoffSchedule = (teams, format = 'single', year = 2024) => {
+export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) => {
   const schedule = [];
   const startDate = { year, month: 10, day: 1 };
 
@@ -313,7 +313,7 @@ const generatePlayoffSchedule = (teams, format = 'single', year = 2024) => {
  * @param {Array} standings - 順位表
  * @param {Object} gameResult - 試合結果
  */
-const updateStandings = (standings, gameResult) => {
+export const updateStandings = (standings, gameResult) => {
   const { home, away, homeScore, awayScore } = gameResult;
 
   const homeTeam = standings.find(t => t.team === home);
@@ -344,7 +344,7 @@ const updateStandings = (standings, gameResult) => {
  * 順位表を初期化
  * @param {Array} teams - チーム配列
  */
-const initializeStandings = (teams) => {
+export const initializeStandings = (teams) => {
   return teams.map(team => ({
     team,
     wins: 0,
@@ -362,7 +362,7 @@ const initializeStandings = (teams) => {
  * @param {Array} schedule - 試合スケジュール
  * @returns {Array} カレンダーデータ
  */
-const generateMonthCalendar = (year, month, schedule) => {
+export const generateMonthCalendar = (year, month, schedule) => {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDayOfWeek = getDayOfWeek({ year, month, day: 1 });
 
@@ -396,20 +396,3 @@ const generateMonthCalendar = (year, month, schedule) => {
 };
 
 // ES module exports
-export {
-  SEASON_PHASES,
-  PHASE_INFO,
-  getDaysInMonth,
-  getCurrentPhase,
-  createSeasonData,
-  advanceDate,
-  compareDates,
-  formatDate,
-  getDayOfWeek,
-  isGameDay,
-  generateRegularSeasonSchedule,
-  generatePlayoffSchedule,
-  updateStandings,
-  initializeStandings,
-  generateMonthCalendar
-};

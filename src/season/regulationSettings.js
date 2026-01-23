@@ -6,7 +6,7 @@
 /**
  * デフォルトレギュレーション設定
  */
-const DEFAULT_REGULATIONS = {
+export const DEFAULT_REGULATIONS = {
   useDH: false,           // DH制
   gamesPerSeason: 60,     // 年間試合数（チームあたり）
   teamsCount: 4,          // チーム数
@@ -24,7 +24,7 @@ const DEFAULT_REGULATIONS = {
  * @param {Object} regulations - 設定オブジェクト
  * @returns {Object} {valid: boolean, errors: string[]}
  */
-const validateRegulations = (regulations) => {
+export const validateRegulations = (regulations) => {
   const errors = [];
 
   // チーム数の検証（最低2チーム、最大12チーム）
@@ -69,7 +69,7 @@ const validateRegulations = (regulations) => {
  * @param {string} phase - 現在のフェーズ
  * @returns {boolean}
  */
-const canModifyRegulations = (phase) => {
+export const canModifyRegulations = (phase) => {
   return phase === SEASON_PHASES.OFF_SEASON;
 };
 
@@ -78,7 +78,7 @@ const canModifyRegulations = (phase) => {
  * @param {string} format - 形式
  * @returns {string} 説明文
  */
-const getPlayoffFormatDescription = (format) => {
+export const getPlayoffFormatDescription = (format) => {
   const descriptions = {
     'single': '1位 vs 2位の対戦（3戦先取制、最大5試合）',
     'double': '4チームトーナメント（1位vs4位、2位vs3位 → 決勝）',
@@ -90,7 +90,7 @@ const getPlayoffFormatDescription = (format) => {
 /**
  * レギュレーション設定のプリセット
  */
-const REGULATION_PRESETS = {
+export const REGULATION_PRESETS = {
   independent: {
     name: '独立リーグ',
     regulations: {
@@ -142,17 +142,9 @@ const REGULATION_PRESETS = {
  * @param {string} presetName - プリセット名
  * @returns {Object} レギュレーション設定
  */
-const applyPreset = (presetName) => {
+export const applyPreset = (presetName) => {
   const preset = REGULATION_PRESETS[presetName];
   return preset ? { ...preset.regulations } : { ...DEFAULT_REGULATIONS };
 };
 
 // ES module exports
-export {
-  DEFAULT_REGULATIONS,
-  validateRegulations,
-  canModifyRegulations,
-  getPlayoffFormatDescription,
-  REGULATION_PRESETS,
-  applyPreset
-};

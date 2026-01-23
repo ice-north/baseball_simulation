@@ -10,7 +10,7 @@
  * weakBonus: 弱い打球への影響
  * velocityMinus: ストレートからの球速減少
  */
-const BALL_EFFECTS = {
+export const BALL_EFFECTS = {
   straight: {
     name: 'ストレート',
     whiffBonus: 0,
@@ -105,7 +105,7 @@ const BALL_EFFECTS = {
  * whiffBonus: 空振り率への影響（サイドスロー・アンダースローは同じ利き腕の打者に対してのみ適用）
  *            例: 左サイドスローは左打者に強い、右アンダースローは右打者に強い
  */
-const PITCHING_FORM_EFFECTS = {
+export const PITCHING_FORM_EFFECTS = {
   overhand: {
     name: 'オーバースロー',
     velocityBonus: 3,
@@ -139,7 +139,7 @@ const PITCHING_FORM_EFFECTS = {
 /**
  * 投球フォームと相性の良い変化球（ボーナス適用）
  */
-const FORM_PITCH_SYNERGY = {
+export const FORM_PITCH_SYNERGY = {
   overhand: ['curve', 'fork', 'splitter', 'knuckle'],      // 縦変化
   threeQuarter: [],                                         // すべて平均的
   sidearm: ['slider', 'shoot', 'cutter', 'twoSeam'],       // 横変化
@@ -150,15 +150,15 @@ const FORM_PITCH_SYNERGY = {
  * 物理計算の定数
  */
 // BABIP校正係数（参考値：現在は直接アウト率を指定）
-const BABIP_CALIBRATION = 0.32;
+export const BABIP_CALIBRATION = 0.32;
 
 // 反発係数（バットとボールの衝突）
-const COR = 0.45;
+export const COR = 0.45;
 
 /**
  * ポジション名（日本語表記）
  */
-const POSITION_NAMES = {
+export const POSITION_NAMES = {
   pitcher: '投',
   catcher: '捕',
   first: '一',
@@ -173,7 +173,7 @@ const POSITION_NAMES = {
 /**
  * ポジション別の色設定（背景色）
  */
-const POSITION_COLORS = {
+export const POSITION_COLORS = {
   pitcher: 'bg-red-600 text-white',
   catcher: 'bg-blue-600 text-white',
   first: 'bg-yellow-600 text-white',
@@ -188,20 +188,10 @@ const POSITION_COLORS = {
 /**
  * 利き手ラベル（日本語表記）
  */
-const HAND_LABELS = {
+export const HAND_LABELS = {
   right: '右',
   left: '左',
   switch: '両'
 };
 
-// ES module exports
-export {
-  BALL_EFFECTS,
-  PITCHING_FORM_EFFECTS,
-  FORM_PITCH_SYNERGY,
-  BABIP_CALIBRATION,
-  COR,
-  POSITION_NAMES,
-  POSITION_COLORS,
-  HAND_LABELS
-};
+// Already exported as individual named exports above
