@@ -3,7 +3,7 @@
 // 総当たり戦、投手ローテーション考慮
 // ============================================================
 
-import { compareDates, advanceDate, isGameDay } from './seasonManager.js';
+import { compareDates, advanceDate, isGameDay, getCurrentPhase } from './seasonManager.js';
 
 /**
  * ラウンドロビン方式で対戦カードを生成
