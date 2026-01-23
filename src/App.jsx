@@ -31,7 +31,7 @@ import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDat
 
 // Season management imports
 import { createSeasonData, SEASON_PHASES, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
-import { generateFullSeasonSchedule, assignPitchersToSchedule } from './season/scheduleGenerator.js';
+import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
 import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations } from './season/regulationSettings.js';
 import { progressDate, progressToNextGame, progressToNextPhase } from './season/dateProgression.js';
