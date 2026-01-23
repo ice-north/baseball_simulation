@@ -22,17 +22,17 @@ import {
 
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
-import { initializeTeamsData, TEAMS_DATA, setAllTeams, getAllTeams } from './teams-data.js';
+import { initializeTeamsData, TEAMS_DATA } from './teams-data.js';
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
-import { simulatePlay, calculatePhysicsContact, calculateWinProbability, calculateDefensiveFitness } from './simulation-logic.js';
+import { calculatePhysicsContact, calculateDefensiveFitness } from './simulation-logic.js';
 import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate } from './game/autoSimulation.js';
 
 // Season management imports
 import { createSeasonData, SEASON_PHASES, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
 import { generateFullSeasonSchedule, assignPitchersToSchedule } from './season/scheduleGenerator.js';
-import { getMonthlyGames, generateCalendarData } from './season/calendarUI.js';
+import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations } from './season/regulationSettings.js';
 import { progressDate, progressToNextGame, progressToNextPhase } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
