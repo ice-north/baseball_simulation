@@ -3,7 +3,7 @@
 // 4チーム分の選手データ
 // ============================================================
 
-// 注: createPlayerStats() は players.js で定義済み
+import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
 
 /**
  * チームデータ構造
