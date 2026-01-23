@@ -3089,6 +3089,7 @@ if (newOuts === 3) {
         const [draftOrder, setDraftOrder] = useState([]);
         const [currentPick, setCurrentPick] = useState(0);
         const [userRoster, setUserRoster] = useState([]);
+        const [teamRosters, setTeamRosters] = useState({}); // 各チームのドラフト済み選手
         const [positionTab, setPositionTab] = useState('all'); // 'all', 'pitcher', 'catcher', 'infielder', 'outfielder'
         const [draftComplete, setDraftComplete] = useState(false);
 
@@ -3165,6 +3166,11 @@ if (newOuts === 3) {
 
           if (currentTeam === 'ユーザー') {
             setUserRoster([...userRoster, player]);
+            // チームロスターにも追加
+            setTeamRosters({
+              ...teamRosters,
+              [currentTeam]: [...(teamRosters[currentTeam] || []), player]
+            });
             setTryoutCandidates(tryoutCandidates.filter(c => c.id !== player.id));
             setCurrentPick(currentPick + 1);
           }
@@ -3180,6 +3186,11 @@ if (newOuts === 3) {
             setTimeout(() => {
               const selected = selectPlayerForAI(tryoutCandidates, {});
               if (selected) {
+                // チームロスターに追加
+                setTeamRosters(prev => ({
+                  ...prev,
+                  [currentTeam]: [...(prev[currentTeam] || []), selected]
+                }));
                 setTryoutCandidates(tryoutCandidates.filter(c => c.id !== selected.id));
                 setCurrentPick(currentPick + 1);
               }
@@ -3191,6 +3202,23 @@ if (newOuts === 3) {
         useEffect(() => {
           if (currentPick >= draftOrder.length && draftOrder.length > 0 && !draftComplete) {
             console.log(`✅ ドラフト完了: ${currentPick}/${draftOrder.length}`);
+            console.log('📋 各チームのドラフト結果:', teamRosters);
+
+            // TEAMS_DATAに選手を追加
+            Object.keys(teamRosters).forEach(teamName => {
+              const draftedPlayers = teamRosters[teamName] || [];
+              const actualTeamName = teamName === 'ユーザー' ? 'チームA' : teamName;
+
+              if (TEAMS_DATA[actualTeamName]) {
+                console.log(`👥 ${actualTeamName}に${draftedPlayers.length}人の選手を追加`);
+                // 既存の選手と統合
+                TEAMS_DATA[actualTeamName].players = [
+                  ...(TEAMS_DATA[actualTeamName].players || []),
+                  ...draftedPlayers
+                ];
+              }
+            });
+
             setDraftComplete(true);
             // 初期トライアウトの場合は自動的にキャンプへ進む
             if (isInitialTryout && onComplete) {
@@ -3198,7 +3226,7 @@ if (newOuts === 3) {
               setTimeout(() => onComplete(), 1000);
             }
           }
-        }, [currentPick, draftOrder.length, draftComplete, onComplete, isInitialTryout]);
+        }, [currentPick, draftOrder.length, draftComplete, onComplete, isInitialTryout, teamRosters]);
 
         // フィルター＆ソート処理
         const filteredCandidates = tryoutCandidates
@@ -3230,7 +3258,7 @@ if (newOuts === 3) {
         }[rank]);
 
         return (
-          <div className="p-8">
+          <div className="p-8 bg-green-900 min-h-screen">
             <div className="max-w-7xl mx-auto">
               <h1 className="text-3xl font-bold text-white mb-6">🎯 トライアウト</h1>
 
