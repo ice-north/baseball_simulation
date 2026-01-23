@@ -5364,6 +5364,45 @@ const CampScreen = ({ onComplete }) => {
         return <div className="p-8 text-white">準備中...</div>;
       };
 
+      // ゲームフロー統合ロジック: スタート画面
+      if (screenMode === 'start' && gameFlowState === 'title') {
+        return <StartScreen
+          onNewGame={() => setGameFlowState('newgame_regulations')}
+          onContinue={() => alert('開発中')}
+          onEdit={() => alert('開発中')}
+        />;
+      }
+
+      // NEW GAME: レギュレーション設定
+      if (screenMode === 'start' && gameFlowState === 'newgame_regulations') {
+        return <NewGameRegulationsScreen
+          onComplete={(regulations) => {
+            initializeNewGame(regulations);
+            setGameFlowState('newgame_tryout');
+          }}
+        />;
+      }
+
+      // NEW GAME: 初期トライアウト
+      if (screenMode === 'start' && gameFlowState === 'newgame_tryout') {
+        return <TryoutScreen
+          seasonData={seasonData}
+          allTeams={window.TEAMS_DATA || {}}
+          isInitialTryout={true}
+          onComplete={() => setGameFlowState('newgame_camp')}
+        />;
+      }
+
+      // NEW GAME: キャンプ
+      if (screenMode === 'start' && gameFlowState === 'newgame_camp') {
+        return <CampScreen
+          onComplete={() => {
+            setScreenMode('management');
+            setGameFlowState('season');
+          }}
+        />;
+      }
+
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
           {screenMode === 'management' && <Sidebar />}
@@ -7518,52 +7557,7 @@ const CampScreen = ({ onComplete }) => {
       );
     }; // PitchByPitchSimulatorの終わり
 
-    // ゲームフロー統合コンポーネント
-    const GameFlowController = () => {
-      // スタート画面
-      if (screenMode === 'start' && gameFlowState === 'title') {
-        return <StartScreen
-          onNewGame={() => setGameFlowState('newgame_regulations')}
-          onContinue={() => alert('開発中')}
-          onEdit={() => alert('開発中')}
-        />;
-      }
-
-      // NEW GAME: レギュレーション設定
-      if (screenMode === 'start' && gameFlowState === 'newgame_regulations') {
-        return <NewGameRegulationsScreen
-          onComplete={(regulations) => {
-            initializeNewGame(regulations);
-            setGameFlowState('newgame_tryout');
-          }}
-        />;
-      }
-
-      // NEW GAME: 初期トライアウト
-      if (screenMode === 'start' && gameFlowState === 'newgame_tryout') {
-        return <TryoutScreen
-          seasonData={seasonData}
-          allTeams={window.TEAMS_DATA || {}}
-          isInitialTryout={true}
-          onComplete={() => setGameFlowState('newgame_camp')}
-        />;
-      }
-
-      // NEW GAME: キャンプ
-      if (screenMode === 'start' && gameFlowState === 'newgame_camp') {
-        return <CampScreen
-          onComplete={() => {
-            setScreenMode('management');
-            setGameFlowState('season');
-          }}
-        />;
-      }
-
-      // 通常ゲーム画面
-      return <PitchByPitchSimulator />;
-    };
-
-    ReactDOM.render(<GameFlowController />, document.getElementById('root'));
+    ReactDOM.render(<PitchByPitchSimulator />, document.getElementById('root'));
   </script>
 </body>
 </html>
