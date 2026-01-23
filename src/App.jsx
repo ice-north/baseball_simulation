@@ -36,7 +36,7 @@ import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations } from './season/regulationSettings.js';
 import { progressDate, progressToNextGame, progressToNextPhase } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
-import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges } from './season/yearProgressionSystem.js';
+import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer } from './season/yearProgressionSystem.js';
 
     const App = () => {
       // チームデータの初期化
@@ -184,9 +184,9 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
 
       // TEAMS_DATAからチームデータを初期化
       useEffect(() => {
-        if (window.TEAMS_DATA) {
-          const teamAData = window.TEAMS_DATA['チームA'];
-          const teamBData = window.TEAMS_DATA['チームB'];
+        if (TEAMS_DATA) {
+          const teamAData = TEAMS_DATA['チームA'];
+          const teamBData = TEAMS_DATA['チームB'];
 
           if (teamAData && teamAData.players && teamAData.players.length > 0) {
             setHomeTeam({
@@ -2934,12 +2934,12 @@ if (newOuts === 3) {
 
       // AIオーダー編成関数
       const generateOptimalLineup = (teamName) => {
-        if (!window.TEAMS_DATA || !window.TEAMS_DATA[teamName]) {
+        if (!TEAMS_DATA || !TEAMS_DATA[teamName]) {
           console.error('チームデータが見つかりません:', teamName);
           return;
         }
 
-        const team = window.TEAMS_DATA[teamName];
+        const team = TEAMS_DATA[teamName];
         console.log(`🤖 ${teamName}のAIオーダー編成を開始`);
 
         // 野手と投手を分ける
@@ -3043,12 +3043,12 @@ if (newOuts === 3) {
 
       // 投手ローテーション生成関数
       const generatePitchingRotation = (teamName) => {
-        if (!window.TEAMS_DATA || !window.TEAMS_DATA[teamName]) {
+        if (!TEAMS_DATA || !TEAMS_DATA[teamName]) {
           console.error('チームデータが見つかりません:', teamName);
           return;
         }
 
-        const team = window.TEAMS_DATA[teamName];
+        const team = TEAMS_DATA[teamName];
         const pitchers = team.players.filter(p => p.position === 'pitcher' || p.pitching?.stamina > 0);
 
         // スタミナでソート
@@ -3208,8 +3208,8 @@ if (newOuts === 3) {
           .sort((a, b) => {
             // ランク順にソート（S→A→B→C→D）
             const rankOrder = { S: 5, A: 4, B: 3, C: 2, D: 1 };
-            const rankA = window.calculatePlayerRank(a);
-            const rankB = window.calculatePlayerRank(b);
+            const rankA = calculatePlayerRank(a);
+            const rankB = calculatePlayerRank(b);
             return rankOrder[rankB] - rankOrder[rankA];
           });
 
@@ -3292,7 +3292,7 @@ if (newOuts === 3) {
               {/* 候補者リスト（4グリッド） */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {filteredCandidates.map(player => {
-                  const overallRank = window.calculatePlayerRank(player);
+                  const overallRank = calculatePlayerRank(player);
                   const isPitcher = player.position === 'pitcher';
 
                   return (
@@ -3397,8 +3397,8 @@ if (newOuts === 3) {
 
   // TEAMS_DATAからチーム情報を取得
   const getTeamData = (teamName) => {
-    if (window.TEAMS_DATA && window.TEAMS_DATA[teamName]) {
-      return window.TEAMS_DATA[teamName];
+    if (TEAMS_DATA && TEAMS_DATA[teamName]) {
+      return TEAMS_DATA[teamName];
     }
     return { name: teamName, players: [] };
   };
@@ -3472,11 +3472,11 @@ if (newOuts === 3) {
     console.log('保存中:', editFormData.name, editFormData);
 
     // TEAMS_DATAを更新
-    const playerIndex = window.TEAMS_DATA[editingTeam].players.findIndex(p => p.id === editingPlayer.id);
+    const playerIndex = TEAMS_DATA[editingTeam].players.findIndex(p => p.id === editingPlayer.id);
     if (playerIndex !== -1) {
-      window.TEAMS_DATA[editingTeam].players[playerIndex] = editFormData;
+      TEAMS_DATA[editingTeam].players[playerIndex] = editFormData;
       console.log(`✅ ${editFormData.name}の能力値を更新しました (インデックス: ${playerIndex})`);
-      console.log('更新後のデータ:', window.TEAMS_DATA[editingTeam].players[playerIndex]);
+      console.log('更新後のデータ:', TEAMS_DATA[editingTeam].players[playerIndex]);
 
       // 画面を更新するため、state を変更
       cancelEdit();
@@ -3920,8 +3920,8 @@ if (newOuts === 3) {
   // 全選手のシーズン成績を取得
   const getAllPlayerStats = () => {
     const allPlayers = [];
-    Object.keys(window.TEAMS_DATA || {}).forEach(teamName => {
-      const team = window.TEAMS_DATA[teamName];
+    Object.keys(TEAMS_DATA || {}).forEach(teamName => {
+      const team = TEAMS_DATA[teamName];
       team.players.forEach(player => {
         allPlayers.push({
           ...player,
@@ -4121,8 +4121,8 @@ if (newOuts === 3) {
   // 全選手の成績を取得してランキング形式に変換
   const getAllPlayersStats = () => {
     const allPlayers = [];
-    Object.keys(window.TEAMS_DATA || {}).forEach(teamName => {
-      const team = window.TEAMS_DATA[teamName];
+    Object.keys(TEAMS_DATA || {}).forEach(teamName => {
+      const team = TEAMS_DATA[teamName];
       team.players.forEach(player => {
         allPlayers.push({ ...player, teamName: team.name });
       });
@@ -4360,13 +4360,13 @@ if (newOuts === 3) {
       if (game.result) return;
 
       // チームデータの存在確認
-      const homeTeam = window.TEAMS_DATA?.[game.home];
-      const awayTeam = window.TEAMS_DATA?.[game.away];
+      const homeTeam = TEAMS_DATA?.[game.home];
+      const awayTeam = TEAMS_DATA?.[game.away];
 
       if (!homeTeam || !awayTeam) return;
 
       // 試合をシミュレーション（チーム名を渡す）
-      const gameResult = window.autoSimulateGame?.(game.home, game.away);
+      const gameResult = autoSimulateGame?.(game.home, game.away);
 
       if (gameResult) {
         // 試合結果を記録
@@ -4398,13 +4398,13 @@ if (newOuts === 3) {
     });
 
     phaseGames.forEach(game => {
-      const homeTeam = window.TEAMS_DATA?.[game.home];
-      const awayTeam = window.TEAMS_DATA?.[game.away];
+      const homeTeam = TEAMS_DATA?.[game.home];
+      const awayTeam = TEAMS_DATA?.[game.away];
 
       if (!homeTeam || !awayTeam) return;
 
       // 試合をシミュレーション（チーム名を渡す）
-      const gameResult = window.autoSimulateGame?.(game.home, game.away);
+      const gameResult = autoSimulateGame?.(game.home, game.away);
 
       if (gameResult) {
         const result = {
@@ -4695,13 +4695,13 @@ const RosterScreen = () => {
   const [releaseConfirm, setReleaseConfirm] = useState(null);
   const [updateTrigger, setUpdateTrigger] = useState(0); // 再レンダリング用
 
-  const allTeams = window.TEAMS_DATA || {};
+  const allTeams = TEAMS_DATA || {};
   const team = allTeams[selectedTeam];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
 
   const handleRelease = (playerId) => {
-    const updatedTeam = window.releasePlayer(team, playerId);
-    window.TEAMS_DATA[selectedTeam] = updatedTeam;
+    const updatedTeam = releasePlayer(team, playerId);
+    TEAMS_DATA[selectedTeam] = updatedTeam;
     setReleaseConfirm(null);
     setUpdateTrigger(prev => prev + 1); // 再レンダリング
   };
@@ -4826,7 +4826,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
   const [seasonResults, setSeasonResults] = useState(null);
 
   const handleAdvanceYear = () => {
-    if (!window.advanceToNextYear) {
+    if (!advanceToNextYear) {
       alert('年間進行システムが読み込まれていません');
       return;
     }
@@ -4834,13 +4834,13 @@ const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
     setProcessing(true);
 
     try {
-      const allTeams = window.TEAMS_DATA || {};
-      const result = window.advanceToNextYear(seasonData, allTeams);
+      const allTeams = TEAMS_DATA || {};
+      const result = advanceToNextYear(seasonData, allTeams);
       setSeasonResults(result);
       setSeasonData(result.newSeasonData);
-      // window.TEAMS_DATAを更新
+      // TEAMS_DATAを更新
       Object.keys(result.updatedTeams).forEach(teamName => {
-        window.TEAMS_DATA[teamName] = result.updatedTeams[teamName];
+        TEAMS_DATA[teamName] = result.updatedTeams[teamName];
       });
     } catch (error) {
       console.error('年度進行エラー:', error);
