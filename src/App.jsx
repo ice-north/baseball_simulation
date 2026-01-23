@@ -30,7 +30,7 @@ import { calculatePhysicsContact, calculateDefensiveFitness } from './simulation
 import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate } from './game/autoSimulation.js';
 
 // Season management imports
-import { createSeasonData, SEASON_PHASES, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
+import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
 import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
 import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations } from './season/regulationSettings.js';
@@ -3141,12 +3141,15 @@ if (newOuts === 3) {
             // isInitialTryoutがtrueならyear=1（30人×チーム数）、falseならyear=2（15人×チーム数）
             const year = isInitialTryout ? 1 : (seasonData?.year || 1);
             const teamCount = Object.keys(allTeams).length || 4;
+            console.log(`🎯 トライアウト初期化: year=${year}, teamCount=${teamCount}, allTeams=`, allTeams);
             const candidates = generateTryoutCandidates(year, teamCount);
+            console.log(`📋 候補者生成完了: ${candidates.length}人`);
             setTryoutCandidates(candidates);
 
             // ドラフト順序を生成（24ラウンド）
             const teams = ['ユーザー', ...Object.keys(allTeams).slice(1)];
             const order = generateSnakeDraftOrder(teams, 24);
+            console.log(`📊 ドラフト順序: ${order.length}ラウンド`);
             setDraftOrder(order);
           }
         }, [seasonData, allTeams, tryoutCandidates.length, isInitialTryout]);
@@ -3186,10 +3189,12 @@ if (newOuts === 3) {
 
         // ドラフト完了検出
         useEffect(() => {
-          if (currentPick >= draftOrder.length && !draftComplete) {
+          if (currentPick >= draftOrder.length && draftOrder.length > 0 && !draftComplete) {
+            console.log(`✅ ドラフト完了: ${currentPick}/${draftOrder.length}`);
             setDraftComplete(true);
             // 初期トライアウトの場合は自動的にキャンプへ進む
             if (isInitialTryout && onComplete) {
+              console.log('🏕️ キャンプ画面へ移動');
               setTimeout(() => onComplete(), 1000);
             }
           }
