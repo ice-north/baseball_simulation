@@ -1,18 +1,19 @@
 {
-  "name": "baseball-simulator",
-  "version": "2.5.15",
-  "description": "野球シミュレーター - 物理演算による詳細な試合シミュレーション",
-  "main": "index.html",
+  "name": "baseball-simulation",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "野球シミュレーションゲーム",
   "scripts": {
-    "build": "node build.js",
-    "serve": "python3 -m http.server 8000",
-    "dev": "echo '開発サーバーを起動: http://localhost:8000' && python3 -m http.server 8000"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "keywords": [
-    "baseball",
-    "simulator",
-    "game"
-  ],
-  "author": "",
-  "license": "MIT"
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.12"
+  }
 }
