@@ -3,6 +3,9 @@
 // シーズンカレンダーの表示・操作
 // ============================================================
 
+import { getCurrentPhase, PHASE_INFO, generateMonthCalendar } from './seasonManager.js';
+import { getTeamSchedule, getScheduleByDate } from './scheduleGenerator.js';
+
 /**
  * カレンダー月を生成（Reactコンポーネント外で使用可能）
  * @param {number} year - 年
