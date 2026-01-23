@@ -3137,16 +3137,16 @@ if (newOuts === 3) {
 
         // 初期化: トライアウト候補者を生成
         useEffect(() => {
-          if (tryoutCandidates.length === 0 && typeof window.generateTryoutCandidates === 'function') {
+          if (tryoutCandidates.length === 0) {
             // isInitialTryoutがtrueならyear=1（30人×チーム数）、falseならyear=2（15人×チーム数）
             const year = isInitialTryout ? 1 : (seasonData?.year || 1);
             const teamCount = Object.keys(allTeams).length || 4;
-            const candidates = window.generateTryoutCandidates(year, teamCount);
+            const candidates = generateTryoutCandidates(year, teamCount);
             setTryoutCandidates(candidates);
 
             // ドラフト順序を生成（24ラウンド）
             const teams = ['ユーザー', ...Object.keys(allTeams).slice(1)];
-            const order = window.generateSnakeDraftOrder(teams, 24);
+            const order = generateSnakeDraftOrder(teams, 24);
             setDraftOrder(order);
           }
         }, [seasonData, allTeams, tryoutCandidates.length, isInitialTryout]);
@@ -3175,7 +3175,7 @@ if (newOuts === 3) {
 
           if (currentTeam !== 'ユーザー') {
             setTimeout(() => {
-              const selected = window.selectPlayerForAI(tryoutCandidates, {});
+              const selected = selectPlayerForAI(tryoutCandidates, {});
               if (selected) {
                 setTryoutCandidates(tryoutCandidates.filter(c => c.id !== selected.id));
                 setCurrentPick(currentPick + 1);
