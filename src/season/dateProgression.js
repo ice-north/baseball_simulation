@@ -3,6 +3,8 @@
 // 日付を進めてフェーズを遷移
 // ============================================================
 
+import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings } from './seasonManager.js';
+
 /**
  * 日付を進行（1日/1週間/1ヶ月）
  * @param {Object} seasonData - シーズンデータ

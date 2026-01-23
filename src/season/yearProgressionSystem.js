@@ -3,6 +3,8 @@
 // シーズン終了処理、年度更新、引退、解雇
 // ============================================================
 
+import { createSeasonData, initializeStandings } from './seasonManager.js';
+
 /**
  * シーズン終了処理
  * @param {Object} seasonData - シーズンデータ

@@ -3,6 +3,8 @@
 // 選手獲得システム（年次トライアウト、ドラフト）
 // ============================================================
 
+import { generateRandomPlayerName } from '../data/playerNames.js';
+
 /**
  * トライアウト候補者を生成
  * @param {number} year - 年数（1年目は30人/チーム、2年目以降は15人/チーム）
@@ -22,7 +24,7 @@ export function generateTryoutCandidates(year, teamCount) {
     const position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
 
     // ランダムな名前生成（選手名データベースから3000×3000の重み付き選択）
-    const name = window.generateRandomPlayerName();
+    const name = generateRandomPlayerName();
 
     const player = {
       id: i,

@@ -1,14 +1,16 @@
+import { TEAMS_DATA } from '../teams-data.js';
+
 export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   console.log(`🏟️ 試合開始: ${awayTeamName} @ ${homeTeamName}`);
 
   // TEAMS_DATAからチームデータを取得
-  if (!window.TEAMS_DATA || !window.TEAMS_DATA[homeTeamName] || !window.TEAMS_DATA[awayTeamName]) {
+  if (!TEAMS_DATA || !TEAMS_DATA[homeTeamName] || !TEAMS_DATA[awayTeamName]) {
     console.error('チームデータが見つかりません');
     return { homeScore: 0, awayScore: 0, result: '引分 0-0', winner: null };
   }
 
-  const homeTeamData = JSON.parse(JSON.stringify(window.TEAMS_DATA[homeTeamName]));
-  const awayTeamData = JSON.parse(JSON.stringify(window.TEAMS_DATA[awayTeamName]));
+  const homeTeamData = JSON.parse(JSON.stringify(TEAMS_DATA[homeTeamName]));
+  const awayTeamData = JSON.parse(JSON.stringify(TEAMS_DATA[awayTeamName]));
 
   console.log(`  ${homeTeamName}: ${homeTeamData.players.length}人`);
   console.log(`  ${awayTeamName}: ${awayTeamData.players.length}人`);
@@ -30,7 +32,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       console.log(`  🎯 ${teamName}先発: ${starter.name} (ローテ${index + 1}/${rotation.starters.length}番手)`);
 
       // 次回のローテーションインデックスを更新
-      window.TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
+      TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
         (index + 1) % rotation.starters.length;
 
       // 先発投手を打順9、ポジションpitcherに設定
@@ -433,7 +435,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       if (!player.gameStats) return;
 
       // TEAMS_DATAの該当選手を取得（参照を更新）
-      const teamData = window.TEAMS_DATA[team.name];
+      const teamData = TEAMS_DATA[team.name];
       if (!teamData) return;
 
       const playerData = teamData.players.find(p => p.id === player.id);
