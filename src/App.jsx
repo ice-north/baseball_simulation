@@ -3290,6 +3290,100 @@ if (newOuts === 3) {
                 )}
               </div>
 
+              {/* 現在の編成表示 */}
+              {userRoster.length > 0 && (
+                <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-6 mb-6 border-2 border-blue-500">
+                  <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                    <span>👥 現在の編成</span>
+                    <span className="text-lg text-blue-300">({userRoster.length}/24人)</span>
+                  </h2>
+
+                  {/* ポジション別集計 */}
+                  {(() => {
+                    const positionCounts = {
+                      pitcher: 0,
+                      catcher: 0,
+                      infielder: 0,
+                      outfielder: 0
+                    };
+
+                    userRoster.forEach(player => {
+                      const category = getPositionCategory(player.position);
+                      if (category in positionCounts) {
+                        positionCounts[category]++;
+                      }
+                    });
+
+                    const getStatusIcon = (current, min, ideal) => {
+                      if (current >= ideal) return '✅';
+                      if (current >= min) return '🟡';
+                      return '🔴';
+                    };
+
+                    const positionRequirements = [
+                      { key: 'pitcher', label: '投手', min: 5, ideal: 10 },
+                      { key: 'catcher', label: '捕手', min: 1, ideal: 2 },
+                      { key: 'infielder', label: '内野手', min: 4, ideal: 6 },
+                      { key: 'outfielder', label: '外野手', min: 3, ideal: 6 }
+                    ];
+
+                    return (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        {positionRequirements.map(req => {
+                          const count = positionCounts[req.key];
+                          const icon = getStatusIcon(count, req.min, req.ideal);
+                          return (
+                            <div key={req.key} className="bg-gray-800 rounded-lg p-4 text-center">
+                              <div className="text-3xl mb-2">{icon}</div>
+                              <div className="text-white font-bold text-lg">{req.label}</div>
+                              <div className="text-blue-300 text-2xl font-bold mt-2">
+                                {count} / {req.ideal}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-1">
+                                (最低: {req.min}人)
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  {/* 獲得選手リスト（ポジション別） */}
+                  <div className="space-y-4">
+                    {['pitcher', 'catcher', 'infielder', 'outfielder'].map(category => {
+                      const categoryPlayers = userRoster.filter(p => getPositionCategory(p.position) === category);
+                      if (categoryPlayers.length === 0) return null;
+
+                      const categoryLabels = {
+                        pitcher: '投手',
+                        catcher: '捕手',
+                        infielder: '内野手',
+                        outfielder: '外野手'
+                      };
+
+                      return (
+                        <div key={category}>
+                          <h3 className="text-white font-bold mb-2 text-sm border-b border-blue-700 pb-1">
+                            {categoryLabels[category]} ({categoryPlayers.length}人)
+                          </h3>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {categoryPlayers.map(player => (
+                              <div key={player.id} className="bg-gray-700 rounded p-2 text-white text-sm">
+                                <div className="font-bold">{player.name}</div>
+                                <div className="text-xs text-gray-400">
+                                  {getPositionName(player.position)} | {player.age}歳
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* ポジションタブ */}
               <div className="bg-gray-800 rounded-lg p-4 mb-4">
                 <div className="flex gap-2">
@@ -3397,24 +3491,19 @@ if (newOuts === 3) {
                 })}
               </div>
 
-              {/* 獲得選手リスト */}
-              {userRoster.length > 0 && (
-                <div className="mt-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-bold text-white">獲得した選手 ({userRoster.length}人)</h2>
-                    {userRoster.length > 24 && (
-                      <div className="bg-red-900 border border-red-700 rounded px-4 py-2">
-                        <span className="text-red-200 font-bold">⚠️ 24人を超えています！ロスター管理で解雇が必要です</span>
+              {/* 24人超過警告（ドラフト完了後に表示） */}
+              {userRoster.length > 24 && draftComplete && (
+                <div className="mt-8 bg-red-900 border-2 border-red-700 rounded-lg p-6">
+                  <div className="flex items-center gap-3">
+                    <span className="text-4xl">⚠️</span>
+                    <div>
+                      <div className="text-red-200 font-bold text-xl mb-1">
+                        ロスター人数が24人を超えています！
                       </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {userRoster.map(player => (
-                      <div key={player.id} className="bg-gray-700 rounded p-2 text-white text-sm">
-                        <div className="font-bold">{player.name}</div>
-                        <div className="text-xs text-gray-400">{getPositionName(player.position)}</div>
+                      <div className="text-red-300">
+                        ロスター管理画面で{userRoster.length - 24}人を解雇してください
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </div>
               )}

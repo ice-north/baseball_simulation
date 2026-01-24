@@ -1,0 +1,23 @@
+# 大きなデータファイル（229KB）
+src/data/playerNames.js
+js/data/playerNames.js
+
+# バックアップファイル
+*.old
+*.bak
+index.html.old
+
+# ビルド成果物
+dist/
+node_modules/
+
+# 旧バージョンファイル
+baseball-simulator-v25_15.html
+
+# エディター設定
+.vscode/
+.idea/
+
+# ログファイル
+*.log
+npm-debug.log*
