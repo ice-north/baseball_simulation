@@ -15,6 +15,37 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   console.log(`  ${homeTeamName}: ${homeTeamData.players.length}人`);
   console.log(`  ${awayTeamName}: ${awayTeamData.players.length}人`);
 
+  // スタメン設定を適用
+  const applyLineupSettings = (teamData, teamName) => {
+    const settings = teamData.lineupSettings;
+    if (!settings || !settings.battingOrder || settings.battingOrder.length === 0) {
+      console.log(`  ⚠️ ${teamName}はスタメン設定なし、既存の打順を使用`);
+      return;
+    }
+
+    console.log(`  ✅ ${teamName}のスタメン設定を適用`);
+
+    // まず全員の打順を0にリセット（ベンチ）
+    teamData.players.forEach(p => {
+      if (p.position !== 'pitcher') {
+        p.battingOrder = 0;
+      }
+    });
+
+    // lineupSettingsから打順と守備位置を適用
+    settings.battingOrder.forEach(entry => {
+      const player = teamData.players.find(p => p.id === entry.playerId);
+      if (player) {
+        player.battingOrder = entry.battingOrder;
+        player.position = entry.position;
+        console.log(`    ${entry.battingOrder}番 ${entry.position}: ${player.name}`);
+      }
+    });
+  };
+
+  applyLineupSettings(homeTeamData, homeTeamName);
+  applyLineupSettings(awayTeamData, awayTeamName);
+
   // 投手ローテーションから先発投手を選択
   const selectStarterFromRotation = (teamData, teamName) => {
     const rotation = teamData.pitchingRotation;
