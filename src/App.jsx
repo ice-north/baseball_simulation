@@ -3184,8 +3184,11 @@ if (newOuts === 3) {
 
           if (currentTeam !== 'ユーザー') {
             setTimeout(() => {
-              const selected = selectPlayerForAI(tryoutCandidates, {});
+              // 現在のチームのロスターを取得して能力バランスを考慮
+              const currentTeamRoster = teamRosters[currentTeam] || [];
+              const selected = selectPlayerForAI(tryoutCandidates, currentTeamRoster);
               if (selected) {
+                console.log(`🤖 ${currentTeam}が${selected.name}（${selected.position}）を指名`);
                 // チームロスターに追加
                 setTeamRosters(prev => ({
                   ...prev,
@@ -3196,7 +3199,7 @@ if (newOuts === 3) {
               }
             }, 500);
           }
-        }, [currentPick, draftOrder, tryoutCandidates]);
+        }, [currentPick, draftOrder, tryoutCandidates, teamRosters]);
 
         // ドラフト完了検出
         useEffect(() => {

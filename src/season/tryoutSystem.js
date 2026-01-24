@@ -206,61 +206,205 @@ export function generateSnakeDraftOrder(teams, rounds) {
 };
 
 /**
- * AIチームの選手選択ロジック
+ * ロスターの能力バランスを分析
+ * @param {Array} roster - 現在のロスター（配列形式）
+ * @returns {Object} 能力バランス分析結果
+ */
+export function analyzeRosterBalance(roster) {
+  if (!roster || roster.length === 0) {
+    return {
+      pitchers: { count: 0, avgStamina: 0, avgVelocity: 0, avgControl: 0 },
+      fielders: { count: 0, avgOffense: 0, avgDefense: 0, avgSpeed: 0 }
+    };
+  }
+
+  const pitchers = roster.filter(p => p.position === 'pitcher');
+  const fielders = roster.filter(p => p.position !== 'pitcher');
+
+  // 投手分析
+  const pitcherAnalysis = {
+    count: pitchers.length,
+    avgStamina: 0,
+    avgVelocity: 0,
+    avgControl: 0
+  };
+
+  if (pitchers.length > 0) {
+    pitcherAnalysis.avgStamina = pitchers.reduce((sum, p) => sum + p.pitching.stamina, 0) / pitchers.length;
+    pitcherAnalysis.avgVelocity = pitchers.reduce((sum, p) => sum + p.pitching.velocity, 0) / pitchers.length;
+    pitcherAnalysis.avgControl = pitchers.reduce((sum, p) => sum + p.pitching.control, 0) / pitchers.length;
+  }
+
+  // 野手分析
+  const fielderAnalysis = {
+    count: fielders.length,
+    avgOffense: 0,  // ミート + パワーの平均
+    avgDefense: 0,
+    avgSpeed: 0
+  };
+
+  if (fielders.length > 0) {
+    fielderAnalysis.avgOffense = fielders.reduce((sum, p) => sum + (p.batting.meet + p.batting.power) / 2, 0) / fielders.length;
+    fielderAnalysis.avgDefense = fielders.reduce((sum, p) => sum + p.fielding.defense, 0) / fielders.length;
+    fielderAnalysis.avgSpeed = fielders.reduce((sum, p) => sum + p.physical.speed, 0) / fielders.length;
+  }
+
+  return {
+    pitchers: pitcherAnalysis,
+    fielders: fielderAnalysis
+  };
+}
+
+/**
+ * 選手の価値をロスターバランスを考慮してスコア化
+ * @param {Object} player - 選手データ
+ * @param {Object} rosterAnalysis - ロスター分析結果
+ * @returns {number} 選手の価値スコア（高いほど優先）
+ */
+export function calculatePlayerValueScore(player, rosterAnalysis) {
+  const rank = calculatePlayerRank(player);
+  const rankScore = { S: 100, A: 80, B: 60, C: 40, D: 20 }[rank] || 0;
+  let bonusScore = 0;
+
+  if (player.position === 'pitcher') {
+    const { avgStamina, avgVelocity, avgControl } = rosterAnalysis.pitchers;
+
+    // スタミナが不足している場合、スタミナの高い投手にボーナス
+    if (avgStamina < 120 && player.pitching.stamina >= 140) {
+      bonusScore += 30;
+    } else if (avgStamina < 130 && player.pitching.stamina >= 140) {
+      bonusScore += 15;
+    }
+
+    // 球速が高い投手ばかりの場合、制球力の高い投手にボーナス
+    if (avgVelocity >= 135 && player.pitching.control >= 60) {
+      bonusScore += 20;
+    }
+
+    // 制球力が低い投手が多い場合、制球力の高い投手にボーナス
+    if (avgControl < 50 && player.pitching.control >= 60) {
+      bonusScore += 25;
+    }
+
+    // バランス型投手にもボーナス（全能力が平均以上）
+    if (player.pitching.stamina >= 130 && player.pitching.velocity >= 135 && player.pitching.control >= 55) {
+      bonusScore += 10;
+    }
+
+  } else {
+    const { avgOffense, avgDefense, avgSpeed } = rosterAnalysis.fielders;
+
+    // 打撃偏重チームの場合、守備・走力特化型にボーナス
+    if (avgOffense >= 50) {
+      if (player.fielding.defense >= 65) {
+        bonusScore += 25; // 守備職人
+      }
+      if (player.physical.speed >= 65) {
+        bonusScore += 20; // 俊足
+      }
+    }
+
+    // 守備が弱いチームの場合、守備の良い選手にボーナス
+    if (avgDefense < 45 && player.fielding.defense >= 60) {
+      bonusScore += 20;
+    }
+
+    // 足が遅いチームの場合、俊足選手にボーナス
+    if (avgSpeed < 45 && player.physical.speed >= 65) {
+      bonusScore += 20;
+    }
+
+    // 打撃が弱いチームの場合、打撃の良い選手にボーナス
+    if (avgOffense < 40) {
+      const offense = (player.batting.meet + player.batting.power) / 2;
+      if (offense >= 55) {
+        bonusScore += 25;
+      }
+    }
+
+    // 5ツール型選手にボーナス
+    const offense = (player.batting.meet + player.batting.power) / 2;
+    if (offense >= 55 && player.physical.speed >= 60 && player.fielding.defense >= 60) {
+      bonusScore += 15; // バランス型
+    }
+  }
+
+  return rankScore + bonusScore;
+}
+
+/**
+ * AIチームの選手選択ロジック（改良版）
  * @param {Array} candidates - 残りの候補者
- * @param {Object} currentRoster - 現在のロスター
+ * @param {Array} currentRoster - 現在のロスター（配列形式）
  * @returns {Object} 選択された選手
  */
-export function selectPlayerForAI(candidates, currentRoster = {}) {
-  // 必要なポジションを判定
+export function selectPlayerForAI(candidates, currentRoster = []) {
+  // ロスター配列をオブジェクトから配列に変換（後方互換性のため）
+  let rosterArray = currentRoster;
+  if (!Array.isArray(currentRoster)) {
+    rosterArray = Object.values(currentRoster);
+  }
+
+  // ポジション別カウント
   const rosterCounts = {
     pitcher: 0,
     catcher: 0,
-    infielder: 0,  // first, second, third, short
-    outfielder: 0  // left, center, right
+    infielder: 0,
+    outfielder: 0
   };
 
-  Object.values(currentRoster).forEach(player => {
+  rosterArray.forEach(player => {
     if (player.position === 'pitcher') rosterCounts.pitcher++;
     else if (player.position === 'catcher') rosterCounts.catcher++;
     else if (['first', 'second', 'third', 'short'].includes(player.position)) rosterCounts.infielder++;
     else rosterCounts.outfielder++;
   });
 
-  // 優先度設定（不足しているポジションを優先）
+  // ロスターの能力バランスを分析
+  const rosterAnalysis = analyzeRosterBalance(rosterArray);
+
+  // 優先ポジション設定（不足しているポジション）
   let preferredPositions = [];
   if (rosterCounts.pitcher < 10) preferredPositions.push('pitcher');
   if (rosterCounts.catcher < 2) preferredPositions.push('catcher');
   if (rosterCounts.infielder < 6) preferredPositions.push('first', 'second', 'third', 'short');
   if (rosterCounts.outfielder < 6) preferredPositions.push('left', 'center', 'right');
 
-  // ランクでフィルタ（S/A/Bを優先）
-  const rankedCandidates = candidates.map(c => ({
-    ...c,
-    rank: calculatePlayerRank(c)
+  // 全候補者に価値スコアを付与
+  const scoredCandidates = candidates.map(player => ({
+    ...player,
+    valueScore: calculatePlayerValueScore(player, rosterAnalysis),
+    isPreferredPosition: preferredPositions.includes(player.position)
   }));
 
-  const topCandidates = rankedCandidates.filter(c => ['S', 'A', 'B'].includes(c.rank));
-  const pool = topCandidates.length > 0 ? topCandidates : rankedCandidates;
-
-  // 優先ポジションから選択
-  if (preferredPositions.length > 0) {
-    const preferredCandidates = pool.filter(c => preferredPositions.includes(c.position));
-    if (preferredCandidates.length > 0) {
-      // ランクが高い順にソート
-      preferredCandidates.sort((a, b) => {
-        const rankOrder = { S: 5, A: 4, B: 3, C: 2, D: 1 };
-        return rankOrder[b.rank] - rankOrder[a.rank];
-      });
-      return preferredCandidates[0];
+  // ポジション優先度ボーナスを適用
+  scoredCandidates.forEach(candidate => {
+    if (candidate.isPreferredPosition) {
+      // 不足ポジションには大きなボーナス
+      if (rosterCounts[candidate.position === 'pitcher' ? 'pitcher' :
+                       candidate.position === 'catcher' ? 'catcher' :
+                       ['first', 'second', 'third', 'short'].includes(candidate.position) ? 'infielder' : 'outfielder'] === 0) {
+        candidate.valueScore += 50; // 0人の場合は最優先
+      } else {
+        candidate.valueScore += 30; // 不足している場合
+      }
     }
-  }
-
-  // 優先ポジションがない場合は最高ランクを選択
-  pool.sort((a, b) => {
-    const rankOrder = { S: 5, A: 4, B: 3, C: 2, D: 1 };
-    return rankOrder[b.rank] - rankOrder[a.rank];
   });
 
-  return pool[0];
+  // スコアが高い順にソート
+  scoredCandidates.sort((a, b) => b.valueScore - a.valueScore);
+
+  // デバッグログ（トップ5を表示）
+  if (scoredCandidates.length > 0) {
+    console.log('🤖 AI選択 - トップ5候補:');
+    scoredCandidates.slice(0, 5).forEach((c, i) => {
+      const posName = {
+        pitcher: '投手', catcher: '捕手', first: '一', second: '二',
+        third: '三', short: '遊', left: '左', center: '中', right: '右'
+      }[c.position];
+      console.log(`  ${i+1}. ${c.name} (${posName}) - スコア:${c.valueScore.toFixed(1)}`);
+    });
+  }
+
+  return scoredCandidates[0];
 }
