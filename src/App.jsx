@@ -2983,39 +2983,62 @@ if (newOuts === 3) {
           }
         });
 
-        // 打順を決定（セイバーメトリクス的な配置）
+        // 打順を決定（一般的なセオリーに従う）
         const lineupOrder = [];
 
-        // 1番: 出塁率重視（選球眼が高い選手）
+        // 1番: 足が速い選手（走力重視）
         const leadoffCandidates = Object.values(positionAssignments)
-          .sort((a, b) => (b.batting.eye + b.physical.speed) - (a.batting.eye + a.physical.speed));
+          .sort((a, b) => b.physical.speed - a.physical.speed);
         if (leadoffCandidates[0]) lineupOrder.push(leadoffCandidates[0]);
 
-        // 2番: コンタクト重視
+        // 2番: ミートが高い選手（コンタクト重視）
         const secondCandidates = Object.values(positionAssignments)
           .filter(p => !lineupOrder.includes(p))
           .sort((a, b) => b.batting.meet - a.batting.meet);
         if (secondCandidates[0]) lineupOrder.push(secondCandidates[0]);
 
-        // 3-5番: 強打者（パワー+ミート）
+        // 3番: バランス型（ミート+パワー）
+        const thirdCandidates = Object.values(positionAssignments)
+          .filter(p => !lineupOrder.includes(p))
+          .sort((a, b) => (b.batting.meet + b.batting.power) - (a.batting.meet + a.batting.power));
+        if (thirdCandidates[0]) lineupOrder.push(thirdCandidates[0]);
+
+        // 4番: パワーが最も高い選手（長距離砲）
         const cleanupCandidates = Object.values(positionAssignments)
           .filter(p => !lineupOrder.includes(p))
-          .sort((a, b) => b.battingPower - a.battingPower);
-        for (let i = 0; i < 3 && i < cleanupCandidates.length; i++) {
-          lineupOrder.push(cleanupCandidates[i]);
-        }
+          .sort((a, b) => b.batting.power - a.batting.power);
+        if (cleanupCandidates[0]) lineupOrder.push(cleanupCandidates[0]);
 
-        // 6-8番: 残りの選手
+        // 5番: 2番目にパワーが高い選手
+        if (cleanupCandidates[1]) lineupOrder.push(cleanupCandidates[1]);
+
+        // 6-8番: 残りの選手（総合力順）
         const remainingFielders = Object.values(positionAssignments)
           .filter(p => !lineupOrder.includes(p))
           .sort((a, b) => b.totalPower - a.totalPower);
         remainingFielders.forEach(p => lineupOrder.push(p));
 
-        // 9番: 投手
-        const starterPitcher = pitchers.find(p => p.pitching.stamina >= 80) || pitchers[0];
-        if (starterPitcher) lineupOrder.push(starterPitcher);
+        // 9番: 投手（スタメンには入れない）
 
-        // TEAMS_DATAに反映
+        // lineupSettingsに保存（新形式）
+        if (!team.lineupSettings) {
+          team.lineupSettings = {
+            battingOrder: [],
+            benchPlayers: [],
+            substitutionRules: { pinchHitter: [], pinchRunner: [] }
+          };
+        }
+
+        team.lineupSettings.battingOrder = lineupOrder.map((player, index) => {
+          const assignedPos = Object.entries(positionAssignments).find(([_, p]) => p.id === player.id);
+          return {
+            playerId: player.id,
+            battingOrder: index + 1,
+            position: assignedPos ? assignedPos[0] : player.position
+          };
+        });
+
+        // 旧形式の打順も維持（互換性のため）
         team.players.forEach(p => {
           p.battingOrder = 0; // リセット
         });
@@ -3024,24 +3047,21 @@ if (newOuts === 3) {
           const teamPlayer = team.players.find(p => p.id === player.id);
           if (teamPlayer) {
             teamPlayer.battingOrder = index + 1;
-
-            // ポジション割り当て
-            if (index < 8) {
-              const assignedPos = Object.entries(positionAssignments).find(([_, p]) => p.id === player.id);
-              if (assignedPos) {
-                teamPlayer.position = assignedPos[0];
-              }
-            } else {
-              teamPlayer.position = 'pitcher';
+            const assignedPos = Object.entries(positionAssignments).find(([_, p]) => p.id === player.id);
+            if (assignedPos) {
+              teamPlayer.position = assignedPos[0];
             }
           }
         });
 
         console.log(`✅ ${teamName}のオーダー編成完了`);
-        console.log('打順:', lineupOrder.map((p, i) => `${i + 1}. ${p.name} (${p.position})`).join(', '));
+        console.log('打順:', lineupOrder.map((p, i) => {
+          const pos = Object.entries(positionAssignments).find(([_, pl]) => pl.id === p.id);
+          return `${i + 1}. ${p.name} (${pos ? pos[0] : p.position})`;
+        }).join(', '));
       };
 
-      // 投手ローテーション生成関数
+      // 投手ローテーション生成関数（AI監督用）
       const generatePitchingRotation = (teamName) => {
         if (!TEAMS_DATA || !TEAMS_DATA[teamName]) {
           console.error('チームデータが見つかりません:', teamName);
@@ -3054,24 +3074,38 @@ if (newOuts === 3) {
         // スタミナでソート
         const sortedPitchers = pitchers.sort((a, b) => (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0));
 
-        // 先発ローテーション（スタミナ80以上）
-        const starters = sortedPitchers.filter(p => p.pitching?.stamina >= 80).slice(0, 5);
+        // 先発ローテーション（スタミナ140以上、最大5人）
+        const starters = sortedPitchers.filter(p => p.pitching?.stamina >= 140).slice(0, 5);
 
-        // 中継ぎ・抑え（スタミナ80未満）
-        const relievers = sortedPitchers.filter(p => p.pitching?.stamina < 80);
+        // 抑え（スタミナ140未満で能力が高い投手、最大2人）
+        const closerCandidates = sortedPitchers
+          .filter(p => p.pitching?.stamina < 140)
+          .sort((a, b) => {
+            const aPower = (a.pitching?.velocity || 0) + (a.pitching?.control || 0);
+            const bPower = (b.pitching?.velocity || 0) + (b.pitching?.control || 0);
+            return bPower - aPower;
+          })
+          .slice(0, 2);
 
-        // ローテーション情報を保存
+        // 中継ぎ（残りの投手）
+        const middleRelievers = sortedPitchers.filter(p =>
+          !starters.includes(p) && !closerCandidates.includes(p)
+        );
+
+        // ローテーション情報を新形式で保存
         if (!team.pitchingRotation) {
           team.pitchingRotation = {};
         }
 
         team.pitchingRotation.starters = starters.map(p => p.id);
-        team.pitchingRotation.relievers = relievers.map(p => p.id);
+        team.pitchingRotation.closers = closerCandidates.map(p => p.id);
+        team.pitchingRotation.middleRelievers = middleRelievers.map(p => p.id);
         team.pitchingRotation.currentStarterIndex = 0;
 
         console.log(`✅ ${teamName}の投手ローテーション設定完了`);
-        console.log('先発:', starters.map(p => p.name).join(', '));
-        console.log('リリーフ:', relievers.map(p => p.name).join(', '));
+        console.log('先発:', starters.map(p => `${p.name}(スタ${p.pitching.stamina})`).join(', '));
+        console.log('抑え:', closerCandidates.map(p => `${p.name}(球${p.pitching.velocity})`).join(', '));
+        console.log('中継ぎ:', middleRelievers.map(p => p.name).join(', '));
       };
 
       // 全チームのAIオーダー編成を実行
@@ -4892,6 +4926,35 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
 
+  // 能力値をランク化（S/A/B/C/D/E）
+  const getAbilityRank = (value) => {
+    if (value >= 90) return 'S';
+    if (value >= 80) return 'A';
+    if (value >= 70) return 'B';
+    if (value >= 60) return 'C';
+    if (value >= 50) return 'D';
+    return 'E';
+  };
+
+  // ランクの色を取得
+  const getRankColor = (rank) => {
+    const colors = {
+      S: 'text-pink-400',
+      A: 'text-red-400',
+      B: 'text-orange-400',
+      C: 'text-yellow-400',
+      D: 'text-green-400',
+      E: 'text-gray-400'
+    };
+    return colors[rank] || 'text-gray-400';
+  };
+
+  // 投手の球速をランク化
+  const getVelocityRank = (velocity) => {
+    const adjusted = (velocity - 115) * 2.5;
+    return getAbilityRank(adjusted);
+  };
+
   // スタメン設定の初期化
   if (!team.lineupSettings) {
     team.lineupSettings = {
@@ -4916,6 +4979,35 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
   const fielders = team.players.filter(p => p.position !== 'pitcher');
   const pitchers = team.players.filter(p => p.position === 'pitcher');
+
+  // スタメン登録（簡易版：次の空き打順に追加）
+  const handleAddToLineup = (playerId) => {
+    const lineup = team.lineupSettings.battingOrder;
+    // 既にスタメンにいるか確認
+    if (lineup.some(entry => entry.playerId === playerId)) return;
+
+    // 次の空き打順を見つける（1-9）
+    let nextOrder = 1;
+    for (let i = 1; i <= 9; i++) {
+      if (!lineup.some(entry => entry.battingOrder === i)) {
+        nextOrder = i;
+        break;
+      }
+    }
+
+    if (nextOrder > 9) {
+      alert('スタメンは9人までです');
+      return;
+    }
+
+    const player = team.players.find(p => p.id === playerId);
+    // デフォルトポジションを設定
+    const defaultPosition = player.position !== 'pitcher' ? player.position : 'catcher';
+
+    lineup.push({ playerId, position: defaultPosition, battingOrder: nextOrder });
+    lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+    setUpdateTrigger(prev => prev + 1);
+  };
 
   // スタメン登録
   const handleSetStarter = (playerId, battingOrder, position) => {
@@ -5016,34 +5108,58 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
         {/* スタメン設定タブ */}
         {tab === 'lineup' && (
-          <div className="space-y-6">
-            {/* 現在のスタメン */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* 左側：現在のスタメン */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-4">現在のスタメン</h2>
+              <h2 className="text-xl font-bold text-white mb-4">
+                現在のスタメン ({team.lineupSettings.battingOrder.length}/9人)
+              </h2>
               {team.lineupSettings.battingOrder.length === 0 ? (
-                <p className="text-gray-400">スタメンが設定されていません</p>
+                <p className="text-gray-400">右側の控え選手からクリックして追加</p>
               ) : (
                 <div className="space-y-2">
                   {team.lineupSettings.battingOrder.map((entry, idx) => {
                     const player = team.players.find(p => p.id === entry.playerId);
                     if (!player) return null;
+
+                    // 能力値のランク計算
+                    const meetRank = getAbilityRank(player.batting.meet);
+                    const powerRank = getAbilityRank(player.batting.power);
+                    const speedRank = getAbilityRank(player.physical.speed);
+                    const defenseRank = getAbilityRank(player.fielding.defense);
+                    const armRank = getAbilityRank(player.physical.arm);
+
                     return (
-                      <div key={player.id} className="bg-gray-700 rounded p-3 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="text-white font-bold text-lg">{idx + 1}</div>
-                          <div>
-                            <div className="text-white font-bold">{player.name}</div>
-                            <div className="text-sm text-gray-400">
-                              {POSITION_NAMES[entry.position]} | {player.age}歳
+                      <div key={player.id} className="bg-gray-700 rounded p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="text-white font-bold text-lg w-6">{idx + 1}</div>
+                            <div>
+                              <div className="text-white font-bold">{player.name}</div>
+                              <div className="text-xs text-gray-400">
+                                {POSITION_NAMES[entry.position]} | {player.age}歳
+                              </div>
                             </div>
                           </div>
+                          <button
+                            onClick={() => handleRemoveFromLineup(player.id)}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition"
+                          >
+                            外す
+                          </button>
                         </div>
-                        <button
-                          onClick={() => handleRemoveFromLineup(player.id)}
-                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition"
-                        >
-                          外す
-                        </button>
+                        {/* 能力値表示 */}
+                        <div className="text-xs space-y-1">
+                          <div className="flex gap-3">
+                            <span className={getRankColor(meetRank)}>ミ {meetRank}{player.batting.meet}</span>
+                            <span className={getRankColor(powerRank)}>パ {powerRank}{player.batting.power}</span>
+                            <span className={getRankColor(speedRank)}>走 {speedRank}{player.physical.speed}</span>
+                          </div>
+                          <div className="flex gap-3">
+                            <span className={getRankColor(armRank)}>肩 {armRank}{player.physical.arm}</span>
+                            <span className={getRankColor(defenseRank)}>守 {defenseRank}{player.fielding.defense}</span>
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -5051,55 +5167,47 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               )}
             </div>
 
-            {/* 野手リスト */}
+            {/* 右側：控え選手リスト */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-4">野手一覧</h2>
-              <div className="space-y-2">
+              <h2 className="text-xl font-bold text-white mb-4">控え選手（クリックで追加）</h2>
+              <div className="space-y-2 max-h-[600px] overflow-y-auto">
                 {fielders.map(player => {
                   const isInLineup = team.lineupSettings.battingOrder.some(entry => entry.playerId === player.id);
+                  if (isInLineup) return null; // スタメンにいる選手は表示しない
+
+                  // 能力値のランク計算
+                  const meetRank = getAbilityRank(player.batting.meet);
+                  const powerRank = getAbilityRank(player.batting.power);
+                  const speedRank = getAbilityRank(player.physical.speed);
+                  const defenseRank = getAbilityRank(player.fielding.defense);
+                  const armRank = getAbilityRank(player.physical.arm);
+
                   return (
-                    <div key={player.id} className="bg-gray-700 rounded p-3">
+                    <div
+                      key={player.id}
+                      className="bg-gray-700 rounded p-3 cursor-pointer hover:bg-gray-600 transition"
+                      onClick={() => handleAddToLineup(player.id)}
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <div className="text-white font-bold">{player.name}</div>
-                          <div className="text-sm text-gray-400">
-                            {POSITION_NAMES[player.position]} | {player.age}歳 |
-                            ミート{player.batting.meet} パワー{player.batting.power} 走力{player.physical.speed}
+                          <div className="text-xs text-gray-400">
+                            {POSITION_NAMES[player.position]} | {player.age}歳
                           </div>
                         </div>
-                        {isInLineup && (
-                          <span className="bg-blue-600 text-white px-3 py-1 rounded text-sm">スタメン</span>
-                        )}
                       </div>
-                      {!isInLineup && (
-                        <div className="flex gap-2">
-                          <select className="bg-gray-600 text-white rounded px-2 py-1" id={`order-${player.id}`}>
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
-                              <option key={n} value={n}>{n}番</option>
-                            ))}
-                          </select>
-                          <select className="bg-gray-600 text-white rounded px-2 py-1" id={`pos-${player.id}`}>
-                            <option value="catcher">捕手</option>
-                            <option value="first">一塁</option>
-                            <option value="second">二塁</option>
-                            <option value="third">三塁</option>
-                            <option value="short">遊撃</option>
-                            <option value="left">左翼</option>
-                            <option value="center">中堅</option>
-                            <option value="right">右翼</option>
-                          </select>
-                          <button
-                            onClick={() => {
-                              const order = parseInt(document.getElementById(`order-${player.id}`).value);
-                              const position = document.getElementById(`pos-${player.id}`).value;
-                              handleSetStarter(player.id, order, position);
-                            }}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded transition"
-                          >
-                            スタメン登録
-                          </button>
+                      {/* 能力値表示 */}
+                      <div className="text-xs space-y-1">
+                        <div className="flex gap-3">
+                          <span className={getRankColor(meetRank)}>ミ {meetRank}{player.batting.meet}</span>
+                          <span className={getRankColor(powerRank)}>パ {powerRank}{player.batting.power}</span>
+                          <span className={getRankColor(speedRank)}>走 {speedRank}{player.physical.speed}</span>
                         </div>
-                      )}
+                        <div className="flex gap-3">
+                          <span className={getRankColor(armRank)}>肩 {armRank}{player.physical.arm}</span>
+                          <span className={getRankColor(defenseRank)}>守 {defenseRank}{player.fielding.defense}</span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -5189,20 +5297,29 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
             {/* 投手リスト */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-4">投手一覧</h2>
+              <h2 className="text-xl font-bold text-white mb-4">投手一覧（クリックで追加）</h2>
               <div className="space-y-2">
                 {pitchers.map(player => {
                   const isStarter = team.pitchingRotation.starters.includes(player.id);
                   const isMiddle = team.pitchingRotation.middleRelievers.includes(player.id);
                   const isCloser = team.pitchingRotation.closers.includes(player.id);
 
+                  // 能力値のランク計算
+                  const velocityRank = getVelocityRank(player.pitching.velocity);
+                  const controlRank = getAbilityRank(player.pitching.control);
+                  const staminaRank = getAbilityRank(player.pitching.stamina / 2); // スタミナは200が最大なので半分に
+
                   return (
                     <div key={player.id} className="bg-gray-700 rounded p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <div className="text-white font-bold">{player.name}</div>
-                          <div className="text-sm text-gray-400">
-                            球速{player.pitching.velocity}km/h | 制球{player.pitching.control} | スタミナ{player.pitching.stamina}
+                          <div className="text-xs space-y-1">
+                            <div className="flex gap-3">
+                              <span className={getRankColor(velocityRank)}>球速 {velocityRank}{player.pitching.velocity}</span>
+                              <span className={getRankColor(controlRank)}>制球 {controlRank}{player.pitching.control}</span>
+                              <span className={getRankColor(staminaRank)}>スタミナ {staminaRank}{player.pitching.stamina}</span>
+                            </div>
                           </div>
                         </div>
                         <div className="flex gap-2">
