@@ -2816,10 +2816,10 @@ if (newOuts === 3) {
             <button
               onClick={() => {
                 setScreenMode('management');
-                setManagementView('schedule');
+                setManagementView('dateprogress');
               }}
               className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'schedule' ? 'bg-green-600' : 'hover:bg-gray-800'
+                screenMode === 'management' && managementView === 'dateprogress' ? 'bg-green-600' : 'hover:bg-gray-800'
               }`}
             >
               📅 日程進行
@@ -2828,14 +2828,13 @@ if (newOuts === 3) {
             <button
               onClick={() => {
                 setScreenMode('management');
-                setManagementView('team');
+                setManagementView('teaminfo');
               }}
               className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'team' ? 'bg-green-600' : 'hover:bg-gray-800'
+                screenMode === 'management' && managementView === 'teaminfo' ? 'bg-green-600' : 'hover:bg-gray-800'
               }`}
-              disabled
             >
-              👥 チーム情報 <span className="text-xs text-gray-500">(準備中)</span>
+              👥 チーム情報
             </button>
 
             <button
@@ -2862,29 +2861,6 @@ if (newOuts === 3) {
               👥 ロスター管理
             </button>
 
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('teaminfo');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'teaminfo' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              📊 チーム情報
-            </button>
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('dateprogress');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'dateprogress' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              📅 日程進行
-            </button>
 
             <button
               onClick={() => {
@@ -5046,9 +5022,33 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     }
 
     const player = team.players.find(p => p.id === playerId);
-    const defaultPosition = player.position !== 'pitcher' ? player.position : 'catcher';
+    let assignedPosition = player.position !== 'pitcher' ? player.position : 'catcher';
 
-    lineup.push({ playerId, position: defaultPosition, battingOrder: selectedBattingOrder });
+    // 同じポジションが既に使われているかチェック（投手以外）
+    const existingPositionEntry = lineup.find(e => e.position === assignedPosition);
+    if (existingPositionEntry) {
+      // 空いているポジションを探す
+      const allPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
+      const usedPositions = lineup.map(e => e.position);
+      const availablePositions = allPositions.filter(pos => !usedPositions.includes(pos));
+
+      if (availablePositions.length > 0) {
+        // 空いているポジションの中から選手の適正が最も高いものを選ぶ
+        if (player.positionFitness) {
+          const positionFitnessMap = {
+            catcher: 'catcher', first: 'first', second: 'second',
+            short: 'short', third: 'third', left: 'left', center: 'center', right: 'right'
+          };
+          availablePositions.sort((a, b) =>
+            (player.positionFitness[positionFitnessMap[b]] || 0) -
+            (player.positionFitness[positionFitnessMap[a]] || 0)
+          );
+        }
+        assignedPosition = availablePositions[0];
+      }
+    }
+
+    lineup.push({ playerId, position: assignedPosition, battingOrder: selectedBattingOrder });
     lineup.sort((a, b) => a.battingOrder - b.battingOrder);
 
     // 次の打順を自動選択
@@ -5057,11 +5057,23 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     setUpdateTrigger(prev => prev + 1);
   };
 
-  // 守備位置変更
+  // 守備位置変更（同じポジションの重複を禁止）
   const handleChangePosition = (battingOrder, newPosition) => {
     const lineup = team.lineupSettings.battingOrder;
     const entry = lineup.find(e => e.battingOrder === battingOrder);
     if (entry) {
+      // 同じポジションが既に使われているかチェック（投手以外）
+      if (newPosition !== 'pitcher') {
+        const existingEntry = lineup.find(e => e.position === newPosition && e.battingOrder !== battingOrder);
+        if (existingEntry) {
+          // 既に同じポジションの選手がいる場合は守備位置を入れ替える
+          const oldPosition = entry.position;
+          existingEntry.position = oldPosition;
+          entry.position = newPosition;
+          setUpdateTrigger(prev => prev + 1);
+          return;
+        }
+      }
       entry.position = newPosition;
       setUpdateTrigger(prev => prev + 1);
     }
@@ -6555,6 +6567,12 @@ const CampScreen = ({ onComplete }) => {
       if (screenMode === 'start' && gameFlowState === 'newgame_camp') {
         return <CampScreen
           onComplete={() => {
+            // キャンプ終了時に日付を3/1に設定し、レギュラーシーズンに移行
+            setSeasonData(prev => ({
+              ...prev,
+              currentDate: { year: 2024, month: 3, day: 1 },
+              phase: SEASON_PHASES.REGULAR_SEASON
+            }));
             setScreenMode('management');
             setGameFlowState('season');
           }}
