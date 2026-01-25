@@ -3176,16 +3176,21 @@ if (newOuts === 3) {
           if (tryoutCandidates.length === 0) {
             // isInitialTryoutがtrueならyear=1（30人×チーム数）、falseならyear=2（15人×チーム数）
             const year = isInitialTryout ? 1 : (seasonData?.year || 1);
-            const teamCount = Object.keys(allTeams).length || 4;
-            console.log(`🎯 トライアウト初期化: year=${year}, teamCount=${teamCount}, allTeams=`, allTeams);
+            // レギュレーション設定のチーム数を使用（設定がない場合はallTeamsから取得）
+            const teamCount = seasonData?.settings?.teamsCount || Object.keys(allTeams).length || 4;
+            console.log(`🎯 トライアウト初期化: year=${year}, teamCount=${teamCount}, settings.teamsCount=${seasonData?.settings?.teamsCount}`);
             const candidates = generateTryoutCandidates(year, teamCount);
             console.log(`📋 候補者生成完了: ${candidates.length}人`);
             setTryoutCandidates(candidates);
 
             // ドラフト順序を生成（24ラウンド）
-            const teams = ['ユーザー', ...Object.keys(allTeams).slice(1)];
-            const order = generateSnakeDraftOrder(teams, 24);
-            console.log(`📊 ドラフト順序: ${order.length}ラウンド`);
+            // チーム数に応じて動的にチーム名を生成
+            const teamNames = ['ユーザー'];
+            for (let i = 1; i < teamCount; i++) {
+              teamNames.push(`チーム${String.fromCharCode(65 + i)}`); // B, C, D...
+            }
+            const order = generateSnakeDraftOrder(teamNames, 24);
+            console.log(`📊 ドラフト順序: ${order.length}ラウンド, チーム数: ${teamCount}`);
             setDraftOrder(order);
           }
         }, [seasonData, allTeams, tryoutCandidates.length, isInitialTryout]);
