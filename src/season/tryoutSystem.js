@@ -6,6 +6,64 @@
 import { generateRandomPlayerName } from '../data/playerNames.js';
 
 /**
+ * 利き手を決定（リアルな分布）
+ * - 右投右打: 50%
+ * - 右投左打: 30%
+ * - 左投左打: 15%
+ * - 右投両打: 5%
+ * - 左投右打: 0%（基本的に存在しない）
+ */
+function determineHandedness() {
+  const rand = Math.random() * 100;
+  if (rand < 50) {
+    return { throws: 'right', bats: 'right' };
+  } else if (rand < 80) {
+    return { throws: 'right', bats: 'left' };
+  } else if (rand < 95) {
+    return { throws: 'left', bats: 'left' };
+  } else {
+    return { throws: 'right', bats: 'switch' };
+  }
+}
+
+/**
+ * 左投げ選手のポジションを決定
+ * 左投げは投手、一塁手、外野手が99%、捕手は1%
+ */
+function getPositionForLeftHander() {
+  const rand = Math.random() * 100;
+  if (rand < 40) {
+    return 'pitcher';
+  } else if (rand < 55) {
+    return 'first';
+  } else if (rand < 70) {
+    return 'left';
+  } else if (rand < 85) {
+    return 'center';
+  } else if (rand < 99) {
+    return 'right';
+  } else {
+    return 'catcher'; // 1%の確率で左投げ捕手
+  }
+}
+
+/**
+ * 一芸に秀でた選手タイプを生成
+ */
+function getSpecialistType() {
+  const types = [
+    'speedster',      // 俊足だが打撃弱い
+    'slugger',        // パワーはあるが守備走塁弱い
+    'defender',       // 守備の名手だが打撃弱い
+    'contactHitter',  // ミートはいいがパワー無い
+    'fireballer',     // 球速は速いがスタミナ制球弱い
+    'controlPitcher', // 制球はいいが球速遅い
+    'ironman',        // スタミナあるが球速制球弱い
+  ];
+  return types[Math.floor(Math.random() * types.length)];
+}
+
+/**
  * トライアウト候補者を生成
  * @param {number} year - 年数（1年目は30人/チーム、2年目以降は15人/チーム）
  * @param {number} teamCount - チーム数
@@ -19,12 +77,33 @@ export function generateTryoutCandidates(year, teamCount) {
   const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
 
   for (let i = 1; i <= totalCandidates; i++) {
-    // 投手と野手を1:1の比率で生成
-    const isPitcher = Math.random() < 0.5;
-    const position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
+    // 利き手を決定
+    const handedness = determineHandedness();
+    const throws = handedness.throws;
+    const bats = handedness.bats;
 
-    // ランダムな名前生成（選手名データベースから3000×3000の重み付き選択）
+    // 投手と野手を1:1の比率で生成（ただし左投げは制限あり）
+    let isPitcher = Math.random() < 0.5;
+    let position;
+
+    if (throws === 'left') {
+      // 左投げの場合、ポジションを制限
+      position = getPositionForLeftHander();
+      isPitcher = position === 'pitcher';
+    } else {
+      // 右投げの場合は自由にポジション決定
+      position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
+    }
+
+    // 一芸に秀でた選手かどうか（20%の確率）
+    const isSpecialist = Math.random() < 0.2;
+    const specialistType = isSpecialist ? getSpecialistType() : null;
+
+    // ランダムな名前生成
     const name = generateRandomPlayerName();
+
+    // 能力値生成（一芸選手の場合は特殊な分布）
+    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType);
 
     const player = {
       id: i,
@@ -34,28 +113,27 @@ export function generateTryoutCandidates(year, teamCount) {
       battingOrder: 0,
       isStarter: false,
       batting: {
-        // 独立リーグ設定：能力値を全体的に低く
-        meet: isPitcher ? Math.floor(Math.random() * 26) + 15 : Math.floor(Math.random() * 41) + 30,  // 投手15-40、野手30-70
-        power: isPitcher ? Math.floor(Math.random() * 26) + 10 : Math.floor(Math.random() * 41) + 25, // 投手10-35、野手25-65
-        eye: isPitcher ? Math.floor(Math.random() * 26) + 25 : Math.floor(Math.random() * 41) + 30,   // 投手25-50、野手30-70
-        bats: Math.random() > 0.7 ? 'left' : Math.random() > 0.9 ? 'switch' : 'right',
-        steal: isPitcher ? Math.floor(Math.random() * 16) + 10 : Math.floor(Math.random() * 51) + 20  // 投手10-25、野手20-70
+        meet: abilities.meet,
+        power: abilities.power,
+        eye: abilities.eye,
+        bats: bats,
+        steal: abilities.steal
       },
       physical: {
-        speed: isPitcher ? Math.floor(Math.random() * 26) + 30 : Math.floor(Math.random() * 41) + 30, // 投手30-55、野手30-70
-        arm: isPitcher ? Math.floor(Math.random() * 26) + 40 : Math.floor(Math.random() * 41) + 30,   // 投手40-65、野手30-70
-        throws: Math.random() > 0.8 ? 'left' : 'right'
+        speed: abilities.speed,
+        arm: abilities.arm,
+        throws: throws
       },
       fielding: {
-        defense: isPitcher ? Math.floor(Math.random() * 26) + 40 : Math.floor(Math.random() * 41) + 30 // 投手40-65、野手30-70
+        defense: abilities.defense
       },
       catching: {
-        lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 40 : Math.floor(Math.random() * 26) + 25 // 捕手40-75、その他25-50
+        lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 40 : Math.floor(Math.random() * 26) + 25
       },
       pitching: {
-        velocity: isPitcher ? Math.floor(Math.random() * 21) + 125 : Math.floor(Math.random() * 16) + 110, // 投手125-145、野手110-125
-        control: isPitcher ? Math.floor(Math.random() * 31) + 40 : Math.floor(Math.random() * 26) + 30,    // 投手40-70、野手30-55
-        stamina: isPitcher ? Math.floor(Math.random() * 61) + 100 : Math.floor(Math.random() * 41) + 50,   // 投手100-160、野手50-90
+        velocity: abilities.velocity,
+        control: abilities.control,
+        stamina: abilities.stamina,
         form: ['overhand', 'threeQuarter', 'sidearm', 'submarine'][Math.floor(Math.random() * 4)],
         arsenal: isPitcher ? generateRandomArsenal() : [
           { id: 1, type: 'straight', level: 100 },
@@ -83,6 +161,124 @@ export function generateTryoutCandidates(year, teamCount) {
   }
 
   return candidates;
+}
+
+/**
+ * 能力値を生成（一芸選手対応）
+ */
+function generateAbilities(isPitcher, position, isSpecialist, specialistType) {
+  // 通常の能力値範囲
+  const normalAbilities = {
+    // 野手能力
+    meet: isPitcher ? randRange(15, 40) : randRange(30, 70),
+    power: isPitcher ? randRange(10, 35) : randRange(25, 65),
+    eye: isPitcher ? randRange(25, 50) : randRange(30, 70),
+    steal: isPitcher ? randRange(10, 25) : randRange(20, 70),
+    speed: isPitcher ? randRange(30, 55) : randRange(30, 70),
+    arm: isPitcher ? randRange(40, 65) : randRange(30, 70),
+    defense: isPitcher ? randRange(40, 65) : randRange(30, 70),
+    // 投手能力
+    velocity: isPitcher ? randRange(125, 145) : randRange(110, 125),
+    control: isPitcher ? randRange(40, 70) : randRange(30, 55),
+    stamina: isPitcher ? randRange(100, 160) : randRange(50, 90)
+  };
+
+  if (!isSpecialist) {
+    return normalAbilities;
+  }
+
+  // 一芸に秀でた選手の能力調整
+  switch (specialistType) {
+    case 'speedster':
+      // 俊足だが打撃弱い
+      return {
+        ...normalAbilities,
+        speed: randRange(80, 95),
+        steal: randRange(75, 90),
+        meet: randRange(25, 45),
+        power: randRange(15, 35),
+        defense: randRange(55, 75)
+      };
+
+    case 'slugger':
+      // パワーはあるが守備走塁弱い
+      return {
+        ...normalAbilities,
+        power: randRange(75, 90),
+        meet: randRange(40, 60),
+        speed: randRange(20, 40),
+        steal: randRange(10, 25),
+        defense: randRange(25, 45),
+        arm: randRange(35, 55)
+      };
+
+    case 'defender':
+      // 守備の名手だが打撃弱い
+      return {
+        ...normalAbilities,
+        defense: randRange(80, 95),
+        arm: randRange(70, 85),
+        meet: randRange(30, 50),
+        power: randRange(20, 40),
+        speed: randRange(50, 70)
+      };
+
+    case 'contactHitter':
+      // ミートはいいがパワー無い
+      return {
+        ...normalAbilities,
+        meet: randRange(75, 90),
+        eye: randRange(70, 85),
+        power: randRange(20, 40),
+        speed: randRange(45, 65)
+      };
+
+    case 'fireballer':
+      // 球速は速いがスタミナ制球弱い（投手用）
+      if (isPitcher) {
+        return {
+          ...normalAbilities,
+          velocity: randRange(150, 160),
+          control: randRange(25, 45),
+          stamina: randRange(70, 100)
+        };
+      }
+      return normalAbilities;
+
+    case 'controlPitcher':
+      // 制球はいいが球速遅い（投手用）
+      if (isPitcher) {
+        return {
+          ...normalAbilities,
+          velocity: randRange(120, 135),
+          control: randRange(75, 90),
+          stamina: randRange(110, 150)
+        };
+      }
+      return normalAbilities;
+
+    case 'ironman':
+      // スタミナあるが球速制球弱い（投手用）
+      if (isPitcher) {
+        return {
+          ...normalAbilities,
+          velocity: randRange(125, 140),
+          control: randRange(35, 55),
+          stamina: randRange(170, 200)
+        };
+      }
+      return normalAbilities;
+
+    default:
+      return normalAbilities;
+  }
+}
+
+/**
+ * 範囲内のランダム整数を生成
+ */
+function randRange(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 /**

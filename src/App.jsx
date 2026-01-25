@@ -5541,90 +5541,109 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   );
 };
 
-// ロスター管理画面（スタメン・投手設定）
+// ロスター管理画面（スタメン・投手設定）- 自チーム（チームA）のみ
 const RosterScreen = () => {
-  const [selectedTeam, setSelectedTeam] = useState('チームA');
-  const allTeams = TEAMS_DATA || {};
+  const userTeam = 'チームA'; // 自チームは固定
 
   return (
     <div className="p-8">
       <div className="max-w-7xl mx-auto">
-        {/* チーム選択 */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-2">チーム選択</label>
-          <select
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            className="w-full bg-gray-700 text-white rounded px-4 py-2"
-          >
-            {Object.keys(allTeams).map(teamName => (
-              <option key={teamName} value={teamName}>{teamName}</option>
-            ))}
-          </select>
+        {/* 自チーム表示 */}
+        <div className="bg-gray-800 rounded-lg p-4 mb-6">
+          <div className="text-lg font-bold text-white">🏠 自チーム: {userTeam}</div>
+          <p className="text-sm text-gray-400 mt-1">ロスター管理は自チームのみ設定できます</p>
         </div>
 
         {/* LineupSettingScreenを直接表示 */}
-        <LineupSettingScreen teamName={selectedTeam} onBack={null} />
+        <LineupSettingScreen teamName={userTeam} onBack={null} />
       </div>
     </div>
   );
 };
 
-// チーム情報画面（選手一覧・解雇機能）
+// チーム情報画面（選手一覧・能力値表示）
 const TeamInfoScreen = () => {
   const [selectedTeam, setSelectedTeam] = useState('チームA');
-  const [releaseConfirm, setReleaseConfirm] = useState(null);
-  const [updateTrigger, setUpdateTrigger] = useState(0); // 再レンダリング用
 
   const allTeams = TEAMS_DATA || {};
   const team = allTeams[selectedTeam];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
 
-  const handleRelease = (playerId) => {
-    const updatedTeam = releasePlayer(team, playerId);
-    TEAMS_DATA[selectedTeam] = updatedTeam;
-    setReleaseConfirm(null);
-    setUpdateTrigger(prev => prev + 1); // 再レンダリング
-  };
-
   // 投手と野手に分ける
   const pitchers = team.players.filter(p => p.position === 'pitcher');
   const fielders = team.players.filter(p => p.position !== 'pitcher');
 
-  const renderPlayerCard = (player) => {
-    const battingAvg = player.seasonStats.batting.atBats > 0
-      ? (player.seasonStats.batting.hits / player.seasonStats.batting.atBats).toFixed(3)
-      : '.000';
-    const era = player.seasonStats.pitching.inningsPitched > 0
+  // 能力値の色を取得
+  const getAbilityColor = (value) => {
+    if (value >= 90) return 'text-pink-400';
+    if (value >= 80) return 'text-red-400';
+    if (value >= 70) return 'text-orange-400';
+    if (value >= 60) return 'text-yellow-400';
+    if (value >= 50) return 'text-green-400';
+    if (value >= 40) return 'text-blue-400';
+    return 'text-gray-400';
+  };
+
+  const renderPitcherRow = (player, index) => {
+    const era = player.seasonStats?.pitching?.inningsPitched > 0
       ? ((player.seasonStats.pitching.earnedRuns * 27) / player.seasonStats.pitching.inningsPitched).toFixed(2)
       : '-.--';
 
     return (
-      <div key={player.id} className="bg-gray-700 rounded p-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="text-white">
-            <div className="font-bold">{player.name}</div>
-            <div className="text-sm text-gray-400">
-              {POSITION_NAMES[player.position]} | {player.age}歳 |
-              {player.physical?.throws && ` 投${player.physical.throws === 'left' ? '左' : '右'}`}
-              {player.batting?.bats && ` 打${player.batting.bats === 'left' ? '左' : player.batting.bats === 'switch' ? '両' : '右'}`}
-            </div>
-          </div>
-          <div className="text-sm text-gray-300">
-            {player.position === 'pitcher' ? (
-              <span>防{era} {player.seasonStats.pitching.wins}勝{player.seasonStats.pitching.losses}敗</span>
-            ) : (
-              <span>打率{battingAvg} {player.seasonStats.batting.homeruns}本 {player.seasonStats.batting.rbis}打点</span>
-            )}
-          </div>
-        </div>
-        <button
-          onClick={() => setReleaseConfirm(player.id)}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition"
-        >
-          解雇
-        </button>
-      </div>
+      <tr key={player.id} className={index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-750'}>
+        <td className="px-2 py-1 text-white font-medium">{player.name}</td>
+        <td className="px-2 py-1 text-gray-300 text-center">{player.age}</td>
+        <td className="px-2 py-1 text-gray-300 text-center">
+          {player.physical?.throws === 'left' ? '左' : '右'}
+        </td>
+        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.velocity)}`}>
+          {player.pitching?.velocity || '-'}
+        </td>
+        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.control)}`}>
+          {player.pitching?.control || '-'}
+        </td>
+        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(Math.min(99, Math.floor((player.pitching?.stamina || 0) / 2)))}`}>
+          {player.pitching?.stamina || '-'}
+        </td>
+        <td className="px-2 py-1 text-gray-300 text-center">{era}</td>
+        <td className="px-2 py-1 text-gray-300 text-center">
+          {player.seasonStats?.pitching?.wins || 0}-{player.seasonStats?.pitching?.losses || 0}
+        </td>
+      </tr>
+    );
+  };
+
+  const renderFielderRow = (player, index) => {
+    const battingAvg = player.seasonStats?.batting?.atBats > 0
+      ? (player.seasonStats.batting.hits / player.seasonStats.batting.atBats).toFixed(3)
+      : '.000';
+
+    return (
+      <tr key={player.id} className={index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-750'}>
+        <td className="px-2 py-1 text-white font-medium">{player.name}</td>
+        <td className="px-2 py-1 text-gray-300 text-center">{POSITION_NAMES[player.position]}</td>
+        <td className="px-2 py-1 text-gray-300 text-center">{player.age}</td>
+        <td className="px-2 py-1 text-gray-300 text-center">
+          {player.physical?.throws === 'left' ? '左' : '右'}{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}
+        </td>
+        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.meet)}`}>
+          {player.batting?.meet || '-'}
+        </td>
+        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.power)}`}>
+          {player.batting?.power || '-'}
+        </td>
+        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.speed)}`}>
+          {player.physical?.speed || '-'}
+        </td>
+        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.fielding?.defense)}`}>
+          {player.fielding?.defense || '-'}
+        </td>
+        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.arm)}`}>
+          {player.physical?.arm || '-'}
+        </td>
+        <td className="px-2 py-1 text-gray-300 text-center">{battingAvg}</td>
+        <td className="px-2 py-1 text-gray-300 text-center">{player.seasonStats?.batting?.homeruns || 0}</td>
+      </tr>
     );
   };
 
@@ -5651,74 +5670,80 @@ const TeamInfoScreen = () => {
 
         {/* ロスター情報 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <div className="grid grid-cols-2 gap-4 text-white">
+          <div className="grid grid-cols-3 gap-4 text-white">
             <div>
               <div className="text-sm text-gray-400">総人数</div>
-              <div className="text-2xl font-bold">{team.players.length} / 24人</div>
+              <div className="text-2xl font-bold">{team.players.length}人</div>
             </div>
             <div>
-              <div className="text-sm text-gray-400">状態</div>
-              <div className={`text-2xl font-bold ${team.players.length > 24 ? 'text-red-400' : 'text-green-400'}`}>
-                {team.players.length > 24 ? `${team.players.length - 24}人超過` : '正常'}
-              </div>
+              <div className="text-sm text-gray-400">投手</div>
+              <div className="text-2xl font-bold">{pitchers.length}人</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400">野手</div>
+              <div className="text-2xl font-bold">{fielders.length}人</div>
             </div>
           </div>
-          {team.players.length > 24 && (
-            <div className="mt-4 p-4 bg-red-900 border border-red-700 rounded">
-              <p className="text-red-200">⚠️ ロスターが24人を超えています。選手を解雇してください。</p>
+        </div>
+
+        {/* 投手一覧（テーブル形式） */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-bold text-white mb-4">投手 ({pitchers.length}人)</h2>
+          {pitchers.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-600 text-gray-200">
+                    <th className="px-2 py-2 text-left">名前</th>
+                    <th className="px-2 py-2 text-center">年齢</th>
+                    <th className="px-2 py-2 text-center">投</th>
+                    <th className="px-2 py-2 text-center">球速</th>
+                    <th className="px-2 py-2 text-center">制球</th>
+                    <th className="px-2 py-2 text-center">スタミナ</th>
+                    <th className="px-2 py-2 text-center">防御率</th>
+                    <th className="px-2 py-2 text-center">勝敗</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pitchers.map((player, index) => renderPitcherRow(player, index))}
+                </tbody>
+              </table>
             </div>
+          ) : (
+            <p className="text-gray-400 text-center py-4">投手がいません</p>
           )}
         </div>
 
-        {/* 2グリッド表示：左=投手、右=野手 */}
-        <div className="grid grid-cols-2 gap-6">
-          {/* 投手リスト */}
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-bold text-white mb-4">投手 ({pitchers.length}人)</h2>
-            <div className="space-y-2">
-              {pitchers.length > 0 ? pitchers.map(renderPlayerCard) : (
-                <p className="text-gray-400 text-center py-4">投手がいません</p>
-              )}
+        {/* 野手一覧（テーブル形式） */}
+        <div className="bg-gray-800 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-white mb-4">野手 ({fielders.length}人)</h2>
+          {fielders.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-600 text-gray-200">
+                    <th className="px-2 py-2 text-left">名前</th>
+                    <th className="px-2 py-2 text-center">守備</th>
+                    <th className="px-2 py-2 text-center">年齢</th>
+                    <th className="px-2 py-2 text-center">投打</th>
+                    <th className="px-2 py-2 text-center">ミート</th>
+                    <th className="px-2 py-2 text-center">パワー</th>
+                    <th className="px-2 py-2 text-center">走力</th>
+                    <th className="px-2 py-2 text-center">守備</th>
+                    <th className="px-2 py-2 text-center">肩</th>
+                    <th className="px-2 py-2 text-center">打率</th>
+                    <th className="px-2 py-2 text-center">HR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fielders.map((player, index) => renderFielderRow(player, index))}
+                </tbody>
+              </table>
             </div>
-          </div>
-
-          {/* 野手リスト */}
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-bold text-white mb-4">野手 ({fielders.length}人)</h2>
-            <div className="space-y-2">
-              {fielders.length > 0 ? fielders.map(renderPlayerCard) : (
-                <p className="text-gray-400 text-center py-4">野手がいません</p>
-              )}
-            </div>
-          </div>
+          ) : (
+            <p className="text-gray-400 text-center py-4">野手がいません</p>
+          )}
         </div>
-
-        {/* 解雇確認ダイアログ */}
-        {releaseConfirm !== null && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg p-8 max-w-md">
-              <h3 className="text-xl font-bold text-white mb-4">選手解雇の確認</h3>
-              <p className="text-gray-300 mb-6">
-                {team.players.find(p => p.id === releaseConfirm)?.name} を解雇しますか？
-                この操作は取り消せません。
-              </p>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => handleRelease(releaseConfirm)}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded font-bold transition"
-                >
-                  解雇する
-                </button>
-                <button
-                  onClick={() => setReleaseConfirm(null)}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded font-bold transition"
-                >
-                  キャンセル
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -5902,7 +5927,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
         </div>
 
         {/* 本日の試合 */}
-        <div className="bg-gray-800 rounded-lg p-6">
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <h2 className="text-xl font-bold text-white mb-4">本日の試合</h2>
           {(() => {
             const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
@@ -5927,6 +5952,125 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
             );
           })()}
         </div>
+
+        {/* 月間カレンダー */}
+        <CalendarView seasonData={seasonData} />
+      </div>
+    </div>
+  );
+};
+
+// カレンダービュー
+const CalendarView = ({ seasonData }) => {
+  const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 3);
+
+  if (!seasonData) return null;
+
+  const months = [
+    { value: 1, label: '1月' }, { value: 2, label: '2月' }, { value: 3, label: '3月' },
+    { value: 4, label: '4月' }, { value: 5, label: '5月' }, { value: 6, label: '6月' },
+    { value: 7, label: '7月' }, { value: 8, label: '8月' }, { value: 9, label: '9月' },
+    { value: 10, label: '10月' }, { value: 11, label: '11月' }, { value: 12, label: '12月' }
+  ];
+
+  const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
+  const getFirstDayOfWeek = (year, month) => new Date(year, month - 1, 1).getDay();
+
+  const year = seasonData.currentDate?.year || 2024;
+  const daysInMonth = getDaysInMonth(year, selectedMonth);
+  const firstDay = getFirstDayOfWeek(year, selectedMonth);
+
+  // カレンダーのセルを生成
+  const cells = [];
+  const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+
+  // 空セルを追加
+  for (let i = 0; i < firstDay; i++) {
+    cells.push({ day: null, games: [] });
+  }
+
+  // 日付セルを追加
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateObj = { year, month: selectedMonth, day };
+    const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
+    const isToday = seasonData.currentDate.year === year &&
+                    seasonData.currentDate.month === selectedMonth &&
+                    seasonData.currentDate.day === day;
+    cells.push({ day, games: gamesOnDay, isToday });
+  }
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-white">📆 カレンダー</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)}
+            className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded"
+          >
+            ◀
+          </button>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="bg-gray-700 text-white rounded px-4 py-1"
+          >
+            {months.map(m => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)}
+            className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded"
+          >
+            ▶
+          </button>
+        </div>
+      </div>
+
+      {/* 曜日ヘッダー */}
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {dayNames.map((name, i) => (
+          <div key={i} className={`text-center text-sm font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
+            {name}
+          </div>
+        ))}
+      </div>
+
+      {/* カレンダーグリッド */}
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((cell, i) => (
+          <div
+            key={i}
+            className={`min-h-[60px] p-1 rounded text-xs ${
+              cell.day === null ? 'bg-transparent' :
+              cell.isToday ? 'bg-green-800 border-2 border-green-400' : 'bg-gray-700'
+            }`}
+          >
+            {cell.day && (
+              <>
+                <div className={`font-bold mb-1 ${
+                  i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'
+                }`}>
+                  {cell.day}
+                </div>
+                {cell.games.length > 0 && (
+                  <div className="space-y-0.5">
+                    {cell.games.slice(0, 2).map(game => (
+                      <div key={game.id} className={`text-[10px] truncate ${game.result ? 'text-gray-400' : 'text-yellow-300'}`}>
+                        {game.away.replace('チーム', '')}@{game.home.replace('チーム', '')}
+                        {game.result && ` ${game.result.awayScore}-${game.result.homeScore}`}
+                      </div>
+                    ))}
+                    {cell.games.length > 2 && (
+                      <div className="text-[10px] text-gray-500">+{cell.games.length - 2}試合</div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
