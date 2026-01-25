@@ -33,7 +33,7 @@ import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDat
 import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
 import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
 import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
-import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription } from './season/regulationSettings.js';
+import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
 import { progressDate, progressToNextGame, progressToNextPhase } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer } from './season/yearProgressionSystem.js';
@@ -2865,6 +2865,30 @@ if (newOuts === 3) {
             <button
               onClick={() => {
                 setScreenMode('management');
+                setManagementView('teaminfo');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'teaminfo' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              📊 チーム情報
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('dateprogress');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'dateprogress' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              📅 日程進行
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
                 setManagementView('offseason');
               }}
               className={`w-full text-left px-4 py-3 rounded transition ${
@@ -2883,7 +2907,7 @@ if (newOuts === 3) {
                 screenMode === 'management' && managementView === 'stats' ? 'bg-green-600' : 'hover:bg-gray-800'
               }`}
             >
-              📊 選手成績
+              📈 選手成績
             </button>
 
             <button
@@ -5505,12 +5529,40 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   );
 };
 
-// ロスター管理画面
+// ロスター管理画面（スタメン・投手設定）
 const RosterScreen = () => {
+  const [selectedTeam, setSelectedTeam] = useState('チームA');
+  const allTeams = TEAMS_DATA || {};
+
+  return (
+    <div className="p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* チーム選択 */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <label className="block text-sm font-medium text-gray-300 mb-2">チーム選択</label>
+          <select
+            value={selectedTeam}
+            onChange={(e) => setSelectedTeam(e.target.value)}
+            className="w-full bg-gray-700 text-white rounded px-4 py-2"
+          >
+            {Object.keys(allTeams).map(teamName => (
+              <option key={teamName} value={teamName}>{teamName}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* LineupSettingScreenを直接表示 */}
+        <LineupSettingScreen teamName={selectedTeam} onBack={null} />
+      </div>
+    </div>
+  );
+};
+
+// チーム情報画面（選手一覧・解雇機能）
+const TeamInfoScreen = () => {
   const [selectedTeam, setSelectedTeam] = useState('チームA');
   const [releaseConfirm, setReleaseConfirm] = useState(null);
   const [updateTrigger, setUpdateTrigger] = useState(0); // 再レンダリング用
-  const [showLineupSetting, setShowLineupSetting] = useState(false); // スタメン設定画面表示フラグ
 
   const allTeams = TEAMS_DATA || {};
   const team = allTeams[selectedTeam];
@@ -5523,22 +5575,52 @@ const RosterScreen = () => {
     setUpdateTrigger(prev => prev + 1); // 再レンダリング
   };
 
-  // スタメン設定画面を表示
-  if (showLineupSetting) {
-    return <LineupSettingScreen teamName={selectedTeam} onBack={() => setShowLineupSetting(false)} />;
-  }
+  // 投手と野手に分ける
+  const pitchers = team.players.filter(p => p.position === 'pitcher');
+  const fielders = team.players.filter(p => p.position !== 'pitcher');
+
+  const renderPlayerCard = (player) => {
+    const battingAvg = player.seasonStats.batting.atBats > 0
+      ? (player.seasonStats.batting.hits / player.seasonStats.batting.atBats).toFixed(3)
+      : '.000';
+    const era = player.seasonStats.pitching.inningsPitched > 0
+      ? ((player.seasonStats.pitching.earnedRuns * 27) / player.seasonStats.pitching.inningsPitched).toFixed(2)
+      : '-.--';
+
+    return (
+      <div key={player.id} className="bg-gray-700 rounded p-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="text-white">
+            <div className="font-bold">{player.name}</div>
+            <div className="text-sm text-gray-400">
+              {POSITION_NAMES[player.position]} | {player.age}歳 |
+              {player.physical?.throws && ` 投${player.physical.throws === 'left' ? '左' : '右'}`}
+              {player.batting?.bats && ` 打${player.batting.bats === 'left' ? '左' : player.batting.bats === 'switch' ? '両' : '右'}`}
+            </div>
+          </div>
+          <div className="text-sm text-gray-300">
+            {player.position === 'pitcher' ? (
+              <span>防{era} {player.seasonStats.pitching.wins}勝{player.seasonStats.pitching.losses}敗</span>
+            ) : (
+              <span>打率{battingAvg} {player.seasonStats.batting.homeruns}本 {player.seasonStats.batting.rbis}打点</span>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={() => setReleaseConfirm(player.id)}
+          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition"
+        >
+          解雇
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="p-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-white">👥 ロスター管理</h1>
-          <button
-            onClick={() => setShowLineupSetting(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded font-bold transition"
-          >
-            ⚙️ スタメン・投手設定
-          </button>
+          <h1 className="text-3xl font-bold text-white">📊 チーム情報</h1>
         </div>
 
         {/* チーム選択 */}
@@ -5576,46 +5658,26 @@ const RosterScreen = () => {
           )}
         </div>
 
-        {/* 選手リスト */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-bold text-white mb-4">選手一覧</h2>
-          <div className="space-y-2">
-            {team.players.map(player => {
-              const battingAvg = player.seasonStats.batting.atBats > 0
-                ? (player.seasonStats.batting.hits / player.seasonStats.batting.atBats).toFixed(3)
-                : '.000';
-              const era = player.seasonStats.pitching.inningsPitched > 0
-                ? ((player.seasonStats.pitching.earnedRuns * 27) / player.seasonStats.pitching.inningsPitched).toFixed(2)
-                : '-.--';
+        {/* 2グリッド表示：左=投手、右=野手 */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* 投手リスト */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-bold text-white mb-4">投手 ({pitchers.length}人)</h2>
+            <div className="space-y-2">
+              {pitchers.length > 0 ? pitchers.map(renderPlayerCard) : (
+                <p className="text-gray-400 text-center py-4">投手がいません</p>
+              )}
+            </div>
+          </div>
 
-              return (
-                <div key={player.id} className="bg-gray-700 rounded p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="text-white">
-                      <div className="font-bold">{player.name}</div>
-                      <div className="text-sm text-gray-400">
-                        {POSITION_NAMES[player.position]} | {player.age}歳 |
-                        {player.physical?.throws && ` 投${player.physical.throws === 'left' ? '左' : '右'}`}
-                        {player.batting?.bats && ` 打${player.batting.bats === 'left' ? '左' : player.batting.bats === 'switch' ? '両' : '右'}`}
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-300">
-                      {player.position === 'pitcher' ? (
-                        <span>防{era} {player.seasonStats.pitching.wins}勝{player.seasonStats.pitching.losses}敗</span>
-                      ) : (
-                        <span>打率{battingAvg} {player.seasonStats.batting.homeruns}本 {player.seasonStats.batting.rbis}打点</span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setReleaseConfirm(player.id)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition"
-                  >
-                    解雇
-                  </button>
-                </div>
-              );
-            })}
+          {/* 野手リスト */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-bold text-white mb-4">野手 ({fielders.length}人)</h2>
+            <div className="space-y-2">
+              {fielders.length > 0 ? fielders.map(renderPlayerCard) : (
+                <p className="text-gray-400 text-center py-4">野手がいません</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -5645,6 +5707,214 @@ const RosterScreen = () => {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+// 日程進行画面
+const DateProgressScreen = ({ seasonData, setSeasonData }) => {
+  if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
+
+  const currentPhase = seasonData.phase || 'off_season';
+  const phaseInfo = PHASE_INFO[currentPhase] || { name: '', color: 'bg-gray-100', description: '' };
+
+  // 試合日の全試合を自動シミュレーション
+  const simulateGamesOnDate = (sData) => {
+    const gamesOnDate = getScheduleByDate(sData.schedule, sData.currentDate);
+    if (gamesOnDate.length === 0) return sData;
+
+    let updatedSchedule = [...sData.schedule];
+    let updatedStandings = [...sData.standings];
+    let updatedResults = [...sData.results];
+
+    gamesOnDate.forEach(game => {
+      if (game.result) return; // 既に試合済み
+
+      const homeTeam = TEAMS_DATA[game.home];
+      const awayTeam = TEAMS_DATA[game.away];
+      if (!homeTeam || !awayTeam) return;
+
+      const result = autoSimulateGame(homeTeam, awayTeam, game.starterHome, game.starterAway, sData.settings);
+
+      const scheduleIndex = updatedSchedule.findIndex(g => g.id === game.id);
+      if (scheduleIndex !== -1) {
+        updatedSchedule[scheduleIndex] = { ...game, result };
+      }
+
+      updatedResults.push({
+        gameId: game.id,
+        date: { ...sData.currentDate },
+        home: game.home,
+        away: game.away,
+        result
+      });
+
+      const standingHome = updatedStandings.find(s => s.team === game.home);
+      const standingAway = updatedStandings.find(s => s.team === game.away);
+      if (standingHome && standingAway) {
+        standingHome.gamesPlayed++;
+        standingAway.gamesPlayed++;
+        if (result.homeScore > result.awayScore) {
+          standingHome.wins++;
+          standingAway.losses++;
+        } else {
+          standingAway.wins++;
+          standingHome.losses++;
+        }
+        standingHome.winRate = standingHome.gamesPlayed > 0 ? standingHome.wins / standingHome.gamesPlayed : 0;
+        standingAway.winRate = standingAway.gamesPlayed > 0 ? standingAway.wins / standingAway.gamesPlayed : 0;
+      }
+    });
+
+    updatedStandings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+
+    return {
+      ...sData,
+      schedule: updatedSchedule,
+      standings: updatedStandings,
+      results: updatedResults
+    };
+  };
+
+  // 現在フェーズの全未消化試合を自動シミュレーション
+  const simulateAllRemainingGames = (sData) => {
+    const remainingGames = sData.schedule.filter(game => !game.result && game.phase === sData.phase);
+    if (remainingGames.length === 0) return sData;
+
+    let updatedData = { ...sData };
+    remainingGames.forEach(game => {
+      const homeTeam = TEAMS_DATA[game.home];
+      const awayTeam = TEAMS_DATA[game.away];
+      if (!homeTeam || !awayTeam) return;
+
+      const result = autoSimulateGame(homeTeam, awayTeam, game.starterHome, game.starterAway, sData.settings);
+
+      const scheduleIndex = updatedData.schedule.findIndex(g => g.id === game.id);
+      if (scheduleIndex !== -1) {
+        updatedData.schedule[scheduleIndex] = { ...game, result };
+      }
+
+      updatedData.results.push({
+        gameId: game.id,
+        date: game.date,
+        home: game.home,
+        away: game.away,
+        result
+      });
+
+      const standingHome = updatedData.standings.find(s => s.team === game.home);
+      const standingAway = updatedData.standings.find(s => s.team === game.away);
+      if (standingHome && standingAway) {
+        standingHome.gamesPlayed++;
+        standingAway.gamesPlayed++;
+        if (result.homeScore > result.awayScore) {
+          standingHome.wins++;
+          standingAway.losses++;
+        } else {
+          standingAway.wins++;
+          standingHome.losses++;
+        }
+        standingHome.winRate = standingHome.gamesPlayed > 0 ? standingHome.wins / standingHome.gamesPlayed : 0;
+        standingAway.winRate = standingAway.gamesPlayed > 0 ? standingAway.wins / standingAway.gamesPlayed : 0;
+      }
+    });
+
+    updatedData.standings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+    return updatedData;
+  };
+
+  // 日付進行ハンドラー
+  const handleProgressDate = (days) => {
+    let newSeasonData = progressDate(seasonData, days);
+    newSeasonData = simulateGamesOnDate(newSeasonData);
+    setSeasonData(newSeasonData);
+  };
+
+  const handleProgressToNextGame = () => {
+    let newSeasonData = progressToNextGame(seasonData, 'チームA');
+    newSeasonData = simulateGamesOnDate(newSeasonData);
+    setSeasonData(newSeasonData);
+  };
+
+  const handleProgressToNextPhase = () => {
+    let newSeasonData = progressToNextPhase(seasonData);
+    newSeasonData = simulateAllRemainingGames(newSeasonData);
+    setSeasonData(newSeasonData);
+  };
+
+  return (
+    <div className="p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6 text-white">📅 日程進行</h1>
+
+        {/* 現在の日付とフェーズ */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <div className="text-white mb-4">
+            <div className="text-sm text-gray-400">現在の日付</div>
+            <div className="text-3xl font-bold">
+              {formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className={`px-4 py-2 rounded-lg font-bold text-white ${phaseInfo.color}`}>
+              {phaseInfo.name}
+            </span>
+            <span className="text-gray-400 text-sm">{phaseInfo.description}</span>
+          </div>
+        </div>
+
+        {/* 日程進行ボタン */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-bold text-white mb-4">日程を進める</h2>
+          <div className="space-y-3">
+            <button
+              onClick={() => handleProgressDate(1)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold text-lg transition"
+            >
+              ➡️ 1日進める
+            </button>
+            <button
+              onClick={handleProgressToNextGame}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-4 rounded-lg font-bold text-lg transition"
+            >
+              ⏩ 次の試合日まで進む
+            </button>
+            <button
+              onClick={handleProgressToNextPhase}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white px-6 py-4 rounded-lg font-bold text-lg transition"
+            >
+              🔄 次のフェーズまで進む
+            </button>
+          </div>
+        </div>
+
+        {/* 本日の試合 */}
+        <div className="bg-gray-800 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-white mb-4">本日の試合</h2>
+          {(() => {
+            const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+            if (todaysGames.length === 0) {
+              return <p className="text-gray-400 text-center py-4">本日は試合がありません</p>;
+            }
+            return (
+              <div className="space-y-2">
+                {todaysGames.map(game => (
+                  <div key={game.id} className="bg-gray-700 rounded p-4 text-white">
+                    <div className="font-bold text-center">
+                      {game.away} vs {game.home}
+                    </div>
+                    {game.result && (
+                      <div className="text-center text-sm text-gray-300 mt-2">
+                        {game.result.awayScore} - {game.result.homeScore}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );
@@ -6036,6 +6306,7 @@ const CampScreen = ({ onComplete }) => {
       const RegulationsScreen = ({ seasonData, setSeasonData }) => {
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
+  const currentPhase = seasonData.phase || 'off_season';
   const canModify = canModifyRegulations(currentPhase);
   const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
     ? PHASE_INFO[currentPhase]
@@ -6224,6 +6495,11 @@ const CampScreen = ({ onComplete }) => {
           allTeams={allTeams}
         />;
         if (managementView === 'roster') return <RosterScreen />;
+        if (managementView === 'teaminfo') return <TeamInfoScreen />;
+        if (managementView === 'dateprogress') return <DateProgressScreen
+          seasonData={seasonData}
+          setSeasonData={setSeasonData}
+        />;
         if (managementView === 'offseason') return <OffSeasonScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}
