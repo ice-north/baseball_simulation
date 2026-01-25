@@ -5749,21 +5749,98 @@ const TeamInfoScreen = () => {
   );
 };
 
-// 日程進行画面
+// 日程進行画面（大幅刷新版）
 const DateProgressScreen = ({ seasonData, setSeasonData }) => {
+  const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 3);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [lastGameResults, setLastGameResults] = useState([]);
+
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
   const currentPhase = seasonData.phase || 'off_season';
   const phaseInfo = PHASE_INFO[currentPhase] || { name: '', color: 'bg-gray-100', description: '' };
 
-  // 試合日の全試合を自動シミュレーション
+  // 先発投手を取得
+  const getStartingPitcher = (teamName) => {
+    const team = TEAMS_DATA[teamName];
+    if (!team || !team.pitchingRotation || !team.pitchingRotation.starters) {
+      return null;
+    }
+    const rotation = team.pitchingRotation;
+    const index = rotation.currentStarterIndex || 0;
+    const starterId = rotation.starters[index];
+    return team.players.find(p => p.id === starterId);
+  };
+
+  // 勝利投手・敗戦投手・セーブ・ホールドを判定
+  const determinePitcherDecisions = (gameResult, homeTeamData, awayTeamData) => {
+    const decisions = {
+      winningPitcher: null,
+      losingPitcher: null,
+      savePitcher: null,
+      holdPitchers: []
+    };
+
+    if (!gameResult || gameResult.homeScore === gameResult.awayScore) {
+      return decisions; // 引き分け
+    }
+
+    const isHomeWin = gameResult.homeScore > gameResult.awayScore;
+    const winningTeam = isHomeWin ? gameResult.homeTeam : gameResult.awayTeam;
+    const losingTeam = isHomeWin ? gameResult.awayTeam : gameResult.homeTeam;
+
+    if (!winningTeam || !losingTeam) return decisions;
+
+    // 投手成績を持つ選手を抽出
+    const winningPitchers = winningTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
+    const losingPitchers = losingTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
+
+    // 勝利投手: リード時に投げた投手で最低5イニング（先発）または救援で逆転時に投げた投手
+    const winningStarter = winningPitchers.find(p => p.gameStats.pitching.outs >= 15);
+    if (winningStarter) {
+      decisions.winningPitcher = winningStarter;
+    } else {
+      // 救援投手で最も多くアウトを取った投手
+      const reliever = winningPitchers.sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs)[0];
+      if (reliever) {
+        decisions.winningPitcher = reliever;
+      }
+    }
+
+    // 敗戦投手: 負けチームで最初に失点を許した投手（簡易版: 最も失点の多い投手）
+    const losingPitcher = losingPitchers.sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed)[0];
+    if (losingPitcher) {
+      decisions.losingPitcher = losingPitcher;
+    }
+
+    // セーブ: 3点差以内でリードを守り切った最後の投手
+    const scoreDiff = Math.abs(gameResult.homeScore - gameResult.awayScore);
+    if (scoreDiff <= 3 && winningPitchers.length > 1) {
+      const lastPitcher = winningPitchers[winningPitchers.length - 1];
+      if (lastPitcher && lastPitcher !== decisions.winningPitcher && lastPitcher.gameStats.pitching.outs >= 3) {
+        decisions.savePitcher = lastPitcher;
+      }
+    }
+
+    // ホールド: 勝利投手とセーブ投手以外の中継ぎ
+    winningPitchers.forEach(p => {
+      if (p !== decisions.winningPitcher && p !== decisions.savePitcher && p.gameStats.pitching.outs >= 3) {
+        decisions.holdPitchers.push(p);
+      }
+    });
+
+    return decisions;
+  };
+
+  // 試合日の全試合を自動シミュレーション（投手成績判定付き）
   const simulateGamesOnDate = (sData) => {
     const gamesOnDate = getScheduleByDate(sData.schedule, sData.currentDate);
-    if (gamesOnDate.length === 0) return sData;
+    if (gamesOnDate.length === 0) return { data: sData, results: [] };
 
     let updatedSchedule = [...sData.schedule];
     let updatedStandings = [...sData.standings];
     let updatedResults = [...sData.results];
+    const gameResults = [];
 
     gamesOnDate.forEach(game => {
       if (game.result) return; // 既に試合済み
@@ -5772,12 +5849,71 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
       const awayTeam = TEAMS_DATA[game.away];
       if (!homeTeam || !awayTeam) return;
 
-      const result = autoSimulateGame(homeTeam, awayTeam, game.starterHome, game.starterAway, sData.settings);
+      const result = autoSimulateGame(game.home, game.away);
+
+      // 投手成績の判定
+      const decisions = determinePitcherDecisions(result, homeTeam, awayTeam);
+
+      // 投手の勝利/敗戦/セーブ/ホールドを記録
+      if (decisions.winningPitcher) {
+        const teamName = result.homeScore > result.awayScore ? game.home : game.away;
+        const teamData = TEAMS_DATA[teamName];
+        if (teamData) {
+          const pitcher = teamData.players.find(p => p.id === decisions.winningPitcher.id);
+          if (pitcher) {
+            pitcher.seasonStats.pitching.wins = (pitcher.seasonStats.pitching.wins || 0) + 1;
+            pitcher.careerStats.pitching.wins = (pitcher.careerStats.pitching.wins || 0) + 1;
+          }
+        }
+      }
+      if (decisions.losingPitcher) {
+        const teamName = result.homeScore > result.awayScore ? game.away : game.home;
+        const teamData = TEAMS_DATA[teamName];
+        if (teamData) {
+          const pitcher = teamData.players.find(p => p.id === decisions.losingPitcher.id);
+          if (pitcher) {
+            pitcher.seasonStats.pitching.losses = (pitcher.seasonStats.pitching.losses || 0) + 1;
+            pitcher.careerStats.pitching.losses = (pitcher.careerStats.pitching.losses || 0) + 1;
+          }
+        }
+      }
+      if (decisions.savePitcher) {
+        const teamName = result.homeScore > result.awayScore ? game.home : game.away;
+        const teamData = TEAMS_DATA[teamName];
+        if (teamData) {
+          const pitcher = teamData.players.find(p => p.id === decisions.savePitcher.id);
+          if (pitcher) {
+            pitcher.seasonStats.pitching.saves = (pitcher.seasonStats.pitching.saves || 0) + 1;
+            pitcher.careerStats.pitching.saves = (pitcher.careerStats.pitching.saves || 0) + 1;
+          }
+        }
+      }
+      decisions.holdPitchers.forEach(holdPitcher => {
+        const teamName = result.homeScore > result.awayScore ? game.home : game.away;
+        const teamData = TEAMS_DATA[teamName];
+        if (teamData) {
+          const pitcher = teamData.players.find(p => p.id === holdPitcher.id);
+          if (pitcher) {
+            pitcher.seasonStats.pitching.holds = (pitcher.seasonStats.pitching.holds || 0) + 1;
+            pitcher.careerStats.pitching.holds = (pitcher.careerStats.pitching.holds || 0) + 1;
+          }
+        }
+      });
 
       const scheduleIndex = updatedSchedule.findIndex(g => g.id === game.id);
       if (scheduleIndex !== -1) {
         updatedSchedule[scheduleIndex] = { ...game, result };
       }
+
+      gameResults.push({
+        gameId: game.id,
+        home: game.home,
+        away: game.away,
+        homeScore: result.homeScore,
+        awayScore: result.awayScore,
+        winner: result.winner,
+        decisions
+      });
 
       updatedResults.push({
         gameId: game.id,
@@ -5795,9 +5931,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
         if (result.homeScore > result.awayScore) {
           standingHome.wins++;
           standingAway.losses++;
-        } else {
+        } else if (result.awayScore > result.homeScore) {
           standingAway.wins++;
           standingHome.losses++;
+        } else {
+          standingHome.draws = (standingHome.draws || 0) + 1;
+          standingAway.draws = (standingAway.draws || 0) + 1;
         }
         standingHome.winRate = standingHome.gamesPlayed > 0 ? standingHome.wins / standingHome.gamesPlayed : 0;
         standingAway.winRate = standingAway.gamesPlayed > 0 ? standingAway.wins / standingAway.gamesPlayed : 0;
@@ -5807,10 +5946,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
     updatedStandings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
 
     return {
-      ...sData,
-      schedule: updatedSchedule,
-      standings: updatedStandings,
-      results: updatedResults
+      data: {
+        ...sData,
+        schedule: updatedSchedule,
+        standings: updatedStandings,
+        results: updatedResults
+      },
+      results: gameResults
     };
   };
 
@@ -5819,20 +5961,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
     const remainingGames = sData.schedule.filter(game => !game.result && game.phase === sData.phase);
     if (remainingGames.length === 0) return sData;
 
-    let updatedData = { ...sData };
+    let updatedSchedule = [...sData.schedule];
+    let updatedStandings = [...sData.standings];
+    let updatedResults = [...sData.results];
+
     remainingGames.forEach(game => {
       const homeTeam = TEAMS_DATA[game.home];
       const awayTeam = TEAMS_DATA[game.away];
       if (!homeTeam || !awayTeam) return;
 
-      const result = autoSimulateGame(homeTeam, awayTeam, game.starterHome, game.starterAway, sData.settings);
+      const result = autoSimulateGame(game.home, game.away);
 
-      const scheduleIndex = updatedData.schedule.findIndex(g => g.id === game.id);
+      const scheduleIndex = updatedSchedule.findIndex(g => g.id === game.id);
       if (scheduleIndex !== -1) {
-        updatedData.schedule[scheduleIndex] = { ...game, result };
+        updatedSchedule[scheduleIndex] = { ...game, result };
       }
 
-      updatedData.results.push({
+      updatedResults.push({
         gameId: game.id,
         date: game.date,
         home: game.home,
@@ -5840,139 +5985,64 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
         result
       });
 
-      const standingHome = updatedData.standings.find(s => s.team === game.home);
-      const standingAway = updatedData.standings.find(s => s.team === game.away);
+      const standingHome = updatedStandings.find(s => s.team === game.home);
+      const standingAway = updatedStandings.find(s => s.team === game.away);
       if (standingHome && standingAway) {
         standingHome.gamesPlayed++;
         standingAway.gamesPlayed++;
         if (result.homeScore > result.awayScore) {
           standingHome.wins++;
           standingAway.losses++;
-        } else {
+        } else if (result.awayScore > result.homeScore) {
           standingAway.wins++;
           standingHome.losses++;
+        } else {
+          standingHome.draws = (standingHome.draws || 0) + 1;
+          standingAway.draws = (standingAway.draws || 0) + 1;
         }
         standingHome.winRate = standingHome.gamesPlayed > 0 ? standingHome.wins / standingHome.gamesPlayed : 0;
         standingAway.winRate = standingAway.gamesPlayed > 0 ? standingAway.wins / standingAway.gamesPlayed : 0;
       }
     });
 
-    updatedData.standings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-    return updatedData;
+    updatedStandings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+    return {
+      ...sData,
+      schedule: updatedSchedule,
+      standings: updatedStandings,
+      results: updatedResults
+    };
   };
 
   // 日付進行ハンドラー
   const handleProgressDate = (days) => {
+    setIsSimulating(true);
     let newSeasonData = progressDate(seasonData, days);
-    newSeasonData = simulateGamesOnDate(newSeasonData);
-    setSeasonData(newSeasonData);
+    const { data, results } = simulateGamesOnDate(newSeasonData);
+    setSeasonData(data);
+    setLastGameResults(results);
+    setIsSimulating(false);
   };
 
   const handleProgressToNextGame = () => {
+    setIsSimulating(true);
     let newSeasonData = progressToNextGame(seasonData, 'チームA');
-    newSeasonData = simulateGamesOnDate(newSeasonData);
-    setSeasonData(newSeasonData);
+    const { data, results } = simulateGamesOnDate(newSeasonData);
+    setSeasonData(data);
+    setLastGameResults(results);
+    setIsSimulating(false);
   };
 
   const handleProgressToNextPhase = () => {
+    setIsSimulating(true);
     let newSeasonData = progressToNextPhase(seasonData);
     newSeasonData = simulateAllRemainingGames(newSeasonData);
     setSeasonData(newSeasonData);
+    setLastGameResults([]);
+    setIsSimulating(false);
   };
 
-  return (
-    <div className="p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-white">📅 日程進行</h1>
-
-        {/* 現在の日付とフェーズ */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <div className="text-white mb-4">
-            <div className="text-sm text-gray-400">現在の日付</div>
-            <div className="text-3xl font-bold">
-              {formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className={`px-4 py-2 rounded-lg font-bold text-white ${phaseInfo.color}`}>
-              {phaseInfo.name}
-            </span>
-            <span className="text-gray-400 text-sm">{phaseInfo.description}</span>
-          </div>
-        </div>
-
-        {/* 日程進行ボタン */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-bold text-white mb-4">日程を進める</h2>
-          <div className="space-y-3">
-            <button
-              onClick={() => handleProgressDate(1)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold text-lg transition"
-            >
-              ➡️ 1日進める
-            </button>
-            <button
-              onClick={handleProgressToNextGame}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-4 rounded-lg font-bold text-lg transition"
-            >
-              ⏩ 次の試合日まで進む
-            </button>
-            <button
-              onClick={handleProgressToNextPhase}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white px-6 py-4 rounded-lg font-bold text-lg transition"
-            >
-              🔄 次のフェーズまで進む
-            </button>
-          </div>
-        </div>
-
-        {/* 本日の試合 */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-bold text-white mb-4">本日の試合</h2>
-          {(() => {
-            const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
-            if (todaysGames.length === 0) {
-              return <p className="text-gray-400 text-center py-4">本日は試合がありません</p>;
-            }
-            return (
-              <div className="space-y-2">
-                {todaysGames.map(game => (
-                  <div key={game.id} className="bg-gray-700 rounded p-4 text-white">
-                    <div className="font-bold text-center">
-                      {game.away} vs {game.home}
-                    </div>
-                    {game.result && (
-                      <div className="text-center text-sm text-gray-300 mt-2">
-                        {game.result.awayScore} - {game.result.homeScore}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-        </div>
-
-        {/* 月間カレンダー */}
-        <CalendarView seasonData={seasonData} />
-      </div>
-    </div>
-  );
-};
-
-// カレンダービュー
-const CalendarView = ({ seasonData }) => {
-  const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 3);
-
-  if (!seasonData) return null;
-
-  const months = [
-    { value: 1, label: '1月' }, { value: 2, label: '2月' }, { value: 3, label: '3月' },
-    { value: 4, label: '4月' }, { value: 5, label: '5月' }, { value: 6, label: '6月' },
-    { value: 7, label: '7月' }, { value: 8, label: '8月' }, { value: 9, label: '9月' },
-    { value: 10, label: '10月' }, { value: 11, label: '11月' }, { value: 12, label: '12月' }
-  ];
-
+  // カレンダー用のデータ生成
   const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
   const getFirstDayOfWeek = (year, month) => new Date(year, month - 1, 1).getDay();
 
@@ -5980,97 +6050,363 @@ const CalendarView = ({ seasonData }) => {
   const daysInMonth = getDaysInMonth(year, selectedMonth);
   const firstDay = getFirstDayOfWeek(year, selectedMonth);
 
-  // カレンダーのセルを生成
-  const cells = [];
+  const calendarCells = [];
   const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
 
-  // 空セルを追加
   for (let i = 0; i < firstDay; i++) {
-    cells.push({ day: null, games: [] });
+    calendarCells.push({ day: null, games: [] });
   }
 
-  // 日付セルを追加
   for (let day = 1; day <= daysInMonth; day++) {
     const dateObj = { year, month: selectedMonth, day };
     const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
     const isToday = seasonData.currentDate.year === year &&
                     seasonData.currentDate.month === selectedMonth &&
                     seasonData.currentDate.day === day;
-    cells.push({ day, games: gamesOnDay, isToday });
+    const isPast = (selectedMonth < seasonData.currentDate.month) ||
+                   (selectedMonth === seasonData.currentDate.month && day < seasonData.currentDate.day);
+    calendarCells.push({ day, games: gamesOnDay, isToday, isPast });
   }
 
+  // 本日の試合データ取得
+  const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-white">📆 カレンダー</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)}
-            className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded"
-          >
-            ◀
-          </button>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="bg-gray-700 text-white rounded px-4 py-1"
-          >
-            {months.map(m => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)}
-            className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded"
-          >
-            ▶
-          </button>
+    <div className="p-4 min-h-screen">
+      {/* ヘッダー: 日付とフェーズ */}
+      <div className="bg-gradient-to-r from-blue-900 to-purple-900 rounded-xl p-6 mb-6 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-gray-300 text-sm mb-1">Year {seasonData.year}</div>
+            <div className="text-4xl font-bold text-white">
+              {formatDate(seasonData.currentDate)}
+              <span className="text-2xl ml-3 text-gray-300">({getDayOfWeek(seasonData.currentDate)})</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className={`px-5 py-2 rounded-full font-bold text-white text-lg ${phaseInfo.color}`}>
+              {phaseInfo.name}
+            </span>
+            <div className="text-gray-400 text-sm mt-2">{phaseInfo.description}</div>
+          </div>
         </div>
       </div>
 
-      {/* 曜日ヘッダー */}
-      <div className="grid grid-cols-7 gap-1 mb-1">
-        {dayNames.map((name, i) => (
-          <div key={i} className={`text-center text-sm font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
-            {name}
-          </div>
-        ))}
+      {/* 日程進行ボタン */}
+      <div className="flex gap-3 mb-6">
+        <button
+          onClick={() => handleProgressDate(1)}
+          disabled={isSimulating}
+          className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-4 rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50"
+        >
+          {isSimulating ? '...' : '1日進める'}
+        </button>
+        <button
+          onClick={handleProgressToNextGame}
+          disabled={isSimulating}
+          className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-4 rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50"
+        >
+          {isSimulating ? '...' : '次の試合日へ'}
+        </button>
+        <button
+          onClick={handleProgressToNextPhase}
+          disabled={isSimulating}
+          className="flex-1 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white px-6 py-4 rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50"
+        >
+          {isSimulating ? '...' : '次フェーズへ'}
+        </button>
       </div>
 
-      {/* カレンダーグリッド */}
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((cell, i) => (
-          <div
-            key={i}
-            className={`min-h-[60px] p-1 rounded text-xs ${
-              cell.day === null ? 'bg-transparent' :
-              cell.isToday ? 'bg-green-800 border-2 border-green-400' : 'bg-gray-700'
-            }`}
-          >
-            {cell.day && (
-              <>
-                <div className={`font-bold mb-1 ${
-                  i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'
-                }`}>
-                  {cell.day}
+      {/* 3カラムレイアウト */}
+      <div className="grid grid-cols-12 gap-4">
+        {/* 左カラム: カレンダー */}
+        <div className="col-span-5">
+          <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)}
+                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
+                >
+                  ◀
+                </button>
+                <button
+                  onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)}
+                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
+                >
+                  ▶
+                </button>
+              </div>
+            </div>
+
+            {/* 曜日ヘッダー */}
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {dayNames.map((name, i) => (
+                <div key={i} className={`text-center text-xs font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
+                  {name}
                 </div>
-                {cell.games.length > 0 && (
-                  <div className="space-y-0.5">
-                    {cell.games.slice(0, 2).map(game => (
-                      <div key={game.id} className={`text-[10px] truncate ${game.result ? 'text-gray-400' : 'text-yellow-300'}`}>
-                        {game.away.replace('チーム', '')}@{game.home.replace('チーム', '')}
-                        {game.result && ` ${game.result.awayScore}-${game.result.homeScore}`}
-                      </div>
-                    ))}
-                    {cell.games.length > 2 && (
-                      <div className="text-[10px] text-gray-500">+{cell.games.length - 2}試合</div>
+              ))}
+            </div>
+
+            {/* カレンダーグリッド */}
+            <div className="grid grid-cols-7 gap-1">
+              {calendarCells.map((cell, i) => {
+                // チームAの試合結果を取得
+                const myGame = cell.games.find(g => g.home === 'チームA' || g.away === 'チームA');
+                let resultMark = null;
+                let resultColor = 'bg-gray-700';
+
+                if (myGame && myGame.result) {
+                  const isHome = myGame.home === 'チームA';
+                  const myScore = isHome ? myGame.result.homeScore : myGame.result.awayScore;
+                  const opponentScore = isHome ? myGame.result.awayScore : myGame.result.homeScore;
+
+                  if (myScore > opponentScore) {
+                    resultMark = '○';
+                    resultColor = 'bg-blue-900';
+                  } else if (myScore < opponentScore) {
+                    resultMark = '●';
+                    resultColor = 'bg-red-900';
+                  } else {
+                    resultMark = '△';
+                    resultColor = 'bg-gray-600';
+                  }
+                }
+
+                return (
+                  <div
+                    key={i}
+                    className={`min-h-[50px] p-1 rounded text-xs transition ${
+                      cell.day === null ? 'bg-transparent' :
+                      cell.isToday ? 'bg-green-700 border-2 border-green-400 shadow-lg' :
+                      cell.isPast && myGame ? resultColor : 'bg-gray-700'
+                    }`}
+                  >
+                    {cell.day && (
+                      <>
+                        <div className={`font-bold ${
+                          i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'
+                        }`}>
+                          {cell.day}
+                        </div>
+                        {myGame && (
+                          <div className="mt-1">
+                            {myGame.result ? (
+                              <div className="flex items-center justify-between">
+                                <span className={`text-[11px] font-bold ${
+                                  resultMark === '○' ? 'text-green-400' :
+                                  resultMark === '●' ? 'text-red-400' : 'text-gray-400'
+                                }`}>{resultMark}</span>
+                                <span className="text-[10px] text-gray-300">
+                                  {myGame.home === 'チームA' ? myGame.result.homeScore : myGame.result.awayScore}-
+                                  {myGame.home === 'チームA' ? myGame.result.awayScore : myGame.result.homeScore}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-yellow-300">
+                                vs {(myGame.home === 'チームA' ? myGame.away : myGame.home).replace('チーム', '')}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!myGame && cell.games.length === 0 && i % 7 === 1 && (
+                          <div className="text-[9px] text-gray-500 mt-1">休</div>
+                        )}
+                      </>
                     )}
                   </div>
-                )}
-              </>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 中央カラム: 本日の試合 */}
+        <div className="col-span-4">
+          <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
+            <h2 className="text-xl font-bold text-white mb-4">
+              {todaysGames.length > 0 ? '本日の対戦' : '試合なし'}
+            </h2>
+
+            {todaysGames.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-6xl mb-4">☀️</div>
+                <p className="text-gray-400">本日は試合がありません</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {todaysGames.map(game => {
+                  const awayPitcher = getStartingPitcher(game.away);
+                  const homePitcher = getStartingPitcher(game.home);
+
+                  return (
+                    <div key={game.id} className={`rounded-xl p-4 ${
+                      game.result ? 'bg-gray-700' : 'bg-gradient-to-r from-gray-700 to-gray-600'
+                    }`}>
+                      {/* チーム名とスコア */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex-1 text-center">
+                          <div className="text-lg font-bold text-white">{game.away}</div>
+                          <div className="text-xs text-gray-400">Away</div>
+                        </div>
+                        <div className="px-4">
+                          {game.result ? (
+                            <div className="text-2xl font-bold text-white">
+                              {game.result.awayScore} - {game.result.homeScore}
+                            </div>
+                          ) : (
+                            <div className="text-xl text-gray-400">vs</div>
+                          )}
+                        </div>
+                        <div className="flex-1 text-center">
+                          <div className="text-lg font-bold text-white">{game.home}</div>
+                          <div className="text-xs text-gray-400">Home</div>
+                        </div>
+                      </div>
+
+                      {/* 先発投手 */}
+                      <div className="flex items-center justify-between border-t border-gray-600 pt-3">
+                        <div className="flex-1 text-center">
+                          {awayPitcher ? (
+                            <div className="text-sm">
+                              <span className="text-gray-400">先発: </span>
+                              <span className="text-white font-bold">{awayPitcher.name}</span>
+                              <span className="text-gray-400 ml-1 text-xs">
+                                ({awayPitcher.physical?.throws === 'left' ? '左' : '右'})
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 text-sm">未定</span>
+                          )}
+                        </div>
+                        <div className="px-4 text-gray-500 text-sm">⚾</div>
+                        <div className="flex-1 text-center">
+                          {homePitcher ? (
+                            <div className="text-sm">
+                              <span className="text-gray-400">先発: </span>
+                              <span className="text-white font-bold">{homePitcher.name}</span>
+                              <span className="text-gray-400 ml-1 text-xs">
+                                ({homePitcher.physical?.throws === 'left' ? '左' : '右'})
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 text-sm">未定</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 試合結果詳細 */}
+                      {game.result && (
+                        <div className="mt-3 pt-3 border-t border-gray-600 text-center">
+                          <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                            game.result.homeScore > game.result.awayScore ? 'bg-blue-600 text-white' :
+                            game.result.awayScore > game.result.homeScore ? 'bg-red-600 text-white' :
+                            'bg-gray-500 text-white'
+                          }`}>
+                            {game.result.winner ? `${game.result.winner} WIN` : '引き分け'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 直近の試合結果 */}
+            {lastGameResults.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-600">
+                <h3 className="text-sm font-bold text-gray-400 mb-2">試合結果サマリー</h3>
+                {lastGameResults.map((result, idx) => (
+                  <div key={idx} className="text-xs text-gray-300 mb-1">
+                    {result.away} {result.awayScore} - {result.homeScore} {result.home}
+                    {result.decisions?.winningPitcher && (
+                      <span className="ml-2 text-green-400">勝: {result.decisions.winningPitcher.name}</span>
+                    )}
+                    {result.decisions?.savePitcher && (
+                      <span className="ml-2 text-yellow-400">S: {result.decisions.savePitcher.name}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        ))}
+        </div>
+
+        {/* 右カラム: 順位表 */}
+        <div className="col-span-3">
+          <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
+            <h2 className="text-xl font-bold text-white mb-4">順位表</h2>
+
+            <div className="space-y-2">
+              {seasonData.standings.map((team, index) => {
+                const isUserTeam = team.team === 'チームA';
+                const winRate = team.gamesPlayed > 0 ? (team.wins / team.gamesPlayed * 100).toFixed(1) : '---';
+                const gb = index === 0 ? '-' :
+                  ((seasonData.standings[0].wins - team.wins) - (seasonData.standings[0].losses - team.losses)) / 2;
+
+                return (
+                  <div key={team.team} className={`rounded-lg p-3 ${
+                    isUserTeam ? 'bg-gradient-to-r from-blue-800 to-blue-700 border border-blue-500' : 'bg-gray-700'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
+                          index === 0 ? 'bg-yellow-500 text-black' :
+                          index === 1 ? 'bg-gray-400 text-black' :
+                          index === 2 ? 'bg-orange-600 text-white' :
+                          'bg-gray-600 text-white'
+                        }`}>
+                          {index + 1}
+                        </span>
+                        <span className={`font-bold ${isUserTeam ? 'text-white' : 'text-gray-200'}`}>
+                          {team.team}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-white font-bold">
+                          {team.wins}-{team.losses}{team.draws > 0 ? `-${team.draws}` : ''}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {winRate}% {gb !== '-' && `(${gb > 0 ? '+' : ''}${typeof gb === 'number' ? gb.toFixed(1) : gb})`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* チーム成績サマリー */}
+            <div className="mt-4 pt-4 border-t border-gray-600">
+              <h3 className="text-sm font-bold text-gray-400 mb-2">チームA 成績</h3>
+              {(() => {
+                const myTeam = seasonData.standings.find(t => t.team === 'チームA');
+                if (!myTeam) return null;
+
+                const streak = []; // 連勝/連敗は別途計算が必要
+
+                return (
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-gray-700 rounded p-2">
+                      <div className="text-2xl font-bold text-green-400">{myTeam.wins}</div>
+                      <div className="text-xs text-gray-400">勝</div>
+                    </div>
+                    <div className="bg-gray-700 rounded p-2">
+                      <div className="text-2xl font-bold text-red-400">{myTeam.losses}</div>
+                      <div className="text-xs text-gray-400">敗</div>
+                    </div>
+                    <div className="bg-gray-700 rounded p-2">
+                      <div className="text-2xl font-bold text-gray-300">{myTeam.draws || 0}</div>
+                      <div className="text-xs text-gray-400">分</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
