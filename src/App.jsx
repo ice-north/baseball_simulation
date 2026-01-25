@@ -4922,6 +4922,7 @@ if (newOuts === 3) {
 const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup'); // 'lineup', 'rotation', 'usage'
   const [updateTrigger, setUpdateTrigger] = useState(0);
+  const [selectedBattingOrder, setSelectedBattingOrder] = useState(null); // 選択中の打順（1-9）
 
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
@@ -4955,6 +4956,20 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     return getAbilityRank(adjusted);
   };
 
+  // 投げ手表示
+  const getThrowsLabel = (throws) => throws === 'left' ? '左投' : '右投';
+
+  // フォーム表示
+  const getFormLabel = (form) => {
+    const forms = {
+      overhand: 'オーバー',
+      threeQuarter: 'スリークォーター',
+      sidearm: 'サイド',
+      submarine: 'アンダー'
+    };
+    return forms[form] || form;
+  };
+
   // スタメン設定の初期化
   if (!team.lineupSettings) {
     team.lineupSettings = {
@@ -4980,33 +4995,47 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const fielders = team.players.filter(p => p.position !== 'pitcher');
   const pitchers = team.players.filter(p => p.position === 'pitcher');
 
-  // スタメン登録（簡易版：次の空き打順に追加）
+  // スタメン登録（選択中の打順に追加）
   const handleAddToLineup = (playerId) => {
-    const lineup = team.lineupSettings.battingOrder;
-    // 既にスタメンにいるか確認
-    if (lineup.some(entry => entry.playerId === playerId)) return;
-
-    // 次の空き打順を見つける（1-9）
-    let nextOrder = 1;
-    for (let i = 1; i <= 9; i++) {
-      if (!lineup.some(entry => entry.battingOrder === i)) {
-        nextOrder = i;
-        break;
-      }
-    }
-
-    if (nextOrder > 9) {
-      alert('スタメンは9人までです');
+    if (!selectedBattingOrder) {
+      alert('打順を選択してください（1-9番の枠をクリック）');
       return;
     }
 
+    const lineup = team.lineupSettings.battingOrder;
+
+    // 既に同じ打順に選手がいる場合は削除
+    const existingIndex = lineup.findIndex(entry => entry.battingOrder === selectedBattingOrder);
+    if (existingIndex !== -1) {
+      lineup.splice(existingIndex, 1);
+    }
+
+    // 選手が既に別の打順にいる場合も削除
+    const playerIndex = lineup.findIndex(entry => entry.playerId === playerId);
+    if (playerIndex !== -1) {
+      lineup.splice(playerIndex, 1);
+    }
+
     const player = team.players.find(p => p.id === playerId);
-    // デフォルトポジションを設定
     const defaultPosition = player.position !== 'pitcher' ? player.position : 'catcher';
 
-    lineup.push({ playerId, position: defaultPosition, battingOrder: nextOrder });
+    lineup.push({ playerId, position: defaultPosition, battingOrder: selectedBattingOrder });
     lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+
+    // 次の打順を自動選択
+    const nextOrder = selectedBattingOrder < 9 ? selectedBattingOrder + 1 : 1;
+    setSelectedBattingOrder(nextOrder);
     setUpdateTrigger(prev => prev + 1);
+  };
+
+  // 守備位置変更
+  const handleChangePosition = (battingOrder, newPosition) => {
+    const lineup = team.lineupSettings.battingOrder;
+    const entry = lineup.find(e => e.battingOrder === battingOrder);
+    if (entry) {
+      entry.position = newPosition;
+      setUpdateTrigger(prev => prev + 1);
+    }
   };
 
   // スタメン登録
@@ -5109,103 +5138,155 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         {/* スタメン設定タブ */}
         {tab === 'lineup' && (
           <div className="grid grid-cols-2 gap-6">
-            {/* 左側：現在のスタメン */}
+            {/* 左側：1-9番の打順枠 */}
             <div className="bg-gray-800 rounded-lg p-6">
               <h2 className="text-xl font-bold text-white mb-4">
-                現在のスタメン ({team.lineupSettings.battingOrder.length}/9人)
+                スタメン設定 ({team.lineupSettings.battingOrder.length}/9人)
               </h2>
-              {team.lineupSettings.battingOrder.length === 0 ? (
-                <p className="text-gray-400">右側の控え選手からクリックして追加</p>
-              ) : (
-                <div className="space-y-2">
-                  {team.lineupSettings.battingOrder.map((entry, idx) => {
-                    const player = team.players.find(p => p.id === entry.playerId);
-                    if (!player) return null;
+              <p className="text-sm text-gray-400 mb-4">
+                打順をクリックして選択 → 右側の野手をクリックで追加
+              </p>
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(order => {
+                  const entry = team.lineupSettings.battingOrder.find(e => e.battingOrder === order);
+                  const player = entry ? team.players.find(p => p.id === entry.playerId) : null;
+                  const isSelected = selectedBattingOrder === order;
 
-                    // 能力値のランク計算
-                    const meetRank = getAbilityRank(player.batting.meet);
-                    const powerRank = getAbilityRank(player.batting.power);
-                    const speedRank = getAbilityRank(player.physical.speed);
-                    const defenseRank = getAbilityRank(player.fielding.defense);
-                    const armRank = getAbilityRank(player.physical.arm);
-
-                    return (
-                      <div key={player.id} className="bg-gray-700 rounded p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="text-white font-bold text-lg w-6">{idx + 1}</div>
-                            <div>
-                              <div className="text-white font-bold">{player.name}</div>
-                              <div className="text-xs text-gray-400">
-                                {POSITION_NAMES[entry.position]} | {player.age}歳
+                  return (
+                    <div
+                      key={order}
+                      onClick={() => setSelectedBattingOrder(order)}
+                      className={`rounded p-3 cursor-pointer transition ${
+                        isSelected
+                          ? 'bg-blue-700 ring-2 ring-blue-400'
+                          : player
+                          ? 'bg-gray-700 hover:bg-gray-600'
+                          : 'bg-gray-900 hover:bg-gray-800 border border-dashed border-gray-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`font-bold text-lg w-6 ${isSelected ? 'text-blue-300' : 'text-white'}`}>
+                          {order}
+                        </div>
+                        {player ? (
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-white font-bold">{player.name}</div>
+                                <div className="text-xs text-gray-400 flex items-center gap-2">
+                                  <select
+                                    value={entry.position}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      handleChangePosition(order, e.target.value);
+                                    }}
+                                    className="bg-gray-600 text-white rounded px-2 py-0.5 text-xs"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <option value="catcher">捕手</option>
+                                    <option value="first">一塁</option>
+                                    <option value="second">二塁</option>
+                                    <option value="third">三塁</option>
+                                    <option value="short">遊撃</option>
+                                    <option value="left">左翼</option>
+                                    <option value="center">中堅</option>
+                                    <option value="right">右翼</option>
+                                  </select>
+                                  <span>| {player.age}歳</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveFromLineup(player.id);
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
+                              >
+                                外す
+                              </button>
+                            </div>
+                            {/* 能力値表示 */}
+                            <div className="text-xs mt-2 space-y-0.5">
+                              <div className="flex gap-2">
+                                {[
+                                  { label: 'ミ', value: player.batting.meet },
+                                  { label: 'パ', value: player.batting.power },
+                                  { label: '走', value: player.physical.speed },
+                                  { label: '肩', value: player.physical.arm },
+                                  { label: '守', value: player.fielding.defense }
+                                ].map(stat => {
+                                  const rank = getAbilityRank(stat.value);
+                                  return (
+                                    <span key={stat.label} className={getRankColor(rank)}>
+                                      {stat.label} {rank}{stat.value}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             </div>
                           </div>
-                          <button
-                            onClick={() => handleRemoveFromLineup(player.id)}
-                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition"
-                          >
-                            外す
-                          </button>
-                        </div>
-                        {/* 能力値表示 */}
-                        <div className="text-xs space-y-1">
-                          <div className="flex gap-3">
-                            <span className={getRankColor(meetRank)}>ミ {meetRank}{player.batting.meet}</span>
-                            <span className={getRankColor(powerRank)}>パ {powerRank}{player.batting.power}</span>
-                            <span className={getRankColor(speedRank)}>走 {speedRank}{player.physical.speed}</span>
-                          </div>
-                          <div className="flex gap-3">
-                            <span className={getRankColor(armRank)}>肩 {armRank}{player.physical.arm}</span>
-                            <span className={getRankColor(defenseRank)}>守 {defenseRank}{player.fielding.defense}</span>
-                          </div>
-                        </div>
+                        ) : (
+                          <div className="text-gray-500 italic">未設定（クリックして選手を追加）</div>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* 右側：控え選手リスト */}
+            {/* 右側：野手リスト */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-4">控え選手（クリックで追加）</h2>
-              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+              <h2 className="text-xl font-bold text-white mb-4">
+                野手リスト（クリックでスタメンに追加）
+                {selectedBattingOrder && (
+                  <span className="text-blue-400 text-sm ml-2">
+                    → {selectedBattingOrder}番に追加
+                  </span>
+                )}
+              </h2>
+              <div className="space-y-2 max-h-[700px] overflow-y-auto">
                 {fielders.map(player => {
                   const isInLineup = team.lineupSettings.battingOrder.some(entry => entry.playerId === player.id);
-                  if (isInLineup) return null; // スタメンにいる選手は表示しない
-
-                  // 能力値のランク計算
-                  const meetRank = getAbilityRank(player.batting.meet);
-                  const powerRank = getAbilityRank(player.batting.power);
-                  const speedRank = getAbilityRank(player.physical.speed);
-                  const defenseRank = getAbilityRank(player.fielding.defense);
-                  const armRank = getAbilityRank(player.physical.arm);
 
                   return (
                     <div
                       key={player.id}
-                      className="bg-gray-700 rounded p-3 cursor-pointer hover:bg-gray-600 transition"
-                      onClick={() => handleAddToLineup(player.id)}
+                      className={`rounded p-3 cursor-pointer transition ${
+                        isInLineup
+                          ? 'bg-gray-900 opacity-50'
+                          : 'bg-gray-700 hover:bg-gray-600'
+                      }`}
+                      onClick={() => !isInLineup && handleAddToLineup(player.id)}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <div className="text-white font-bold">{player.name}</div>
+                          <div className="text-white font-bold flex items-center gap-2">
+                            {player.name}
+                            {isInLineup && <span className="text-xs bg-blue-600 px-2 py-0.5 rounded">スタメン</span>}
+                          </div>
                           <div className="text-xs text-gray-400">
                             {POSITION_NAMES[player.position]} | {player.age}歳
                           </div>
                         </div>
                       </div>
                       {/* 能力値表示 */}
-                      <div className="text-xs space-y-1">
-                        <div className="flex gap-3">
-                          <span className={getRankColor(meetRank)}>ミ {meetRank}{player.batting.meet}</span>
-                          <span className={getRankColor(powerRank)}>パ {powerRank}{player.batting.power}</span>
-                          <span className={getRankColor(speedRank)}>走 {speedRank}{player.physical.speed}</span>
-                        </div>
-                        <div className="flex gap-3">
-                          <span className={getRankColor(armRank)}>肩 {armRank}{player.physical.arm}</span>
-                          <span className={getRankColor(defenseRank)}>守 {defenseRank}{player.fielding.defense}</span>
+                      <div className="text-xs space-y-0.5">
+                        <div className="flex gap-2">
+                          {[
+                            { label: 'ミ', value: player.batting.meet },
+                            { label: 'パ', value: player.batting.power },
+                            { label: '走', value: player.physical.speed },
+                            { label: '肩', value: player.physical.arm },
+                            { label: '守', value: player.fielding.defense }
+                          ].map(stat => {
+                            const rank = getAbilityRank(stat.value);
+                            return (
+                              <span key={stat.label} className={getRankColor(rank)}>
+                                {stat.label} {rank}{stat.value}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -5218,87 +5299,118 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
         {/* 投手ローテーションタブ */}
         {tab === 'rotation' && (
-          <div className="space-y-6">
-            {/* 先発ローテーション */}
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-4">先発ローテーション</h2>
-              {team.pitchingRotation.starters.length === 0 ? (
-                <p className="text-gray-400">先発投手が設定されていません</p>
-              ) : (
-                <div className="space-y-2 mb-4">
-                  {team.pitchingRotation.starters.map((playerId, idx) => {
-                    const player = team.players.find(p => p.id === playerId);
-                    if (!player) return null;
-                    return (
-                      <div key={player.id} className="bg-gray-700 rounded p-3 flex items-center justify-between">
-                        <div>
-                          <div className="text-white font-bold">第{idx + 1}先発: {player.name}</div>
-                          <div className="text-sm text-gray-400">
-                            球速{player.pitching.velocity}km/h | 制球{player.pitching.control} | スタミナ{player.pitching.stamina}
+          <div className="grid grid-cols-2 gap-6">
+            {/* 左側：ローテーション設定 */}
+            <div className="space-y-4">
+              {/* 先発ローテーション */}
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h2 className="text-xl font-bold text-white mb-4">先発ローテーション ({team.pitchingRotation.starters.length}人)</h2>
+                {team.pitchingRotation.starters.length === 0 ? (
+                  <p className="text-gray-400 text-sm">右側の投手一覧から選択してください</p>
+                ) : (
+                  <div className="space-y-2">
+                    {team.pitchingRotation.starters.map((playerId, idx) => {
+                      const player = team.players.find(p => p.id === playerId);
+                      if (!player) return null;
+
+                      const velocityRank = getVelocityRank(player.pitching.velocity);
+                      const controlRank = getAbilityRank(player.pitching.control);
+                      const staminaRank = getAbilityRank(player.pitching.stamina / 2);
+
+                      return (
+                        <div key={player.id} className="bg-gray-700 rounded p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <div className="text-white font-bold flex items-center gap-2">
+                                第{idx + 1}先発: {player.name}
+                                <span className="text-xs text-gray-400">
+                                  {getThrowsLabel(player.physical.throws)} | {getFormLabel(player.pitching.form)}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveFromRotation(player.id, 'starter')}
+                              className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
+                            >
+                              外す
+                            </button>
+                          </div>
+                          <div className="text-xs flex gap-2">
+                            <span className={getRankColor(velocityRank)}>球速 {velocityRank}{player.pitching.velocity}</span>
+                            <span className={getRankColor(controlRank)}>制球 {controlRank}{player.pitching.control}</span>
+                            <span className={getRankColor(staminaRank)}>スタミナ {staminaRank}{player.pitching.stamina}</span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleRemoveFromRotation(player.id, 'starter')}
-                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition"
-                        >
-                          外す
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* 中継ぎ・抑え */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold text-white mb-4">中継ぎ</h2>
-                <div className="space-y-2">
-                  {team.pitchingRotation.middleRelievers.map(playerId => {
-                    const player = team.players.find(p => p.id === playerId);
-                    if (!player) return null;
-                    return (
-                      <div key={player.id} className="bg-gray-700 rounded p-2 flex justify-between items-center">
-                        <div className="text-white text-sm">{player.name}</div>
-                        <button
-                          onClick={() => handleRemoveFromRotation(player.id, 'middle')}
-                          className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
-                        >
-                          外す
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold text-white mb-4">抑え</h2>
-                <div className="space-y-2">
-                  {team.pitchingRotation.closers.map(playerId => {
-                    const player = team.players.find(p => p.id === playerId);
-                    if (!player) return null;
-                    return (
-                      <div key={player.id} className="bg-gray-700 rounded p-2 flex justify-between items-center">
-                        <div className="text-white text-sm">{player.name}</div>
-                        <button
-                          onClick={() => handleRemoveFromRotation(player.id, 'closer')}
-                          className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
-                        >
-                          外す
-                        </button>
-                      </div>
-                    );
-                  })}
+              {/* 中継ぎ・抑え */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h2 className="text-lg font-bold text-white mb-3">中継ぎ ({team.pitchingRotation.middleRelievers.length}人)</h2>
+                  <div className="space-y-2">
+                    {team.pitchingRotation.middleRelievers.map(playerId => {
+                      const player = team.players.find(p => p.id === playerId);
+                      if (!player) return null;
+                      return (
+                        <div key={player.id} className="bg-gray-700 rounded p-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="text-white text-sm font-bold">{player.name}</div>
+                              <div className="text-xs text-gray-400">
+                                {getThrowsLabel(player.physical.throws)}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveFromRotation(player.id, 'middle')}
+                              className="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-xs"
+                            >
+                              外す
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h2 className="text-lg font-bold text-white mb-3">抑え ({team.pitchingRotation.closers.length}人)</h2>
+                  <div className="space-y-2">
+                    {team.pitchingRotation.closers.map(playerId => {
+                      const player = team.players.find(p => p.id === playerId);
+                      if (!player) return null;
+                      return (
+                        <div key={player.id} className="bg-gray-700 rounded p-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="text-white text-sm font-bold">{player.name}</div>
+                              <div className="text-xs text-gray-400">
+                                {getThrowsLabel(player.physical.throws)}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveFromRotation(player.id, 'closer')}
+                              className="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-xs"
+                            >
+                              外す
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* 投手リスト */}
+            {/* 右側：投手一覧 */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-4">投手一覧（クリックで追加）</h2>
-              <div className="space-y-2">
+              <h2 className="text-xl font-bold text-white mb-4">投手一覧（クリックでローテーションに追加）</h2>
+              <div className="space-y-2 max-h-[700px] overflow-y-auto">
                 {pitchers.map(player => {
                   const isStarter = team.pitchingRotation.starters.includes(player.id);
                   const isMiddle = team.pitchingRotation.middleRelievers.includes(player.id);
@@ -5313,8 +5425,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <div key={player.id} className="bg-gray-700 rounded p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <div className="text-white font-bold">{player.name}</div>
-                          <div className="text-xs space-y-1">
+                          <div className="text-white font-bold">
+                            {player.name}
+                            <span className="text-xs text-gray-400 ml-2">
+                              {getThrowsLabel(player.physical.throws)} | {getFormLabel(player.pitching.form)}
+                            </span>
+                          </div>
+                          <div className="text-xs space-y-1 mt-1">
                             <div className="flex gap-3">
                               <span className={getRankColor(velocityRank)}>球速 {velocityRank}{player.pitching.velocity}</span>
                               <span className={getRankColor(controlRank)}>制球 {controlRank}{player.pitching.control}</span>
