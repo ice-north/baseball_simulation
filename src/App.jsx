@@ -33,7 +33,7 @@ import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDat
 import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
 import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
 import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
-import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations } from './season/regulationSettings.js';
+import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription } from './season/regulationSettings.js';
 import { progressDate, progressToNextGame, progressToNextPhase } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer } from './season/yearProgressionSystem.js';
@@ -5751,51 +5751,85 @@ const StartScreen = ({ onNewGame, onContinue, onEdit }) => {
 const NewGameRegulationsScreen = ({ onComplete }) => {
   const [tempSettings, setTempSettings] = useState({
     useDH: false,
-    gamesPerSeason: 60,
+    gamesPerSeason: 76,
     teamsCount: 4,
-    playoffFormat: 'single',
+    playoffFormat: 'split',
     maxExtraInnings: 12
   });
+  const [selectedPreset, setSelectedPreset] = useState('shikoku');
 
   const handleApplyPreset = (presetName) => {
-    const presets = {
-      independent: { useDH: false, gamesPerSeason: 60, teamsCount: 4, playoffFormat: 'single', maxExtraInnings: 12 },
-      pro: { useDH: true, gamesPerSeason: 143, teamsCount: 6, playoffFormat: 'double', maxExtraInnings: 12 },
-      highschool: { useDH: false, gamesPerSeason: 40, teamsCount: 8, playoffFormat: 'none', maxExtraInnings: 15 },
-      college: { useDH: true, gamesPerSeason: 52, teamsCount: 6, playoffFormat: 'single', maxExtraInnings: 12 }
-    };
-    setTempSettings(presets[presetName]);
+    const preset = REGULATION_PRESETS[presetName];
+    if (preset) {
+      setTempSettings(preset.regulations);
+      setSelectedPreset(presetName);
+    }
   };
 
   const handleStart = () => {
     onComplete(tempSettings);
   };
 
+  // プリセットリストを取得
+  const presetList = [
+    { key: 'shikoku', name: '四国IL', icon: '🏝️' },
+    { key: 'bc', name: 'BCリーグ', icon: '⚾' },
+    { key: 'kyushu', name: '九州AL', icon: '🌸' },
+    { key: 'hokkaido', name: '北海道FL', icon: '🐻' },
+    { key: 'kansai', name: '関西BL', icon: '🏯' },
+    { key: 'independent', name: '汎用', icon: '⚡' },
+    { key: 'professional', name: 'NPB', icon: '🏆' }
+  ];
+
   return (
     <div className="p-8 bg-gray-900 min-h-screen">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-4xl font-bold text-white mb-8">⚙️ レギュレーション設定</h1>
 
+        {/* プリセット選択 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 text-white">プリセット選択</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <button onClick={() => handleApplyPreset('independent')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition">
-              独立リーグ
-            </button>
-            <button onClick={() => handleApplyPreset('pro')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition">
-              プロ野球
-            </button>
-            <button onClick={() => handleApplyPreset('highschool')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition">
-              高校野球
-            </button>
-            <button onClick={() => handleApplyPreset('college')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition">
-              大学野球
-            </button>
+          <h2 className="text-xl font-bold mb-4 text-white">実在リーグから選択</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {presetList.map(preset => {
+              const presetData = REGULATION_PRESETS[preset.key];
+              return (
+                <button
+                  key={preset.key}
+                  onClick={() => handleApplyPreset(preset.key)}
+                  className={`p-4 rounded-lg transition ${
+                    selectedPreset === preset.key
+                      ? 'bg-blue-600 text-white ring-2 ring-blue-400'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  <div className="text-3xl mb-2">{preset.icon}</div>
+                  <div className="font-bold">{presetData.name}</div>
+                  {presetData.description && (
+                    <div className="text-xs mt-1 opacity-80">{presetData.description}</div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
+        {/* 選択中のプリセット情報 */}
+        {selectedPreset && (
+          <div className="bg-blue-900 border border-blue-700 rounded-lg p-4 mb-6">
+            <div className="text-white">
+              <div className="font-bold text-lg mb-2">
+                📋 {REGULATION_PRESETS[selectedPreset].name}
+              </div>
+              <div className="text-sm text-blue-200">
+                {getPlayoffFormatDescription(tempSettings.playoffFormat)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 詳細設定 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 text-white">詳細設定</h2>
+          <h2 className="text-xl font-bold mb-4 text-white">詳細設定（カスタマイズ可能）</h2>
           <div className="space-y-4 text-white">
             <div className="flex items-center justify-between">
               <label className="font-medium">DH制</label>
@@ -5815,7 +5849,10 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
             <div className="flex items-center justify-between">
               <label className="font-medium">プレーオフ形式</label>
               <select value={tempSettings.playoffFormat} onChange={(e) => setTempSettings({...tempSettings, playoffFormat: e.target.value})} className="bg-gray-700 rounded px-3 py-2">
-                <option value="single">1位vs2位</option>
+                <option value="split">前後期制（3戦2勝）</option>
+                <option value="single">1位vs2位（3戦2勝）</option>
+                <option value="top2">上位2チーム（5戦3勝）</option>
+                <option value="tournament">トーナメント</option>
                 <option value="double">4チーム</option>
                 <option value="none">なし</option>
               </select>

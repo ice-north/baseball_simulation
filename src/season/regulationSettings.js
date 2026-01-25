@@ -3,6 +3,8 @@
 // オフシーズン（12月）に変更可能な設定項目
 // ============================================================
 
+import { SEASON_PHASES } from './seasonManager.js';
+
 /**
  * デフォルトレギュレーション設定
  */
@@ -80,19 +82,84 @@ export const canModifyRegulations = (phase) => {
  */
 export const getPlayoffFormatDescription = (format) => {
   const descriptions = {
-    'single': '1位 vs 2位の対戦（3戦先取制、最大5試合）',
+    'single': '1位 vs 2位の対戦（3戦2勝制、最大3試合）',
     'double': '4チームトーナメント（1位vs4位、2位vs3位 → 決勝）',
+    'tournament': 'トーナメント制（3位vs4位 → 勝者vs2位 → 勝者vs1位）',
+    'top2': '上位2チーム対決（5戦3勝制、最大5試合）',
+    'split': '前期・後期優勝チーム対決（3戦2勝制）',
     'none': 'プレーオフなし（レギュラーシーズンの優勝チームが年間王者）'
   };
   return descriptions[format] || '';
 };
 
 /**
- * レギュレーション設定のプリセット
+ * レギュレーション設定のプリセット（実在の独立リーグ）
  */
 export const REGULATION_PRESETS = {
+  shikoku: {
+    name: '四国アイランドリーグplus',
+    description: '前期38試合＋後期38試合、前後期優勝者による決戦',
+    regulations: {
+      useDH: false,
+      gamesPerSeason: 76,  // 前期38＋後期38
+      teamsCount: 4,
+      playoffFormat: 'split',  // 前期・後期優勝チーム対決
+      maxExtraInnings: 12,
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
+    }
+  },
+  bc: {
+    name: 'BCリーグ',
+    description: '2リーグ制（4チーム×2）、両リーグ優勝チームによる決戦',
+    regulations: {
+      useDH: false,
+      gamesPerSeason: 58,
+      teamsCount: 8,  // 2リーグ×4チーム
+      playoffFormat: 'single',  // 両リーグ優勝チーム対決（3戦2勝制）
+      maxExtraInnings: 12,
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
+    }
+  },
+  kyushu: {
+    name: '九州アジアリーグ',
+    description: '年間76試合、トーナメント制プレーオフ',
+    regulations: {
+      useDH: false,
+      gamesPerSeason: 76,
+      teamsCount: 4,
+      playoffFormat: 'tournament',  // 3位vs4位→勝者vs2位→勝者vs1位
+      maxExtraInnings: 12,
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
+    }
+  },
+  hokkaido: {
+    name: '北海道フロンティアリーグ',
+    description: '年間54試合、上位2チームによる決戦',
+    regulations: {
+      useDH: false,
+      gamesPerSeason: 54,
+      teamsCount: 4,
+      playoffFormat: 'top2',  // 上位2チーム、5戦3勝制
+      maxExtraInnings: 12,
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
+    }
+  },
+  kansai: {
+    name: '関西独立リーグ',
+    description: '年間48試合、プレーオフなし',
+    regulations: {
+      useDH: false,
+      gamesPerSeason: 48,
+      teamsCount: 6,
+      playoffFormat: 'none',  // プレーオフなし
+      maxExtraInnings: 12,
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
+    }
+  },
+  // 汎用プリセット（参考用）
   independent: {
-    name: '独立リーグ',
+    name: '独立リーグ（汎用）',
+    description: '標準的な独立リーグ設定',
     regulations: {
       useDH: false,
       gamesPerSeason: 60,
@@ -103,7 +170,8 @@ export const REGULATION_PRESETS = {
     }
   },
   professional: {
-    name: 'プロ野球',
+    name: 'プロ野球（参考）',
+    description: 'NPB標準設定',
     regulations: {
       useDH: true,
       gamesPerSeason: 143,
@@ -111,28 +179,6 @@ export const REGULATION_PRESETS = {
       playoffFormat: 'double',
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
-    }
-  },
-  highSchool: {
-    name: '高校野球',
-    regulations: {
-      useDH: false,
-      gamesPerSeason: 40,
-      teamsCount: 8,
-      playoffFormat: 'none',
-      maxExtraInnings: 15,
-      roster: { starters: 9, benchFielders: 2, benchPitchers: 9 }
-    }
-  },
-  college: {
-    name: '大学野球',
-    regulations: {
-      useDH: true,
-      gamesPerSeason: 52,
-      teamsCount: 6,
-      playoffFormat: 'single',
-      maxExtraInnings: 12,
-      roster: { starters: 9, benchFielders: 6, benchPitchers: 8 }
     }
   }
 };
