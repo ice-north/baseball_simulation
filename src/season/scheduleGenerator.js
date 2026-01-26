@@ -128,20 +128,57 @@ export const generateFullSeasonSchedule = (config) => {
   // 1チームあたりの月間試合数
   const gamesPerMonth = Math.ceil(gamesPerSeason / seasonMonths.length);
 
-  // 試合日を生成（土日中心、火水金も使用）
-  const generateGameDays = (year, month, startDay, maxGames) => {
+  // 試合日を生成（土日優先、火水金も使用、月内バランス配置）
+  const generateGameDays = (year, month, startDay, targetGames, gamesPerDay) => {
     const gameDays = [];
     const daysInMonth = new Date(year, month, 0).getDate();
 
-    for (let day = startDay; day <= daysInMonth && gameDays.length < maxGames; day++) {
+    // まず土日を収集
+    const weekends = [];
+    // 次に火水金を収集
+    const weekdays = [];
+
+    for (let day = startDay; day <= daysInMonth; day++) {
       const date = new Date(year, month - 1, day);
       const dayOfWeek = date.getDay(); // 0=日, 1=月, ..., 6=土
 
-      // 試合日: 火(2)、水(3)、金(5)、土(6)、日(0) - 月曜休み、木曜も休み
-      if (dayOfWeek === 0 || dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 5 || dayOfWeek === 6) {
-        gameDays.push({ year, month, day });
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        // 土日
+        weekends.push({ year, month, day, priority: 1 });
+      } else if (dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 5) {
+        // 火水金
+        weekdays.push({ year, month, day, priority: 2 });
       }
     }
+
+    // 必要な試合日数
+    const neededDays = Math.ceil(targetGames / gamesPerDay);
+
+    // 土日だけで足りる場合は土日のみ、足りない場合は平日も追加
+    if (weekends.length >= neededDays) {
+      // 土日を月内で均等に配置（間引く）
+      const step = weekends.length / neededDays;
+      for (let i = 0; i < neededDays; i++) {
+        const idx = Math.floor(i * step);
+        gameDays.push(weekends[idx]);
+      }
+    } else {
+      // 全土日を使用
+      gameDays.push(...weekends);
+
+      // 平日から追加（月内で均等に）
+      const neededWeekdays = neededDays - weekends.length;
+      if (neededWeekdays > 0 && weekdays.length > 0) {
+        const step = weekdays.length / neededWeekdays;
+        for (let i = 0; i < neededWeekdays && i < weekdays.length; i++) {
+          const idx = Math.floor(i * step);
+          gameDays.push(weekdays[idx]);
+        }
+      }
+    }
+
+    // 日付順でソート
+    gameDays.sort((a, b) => a.day - b.day);
 
     return gameDays;
   };
@@ -155,18 +192,20 @@ export const generateFullSeasonSchedule = (config) => {
   for (const monthConfig of seasonMonths) {
     if (matchupIndex >= allMatchups.length) break;
 
-    // この月の試合日を生成
+    // 月間で配置する試合数を計算
+    const remainingGames = allMatchups.length - matchupIndex;
+    const monthIndex = seasonMonths.indexOf(monthConfig);
+    const remainingMonths = seasonMonths.length - monthIndex;
+    const targetGamesThisMonth = Math.ceil(remainingGames / remainingMonths / gamesPerDay) * gamesPerDay;
+
+    // この月の試合日を生成（月内バランス配置）
     const monthGameDays = generateGameDays(
       year,
       monthConfig.month,
       monthConfig.startDay,
-      Math.ceil(gamesPerMonth / gamesPerDay) + 5 // 予備日も含める
+      targetGamesThisMonth,
+      gamesPerDay
     );
-
-    // 月間で配置する試合数を計算
-    const remainingGames = allMatchups.length - matchupIndex;
-    const remainingMonths = seasonMonths.length - seasonMonths.indexOf(monthConfig);
-    const targetGamesThisMonth = Math.ceil(remainingGames / remainingMonths / gamesPerDay) * gamesPerDay;
 
     let gamesScheduledThisMonth = 0;
 
@@ -182,7 +221,7 @@ export const generateFullSeasonSchedule = (config) => {
 
         schedule.push({
           id: schedule.length + 1,
-          date: { ...gameDay },
+          date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
           home: matchup.home,
           away: matchup.away,
           starterHome: null,

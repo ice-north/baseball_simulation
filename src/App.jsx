@@ -97,11 +97,11 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
         console.log('👥 チームデータ初期化中...');
         initializeTeamsData();
 
-        // スケジュール生成
+        // スケジュール生成（60試合未満は4月開始、140試合以上は3月後半開始）
         const schedule = generateFullSeasonSchedule({
           teams: teamNames,
           gamesPerSeason: regulations.gamesPerSeason || 60,
-          startDate: { year: 2024, month: 3, day: 1 },
+          startDate: { year: 2024, month: 4, day: 1 },
           endDate: { year: 2024, month: 9, day: 30 }
         });
 
@@ -6021,11 +6021,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
   };
 
   // 日付進行ハンドラー
+  // 重要: 現在の日の試合を消化してから日付を進める
   const handleProgressDate = (days) => {
     setIsSimulating(true);
-    let newSeasonData = progressDate(seasonData, days);
-    const { data, results } = simulateGamesOnDate(newSeasonData);
-    setSeasonData(data);
+    // 1. まず現在の日の試合を消化
+    const { data: afterSimData, results } = simulateGamesOnDate(seasonData);
+    // 2. その後、日付を進める
+    const newSeasonData = progressDate(afterSimData, days);
+    setSeasonData(newSeasonData);
     setLastGameResults(results);
     setIsSimulating(false);
   };
@@ -6079,6 +6082,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
 
   return (
     <div className="p-4 min-h-screen">
+      {/* 年目表示 */}
+      <div className="text-center mb-4">
+        <span className="text-2xl font-bold text-yellow-400">{seasonData.year}年目</span>
+        <span className="text-gray-400 ml-4">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
+      </div>
+
       {/* 上段: カレンダー（フル幅） */}
       <div className="bg-gray-800 rounded-xl p-4 shadow-lg mb-4">
         <div className="flex items-center justify-between mb-3">
@@ -6904,7 +6913,18 @@ const CampScreen = ({ onComplete }) => {
           seasonData={seasonData}
           allTeams={TEAMS_DATA}
           isInitialTryout={true}
-          onComplete={() => setGameFlowState('newgame_camp')}
+          onComplete={() => {
+            // トライアウト完了後、直接シーズンへ移行（キャンプスキップ）
+            setSeasonData(prev => ({
+              ...prev,
+              currentDate: { year: 2024, month: 4, day: 1 },
+              phase: SEASON_PHASES.REGULAR_SEASON
+            }));
+            setSelectedMonth(4);
+            setManagementView('dateprogress');
+            setScreenMode('management');
+            setGameFlowState('season');
+          }}
         />;
       }
 
