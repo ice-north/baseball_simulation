@@ -1,37 +1,48 @@
 // ============================================================
 // チームデータ - teams-data.js
-// 4チーム分の選手データ
+// 動的チーム生成対応（最大12チーム）
 // ============================================================
 
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
 
 /**
- * チームデータ構造
+ * チームデータ構造（動的に拡張可能）
  */
-export const TEAMS_DATA = {
-  'チームA': {
-    name: 'チームA',
-    players: [] // 後で設定
-  },
-  'チームB': {
-    name: 'チームB',
-    players: [] // 後で設定
-  },
-  'チームC': {
-    name: 'チームC',
-    players: [] // 後で設定
-  },
-  'チームD': {
-    name: 'チームD',
-    players: [] // 後で設定
+export const TEAMS_DATA = {};
+
+/**
+ * 指定したチーム数でTEAMS_DATAを初期化
+ * @param {number} teamCount - チーム数（2-12）
+ */
+export const initializeTeamsForCount = (teamCount) => {
+  // 既存のデータをクリア（必要に応じて）
+  const existingTeams = Object.keys(TEAMS_DATA);
+
+  // 必要なチーム名を生成
+  const requiredTeams = [];
+  for (let i = 0; i < teamCount; i++) {
+    requiredTeams.push(`チーム${String.fromCharCode(65 + i)}`); // A, B, C, D, E, F...
   }
+
+  // 不足しているチームを追加
+  requiredTeams.forEach(teamName => {
+    if (!TEAMS_DATA[teamName]) {
+      TEAMS_DATA[teamName] = {
+        name: teamName,
+        players: [],
+        pitchingRotation: null
+      };
+      console.log(`📋 ${teamName}を作成しました`);
+    }
+  });
+
+  return requiredTeams;
 };
 
 /**
  * チームAの選手データ（元のホームチーム）
  */
 export const createTeamAPlayers = () => {
-  // 元のcreateDefaultPlayers()のデータを使用
   return window.createDefaultPlayers ? window.createDefaultPlayers() : [];
 };
 
@@ -39,7 +50,6 @@ export const createTeamAPlayers = () => {
  * チームAのベンチ
  */
 export const createTeamABench = () => {
-  // 元のcreateHomeBench()のデータを使用
   return window.createHomeBench ? window.createHomeBench() : [];
 };
 
@@ -47,7 +57,6 @@ export const createTeamABench = () => {
  * チームBの選手データ（元のアウェイチーム）
  */
 export const createTeamBPlayers = () => {
-  // 元のcreateAwayPlayers()のデータを使用
   return window.createAwayPlayers ? window.createAwayPlayers() : [];
 };
 
@@ -55,42 +64,16 @@ export const createTeamBPlayers = () => {
  * チームBのベンチ
  */
 export const createTeamBBench = () => {
-  // 元のcreateAwayBench()のデータを使用
   return window.createAwayBench ? window.createAwayBench() : [];
 };
 
 /**
- * チームCの選手データ（トライアウトで獲得）
- */
-export const createTeamCPlayers = () => {
-  return []; // トライアウトで選手を獲得
-};
-
-/**
- * チームCのベンチ（トライアウトで獲得）
- */
-export const createTeamCBench = () => {
-  return []; // トライアウトで選手を獲得
-};
-
-/**
- * チームDの選手データ（トライアウトで獲得）
- */
-export const createTeamDPlayers = () => {
-  return []; // トライアウトで選手を獲得
-};
-
-/**
- * チームDのベンチ（トライアウトで獲得）
- */
-export const createTeamDBench = () => {
-  return []; // トライアウトで選手を獲得
-};
-
-/**
- * 全チームデータを初期化
+ * 全チームデータを初期化（4チームの場合）
  */
 export const initializeTeamsData = () => {
+  // デフォルト4チームを初期化
+  initializeTeamsForCount(4);
+
   // players.jsの関数が読み込まれているか確認
   if (typeof createDefaultPlayers === 'function') {
     TEAMS_DATA['チームA'].players = [...createDefaultPlayers(), ...createHomeBench()];
@@ -98,10 +81,6 @@ export const initializeTeamsData = () => {
   if (typeof createAwayPlayers === 'function') {
     TEAMS_DATA['チームB'].players = [...createAwayPlayers(), ...createAwayBench()];
   }
-
-  // チームC、Dは新規データ
-  TEAMS_DATA['チームC'].players = [...createTeamCPlayers(), ...createTeamCBench()];
-  TEAMS_DATA['チームD'].players = [...createTeamDPlayers(), ...createTeamDBench()];
 
   // 全選手に背番号と初期成績を設定
   Object.keys(TEAMS_DATA).forEach(teamName => {
@@ -128,7 +107,7 @@ export const initializeAllPitchingRotations = () => {
 };
 
 /**
- * 指定チームの投手ローテーションを初期化
+ * 指定チームの投手ローテーションを初期化（リリーフ役割対応）
  */
 export const initializePitchingRotation = (teamName) => {
   const team = TEAMS_DATA[teamName];
@@ -146,12 +125,12 @@ export const initializePitchingRotation = (teamName) => {
     (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0)
   );
 
-  // 先発（スタミナ140以上、最大5人）
+  // 先発（スタミナ130以上、最大5人）
   const starters = sortedPitchers
-    .filter(p => (p.pitching?.stamina || 0) >= 140)
+    .filter(p => (p.pitching?.stamina || 0) >= 130)
     .slice(0, 5);
 
-  // スタミナ140以上が5人未満の場合、スタミナ上位から補充
+  // スタミナ130以上が5人未満の場合、スタミナ上位から補充
   if (starters.length < 5) {
     const remaining = sortedPitchers
       .filter(p => !starters.includes(p))
@@ -159,30 +138,147 @@ export const initializePitchingRotation = (teamName) => {
     starters.push(...remaining);
   }
 
-  // 抑え（スタミナ140未満で能力が高い投手、最大2人）
-  const closerCandidates = sortedPitchers
-    .filter(p => (p.pitching?.stamina || 0) < 140)
-    .sort((a, b) => {
-      const aPower = (a.pitching?.velocity || 0) + (a.pitching?.control || 0);
-      const bPower = (b.pitching?.velocity || 0) + (b.pitching?.control || 0);
-      return bPower - aPower;
-    })
-    .slice(0, 2);
+  // 残りの投手（リリーフ候補）
+  const relievers = sortedPitchers.filter(p => !starters.includes(p));
 
-  // 中継ぎ（残りの投手）
-  const middleRelievers = sortedPitchers.filter(p =>
-    !starters.includes(p) && !closerCandidates.includes(p)
+  // リリーフの役割を決定
+  // 能力スコア = 球速×0.4 + 制球×0.4 + スタミナ×0.2
+  const scoredRelievers = relievers.map(p => ({
+    ...p,
+    reliefScore: (p.pitching?.velocity || 130) * 0.4 +
+                 (p.pitching?.control || 50) * 0.4 +
+                 (p.pitching?.stamina || 80) * 0.2
+  })).sort((a, b) => b.reliefScore - a.reliefScore);
+
+  // クローザー（最高能力、1人）
+  const closer = scoredRelievers[0] || null;
+
+  // セットアッパー（2番目に高い能力、1-2人）
+  const setupMen = scoredRelievers.slice(1, 3);
+
+  // 中継ぎ（残り）
+  const middleRelievers = scoredRelievers.slice(3);
+
+  // 左のワンポイント候補を特定
+  const leftSpecialists = relievers.filter(p =>
+    p.physical?.throws === 'left' && (p.pitching?.stamina || 0) < 100
   );
 
   // ローテーション情報を保存
   team.pitchingRotation = {
     starters: starters.map(p => p.id),
-    closers: closerCandidates.map(p => p.id),
+    closer: closer ? closer.id : null,
+    setupMen: setupMen.map(p => p.id),
     middleRelievers: middleRelievers.map(p => p.id),
-    currentStarterIndex: 0
+    leftSpecialists: leftSpecialists.map(p => p.id),
+    currentStarterIndex: 0,
+    // リリーフ疲労管理
+    reliefFatigue: {}
   };
 
-  console.log(`✅ ${teamName}の投手ローテーション初期化完了 - 先発${starters.length}人`);
+  // 初期疲労を設定
+  [...(closer ? [closer] : []), ...setupMen, ...middleRelievers].forEach(p => {
+    team.pitchingRotation.reliefFatigue[p.id] = 0;
+  });
+
+  console.log(`✅ ${teamName}のローテーション: 先発${starters.length}人, クローザー${closer ? 1 : 0}人, セットアップ${setupMen.length}人, 中継ぎ${middleRelievers.length}人`);
+};
+
+/**
+ * リリーフ投手を役割に基づいて選択
+ * @param {string} teamName - チーム名
+ * @param {string} situation - 状況 ('save', 'hold', 'middle', 'long', 'lefty')
+ * @param {number} inning - 現在のイニング
+ * @param {number} scoreDiff - 点差（正なら勝ち、負なら負け）
+ * @returns {Object|null} 選択された投手
+ */
+export const selectReliefPitcher = (teamName, situation, inning, scoreDiff) => {
+  const team = TEAMS_DATA[teamName];
+  if (!team || !team.pitchingRotation) return null;
+
+  const rotation = team.pitchingRotation;
+  const fatigue = rotation.reliefFatigue || {};
+
+  // 疲労が50以下の投手のみ選択可能
+  const isAvailable = (pitcherId) => (fatigue[pitcherId] || 0) < 50;
+
+  // 状況に応じた投手選択
+  if (situation === 'save' && rotation.closer) {
+    // セーブ場面: クローザー
+    if (isAvailable(rotation.closer)) {
+      return team.players.find(p => p.id === rotation.closer);
+    }
+  }
+
+  if (situation === 'hold' || (inning >= 7 && Math.abs(scoreDiff) <= 2)) {
+    // セットアップ場面: セットアッパー
+    for (const id of rotation.setupMen) {
+      if (isAvailable(id)) {
+        return team.players.find(p => p.id === id);
+      }
+    }
+  }
+
+  if (situation === 'lefty' && rotation.leftSpecialists.length > 0) {
+    // 左打者対策: 左のワンポイント
+    for (const id of rotation.leftSpecialists) {
+      if (isAvailable(id)) {
+        return team.players.find(p => p.id === id);
+      }
+    }
+  }
+
+  // 通常の中継ぎ（疲労が少ない順）
+  const availableMiddle = rotation.middleRelievers
+    .filter(isAvailable)
+    .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
+
+  if (availableMiddle.length > 0) {
+    return team.players.find(p => p.id === availableMiddle[0]);
+  }
+
+  // 全員疲労している場合、セットアッパーから選択
+  for (const id of [...rotation.setupMen, rotation.closer].filter(Boolean)) {
+    const p = team.players.find(p => p.id === id);
+    if (p) return p;
+  }
+
+  return null;
+};
+
+/**
+ * リリーフ投手の疲労を更新
+ * @param {string} teamName - チーム名
+ * @param {number} pitcherId - 投手ID
+ * @param {number} pitchCount - 投球数
+ */
+export const updateReliefFatigue = (teamName, pitcherId, pitchCount) => {
+  const team = TEAMS_DATA[teamName];
+  if (!team || !team.pitchingRotation) return;
+
+  if (!team.pitchingRotation.reliefFatigue) {
+    team.pitchingRotation.reliefFatigue = {};
+  }
+
+  // 疲労を加算（投球数の半分）
+  const currentFatigue = team.pitchingRotation.reliefFatigue[pitcherId] || 0;
+  team.pitchingRotation.reliefFatigue[pitcherId] = currentFatigue + Math.floor(pitchCount / 2);
+};
+
+/**
+ * 日付進行時にリリーフ疲労を回復
+ * @param {string} teamName - チーム名
+ * @param {number} days - 経過日数
+ */
+export const recoverReliefFatigue = (teamName, days = 1) => {
+  const team = TEAMS_DATA[teamName];
+  if (!team || !team.pitchingRotation || !team.pitchingRotation.reliefFatigue) return;
+
+  Object.keys(team.pitchingRotation.reliefFatigue).forEach(id => {
+    team.pitchingRotation.reliefFatigue[id] = Math.max(0,
+      team.pitchingRotation.reliefFatigue[id] - (20 * days)
+    );
+  });
 };
 
 // ES module exports

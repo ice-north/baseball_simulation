@@ -150,13 +150,24 @@ const generateAILineup = (teamData, teamName) => {
 
 // 全チームの投手疲労を回復（日次処理）
 export const recoverAllPitcherFatigue = (recoveryAmount = 20) => {
-  Object.values(TEAMS_DATA).forEach(team => {
+  Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
     if (!team || !team.players) return;
+
+    // 選手個人の疲労回復
     team.players.forEach(player => {
       if (player.fatigue && player.fatigue > 0) {
         player.fatigue = Math.max(0, player.fatigue - recoveryAmount);
       }
     });
+
+    // リリーフ投手の疲労回復
+    if (team.pitchingRotation && team.pitchingRotation.reliefFatigue) {
+      Object.keys(team.pitchingRotation.reliefFatigue).forEach(id => {
+        team.pitchingRotation.reliefFatigue[id] = Math.max(0,
+          team.pitchingRotation.reliefFatigue[id] - recoveryAmount
+        );
+      });
+    }
   });
   console.log(`💤 全投手の疲労を${recoveryAmount}回復`);
 };
@@ -717,9 +728,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       gameState.inning++;
     }
 
-    // 投手スタミナ回復 & AI監督機能（投手交代判定）
+    // 投手スタミナ回復 & AI監督機能（役割ベースの投手交代）
     [gameState.homeTeam, gameState.awayTeam].forEach(team => {
       const pitcher = getCurrentPitcher(team);
+      const teamName = team === gameState.homeTeam ? homeTeamName : awayTeamName;
+      const scoreDiff = team === gameState.homeTeam
+        ? gameState.score.home - gameState.score.away
+        : gameState.score.away - gameState.score.home;
+
       if (pitcher) {
         const pitcherData = team.players.find(p => p.id === pitcher.id);
         if (pitcherData) {
@@ -729,29 +745,91 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             pitcher.pitching.stamina
           );
 
-          // AI監督: スタミナ20%以下で投手交代
+          // AI監督: 役割ベースの投手交代判定
           const staminaRate = pitcherData.currentStamina / pitcher.pitching.stamina;
-          if (staminaRate < 0.20 && gameState.inning >= 5) {
-            // リリーフ投手を探す（投手で打順が0または控え）
-            const reliever = team.players.find(p =>
-              p.position === 'pitcher' &&
-              p.battingOrder === 0 &&
-              p.id !== pitcher.id &&
-              p.currentStamina > pitcher.pitching.stamina * 0.5
-            );
+          const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
+          let shouldChange = false;
+          let situation = 'middle';
+
+          // 交代判定条件
+          if (staminaRate < 0.25 && gameState.inning >= 5) {
+            shouldChange = true;
+            situation = 'middle';
+          } else if (gameState.inning === 9 && !gameState.isTopInning && scoreDiff > 0 && scoreDiff <= 3) {
+            // 9回裏、3点差以内のリード → クローザー
+            shouldChange = true;
+            situation = 'save';
+          } else if (gameState.inning >= 7 && Math.abs(scoreDiff) <= 2 && staminaRate < 0.40) {
+            // 7回以降で僅差 → セットアッパー
+            shouldChange = true;
+            situation = 'hold';
+          }
+
+          if (shouldChange && rotation) {
+            let reliever = null;
+            const fatigue = rotation.reliefFatigue || {};
+
+            // セーブ場面: クローザー優先
+            if (situation === 'save' && rotation.closer) {
+              const closerData = team.players.find(p => p.id === rotation.closer && p.battingOrder === 0);
+              if (closerData && (fatigue[rotation.closer] || 0) < 50) {
+                reliever = closerData;
+              }
+            }
+
+            // ホールド場面: セットアッパー優先
+            if (!reliever && (situation === 'hold' || situation === 'save')) {
+              for (const setupId of (rotation.setupMen || [])) {
+                const setupData = team.players.find(p => p.id === setupId && p.battingOrder === 0);
+                if (setupData && (fatigue[setupId] || 0) < 50) {
+                  reliever = setupData;
+                  break;
+                }
+              }
+            }
+
+            // 通常の中継ぎ（疲労が少ない順）
+            if (!reliever) {
+              const sortedMiddle = (rotation.middleRelievers || [])
+                .filter(id => {
+                  const p = team.players.find(pl => pl.id === id && pl.battingOrder === 0);
+                  return p && (fatigue[id] || 0) < 50;
+                })
+                .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
+
+              if (sortedMiddle.length > 0) {
+                reliever = team.players.find(p => p.id === sortedMiddle[0]);
+              }
+            }
+
+            // フォールバック
+            if (!reliever) {
+              reliever = team.players.find(p =>
+                p.position === 'pitcher' &&
+                p.battingOrder === 0 &&
+                p.id !== pitcher.id &&
+                (p.currentStamina || 80) > 40
+              );
+            }
 
             if (reliever) {
-              // 投手交代
-              console.log(`   🔄 投手交代: ${team.name} ${pitcher.name}(スタミナ${Math.round(staminaRate * 100)}%) → ${reliever.name}`);
+              const roleLabel = situation === 'save' ? '守護神' :
+                              situation === 'hold' ? 'セットアップ' : '中継ぎ';
+              console.log(`   🔄 投手交代: ${teamName} ${pitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${roleLabel})`);
 
-              // 先発投手を控えに
               pitcherData.battingOrder = 0;
               pitcherData.position = 'pitcher';
 
-              // リリーフ投手をマウンドに
               const relieverData = team.players.find(p => p.id === reliever.id);
               relieverData.battingOrder = 9;
               relieverData.position = 'pitcher';
+              relieverData.currentStamina = relieverData.pitching?.stamina || 80;
+
+              // リリーフ疲労を記録（TEAMS_DATAに反映）
+              if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
+                TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
+                  (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 30;
+              }
             }
           }
         }

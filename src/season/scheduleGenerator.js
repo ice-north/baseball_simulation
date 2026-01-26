@@ -48,8 +48,7 @@ export const generateRoundRobin = (teams) => {
 
 /**
  * 年間スケジュールを生成（レギュラーシーズン）
- * 月間バランス型: 4-6月が前半戦、7-9月が後半戦
- * 土日中心に配置（平日は火・水・金も使用）
+ * 月間バランス型: 土日優先、平日も含めて全試合を配置
  *
  * @param {Object} config - 設定
  *   - teams: チーム配列
@@ -64,40 +63,55 @@ export const generateFullSeasonSchedule = (config) => {
 
   // 各チームが何回対戦するか計算
   const opponentsCount = teamsCount - 1;
-  const gamesPerOpponent = Math.floor(gamesPerSeason / opponentsCount);
-  const extraGames = gamesPerSeason % opponentsCount;
+  const gamesPerOpponent = Math.ceil(gamesPerSeason / opponentsCount);
 
   // ラウンドロビン方式で1周分の対戦カードを生成
   const oneRound = generateRoundRobin(teams);
 
-  // 必要な周回数を計算
-  const totalRounds = Math.ceil(gamesPerOpponent / 2);
+  // 必要な周回数を計算（ホーム・アウェイの入れ替えを考慮）
+  const totalRounds = Math.ceil(gamesPerOpponent);
 
   // 全対戦カードを生成
   const allMatchups = [];
-  for (let i = 0; i < totalRounds; i++) {
+  for (let round = 0; round < totalRounds; round++) {
     oneRound.forEach(roundGames => {
       roundGames.forEach(game => {
-        if (i % 2 === 0) {
-          allMatchups.push({ home: game.home, away: game.away });
-        } else {
-          allMatchups.push({ home: game.away, away: game.home });
+        // 各チームの試合数が目標に達するまで追加
+        const teamGames = (teamName) => allMatchups.filter(m =>
+          m.home === teamName || m.away === teamName
+        ).length;
+
+        if (teamGames(game.home) < gamesPerSeason && teamGames(game.away) < gamesPerSeason) {
+          if (round % 2 === 0) {
+            allMatchups.push({ home: game.home, away: game.away });
+          } else {
+            allMatchups.push({ home: game.away, away: game.home });
+          }
         }
       });
     });
   }
 
-  for (let i = 0; i < extraGames; i++) {
-    const game = oneRound[0][i % oneRound[0].length];
-    allMatchups.push({ home: game.home, away: game.away });
+  // 目標試合数に達していない場合、追加カードを生成
+  let attempts = 0;
+  while (allMatchups.length < (teamsCount * gamesPerSeason / 2) && attempts < 100) {
+    const round = oneRound[attempts % oneRound.length];
+    for (const game of round) {
+      const teamGames = (teamName) => allMatchups.filter(m =>
+        m.home === teamName || m.away === teamName
+      ).length;
+
+      if (teamGames(game.home) < gamesPerSeason && teamGames(game.away) < gamesPerSeason) {
+        if (attempts % 2 === 0) {
+          allMatchups.push({ home: game.home, away: game.away });
+        } else {
+          allMatchups.push({ home: game.away, away: game.home });
+        }
+      }
+    }
+    attempts++;
   }
 
-  // 月別に試合を配分
-  // 60試合 → 各月10試合 (4-9月)
-  // 120試合 → 各月20試合
-  // 143試合 → 3月後半も使用、約24試合/月
-
-  const totalGamesNeeded = allMatchups.length;
   const gamesPerDay = Math.floor(teamsCount / 2); // 同時開催試合数
 
   // 試合開催月を決定
@@ -125,116 +139,110 @@ export const generateFullSeasonSchedule = (config) => {
     ];
   }
 
-  // 1チームあたりの月間試合数
-  const gamesPerMonth = Math.ceil(gamesPerSeason / seasonMonths.length);
+  // 全ての試合日を収集（土日優先、平日も全て使用可能）
+  const collectAllGameDays = (year) => {
+    const allDays = [];
 
-  // 試合日を生成（土日優先、火水金も使用、月内バランス配置）
-  const generateGameDays = (year, month, startDay, targetGames, gamesPerDay) => {
-    const gameDays = [];
-    const daysInMonth = new Date(year, month, 0).getDate();
+    for (const monthConfig of seasonMonths) {
+      const daysInMonth = new Date(year, monthConfig.month, 0).getDate();
 
-    // まず土日を収集
-    const weekends = [];
-    // 次に火水金を収集
-    const weekdays = [];
+      for (let day = monthConfig.startDay; day <= daysInMonth; day++) {
+        const date = new Date(year, monthConfig.month - 1, day);
+        const dayOfWeek = date.getDay(); // 0=日, 1=月, ..., 6=土
 
-    for (let day = startDay; day <= daysInMonth; day++) {
-      const date = new Date(year, month - 1, day);
-      const dayOfWeek = date.getDay(); // 0=日, 1=月, ..., 6=土
-
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        // 土日
-        weekends.push({ year, month, day, priority: 1 });
-      } else if (dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 5) {
-        // 火水金
-        weekdays.push({ year, month, day, priority: 2 });
-      }
-    }
-
-    // 必要な試合日数
-    const neededDays = Math.ceil(targetGames / gamesPerDay);
-
-    // 土日だけで足りる場合は土日のみ、足りない場合は平日も追加
-    if (weekends.length >= neededDays) {
-      // 土日を月内で均等に配置（間引く）
-      const step = weekends.length / neededDays;
-      for (let i = 0; i < neededDays; i++) {
-        const idx = Math.floor(i * step);
-        gameDays.push(weekends[idx]);
-      }
-    } else {
-      // 全土日を使用
-      gameDays.push(...weekends);
-
-      // 平日から追加（月内で均等に）
-      const neededWeekdays = neededDays - weekends.length;
-      if (neededWeekdays > 0 && weekdays.length > 0) {
-        const step = weekdays.length / neededWeekdays;
-        for (let i = 0; i < neededWeekdays && i < weekdays.length; i++) {
-          const idx = Math.floor(i * step);
-          gameDays.push(weekdays[idx]);
+        // 月曜日は休み、それ以外は開催可能
+        if (dayOfWeek !== 1) {
+          const priority = (dayOfWeek === 0 || dayOfWeek === 6) ? 1 : 2; // 土日優先
+          allDays.push({ year, month: monthConfig.month, day, priority, dayOfWeek });
         }
       }
     }
 
-    // 日付順でソート
-    gameDays.sort((a, b) => a.day - b.day);
-
-    return gameDays;
+    return allDays;
   };
 
-  // スケジュールを月別に配置
-  const schedule = [];
-  let matchupIndex = 0;
   const year = startDate.year;
+  const allGameDays = collectAllGameDays(year);
 
-  // 各月に試合を配分
-  for (const monthConfig of seasonMonths) {
-    if (matchupIndex >= allMatchups.length) break;
+  // 必要な試合日数を計算
+  const totalGamesNeeded = allMatchups.length;
+  const neededDays = Math.ceil(totalGamesNeeded / gamesPerDay);
 
-    // 月間で配置する試合数を計算
-    const remainingGames = allMatchups.length - matchupIndex;
-    const monthIndex = seasonMonths.indexOf(monthConfig);
-    const remainingMonths = seasonMonths.length - monthIndex;
-    const targetGamesThisMonth = Math.ceil(remainingGames / remainingMonths / gamesPerDay) * gamesPerDay;
+  // 土日を優先して選択し、足りなければ平日も使用
+  const weekends = allGameDays.filter(d => d.priority === 1);
+  const weekdays = allGameDays.filter(d => d.priority === 2);
 
-    // この月の試合日を生成（月内バランス配置）
-    const monthGameDays = generateGameDays(
-      year,
-      monthConfig.month,
-      monthConfig.startDay,
-      targetGamesThisMonth,
-      gamesPerDay
-    );
+  let selectedDays = [];
 
-    let gamesScheduledThisMonth = 0;
+  if (weekends.length >= neededDays) {
+    // 土日だけで足りる → 均等に分散
+    const step = weekends.length / neededDays;
+    for (let i = 0; i < neededDays; i++) {
+      const idx = Math.min(Math.floor(i * step), weekends.length - 1);
+      selectedDays.push(weekends[idx]);
+    }
+  } else {
+    // 土日全部使用 + 平日も追加
+    selectedDays = [...weekends];
+    const neededWeekdays = neededDays - weekends.length;
 
-    for (const gameDay of monthGameDays) {
-      if (matchupIndex >= allMatchups.length) break;
-      if (gamesScheduledThisMonth >= targetGamesThisMonth) break;
-
-      // この日の試合数
-      const gamesThisDay = Math.min(gamesPerDay, allMatchups.length - matchupIndex);
-
-      for (let i = 0; i < gamesThisDay; i++) {
-        const matchup = allMatchups[matchupIndex + i];
-
-        schedule.push({
-          id: schedule.length + 1,
-          date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
-          home: matchup.home,
-          away: matchup.away,
-          starterHome: null,
-          starterAway: null,
-          result: null,
-          phase: SEASON_PHASES.REGULAR_SEASON
-        });
+    if (neededWeekdays > 0) {
+      // 平日を均等に分散して追加
+      const step = Math.max(1, weekdays.length / neededWeekdays);
+      for (let i = 0; i < neededWeekdays && i * step < weekdays.length; i++) {
+        const idx = Math.min(Math.floor(i * step), weekdays.length - 1);
+        if (!selectedDays.find(d => d.month === weekdays[idx].month && d.day === weekdays[idx].day)) {
+          selectedDays.push(weekdays[idx]);
+        }
       }
 
-      matchupIndex += gamesThisDay;
-      gamesScheduledThisMonth += gamesThisDay;
+      // まだ足りない場合は残りの平日を追加
+      if (selectedDays.length < neededDays) {
+        for (const wd of weekdays) {
+          if (!selectedDays.find(d => d.month === wd.month && d.day === wd.day)) {
+            selectedDays.push(wd);
+            if (selectedDays.length >= neededDays) break;
+          }
+        }
+      }
     }
   }
+
+  // 日付順にソート
+  selectedDays.sort((a, b) => {
+    if (a.month !== b.month) return a.month - b.month;
+    return a.day - b.day;
+  });
+
+  // スケジュールを配置
+  const schedule = [];
+  let matchupIndex = 0;
+
+  for (const gameDay of selectedDays) {
+    if (matchupIndex >= allMatchups.length) break;
+
+    // この日の試合数
+    const gamesThisDay = Math.min(gamesPerDay, allMatchups.length - matchupIndex);
+
+    for (let i = 0; i < gamesThisDay; i++) {
+      const matchup = allMatchups[matchupIndex + i];
+
+      schedule.push({
+        id: schedule.length + 1,
+        date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
+        home: matchup.home,
+        away: matchup.away,
+        starterHome: null,
+        starterAway: null,
+        result: null,
+        phase: SEASON_PHASES.REGULAR_SEASON
+      });
+    }
+
+    matchupIndex += gamesThisDay;
+  }
+
+  console.log(`📅 スケジュール生成完了: ${schedule.length}試合 / 目標${totalGamesNeeded}試合, ${selectedDays.length}日間`);
 
   return schedule;
 };

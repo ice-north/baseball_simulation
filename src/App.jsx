@@ -22,7 +22,7 @@ import {
 
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
-import { initializeTeamsData, TEAMS_DATA, initializeAllPitchingRotations } from './teams-data.js';
+import { initializeTeamsData, TEAMS_DATA, initializeAllPitchingRotations, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue } from './teams-data.js';
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
@@ -82,20 +82,16 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
 
         // チーム数に応じてリーグ構成を更新
         const teamCount = regulations.teamsCount || 4;
-        const teamNames = [];
-        for (let i = 0; i < teamCount; i++) {
-          teamNames.push(`チーム${String.fromCharCode(65 + i)}`); // A, B, C, D...
-        }
+
+        // 動的にチームを作成（4チーム以上に対応）
+        const teamNames = initializeTeamsForCount(teamCount);
+        console.log(`👥 ${teamCount}チームを初期化: ${teamNames.join(', ')}`);
 
         setLeagueConfig({
           format: 'single',
           teamsPerLeague: teamCount,
           leagues: [{ name: 'リーグ', teams: teamNames }]
         });
-
-        // チームデータを初期化
-        console.log('👥 チームデータ初期化中...');
-        initializeTeamsData();
 
         // スケジュール生成（60試合未満は4月開始、140試合以上は3月後半開始）
         const schedule = generateFullSeasonSchedule({
@@ -109,7 +105,7 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
         newSeasonData.standings = initializeStandings(teamNames);
 
         setSeasonData(newSeasonData);
-        console.log('✅ NEW GAME初期化完了');
+        console.log(`✅ NEW GAME初期化完了 - ${schedule.length}試合生成`);
       };
 
       // セーブデータの有無を確認
