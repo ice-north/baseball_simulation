@@ -113,22 +113,52 @@ const generateAILineup = (teamData, teamName) => {
     }
   });
 
-  // 投手を9番に設定
+  // 投手を9番に設定（疲労度が低い投手を優先）
   const pitchers = players.filter(p =>
     p.position === 'pitcher' ||
     (p.pitching?.velocity >= 135 && !usedPlayers.has(p.id))
   );
 
   if (pitchers.length > 0) {
-    // 最も球速が速い投手を先発に
-    pitchers.sort((a, b) => (b.pitching?.velocity || 0) - (a.pitching?.velocity || 0));
-    const starter = pitchers[0];
-    starter.battingOrder = 9;
-    starter.position = 'pitcher';
-    console.log(`    先発投手: ${starter.name} (${starter.pitching?.velocity || 0}km/h)`);
+    // 疲労度が低い順にソート（疲労度が同じ場合は球速順）
+    // 疲労度100以上の投手は先発不可
+    const availablePitchers = pitchers.filter(p => (p.fatigue || 0) < 100);
+
+    if (availablePitchers.length > 0) {
+      availablePitchers.sort((a, b) => {
+        const fatigueA = a.fatigue || 0;
+        const fatigueB = b.fatigue || 0;
+        if (fatigueA !== fatigueB) return fatigueA - fatigueB; // 疲労度が低い順
+        return (b.pitching?.velocity || 0) - (a.pitching?.velocity || 0); // 同じなら球速順
+      });
+      const starter = availablePitchers[0];
+      starter.battingOrder = 9;
+      starter.position = 'pitcher';
+      console.log(`    先発投手: ${starter.name} (${starter.pitching?.velocity || 0}km/h, 疲労:${starter.fatigue || 0})`);
+    } else {
+      // 全員疲労が高い場合は最も疲労が低い投手
+      pitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
+      const starter = pitchers[0];
+      starter.battingOrder = 9;
+      starter.position = 'pitcher';
+      console.log(`    先発投手(疲労高): ${starter.name} (疲労:${starter.fatigue || 0})`);
+    }
   }
 
   console.log(`    スタメン: ${battingOrder.map(e => `${e.battingOrder}番${e.position}:${e.player.name}`).join(', ')}`);
+};
+
+// 全チームの投手疲労を回復（日次処理）
+export const recoverAllPitcherFatigue = (recoveryAmount = 20) => {
+  Object.values(TEAMS_DATA).forEach(team => {
+    if (!team || !team.players) return;
+    team.players.forEach(player => {
+      if (player.fatigue && player.fatigue > 0) {
+        player.fatigue = Math.max(0, player.fatigue - recoveryAmount);
+      }
+    });
+  });
+  console.log(`💤 全投手の疲労を${recoveryAmount}回復`);
 };
 
 export const autoSimulateGame = (homeTeamName, awayTeamName) => {
@@ -711,6 +741,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         career.strikeouts += p.strikeouts;
         career.walks += p.walks;
         career.pitches += p.pitches;
+
+        // 疲労度を蓄積（投げた球数分）
+        playerData.fatigue = (playerData.fatigue || 0) + p.pitches;
+        console.log(`   疲労蓄積: ${playerData.name} +${p.pitches}球 → 疲労${playerData.fatigue}`);
 
         // 勝敗の判定（簡易版：先発投手のみ）
         if (player.battingOrder === 9 && p.outs >= 15) { // 5イニング以上投げた先発

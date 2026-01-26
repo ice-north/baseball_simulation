@@ -99,11 +99,14 @@ export function generateTryoutCandidates(year, teamCount) {
     const isSpecialist = Math.random() < 0.2;
     const specialistType = isSpecialist ? getSpecialistType() : null;
 
+    // 投球フォームを先に決定（能力に影響するため）
+    const pitchingForm = ['overhand', 'threeQuarter', 'sidearm', 'submarine'][Math.floor(Math.random() * 4)];
+
     // ランダムな名前生成
     const name = generateRandomPlayerName();
 
     // 能力値生成（一芸選手の場合は特殊な分布）
-    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType);
+    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm);
 
     const player = {
       id: i,
@@ -134,7 +137,7 @@ export function generateTryoutCandidates(year, teamCount) {
         velocity: abilities.velocity,
         control: abilities.control,
         stamina: abilities.stamina,
-        form: ['overhand', 'threeQuarter', 'sidearm', 'submarine'][Math.floor(Math.random() * 4)],
+        form: pitchingForm,
         arsenal: isPitcher ? generateRandomArsenal() : [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 50 }
@@ -147,6 +150,7 @@ export function generateTryoutCandidates(year, teamCount) {
         draftTeam: null,
         achievements: []
       },
+      fatigue: 0, // 疲労度（投げた球数分蓄積、1日20回復）
       seasonStats: {
         batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
         pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
@@ -164,22 +168,29 @@ export function generateTryoutCandidates(year, teamCount) {
 }
 
 /**
- * 能力値を生成（一芸選手対応）
+ * 能力値を生成（一芸選手対応、フォーム別球速調整）
+ * 重要: 球速・ミート・パワーは一芸でも最大Aランク(79)まで
  */
-function generateAbilities(isPitcher, position, isSpecialist, specialistType) {
+function generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm) {
+  // フォームによる球速・制球の調整
+  // サイドスロー・アンダースローは球速-10、制球+15
+  const isSideOrUnder = pitchingForm === 'sidearm' || pitchingForm === 'submarine';
+  const velocityAdjust = isSideOrUnder ? -10 : 0;
+  const controlAdjust = isSideOrUnder ? 15 : 0;
+
   // 通常の能力値範囲
   const normalAbilities = {
     // 野手能力
-    meet: isPitcher ? randRange(15, 40) : randRange(30, 70),
-    power: isPitcher ? randRange(10, 35) : randRange(25, 65),
+    meet: isPitcher ? randRange(15, 40) : randRange(30, 65),
+    power: isPitcher ? randRange(10, 35) : randRange(25, 60),
     eye: isPitcher ? randRange(25, 50) : randRange(30, 70),
     steal: isPitcher ? randRange(10, 25) : randRange(20, 70),
     speed: isPitcher ? randRange(30, 55) : randRange(30, 70),
     arm: isPitcher ? randRange(40, 65) : randRange(30, 70),
     defense: isPitcher ? randRange(40, 65) : randRange(30, 70),
-    // 投手能力
-    velocity: isPitcher ? randRange(125, 145) : randRange(110, 125),
-    control: isPitcher ? randRange(40, 70) : randRange(30, 55),
+    // 投手能力（フォーム調整適用）
+    velocity: isPitcher ? Math.min(randRange(125, 145) + velocityAdjust, 155) : randRange(110, 125),
+    control: isPitcher ? Math.min(randRange(40, 70) + controlAdjust, 85) : randRange(30, 55),
     stamina: isPitcher ? randRange(100, 160) : randRange(50, 90)
   };
 
@@ -188,6 +199,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType) {
   }
 
   // 一芸に秀でた選手の能力調整
+  // 注意: 球速・ミート・パワーの最大値は79（Aランク）
   switch (specialistType) {
     case 'speedster':
       // 俊足だが打撃弱い
@@ -201,10 +213,10 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType) {
       };
 
     case 'slugger':
-      // パワーはあるが守備走塁弱い
+      // パワーはあるが守備走塁弱い（パワー最大79）
       return {
         ...normalAbilities,
-        power: randRange(75, 90),
+        power: randRange(70, 79),  // 最大Aランク
         meet: randRange(40, 60),
         speed: randRange(20, 40),
         steal: randRange(10, 25),
@@ -224,10 +236,10 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType) {
       };
 
     case 'contactHitter':
-      // ミートはいいがパワー無い
+      // ミートはいいがパワー無い（ミート最大79）
       return {
         ...normalAbilities,
-        meet: randRange(75, 90),
+        meet: randRange(70, 79),  // 最大Aランク
         eye: randRange(70, 85),
         power: randRange(20, 40),
         speed: randRange(45, 65)
@@ -235,11 +247,13 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType) {
 
     case 'fireballer':
       // 球速は速いがスタミナ制球弱い（投手用）
+      // 球速最大はフォーム調整後で最大155km/h（オーバー/スリークォーター）または145km/h（サイド/アンダー）
       if (isPitcher) {
+        const baseVelocity = randRange(145, 155);
         return {
           ...normalAbilities,
-          velocity: randRange(150, 160),
-          control: randRange(25, 45),
+          velocity: Math.min(baseVelocity + velocityAdjust, 155),  // 最大155
+          control: Math.min(randRange(25, 45) + controlAdjust, 60),
           stamina: randRange(70, 100)
         };
       }
@@ -250,8 +264,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType) {
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: randRange(120, 135),
-          control: randRange(75, 90),
+          velocity: Math.max(randRange(120, 135) + velocityAdjust, 110),
+          control: Math.min(randRange(75, 90) + controlAdjust, 95),
           stamina: randRange(110, 150)
         };
       }
@@ -262,8 +276,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType) {
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: randRange(125, 140),
-          control: randRange(35, 55),
+          velocity: Math.min(randRange(125, 140) + velocityAdjust, 150),
+          control: Math.min(randRange(35, 55) + controlAdjust, 70),
           stamina: randRange(170, 200)
         };
       }

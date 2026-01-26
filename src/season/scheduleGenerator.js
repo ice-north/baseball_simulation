@@ -48,6 +48,9 @@ export const generateRoundRobin = (teams) => {
 
 /**
  * 年間スケジュールを生成（レギュラーシーズン）
+ * 月間バランス型: 4-6月が前半戦、7-9月が後半戦
+ * 土日中心に配置（平日は火・水・金も使用）
+ *
  * @param {Object} config - 設定
  *   - teams: チーム配列
  *   - gamesPerSeason: 年間試合数（チームあたり）
@@ -62,7 +65,7 @@ export const generateFullSeasonSchedule = (config) => {
   // 各チームが何回対戦するか計算
   const opponentsCount = teamsCount - 1;
   const gamesPerOpponent = Math.floor(gamesPerSeason / opponentsCount);
-  const extraGames = gamesPerSeason % opponentsCount; // 余り分
+  const extraGames = gamesPerSeason % opponentsCount;
 
   // ラウンドロビン方式で1周分の対戦カードを生成
   const oneRound = generateRoundRobin(teams);
@@ -75,7 +78,6 @@ export const generateFullSeasonSchedule = (config) => {
   for (let i = 0; i < totalRounds; i++) {
     oneRound.forEach(roundGames => {
       roundGames.forEach(game => {
-        // ホーム/アウェイを交互に
         if (i % 2 === 0) {
           allMatchups.push({ home: game.home, away: game.away });
         } else {
@@ -85,42 +87,114 @@ export const generateFullSeasonSchedule = (config) => {
     });
   }
 
-  // 余り分の試合を追加（特定の対戦カードを追加）
   for (let i = 0; i < extraGames; i++) {
     const game = oneRound[0][i % oneRound[0].length];
     allMatchups.push({ home: game.home, away: game.away });
   }
 
-  // 日程に配置
+  // 月別に試合を配分
+  // 60試合 → 各月10試合 (4-9月)
+  // 120試合 → 各月20試合
+  // 143試合 → 3月後半も使用、約24試合/月
+
+  const totalGamesNeeded = allMatchups.length;
+  const gamesPerDay = Math.floor(teamsCount / 2); // 同時開催試合数
+
+  // 試合開催月を決定
+  let seasonMonths;
+  if (gamesPerSeason >= 140) {
+    // 140試合以上: 3月後半〜9月
+    seasonMonths = [
+      { month: 3, startDay: 20 },
+      { month: 4, startDay: 1 },
+      { month: 5, startDay: 1 },
+      { month: 6, startDay: 1 },
+      { month: 7, startDay: 1 },
+      { month: 8, startDay: 1 },
+      { month: 9, startDay: 1 }
+    ];
+  } else {
+    // 140試合未満: 4月〜9月
+    seasonMonths = [
+      { month: 4, startDay: 1 },
+      { month: 5, startDay: 1 },
+      { month: 6, startDay: 1 },
+      { month: 7, startDay: 1 },
+      { month: 8, startDay: 1 },
+      { month: 9, startDay: 1 }
+    ];
+  }
+
+  // 1チームあたりの月間試合数
+  const gamesPerMonth = Math.ceil(gamesPerSeason / seasonMonths.length);
+
+  // 試合日を生成（土日中心、火水金も使用）
+  const generateGameDays = (year, month, startDay, maxGames) => {
+    const gameDays = [];
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    for (let day = startDay; day <= daysInMonth && gameDays.length < maxGames; day++) {
+      const date = new Date(year, month - 1, day);
+      const dayOfWeek = date.getDay(); // 0=日, 1=月, ..., 6=土
+
+      // 試合日: 火(2)、水(3)、金(5)、土(6)、日(0) - 月曜休み、木曜も休み
+      if (dayOfWeek === 0 || dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 5 || dayOfWeek === 6) {
+        gameDays.push({ year, month, day });
+      }
+    }
+
+    return gameDays;
+  };
+
+  // スケジュールを月別に配置
   const schedule = [];
-  let currentDate = { ...startDate };
   let matchupIndex = 0;
+  const year = startDate.year;
 
-  while (compareDates(currentDate, endDate) <= 0 && matchupIndex < allMatchups.length) {
-    const phase = getCurrentPhase(currentDate.month, currentDate.day);
+  // 各月に試合を配分
+  for (const monthConfig of seasonMonths) {
+    if (matchupIndex >= allMatchups.length) break;
 
-    if (isGameDay(currentDate, phase)) {
-      // この日に開催可能な試合数（同時開催）
-      const gamesThisDay = Math.min(Math.floor(teamsCount / 2), allMatchups.length - matchupIndex);
+    // この月の試合日を生成
+    const monthGameDays = generateGameDays(
+      year,
+      monthConfig.month,
+      monthConfig.startDay,
+      Math.ceil(gamesPerMonth / gamesPerDay) + 5 // 予備日も含める
+    );
+
+    // 月間で配置する試合数を計算
+    const remainingGames = allMatchups.length - matchupIndex;
+    const remainingMonths = seasonMonths.length - seasonMonths.indexOf(monthConfig);
+    const targetGamesThisMonth = Math.ceil(remainingGames / remainingMonths / gamesPerDay) * gamesPerDay;
+
+    let gamesScheduledThisMonth = 0;
+
+    for (const gameDay of monthGameDays) {
+      if (matchupIndex >= allMatchups.length) break;
+      if (gamesScheduledThisMonth >= targetGamesThisMonth) break;
+
+      // この日の試合数
+      const gamesThisDay = Math.min(gamesPerDay, allMatchups.length - matchupIndex);
 
       for (let i = 0; i < gamesThisDay; i++) {
         const matchup = allMatchups[matchupIndex + i];
 
         schedule.push({
-          date: { ...currentDate },
+          id: schedule.length + 1,
+          date: { ...gameDay },
           home: matchup.home,
           away: matchup.away,
-          homePitcher: null,
-          awayPitcher: null,
+          starterHome: null,
+          starterAway: null,
           result: null,
           phase: SEASON_PHASES.REGULAR_SEASON
         });
       }
 
       matchupIndex += gamesThisDay;
+      gamesScheduledThisMonth += gamesThisDay;
     }
-
-    currentDate = advanceDate(currentDate, 1);
   }
 
   return schedule;

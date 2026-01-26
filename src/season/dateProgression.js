@@ -4,6 +4,7 @@
 // ============================================================
 
 import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings } from './seasonManager.js';
+import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 
 /**
  * 日付を進行（1日/1週間/1ヶ月）
@@ -14,6 +15,11 @@ import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings } f
 export const progressDate = (seasonData, days = 1) => {
   const newDate = advanceDate(seasonData.currentDate, days);
   const newPhase = getCurrentPhase(newDate.month, newDate.day);
+
+  // 投手の疲労を回復（1日あたり20）
+  for (let i = 0; i < days; i++) {
+    recoverAllPitcherFatigue(20);
+  }
 
   return {
     ...seasonData,

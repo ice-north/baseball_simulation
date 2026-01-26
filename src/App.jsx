@@ -6117,296 +6117,243 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
         </button>
       </div>
 
-      {/* 3カラムレイアウト */}
-      <div className="grid grid-cols-12 gap-4">
-        {/* 左カラム: カレンダー */}
-        <div className="col-span-5">
-          <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)}
-                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
-                >
-                  ◀
-                </button>
-                <button
-                  onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)}
-                  className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
-                >
-                  ▶
-                </button>
-              </div>
+      {/* 2グリッドレイアウト - 上段: カレンダー＋本日の対戦 */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {/* 左: カレンダー */}
+        <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)}
+                className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
+              >
+                ◀
+              </button>
+              <button
+                onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)}
+                className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
+              >
+                ▶
+              </button>
             </div>
+          </div>
 
-            {/* 曜日ヘッダー */}
-            <div className="grid grid-cols-7 gap-1 mb-1">
-              {dayNames.map((name, i) => (
-                <div key={i} className={`text-center text-xs font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
-                  {name}
+          {/* 曜日ヘッダー */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {dayNames.map((name, i) => (
+              <div key={i} className={`text-center text-xs font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
+                {name}
+              </div>
+            ))}
+          </div>
+
+          {/* カレンダーグリッド */}
+          <div className="grid grid-cols-7 gap-1">
+            {calendarCells.map((cell, i) => {
+              const myGame = cell.games.find(g => g.home === 'チームA' || g.away === 'チームA');
+              let resultMark = null;
+              let resultColor = 'bg-gray-700';
+
+              if (myGame && myGame.result) {
+                const isHome = myGame.home === 'チームA';
+                const myScore = isHome ? myGame.result.homeScore : myGame.result.awayScore;
+                const opponentScore = isHome ? myGame.result.awayScore : myGame.result.homeScore;
+
+                if (myScore > opponentScore) {
+                  resultMark = '○';
+                  resultColor = 'bg-blue-900';
+                } else if (myScore < opponentScore) {
+                  resultMark = '●';
+                  resultColor = 'bg-red-900';
+                } else {
+                  resultMark = '△';
+                  resultColor = 'bg-gray-600';
+                }
+              }
+
+              return (
+                <div
+                  key={i}
+                  className={`min-h-[50px] p-1 rounded text-xs transition ${
+                    cell.day === null ? 'bg-transparent' :
+                    cell.isToday ? 'bg-green-700 border-2 border-green-400 shadow-lg' :
+                    cell.isPast && myGame ? resultColor : 'bg-gray-700'
+                  }`}
+                >
+                  {cell.day && (
+                    <>
+                      <div className={`font-bold ${
+                        i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'
+                      }`}>
+                        {cell.day}
+                      </div>
+                      {myGame && (
+                        <div className="mt-1">
+                          {myGame.result ? (
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[11px] font-bold ${
+                                resultMark === '○' ? 'text-green-400' :
+                                resultMark === '●' ? 'text-red-400' : 'text-gray-400'
+                              }`}>{resultMark}</span>
+                              <span className="text-[10px] text-gray-300">
+                                {myGame.home === 'チームA' ? myGame.result.homeScore : myGame.result.awayScore}-
+                                {myGame.home === 'チームA' ? myGame.result.awayScore : myGame.result.homeScore}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-yellow-300">
+                              vs {(myGame.home === 'チームA' ? myGame.away : myGame.home).replace('チーム', '')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {!myGame && cell.games.length === 0 && i % 7 === 1 && (
+                        <div className="text-[9px] text-gray-500 mt-1">休</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 右: 本日の対戦 */}
+        <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
+          <h2 className="text-xl font-bold text-white mb-4">
+            {todaysGames.length > 0 ? '本日の対戦' : '試合なし'}
+          </h2>
+
+          {todaysGames.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-6xl mb-4">☀️</div>
+              <p className="text-gray-400">本日は試合がありません</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {todaysGames.map(game => {
+                const awayPitcher = getStartingPitcher(game.away);
+                const homePitcher = getStartingPitcher(game.home);
+
+                return (
+                  <div key={game.id} className={`rounded-lg p-3 ${
+                    game.result ? 'bg-gray-700' : 'bg-gradient-to-r from-gray-700 to-gray-600'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex-1 text-center">
+                        <div className="font-bold text-white">{game.away}</div>
+                        {awayPitcher && (
+                          <div className="text-xs text-gray-400">
+                            {awayPitcher.name} ({awayPitcher.physical?.throws === 'left' ? '左' : '右'})
+                          </div>
+                        )}
+                      </div>
+                      <div className="px-4">
+                        {game.result ? (
+                          <div className="text-xl font-bold text-white">
+                            {game.result.awayScore} - {game.result.homeScore}
+                          </div>
+                        ) : (
+                          <div className="text-lg text-gray-400">vs</div>
+                        )}
+                      </div>
+                      <div className="flex-1 text-center">
+                        <div className="font-bold text-white">{game.home}</div>
+                        {homePitcher && (
+                          <div className="text-xs text-gray-400">
+                            {homePitcher.name} ({homePitcher.physical?.throws === 'left' ? '左' : '右'})
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {game.result && (
+                      <div className="text-center">
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${
+                          game.result.homeScore > game.result.awayScore ? 'bg-blue-600 text-white' :
+                          game.result.awayScore > game.result.homeScore ? 'bg-red-600 text-white' :
+                          'bg-gray-500 text-white'
+                        }`}>
+                          {game.result.winner ? `${game.result.winner} WIN` : '引分'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {lastGameResults.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-600">
+              <h3 className="text-sm font-bold text-gray-400 mb-2">試合結果</h3>
+              {lastGameResults.map((result, idx) => (
+                <div key={idx} className="text-xs text-gray-300 mb-1">
+                  {result.away} {result.awayScore} - {result.homeScore} {result.home}
+                  {result.decisions?.winningPitcher && (
+                    <span className="ml-2 text-green-400">勝:{result.decisions.winningPitcher.name}</span>
+                  )}
+                  {result.decisions?.savePitcher && (
+                    <span className="ml-1 text-yellow-400">S:{result.decisions.savePitcher.name}</span>
+                  )}
                 </div>
               ))}
             </div>
-
-            {/* カレンダーグリッド */}
-            <div className="grid grid-cols-7 gap-1">
-              {calendarCells.map((cell, i) => {
-                // チームAの試合結果を取得
-                const myGame = cell.games.find(g => g.home === 'チームA' || g.away === 'チームA');
-                let resultMark = null;
-                let resultColor = 'bg-gray-700';
-
-                if (myGame && myGame.result) {
-                  const isHome = myGame.home === 'チームA';
-                  const myScore = isHome ? myGame.result.homeScore : myGame.result.awayScore;
-                  const opponentScore = isHome ? myGame.result.awayScore : myGame.result.homeScore;
-
-                  if (myScore > opponentScore) {
-                    resultMark = '○';
-                    resultColor = 'bg-blue-900';
-                  } else if (myScore < opponentScore) {
-                    resultMark = '●';
-                    resultColor = 'bg-red-900';
-                  } else {
-                    resultMark = '△';
-                    resultColor = 'bg-gray-600';
-                  }
-                }
-
-                return (
-                  <div
-                    key={i}
-                    className={`min-h-[50px] p-1 rounded text-xs transition ${
-                      cell.day === null ? 'bg-transparent' :
-                      cell.isToday ? 'bg-green-700 border-2 border-green-400 shadow-lg' :
-                      cell.isPast && myGame ? resultColor : 'bg-gray-700'
-                    }`}
-                  >
-                    {cell.day && (
-                      <>
-                        <div className={`font-bold ${
-                          i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'
-                        }`}>
-                          {cell.day}
-                        </div>
-                        {myGame && (
-                          <div className="mt-1">
-                            {myGame.result ? (
-                              <div className="flex items-center justify-between">
-                                <span className={`text-[11px] font-bold ${
-                                  resultMark === '○' ? 'text-green-400' :
-                                  resultMark === '●' ? 'text-red-400' : 'text-gray-400'
-                                }`}>{resultMark}</span>
-                                <span className="text-[10px] text-gray-300">
-                                  {myGame.home === 'チームA' ? myGame.result.homeScore : myGame.result.awayScore}-
-                                  {myGame.home === 'チームA' ? myGame.result.awayScore : myGame.result.homeScore}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="text-[10px] text-yellow-300">
-                                vs {(myGame.home === 'チームA' ? myGame.away : myGame.home).replace('チーム', '')}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {!myGame && cell.games.length === 0 && i % 7 === 1 && (
-                          <div className="text-[9px] text-gray-500 mt-1">休</div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* 中央カラム: 本日の試合 */}
-        <div className="col-span-4">
-          <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
-            <h2 className="text-xl font-bold text-white mb-4">
-              {todaysGames.length > 0 ? '本日の対戦' : '試合なし'}
-            </h2>
+      {/* 下段: 順位表（テーブル形式） */}
+      <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
+        <h2 className="text-xl font-bold text-white mb-4">順位表</h2>
+        <table className="w-full text-white">
+          <thead>
+            <tr className="border-b border-gray-600 text-gray-400 text-sm">
+              <th className="py-2 px-2 text-left w-12">順位</th>
+              <th className="py-2 px-2 text-left">チーム</th>
+              <th className="py-2 px-3 text-center">試合</th>
+              <th className="py-2 px-3 text-center">勝</th>
+              <th className="py-2 px-3 text-center">負</th>
+              <th className="py-2 px-3 text-center">分</th>
+              <th className="py-2 px-3 text-center">勝率</th>
+              <th className="py-2 px-3 text-center">差</th>
+            </tr>
+          </thead>
+          <tbody>
+            {seasonData.standings.map((team, index) => {
+              const isUserTeam = team.team === 'チームA';
+              const winRate = team.gamesPlayed > 0 ? (team.wins / team.gamesPlayed).toFixed(3).substring(1) : '.000';
+              const gb = index === 0 ? '-' :
+                ((seasonData.standings[0].wins - team.wins) - (seasonData.standings[0].losses - team.losses)) / 2;
 
-            {todaysGames.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="text-6xl mb-4">☀️</div>
-                <p className="text-gray-400">本日は試合がありません</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {todaysGames.map(game => {
-                  const awayPitcher = getStartingPitcher(game.away);
-                  const homePitcher = getStartingPitcher(game.home);
-
-                  return (
-                    <div key={game.id} className={`rounded-xl p-4 ${
-                      game.result ? 'bg-gray-700' : 'bg-gradient-to-r from-gray-700 to-gray-600'
+              return (
+                <tr key={team.team} className={`border-b border-gray-700 ${isUserTeam ? 'bg-blue-900/50' : ''}`}>
+                  <td className="py-3 px-2">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
+                      index === 0 ? 'bg-yellow-500 text-black' :
+                      index === 1 ? 'bg-gray-400 text-black' :
+                      index === 2 ? 'bg-orange-600 text-white' :
+                      'bg-gray-600 text-white'
                     }`}>
-                      {/* チーム名とスコア */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex-1 text-center">
-                          <div className="text-lg font-bold text-white">{game.away}</div>
-                          <div className="text-xs text-gray-400">Away</div>
-                        </div>
-                        <div className="px-4">
-                          {game.result ? (
-                            <div className="text-2xl font-bold text-white">
-                              {game.result.awayScore} - {game.result.homeScore}
-                            </div>
-                          ) : (
-                            <div className="text-xl text-gray-400">vs</div>
-                          )}
-                        </div>
-                        <div className="flex-1 text-center">
-                          <div className="text-lg font-bold text-white">{game.home}</div>
-                          <div className="text-xs text-gray-400">Home</div>
-                        </div>
-                      </div>
-
-                      {/* 先発投手 */}
-                      <div className="flex items-center justify-between border-t border-gray-600 pt-3">
-                        <div className="flex-1 text-center">
-                          {awayPitcher ? (
-                            <div className="text-sm">
-                              <span className="text-gray-400">先発: </span>
-                              <span className="text-white font-bold">{awayPitcher.name}</span>
-                              <span className="text-gray-400 ml-1 text-xs">
-                                ({awayPitcher.physical?.throws === 'left' ? '左' : '右'})
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-500 text-sm">未定</span>
-                          )}
-                        </div>
-                        <div className="px-4 text-gray-500 text-sm">⚾</div>
-                        <div className="flex-1 text-center">
-                          {homePitcher ? (
-                            <div className="text-sm">
-                              <span className="text-gray-400">先発: </span>
-                              <span className="text-white font-bold">{homePitcher.name}</span>
-                              <span className="text-gray-400 ml-1 text-xs">
-                                ({homePitcher.physical?.throws === 'left' ? '左' : '右'})
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-500 text-sm">未定</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 試合結果詳細 */}
-                      {game.result && (
-                        <div className="mt-3 pt-3 border-t border-gray-600 text-center">
-                          <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                            game.result.homeScore > game.result.awayScore ? 'bg-blue-600 text-white' :
-                            game.result.awayScore > game.result.homeScore ? 'bg-red-600 text-white' :
-                            'bg-gray-500 text-white'
-                          }`}>
-                            {game.result.winner ? `${game.result.winner} WIN` : '引き分け'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* 直近の試合結果 */}
-            {lastGameResults.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-600">
-                <h3 className="text-sm font-bold text-gray-400 mb-2">試合結果サマリー</h3>
-                {lastGameResults.map((result, idx) => (
-                  <div key={idx} className="text-xs text-gray-300 mb-1">
-                    {result.away} {result.awayScore} - {result.homeScore} {result.home}
-                    {result.decisions?.winningPitcher && (
-                      <span className="ml-2 text-green-400">勝: {result.decisions.winningPitcher.name}</span>
-                    )}
-                    {result.decisions?.savePitcher && (
-                      <span className="ml-2 text-yellow-400">S: {result.decisions.savePitcher.name}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 右カラム: 順位表 */}
-        <div className="col-span-3">
-          <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
-            <h2 className="text-xl font-bold text-white mb-4">順位表</h2>
-
-            <div className="space-y-2">
-              {seasonData.standings.map((team, index) => {
-                const isUserTeam = team.team === 'チームA';
-                const winRate = team.gamesPlayed > 0 ? (team.wins / team.gamesPlayed * 100).toFixed(1) : '---';
-                const gb = index === 0 ? '-' :
-                  ((seasonData.standings[0].wins - team.wins) - (seasonData.standings[0].losses - team.losses)) / 2;
-
-                return (
-                  <div key={team.team} className={`rounded-lg p-3 ${
-                    isUserTeam ? 'bg-gradient-to-r from-blue-800 to-blue-700 border border-blue-500' : 'bg-gray-700'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
-                          index === 0 ? 'bg-yellow-500 text-black' :
-                          index === 1 ? 'bg-gray-400 text-black' :
-                          index === 2 ? 'bg-orange-600 text-white' :
-                          'bg-gray-600 text-white'
-                        }`}>
-                          {index + 1}
-                        </span>
-                        <span className={`font-bold ${isUserTeam ? 'text-white' : 'text-gray-200'}`}>
-                          {team.team}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-white font-bold">
-                          {team.wins}-{team.losses}{team.draws > 0 ? `-${team.draws}` : ''}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {winRate}% {gb !== '-' && `(${gb > 0 ? '+' : ''}${typeof gb === 'number' ? gb.toFixed(1) : gb})`}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* チーム成績サマリー */}
-            <div className="mt-4 pt-4 border-t border-gray-600">
-              <h3 className="text-sm font-bold text-gray-400 mb-2">チームA 成績</h3>
-              {(() => {
-                const myTeam = seasonData.standings.find(t => t.team === 'チームA');
-                if (!myTeam) return null;
-
-                const streak = []; // 連勝/連敗は別途計算が必要
-
-                return (
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-gray-700 rounded p-2">
-                      <div className="text-2xl font-bold text-green-400">{myTeam.wins}</div>
-                      <div className="text-xs text-gray-400">勝</div>
-                    </div>
-                    <div className="bg-gray-700 rounded p-2">
-                      <div className="text-2xl font-bold text-red-400">{myTeam.losses}</div>
-                      <div className="text-xs text-gray-400">敗</div>
-                    </div>
-                    <div className="bg-gray-700 rounded p-2">
-                      <div className="text-2xl font-bold text-gray-300">{myTeam.draws || 0}</div>
-                      <div className="text-xs text-gray-400">分</div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
+                      {index + 1}
+                    </span>
+                  </td>
+                  <td className={`py-3 px-2 font-bold ${isUserTeam ? 'text-yellow-300' : ''}`}>
+                    {team.team}
+                  </td>
+                  <td className="py-3 px-3 text-center">{team.gamesPlayed || 0}</td>
+                  <td className="py-3 px-3 text-center text-green-400 font-bold">{team.wins || 0}</td>
+                  <td className="py-3 px-3 text-center text-red-400 font-bold">{team.losses || 0}</td>
+                  <td className="py-3 px-3 text-center text-gray-400">{team.draws || 0}</td>
+                  <td className="py-3 px-3 text-center font-mono">{winRate}</td>
+                  <td className="py-3 px-3 text-center text-gray-400">
+                    {gb === '-' ? '-' : (typeof gb === 'number' ? gb.toFixed(1) : gb)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
