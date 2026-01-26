@@ -6079,151 +6079,146 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
 
   return (
     <div className="p-4 min-h-screen">
-      {/* 3:1グリッドレイアウト - カレンダー＋本日の対戦 */}
-      <div className="grid grid-cols-4 gap-4 mb-4">
-        {/* 左: カレンダー（3/4幅） */}
-        <div className="col-span-3 bg-gray-800 rounded-xl p-4 shadow-lg">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => handleProgressDate(1)}
-                disabled={isSimulating}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-lg font-bold transition shadow disabled:opacity-50"
-              >
-                {isSimulating ? '...' : '1日進める'}
-              </button>
-              <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)}
-                className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
-              >
-                ◀
-              </button>
-              <button
-                onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)}
-                className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
-              >
-                ▶
-              </button>
-            </div>
+      {/* 上段: カレンダー（フル幅） */}
+      <div className="bg-gray-800 rounded-xl p-4 shadow-lg mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => handleProgressDate(1)}
+              disabled={isSimulating}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-lg font-bold transition shadow disabled:opacity-50"
+            >
+              {isSimulating ? '...' : '1日進める'}
+            </button>
+            <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
           </div>
-
-          {/* 曜日ヘッダー */}
-          <div className="grid grid-cols-7 gap-1 mb-1">
-            {dayNames.map((name, i) => (
-              <div key={i} className={`text-center text-xs font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
-                {name}
-              </div>
-            ))}
+          <div className="flex gap-1">
+            <button
+              onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)}
+              className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
+            >
+              ◀
+            </button>
+            <button
+              onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)}
+              className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center"
+            >
+              ▶
+            </button>
           </div>
+        </div>
 
-          {/* カレンダーグリッド */}
-          <div className="grid grid-cols-7 gap-1">
-            {calendarCells.map((cell, i) => {
-              const myGame = cell.games.find(g => g.home === 'チームA' || g.away === 'チームA');
-              let resultMark = null;
-              let resultColor = 'bg-gray-700';
+        {/* 曜日ヘッダー */}
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {dayNames.map((name, i) => (
+            <div key={i} className={`text-center text-sm font-bold py-2 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
+              {name}
+            </div>
+          ))}
+        </div>
 
-              if (myGame && myGame.result) {
-                const isHome = myGame.home === 'チームA';
-                const myScore = isHome ? myGame.result.homeScore : myGame.result.awayScore;
-                const opponentScore = isHome ? myGame.result.awayScore : myGame.result.homeScore;
+        {/* カレンダーグリッド（大きめ） */}
+        <div className="grid grid-cols-7 gap-1">
+          {calendarCells.map((cell, i) => {
+            // 今日の日は試合前として表示（結果なし）
+            const showAsScheduled = cell.isToday;
 
-                if (myScore > opponentScore) {
-                  resultMark = '○';
-                  resultColor = 'bg-blue-900';
-                } else if (myScore < opponentScore) {
-                  resultMark = '●';
-                  resultColor = 'bg-red-900';
-                } else {
-                  resultMark = '△';
-                  resultColor = 'bg-gray-600';
-                }
-              }
-
-              return (
-                <div
-                  key={i}
-                  className={`min-h-[50px] p-1 rounded text-xs transition ${
-                    cell.day === null ? 'bg-transparent' :
-                    cell.isToday ? 'bg-green-700 border-2 border-green-400 shadow-lg' :
-                    cell.isPast && myGame ? resultColor : 'bg-gray-700'
-                  }`}
-                >
-                  {cell.day && (
-                    <>
-                      <div className={`font-bold ${
-                        i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'
-                      }`}>
-                        {cell.day}
-                      </div>
-                      {myGame && (
-                        <div className="mt-1">
-                          {myGame.result ? (
-                            <div className="flex items-center justify-between">
-                              <span className={`text-[11px] font-bold ${
-                                resultMark === '○' ? 'text-green-400' :
-                                resultMark === '●' ? 'text-red-400' : 'text-gray-400'
-                              }`}>{resultMark}</span>
-                              <span className="text-[10px] text-gray-300">
-                                {myGame.home === 'チームA' ? myGame.result.homeScore : myGame.result.awayScore}-
-                                {myGame.home === 'チームA' ? myGame.result.awayScore : myGame.result.homeScore}
+            return (
+              <div
+                key={i}
+                className={`min-h-[80px] p-2 rounded text-sm transition ${
+                  cell.day === null ? 'bg-transparent' :
+                  cell.isToday ? 'bg-green-800 border-2 border-green-400 shadow-lg' :
+                  cell.isPast ? 'bg-gray-700' : 'bg-gray-700'
+                }`}
+              >
+                {cell.day && (
+                  <>
+                    <div className={`font-bold mb-1 ${
+                      i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'
+                    }`}>
+                      {cell.day}
+                    </div>
+                    {/* 全試合を表示 */}
+                    {cell.games.length > 0 && (
+                      <div className="space-y-1">
+                        {cell.games.map((game, gIdx) => {
+                          // 今日の試合は試合前として表示
+                          if (showAsScheduled || !game.result) {
+                            return (
+                              <div key={gIdx} className="text-[11px] text-yellow-300">
+                                {game.away.replace('チーム', '')} vs {game.home.replace('チーム', '')}
+                              </div>
+                            );
+                          }
+                          // 過去の試合は結果表示
+                          const awayWin = game.result.awayScore > game.result.homeScore;
+                          const homeWin = game.result.homeScore > game.result.awayScore;
+                          return (
+                            <div key={gIdx} className="text-[11px]">
+                              <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-400'}>
+                                {game.away.replace('チーム', '')}
+                              </span>
+                              <span className="text-gray-500 mx-1">
+                                {game.result.awayScore}-{game.result.homeScore}
+                              </span>
+                              <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-400'}>
+                                {game.home.replace('チーム', '')}
                               </span>
                             </div>
-                          ) : (
-                            <div className="text-[10px] text-yellow-300">
-                              vs {(myGame.home === 'チームA' ? myGame.away : myGame.home).replace('チーム', '')}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {!myGame && cell.games.length === 0 && i % 7 === 1 && (
-                        <div className="text-[9px] text-gray-500 mt-1">休</div>
-                      )}
-                    </>
-                  )}
+                          );
+                        })}
+                      </div>
+                    )}
+                    {cell.games.length === 0 && (
+                      <div className="text-[10px] text-gray-500">-</div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 中段: 本日の対戦 */}
+      <div className="bg-gray-800 rounded-xl p-4 shadow-lg mb-4">
+        <h2 className="text-lg font-bold text-white mb-3">
+          📅 {formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)}) の対戦
+        </h2>
+
+        {todaysGames.length === 0 ? (
+          <div className="text-center py-4">
+            <span className="text-gray-400">本日は試合がありません</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            {todaysGames.map(game => {
+              const awayPitcher = getStartingPitcher(game.away);
+              const homePitcher = getStartingPitcher(game.home);
+
+              return (
+                <div key={game.id} className="rounded-lg p-3 bg-gray-700">
+                  <div className="flex items-center justify-between">
+                    <div className="text-center flex-1">
+                      <div className="text-white font-bold text-lg">{game.away}</div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        先発: {awayPitcher ? `${awayPitcher.name} (${awayPitcher.physical?.throws === 'left' ? '左' : '右'})` : '未定'}
+                      </div>
+                    </div>
+                    <div className="px-4 text-gray-500 text-xl">vs</div>
+                    <div className="text-center flex-1">
+                      <div className="text-white font-bold text-lg">{game.home}</div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        先発: {homePitcher ? `${homePitcher.name} (${homePitcher.physical?.throws === 'left' ? '左' : '右'})` : '未定'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
-
-        {/* 右: 本日の対戦（1/4幅） */}
-        <div className="col-span-1 bg-gray-800 rounded-xl p-4 shadow-lg">
-          <h2 className="text-lg font-bold text-white mb-3">
-            {todaysGames.length > 0 ? '本日の対戦' : '試合なし'}
-          </h2>
-
-          {todaysGames.length === 0 ? (
-            <div className="text-center py-4">
-              <div className="text-4xl mb-2">☀️</div>
-              <p className="text-gray-400 text-sm">試合なし</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {todaysGames.map(game => {
-                const awayPitcher = getStartingPitcher(game.away);
-                const homePitcher = getStartingPitcher(game.home);
-
-                return (
-                  <div key={game.id} className="rounded-lg p-2 bg-gray-700 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-white font-bold">{game.away.replace('チーム', '')}</span>
-                      <span className="text-gray-400 text-xs">vs</span>
-                      <span className="text-white font-bold">{game.home.replace('チーム', '')}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-400 mt-1">
-                      <span>{awayPitcher ? awayPitcher.name : '-'}</span>
-                      <span>{homePitcher ? homePitcher.name : '-'}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* 下段: 順位表（テーブル形式） */}

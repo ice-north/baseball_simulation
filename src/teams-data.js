@@ -113,6 +113,76 @@ export const initializeTeamsData = () => {
       careerStats: p.careerStats || createCareerStats()
     }));
   });
+
+  // 全チームの投手ローテーションを初期化
+  initializeAllPitchingRotations();
+};
+
+/**
+ * 全チームの投手ローテーションを初期化
+ */
+export const initializeAllPitchingRotations = () => {
+  Object.keys(TEAMS_DATA).forEach(teamName => {
+    initializePitchingRotation(teamName);
+  });
+};
+
+/**
+ * 指定チームの投手ローテーションを初期化
+ */
+export const initializePitchingRotation = (teamName) => {
+  const team = TEAMS_DATA[teamName];
+  if (!team || !team.players || team.players.length === 0) {
+    return;
+  }
+
+  // 投手を抽出してスタミナでソート
+  const pitchers = team.players.filter(p => p.position === 'pitcher');
+  if (pitchers.length === 0) {
+    return;
+  }
+
+  const sortedPitchers = [...pitchers].sort((a, b) =>
+    (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0)
+  );
+
+  // 先発（スタミナ140以上、最大5人）
+  const starters = sortedPitchers
+    .filter(p => (p.pitching?.stamina || 0) >= 140)
+    .slice(0, 5);
+
+  // スタミナ140以上が5人未満の場合、スタミナ上位から補充
+  if (starters.length < 5) {
+    const remaining = sortedPitchers
+      .filter(p => !starters.includes(p))
+      .slice(0, 5 - starters.length);
+    starters.push(...remaining);
+  }
+
+  // 抑え（スタミナ140未満で能力が高い投手、最大2人）
+  const closerCandidates = sortedPitchers
+    .filter(p => (p.pitching?.stamina || 0) < 140)
+    .sort((a, b) => {
+      const aPower = (a.pitching?.velocity || 0) + (a.pitching?.control || 0);
+      const bPower = (b.pitching?.velocity || 0) + (b.pitching?.control || 0);
+      return bPower - aPower;
+    })
+    .slice(0, 2);
+
+  // 中継ぎ（残りの投手）
+  const middleRelievers = sortedPitchers.filter(p =>
+    !starters.includes(p) && !closerCandidates.includes(p)
+  );
+
+  // ローテーション情報を保存
+  team.pitchingRotation = {
+    starters: starters.map(p => p.id),
+    closers: closerCandidates.map(p => p.id),
+    middleRelievers: middleRelievers.map(p => p.id),
+    currentStarterIndex: 0
+  };
+
+  console.log(`✅ ${teamName}の投手ローテーション初期化完了 - 先発${starters.length}人`);
 };
 
 // ES module exports
