@@ -457,12 +457,106 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     return { bases: newBases, runsScored };
   };
 
+  // 盗塁判定（AI監督）
+  const attemptStolenBase = (offenseTeam, defenseTeam) => {
+    // 1塁または2塁にランナーがいて、次の塁が空いている場合
+    const pitcher = getCurrentPitcher(defenseTeam);
+    const catcher = defenseTeam.players.find(p => p.position === 'catcher');
+
+    for (let base = 0; base < 2; base++) {
+      if (gameState.bases[base] && !gameState.bases[base + 1]) {
+        // このランナーの盗塁を検討
+        const runnerSpeed = 60; // 仮の走力（本来は走者の能力を取得）
+        const catcherArm = catcher?.physical?.arm || 50;
+        const pitcherQuick = pitcher?.pitching?.control || 50; // クイック代用
+
+        // 盗塁成功率 = 走力 - 捕手肩力/2 - 投手クイック/4 + ランダム
+        const successChance = runnerSpeed - catcherArm / 2 - pitcherQuick / 4 + (Math.random() * 30 - 15);
+
+        // 走力70以上で2アウト未満、成功率50%以上なら盗塁試行
+        if (runnerSpeed >= 70 && gameState.outs < 2 && successChance > 50) {
+          const rand = Math.random() * 100;
+          if (rand < successChance) {
+            // 盗塁成功
+            gameState.bases[base] = false;
+            gameState.bases[base + 1] = true;
+            console.log(`   🏃 盗塁成功: ${base + 1}塁 → ${base + 2}塁`);
+            return { success: true, base };
+          } else {
+            // 盗塁失敗（アウト）
+            gameState.bases[base] = false;
+            gameState.outs++;
+            console.log(`   🚫 盗塁失敗: ${base + 1}塁走者アウト`);
+            return { success: false, base };
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  // 代打判定（AI監督）
+  const considerPinchHitter = (offenseTeam, batter) => {
+    // 7回以降、投手の打順で代打を検討
+    if (gameState.inning >= 7 && batter.position === 'pitcher') {
+      // ベンチにいる野手で打撃能力が高い選手を探す
+      const pinchHitter = offenseTeam.players.find(p =>
+        p.battingOrder === 0 &&
+        p.position !== 'pitcher' &&
+        (p.batting?.meet || 0) > (batter.batting?.meet || 0)
+      );
+
+      if (pinchHitter) {
+        console.log(`   🔄 代打: ${batter.name} → ${pinchHitter.name}`);
+        // 代打を送る
+        const batterData = offenseTeam.players.find(p => p.id === batter.id);
+        const phData = offenseTeam.players.find(p => p.id === pinchHitter.id);
+        if (batterData && phData) {
+          phData.battingOrder = batterData.battingOrder;
+          batterData.battingOrder = 0;
+          return pinchHitter;
+        }
+      }
+    }
+    return batter;
+  };
+
+  // 守備固め判定（AI監督）- イニング終了時に呼ばれる
+  const considerDefensiveReplacement = (defenseTeam) => {
+    // 7回以降、リード時に守備固めを検討
+    const isLeading = gameState.isTopInning
+      ? gameState.score.home > gameState.score.away
+      : gameState.score.away > gameState.score.home;
+
+    if (gameState.inning >= 7 && isLeading) {
+      defenseTeam.players.forEach(starter => {
+        if (starter.battingOrder > 0 && starter.battingOrder < 9) {
+          // 守備が弱い選手を探す
+          if ((starter.fielding?.defense || 50) < 50) {
+            const replacement = defenseTeam.players.find(p =>
+              p.battingOrder === 0 &&
+              p.position !== 'pitcher' &&
+              (p.fielding?.defense || 0) > (starter.fielding?.defense || 0) + 15
+            );
+
+            if (replacement) {
+              console.log(`   🔄 守備固め: ${starter.name} → ${replacement.name} (${starter.position})`);
+              replacement.battingOrder = starter.battingOrder;
+              replacement.position = starter.position;
+              starter.battingOrder = 0;
+            }
+          }
+        }
+      });
+    }
+  };
+
   // 打席シミュレーション
   const simulateAtBat = () => {
     const offenseTeam = gameState.isTopInning ? gameState.awayTeam : gameState.homeTeam;
     const defenseTeam = gameState.isTopInning ? gameState.homeTeam : gameState.awayTeam;
 
-    const batter = getCurrentBatter(offenseTeam);
+    let batter = getCurrentBatter(offenseTeam);
     const pitcher = getCurrentPitcher(defenseTeam);
     const catcher = getCurrentCatcher(defenseTeam);
     const defense = buildDefense(defenseTeam);
@@ -476,6 +570,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       return;
     }
 
+    // AI監督: 代打を検討
+    batter = considerPinchHitter(offenseTeam, batter);
+
     let atBatOver = false;
     let pitchCount = 0;
     const maxPitches = 20; // 無限ループ防止
@@ -483,6 +580,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     while (!atBatOver && pitchCount < maxPitches) {
       pitchCount++;
+
+      // AI監督: 盗塁を検討（1球目のみ）
+      if (pitchCount === 1 && gameState.outs < 2) {
+        const stealResult = attemptStolenBase(offenseTeam, defenseTeam);
+        if (stealResult && !stealResult.success && gameState.outs >= 3) {
+          // 盗塁死で3アウトなら打席終了
+          atBatOver = true;
+          break;
+        }
+      }
 
       // 投手のスタミナを取得
       const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
@@ -649,6 +756,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           }
         }
       }
+
+      // AI監督: 守備固めを検討
+      considerDefensiveReplacement(team);
     });
   };
 

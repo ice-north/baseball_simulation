@@ -22,7 +22,7 @@ import {
 
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
-import { initializeTeamsData, TEAMS_DATA } from './teams-data.js';
+import { initializeTeamsData, TEAMS_DATA, initializeAllPitchingRotations } from './teams-data.js';
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
@@ -110,6 +110,93 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
 
         setSeasonData(newSeasonData);
         console.log('✅ NEW GAME初期化完了');
+      };
+
+      // セーブデータの有無を確認
+      const [hasSaveData, setHasSaveData] = useState(false);
+      useEffect(() => {
+        const savedData = localStorage.getItem('baseballSim_saveData');
+        setHasSaveData(!!savedData);
+      }, []);
+
+      // ゲームデータを保存
+      const saveGame = (slotName = 'auto') => {
+        try {
+          const saveData = {
+            version: '2.7.0',
+            timestamp: new Date().toISOString(),
+            slotName,
+            seasonData: seasonData,
+            leagueConfig: leagueConfig,
+            teamsData: JSON.parse(JSON.stringify(TEAMS_DATA)), // ディープコピー
+            screenMode,
+            managementView,
+            gameFlowState,
+            selectedMonth
+          };
+
+          localStorage.setItem('baseballSim_saveData', JSON.stringify(saveData));
+          console.log('💾 ゲームをセーブしました:', slotName);
+          setHasSaveData(true);
+          return true;
+        } catch (error) {
+          console.error('セーブ失敗:', error);
+          return false;
+        }
+      };
+
+      // ゲームデータを読み込み
+      const loadGame = () => {
+        try {
+          const savedJson = localStorage.getItem('baseballSim_saveData');
+          if (!savedJson) {
+            console.warn('セーブデータがありません');
+            return false;
+          }
+
+          const saveData = JSON.parse(savedJson);
+          console.log('📂 ロード開始:', saveData.slotName, saveData.timestamp);
+
+          // TEAMS_DATAを復元
+          if (saveData.teamsData) {
+            Object.keys(saveData.teamsData).forEach(teamName => {
+              if (TEAMS_DATA[teamName]) {
+                TEAMS_DATA[teamName] = saveData.teamsData[teamName];
+              } else {
+                TEAMS_DATA[teamName] = saveData.teamsData[teamName];
+              }
+            });
+          }
+
+          // 状態を復元
+          if (saveData.seasonData) setSeasonData(saveData.seasonData);
+          if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
+          if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
+
+          // 画面状態を復元（管理画面に移動）
+          setScreenMode('management');
+          setManagementView('dateprogress');
+          setGameFlowState('season');
+
+          console.log('✅ ロード完了');
+          return true;
+        } catch (error) {
+          console.error('ロード失敗:', error);
+          return false;
+        }
+      };
+
+      // セーブデータを削除
+      const deleteSave = () => {
+        try {
+          localStorage.removeItem('baseballSim_saveData');
+          setHasSaveData(false);
+          console.log('🗑️ セーブデータを削除しました');
+          return true;
+        } catch (error) {
+          console.error('削除失敗:', error);
+          return false;
+        }
       };
 
       // 後方互換性のため、既存の変数名でもアクセス可能にする
@@ -2894,9 +2981,8 @@ if (newOuts === 3) {
               className={`w-full text-left px-4 py-3 rounded transition ${
                 screenMode === 'management' && managementView === 'save' ? 'bg-green-600' : 'hover:bg-gray-800'
               }`}
-              disabled
             >
-              💾 セーブ＆ロード <span className="text-xs text-gray-500">(準備中)</span>
+              💾 セーブ＆ロード
             </button>
 
             <div className="border-t border-gray-700 my-4"></div>
@@ -3261,6 +3347,10 @@ if (newOuts === 3) {
                 ];
               }
             });
+
+            // 全チームの投手ローテーションを再初期化
+            console.log('⚾ 全チームの投手ローテーションを設定');
+            initializeAllPitchingRotations();
 
             setDraftComplete(true);
             // 初期トライアウトの場合は自動的にキャンプへ進む
@@ -4150,6 +4240,10 @@ if (newOuts === 3) {
       const PlayerStatsScreen = ({ seasonData, allTeams }) => {
   const [statsTab, setStatsTab] = useState('season'); // 'season' or 'career'
   const [statsType, setStatsType] = useState('batting'); // 'batting' or 'pitching'
+  const [battingSortKey, setBattingSortKey] = useState('avg'); // ソートキー
+  const [battingSortDir, setBattingSortDir] = useState('desc'); // 'asc' or 'desc'
+  const [pitchingSortKey, setPitchingSortKey] = useState('era');
+  const [pitchingSortDir, setPitchingSortDir] = useState('asc');
 
   // 全選手のシーズン成績を取得
   const getAllPlayerStats = () => {
@@ -4168,6 +4262,27 @@ if (newOuts === 3) {
 
   const allPlayers = getAllPlayerStats();
 
+  // ソート切り替えハンドラ
+  const handleBattingSort = (key) => {
+    if (battingSortKey === key) {
+      setBattingSortDir(battingSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setBattingSortKey(key);
+      // 打率・安打・本塁打・打点・盗塁はdesc、三振はasc
+      setBattingSortDir(['strikeouts'].includes(key) ? 'asc' : 'desc');
+    }
+  };
+
+  const handlePitchingSort = (key) => {
+    if (pitchingSortKey === key) {
+      setPitchingSortDir(pitchingSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPitchingSortKey(key);
+      // 防御率・失点・与四球はasc、勝利・セーブ・ホールド・奪三振はdesc
+      setPitchingSortDir(['era', 'runsAllowed', 'walks'].includes(key) ? 'asc' : 'desc');
+    }
+  };
+
   // 打撃成績でソート
   const battingStats = allPlayers
     .filter(p => {
@@ -4176,13 +4291,22 @@ if (newOuts === 3) {
     })
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.batting : p.careerStats.batting;
-      const avg = stats.atBats > 0 ? (stats.hits / stats.atBats).toFixed(3) : '.000';
-      return { ...p, stats, avg: parseFloat(avg) };
+      const avg = stats.atBats > 0 ? (stats.hits / stats.atBats) : 0;
+      return { ...p, stats, avg };
     })
-    .sort((a, b) => b.avg - a.avg)
+    .sort((a, b) => {
+      let valA, valB;
+      if (battingSortKey === 'avg') {
+        valA = a.avg; valB = b.avg;
+      } else {
+        valA = a.stats[battingSortKey] || 0;
+        valB = b.stats[battingSortKey] || 0;
+      }
+      return battingSortDir === 'asc' ? valA - valB : valB - valA;
+    })
     .slice(0, 20);
 
-  // 投手成績でソート（防御率順）
+  // 投手成績でソート
   const pitchingStats = allPlayers
     .filter(p => {
       const stats = statsTab === 'season' ? p.seasonStats?.pitching : p.careerStats?.pitching;
@@ -4191,13 +4315,34 @@ if (newOuts === 3) {
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.pitching : p.careerStats.pitching;
       const era = stats.inningsPitched > 0
-        ? ((stats.earnedRuns * 27) / stats.inningsPitched).toFixed(2)
-        : '0.00';
+        ? (stats.earnedRuns * 27) / stats.inningsPitched
+        : 0;
       const ip = formatInnings(stats.inningsPitched);
-      return { ...p, stats, era: parseFloat(era), ip };
+      return { ...p, stats, era, ip };
     })
-    .sort((a, b) => a.era - b.era)
+    .sort((a, b) => {
+      let valA, valB;
+      if (pitchingSortKey === 'era') {
+        valA = a.era; valB = b.era;
+      } else if (pitchingSortKey === 'inningsPitched') {
+        valA = a.stats.inningsPitched || 0; valB = b.stats.inningsPitched || 0;
+      } else {
+        valA = a.stats[pitchingSortKey] || 0;
+        valB = b.stats[pitchingSortKey] || 0;
+      }
+      return pitchingSortDir === 'asc' ? valA - valB : valB - valA;
+    })
     .slice(0, 20);
+
+  // ソート可能なヘッダーコンポーネント
+  const SortableHeader = ({ label, sortKey, currentKey, currentDir, onClick, align = 'right' }) => (
+    <th
+      className={`py-2 px-3 text-${align} cursor-pointer hover:bg-gray-600 transition ${currentKey === sortKey ? 'text-yellow-400' : ''}`}
+      onClick={() => onClick(sortKey)}
+    >
+      {label} {currentKey === sortKey && (currentDir === 'asc' ? '▲' : '▼')}
+    </th>
+  );
 
   return (
     <div className="p-8">
@@ -4253,18 +4398,18 @@ if (newOuts === 3) {
             <table className="w-full text-white text-sm">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="py-2 px-3 text-left">順位</th>
+                  <th className="py-2 px-3 text-left">#</th>
                   <th className="py-2 px-3 text-left">選手名</th>
                   <th className="py-2 px-3 text-left">チーム</th>
-                  <th className="py-2 px-3 text-right">試合</th>
-                  <th className="py-2 px-3 text-right">打席</th>
-                  <th className="py-2 px-3 text-right">安打</th>
-                  <th className="py-2 px-3 text-right">本塁打</th>
-                  <th className="py-2 px-3 text-right">打点</th>
-                  <th className="py-2 px-3 text-right">盗塁</th>
-                  <th className="py-2 px-3 text-right">四球</th>
-                  <th className="py-2 px-3 text-right">三振</th>
-                  <th className="py-2 px-3 text-right font-bold">打率</th>
+                  <SortableHeader label="試合" sortKey="games" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="打席" sortKey="atBats" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="安打" sortKey="hits" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="本塁打" sortKey="homeruns" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="打点" sortKey="rbis" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="盗塁" sortKey="stolenBases" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="四球" sortKey="walks" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="三振" sortKey="strikeouts" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="打率" sortKey="avg" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                 </tr>
               </thead>
               <tbody>
@@ -4307,19 +4452,19 @@ if (newOuts === 3) {
             <table className="w-full text-white text-sm">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="py-2 px-3 text-left">順位</th>
+                  <th className="py-2 px-3 text-left">#</th>
                   <th className="py-2 px-3 text-left">選手名</th>
                   <th className="py-2 px-3 text-left">チーム</th>
-                  <th className="py-2 px-3 text-right">試合</th>
-                  <th className="py-2 px-3 text-right">勝</th>
-                  <th className="py-2 px-3 text-right">敗</th>
-                  <th className="py-2 px-3 text-right">H</th>
-                  <th className="py-2 px-3 text-right">S</th>
-                  <th className="py-2 px-3 text-right">回数</th>
-                  <th className="py-2 px-3 text-right">失点</th>
-                  <th className="py-2 px-3 text-right">奪三振</th>
-                  <th className="py-2 px-3 text-right">与四球</th>
-                  <th className="py-2 px-3 text-right font-bold">防御率</th>
+                  <SortableHeader label="試合" sortKey="games" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="勝" sortKey="wins" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="敗" sortKey="losses" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="H" sortKey="holds" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="S" sortKey="saves" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="回数" sortKey="inningsPitched" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="失点" sortKey="runsAllowed" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="奪三振" sortKey="strikeouts" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="与四球" sortKey="walks" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="防御率" sortKey="era" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                 </tr>
               </thead>
               <tbody>
@@ -6466,8 +6611,183 @@ const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
   );
 };
 
+// セーブ＆ロード画面
+const SaveLoadScreen = ({ onSave, onLoad, onDelete, hasSaveData, seasonData }) => {
+  const [saveStatus, setSaveStatus] = useState(null);
+  const [saveInfo, setSaveInfo] = useState(null);
+
+  useEffect(() => {
+    // 既存のセーブデータ情報を取得
+    try {
+      const savedJson = localStorage.getItem('baseballSim_saveData');
+      if (savedJson) {
+        const data = JSON.parse(savedJson);
+        setSaveInfo({
+          timestamp: data.timestamp,
+          year: data.seasonData?.year || 1,
+          date: data.seasonData?.currentDate || { month: 4, day: 1 },
+          phase: data.seasonData?.phase || 'regular_season'
+        });
+      }
+    } catch (e) {
+      console.error('セーブデータ読み込みエラー:', e);
+    }
+  }, [hasSaveData]);
+
+  const handleSave = () => {
+    const success = onSave();
+    setSaveStatus(success ? 'saved' : 'error');
+    if (success) {
+      // セーブ情報を更新
+      setSaveInfo({
+        timestamp: new Date().toISOString(),
+        year: seasonData?.year || 1,
+        date: seasonData?.currentDate || { month: 4, day: 1 },
+        phase: seasonData?.phase || 'regular_season'
+      });
+    }
+    setTimeout(() => setSaveStatus(null), 3000);
+  };
+
+  const handleLoad = () => {
+    if (window.confirm('現在の進行データは失われます。ロードしますか？')) {
+      const success = onLoad();
+      setSaveStatus(success ? 'loaded' : 'error');
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
+  const handleDelete = () => {
+    if (window.confirm('セーブデータを削除しますか？この操作は取り消せません。')) {
+      const success = onDelete();
+      if (success) {
+        setSaveInfo(null);
+        setSaveStatus('deleted');
+      } else {
+        setSaveStatus('error');
+      }
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
+  const formatTimestamp = (ts) => {
+    if (!ts) return '---';
+    const date = new Date(ts);
+    return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const getPhaseLabel = (phase) => {
+    const labels = {
+      spring_camp: '春季キャンプ',
+      regular_season: 'レギュラーシーズン',
+      playoffs: 'プレーオフ',
+      draft: 'ドラフト',
+      tryout: 'トライアウト',
+      offseason: 'オフシーズン'
+    };
+    return labels[phase] || phase;
+  };
+
+  return (
+    <div className="p-8 max-w-2xl mx-auto">
+      <h1 className="text-3xl font-bold mb-8 text-white">💾 セーブ＆ロード</h1>
+
+      {/* ステータスメッセージ */}
+      {saveStatus && (
+        <div className={`mb-6 p-4 rounded-lg font-bold text-center ${
+          saveStatus === 'saved' ? 'bg-green-600 text-white' :
+          saveStatus === 'loaded' ? 'bg-blue-600 text-white' :
+          saveStatus === 'deleted' ? 'bg-yellow-600 text-white' :
+          'bg-red-600 text-white'
+        }`}>
+          {saveStatus === 'saved' && '✅ セーブしました'}
+          {saveStatus === 'loaded' && '✅ ロードしました'}
+          {saveStatus === 'deleted' && '🗑️ 削除しました'}
+          {saveStatus === 'error' && '❌ エラーが発生しました'}
+        </div>
+      )}
+
+      {/* 現在の進行状況 */}
+      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-bold text-white mb-4">📍 現在の進行状況</h2>
+        {seasonData ? (
+          <div className="text-gray-300">
+            <p className="mb-2">シーズン: <span className="text-yellow-400 font-bold">{seasonData.year}年目</span></p>
+            <p className="mb-2">日付: <span className="text-white">{seasonData.currentDate?.month}月{seasonData.currentDate?.day}日</span></p>
+            <p>フェーズ: <span className="text-blue-400">{getPhaseLabel(seasonData.phase)}</span></p>
+          </div>
+        ) : (
+          <p className="text-gray-500">ゲームが開始されていません</p>
+        )}
+      </div>
+
+      {/* セーブスロット */}
+      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-bold text-white mb-4">💾 セーブスロット</h2>
+
+        <div className="border border-gray-600 rounded-lg p-4 mb-4">
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <div className="text-white font-bold text-lg">オートセーブ</div>
+              {saveInfo ? (
+                <div className="text-sm text-gray-400 mt-1">
+                  <p>{saveInfo.year}年目 | {saveInfo.date?.month}月{saveInfo.date?.day}日 | {getPhaseLabel(saveInfo.phase)}</p>
+                  <p>保存日時: {formatTimestamp(saveInfo.timestamp)}</p>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm mt-1">セーブデータなし</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleSave}
+              disabled={!seasonData}
+              className={`flex-1 px-4 py-2 rounded font-bold transition ${
+                seasonData
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              上書き保存
+            </button>
+            <button
+              onClick={handleLoad}
+              disabled={!saveInfo}
+              className={`flex-1 px-4 py-2 rounded font-bold transition ${
+                saveInfo
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              ロード
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={!saveInfo}
+              className={`px-4 py-2 rounded font-bold transition ${
+                saveInfo
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500">
+          ※ セーブデータはブラウザのローカルストレージに保存されます。<br />
+          ※ ブラウザのデータを消去すると、セーブデータも削除されます。
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // スタート画面
-const StartScreen = ({ onNewGame, onContinue, onEdit }) => {
+const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData }) => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
       <div className="text-center">
@@ -6484,8 +6804,12 @@ const StartScreen = ({ onNewGame, onContinue, onEdit }) => {
 
           <button
             onClick={onContinue}
-            disabled
-            className="w-80 bg-gray-600 text-gray-400 px-8 py-4 rounded-lg font-bold text-2xl cursor-not-allowed shadow-lg"
+            disabled={!hasSaveData}
+            className={`w-80 px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg ${
+              hasSaveData
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+            }`}
           >
             CONTINUE
           </button>
@@ -6499,7 +6823,7 @@ const StartScreen = ({ onNewGame, onContinue, onEdit }) => {
           </button>
         </div>
 
-        <p className="text-sm text-gray-500 mt-8">CONTINUEとEDITは開発中です</p>
+        <p className="text-sm text-gray-500 mt-8">{hasSaveData ? 'セーブデータあり' : ''} | EDITは開発中です</p>
       </div>
     </div>
   );
@@ -6874,6 +7198,13 @@ const CampScreen = ({ onComplete }) => {
           seasonData={seasonData}
           allTeams={allTeams}
         />;
+        if (managementView === 'save') return <SaveLoadScreen
+          onSave={() => saveGame('auto')}
+          onLoad={loadGame}
+          onDelete={deleteSave}
+          hasSaveData={hasSaveData}
+          seasonData={seasonData}
+        />;
         if (managementView === 'regulations') return <RegulationsScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}
@@ -6892,8 +7223,13 @@ const CampScreen = ({ onComplete }) => {
       if (screenMode === 'start' && gameFlowState === 'title') {
         return <StartScreen
           onNewGame={() => setGameFlowState('newgame_regulations')}
-          onContinue={() => alert('開発中')}
+          onContinue={() => {
+            if (loadGame()) {
+              console.log('✅ ゲームをロードしました');
+            }
+          }}
           onEdit={() => alert('開発中')}
+          hasSaveData={hasSaveData}
         />;
       }
 

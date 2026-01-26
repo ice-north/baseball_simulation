@@ -189,7 +189,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   const velocityAdjust = isSideOrUnder ? -10 : 0;
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
-  // 通常の能力値範囲（平均+5ポイント調整済み）
+  // 通常の能力値範囲（平均+2ポイント調整済み、投手能力は-3調整）
   const normalAbilities = {
     // 野手能力
     meet: isPitcher ? randRange(20, 45) : randRange(35, 70),
@@ -199,10 +199,10 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     speed: isPitcher ? randRange(35, 60) : randRange(35, 75),
     arm: isPitcher ? randRange(45, 70) : randRange(35, 75),
     defense: isPitcher ? randRange(45, 70) : randRange(35, 75),
-    // 投手能力（フォーム調整適用）
-    velocity: isPitcher ? Math.min(randRange(130, 150) + velocityAdjust, 155) : randRange(115, 130),
-    control: isPitcher ? Math.min(randRange(45, 75) + controlAdjust, 90) : randRange(35, 60),
-    stamina: isPitcher ? randRange(105, 165) : randRange(55, 95)
+    // 投手能力（フォーム調整適用、-3調整済み）
+    velocity: isPitcher ? Math.min(randRange(127, 147) + velocityAdjust, 152) : randRange(115, 130),
+    control: isPitcher ? Math.min(randRange(42, 72) + controlAdjust, 87) : randRange(35, 60),
+    stamina: isPitcher ? randRange(102, 162) : randRange(55, 95)
   };
 
   if (!isSpecialist) {
@@ -257,39 +257,39 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       };
 
     case 'fireballer':
-      // 球速は速いがスタミナ制球弱い（投手用、+5調整済み）
-      // 球速最大はフォーム調整後で最大155km/h（オーバー/スリークォーター）または145km/h（サイド/アンダー）
+      // 球速は速いがスタミナ制球弱い（投手用、-3調整済み）
+      // 球速最大はフォーム調整後で最大152km/h（オーバー/スリークォーター）または142km/h（サイド/アンダー）
       if (isPitcher) {
-        const baseVelocity = randRange(148, 157);
+        const baseVelocity = randRange(145, 154);
         return {
           ...normalAbilities,
-          velocity: Math.min(baseVelocity + velocityAdjust, 155),  // 最大155
-          control: Math.min(randRange(30, 50) + controlAdjust, 65),
-          stamina: randRange(75, 105)
+          velocity: Math.min(baseVelocity + velocityAdjust, 152),  // 最大152
+          control: Math.min(randRange(27, 47) + controlAdjust, 62),
+          stamina: randRange(72, 102)
         };
       }
       return normalAbilities;
 
     case 'controlPitcher':
-      // 制球はいいが球速遅い（投手用、+5調整済み）
+      // 制球はいいが球速遅い（投手用、-3調整済み）
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: Math.max(randRange(125, 140) + velocityAdjust, 115),
-          control: Math.min(randRange(80, 95) + controlAdjust, 99),
-          stamina: randRange(115, 155)
+          velocity: Math.max(randRange(122, 137) + velocityAdjust, 112),
+          control: Math.min(randRange(77, 92) + controlAdjust, 99),
+          stamina: randRange(112, 152)
         };
       }
       return normalAbilities;
 
     case 'ironman':
-      // スタミナあるが球速制球弱い（投手用、+5調整済み）
+      // スタミナあるが球速制球弱い（投手用、-3調整済み）
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: Math.min(randRange(130, 145) + velocityAdjust, 152),
-          control: Math.min(randRange(40, 60) + controlAdjust, 75),
-          stamina: randRange(175, 205)
+          velocity: Math.min(randRange(127, 142) + velocityAdjust, 149),
+          control: Math.min(randRange(37, 57) + controlAdjust, 72),
+          stamina: randRange(172, 202)
         };
       }
       return normalAbilities;
