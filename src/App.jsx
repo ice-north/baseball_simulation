@@ -4193,7 +4193,7 @@ if (newOuts === 3) {
       const era = stats.inningsPitched > 0
         ? ((stats.earnedRuns * 27) / stats.inningsPitched).toFixed(2)
         : '0.00';
-      const ip = (stats.inningsPitched / 3).toFixed(1);
+      const ip = formatInnings(stats.inningsPitched);
       return { ...p, stats, era: parseFloat(era), ip };
     })
     .sort((a, b) => a.era - b.era)
@@ -4231,7 +4231,7 @@ if (newOuts === 3) {
             statsType === 'batting' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          打撃成績
+          野手成績
         </button>
         <button
           onClick={() => setStatsType('pitching')}
@@ -4243,11 +4243,11 @@ if (newOuts === 3) {
         </button>
       </div>
 
-      {/* 打撃成績テーブル */}
+      {/* 野手成績テーブル */}
       {statsType === 'batting' && (
         <div className="bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4 text-white">
-            {statsTab === 'season' ? 'シーズン' : '通算'}打撃成績 (上位20名)
+            {statsTab === 'season' ? 'シーズン' : '通算'}野手成績 (上位20名)
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-white text-sm">
@@ -4261,6 +4261,7 @@ if (newOuts === 3) {
                   <th className="py-2 px-3 text-right">安打</th>
                   <th className="py-2 px-3 text-right">本塁打</th>
                   <th className="py-2 px-3 text-right">打点</th>
+                  <th className="py-2 px-3 text-right">盗塁</th>
                   <th className="py-2 px-3 text-right">四球</th>
                   <th className="py-2 px-3 text-right">三振</th>
                   <th className="py-2 px-3 text-right font-bold">打率</th>
@@ -4277,6 +4278,7 @@ if (newOuts === 3) {
                     <td className="py-2 px-3 text-right">{player.stats.hits}</td>
                     <td className="py-2 px-3 text-right">{player.stats.homeruns}</td>
                     <td className="py-2 px-3 text-right">{player.stats.rbis}</td>
+                    <td className="py-2 px-3 text-right">{player.stats.stolenBases || 0}</td>
                     <td className="py-2 px-3 text-right">{player.stats.walks}</td>
                     <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
                     <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.avg.toFixed(3)}</td>
@@ -4284,8 +4286,8 @@ if (newOuts === 3) {
                 ))}
                 {battingStats.length === 0 && (
                   <tr>
-                    <td colSpan="11" className="py-8 text-center text-gray-500">
-                      まだ打撃成績がありません。試合を進行してください。
+                    <td colSpan="12" className="py-8 text-center text-gray-500">
+                      まだ野手成績がありません。試合を進行してください。
                     </td>
                   </tr>
                 )}
@@ -4311,7 +4313,9 @@ if (newOuts === 3) {
                   <th className="py-2 px-3 text-right">試合</th>
                   <th className="py-2 px-3 text-right">勝</th>
                   <th className="py-2 px-3 text-right">敗</th>
-                  <th className="py-2 px-3 text-right">イニング</th>
+                  <th className="py-2 px-3 text-right">H</th>
+                  <th className="py-2 px-3 text-right">S</th>
+                  <th className="py-2 px-3 text-right">回数</th>
                   <th className="py-2 px-3 text-right">失点</th>
                   <th className="py-2 px-3 text-right">奪三振</th>
                   <th className="py-2 px-3 text-right">与四球</th>
@@ -4327,6 +4331,8 @@ if (newOuts === 3) {
                     <td className="py-2 px-3 text-right">{player.stats.games}</td>
                     <td className="py-2 px-3 text-right">{player.stats.wins}</td>
                     <td className="py-2 px-3 text-right">{player.stats.losses}</td>
+                    <td className="py-2 px-3 text-right">{player.stats.holds || 0}</td>
+                    <td className="py-2 px-3 text-right">{player.stats.saves || 0}</td>
                     <td className="py-2 px-3 text-right">{player.ip}</td>
                     <td className="py-2 px-3 text-right">{player.stats.runsAllowed}</td>
                     <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
@@ -4336,7 +4342,7 @@ if (newOuts === 3) {
                 ))}
                 {pitchingStats.length === 0 && (
                   <tr>
-                    <td colSpan="11" className="py-8 text-center text-gray-500">
+                    <td colSpan="13" className="py-8 text-center text-gray-500">
                       まだ投手成績がありません。試合を進行してください。
                     </td>
                   </tr>
@@ -6073,56 +6079,21 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
 
   return (
     <div className="p-4 min-h-screen">
-      {/* ヘッダー: 日付とフェーズ */}
-      <div className="bg-gradient-to-r from-blue-900 to-purple-900 rounded-xl p-6 mb-6 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-gray-300 text-sm mb-1">Year {seasonData.year}</div>
-            <div className="text-4xl font-bold text-white">
-              {formatDate(seasonData.currentDate)}
-              <span className="text-2xl ml-3 text-gray-300">({getDayOfWeek(seasonData.currentDate)})</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <span className={`px-5 py-2 rounded-full font-bold text-white text-lg ${phaseInfo.color}`}>
-              {phaseInfo.name}
-            </span>
-            <div className="text-gray-400 text-sm mt-2">{phaseInfo.description}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* 日程進行ボタン */}
-      <div className="flex gap-3 mb-6">
-        <button
-          onClick={() => handleProgressDate(1)}
-          disabled={isSimulating}
-          className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-4 rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50"
-        >
-          {isSimulating ? '...' : '1日進める'}
-        </button>
-        <button
-          onClick={handleProgressToNextGame}
-          disabled={isSimulating}
-          className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-4 rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50"
-        >
-          {isSimulating ? '...' : '次の試合日へ'}
-        </button>
-        <button
-          onClick={handleProgressToNextPhase}
-          disabled={isSimulating}
-          className="flex-1 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white px-6 py-4 rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50"
-        >
-          {isSimulating ? '...' : '次フェーズへ'}
-        </button>
-      </div>
-
-      {/* 2グリッドレイアウト - 上段: カレンダー＋本日の対戦 */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        {/* 左: カレンダー */}
-        <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
+      {/* 3:1グリッドレイアウト - カレンダー＋本日の対戦 */}
+      <div className="grid grid-cols-4 gap-4 mb-4">
+        {/* 左: カレンダー（3/4幅） */}
+        <div className="col-span-3 bg-gray-800 rounded-xl p-4 shadow-lg">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleProgressDate(1)}
+                disabled={isSimulating}
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-lg font-bold transition shadow disabled:opacity-50"
+              >
+                {isSimulating ? '...' : '1日進める'}
+              </button>
+              <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
+            </div>
             <div className="flex gap-1">
               <button
                 onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)}
@@ -6219,85 +6190,37 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
           </div>
         </div>
 
-        {/* 右: 本日の対戦 */}
-        <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
-          <h2 className="text-xl font-bold text-white mb-4">
+        {/* 右: 本日の対戦（1/4幅） */}
+        <div className="col-span-1 bg-gray-800 rounded-xl p-4 shadow-lg">
+          <h2 className="text-lg font-bold text-white mb-3">
             {todaysGames.length > 0 ? '本日の対戦' : '試合なし'}
           </h2>
 
           {todaysGames.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="text-6xl mb-4">☀️</div>
-              <p className="text-gray-400">本日は試合がありません</p>
+            <div className="text-center py-4">
+              <div className="text-4xl mb-2">☀️</div>
+              <p className="text-gray-400 text-sm">試合なし</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {todaysGames.map(game => {
                 const awayPitcher = getStartingPitcher(game.away);
                 const homePitcher = getStartingPitcher(game.home);
 
                 return (
-                  <div key={game.id} className={`rounded-lg p-3 ${
-                    game.result ? 'bg-gray-700' : 'bg-gradient-to-r from-gray-700 to-gray-600'
-                  }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex-1 text-center">
-                        <div className="font-bold text-white">{game.away}</div>
-                        {awayPitcher && (
-                          <div className="text-xs text-gray-400">
-                            {awayPitcher.name} ({awayPitcher.physical?.throws === 'left' ? '左' : '右'})
-                          </div>
-                        )}
-                      </div>
-                      <div className="px-4">
-                        {game.result ? (
-                          <div className="text-xl font-bold text-white">
-                            {game.result.awayScore} - {game.result.homeScore}
-                          </div>
-                        ) : (
-                          <div className="text-lg text-gray-400">vs</div>
-                        )}
-                      </div>
-                      <div className="flex-1 text-center">
-                        <div className="font-bold text-white">{game.home}</div>
-                        {homePitcher && (
-                          <div className="text-xs text-gray-400">
-                            {homePitcher.name} ({homePitcher.physical?.throws === 'left' ? '左' : '右'})
-                          </div>
-                        )}
-                      </div>
+                  <div key={game.id} className="rounded-lg p-2 bg-gray-700 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-bold">{game.away.replace('チーム', '')}</span>
+                      <span className="text-gray-400 text-xs">vs</span>
+                      <span className="text-white font-bold">{game.home.replace('チーム', '')}</span>
                     </div>
-                    {game.result && (
-                      <div className="text-center">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${
-                          game.result.homeScore > game.result.awayScore ? 'bg-blue-600 text-white' :
-                          game.result.awayScore > game.result.homeScore ? 'bg-red-600 text-white' :
-                          'bg-gray-500 text-white'
-                        }`}>
-                          {game.result.winner ? `${game.result.winner} WIN` : '引分'}
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between text-xs text-gray-400 mt-1">
+                      <span>{awayPitcher ? awayPitcher.name : '-'}</span>
+                      <span>{homePitcher ? homePitcher.name : '-'}</span>
+                    </div>
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {lastGameResults.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-600">
-              <h3 className="text-sm font-bold text-gray-400 mb-2">試合結果</h3>
-              {lastGameResults.map((result, idx) => (
-                <div key={idx} className="text-xs text-gray-300 mb-1">
-                  {result.away} {result.awayScore} - {result.homeScore} {result.home}
-                  {result.decisions?.winningPitcher && (
-                    <span className="ml-2 text-green-400">勝:{result.decisions.winningPitcher.name}</span>
-                  )}
-                  {result.decisions?.savePitcher && (
-                    <span className="ml-1 text-yellow-400">S:{result.decisions.savePitcher.name}</span>
-                  )}
-                </div>
-              ))}
             </div>
           )}
         </div>

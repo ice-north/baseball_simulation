@@ -4,14 +4,17 @@
 // ============================================================
 
 /**
- * イニング数を分数形式で表示（例: 7回2/3）
+ * イニング数を分数形式で表示（例: 30回1/3）
  * @param {number} outs - アウト数
  * @returns {string} フォーマットされたイニング表記
  */
 export const formatInnings = (outs) => {
-  if (outs === 0) return '0回0/3';
+  if (outs === 0) return '0回';
   const fullInnings = Math.floor(outs / 3);
   const partialOuts = outs % 3;
+  if (partialOuts === 0) {
+    return `${fullInnings}回`;
+  }
   return `${fullInnings}回${partialOuts}/3`;
 };
 

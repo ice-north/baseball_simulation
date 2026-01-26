@@ -100,7 +100,18 @@ export function generateTryoutCandidates(year, teamCount) {
     const specialistType = isSpecialist ? getSpecialistType() : null;
 
     // 投球フォームを先に決定（能力に影響するため）
-    const pitchingForm = ['overhand', 'threeQuarter', 'sidearm', 'submarine'][Math.floor(Math.random() * 4)];
+    // オーバースロー45%、スリークォーター40%、サイドスロー10%、アンダースロー5%
+    const formRand = Math.random() * 100;
+    let pitchingForm;
+    if (formRand < 45) {
+      pitchingForm = 'overhand';
+    } else if (formRand < 85) {
+      pitchingForm = 'threeQuarter';
+    } else if (formRand < 95) {
+      pitchingForm = 'sidearm';
+    } else {
+      pitchingForm = 'submarine';
+    }
 
     // ランダムな名前生成
     const name = generateRandomPlayerName();
@@ -178,20 +189,20 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   const velocityAdjust = isSideOrUnder ? -10 : 0;
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
-  // 通常の能力値範囲
+  // 通常の能力値範囲（平均+5ポイント調整済み）
   const normalAbilities = {
     // 野手能力
-    meet: isPitcher ? randRange(15, 40) : randRange(30, 65),
-    power: isPitcher ? randRange(10, 35) : randRange(25, 60),
-    eye: isPitcher ? randRange(25, 50) : randRange(30, 70),
-    steal: isPitcher ? randRange(10, 25) : randRange(20, 70),
-    speed: isPitcher ? randRange(30, 55) : randRange(30, 70),
-    arm: isPitcher ? randRange(40, 65) : randRange(30, 70),
-    defense: isPitcher ? randRange(40, 65) : randRange(30, 70),
+    meet: isPitcher ? randRange(20, 45) : randRange(35, 70),
+    power: isPitcher ? randRange(15, 40) : randRange(30, 65),
+    eye: isPitcher ? randRange(30, 55) : randRange(35, 75),
+    steal: isPitcher ? randRange(15, 30) : randRange(25, 75),
+    speed: isPitcher ? randRange(35, 60) : randRange(35, 75),
+    arm: isPitcher ? randRange(45, 70) : randRange(35, 75),
+    defense: isPitcher ? randRange(45, 70) : randRange(35, 75),
     // 投手能力（フォーム調整適用）
-    velocity: isPitcher ? Math.min(randRange(125, 145) + velocityAdjust, 155) : randRange(110, 125),
-    control: isPitcher ? Math.min(randRange(40, 70) + controlAdjust, 85) : randRange(30, 55),
-    stamina: isPitcher ? randRange(100, 160) : randRange(50, 90)
+    velocity: isPitcher ? Math.min(randRange(130, 150) + velocityAdjust, 155) : randRange(115, 130),
+    control: isPitcher ? Math.min(randRange(45, 75) + controlAdjust, 90) : randRange(35, 60),
+    stamina: isPitcher ? randRange(105, 165) : randRange(55, 95)
   };
 
   if (!isSpecialist) {
@@ -202,83 +213,83 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 注意: 球速・ミート・パワーの最大値は79（Aランク）
   switch (specialistType) {
     case 'speedster':
-      // 俊足だが打撃弱い
+      // 俊足だが打撃弱い（+5調整済み）
       return {
         ...normalAbilities,
-        speed: randRange(80, 95),
-        steal: randRange(75, 90),
-        meet: randRange(25, 45),
-        power: randRange(15, 35),
-        defense: randRange(55, 75)
+        speed: randRange(85, 99),
+        steal: randRange(80, 95),
+        meet: randRange(30, 50),
+        power: randRange(20, 40),
+        defense: randRange(60, 80)
       };
 
     case 'slugger':
-      // パワーはあるが守備走塁弱い（パワー最大79）
+      // パワーはあるが守備走塁弱い（パワー最大79、+5調整済み）
       return {
         ...normalAbilities,
         power: randRange(70, 79),  // 最大Aランク
-        meet: randRange(40, 60),
-        speed: randRange(20, 40),
-        steal: randRange(10, 25),
-        defense: randRange(25, 45),
-        arm: randRange(35, 55)
+        meet: randRange(45, 65),
+        speed: randRange(25, 45),
+        steal: randRange(15, 30),
+        defense: randRange(30, 50),
+        arm: randRange(40, 60)
       };
 
     case 'defender':
-      // 守備の名手だが打撃弱い
+      // 守備の名手だが打撃弱い（+5調整済み）
       return {
         ...normalAbilities,
-        defense: randRange(80, 95),
-        arm: randRange(70, 85),
-        meet: randRange(30, 50),
-        power: randRange(20, 40),
-        speed: randRange(50, 70)
+        defense: randRange(85, 99),
+        arm: randRange(75, 90),
+        meet: randRange(35, 55),
+        power: randRange(25, 45),
+        speed: randRange(55, 75)
       };
 
     case 'contactHitter':
-      // ミートはいいがパワー無い（ミート最大79）
+      // ミートはいいがパワー無い（ミート最大79、+5調整済み）
       return {
         ...normalAbilities,
         meet: randRange(70, 79),  // 最大Aランク
-        eye: randRange(70, 85),
-        power: randRange(20, 40),
-        speed: randRange(45, 65)
+        eye: randRange(75, 90),
+        power: randRange(25, 45),
+        speed: randRange(50, 70)
       };
 
     case 'fireballer':
-      // 球速は速いがスタミナ制球弱い（投手用）
+      // 球速は速いがスタミナ制球弱い（投手用、+5調整済み）
       // 球速最大はフォーム調整後で最大155km/h（オーバー/スリークォーター）または145km/h（サイド/アンダー）
       if (isPitcher) {
-        const baseVelocity = randRange(145, 155);
+        const baseVelocity = randRange(148, 157);
         return {
           ...normalAbilities,
           velocity: Math.min(baseVelocity + velocityAdjust, 155),  // 最大155
-          control: Math.min(randRange(25, 45) + controlAdjust, 60),
-          stamina: randRange(70, 100)
+          control: Math.min(randRange(30, 50) + controlAdjust, 65),
+          stamina: randRange(75, 105)
         };
       }
       return normalAbilities;
 
     case 'controlPitcher':
-      // 制球はいいが球速遅い（投手用）
+      // 制球はいいが球速遅い（投手用、+5調整済み）
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: Math.max(randRange(120, 135) + velocityAdjust, 110),
-          control: Math.min(randRange(75, 90) + controlAdjust, 95),
-          stamina: randRange(110, 150)
+          velocity: Math.max(randRange(125, 140) + velocityAdjust, 115),
+          control: Math.min(randRange(80, 95) + controlAdjust, 99),
+          stamina: randRange(115, 155)
         };
       }
       return normalAbilities;
 
     case 'ironman':
-      // スタミナあるが球速制球弱い（投手用）
+      // スタミナあるが球速制球弱い（投手用、+5調整済み）
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: Math.min(randRange(125, 140) + velocityAdjust, 150),
-          control: Math.min(randRange(35, 55) + controlAdjust, 70),
-          stamina: randRange(170, 200)
+          velocity: Math.min(randRange(130, 145) + velocityAdjust, 152),
+          control: Math.min(randRange(40, 60) + controlAdjust, 75),
+          stamina: randRange(175, 205)
         };
       }
       return normalAbilities;
