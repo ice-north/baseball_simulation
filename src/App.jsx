@@ -3157,22 +3157,25 @@ if (newOuts === 3) {
         const sortedPitchers = pitchers.sort((a, b) => (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0));
 
         // 先発ローテーション（スタミナ140以上、最大5人）
-        const starters = sortedPitchers.filter(p => p.pitching?.stamina >= 140).slice(0, 5);
+        const starters = sortedPitchers.filter(p => p.pitching?.stamina >= 130).slice(0, 5);
 
-        // 抑え（スタミナ140未満で能力が高い投手、最大2人）
-        const closerCandidates = sortedPitchers
-          .filter(p => p.pitching?.stamina < 140)
-          .sort((a, b) => {
-            const aPower = (a.pitching?.velocity || 0) + (a.pitching?.control || 0);
-            const bPower = (b.pitching?.velocity || 0) + (b.pitching?.control || 0);
-            return bPower - aPower;
-          })
-          .slice(0, 2);
+        // 残りの投手（リリーフ候補）
+        const relievers = sortedPitchers.filter(p => !starters.includes(p));
 
-        // 中継ぎ（残りの投手）
-        const middleRelievers = sortedPitchers.filter(p =>
-          !starters.includes(p) && !closerCandidates.includes(p)
-        );
+        // 能力スコアでソート
+        const scoredRelievers = relievers.map(p => ({
+          ...p,
+          reliefScore: (p.pitching?.velocity || 130) * 0.4 +
+                       (p.pitching?.control || 50) * 0.4 +
+                       (p.pitching?.stamina || 80) * 0.2
+        })).sort((a, b) => b.reliefScore - a.reliefScore);
+
+        // クローザー（最高能力、1人）
+        const closer = scoredRelievers[0] || null;
+        // セットアッパー（2-3番手）
+        const setupMen = scoredRelievers.slice(1, 3);
+        // 中継ぎ（残り）
+        const middleRelievers = scoredRelievers.slice(3);
 
         // ローテーション情報を新形式で保存
         if (!team.pitchingRotation) {
@@ -3180,13 +3183,16 @@ if (newOuts === 3) {
         }
 
         team.pitchingRotation.starters = starters.map(p => p.id);
-        team.pitchingRotation.closers = closerCandidates.map(p => p.id);
+        team.pitchingRotation.closer = closer ? closer.id : null;
+        team.pitchingRotation.setupMen = setupMen.map(p => p.id);
         team.pitchingRotation.middleRelievers = middleRelievers.map(p => p.id);
         team.pitchingRotation.currentStarterIndex = 0;
+        team.pitchingRotation.reliefFatigue = {};
 
         console.log(`✅ ${teamName}の投手ローテーション設定完了`);
         console.log('先発:', starters.map(p => `${p.name}(スタ${p.pitching.stamina})`).join(', '));
-        console.log('抑え:', closerCandidates.map(p => `${p.name}(球${p.pitching.velocity})`).join(', '));
+        console.log('守護神:', closer ? `${closer.name}(球${closer.pitching.velocity})` : 'なし');
+        console.log('セットアップ:', setupMen.map(p => p.name).join(', '));
         console.log('中継ぎ:', middleRelievers.map(p => p.name).join(', '));
       };
 
@@ -5258,13 +5264,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         rotation.starters.push(playerId);
       }
     } else if (role === 'middle') {
+      if (!rotation.middleRelievers) rotation.middleRelievers = [];
       if (!rotation.middleRelievers.includes(playerId)) {
         rotation.middleRelievers.push(playerId);
       }
-    } else if (role === 'closer') {
-      if (!rotation.closers.includes(playerId)) {
-        rotation.closers.push(playerId);
+    } else if (role === 'setup') {
+      if (!rotation.setupMen) rotation.setupMen = [];
+      if (!rotation.setupMen.includes(playerId)) {
+        rotation.setupMen.push(playerId);
       }
+    } else if (role === 'closer') {
+      rotation.closer = playerId;
     }
     setUpdateTrigger(prev => prev + 1);
   };
@@ -5275,9 +5285,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     if (role === 'starter') {
       rotation.starters = rotation.starters.filter(id => id !== playerId);
     } else if (role === 'middle') {
-      rotation.middleRelievers = rotation.middleRelievers.filter(id => id !== playerId);
+      rotation.middleRelievers = (rotation.middleRelievers || []).filter(id => id !== playerId);
+    } else if (role === 'setup') {
+      rotation.setupMen = (rotation.setupMen || []).filter(id => id !== playerId);
     } else if (role === 'closer') {
-      rotation.closers = rotation.closers.filter(id => id !== playerId);
+      if (rotation.closer === playerId) {
+        rotation.closer = null;
+      }
     }
     setUpdateTrigger(prev => prev + 1);
   };
@@ -5536,11 +5550,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               </div>
 
               {/* 中継ぎ・抑え */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="bg-gray-800 rounded-lg p-4">
-                  <h2 className="text-lg font-bold text-white mb-3">中継ぎ ({team.pitchingRotation.middleRelievers.length}人)</h2>
+                  <h2 className="text-lg font-bold text-white mb-3">中継ぎ ({team.pitchingRotation.middleRelievers?.length || 0}人)</h2>
                   <div className="space-y-2">
-                    {team.pitchingRotation.middleRelievers.map(playerId => {
+                    {(team.pitchingRotation.middleRelievers || []).map(playerId => {
                       const player = team.players.find(p => p.id === playerId);
                       if (!player) return null;
                       return (
@@ -5566,10 +5580,38 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 </div>
 
                 <div className="bg-gray-800 rounded-lg p-4">
-                  <h2 className="text-lg font-bold text-white mb-3">抑え ({team.pitchingRotation.closers.length}人)</h2>
+                  <h2 className="text-lg font-bold text-white mb-3">セットアップ ({team.pitchingRotation.setupMen?.length || 0}人)</h2>
                   <div className="space-y-2">
-                    {team.pitchingRotation.closers.map(playerId => {
+                    {(team.pitchingRotation.setupMen || []).map(playerId => {
                       const player = team.players.find(p => p.id === playerId);
+                      if (!player) return null;
+                      return (
+                        <div key={player.id} className="bg-gray-700 rounded p-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="text-white text-sm font-bold">{player.name}</div>
+                              <div className="text-xs text-gray-400">
+                                {getThrowsLabel(player.physical.throws)}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveFromRotation(player.id, 'setup')}
+                              className="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-xs"
+                            >
+                              外す
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h2 className="text-lg font-bold text-white mb-3">守護神 ({team.pitchingRotation.closer ? 1 : 0}人)</h2>
+                  <div className="space-y-2">
+                    {team.pitchingRotation.closer && (() => {
+                      const player = team.players.find(p => p.id === team.pitchingRotation.closer);
                       if (!player) return null;
                       return (
                         <div key={player.id} className="bg-gray-700 rounded p-2">
@@ -5589,7 +5631,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           </div>
                         </div>
                       );
-                    })}
+                    })()}
                   </div>
                 </div>
               </div>
@@ -5600,9 +5642,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               <h2 className="text-xl font-bold text-white mb-4">投手一覧（クリックでローテーションに追加）</h2>
               <div className="space-y-2 max-h-[700px] overflow-y-auto">
                 {pitchers.map(player => {
-                  const isStarter = team.pitchingRotation.starters.includes(player.id);
-                  const isMiddle = team.pitchingRotation.middleRelievers.includes(player.id);
-                  const isCloser = team.pitchingRotation.closers.includes(player.id);
+                  const rotation = team.pitchingRotation || {};
+                  const isStarter = rotation.starters?.includes(player.id) || false;
+                  const isMiddle = rotation.middleRelievers?.includes(player.id) || false;
+                  const isSetup = rotation.setupMen?.includes(player.id) || false;
+                  const isCloser = rotation.closer === player.id;
 
                   // 能力値のランク計算
                   const velocityRank = getVelocityRank(player.pitching.velocity);
@@ -5630,10 +5674,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <div className="flex gap-2">
                           {isStarter && <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs">先発</span>}
                           {isMiddle && <span className="bg-green-600 text-white px-2 py-1 rounded text-xs">中継ぎ</span>}
-                          {isCloser && <span className="bg-purple-600 text-white px-2 py-1 rounded text-xs">抑え</span>}
+                          {isSetup && <span className="bg-orange-600 text-white px-2 py-1 rounded text-xs">セットアップ</span>}
+                          {isCloser && <span className="bg-purple-600 text-white px-2 py-1 rounded text-xs">守護神</span>}
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <button
                           onClick={() => handleAddToRotation(player.id, 'starter')}
                           disabled={isStarter}
@@ -5643,7 +5688,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               : 'bg-blue-600 hover:bg-blue-700 text-white'
                           }`}
                         >
-                          先発に追加
+                          先発
                         </button>
                         <button
                           onClick={() => handleAddToRotation(player.id, 'middle')}
@@ -5654,7 +5699,18 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               : 'bg-green-600 hover:bg-green-700 text-white'
                           }`}
                         >
-                          中継ぎに追加
+                          中継ぎ
+                        </button>
+                        <button
+                          onClick={() => handleAddToRotation(player.id, 'setup')}
+                          disabled={isSetup}
+                          className={`px-3 py-1 rounded text-sm transition ${
+                            isSetup
+                              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                              : 'bg-orange-600 hover:bg-orange-700 text-white'
+                          }`}
+                        >
+                          セットアップ
                         </button>
                         <button
                           onClick={() => handleAddToRotation(player.id, 'closer')}
@@ -5665,7 +5721,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               : 'bg-purple-600 hover:bg-purple-700 text-white'
                           }`}
                         >
-                          抑えに追加
+                          守護神
                         </button>
                       </div>
                     </div>
