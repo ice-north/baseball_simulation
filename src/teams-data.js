@@ -13,30 +13,33 @@ export const TEAMS_DATA = {};
 /**
  * 指定したチーム数でTEAMS_DATAを初期化
  * @param {number} teamCount - チーム数（2-12）
+ * @param {Array<string>} customNames - カスタムチーム名（省略時はチームA, B, C...）
  */
-export const initializeTeamsForCount = (teamCount) => {
-  // 既存のデータをクリア（必要に応じて）
-  const existingTeams = Object.keys(TEAMS_DATA);
+export const initializeTeamsForCount = (teamCount, customNames = null) => {
+  // 既存のデータをクリア
+  Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
 
-  // 必要なチーム名を生成
-  const requiredTeams = [];
+  // チーム名を決定（カスタム名または自動生成）
+  const teamNames = [];
   for (let i = 0; i < teamCount; i++) {
-    requiredTeams.push(`チーム${String.fromCharCode(65 + i)}`); // A, B, C, D, E, F...
+    if (customNames && customNames[i]) {
+      teamNames.push(customNames[i]);
+    } else {
+      teamNames.push(`チーム${String.fromCharCode(65 + i)}`); // A, B, C, D, E, F...
+    }
   }
 
-  // 不足しているチームを追加
-  requiredTeams.forEach(teamName => {
-    if (!TEAMS_DATA[teamName]) {
-      TEAMS_DATA[teamName] = {
-        name: teamName,
-        players: [],
-        pitchingRotation: null
-      };
-      console.log(`📋 ${teamName}を作成しました`);
-    }
+  // チームを作成
+  teamNames.forEach(teamName => {
+    TEAMS_DATA[teamName] = {
+      name: teamName,
+      players: [],
+      pitchingRotation: null
+    };
+    console.log(`📋 ${teamName}を作成しました`);
   });
 
-  return requiredTeams;
+  return teamNames;
 };
 
 /**

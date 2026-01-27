@@ -189,20 +189,20 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   const velocityAdjust = isSideOrUnder ? -10 : 0;
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
-  // 通常の能力値範囲（平均+2ポイント調整済み、投手能力は-3調整）
+  // 通常の能力値範囲（投手能力-2、野手能力+2調整）
   const normalAbilities = {
-    // 野手能力
-    meet: isPitcher ? randRange(20, 45) : randRange(35, 70),
-    power: isPitcher ? randRange(15, 40) : randRange(30, 65),
-    eye: isPitcher ? randRange(30, 55) : randRange(35, 75),
-    steal: isPitcher ? randRange(15, 30) : randRange(25, 75),
-    speed: isPitcher ? randRange(35, 60) : randRange(35, 75),
-    arm: isPitcher ? randRange(45, 70) : randRange(35, 75),
-    defense: isPitcher ? randRange(45, 70) : randRange(35, 75),
-    // 投手能力（フォーム調整適用、-3調整済み）
-    velocity: isPitcher ? Math.min(randRange(127, 147) + velocityAdjust, 152) : randRange(115, 130),
-    control: isPitcher ? Math.min(randRange(42, 72) + controlAdjust, 87) : randRange(35, 60),
-    stamina: isPitcher ? randRange(102, 162) : randRange(55, 95)
+    // 野手能力（+2調整）
+    meet: isPitcher ? randRange(20, 45) : randRange(37, 72),
+    power: isPitcher ? randRange(15, 40) : randRange(32, 67),
+    eye: isPitcher ? randRange(30, 55) : randRange(37, 77),
+    steal: isPitcher ? randRange(15, 30) : randRange(27, 77),
+    speed: isPitcher ? randRange(35, 60) : randRange(37, 77),
+    arm: isPitcher ? randRange(45, 70) : randRange(37, 77),
+    defense: isPitcher ? randRange(45, 70) : randRange(37, 77),
+    // 投手能力（フォーム調整適用、-2調整）
+    velocity: isPitcher ? Math.min(randRange(125, 145) + velocityAdjust, 150) : randRange(115, 130),
+    control: isPitcher ? Math.min(randRange(40, 70) + controlAdjust, 85) : randRange(35, 60),
+    stamina: isPitcher ? randRange(100, 160) : randRange(55, 95)
   };
 
   if (!isSpecialist) {

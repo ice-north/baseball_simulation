@@ -27,7 +27,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
 import { calculatePhysicsContact, calculateDefensiveFitness } from './simulation-logic.js';
-import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate } from './game/autoSimulation.js';
+import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate, generateAILineup } from './game/autoSimulation.js';
 
 // Season management imports
 import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
@@ -82,10 +82,14 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
 
         // チーム数に応じてリーグ構成を更新
         const teamCount = regulations.teamsCount || 4;
+        const customNames = regulations.teamNames || null;
 
-        // 動的にチームを作成（4チーム以上に対応）
-        const teamNames = initializeTeamsForCount(teamCount);
+        // 動的にチームを作成（カスタム名対応）
+        const teamNames = initializeTeamsForCount(teamCount, customNames);
         console.log(`👥 ${teamCount}チームを初期化: ${teamNames.join(', ')}`);
+
+        // チーム名をレギュレーションにも保存（成績表等で使用）
+        newSeasonData.settings.teamNames = teamNames;
 
         setLeagueConfig({
           format: 'single',
@@ -6888,14 +6892,44 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     gamesPerSeason: 76,
     teamsCount: 4,
     playoffFormat: 'split',
-    maxExtraInnings: 12
+    maxExtraInnings: 12,
+    teamNames: ['チームA', 'チームB', 'チームC', 'チームD']
   });
   const [selectedPreset, setSelectedPreset] = useState('shikoku');
+
+  // チーム数変更時にチーム名配列も更新
+  const handleTeamsCountChange = (newCount) => {
+    const currentNames = tempSettings.teamNames || [];
+    const newNames = [];
+    for (let i = 0; i < newCount; i++) {
+      newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
+    }
+    setTempSettings({
+      ...tempSettings,
+      teamsCount: newCount,
+      teamNames: newNames
+    });
+  };
+
+  // チーム名変更
+  const handleTeamNameChange = (index, newName) => {
+    const newNames = [...tempSettings.teamNames];
+    newNames[index] = newName;
+    setTempSettings({ ...tempSettings, teamNames: newNames });
+  };
 
   const handleApplyPreset = (presetName) => {
     const preset = REGULATION_PRESETS[presetName];
     if (preset) {
-      setTempSettings(preset.regulations);
+      const newTeamsCount = preset.regulations.teamsCount || 4;
+      const newNames = [];
+      for (let i = 0; i < newTeamsCount; i++) {
+        newNames.push(`チーム${String.fromCharCode(65 + i)}`);
+      }
+      setTempSettings({
+        ...preset.regulations,
+        teamNames: newNames
+      });
       setSelectedPreset(presetName);
     }
   };
@@ -6974,7 +7008,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
             </div>
             <div className="flex items-center justify-between">
               <label className="font-medium">チーム数</label>
-              <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => setTempSettings({...tempSettings, teamsCount: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24" />
+              <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value) || 4)} className="bg-gray-700 rounded px-3 py-2 w-24" />
             </div>
             <div className="flex items-center justify-between">
               <label className="font-medium">年間試合数</label>
@@ -6996,6 +7030,27 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
               <input type="number" min="9" max="20" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({...tempSettings, maxExtraInnings: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24" />
             </div>
           </div>
+        </div>
+
+        {/* チーム名設定 */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-bold mb-4 text-white">📝 チーム名設定</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {tempSettings.teamNames.map((name, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm w-8">#{index + 1}</span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => handleTeamNameChange(index, e.target.value)}
+                  maxLength={15}
+                  className="bg-gray-700 text-white rounded px-3 py-2 flex-1 w-full"
+                  placeholder={`チーム${String.fromCharCode(65 + index)}`}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-gray-500 text-xs mt-3">※チーム名はカレンダー・成績表に反映されます（最大15文字）</p>
         </div>
 
         <div className="text-center">
@@ -7320,10 +7375,21 @@ const CampScreen = ({ onComplete }) => {
       if (screenMode === 'start' && gameFlowState === 'newgame_camp') {
         return <CampScreen
           onComplete={() => {
-            // キャンプ終了時に日付を3/1に設定し、レギュラーシーズンに移行
+            // キャンプ終了時に全チームのスタメンを自動生成
+            console.log('🏕️ キャンプ終了: 全チームのスタメンを生成');
+            Object.keys(TEAMS_DATA).forEach(teamName => {
+              const teamData = TEAMS_DATA[teamName];
+              if (teamData && teamData.players && teamData.players.length > 0) {
+                generateAILineup(teamData, teamName);
+                // 生成結果をTEAMS_DATAに反映
+                console.log(`  ✅ ${teamName}のスタメンを生成完了`);
+              }
+            });
+
+            // 日付を4/1に設定し、レギュラーシーズンに移行
             setSeasonData(prev => ({
               ...prev,
-              currentDate: { year: 2024, month: 3, day: 1 },
+              currentDate: { year: 2024, month: 4, day: 1 },
               phase: SEASON_PHASES.REGULAR_SEASON
             }));
             setScreenMode('management');

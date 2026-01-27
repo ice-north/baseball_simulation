@@ -1,7 +1,7 @@
 import { TEAMS_DATA } from '../teams-data.js';
 
-// AI監督がスタメンを自動生成する機能
-const generateAILineup = (teamData, teamName) => {
+// AI監督がスタメンを自動生成する機能（エクスポート）
+export const generateAILineup = (teamData, teamName) => {
   const players = teamData.players || [];
   if (players.length === 0) {
     console.log(`  ⚠️ ${teamName}には選手がいません`);
@@ -296,6 +296,19 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
         }
       }))
+    },
+    // リリーフ投手追跡（登板制限用）
+    reliefTracking: {
+      home: {
+        starterLeftInning: null,  // 先発が降板したイニング
+        currentRelieverId: null,  // 現在のリリーフ投手ID
+        relieverOutsPitched: 0    // 現在のリリーフの投球アウト数
+      },
+      away: {
+        starterLeftInning: null,
+        currentRelieverId: null,
+        relieverOutsPitched: 0
+      }
     }
   };
 
@@ -728,13 +741,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       gameState.inning++;
     }
 
-    // 投手スタミナ回復 & AI監督機能（役割ベースの投手交代）
+    // 投手スタミナ回復 & AI監督機能（役割ベースの投手交代・登板制限）
     [gameState.homeTeam, gameState.awayTeam].forEach(team => {
       const pitcher = getCurrentPitcher(team);
       const teamName = team === gameState.homeTeam ? homeTeamName : awayTeamName;
+      const teamKey = team === gameState.homeTeam ? 'home' : 'away';
       const scoreDiff = team === gameState.homeTeam
         ? gameState.score.home - gameState.score.away
         : gameState.score.away - gameState.score.home;
+      const reliefTrack = gameState.reliefTracking[teamKey];
 
       if (pitcher) {
         const pitcherData = team.players.find(p => p.id === pitcher.id);
@@ -745,24 +760,44 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             pitcher.pitching.stamina
           );
 
+          // リリーフ投手のイニング追跡
+          if (reliefTrack.currentRelieverId === pitcher.id) {
+            reliefTrack.relieverOutsPitched += 3; // 1イニング = 3アウト
+          }
+
           // AI監督: 役割ベースの投手交代判定
           const staminaRate = pitcherData.currentStamina / pitcher.pitching.stamina;
           const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
           let shouldChange = false;
           let situation = 'middle';
 
-          // 交代判定条件
-          if (staminaRate < 0.25 && gameState.inning >= 5) {
-            shouldChange = true;
-            situation = 'middle';
-          } else if (gameState.inning === 9 && !gameState.isTopInning && scoreDiff > 0 && scoreDiff <= 3) {
-            // 9回裏、3点差以内のリード → クローザー
-            shouldChange = true;
-            situation = 'save';
-          } else if (gameState.inning >= 7 && Math.abs(scoreDiff) <= 2 && staminaRate < 0.40) {
-            // 7回以降で僅差 → セットアッパー
-            shouldChange = true;
-            situation = 'hold';
+          // リリーフ投手の登板制限チェック
+          const isReliever = reliefTrack.currentRelieverId === pitcher.id;
+          if (isReliever) {
+            const starterLeft = reliefTrack.starterLeftInning || 9;
+            // 先発が1-3回で降板した場合は5イニング（15アウト）まで、それ以外は2イニング（6アウト）
+            const maxOuts = starterLeft <= 3 ? 15 : 6;
+            if (reliefTrack.relieverOutsPitched >= maxOuts) {
+              console.log(`   ⏱️ ${pitcher.name}が登板制限(${Math.floor(reliefTrack.relieverOutsPitched / 3)}回)に達しました`);
+              shouldChange = true;
+              situation = 'middle';
+            }
+          }
+
+          // 通常の交代判定条件
+          if (!shouldChange) {
+            if (staminaRate < 0.25 && gameState.inning >= 5) {
+              shouldChange = true;
+              situation = 'middle';
+            } else if (gameState.inning === 9 && !gameState.isTopInning && scoreDiff > 0 && scoreDiff <= 3) {
+              // 9回裏、3点差以内のリード → クローザー
+              shouldChange = true;
+              situation = 'save';
+            } else if (gameState.inning >= 7 && Math.abs(scoreDiff) <= 2 && staminaRate < 0.40) {
+              // 7回以降で僅差 → セットアッパー
+              shouldChange = true;
+              situation = 'hold';
+            }
           }
 
           if (shouldChange && rotation) {
@@ -817,6 +852,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                               situation === 'hold' ? 'セットアップ' : '中継ぎ';
               console.log(`   🔄 投手交代: ${teamName} ${pitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${roleLabel})`);
 
+              // 先発降板時は記録
+              if (!reliefTrack.starterLeftInning) {
+                reliefTrack.starterLeftInning = gameState.inning;
+                console.log(`   📊 先発${pitcher.name}が${gameState.inning}回で降板`);
+              }
+
               pitcherData.battingOrder = 0;
               pitcherData.position = 'pitcher';
 
@@ -824,6 +865,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               relieverData.battingOrder = 9;
               relieverData.position = 'pitcher';
               relieverData.currentStamina = relieverData.pitching?.stamina || 80;
+
+              // リリーフ追跡を更新
+              reliefTrack.currentRelieverId = reliever.id;
+              reliefTrack.relieverOutsPitched = 0; // 新しいリリーフの投球数をリセット
 
               // リリーフ疲労を記録（TEAMS_DATAに反映）
               if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
