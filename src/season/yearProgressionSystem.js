@@ -453,3 +453,239 @@ export function advanceToNextYear(seasonData, allTeams) {
     retirements
   };
 };
+
+// ============================================================
+// キャンプ練習システム（経験値→成長）
+// ============================================================
+
+/**
+ * 練習メニュー定義
+ * 各練習メニューは特定の能力値を成長させる
+ */
+export const TRAINING_MENUS = {
+  batting: {
+    name: '打撃練習',
+    icon: '🏏',
+    description: 'ミート・パワーを強化',
+    targets: ['meet', 'power'],
+    category: 'batting'
+  },
+  baserunning: {
+    name: '走塁練習',
+    icon: '🏃',
+    description: '走力・盗塁を強化',
+    targets: ['speed', 'steal'],
+    category: 'batting'
+  },
+  fielding: {
+    name: '守備練習',
+    icon: '🧤',
+    description: '守備力・肩力を強化',
+    targets: ['defense', 'arm'],
+    category: 'fielding'
+  },
+  stamina: {
+    name: 'スタミナ練習',
+    icon: '💪',
+    description: '投手スタミナを強化',
+    targets: ['stamina'],
+    category: 'pitching'
+  },
+  control: {
+    name: '制球練習',
+    icon: '🎯',
+    description: '制球力を強化',
+    targets: ['control'],
+    category: 'pitching'
+  },
+  velocity: {
+    name: '球速練習',
+    icon: '⚡',
+    description: '球速を強化（投手のみ）',
+    targets: ['velocity'],
+    category: 'pitching'
+  },
+  eye: {
+    name: '選球眼練習',
+    icon: '👁️',
+    description: '選球眼を強化',
+    targets: ['eye'],
+    category: 'batting'
+  }
+};
+
+/**
+ * シーズン終了時に経験値を集計
+ * 投手: 登板数 + 投球回数
+ * 野手: 出場試合数 + 打席数/3
+ * フル稼働で年間約250ポイント
+ * @param {Object} player - 選手データ
+ */
+export function calculateSeasonExperience(player) {
+  const pitchingStats = player.seasonStats?.pitching || {};
+  const battingStats = player.seasonStats?.batting || {};
+
+  const pitcherExp = (pitchingStats.games || 0) + Math.floor(pitchingStats.inningsPitched || 0);
+  const batterExp = (battingStats.games || 0) + Math.floor((battingStats.atBats || 0) / 3);
+
+  // 投手はピッチング経験を、野手はバッティング経験を採用
+  const isPitcher = player.position === 'pitcher';
+  return isPitcher ? pitcherExp : batterExp;
+}
+
+/**
+ * 全選手の経験値を更新（シーズン終了時に呼ぶ）
+ * @param {Object} allTeams - 全チームデータ
+ */
+export function updateAllPlayersExperience(allTeams) {
+  const updatedTeams = {};
+
+  Object.entries(allTeams).forEach(([teamName, team]) => {
+    updatedTeams[teamName] = {
+      ...team,
+      players: team.players.map(player => {
+        const gainedExp = calculateSeasonExperience(player);
+        return {
+          ...player,
+          experience: (player.experience || 0) + gainedExp
+        };
+      })
+    };
+  });
+
+  return updatedTeams;
+}
+
+/**
+ * キャンプ練習を実行
+ * @param {Object} player - 選手データ
+ * @param {string} trainingType - 練習メニューのキー
+ * @returns {Object} - 成長結果 { player, growthReport }
+ */
+export function executeCampTraining(player, trainingType) {
+  const menu = TRAINING_MENUS[trainingType];
+  if (!menu) {
+    console.warn(`Unknown training type: ${trainingType}`);
+    return { player, growthReport: [] };
+  }
+
+  const experience = player.experience || 0;
+  const growthReport = [];
+  let updatedPlayer = { ...player };
+
+  // 各対象能力について成長判定
+  menu.targets.forEach(targetStat => {
+    // 1. 基本練習効果: 1-3ポイント
+    const baseGrowth = Math.floor(Math.random() * 3) + 1;
+
+    // 2. 集中練習効果: 1-4ポイント
+    const focusGrowth = Math.floor(Math.random() * 4) + 1;
+
+    // 3. 覚醒判定: 経験10につき1%の確率で爆発成長
+    const awakeningChance = Math.floor(experience / 10);
+    const isAwakening = Math.random() * 100 < awakeningChance;
+    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 10) + 5 : 0; // 5-14ポイント
+
+    const totalGrowth = baseGrowth + focusGrowth + awakeningGrowth;
+
+    // 能力値を更新
+    const statPath = getStatPath(targetStat);
+    if (statPath) {
+      const currentValue = getNestedValue(updatedPlayer, statPath) || 50;
+      const newValue = Math.min(currentValue + totalGrowth, 99); // 最大99
+      updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
+
+      growthReport.push({
+        stat: targetStat,
+        statName: getStatName(targetStat),
+        before: currentValue,
+        after: newValue,
+        growth: newValue - currentValue,
+        isAwakening: isAwakening
+      });
+    }
+  });
+
+  // 経験値を消費（練習に使った分の一部をリセット）
+  updatedPlayer.experience = Math.floor(experience * 0.3); // 70%消費
+
+  return { player: updatedPlayer, growthReport };
+}
+
+/**
+ * チーム全体のキャンプ練習を実行
+ * @param {Object} team - チームデータ
+ * @param {Object} trainingAssignments - { playerId: trainingType } の形式
+ * @returns {Object} - { updatedTeam, allReports }
+ */
+export function executeTeamCampTraining(team, trainingAssignments) {
+  const allReports = [];
+  const updatedPlayers = team.players.map(player => {
+    const trainingType = trainingAssignments[player.id];
+    if (!trainingType) {
+      // 練習未指定の選手は自動選択
+      const autoTraining = player.position === 'pitcher' ? 'stamina' : 'batting';
+      const { player: trained, growthReport } = executeCampTraining(player, autoTraining);
+      allReports.push({ player: trained, trainingType: autoTraining, growthReport });
+      return trained;
+    }
+
+    const { player: trained, growthReport } = executeCampTraining(player, trainingType);
+    allReports.push({ player: trained, trainingType, growthReport });
+    return trained;
+  });
+
+  return {
+    updatedTeam: { ...team, players: updatedPlayers },
+    allReports
+  };
+}
+
+// ヘルパー関数
+function getStatPath(statKey) {
+  const pathMap = {
+    meet: 'batting.meet',
+    power: 'batting.power',
+    eye: 'batting.eye',
+    steal: 'batting.steal',
+    speed: 'physical.speed',
+    arm: 'physical.arm',
+    defense: 'fielding.defense',
+    velocity: 'pitching.velocity',
+    control: 'pitching.control',
+    stamina: 'pitching.stamina'
+  };
+  return pathMap[statKey];
+}
+
+function getStatName(statKey) {
+  const nameMap = {
+    meet: 'ミート',
+    power: 'パワー',
+    eye: '選球眼',
+    steal: '盗塁',
+    speed: '走力',
+    arm: '肩力',
+    defense: '守備',
+    velocity: '球速',
+    control: '制球',
+    stamina: 'スタミナ'
+  };
+  return nameMap[statKey] || statKey;
+}
+
+function getNestedValue(obj, path) {
+  return path.split('.').reduce((o, k) => (o || {})[k], obj);
+}
+
+function setNestedValue(obj, path, value) {
+  const keys = path.split('.');
+  const result = JSON.parse(JSON.stringify(obj));
+  let current = result;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (!current[keys[i]]) current[keys[i]] = {};
+    current = current[keys[i]];
+  }
+  current[keys[keys.length - 1]] = value;
+  return result;
+}

@@ -116,13 +116,16 @@ export function generateTryoutCandidates(year, teamCount) {
     // ランダムな名前生成
     const name = generateRandomPlayerName();
 
-    // 能力値生成（一芸選手の場合は特殊な分布）
-    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm);
+    // 年齢を先に決定（18-25歳）
+    const age = Math.floor(Math.random() * 8) + 18;
+
+    // 能力値生成（一芸選手の場合は特殊な分布、年齢補正あり）
+    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age);
 
     const player = {
       id: i,
       name: name,
-      age: Math.floor(Math.random() * 8) + 18,  // 18-25歳
+      age: age,
       position: position,
       battingOrder: 0,
       isStarter: false,
@@ -162,6 +165,7 @@ export function generateTryoutCandidates(year, teamCount) {
         achievements: []
       },
       fatigue: 0, // 疲労度（投げた球数分蓄積、1日20回復）
+      experience: 0, // 経験値（シーズン中に蓄積、キャンプで消費）
       seasonStats: {
         batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
         pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
@@ -179,30 +183,41 @@ export function generateTryoutCandidates(year, teamCount) {
 }
 
 /**
- * 能力値を生成（一芸選手対応、フォーム別球速調整）
+ * 能力値を生成（一芸選手対応、フォーム別球速調整、年齢補正）
  * 重要: 球速・ミート・パワーは一芸でも最大Aランク(79)まで
+ * 年齢補正: 18歳基準で、1歳につき平均+1ポイント（ただしランダム範囲内なので例外あり）
  */
-function generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm) {
+function generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age = 20) {
   // フォームによる球速・制球の調整
   // サイドスロー・アンダースローは球速-10、制球+15
   const isSideOrUnder = pitchingForm === 'sidearm' || pitchingForm === 'submarine';
   const velocityAdjust = isSideOrUnder ? -10 : 0;
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
-  // 通常の能力値範囲（投手能力-2、野手能力+2調整）
+  // 年齢補正: 18歳を基準に、1歳につき+1ポイント（最大+7）
+  // ただしランダムの範囲は同じなので、18歳でも高能力、25歳でも低能力の可能性あり
+  const ageBonus = Math.min(age - 18, 7);
+
+  // 年齢補正付きランダム生成（範囲をシフト）
+  const randRangeWithAge = (min, max, bonus = ageBonus) => {
+    const adjustedMin = Math.min(min + bonus, max);
+    return Math.floor(Math.random() * (max - adjustedMin + 1)) + adjustedMin;
+  };
+
+  // 通常の能力値範囲（投手能力-2、野手能力+2調整、年齢補正適用）
   const normalAbilities = {
-    // 野手能力（+2調整）
-    meet: isPitcher ? randRange(20, 45) : randRange(37, 72),
-    power: isPitcher ? randRange(15, 40) : randRange(32, 67),
-    eye: isPitcher ? randRange(30, 55) : randRange(37, 77),
-    steal: isPitcher ? randRange(15, 30) : randRange(27, 77),
-    speed: isPitcher ? randRange(35, 60) : randRange(37, 77),
-    arm: isPitcher ? randRange(45, 70) : randRange(37, 77),
-    defense: isPitcher ? randRange(45, 70) : randRange(37, 77),
-    // 投手能力（フォーム調整適用、-2調整）
-    velocity: isPitcher ? Math.min(randRange(125, 145) + velocityAdjust, 150) : randRange(115, 130),
-    control: isPitcher ? Math.min(randRange(40, 70) + controlAdjust, 85) : randRange(35, 60),
-    stamina: isPitcher ? randRange(100, 160) : randRange(55, 95)
+    // 野手能力（+2調整、年齢補正）
+    meet: isPitcher ? randRangeWithAge(20, 45) : randRangeWithAge(37, 72),
+    power: isPitcher ? randRangeWithAge(15, 40) : randRangeWithAge(32, 67),
+    eye: isPitcher ? randRangeWithAge(30, 55) : randRangeWithAge(37, 77),
+    steal: isPitcher ? randRangeWithAge(15, 30, Math.max(0, ageBonus - 3)) : randRangeWithAge(27, 77, Math.max(0, ageBonus - 2)), // 盗塁は年齢補正控えめ
+    speed: isPitcher ? randRangeWithAge(35, 60, Math.max(0, ageBonus - 3)) : randRangeWithAge(37, 77, Math.max(0, ageBonus - 2)), // 走力は年齢補正控えめ
+    arm: isPitcher ? randRangeWithAge(45, 70) : randRangeWithAge(37, 77),
+    defense: isPitcher ? randRangeWithAge(45, 70) : randRangeWithAge(37, 77),
+    // 投手能力（フォーム調整適用、-2調整、年齢補正）
+    velocity: isPitcher ? Math.min(randRangeWithAge(125, 145) + velocityAdjust, 152) : randRange(115, 130),
+    control: isPitcher ? Math.min(randRangeWithAge(40, 70) + controlAdjust, 87) : randRange(35, 60),
+    stamina: isPitcher ? randRangeWithAge(100, 160) : randRange(55, 95)
   };
 
   if (!isSpecialist) {

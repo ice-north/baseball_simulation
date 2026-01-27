@@ -36,7 +36,7 @@ import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
 import { progressDate, progressToNextGame, progressToNextPhase } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
-import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer } from './season/yearProgressionSystem.js';
+import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
 
     const App = () => {
       // チームデータの初期化
@@ -66,6 +66,9 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
 
       // 全チームリスト（リーグ構成から自動生成）
       const allTeams = leagueConfig.leagues.flatMap(league => league.teams);
+
+      // ユーザーチーム（常に最初のチーム）
+      const userTeamName = allTeams[0] || 'チームA';
 
       // === 新システム: シーズンデータ統合管理 ===
       const [seasonData, setSeasonData] = useState(null);
@@ -258,27 +261,29 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
       
       // チームシステム（ホーム vs アウェイ対戦機能）
       const [homeTeam, setHomeTeam] = useState({
-        name: "チームA",
+        name: "",
         players: [],
         currentBatterOrder: 1
       });
 
       const [awayTeam, setAwayTeam] = useState({
-        name: "チームB",
+        name: "",
         players: [],
         currentBatterOrder: 1
       });
 
-      // TEAMS_DATAからチームデータを初期化
+      // TEAMS_DATAからチームデータを初期化（allTeamsを使用）
       useEffect(() => {
-        if (TEAMS_DATA) {
-          const teamAData = TEAMS_DATA['チームA'];
-          const teamBData = TEAMS_DATA['チームB'];
+        if (TEAMS_DATA && allTeams.length >= 2) {
+          const homeTeamName = allTeams[0];
+          const awayTeamName = allTeams[1];
+          const homeTeamData = TEAMS_DATA[homeTeamName];
+          const awayTeamData = TEAMS_DATA[awayTeamName];
 
-          if (teamAData && teamAData.players && teamAData.players.length > 0) {
+          if (homeTeamData && homeTeamData.players && homeTeamData.players.length > 0) {
             setHomeTeam({
-              name: "チームA",
-              players: teamAData.players.map(p => ({
+              name: homeTeamName,
+              players: homeTeamData.players.map(p => ({
                 ...p,
                 isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
                 hasSubbedOut: false,
@@ -288,10 +293,10 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
             });
           }
 
-          if (teamBData && teamBData.players && teamBData.players.length > 0) {
+          if (awayTeamData && awayTeamData.players && awayTeamData.players.length > 0) {
             setAwayTeam({
-              name: "チームB",
-              players: teamBData.players.map(p => ({
+              name: awayTeamName,
+              players: awayTeamData.players.map(p => ({
                 ...p,
                 isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
                 hasSubbedOut: false,
@@ -301,7 +306,7 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
             });
           }
         }
-      }, []);
+      }, [allTeams]);
       
       // 互換性のため players を動的に取得
       const players = isTopInning ? homeTeam.players : awayTeam.players;  // 守備側
@@ -3202,7 +3207,7 @@ if (newOuts === 3) {
 
       // 全チームのAIオーダー編成を実行
       const generateAllTeamsLineup = () => {
-        ['チームA', 'チームB', 'チームC', 'チームD'].forEach(teamName => {
+        allTeams.forEach(teamName => {
           generateOptimalLineup(teamName);
           generatePitchingRotation(teamName);
         });
@@ -3276,11 +3281,8 @@ if (newOuts === 3) {
             setTryoutCandidates(candidates);
 
             // ドラフト順序を生成（24ラウンド）
-            // チーム数に応じて動的にチーム名を生成
-            const teamNames = ['ユーザー'];
-            for (let i = 1; i < teamCount; i++) {
-              teamNames.push(`チーム${String.fromCharCode(65 + i)}`); // B, C, D...
-            }
+            // allTeamsから実際のチーム名を取得（ユーザーチームは'ユーザー'として表示）
+            const teamNames = ['ユーザー', ...allTeams.slice(1)];
             const order = generateSnakeDraftOrder(teamNames, 24);
             console.log(`📊 ドラフト順序: ${order.length}ラウンド, チーム数: ${teamCount}`);
             setDraftOrder(order);
@@ -3342,7 +3344,7 @@ if (newOuts === 3) {
             // TEAMS_DATAに選手を追加
             Object.keys(teamRosters).forEach(teamName => {
               const draftedPlayers = teamRosters[teamName] || [];
-              const actualTeamName = teamName === 'ユーザー' ? 'チームA' : teamName;
+              const actualTeamName = teamName === 'ユーザー' ? allTeams[0] : teamName;
 
               if (TEAMS_DATA[actualTeamName]) {
                 console.log(`👥 ${actualTeamName}に${draftedPlayers.length}人の選手を追加`);
@@ -3721,7 +3723,7 @@ if (newOuts === 3) {
       };
 
       const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup, allTeams }) => {
-  const [editingTeam, setEditingTeam] = useState('チームA');
+  const [editingTeam, setEditingTeam] = useState(allTeams[0] || 'チームA');
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editFormData, setEditFormData] = useState(null);
 
@@ -3734,12 +3736,12 @@ if (newOuts === 3) {
   };
 
   const team = getTeamData(editingTeam);
-  const teamColors = {
-    'チームA': 'bg-blue-600',
-    'チームB': 'bg-red-600',
-    'チームC': 'bg-green-600',
-    'チームD': 'bg-yellow-600'
-  };
+  // 動的にチームカラーを生成
+  const teamColorList = ['bg-blue-600', 'bg-red-600', 'bg-green-600', 'bg-yellow-600', 'bg-purple-600', 'bg-pink-600', 'bg-indigo-600', 'bg-teal-600', 'bg-orange-600', 'bg-cyan-600', 'bg-lime-600', 'bg-amber-600'];
+  const teamColors = {};
+  allTeams.forEach((name, idx) => {
+    teamColors[name] = teamColorList[idx % teamColorList.length];
+  });
 
   // 選手編集を開始
   const startEditPlayer = (player) => {
@@ -3823,8 +3825,8 @@ if (newOuts === 3) {
       <h1 className="text-3xl font-bold mb-6 text-white">エディット画面（開発用）</h1>
 
       {/* チーム選択 */}
-      <div className="mb-6 flex gap-4">
-        {['チームA', 'チームB', 'チームC', 'チームD'].map((teamName) => (
+      <div className="mb-6 flex gap-4 flex-wrap">
+        {allTeams.map((teamName) => (
           <button
             key={teamName}
             onClick={() => setEditingTeam(teamName)}
@@ -4719,7 +4721,7 @@ if (newOuts === 3) {
 
   const handleProgressToNextGame = () => {
     if (!seasonData) return;
-    let newSeasonData = progressToNextGame(seasonData, 'チームA');
+    let newSeasonData = progressToNextGame(seasonData, userTeamName);
 
     // 試合日まで進んだら、その日の試合を自動シミュレーション
     newSeasonData = simulateGamesOnDate(newSeasonData);
@@ -4815,7 +4817,7 @@ if (newOuts === 3) {
 
   // 当月のカレンダーデータを生成
   const calendarData = seasonData && selectedMonth
-    ? generateTeamCalendar(seasonData.schedule, 'チームA', currentDate.year, selectedMonth)
+    ? generateTeamCalendar(seasonData.schedule, userTeamName, currentDate.year, selectedMonth)
     : [];
 
   // 当日の試合を取得
@@ -4892,7 +4894,7 @@ if (newOuts === 3) {
 
       {/* カレンダー */}
       <div className="bg-gray-800 rounded-lg p-4 mb-6">
-        <h2 className="text-xl font-bold mb-3 text-white">{selectedMonth}月の試合日程（チームA）</h2>
+        <h2 className="text-xl font-bold mb-3 text-white">{selectedMonth}月の試合日程（{userTeamName}）</h2>
         <div className="grid grid-cols-7 gap-1">
           <div className="text-center text-gray-400 font-bold py-1 text-xs">日</div>
           <div className="text-center text-gray-400 font-bold py-1 text-xs">月</div>
@@ -5748,9 +5750,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   );
 };
 
-// ロスター管理画面（スタメン・投手設定）- 自チーム（チームA）のみ
+// ロスター管理画面（スタメン・投手設定）- 自チームのみ
 const RosterScreen = () => {
-  const userTeam = 'チームA'; // 自チームは固定
+  // TEAMS_DATAの最初のチームをユーザーチームとする
+  const teamNames = Object.keys(TEAMS_DATA || {});
+  const userTeam = teamNames[0] || 'チームA';
+
+  if (!TEAMS_DATA[userTeam]) {
+    return <div className="p-8 text-white">チームデータが見つかりません。NEW GAMEからゲームを開始してください。</div>;
+  }
 
   return (
     <div className="p-8">
@@ -5770,11 +5778,12 @@ const RosterScreen = () => {
 
 // チーム情報画面（選手一覧・能力値表示）
 const TeamInfoScreen = () => {
-  const [selectedTeam, setSelectedTeam] = useState('チームA');
+  const teamNames = Object.keys(TEAMS_DATA || {});
+  const [selectedTeam, setSelectedTeam] = useState(teamNames[0] || 'チームA');
 
-  const allTeams = TEAMS_DATA || {};
-  const team = allTeams[selectedTeam];
-  if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
+  const allTeamsData = TEAMS_DATA || {};
+  const team = allTeamsData[selectedTeam];
+  if (!team) return <div className="p-8 text-white">チームが見つかりません。NEW GAMEからゲームを開始してください。</div>;
 
   // 投手と野手に分ける
   const pitchers = team.players.filter(p => p.position === 'pitcher');
@@ -5869,7 +5878,7 @@ const TeamInfoScreen = () => {
             onChange={(e) => setSelectedTeam(e.target.value)}
             className="w-full bg-gray-700 text-white rounded px-4 py-2"
           >
-            {Object.keys(allTeams).map(teamName => (
+            {Object.keys(allTeamsData).map(teamName => (
               <option key={teamName} value={teamName}>{teamName}</option>
             ))}
           </select>
@@ -6236,7 +6245,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
 
   const handleProgressToNextGame = () => {
     setIsSimulating(true);
-    let newSeasonData = progressToNextGame(seasonData, 'チームA');
+    let newSeasonData = progressToNextGame(seasonData, userTeamName);
     const { data, results } = simulateGamesOnDate(newSeasonData);
     setSeasonData(data);
     setLastGameResults(results);
@@ -6449,7 +6458,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData }) => {
           </thead>
           <tbody>
             {seasonData.standings.map((team, index) => {
-              const isUserTeam = team.team === 'チームA';
+              const isUserTeam = team.team === userTeamName;
               const winRate = team.gamesPlayed > 0 ? (team.wins / team.gamesPlayed).toFixed(3).substring(1) : '.000';
               const gb = index === 0 ? '-' :
                 ((seasonData.standings[0].wins - team.wins) - (seasonData.standings[0].losses - team.losses)) / 2;
@@ -7063,37 +7072,147 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
   );
 };
 
-// キャンプ画面
-const CampScreen = ({ onComplete }) => {
+// キャンプ画面（練習メニュー選択対応）
+const CampScreen = ({ onComplete, allTeams }) => {
+  // ユーザーチーム（最初のチーム）
+  const teamNames = Object.keys(TEAMS_DATA || {});
+  const userTeamName = teamNames[0] || 'チームA';
+  const userTeam = TEAMS_DATA[userTeamName];
+
+  const [selectedTraining, setSelectedTraining] = useState('batting'); // 全体練習メニュー
+  const [trainingResults, setTrainingResults] = useState(null);
+  const [isTrainingComplete, setIsTrainingComplete] = useState(false);
+
+  // 練習実行
+  const handleExecuteTraining = () => {
+    if (!userTeam || !userTeam.players) return;
+
+    // 全選手に同じ練習を適用
+    const assignments = {};
+    userTeam.players.forEach(p => {
+      // 投手は投手用練習、野手は野手用練習を自動選択
+      if (p.position === 'pitcher') {
+        assignments[p.id] = ['stamina', 'control', 'velocity'].includes(selectedTraining)
+          ? selectedTraining : 'stamina';
+      } else {
+        assignments[p.id] = ['batting', 'baserunning', 'fielding', 'eye'].includes(selectedTraining)
+          ? selectedTraining : 'batting';
+      }
+    });
+
+    const { updatedTeam, allReports } = executeTeamCampTraining(userTeam, assignments);
+
+    // TEAMS_DATAを更新
+    TEAMS_DATA[userTeamName] = updatedTeam;
+
+    setTrainingResults(allReports);
+    setIsTrainingComplete(true);
+  };
+
+  // 経験値の取得
+  const getPlayerExp = (player) => player.experience || 0;
+
   return (
     <div className="p-8 bg-gray-900 min-h-screen">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <h1 className="text-4xl font-bold text-white mb-8">🏕️ 春季キャンプ</h1>
 
-        <div className="bg-gray-800 rounded-lg p-8 mb-6 text-center">
-          <div className="text-6xl mb-4">⚾</div>
-          <h2 className="text-2xl font-bold text-white mb-4">新シーズンに向けて準備中...</h2>
-          <p className="text-gray-300 mb-8">
-            選手たちは春季キャンプで調整を行っています。<br/>
-            （育成システムは今後実装予定）
-          </p>
-        </div>
+        {!isTrainingComplete ? (
+          <>
+            {/* 練習メニュー選択 */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-bold text-white mb-4">練習メニューを選択</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {Object.entries(TRAINING_MENUS).map(([key, menu]) => (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedTraining(key)}
+                    className={`p-4 rounded-lg transition text-left ${
+                      selectedTraining === key
+                        ? 'bg-blue-600 text-white ring-2 ring-blue-400'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">{menu.icon}</div>
+                    <div className="font-bold text-sm">{menu.name}</div>
+                    <div className="text-xs opacity-80">{menu.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div className="bg-gray-700 rounded-lg p-6 mb-8">
-          <h3 className="text-lg font-bold text-white mb-3">キャンプメニュー（開発中）</h3>
-          <div className="space-y-2 text-gray-400">
-            <div>• 基礎トレーニング</div>
-            <div>• 実戦形式練習</div>
-            <div>• ポジション練習</div>
-            <div>• コンディション調整</div>
-          </div>
-        </div>
+            {/* 選手一覧（経験値表示） */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-bold text-white mb-4">📊 選手経験値一覧</h2>
+              <p className="text-gray-400 text-sm mb-4">
+                経験値が多いほど覚醒（爆発成長）の可能性が上がります。経験10につき覚醒確率+1%
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-64 overflow-y-auto">
+                {userTeam?.players?.map(player => (
+                  <div key={player.id} className="bg-gray-700 rounded p-2 text-sm">
+                    <div className="text-white font-medium">{player.name}</div>
+                    <div className="text-gray-400 text-xs">
+                      {player.position === 'pitcher' ? '投手' : '野手'} | {player.age}歳
+                    </div>
+                    <div className="text-yellow-400 text-xs">
+                      経験値: {getPlayerExp(player)} (覚醒{Math.floor(getPlayerExp(player) / 10)}%)
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-        <div className="text-center">
-          <button onClick={onComplete} className="bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-lg font-bold text-xl transition">
-            キャンプ終了 - シーズン開始
-          </button>
-        </div>
+            <div className="text-center">
+              <button
+                onClick={handleExecuteTraining}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-4 rounded-lg font-bold text-xl transition"
+              >
+                🏋️ 練習を実行する
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* 練習結果表示 */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-bold text-white mb-4">📈 練習結果</h2>
+              <div className="max-h-96 overflow-y-auto space-y-2">
+                {trainingResults?.map((result, idx) => (
+                  <div key={idx} className="bg-gray-700 rounded p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-white font-medium">{result.player.name}</div>
+                      <div className="text-gray-400 text-sm">{TRAINING_MENUS[result.trainingType]?.name}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {result.growthReport.map((growth, gIdx) => (
+                        <span
+                          key={gIdx}
+                          className={`px-2 py-1 rounded text-xs ${
+                            growth.isAwakening
+                              ? 'bg-yellow-500 text-black font-bold'
+                              : 'bg-green-700 text-white'
+                          }`}
+                        >
+                          {growth.statName}: {growth.before}→{growth.after}
+                          {growth.isAwakening && ' 🌟覚醒!'}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="text-center">
+              <button
+                onClick={onComplete}
+                className="bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-lg font-bold text-xl transition"
+              >
+                キャンプ終了 - シーズン開始
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

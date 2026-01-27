@@ -951,6 +951,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         career.rbis += b.rbis;
         career.walks += b.walks;
         career.strikeouts += b.strikeouts;
+
+        // 経験値蓄積（出場1 + 打席数/3）
+        const expGained = 1 + Math.floor(b.atBats / 3);
+        playerData.experience = (playerData.experience || 0) + expGained;
       }
 
       // 投手成績の集計
@@ -977,7 +981,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
         // 疲労度を蓄積（投げた球数分）
         playerData.fatigue = (playerData.fatigue || 0) + p.pitches;
-        console.log(`   疲労蓄積: ${playerData.name} +${p.pitches}球 → 疲労${playerData.fatigue}`);
+
+        // 経験値蓄積（登板1 + 投球回数）
+        const inningsPitched = Math.floor(p.outs / 3);
+        const expGained = 1 + inningsPitched;
+        playerData.experience = (playerData.experience || 0) + expGained;
+        console.log(`   疲労蓄積: ${playerData.name} +${p.pitches}球 → 疲労${playerData.fatigue}, 経験+${expGained}`);
 
         // 勝敗の判定（簡易版：先発投手のみ）
         if (player.battingOrder === 9 && p.outs >= 15) { // 5イニング以上投げた先発
