@@ -3282,7 +3282,8 @@ if (newOuts === 3) {
 
             // ドラフト順序を生成（24ラウンド）
             // allTeamsから実際のチーム名を取得（ユーザーチームは'ユーザー'として表示）
-            const teamNames = ['ユーザー', ...allTeams.slice(1)];
+            const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+            const teamNames = ['ユーザー', ...teamsArray.slice(1)];
             const order = generateSnakeDraftOrder(teamNames, 24);
             console.log(`📊 ドラフト順序: ${order.length}ラウンド, チーム数: ${teamCount}`);
             setDraftOrder(order);
@@ -3342,9 +3343,10 @@ if (newOuts === 3) {
             console.log('📋 各チームのドラフト結果:', teamRosters);
 
             // TEAMS_DATAに選手を追加
+            const teamsArrayForSave = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
             Object.keys(teamRosters).forEach(teamName => {
               const draftedPlayers = teamRosters[teamName] || [];
-              const actualTeamName = teamName === 'ユーザー' ? allTeams[0] : teamName;
+              const actualTeamName = teamName === 'ユーザー' ? teamsArrayForSave[0] : teamName;
 
               if (TEAMS_DATA[actualTeamName]) {
                 console.log(`👥 ${actualTeamName}に${draftedPlayers.length}人の選手を追加`);
@@ -7473,7 +7475,7 @@ const CampScreen = ({ onComplete, allTeams }) => {
       if (screenMode === 'start' && gameFlowState === 'newgame_tryout') {
         return <TryoutScreen
           seasonData={seasonData}
-          allTeams={TEAMS_DATA}
+          allTeams={allTeams}
           isInitialTryout={true}
           onComplete={() => {
             // トライアウト完了後、直接シーズンへ移行（キャンプスキップ）
