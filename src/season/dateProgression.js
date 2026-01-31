@@ -3,7 +3,8 @@
 // 日付を進めてフェーズを遷移
 // ============================================================
 
-import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings } from './seasonManager.js';
+import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule } from './seasonManager.js';
+import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 
 /**
@@ -69,18 +70,18 @@ export const progressToNextPhase = (seasonData) => {
       break;
 
     case SEASON_PHASES.REGULAR_SEASON:
-      // レギュラーシーズン → プレーオフ（10月1日）
-      targetDate = { year: seasonData.currentDate.year, month: 10, day: 1 };
+      // レギュラーシーズン → プレーオフ（10月10日）
+      targetDate = { year: seasonData.currentDate.year, month: 10, day: 10 };
       break;
 
     case SEASON_PHASES.PLAYOFFS:
-      // プレーオフ → ドラフト（10月11日）
-      targetDate = { year: seasonData.currentDate.year, month: 10, day: 11 };
+      // プレーオフ → ドラフト（10月21日）
+      targetDate = { year: seasonData.currentDate.year, month: 10, day: 21 };
       break;
 
     case SEASON_PHASES.DRAFT:
-      // ドラフト → トライアウト（11月1日）
-      targetDate = { year: seasonData.currentDate.year, month: 11, day: 1 };
+      // ドラフト → トライアウト（11月10日）
+      targetDate = { year: seasonData.currentDate.year, month: 11, day: 10 };
       break;
 
     case SEASON_PHASES.TRYOUT:

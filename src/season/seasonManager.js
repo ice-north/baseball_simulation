@@ -34,20 +34,21 @@ export const PHASE_INFO = {
   [SEASON_PHASES.PLAYOFFS]: {
     name: 'プレーオフ',
     months: [10],
-    days: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    days: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     color: 'bg-yellow-100',
     description: '優勝決定シリーズ'
   },
   [SEASON_PHASES.DRAFT]: {
     name: 'ドラフト',
     months: [10],
-    days: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
+    days: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
     color: 'bg-purple-100',
     description: '新人選手獲得'
   },
   [SEASON_PHASES.TRYOUT]: {
     name: 'トライアウト',
     months: [11],
+    startDay: 10,
     color: 'bg-orange-100',
     description: '選手補強'
   },
@@ -74,12 +75,17 @@ export const getCurrentPhase = (month, day) => {
     return SEASON_PHASES.SPRING_CAMP;
   } else if (month >= 3 && month <= 9) {
     return SEASON_PHASES.REGULAR_SEASON;
-  } else if (month === 10 && day <= 10) {
+  } else if (month === 10 && day >= 10 && day <= 20) {
     return SEASON_PHASES.PLAYOFFS;
-  } else if (month === 10 && day > 10) {
+  } else if (month === 10 && day > 20) {
     return SEASON_PHASES.DRAFT;
-  } else if (month === 11) {
+  } else if (month === 10 && day < 10) {
+    // 10月前半はレギュラーシーズン終了後の待機（プレーオフ前）
+    return SEASON_PHASES.REGULAR_SEASON;
+  } else if (month === 11 && day >= 10) {
     return SEASON_PHASES.TRYOUT;
+  } else if (month === 11 && day < 10) {
+    return SEASON_PHASES.DRAFT;
   } else if (month === 12) {
     return SEASON_PHASES.OFF_SEASON;
   }
@@ -242,7 +248,7 @@ export const generateRegularSeasonSchedule = (teams, gamesPerOpponent = 20, star
  */
 export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) => {
   const schedule = [];
-  const startDate = { year, month: 10, day: 1 };
+  const startDate = { year, month: 10, day: 10 };
 
   if (format === 'single') {
     // 1位 vs 2位の3戦先取制（最大5試合）
@@ -332,9 +338,9 @@ export const updateStandings = (standings, gameResult) => {
     awayTeam.draws++;
   }
 
-  // 勝率計算
-  homeTeam.winRate = homeTeam.wins / (homeTeam.wins + homeTeam.losses + homeTeam.draws);
-  awayTeam.winRate = awayTeam.wins / (awayTeam.wins + awayTeam.losses + awayTeam.draws);
+  // 勝率計算（引き分けを除外: 勝利 / (勝利 + 敗北)）
+  homeTeam.winRate = (homeTeam.wins + homeTeam.losses) > 0 ? homeTeam.wins / (homeTeam.wins + homeTeam.losses) : 0;
+  awayTeam.winRate = (awayTeam.wins + awayTeam.losses) > 0 ? awayTeam.wins / (awayTeam.wins + awayTeam.losses) : 0;
 
   // 順位でソート
   return standings.sort((a, b) => b.winRate - a.winRate);

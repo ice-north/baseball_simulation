@@ -3313,12 +3313,13 @@ if (newOuts === 3) {
             console.log(`📋 候補者生成完了: ${candidates.length}人`);
             setTryoutCandidates(candidates);
 
-            // ドラフト順序を生成（24ラウンド）
-            // allTeamsから実際のチーム名を取得（ユーザーチームは'ユーザー'として表示）
+            // ドラフト順序を生成
+            // 1年目は24ラウンド、2年目以降は候補者数/チーム数ラウンド
             const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
             const teamNames = ['ユーザー', ...teamsArray.slice(1)];
-            const order = generateSnakeDraftOrder(teamNames, 24);
-            console.log(`📊 ドラフト順序: ${order.length}ラウンド, チーム数: ${teamCount}`);
+            const rounds = isInitialTryout ? 24 : Math.min(24, Math.floor(candidates.length / teamNames.length));
+            const order = generateSnakeDraftOrder(teamNames, rounds);
+            console.log(`📊 ドラフト順序: ${rounds}ラウンド (${order.length}ピック), チーム数: ${teamCount}`);
             setDraftOrder(order);
           }
         }, [seasonData, allTeams, tryoutCandidates.length, isInitialTryout]);
@@ -3369,21 +3370,20 @@ if (newOuts === 3) {
           }
         }, [currentPick, draftOrder, tryoutCandidates, teamRosters]);
 
-        // ドラフト完了検出
-        useEffect(() => {
-          if (currentPick >= draftOrder.length && draftOrder.length > 0 && !draftComplete) {
+        // ドラフト完了処理
+        const finalizeDraft = () => {
+          if (draftComplete) return;
             console.log(`✅ ドラフト完了: ${currentPick}/${draftOrder.length}`);
             console.log('📋 各チームのドラフト結果:', teamRosters);
 
-            // TEAMS_DATAに選手を追加
+            // TEAMS_DATAに選手を追加（既存選手は保持）
             const teamsArrayForSave = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
             Object.keys(teamRosters).forEach(teamName => {
               const draftedPlayers = teamRosters[teamName] || [];
               const actualTeamName = teamName === 'ユーザー' ? teamsArrayForSave[0] : teamName;
 
               if (TEAMS_DATA[actualTeamName]) {
-                console.log(`👥 ${actualTeamName}に${draftedPlayers.length}人の選手を追加`);
-                // 既存の選手と統合
+                console.log(`👥 ${actualTeamName}に${draftedPlayers.length}人の選手を追加 (既存: ${TEAMS_DATA[actualTeamName].players?.length || 0}人)`);
                 TEAMS_DATA[actualTeamName].players = [
                   ...(TEAMS_DATA[actualTeamName].players || []),
                   ...draftedPlayers
@@ -3396,13 +3396,18 @@ if (newOuts === 3) {
             initializeAllPitchingRotations();
 
             setDraftComplete(true);
-            // 初期トライアウトの場合は自動的にキャンプへ進む
             if (isInitialTryout && onComplete) {
               console.log('🏕️ キャンプ画面へ移動');
               setTimeout(() => onComplete(), 1000);
             }
+        };
+
+        // ドラフト完了検出（全ピック消化 or 候補者枯渇）
+        useEffect(() => {
+          if ((currentPick >= draftOrder.length || tryoutCandidates.length === 0) && draftOrder.length > 0 && !draftComplete) {
+            finalizeDraft();
           }
-        }, [currentPick, draftOrder.length, draftComplete, onComplete, isInitialTryout, teamRosters]);
+        }, [currentPick, draftOrder.length, draftComplete, tryoutCandidates.length, teamRosters]);
 
         // フィルター＆ソート処理
         const filteredCandidates = tryoutCandidates
@@ -3462,6 +3467,19 @@ if (newOuts === 3) {
                 {!isUserTurn && currentTeam && (
                   <div className="mt-4 text-yellow-400 font-bold">
                     ⏳ {currentTeam} が選択中...
+                  </div>
+                )}
+                {!draftComplete && isUserTurn && userRoster.length > 0 && (
+                  <button
+                    onClick={() => finalizeDraft()}
+                    className="mt-4 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded font-bold transition"
+                  >
+                    指名終了
+                  </button>
+                )}
+                {draftComplete && (
+                  <div className="mt-4 text-green-400 font-bold text-lg">
+                    ドラフト完了 - 各チームの選手がロスターに追加されました
                   </div>
                 )}
               </div>
