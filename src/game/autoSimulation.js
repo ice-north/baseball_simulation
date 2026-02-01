@@ -433,7 +433,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 return { type: 'double_play' };
               }
             }
-            return { type: 'out' };
+            return {
+              type: 'out',
+              isOutfieldFly: fieldResult.isOutfieldFly || false,
+              tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0
+            };
           } else if (fieldResult.result === 'triple') {
             return { type: 'triple' };
           } else if (fieldResult.result === 'double') {
@@ -469,8 +473,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     }
   };
 
-  // 走者進塁処理
-  const advanceRunners = (hitType, bases) => {
+  // 走者進塁処理（外野手の肩で進塁を抑制）
+  const advanceRunners = (hitType, bases, defense) => {
     const newBases = [false, false, false];
     let runsScored = 0;
 
@@ -481,9 +485,24 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
 
+    // 外野手の平均肩力（進塁抑制に使用）
+    const ofArms = ['left', 'center', 'right'].map(p => defense?.[p]?.arm || 60);
+    const avgArm = ofArms.reduce((a, b) => a + b, 0) / 3;
+
     for (let i = 2; i >= 0; i--) {
       if (bases[i]) {
-        const newBase = i + advancement;
+        let newBase = i + advancement;
+
+        // 肩による進塁抑制: シングルで1塁走者が3塁を狙う、2塁走者がホームを狙う等
+        // 強肩の場合、余分な進塁（1塁→3塁、2塁→本塁on single）をブロック
+        if (hitType === 'single' && newBase >= 2) {
+          const holdChance = (avgArm - 50) / 100 * 0.4; // 肩90→16%の確率で進塁を阻止
+          if (Math.random() < holdChance) {
+            newBase = Math.max(i + 1, newBase - 1); // 1つ手前で止める
+            console.log(`   💪 強肩で走者を止める（肩力平均${Math.round(avgArm)}）`);
+          }
+        }
+
         if (newBase >= 3) {
           runsScored++;
         } else {
@@ -717,6 +736,38 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           batter.gameStats.batting.atBats++;
           pitcher.gameStats.pitching.outs++;
           gameState.outs++;
+
+          // 外野フライでのタッグアップ（犠牲フライ・進塁）
+          if (result.isOutfieldFly && gameState.outs < 3) {
+            // 3塁走者のタッグアップ（犠牲フライ）
+            if (gameState.bases[2]) {
+              const throwbackChance = result.tagupThrowbackChance || 0;
+              if (Math.random() >= throwbackChance) {
+                // 送球間に合わず得点
+                gameState.bases[2] = false;
+                if (gameState.isTopInning) gameState.score.away++;
+                else gameState.score.home++;
+                batter.gameStats.batting.rbis++;
+                pitcher.gameStats.pitching.runsAllowed++;
+                console.log(`   ✈️ 犠牲フライ（タッグアップ得点）`);
+              } else {
+                console.log(`   💪 好返球！3塁走者タッチアウト`);
+                gameState.bases[2] = false;
+                gameState.outs++;
+                pitcher.gameStats.pitching.outs++;
+              }
+            }
+            // 2塁走者のタッグアップ進塁（深いフライ時）
+            if (gameState.bases[1] && !gameState.bases[2] && gameState.outs < 3) {
+              const advanceChance = 0.4 - (result.tagupThrowbackChance || 0) * 0.5;
+              if (Math.random() < advanceChance) {
+                gameState.bases[1] = false;
+                gameState.bases[2] = true;
+                console.log(`   🏃 タッグアップ 2塁→3塁`);
+              }
+            }
+          }
+
           atBatOver = true;
           break;
 
@@ -732,7 +783,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         case 'double':
         case 'triple':
         case 'homerun':
-          const { bases: newBases, runsScored } = advanceRunners(result.type, gameState.bases);
+          const { bases: newBases, runsScored } = advanceRunners(result.type, gameState.bases, defense);
           batter.gameStats.batting.atBats++;
           batter.gameStats.batting.hits++;
           batter.gameStats.batting.rbis += runsScored;

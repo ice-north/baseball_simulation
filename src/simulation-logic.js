@@ -206,8 +206,11 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
     distance *= (0.9 + batter.power / 500);
   }
 
-  // 打球方向（-45〜45度）
-  const direction = (Math.random() * 90) - 45;
+  // 打球方向（-45〜45度）- 中央（遊撃・二塁・中堅方向）に偏る分布
+  // 正規分布的に中央を重くする（実際の打球分布に近い）
+  const r1 = Math.random(), r2 = Math.random();
+  const normalish = (r1 + r2 + Math.random()) / 3; // 0-1の中央寄り分布
+  const direction = (normalish * 90) - 45;
 
   return {
     exitVelocity,
@@ -251,45 +254,81 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     return { result: 'single', bases: 1, description: 'ポテンヒット' };
   }
 
-  // 担当野手の決定
+  // 担当野手の決定（守備重要度: SS/CF > 2B/RF > LF/3B > 1B）
+  // 足が速い野手は守備範囲が広がる（隣接ゾーンの打球もカバー）
   let fielder, position, isOutfield;
 
   if (distance < 40) {
-    // 内野
+    // 内野 - 遊撃手の守備範囲を広く設定
     isOutfield = false;
     if (distance < 15) {
       position = 'pitcher';
-    } else if (direction < -15) {
-      position = 'third';
-    } else if (direction < 0) {
-      position = 'short';
-    } else if (direction < 15) {
-      position = 'second';
+    } else if (direction < -20) {
+      // 三塁側 - 遊撃手の足で範囲拡張
+      const ssSpeed = safeDefense.short?.speed || 60;
+      const ssExpand = (ssSpeed - 60) / 100 * 5; // 足90→+1.5度拡張
+      if (direction >= -20 - ssExpand) {
+        position = 'short'; // 遊撃手がカバー
+      } else {
+        position = 'third';
+      }
+    } else if (direction < 5) {
+      position = 'short'; // -20〜+5: 遊撃手の広い範囲（25度幅）
+    } else if (direction < 20) {
+      position = 'second'; // +5〜+20: 二塁手（15度幅）
     } else {
-      position = 'first';
+      // 一塁側 - 二塁手の足で範囲拡張
+      const sbSpeed = safeDefense.second?.speed || 60;
+      const sbExpand = (sbSpeed - 60) / 100 * 4;
+      if (direction < 20 + sbExpand) {
+        position = 'second';
+      } else {
+        position = 'first';
+      }
     }
     fielder = safeDefense[position] || { defense: 70, speed: 60, arm: 65 };
   } else {
-    // 外野
+    // 外野 - 中堅手の守備範囲を広く設定
     isOutfield = true;
-    if (direction < -10) {
-      position = 'left';
-    } else if (direction <= 10) {
-      position = 'center';
+    const cfSpeed = safeDefense.center?.speed || 65;
+    const cfExpand = (cfSpeed - 65) / 100 * 8; // 足90→+2度拡張
+    const cfLeft = -15 - cfExpand;  // 中堅の左端（基準-15）
+    const cfRight = 15 + cfExpand;  // 中堅の右端（基準+15）
+
+    if (direction < cfLeft) {
+      // 左翼側 - 左翼手の足でもカバー拡張
+      const lfSpeed = safeDefense.left?.speed || 65;
+      const lfExpand = (lfSpeed - 65) / 100 * 4;
+      position = (direction >= cfLeft - lfExpand) && Math.random() < 0.3 ? 'center' : 'left';
+    } else if (direction <= cfRight) {
+      position = 'center'; // 中堅手の広い範囲（30度幅＋足で拡張）
     } else {
-      position = 'right';
+      // 右翼側 - 右翼手の足でもカバー拡張
+      const rfSpeed = safeDefense.right?.speed || 65;
+      const rfExpand = (rfSpeed - 65) / 100 * 4;
+      position = (direction <= cfRight + rfExpand) && Math.random() < 0.3 ? 'center' : 'right';
     }
     fielder = safeDefense[position] || { defense: 70, speed: 65, arm: 70 };
   }
 
-  // ===== ゴロの場合（旧モデル: 内野ゴロ98.5%アウト）=====
+  // ポジション別守備重要度係数（SS/CF > 2B/RF > LF/3B > 1B）
+  const positionWeight = {
+    short: 1.5, center: 1.5,
+    second: 1.2, right: 1.2,
+    left: 1.0, third: 1.0,
+    first: 0.7, pitcher: 0.5, catcher: 0.8
+  };
+  const weight = positionWeight[position] || 1.0;
+
+  // ===== ゴロの場合 =====
   if (launchAngle < 10) {
     if (distance < 40) {
-      // 内野ゴロ - 旧モデル基準: 98.5%
-      const baseOutRate = 0.985;
-      const defenseBonus = (fielder.defense - 70) / 100 * 0.01;  // 守備力で±1%
-      const speedPenalty = (batter.speed - 60) / 100 * 0.04;  // 俊足で最大-4%
-      const catchProb = Math.min(0.995, Math.max(0.93, baseOutRate + defenseBonus - speedPenalty));
+      // 内野ゴロ - 守備重要度で係数を強化
+      const baseOutRate = 0.975;
+      const defenseBonus = (fielder.defense - 70) / 100 * 0.04 * weight;  // 重要ポジションほど守備力が効く
+      const speedBonus = (fielder.speed - 60) / 100 * 0.03 * weight;     // 足で守備範囲拡大
+      const batterSpeedPenalty = (batter.speed - 60) / 100 * 0.04;
+      const catchProb = Math.min(0.995, Math.max(0.90, baseOutRate + defenseBonus + speedBonus - batterSpeedPenalty));
 
       if (Math.random() < catchProb) {
         // エラー判定
@@ -301,8 +340,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       }
       return { result: 'single', bases: 1, description: '内野安打' };
     } else {
-      // 外野への速いゴロ - 旧モデル: 30%アウト
-      const catchProb = 0.30 + (fielder.speed / 100) * 0.10;
+      // 外野への速いゴロ - 足と守備で大きく変動
+      const catchProb = 0.25 + (fielder.speed / 100) * 0.15 * weight + (fielder.defense / 100) * 0.10 * weight;
       if (Math.random() < catchProb) {
         return { result: 'out', bases: 0, description: '外野ゴロアウト', isOutfieldFly: false };
       }
@@ -313,21 +352,22 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   // ===== ライナーの場合 =====
   if (launchAngle < 25) {
     if (distance < 40) {
-      // 内野ライナー - 旧モデル: 90%アウト
-      const baseOutRate = 0.90;
-      const defenseBonus = (fielder.defense - 70) / 100 * 0.05;
-      const catchProb = Math.min(0.95, baseOutRate + defenseBonus);
+      // 内野ライナー - ポジション重要度で守備力の効きが変わる
+      const baseOutRate = 0.88;
+      const defenseBonus = (fielder.defense - 70) / 100 * 0.08 * weight;
+      const speedBonus = (fielder.speed - 60) / 100 * 0.04 * weight;
+      const catchProb = Math.min(0.96, baseOutRate + defenseBonus + speedBonus);
 
       if (Math.random() < catchProb) {
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: false };
       }
       return { result: 'single', bases: 1, description: 'ヒット！' };
     } else {
-      // 外野ライナー - 旧モデル: 82%アウト
-      const baseOutRate = 0.82;
-      const defenseBonus = (fielder.defense - 70) / 100 * 0.08;
-      const speedBonus = (fielder.speed - 65) / 100 * 0.05;
-      const catchProb = Math.min(0.92, baseOutRate + defenseBonus + speedBonus);
+      // 外野ライナー - CF/RFの守備・足が大きく効く
+      const baseOutRate = 0.78;
+      const defenseBonus = (fielder.defense - 70) / 100 * 0.12 * weight;
+      const speedBonus = (fielder.speed - 65) / 100 * 0.10 * weight;
+      const catchProb = Math.min(0.94, baseOutRate + defenseBonus + speedBonus);
 
       if (Math.random() < catchProb) {
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: true, tagupThrowbackChance: (fielder.arm / 100) * 0.5 };
@@ -363,8 +403,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     baseOutRate = 0.80;
   }
 
-  const defenseBonus = (fielder.defense - 70) / 100 * 0.03;
-  const speedBonus = (fielder.speed - 65) / 100 * 0.05;
+  const defenseBonus = (fielder.defense - 70) / 100 * 0.06 * weight;
+  const speedBonus = (fielder.speed - 65) / 100 * 0.10 * weight;
   const catchProb = Math.min(0.995, baseOutRate + defenseBonus + speedBonus);
 
   if (Math.random() < catchProb) {
