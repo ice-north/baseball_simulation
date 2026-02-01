@@ -1,6 +1,7 @@
 // ============================================================
 // 年間進行システム - yearProgressionSystem.js
 // シーズン終了処理、年度更新、引退、解雇
+// 年齢カーブによる成長・衰退システム
 // ============================================================
 
 import { createSeasonData, initializeStandings } from './seasonManager.js';
@@ -426,6 +427,10 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 4. 選手の年齢を更新
   updatedTeams = updateAllPlayerAges(updatedTeams);
 
+  // 4.5. 年齢カーブによる成長・衰退を適用
+  const { updatedTeams: teamsAfterAgeCurve, ageReports } = applyAgeCurveChanges(updatedTeams);
+  updatedTeams = teamsAfterAgeCurve;
+
   // 5. 引退処理
   const { updatedTeams: teamsAfterRetirement, retirements } = processRetirements(updatedTeams);
 
@@ -450,12 +455,124 @@ export function advanceToNextYear(seasonData, allTeams) {
     newSeasonData,
     updatedTeams: teamsAfterRetirement,
     awards,
-    retirements
+    retirements,
+    ageReports
   };
 };
 
 // ============================================================
-// キャンプ練習システム（経験値→成長）
+// 年齢カーブによる成長・衰退システム
+// 若い: フィジカル成長しやすい、24歳前後: 技術が伸びやすい
+// 28歳前後: 微成長、32歳: 衰え開始、36歳: 顕著な衰え
+// ただし個人差が大きく、例外的な選手も出る
+// ============================================================
+
+// フィジカル系能力（若いほど伸びやすい）
+const PHYSICAL_STATS = ['speed', 'arm', 'stamina', 'velocity'];
+// 技術系能力（24歳前後でピーク成長）
+const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 'steal'];
+
+/**
+ * 年齢に基づく成長・衰退の基礎値を算出
+ * 返り値は -3.0 〜 +3.0 程度の範囲（ランダム偏差含まず）
+ */
+function getAgeGrowthBase(age, isPhysical) {
+  if (isPhysical) {
+    // フィジカル: 18-22で大きく伸びる、23-27で微増、28以降は衰退
+    if (age <= 20) return 2.5;
+    if (age <= 22) return 1.8;
+    if (age <= 25) return 0.8;
+    if (age <= 28) return 0.1;
+    if (age <= 31) return -0.5;
+    if (age <= 34) return -1.2;
+    if (age <= 37) return -2.0;
+    return -3.0;
+  } else {
+    // 技術: 18-21で微増、22-26でよく伸びる、27-30で微増、31以降衰退
+    if (age <= 21) return 1.0;
+    if (age <= 24) return 2.2;
+    if (age <= 27) return 1.5;
+    if (age <= 30) return 0.3;
+    if (age <= 33) return -0.3;
+    if (age <= 36) return -1.0;
+    return -2.0;
+  }
+}
+
+/**
+ * シーズン終了時の年齢カーブによる能力変動を適用
+ * 個人差を大きくし、傾向からの逸脱を許容する
+ * @param {Object} allTeams - 全チームデータ
+ * @returns {Object} - { updatedTeams, ageReports }
+ */
+export function applyAgeCurveChanges(allTeams) {
+  const updatedTeams = {};
+  const ageReports = [];
+
+  Object.entries(allTeams).forEach(([teamName, team]) => {
+    updatedTeams[teamName] = {
+      ...team,
+      players: team.players.map(player => {
+        const age = player.age || 20;
+        let updatedPlayer = JSON.parse(JSON.stringify(player));
+        const changes = [];
+
+        // 全能力について年齢カーブを適用
+        const allStats = [...PHYSICAL_STATS, ...TECHNICAL_STATS];
+
+        allStats.forEach(stat => {
+          const isPhysical = PHYSICAL_STATS.includes(stat);
+          const base = getAgeGrowthBase(age, isPhysical);
+
+          // 個人差: 標準偏差2.0のランダム偏差（大きな個人差を出す）
+          // Box-Muller変換で正規分布を生成
+          const u1 = Math.random() || 0.001;
+          const u2 = Math.random();
+          const normalRandom = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+          const variance = normalRandom * 2.0;
+
+          // 最終変動値（四捨五入、±0の場合もある）
+          let change = Math.round(base + variance);
+
+          // 能力値を取得・更新
+          const statPath = getStatPath(stat);
+          if (!statPath) return;
+
+          const currentValue = getNestedValue(updatedPlayer, statPath);
+          if (currentValue == null) return;
+
+          // 球速は変動幅を2倍に（スケールが大きいため）
+          if (stat === 'velocity') change = Math.round((base + variance) * 1.5);
+          // スタミナも変動幅を2倍
+          if (stat === 'stamina') change = Math.round((base + variance) * 1.5);
+
+          const newValue = Math.min(99, Math.max(1, currentValue + change));
+
+          if (change !== 0) {
+            updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
+            changes.push({
+              stat, statName: getStatName(stat),
+              before: currentValue, after: newValue, change
+            });
+          }
+        });
+
+        if (changes.length > 0) {
+          ageReports.push({
+            name: player.name, team: teamName, age, changes
+          });
+        }
+
+        return updatedPlayer;
+      })
+    };
+  });
+
+  return { updatedTeams, ageReports };
+}
+
+// ============================================================
+// キャンプ練習システム（経験値→成長、年齢カーブ考慮）
 // ============================================================
 
 /**
@@ -570,29 +687,37 @@ export function executeCampTraining(player, trainingType) {
   }
 
   const experience = player.experience || 0;
+  const age = player.age || 20;
   const growthReport = [];
   let updatedPlayer = { ...player };
 
   // 各対象能力について成長判定
   menu.targets.forEach(targetStat => {
-    // 1. 基本練習効果: 1-3ポイント
-    const baseGrowth = Math.floor(Math.random() * 3) + 1;
+    const isPhysical = PHYSICAL_STATS.includes(targetStat);
+    const ageBase = getAgeGrowthBase(age, isPhysical);
 
-    // 2. 集中練習効果: 1-4ポイント
-    const focusGrowth = Math.floor(Math.random() * 4) + 1;
+    // 年齢による練習効率（若いほどフィジカル練習が効く、24前後は技術練習が効く）
+    // ageBaseが正なら練習効果UP、負なら練習効果DOWN（ただし最低1は成長）
+    const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
+
+    // 1. 基本練習効果: 1-3ポイント × 年齢補正
+    const baseGrowth = Math.round((Math.floor(Math.random() * 3) + 1) * ageMultiplier);
+
+    // 2. 集中練習効果: 1-4ポイント × 年齢補正
+    const focusGrowth = Math.round((Math.floor(Math.random() * 4) + 1) * ageMultiplier);
 
     // 3. 覚醒判定: 経験10につき1%の確率で爆発成長
     const awakeningChance = Math.floor(experience / 10);
     const isAwakening = Math.random() * 100 < awakeningChance;
-    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 10) + 5 : 0; // 5-14ポイント
+    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 10) + 5 : 0;
 
-    const totalGrowth = baseGrowth + focusGrowth + awakeningGrowth;
+    const totalGrowth = Math.max(0, baseGrowth + focusGrowth + awakeningGrowth);
 
     // 能力値を更新
     const statPath = getStatPath(targetStat);
     if (statPath) {
       const currentValue = getNestedValue(updatedPlayer, statPath) || 50;
-      const newValue = Math.min(currentValue + totalGrowth, 99); // 最大99
+      const newValue = Math.min(currentValue + totalGrowth, 99);
       updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
 
       growthReport.push({
@@ -607,7 +732,7 @@ export function executeCampTraining(player, trainingType) {
   });
 
   // 経験値を消費（練習に使った分の一部をリセット）
-  updatedPlayer.experience = Math.floor(experience * 0.3); // 70%消費
+  updatedPlayer.experience = Math.floor(experience * 0.3);
 
   return { player: updatedPlayer, growthReport };
 }

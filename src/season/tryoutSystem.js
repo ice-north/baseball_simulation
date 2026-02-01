@@ -194,9 +194,9 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   const velocityAdjust = isSideOrUnder ? -10 : 0;
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
-  // 年齢補正: 18歳を基準に、1歳につき+1ポイント（最大+7）
-  // ただしランダムの範囲は同じなので、18歳でも高能力、25歳でも低能力の可能性あり
-  const ageBonus = Math.min(age - 18, 7);
+  // 年齢補正: 18歳を基準に、1歳につき+2ポイント（19歳=+2, 25歳=+14）
+  // ただしランダムの範囲は広いので、18歳でも高能力、25歳でも低能力の可能性あり
+  const ageBonus = Math.max(0, (age - 18) * 2);
 
   // 年齢補正付きランダム生成（範囲をシフト）
   const randRangeWithAge = (min, max, bonus = ageBonus) => {
@@ -210,8 +210,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     meet: isPitcher ? randRangeWithAge(20, 45) : randRangeWithAge(37, 72),
     power: isPitcher ? randRangeWithAge(15, 40) : randRangeWithAge(32, 67),
     eye: isPitcher ? randRangeWithAge(30, 55) : randRangeWithAge(37, 77),
-    steal: isPitcher ? randRangeWithAge(15, 30, Math.max(0, ageBonus - 3)) : randRangeWithAge(27, 77, Math.max(0, ageBonus - 2)), // 盗塁は年齢補正控えめ
-    speed: isPitcher ? randRangeWithAge(35, 60, Math.max(0, ageBonus - 3)) : randRangeWithAge(37, 77, Math.max(0, ageBonus - 2)), // 走力は年齢補正控えめ
+    steal: isPitcher ? randRangeWithAge(15, 30, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithAge(27, 77, Math.max(0, Math.floor(ageBonus * 0.7))), // 盗塁はフィジカル系で年齢補正控えめ
+    speed: isPitcher ? randRangeWithAge(35, 60, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithAge(37, 77, Math.max(0, Math.floor(ageBonus * 0.7))), // 走力はフィジカル系で年齢補正控えめ
     arm: isPitcher ? randRangeWithAge(45, 70) : randRangeWithAge(37, 77),
     defense: isPitcher ? randRangeWithAge(45, 70) : randRangeWithAge(37, 77),
     // 投手能力（フォーム調整適用、-2調整、年齢補正）
