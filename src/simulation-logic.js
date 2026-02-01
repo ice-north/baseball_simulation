@@ -2,6 +2,7 @@
 // 試合ロジック - simulation-logic.js
 // 野球シミュレーションの物理計算と判定ロジック
 // ============================================================
+import { PITCHING_FORM_EFFECTS } from './utils/constants.js';
 
 /**
  * 物理衝突モデルによるコンタクト計算

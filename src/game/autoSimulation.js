@@ -1,4 +1,6 @@
 import { TEAMS_DATA } from '../teams-data.js';
+import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect } from '../simulation-logic.js';
+import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 
 // AI監督がスタメンを自動生成する機能（エクスポート）
 // 毎試合呼ばれ、ローテーション・疲労を考慮して合理的なラインナップを組む
@@ -387,48 +389,57 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const contactChance = 40 + batter.meet * 0.4 + handBonus;
 
         if (contactRand < contactChance) {
-          // コンタクト成功 - 守備力を考慮
-          const hitRand = Math.random() * 100;
-          const powerFactor = batter.power / 100;
-          // 球速の影響を軽減（0.1→0.04）、ミートの影響を強化
-          const hitChance = 28 + batter.meet * 0.25 - effectiveVelocity * 0.04 + handBonus;
+          // コンタクト成功 - 物理エンジンで打球・守備を判定
+          const pitchData = {
+            type: 'straight',
+            velocity: effectiveVelocity,
+            level: 50
+          };
+          const handEffect = {
+            powerBonus: sameHand ? -3 : 3,
+            meetBonus: sameHand ? -3 : 3
+          };
+          const tunnelingEffect = lastPitch ? getTunnelingEffect(lastPitch, pitchData, catcherPlayer?.catching?.lead || 50) : 0;
 
-          // 守備力による補正（チーム守備平均で±3%）
-          const defenseValues = Object.values(defense).map(d => d.defense || 50);
-          const avgDefense = defenseValues.length > 0 ? defenseValues.reduce((a, b) => a + b, 0) / defenseValues.length : 50;
-          const defenseBonus = (avgDefense - 50) * 0.06; // 守備50基準、±3%
+          // 物理コンタクト計算
+          const physicsResult = calculatePhysicsContact(
+            { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter' },
+            batter,
+            Math.random() < 0.3, // 球種予測的中率30%
+            pitchData,
+            tunnelingEffect,
+            handEffect
+          );
 
-          if (hitRand < hitChance - defenseBonus) {
-            // ヒット - 守備の速さでヒット種別が変わる
-            const hitTypeRand = Math.random() * 100;
-            const hrChance = powerFactor * 8;
-            const tripleChance = batter.speed * 0.05;
-            const doubleChance = 15 + powerFactor * 10;
+          if (!physicsResult.isContact) {
+            return { type: 'swinging_strike' };
+          }
 
-            // 外野守備が良いとエクストラベースヒットが減る
-            const ofDefense = ['left', 'center', 'right'].map(p => defense[p]?.defense || 50);
-            const ofAvg = ofDefense.reduce((a, b) => a + b, 0) / 3;
-            const ofPenalty = (ofAvg - 50) * 0.1; // 外野守備による長打抑制
+          // 打球物理パラメータ計算
+          const battedBall = calculateBattedBallPhysics(batter, pitcher, pitchData, physicsResult);
 
-            if (hitTypeRand < hrChance) {
-              return { type: 'homerun' };
-            } else if (hitTypeRand < hrChance + tripleChance - ofPenalty) {
-              return { type: 'triple' };
-            } else if (hitTypeRand < hrChance + tripleChance + doubleChance - ofPenalty) {
-              return { type: 'double' };
-            } else {
-              return { type: 'single' };
-            }
-          } else {
-            // アウト - 内野守備でゲッツー率が変化
-            const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
-            const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
-            const dpBase = 15 + (ifAvg - 50) * 0.2; // 二遊間の守備でゲッツー率変動
-            const dpRand = Math.random() * 100;
-            if (bases[0] && dpRand < dpBase) {
-              return { type: 'double_play' };
+          // 守備判定（ポジション別の守備力を使用）
+          const fieldResult = judgeFielderReach(battedBall, defense, batter);
+
+          if (fieldResult.result === 'homerun') {
+            return { type: 'homerun' };
+          } else if (fieldResult.result === 'out') {
+            // ゲッツー判定（内野ゴロでランナー1塁）
+            if (bases[0] && battedBall.launchAngle < 10 && battedBall.distance < 40) {
+              const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
+              const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
+              const dpBase = 15 + (ifAvg - 50) * 0.2;
+              if (Math.random() * 100 < dpBase) {
+                return { type: 'double_play' };
+              }
             }
             return { type: 'out' };
+          } else if (fieldResult.result === 'triple') {
+            return { type: 'triple' };
+          } else if (fieldResult.result === 'double') {
+            return { type: 'double' };
+          } else {
+            return { type: 'single' };
           }
         } else {
           // 空振り
