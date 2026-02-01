@@ -1,6 +1,7 @@
 import { TEAMS_DATA } from '../teams-data.js';
 
 // AI監督がスタメンを自動生成する機能（エクスポート）
+// 毎試合呼ばれ、ローテーション・疲労を考慮して合理的なラインナップを組む
 export const generateAILineup = (teamData, teamName) => {
   const players = teamData.players || [];
   if (players.length === 0) {
@@ -14,27 +15,24 @@ export const generateAILineup = (teamData, teamName) => {
   players.forEach(p => { p.battingOrder = 0; });
 
   // 投手を除いた野手を取得
-  const fieldPlayers = players.filter(p => {
-    const isPitcher = p.position === 'pitcher' ||
-      (p.pitching?.velocity >= 140 && p.positionFitness?.pitcher >= 80);
-    return !isPitcher;
-  });
+  const fieldPlayers = players.filter(p => p.position !== 'pitcher');
 
-  // ポジションごとに最適な選手を選ぶ
-  const positions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  // ポジションごとに最適な選手を選ぶ（守備適性+打撃力の総合判断）
   const lineup = [];
   const usedPlayers = new Set();
 
-  // 各ポジションで最高適性の選手を選択
-  positions.forEach(pos => {
+  // 重要守備位置を先に埋める
+  const priorityPositions = ['short', 'second', 'center', 'catcher', 'third', 'first', 'left', 'right'];
+  priorityPositions.forEach(pos => {
     const available = fieldPlayers.filter(p => !usedPlayers.has(p.id));
     if (available.length === 0) return;
 
-    // ポジション適性でソート
     available.sort((a, b) => {
       const aFit = a.positionFitness?.[pos] || 50;
       const bFit = b.positionFitness?.[pos] || 50;
-      return bFit - aFit;
+      const aBat = (a.batting?.meet || 50) + (a.batting?.power || 50);
+      const bBat = (b.batting?.meet || 50) + (b.batting?.power || 50);
+      return (bFit * 0.6 + bBat * 0.4) - (aFit * 0.6 + aBat * 0.4);
     });
 
     const selected = available[0];
@@ -42,63 +40,48 @@ export const generateAILineup = (teamData, teamName) => {
     usedPlayers.add(selected.id);
   });
 
-  // 打順を決定（能力値に基づく）
-  // 1番: 足が速い、出塁率が高い
-  // 2番: バント、進塁打が上手い（ミート高い）
-  // 3番: 最も総合力が高い打者
-  // 4番: パワーが最も高い
-  // 5番: 2番目にパワーが高い
-  // 6-8番: 残りを適当に配置
-  lineup.sort((a, b) => {
-    const aPlayer = a.player;
-    const bPlayer = b.player;
-
-    // 総合打撃力 = ミート + パワー + 選球眼
-    const aTotal = (aPlayer.batting?.meet || 50) + (aPlayer.batting?.power || 50) + (aPlayer.batting?.eye || 50);
-    const bTotal = (bPlayer.batting?.meet || 50) + (bPlayer.batting?.power || 50) + (bPlayer.batting?.eye || 50);
-
-    return bTotal - aTotal; // 高い順
-  });
-
-  // 打順を再配置
+  // 打順を決定
   const battingOrder = [];
   const remaining = [...lineup];
 
-  // 1番: 足が速い選手
-  remaining.sort((a, b) => (b.player.physical?.speed || 50) - (a.player.physical?.speed || 50));
-  if (remaining.length > 0) {
-    battingOrder.push({ ...remaining.shift(), battingOrder: 1 });
-  }
-
-  // 4番: パワーが高い選手
-  remaining.sort((a, b) => (b.player.batting?.power || 50) - (a.player.batting?.power || 50));
-  if (remaining.length > 0) {
-    battingOrder.push({ ...remaining.shift(), battingOrder: 4 });
-  }
-
-  // 3番: 総合力が高い選手
+  // 1番: 出塁率重視（ミート+選球眼+足）
   remaining.sort((a, b) => {
-    const aTotal = (a.player.batting?.meet || 50) + (a.player.batting?.power || 50);
-    const bTotal = (b.player.batting?.meet || 50) + (b.player.batting?.power || 50);
-    return bTotal - aTotal;
+    const aVal = (a.player.batting?.meet || 50) * 0.4 + (a.player.batting?.eye || 50) * 0.3 + (a.player.physical?.speed || 50) * 0.3;
+    const bVal = (b.player.batting?.meet || 50) * 0.4 + (b.player.batting?.eye || 50) * 0.3 + (b.player.physical?.speed || 50) * 0.3;
+    return bVal - aVal;
   });
-  if (remaining.length > 0) {
-    battingOrder.push({ ...remaining.shift(), battingOrder: 3 });
-  }
+  if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 1 });
 
-  // 5番: パワー系
+  // 2番: ミート重視
+  remaining.sort((a, b) => {
+    const aVal = (a.player.batting?.meet || 50) * 0.5 + (a.player.batting?.eye || 50) * 0.3 + (a.player.physical?.speed || 50) * 0.2;
+    const bVal = (b.player.batting?.meet || 50) * 0.5 + (b.player.batting?.eye || 50) * 0.3 + (b.player.physical?.speed || 50) * 0.2;
+    return bVal - aVal;
+  });
+  if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 2 });
+
+  // 3番: 総合力
+  remaining.sort((a, b) => {
+    const aVal = (a.player.batting?.meet || 50) * 0.5 + (a.player.batting?.power || 50) * 0.5;
+    const bVal = (b.player.batting?.meet || 50) * 0.5 + (b.player.batting?.power || 50) * 0.5;
+    return bVal - aVal;
+  });
+  if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 3 });
+
+  // 4番: パワー最重視
   remaining.sort((a, b) => (b.player.batting?.power || 50) - (a.player.batting?.power || 50));
-  if (remaining.length > 0) {
-    battingOrder.push({ ...remaining.shift(), battingOrder: 5 });
-  }
+  if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 4 });
 
-  // 2番: ミートが高い
-  remaining.sort((a, b) => (b.player.batting?.meet || 50) - (a.player.batting?.meet || 50));
-  if (remaining.length > 0) {
-    battingOrder.push({ ...remaining.shift(), battingOrder: 2 });
-  }
+  // 5番: パワー2番手
+  remaining.sort((a, b) => (b.player.batting?.power || 50) - (a.player.batting?.power || 50));
+  if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 5 });
 
-  // 残りは6,7,8番に配置
+  // 6-8番: 残りを総合打力順
+  remaining.sort((a, b) => {
+    const aVal = (a.player.batting?.meet || 50) + (a.player.batting?.power || 50);
+    const bVal = (b.player.batting?.meet || 50) + (b.player.batting?.power || 50);
+    return bVal - aVal;
+  });
   let nextOrder = 6;
   while (remaining.length > 0 && nextOrder <= 8) {
     battingOrder.push({ ...remaining.shift(), battingOrder: nextOrder++ });
@@ -113,43 +96,56 @@ export const generateAILineup = (teamData, teamName) => {
     }
   });
 
-  // 投手を9番に設定（疲労度が低い投手を優先）
-  const pitchers = players.filter(p =>
-    p.position === 'pitcher' ||
-    (p.pitching?.velocity >= 135 && !usedPlayers.has(p.id))
-  );
+  // 先発投手をローテーションから選択
+  const rotation = teamData.pitchingRotation;
+  const allPitchers = players.filter(p => p.position === 'pitcher');
+  let starter = null;
 
-  if (pitchers.length > 0) {
-    // 疲労度が低い順にソート（疲労度が同じ場合は球速順）
-    // 疲労度100以上の投手は先発不可
-    const availablePitchers = pitchers.filter(p => (p.fatigue || 0) < 100);
+  if (rotation?.starters?.length > 0) {
+    const index = rotation.currentStarterIndex || 0;
+    for (let i = 0; i < rotation.starters.length; i++) {
+      const candidateIdx = (index + i) % rotation.starters.length;
+      const candidateId = rotation.starters[candidateIdx];
+      const candidate = allPitchers.find(p => p.id === candidateId);
+      if (candidate && (candidate.fatigue || 0) < 80) {
+        starter = candidate;
+        if (TEAMS_DATA[teamName]?.pitchingRotation) {
+          TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
+            (candidateIdx + 1) % rotation.starters.length;
+        }
+        break;
+      }
+    }
+  }
 
+  if (!starter) {
+    // ローテ未設定 or 全員疲労: スタミナが高い投手を先発に
+    const availablePitchers = allPitchers.filter(p => (p.fatigue || 0) < 80);
     if (availablePitchers.length > 0) {
       availablePitchers.sort((a, b) => {
-        const fatigueA = a.fatigue || 0;
-        const fatigueB = b.fatigue || 0;
-        if (fatigueA !== fatigueB) return fatigueA - fatigueB; // 疲労度が低い順
-        return (b.pitching?.velocity || 0) - (a.pitching?.velocity || 0); // 同じなら球速順
+        const staminaA = a.pitching?.stamina || 100;
+        const staminaB = b.pitching?.stamina || 100;
+        if (staminaA !== staminaB) return staminaB - staminaA;
+        return (a.fatigue || 0) - (b.fatigue || 0);
       });
-      const starter = availablePitchers[0];
-      starter.battingOrder = 9;
-      starter.position = 'pitcher';
-      console.log(`    先発投手: ${starter.name} (${starter.pitching?.velocity || 0}km/h, 疲労:${starter.fatigue || 0})`);
+      starter = availablePitchers[0];
     } else {
-      // 全員疲労が高い場合は最も疲労が低い投手
-      pitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
-      const starter = pitchers[0];
-      starter.battingOrder = 9;
-      starter.position = 'pitcher';
-      console.log(`    先発投手(疲労高): ${starter.name} (疲労:${starter.fatigue || 0})`);
+      allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
+      starter = allPitchers[0];
     }
+  }
+
+  if (starter) {
+    starter.battingOrder = 9;
+    starter.position = 'pitcher';
+    console.log(`    先発投手: ${starter.name} (${starter.pitching?.velocity || 0}km/h, 疲労:${starter.fatigue || 0})`);
   }
 
   console.log(`    スタメン: ${battingOrder.map(e => `${e.battingOrder}番${e.position}:${e.player.name}`).join(', ')}`);
 };
 
 // 全チームの投手疲労を回復（日次処理）
-export const recoverAllPitcherFatigue = (recoveryAmount = 20) => {
+export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
   Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
     if (!team || !team.players) return;
 
@@ -188,22 +184,21 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   console.log(`  ${awayTeamName}: ${awayTeamData.players.length}人`);
 
   // スタメン設定を適用（なければAI生成）
+  // AI監督は毎試合新しくスタメンを決める
   const applyLineupSettings = (teamData, teamName) => {
     const settings = teamData.lineupSettings;
-    if (!settings || !settings.battingOrder || settings.battingOrder.length === 0) {
-      // スタメン設定がない場合はAIが生成
+    const isUserTeam = settings?.battingOrder?.length > 0;
+
+    if (!isUserTeam) {
+      // AI監督が毎試合スタメンを決定
       generateAILineup(teamData, teamName);
       return;
     }
 
     console.log(`  ✅ ${teamName}のスタメン設定を適用`);
 
-    // まず全員の打順を0にリセット（ベンチ）
-    teamData.players.forEach(p => {
-      if (p.position !== 'pitcher') {
-        p.battingOrder = 0;
-      }
-    });
+    // まず全員の打順を0にリセット
+    teamData.players.forEach(p => { p.battingOrder = 0; });
 
     // lineupSettingsから打順と守備位置を適用
     settings.battingOrder.forEach(entry => {
@@ -280,7 +275,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         ...p,
         currentStamina: p.pitching?.stamina || 100,
         gameStats: {
-          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0 },
+          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
           pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
         }
       }))
@@ -292,7 +287,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         ...p,
         currentStamina: p.pitching?.stamina || 100,
         gameStats: {
-          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0 },
+          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
           pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
         }
       }))
@@ -392,31 +387,45 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const contactChance = 40 + batter.meet * 0.4 + handBonus;
 
         if (contactRand < contactChance) {
-          // コンタクト成功
+          // コンタクト成功 - 守備力を考慮
           const hitRand = Math.random() * 100;
           const powerFactor = batter.power / 100;
-          const hitChance = 25 + batter.meet * 0.2 - effectiveVelocity * 0.1 + handBonus;
+          // 球速の影響を軽減（0.1→0.04）、ミートの影響を強化
+          const hitChance = 28 + batter.meet * 0.25 - effectiveVelocity * 0.04 + handBonus;
 
-          if (hitRand < hitChance) {
-            // ヒット
+          // 守備力による補正（チーム守備平均で±3%）
+          const defenseValues = Object.values(defense).map(d => d.defense || 50);
+          const avgDefense = defenseValues.length > 0 ? defenseValues.reduce((a, b) => a + b, 0) / defenseValues.length : 50;
+          const defenseBonus = (avgDefense - 50) * 0.06; // 守備50基準、±3%
+
+          if (hitRand < hitChance - defenseBonus) {
+            // ヒット - 守備の速さでヒット種別が変わる
             const hitTypeRand = Math.random() * 100;
-            const hrChance = powerFactor * 8; // ホームラン確率
+            const hrChance = powerFactor * 8;
             const tripleChance = batter.speed * 0.05;
             const doubleChance = 15 + powerFactor * 10;
 
+            // 外野守備が良いとエクストラベースヒットが減る
+            const ofDefense = ['left', 'center', 'right'].map(p => defense[p]?.defense || 50);
+            const ofAvg = ofDefense.reduce((a, b) => a + b, 0) / 3;
+            const ofPenalty = (ofAvg - 50) * 0.1; // 外野守備による長打抑制
+
             if (hitTypeRand < hrChance) {
               return { type: 'homerun' };
-            } else if (hitTypeRand < hrChance + tripleChance) {
+            } else if (hitTypeRand < hrChance + tripleChance - ofPenalty) {
               return { type: 'triple' };
-            } else if (hitTypeRand < hrChance + tripleChance + doubleChance) {
+            } else if (hitTypeRand < hrChance + tripleChance + doubleChance - ofPenalty) {
               return { type: 'double' };
             } else {
               return { type: 'single' };
             }
           } else {
-            // アウト
+            // アウト - 内野守備でゲッツー率が変化
+            const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
+            const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
+            const dpBase = 15 + (ifAvg - 50) * 0.2; // 二遊間の守備でゲッツー率変動
             const dpRand = Math.random() * 100;
-            if (bases[0] && dpRand < 20) {
+            if (bases[0] && dpRand < dpBase) {
               return { type: 'double_play' };
             }
             return { type: 'out' };
@@ -481,36 +490,53 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     return { bases: newBases, runsScored };
   };
 
-  // 盗塁判定（AI監督）
+  // 盗塁判定（AI監督）- 走者の実際の走力を使用
   const attemptStolenBase = (offenseTeam, defenseTeam) => {
-    // 1塁または2塁にランナーがいて、次の塁が空いている場合
     const pitcher = getCurrentPitcher(defenseTeam);
     const catcher = defenseTeam.players.find(p => p.position === 'catcher');
 
+    // 走塁中の走者を追跡（簡易: 直前の出塁者の走力を使用）
     for (let base = 0; base < 2; base++) {
       if (gameState.bases[base] && !gameState.bases[base + 1]) {
-        // このランナーの盗塁を検討
-        const runnerSpeed = 60; // 仮の走力（本来は走者の能力を取得）
+        // 走者の走力を取得（打順を遡って最近出塁した選手を推定）
+        // 簡易実装: チームの打順から走力の高い走者を想定
+        const runnersOnBase = offenseTeam.players.filter(p =>
+          p.battingOrder > 0 && p.battingOrder <= 9
+        );
+        // 走力の平均的な値を使用（出塁した選手の特定は困難なため、チーム平均+ランダム）
+        const avgSpeed = runnersOnBase.reduce((sum, p) => sum + (p.physical?.speed || 50), 0) / (runnersOnBase.length || 1);
+        const runnerSpeed = avgSpeed + (Math.random() * 20 - 10); // ある程度のバラつき
+
         const catcherArm = catcher?.physical?.arm || 50;
-        const pitcherQuick = pitcher?.pitching?.control || 50; // クイック代用
+        const pitcherQuick = pitcher?.pitching?.control || 50;
 
-        // 盗塁成功率 = 走力 - 捕手肩力/2 - 投手クイック/4 + ランダム
-        const successChance = runnerSpeed - catcherArm / 2 - pitcherQuick / 4 + (Math.random() * 30 - 15);
+        // 盗塁成功確率: 走力ベース（50で25%、70で55%、90で85%）
+        const baseChance = (runnerSpeed - 30) * 1.5;
+        const catcherPenalty = catcherArm * 0.3;
+        const pitcherPenalty = pitcherQuick * 0.1;
+        const successChance = baseChance - catcherPenalty - pitcherPenalty + (Math.random() * 20 - 10);
 
-        // 走力70以上で2アウト未満、成功率50%以上なら盗塁試行
-        if (runnerSpeed >= 70 && gameState.outs < 2 && successChance > 50) {
+        // 盗塁を試みる条件: 走力55以上、2アウト未満、成功率40%以上
+        const shouldAttempt = runnerSpeed >= 55 && gameState.outs < 2 && successChance > 40;
+        // 走力が高いほど積極的に走る
+        const aggressiveness = Math.random() * 100 < (runnerSpeed - 40) * 1.5;
+
+        if (shouldAttempt && aggressiveness) {
           const rand = Math.random() * 100;
           if (rand < successChance) {
-            // 盗塁成功
             gameState.bases[base] = false;
             gameState.bases[base + 1] = true;
-            console.log(`   🏃 盗塁成功: ${base + 1}塁 → ${base + 2}塁`);
+            // 盗塁成功を打者の成績に記録（簡易: 現在の打者の成績に加算）
+            const currentBatter = getCurrentBatter(offenseTeam);
+            if (currentBatter?.gameStats?.batting) {
+              currentBatter.gameStats.batting.stolenBases = (currentBatter.gameStats.batting.stolenBases || 0) + 1;
+            }
+            console.log(`   🏃 盗塁成功: ${base + 1}塁 → ${base + 2}塁 (走力${Math.round(runnerSpeed)})`);
             return { success: true, base };
           } else {
-            // 盗塁失敗（アウト）
             gameState.bases[base] = false;
             gameState.outs++;
-            console.log(`   🚫 盗塁失敗: ${base + 1}塁走者アウト`);
+            console.log(`   🚫 盗塁失敗: ${base + 1}塁走者アウト (走力${Math.round(runnerSpeed)})`);
             return { success: false, base };
           }
         }
@@ -599,15 +625,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     let atBatOver = false;
     let pitchCount = 0;
-    const maxPitches = 20; // 無限ループ防止
-    let lastPitch = null; // トンネリング効果のために前球を記録
+    const maxPitches = 20;
+    let lastPitch = null;
+    gameState._stolenAttempted = false;
 
     while (!atBatOver && pitchCount < maxPitches) {
       pitchCount++;
 
-      // AI監督: 盗塁を検討（1球目のみ）
-      if (pitchCount === 1 && gameState.outs < 2) {
+      // AI監督: 盗塁を検討（各球で検討、ただし1打席1回まで）
+      if (pitchCount <= 3 && gameState.outs < 2 && !gameState._stolenAttempted) {
         const stealResult = attemptStolenBase(offenseTeam, defenseTeam);
+        if (stealResult) gameState._stolenAttempted = true;
         if (stealResult && !stealResult.success && gameState.outs >= 3) {
           // 盗塁死で3アウトなら打席終了
           atBatOver = true;
@@ -837,14 +865,25 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               }
             }
 
-            // フォールバック
+            // フォールバック（先発ローテーション投手は除外）
             if (!reliever) {
+              const starterIds = new Set(rotation.starters || []);
               reliever = team.players.find(p =>
                 p.position === 'pitcher' &&
                 p.battingOrder === 0 &&
                 p.id !== pitcher.id &&
+                !starterIds.has(p.id) &&
                 (p.currentStamina || 80) > 40
               );
+              // リリーフが全員使えない場合のみ先発を緊急登板
+              if (!reliever) {
+                reliever = team.players.find(p =>
+                  p.position === 'pitcher' &&
+                  p.battingOrder === 0 &&
+                  p.id !== pitcher.id &&
+                  (p.currentStamina || 80) > 20
+                );
+              }
             }
 
             if (reliever) {
@@ -943,6 +982,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         season.rbis += b.rbis;
         season.walks += b.walks;
         season.strikeouts += b.strikeouts;
+        season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
 
         career.games++;
         career.atBats += b.atBats;
@@ -951,6 +991,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         career.rbis += b.rbis;
         career.walks += b.walks;
         career.strikeouts += b.strikeouts;
+        career.stolenBases = (career.stolenBases || 0) + (b.stolenBases || 0);
 
         // 経験値蓄積（出場1 + 打席数/3）
         const expGained = 1 + Math.floor(b.atBats / 3);
@@ -979,8 +1020,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         career.walks += p.walks;
         career.pitches += p.pitches;
 
-        // 疲労度を蓄積（投げた球数分）
-        playerData.fatigue = (playerData.fatigue || 0) + p.pitches;
+        // 疲労度を蓄積（先発は球数/2、リリーフは球数/3で蓄積）
+        const isStarterPitcher = p.outs >= 15; // 5回以上投げたら先発扱い
+        const fatigueGain = isStarterPitcher ? Math.floor(p.pitches / 2) : Math.floor(p.pitches / 3);
+        playerData.fatigue = (playerData.fatigue || 0) + fatigueGain;
 
         // 経験値蓄積（登板1 + 投球回数）
         const inningsPitched = Math.floor(p.outs / 3);
