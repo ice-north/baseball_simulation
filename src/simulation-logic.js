@@ -234,13 +234,13 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
 
   // 本塁打判定（バレルゾーン）
   // MLB基準: 打球速度158km/h以上、角度26-30度で.500以上の打率
-  if (distance > 100 && launchAngle >= 20 && launchAngle <= 40 && exitVelocity >= 150) {
+  if (distance > 105 && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 155) {
     return { result: 'homerun', bases: 4, description: 'ホームラン！' };
   }
 
-  // 長打圏フライ（95m以上の深いフライ）
-  if (distance > 95 && launchAngle >= 25 && launchAngle <= 45 && exitVelocity >= 140) {
-    if (Math.random() < 0.7) {
+  // 長打圏フライ（100m以上の深いフライ）
+  if (distance > 100 && launchAngle >= 25 && launchAngle <= 42 && exitVelocity >= 145) {
+    if (Math.random() < 0.5) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス越え）' };
     }
   }
