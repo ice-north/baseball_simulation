@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
@@ -6,6 +6,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup');
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [selectedBattingOrder, setSelectedBattingOrder] = useState(null);
+  const [benchSortKey, setBenchSortKey] = useState(null);
+  const [benchSortAsc, setBenchSortAsc] = useState(false);
 
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
@@ -202,6 +204,44 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     setUpdateTrigger(prev => prev + 1);
   };
 
+  // 控え選手のソート用値を取得
+  const getBenchSortValue = (player, key) => {
+    const isPitcher = player.position === 'pitcher';
+    switch (key) {
+      case 'name': return player.name;
+      case 'age': return player.age || 0;
+      case 'position': return POSITION_NAMES[player.position] || '';
+      case 'meet': return isPitcher ? -1 : (player.batting?.meet || 0);
+      case 'power': return isPitcher ? -1 : (player.batting?.power || 0);
+      case 'speed': return isPitcher ? -1 : (player.physical?.speed || 0);
+      case 'arm': return isPitcher ? -1 : (player.physical?.arm || 0);
+      case 'defense': return isPitcher ? -1 : (player.fielding?.defense || 0);
+      case 'velocity': return isPitcher ? (player.pitching?.velocity || 0) : -1;
+      case 'control': return isPitcher ? (player.pitching?.control || 0) : -1;
+      case 'stamina': return isPitcher ? (player.pitching?.stamina || 0) : -1;
+      default: return 0;
+    }
+  };
+
+  const handleBenchSort = (key) => {
+    if (benchSortKey === key) {
+      setBenchSortAsc(!benchSortAsc);
+    } else {
+      setBenchSortKey(key);
+      setBenchSortAsc(false);
+    }
+  };
+
+  const sortedBenchPlayers = useMemo(() => {
+    if (!benchSortKey) return benchPlayers;
+    return [...benchPlayers].sort((a, b) => {
+      const va = getBenchSortValue(a, benchSortKey);
+      const vb = getBenchSortValue(b, benchSortKey);
+      if (typeof va === 'string') return benchSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      return benchSortAsc ? va - vb : vb - va;
+    });
+  }, [benchPlayers, benchSortKey, benchSortAsc, updateTrigger]);
+
   // 1行表示用の控え選手行コンポーネント
   const BenchPlayerRow = ({ player }) => {
     const isPitcher = player.position === 'pitcher';
@@ -213,65 +253,57 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     const isCloser = rotation.closer === player.id;
     const roleLabel = isStarter ? '先発' : isMiddle ? '中継' : isSetup ? 'SU' : isCloser ? '抑え' : '';
 
+    const StatCell = ({ value, isVelocity }) => {
+      const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);
+      return <td className={`py-1 px-1 text-xs text-center ${getRankColor(rank)}`}>{value}</td>;
+    };
+    const EmptyCell = () => <td className="py-1 px-1 text-xs text-center text-gray-600">-</td>;
+
     return (
       <tr
         className={`border-b border-gray-700 cursor-pointer transition ${isInLineup ? 'opacity-40' : 'hover:bg-gray-600'}`}
         onClick={() => {
           if (isInLineup) return;
-          if (isPitcher) {
-            handleChangePitcher(player.id);
-          } else {
-            handleAddToLineup(player.id);
-          }
+          if (isPitcher) { handleChangePitcher(player.id); } else { handleAddToLineup(player.id); }
         }}
       >
-        <td className="py-1 px-1 text-sm text-white font-bold">{player.name}</td>
-        <td className="py-1 px-1 text-xs text-gray-400">{player.age}</td>
-        <td className="py-1 px-1 text-xs">
+        <td className="py-1 px-1 text-sm text-white font-bold whitespace-nowrap">{player.name}</td>
+        <td className="py-1 px-1 text-xs text-gray-400 text-center">{player.age}</td>
+        <td className="py-1 px-1 text-xs whitespace-nowrap">
           <span className={isPitcher ? 'text-indigo-300' : 'text-gray-300'}>
             {POSITION_NAMES[player.position] || player.position}
           </span>
-          {roleLabel && <span className="ml-1 text-xs text-yellow-400">({roleLabel})</span>}
+          {roleLabel && <span className="ml-1 text-yellow-400">({roleLabel})</span>}
         </td>
-        <td className="py-1 px-1 text-xs text-gray-400">
+        <td className="py-1 px-1 text-xs text-gray-400 whitespace-nowrap">
           {getThrowsLabel(player.physical?.throws)}{getBatsLabel(player.batting?.bats || player.physical?.bats)}
         </td>
-        {isPitcher ? (
-          <>
-            <td className={`py-1 px-1 text-xs ${getRankColor(getVelocityRank(player.pitching?.velocity || 0))}`}>
-              {player.pitching?.velocity || 0}
-            </td>
-            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.pitching?.control || 0))}`}>
-              {player.pitching?.control || 0}
-            </td>
-            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(Math.min(99, Math.floor((player.pitching?.stamina || 0) / 2))))}`}>
-              {player.pitching?.stamina || 0}
-            </td>
-            <td className="py-1 px-1 text-xs text-gray-500">-</td>
-            <td className="py-1 px-1 text-xs text-gray-500">-</td>
-          </>
-        ) : (
-          <>
-            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.batting?.meet || 0))}`}>
-              {player.batting?.meet || 0}
-            </td>
-            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.batting?.power || 0))}`}>
-              {player.batting?.power || 0}
-            </td>
-            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.physical?.speed || 0))}`}>
-              {player.physical?.speed || 0}
-            </td>
-            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.physical?.arm || 0))}`}>
-              {player.physical?.arm || 0}
-            </td>
-            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.fielding?.defense || 0))}`}>
-              {player.fielding?.defense || 0}
-            </td>
-          </>
-        )}
+        {/* 野手能力: ミート、パワー、走力、肩、守備 */}
+        {isPitcher ? <><EmptyCell /><EmptyCell /><EmptyCell /><EmptyCell /><EmptyCell /></> : <>
+          <StatCell value={player.batting?.meet || 0} />
+          <StatCell value={player.batting?.power || 0} />
+          <StatCell value={player.physical?.speed || 0} />
+          <StatCell value={player.physical?.arm || 0} />
+          <StatCell value={player.fielding?.defense || 0} />
+        </>}
+        {/* 投手能力: 球速、制球、スタミナ */}
+        {isPitcher ? <>
+          <StatCell value={player.pitching?.velocity || 0} isVelocity />
+          <StatCell value={player.pitching?.control || 0} />
+          <StatCell value={player.pitching?.stamina || 0} />
+        </> : <><EmptyCell /><EmptyCell /><EmptyCell /></>}
       </tr>
     );
   };
+
+  const SortHeader = ({ label, sortKey, className = '' }) => (
+    <th
+      className={`py-1 px-1 cursor-pointer hover:text-white transition select-none ${className}`}
+      onClick={() => handleBenchSort(sortKey)}
+    >
+      {label}{benchSortKey === sortKey ? (benchSortAsc ? '↑' : '↓') : ''}
+    </th>
+  );
 
   return (
     <div className="p-8">
@@ -294,9 +326,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         </div>
 
         {tab === 'lineup' && (
-          <div className="grid grid-cols-2 gap-6">
-            {/* 左側: スタメン */}
-            <div className="bg-gray-800 rounded-lg p-6">
+          <div className="grid grid-cols-3 gap-4">
+            {/* 左側: スタメン (1/3) */}
+            <div className="bg-gray-800 rounded-lg p-4 col-span-1">
               <h2 className="text-xl font-bold text-white mb-4">スタメン設定 ({lineup.length}/9人)</h2>
               <p className="text-sm text-gray-400 mb-2">1-8番: 野手を配置 / 9番: 投手（試合時に先発投手が入る）</p>
               <div className="space-y-2">
@@ -363,30 +395,33 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               </div>
             </div>
 
-            {/* 右側: 控え選手一覧（1行テーブル） */}
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-2">
+            {/* 右側: 控え選手一覧（2/3） */}
+            <div className="bg-gray-800 rounded-lg p-4 col-span-2">
+              <h2 className="text-lg font-bold text-white mb-2">
                 控え選手 ({benchPlayers.length}人)
                 {selectedBattingOrder && <span className="text-blue-400 text-sm ml-2">→ {selectedBattingOrder}番に追加</span>}
               </h2>
-              <p className="text-xs text-gray-400 mb-3">クリックでスタメンに追加（投手は投手枠を交換）</p>
+              <p className="text-xs text-gray-400 mb-2">クリックでスタメンに追加（投手は投手枠を交換）/ ヘッダークリックでソート</p>
               <div className="overflow-y-auto max-h-[700px]">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-gray-600 text-xs text-gray-400">
-                      <th className="py-1 px-1">名前</th>
-                      <th className="py-1 px-1">齢</th>
-                      <th className="py-1 px-1">守備</th>
+                      <SortHeader label="名前" sortKey="name" />
+                      <SortHeader label="齢" sortKey="age" />
+                      <SortHeader label="守備" sortKey="position" />
                       <th className="py-1 px-1">投打</th>
-                      <th className="py-1 px-1">ミ/球速</th>
-                      <th className="py-1 px-1">パ/制球</th>
-                      <th className="py-1 px-1">走/スタ</th>
-                      <th className="py-1 px-1">肩</th>
-                      <th className="py-1 px-1">守</th>
+                      <SortHeader label="ミ" sortKey="meet" className="text-center" />
+                      <SortHeader label="パ" sortKey="power" className="text-center" />
+                      <SortHeader label="走" sortKey="speed" className="text-center" />
+                      <SortHeader label="肩" sortKey="arm" className="text-center" />
+                      <SortHeader label="守" sortKey="defense" className="text-center" />
+                      <SortHeader label="球速" sortKey="velocity" className="text-center" />
+                      <SortHeader label="制球" sortKey="control" className="text-center" />
+                      <SortHeader label="スタ" sortKey="stamina" className="text-center" />
                     </tr>
                   </thead>
                   <tbody>
-                    {benchPlayers.map(player => (
+                    {sortedBenchPlayers.map(player => (
                       <BenchPlayerRow key={player.id} player={player} />
                     ))}
                   </tbody>

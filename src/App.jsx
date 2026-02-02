@@ -47,6 +47,7 @@ import OffSeasonScreen from './components/OffSeasonScreen.jsx';
 import TeamInfoScreen from './components/TeamInfoScreen.jsx';
 import LineupSettingScreen from './components/LineupSettingScreen.jsx';
 import RosterScreen from './components/RosterScreen.jsx';
+import ContractScreen from './components/ContractScreen.jsx';
 import DateProgressScreen from './components/DateProgressScreen.jsx';
 import RegulationsScreen from './components/RegulationsScreen.jsx';
 
@@ -4805,23 +4806,30 @@ if (newOuts === 3) {
     // 10月10日以降でプレーオフフェーズ → プレーオフ試合がスケジュールに追加済み
     // （handlePhaseTransitionで処理済み）
 
-    // 11月10日: トライアウト強制
-    if (month === 11 && day >= 10 && newPhase === SEASON_PHASES.TRYOUT) {
+    // 11月9日: 契約更改強制
+    if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
+      setSeasonData(newSeasonData);
+      setScreenMode('management');
+      setManagementView('contract');
+      return null;
+    }
+
+    // 11月10日〜29日: トライアウト強制
+    if (month === 11 && day >= 10 && day < 30 && (newPhase === SEASON_PHASES.TRYOUT || newPhase === SEASON_PHASES.CONTRACT)) {
+      newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.TRYOUT };
       setSeasonData(newSeasonData);
       setScreenMode('management');
       setManagementView('tryout');
-      return null; // setSeasonData済みなので呼び出し元でsetしない
+      return null;
     }
 
-    // 11月最終日（11/30）: オフシーズン強制
+    // 11月30日〜: オフシーズン強制
     if (month >= 12 || (month === 11 && day >= 30)) {
-      if (newPhase === SEASON_PHASES.OFF_SEASON || newPhase === SEASON_PHASES.TRYOUT) {
-        newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.OFF_SEASON };
-        setSeasonData(newSeasonData);
-        setScreenMode('management');
-        setManagementView('offseason');
-        return null;
-      }
+      newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.OFF_SEASON };
+      setSeasonData(newSeasonData);
+      setScreenMode('management');
+      setManagementView('offseason');
+      return null;
     }
 
     return newSeasonData;
@@ -5267,6 +5275,16 @@ if (newOuts === 3) {
         if (managementView === 'tryout') return <TryoutScreen
           seasonData={seasonData}
           allTeams={allTeams}
+        />;
+        if (managementView === 'contract') return <ContractScreen
+          seasonData={seasonData}
+          allTeams={allTeams}
+          onComplete={() => {
+            // 契約完了 → トライアウトへ（11/10に進める）
+            const newData = progressDate(seasonData, 1);
+            setSeasonData({ ...newData, phase: 'tryout' });
+            setManagementView('tryout');
+          }}
         />;
         if (managementView === 'roster') return <RosterScreen />;
         if (managementView === 'teaminfo') return <TeamInfoScreen />;

@@ -7,12 +7,13 @@
  * シーズンフェーズ定義
  */
 export const SEASON_PHASES = {
-  SPRING_CAMP: 'spring_camp',      // 1-2月：春季キャンプ
-  REGULAR_SEASON: 'regular_season', // 3-9月：レギュラーシーズン
+  SPRING_CAMP: 'spring_camp',      // 1-3月：春季キャンプ
+  REGULAR_SEASON: 'regular_season', // 4-9月：レギュラーシーズン
   PLAYOFFS: 'playoffs',             // 10月前半：優勝決定シリーズ
   DRAFT: 'draft',                   // 10月後半：ドラフト会議
-  TRYOUT: 'tryout',                 // 11月：トライアウト
-  OFF_SEASON: 'off_season'          // 12月：オフシーズン（レギュレーション変更可能）
+  CONTRACT: 'contract',             // 11月9日：契約更改
+  TRYOUT: 'tryout',                 // 11月10日〜：トライアウト
+  OFF_SEASON: 'off_season'          // 11月30日〜：オフシーズン
 };
 
 /**
@@ -21,13 +22,13 @@ export const SEASON_PHASES = {
 export const PHASE_INFO = {
   [SEASON_PHASES.SPRING_CAMP]: {
     name: '春季キャンプ',
-    months: [1, 2],
+    months: [1, 2, 3],
     color: 'bg-green-100',
     description: '選手調整・練習試合'
   },
   [SEASON_PHASES.REGULAR_SEASON]: {
     name: 'レギュラーシーズン',
-    months: [3, 4, 5, 6, 7, 8, 9],
+    months: [4, 5, 6, 7, 8, 9],
     color: 'bg-blue-100',
     description: '公式戦'
   },
@@ -45,6 +46,13 @@ export const PHASE_INFO = {
     color: 'bg-purple-100',
     description: '新人選手獲得'
   },
+  [SEASON_PHASES.CONTRACT]: {
+    name: '契約更改',
+    months: [11],
+    days: [9],
+    color: 'bg-teal-100',
+    description: '次年度の選手契約判断'
+  },
   [SEASON_PHASES.TRYOUT]: {
     name: 'トライアウト',
     months: [11],
@@ -54,7 +62,8 @@ export const PHASE_INFO = {
   },
   [SEASON_PHASES.OFF_SEASON]: {
     name: 'オフシーズン',
-    months: [12],
+    months: [11, 12],
+    startDay: 30,
     color: 'bg-gray-100',
     description: 'レギュレーション変更可能'
   }
@@ -71,21 +80,24 @@ export const getDaysInMonth = (year, month) => {
  * 現在のフェーズを取得
  */
 export const getCurrentPhase = (month, day) => {
-  if (month >= 1 && month <= 2) {
+  if (month >= 1 && month <= 3) {
     return SEASON_PHASES.SPRING_CAMP;
-  } else if (month >= 3 && month <= 9) {
+  } else if (month >= 4 && month <= 9) {
+    return SEASON_PHASES.REGULAR_SEASON;
+  } else if (month === 10 && day < 10) {
     return SEASON_PHASES.REGULAR_SEASON;
   } else if (month === 10 && day >= 10 && day <= 20) {
     return SEASON_PHASES.PLAYOFFS;
   } else if (month === 10 && day > 20) {
     return SEASON_PHASES.DRAFT;
-  } else if (month === 10 && day < 10) {
-    // 10月前半はレギュラーシーズン終了後の待機（プレーオフ前）
-    return SEASON_PHASES.REGULAR_SEASON;
-  } else if (month === 11 && day >= 10) {
-    return SEASON_PHASES.TRYOUT;
-  } else if (month === 11 && day < 10) {
+  } else if (month === 11 && day < 9) {
     return SEASON_PHASES.DRAFT;
+  } else if (month === 11 && day === 9) {
+    return SEASON_PHASES.CONTRACT;
+  } else if (month === 11 && day >= 10 && day < 30) {
+    return SEASON_PHASES.TRYOUT;
+  } else if (month === 11 && day >= 30) {
+    return SEASON_PHASES.OFF_SEASON;
   } else if (month === 12) {
     return SEASON_PHASES.OFF_SEASON;
   }

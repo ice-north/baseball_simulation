@@ -675,6 +675,73 @@ export function updateAllPlayersExperience(allTeams) {
 }
 
 /**
+ * ポジション経験による成長ボーナス倍率を算出
+ * 外野: バランス成長、二塁/遊撃: 走力・守備、三塁/一塁: 打撃、捕手: 守備・肩
+ */
+function getPositionGrowthBonus(player, targetStat) {
+  const posExp = player.positionExperience || {};
+  const totalGames = Object.values(posExp).reduce((a, b) => a + b, 0);
+  if (totalGames === 0) return 1.0;
+
+  // 各ポジションの成長傾向（stat → bonus倍率）
+  const positionBonusMap = {
+    // 二塁・遊撃: 走力、守備が伸びやすい
+    second:  { speed: 1.4, defense: 1.4, steal: 1.3, arm: 1.1, meet: 1.0, power: 0.9 },
+    short:   { speed: 1.4, defense: 1.4, steal: 1.3, arm: 1.2, meet: 1.0, power: 0.9 },
+    // 三塁・一塁: 打撃が伸びやすい
+    third:   { power: 1.4, meet: 1.3, arm: 1.2, defense: 1.0, speed: 0.9, steal: 0.9 },
+    first:   { power: 1.5, meet: 1.4, eye: 1.2, defense: 0.9, speed: 0.9, steal: 0.8 },
+    // 外野: バランス成長
+    left:    { speed: 1.2, meet: 1.1, power: 1.1, arm: 1.1, defense: 1.1, steal: 1.1 },
+    center:  { speed: 1.3, defense: 1.2, meet: 1.1, steal: 1.2, arm: 1.0, power: 1.0 },
+    right:   { arm: 1.3, power: 1.2, meet: 1.1, speed: 1.1, defense: 1.1, steal: 1.0 },
+    // 捕手: 守備・肩が伸びやすい
+    catcher: { defense: 1.5, arm: 1.4, meet: 1.0, power: 0.9, speed: 0.8, steal: 0.8 },
+  };
+
+  // 加重平均でボーナスを計算
+  let weightedBonus = 0;
+  Object.entries(posExp).forEach(([pos, games]) => {
+    const bonusMap = positionBonusMap[pos] || {};
+    const bonus = bonusMap[targetStat] || 1.0;
+    weightedBonus += bonus * (games / totalGames);
+  });
+
+  return weightedBonus || 1.0;
+}
+
+/**
+ * 打順経験による成長ボーナス倍率を算出
+ * 1番: 走力、2-3番: バランス、4番: パワー、5番: パワー/打撃、下位: 守備
+ */
+function getBattingOrderGrowthBonus(player, targetStat) {
+  const boExp = player.battingOrderExperience || {};
+  const totalGames = Object.values(boExp).reduce((a, b) => a + b, 0);
+  if (totalGames === 0) return 1.0;
+
+  const orderBonusMap = {
+    1: { speed: 1.4, steal: 1.4, meet: 1.2, eye: 1.2, power: 0.9 },
+    2: { meet: 1.3, speed: 1.2, eye: 1.2, steal: 1.1, power: 1.0, defense: 1.0 },
+    3: { meet: 1.3, power: 1.2, eye: 1.1, speed: 1.1, defense: 1.0 },
+    4: { power: 1.5, meet: 1.2, eye: 1.1, speed: 0.9, steal: 0.8 },
+    5: { power: 1.3, meet: 1.2, eye: 1.1, arm: 1.0 },
+    6: { defense: 1.2, meet: 1.1, power: 1.1, arm: 1.1 },
+    7: { defense: 1.2, arm: 1.1, meet: 1.0, speed: 1.1 },
+    8: { defense: 1.3, arm: 1.2, speed: 1.1 },
+    9: { /* 投手枠: ボーナスなし */ },
+  };
+
+  let weightedBonus = 0;
+  Object.entries(boExp).forEach(([order, games]) => {
+    const bonusMap = orderBonusMap[parseInt(order)] || {};
+    const bonus = bonusMap[targetStat] || 1.0;
+    weightedBonus += bonus * (games / totalGames);
+  });
+
+  return weightedBonus || 1.0;
+}
+
+/**
  * キャンプ練習を実行
  * @param {Object} player - 選手データ
  * @param {string} trainingType - 練習メニューのキー
@@ -697,15 +764,19 @@ export function executeCampTraining(player, trainingType) {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
     const ageBase = getAgeGrowthBase(age, isPhysical);
 
-    // 年齢による練習効率（若いほどフィジカル練習が効く、24前後は技術練習が効く）
-    // ageBaseが正なら練習効果UP、負なら練習効果DOWN（ただし最低1は成長）
+    // 年齢による練習効率
     const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
 
-    // 1. 基本練習効果: 1-3ポイント × 年齢補正
-    const baseGrowth = Math.round((Math.floor(Math.random() * 3) + 1) * ageMultiplier);
+    // ポジション・打順経験ボーナス
+    const posBonus = getPositionGrowthBonus(player, targetStat);
+    const boBonus = getBattingOrderGrowthBonus(player, targetStat);
+    const expBonus = posBonus * boBonus;
 
-    // 2. 集中練習効果: 1-4ポイント × 年齢補正
-    const focusGrowth = Math.round((Math.floor(Math.random() * 4) + 1) * ageMultiplier);
+    // 1. 基本練習効果: 1-3ポイント × 年齢補正 × 経験ボーナス
+    const baseGrowth = Math.round((Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus);
+
+    // 2. 集中練習効果: 1-4ポイント × 年齢補正 × 経験ボーナス
+    const focusGrowth = Math.round((Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus);
 
     // 3. 覚醒判定: 経験10につき1%の確率で爆発成長
     const awakeningChance = Math.floor(experience / 10);
@@ -734,6 +805,9 @@ export function executeCampTraining(player, trainingType) {
 
   // 経験値を消費（練習に使った分の一部をリセット）
   updatedPlayer.experience = Math.floor(experience * 0.3);
+  // ポジション・打順経験はシーズンごとにリセット
+  updatedPlayer.positionExperience = {};
+  updatedPlayer.battingOrderExperience = {};
 
   return { player: updatedPlayer, growthReport };
 }

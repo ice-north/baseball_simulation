@@ -65,8 +65,8 @@ export const progressToNextPhase = (seasonData) => {
   // 現在のフェーズから次のフェーズの開始日を計算
   switch (seasonData.phase) {
     case SEASON_PHASES.SPRING_CAMP:
-      // キャンプ → レギュラーシーズン（3月1日）
-      targetDate = { year: seasonData.currentDate.year, month: 3, day: 1 };
+      // キャンプ → レギュラーシーズン（4月1日）
+      targetDate = { year: seasonData.currentDate.year, month: 4, day: 1 };
       break;
 
     case SEASON_PHASES.REGULAR_SEASON:
@@ -80,13 +80,18 @@ export const progressToNextPhase = (seasonData) => {
       break;
 
     case SEASON_PHASES.DRAFT:
-      // ドラフト → トライアウト（11月10日）
+      // ドラフト → 契約更改（11月9日）
+      targetDate = { year: seasonData.currentDate.year, month: 11, day: 9 };
+      break;
+
+    case SEASON_PHASES.CONTRACT:
+      // 契約更改 → トライアウト（11月10日）
       targetDate = { year: seasonData.currentDate.year, month: 11, day: 10 };
       break;
 
     case SEASON_PHASES.TRYOUT:
-      // トライアウト → オフシーズン（12月1日）
-      targetDate = { year: seasonData.currentDate.year, month: 12, day: 1 };
+      // トライアウト → オフシーズン（11月30日）
+      targetDate = { year: seasonData.currentDate.year, month: 11, day: 30 };
       break;
 
     case SEASON_PHASES.OFF_SEASON:
@@ -203,6 +208,10 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
 
     case SEASON_PHASES.DRAFT:
       // ドラフト開始時：新人選手リストを生成（将来実装）
+      break;
+
+    case SEASON_PHASES.CONTRACT:
+      // 契約更改：画面遷移はApp.jsx側で処理
       break;
 
     case SEASON_PHASES.OFF_SEASON:

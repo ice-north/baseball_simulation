@@ -1199,6 +1199,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         // 経験値蓄積（出場1 + 打席数/3）
         const expGained = 1 + Math.floor(b.atBats / 3);
         playerData.experience = (playerData.experience || 0) + expGained;
+
+        // ポジション・打順別経験を蓄積
+        if (!playerData.positionExperience) playerData.positionExperience = {};
+        const pos = player.position || 'unknown';
+        playerData.positionExperience[pos] = (playerData.positionExperience[pos] || 0) + 1;
+
+        if (!playerData.battingOrderExperience) playerData.battingOrderExperience = {};
+        const bo = player.battingOrder || 0;
+        if (bo >= 1 && bo <= 9) {
+          playerData.battingOrderExperience[bo] = (playerData.battingOrderExperience[bo] || 0) + 1;
+        }
       }
 
       // 投手成績の集計
