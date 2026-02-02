@@ -3,7 +3,7 @@
 // シーズンカレンダーの表示・操作
 // ============================================================
 
-import { getCurrentPhase, PHASE_INFO, generateMonthCalendar } from './seasonManager.js';
+import { getCurrentPhase, PHASE_INFO, SEASON_PHASES, generateMonthCalendar } from './seasonManager.js';
 import { getTeamSchedule, getScheduleByDate } from './scheduleGenerator.js';
 
 /**
@@ -52,8 +52,18 @@ export const generateTeamCalendar = (schedule, teamName, year, month) => {
   return calendar.map(day => {
     if (!day.day) return day;
 
+    // フェーズイベントラベルを付与
+    const phase = getCurrentPhase(month, day.day);
+    let eventLabel = null;
+    if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
+    else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
+    else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
+    else if (phase === SEASON_PHASES.CONTRACT) eventLabel = '契約更改';
+    else if (phase === SEASON_PHASES.TRYOUT) eventLabel = 'トライアウト';
+    else if (phase === SEASON_PHASES.OFF_SEASON) eventLabel = 'オフシーズン';
+
     const game = day.games[0]; // チーム別なので1日1試合
-    if (!game) return day;
+    if (!game) return { ...day, eventLabel, phase };
 
     const isHome = game.home === teamName;
     const opponent = isHome ? game.away : game.home;
@@ -64,6 +74,8 @@ export const generateTeamCalendar = (schedule, teamName, year, month) => {
       opponent,
       venue,
       isHome,
+      eventLabel,
+      phase,
       result: game.result ? (
         game.result.homeScore > game.result.awayScore
           ? (isHome ? '○' : '●')

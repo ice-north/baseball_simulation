@@ -85,7 +85,7 @@ import RegulationsScreen from './components/RegulationsScreen.jsx';
 
       // === 新システム: シーズンデータ統合管理 ===
       const [seasonData, setSeasonData] = useState(null);
-      const [selectedMonth, setSelectedMonth] = useState(3); // カレンダー表示月
+      const [selectedMonth, setSelectedMonth] = useState(4); // カレンダー表示月
 
       // シーズンデータの初期化（NEW GAMEフローから呼ばれる）
       const initializeNewGame = (regulations) => {
@@ -4836,6 +4836,13 @@ if (newOuts === 3) {
   };
 
   // 日付進行ハンドラー
+  // カレンダー月を現在日付に自動追従
+  const autoFollowMonth = (newSeasonData) => {
+    if (newSeasonData?.currentDate?.month && newSeasonData.currentDate.month !== selectedMonth) {
+      setSelectedMonth(newSeasonData.currentDate.month);
+    }
+  };
+
   const handleProgressDate = (days) => {
     if (!seasonData) return;
     let newSeasonData = progressDate(seasonData, days);
@@ -4843,6 +4850,7 @@ if (newOuts === 3) {
     // 新しい日付の試合を自動シミュレーション
     newSeasonData = simulateGamesOnDate(newSeasonData);
 
+    autoFollowMonth(newSeasonData);
     // フェーズ遷移チェック
     const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
     if (result !== null) setSeasonData(result);
@@ -4855,6 +4863,7 @@ if (newOuts === 3) {
     // 試合日まで進んだら、その日の試合を自動シミュレーション
     newSeasonData = simulateGamesOnDate(newSeasonData);
 
+    autoFollowMonth(newSeasonData);
     const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
     if (result !== null) setSeasonData(result);
   };
@@ -4868,6 +4877,7 @@ if (newOuts === 3) {
     // 次フェーズへ
     newSeasonData = progressToNextPhase(newSeasonData);
 
+    autoFollowMonth(newSeasonData);
     // フェーズ遷移処理（プレーオフスケジュール生成など）
     const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
     if (result !== null) setSeasonData(result);
@@ -5010,14 +5020,16 @@ if (newOuts === 3) {
       </div>
 
       {/* カレンダー月選択 */}
-      <div className="mb-4 flex gap-2">
-        {[3, 4, 5, 6, 7, 8, 9].map(month => (
+      <div className="mb-4 flex gap-1 flex-wrap">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => (
           <button
             key={month}
             onClick={() => setSelectedMonth(month)}
-            className={`px-4 py-2 rounded font-bold transition ${
+            className={`px-3 py-1.5 rounded font-bold transition text-sm ${
               selectedMonth === month
                 ? 'bg-blue-600 text-white'
+                : month === currentDate.month
+                ? 'bg-gray-600 text-white border border-blue-400'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
             }`}
           >
@@ -5074,8 +5086,18 @@ if (newOuts === 3) {
                       <div className="text-xs text-gray-500">未消化</div>
                     )}
                   </>
+                ) : day.eventLabel ? (
+                  <div className={`text-xs font-bold ${
+                    day.eventLabel === 'プレーオフ' ? 'text-yellow-400' :
+                    day.eventLabel === '契約更改' ? 'text-teal-400' :
+                    day.eventLabel === 'トライアウト' ? 'text-orange-400' :
+                    day.eventLabel === 'オフシーズン' ? 'text-gray-400' :
+                    day.eventLabel === 'キャンプ' ? 'text-green-400' :
+                    day.eventLabel === 'ドラフト' ? 'text-purple-400' :
+                    'text-gray-500'
+                  }`}>{day.eventLabel}</div>
                 ) : (
-                  <div className="text-xs text-gray-600">休養日</div>
+                  <div className="text-xs text-gray-600">-</div>
                 )}
               </div>
             );
@@ -5367,7 +5389,7 @@ if (newOuts === 3) {
               currentDate: { year: 2024, month: 4, day: 1 },
               phase: SEASON_PHASES.REGULAR_SEASON
             }));
-            setSelectedMonth(4);
+            setSelectedMonth(4); // 4月から試合開始
             setManagementView('dateprogress');
             setScreenMode('management');
             setGameFlowState('season');

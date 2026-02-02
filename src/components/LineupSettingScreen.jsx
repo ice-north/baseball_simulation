@@ -63,8 +63,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   // スタメン入りしている選手IDのセット
   const lineupPlayerIds = new Set(lineup.map(e => e.playerId));
 
-  // 控え選手（スタメンに入っていない全選手）
-  const benchPlayers = team.players.filter(p => !lineupPlayerIds.has(p.id));
+  // 控え選手（1-8番スタメン野手を除く全選手。投手枠は別管理なので除外しない）
+  const fieldLineupIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= 8).map(e => e.playerId));
+  const benchPlayers = team.players.filter(p => !fieldLineupIds.has(p.id));
 
   // 初期化：投手枠がなければ9番に投手を自動設定
   useEffect(() => {
@@ -206,19 +207,18 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
   // 控え選手のソート用値を取得
   const getBenchSortValue = (player, key) => {
-    const isPitcher = player.position === 'pitcher';
     switch (key) {
       case 'name': return player.name;
       case 'age': return player.age || 0;
       case 'position': return POSITION_NAMES[player.position] || '';
-      case 'meet': return isPitcher ? -1 : (player.batting?.meet || 0);
-      case 'power': return isPitcher ? -1 : (player.batting?.power || 0);
-      case 'speed': return isPitcher ? -1 : (player.physical?.speed || 0);
-      case 'arm': return isPitcher ? -1 : (player.physical?.arm || 0);
-      case 'defense': return isPitcher ? -1 : (player.fielding?.defense || 0);
-      case 'velocity': return isPitcher ? (player.pitching?.velocity || 0) : -1;
-      case 'control': return isPitcher ? (player.pitching?.control || 0) : -1;
-      case 'stamina': return isPitcher ? (player.pitching?.stamina || 0) : -1;
+      case 'meet': return player.batting?.meet || 0;
+      case 'power': return player.batting?.power || 0;
+      case 'speed': return player.physical?.speed || 0;
+      case 'arm': return player.physical?.arm || 0;
+      case 'defense': return player.fielding?.defense || 0;
+      case 'velocity': return player.pitching?.velocity || 0;
+      case 'control': return player.pitching?.control || 0;
+      case 'stamina': return player.pitching?.stamina || 0;
       default: return 0;
     }
   };
@@ -278,20 +278,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         <td className="py-1 px-1 text-xs text-gray-400 whitespace-nowrap">
           {getThrowsLabel(player.physical?.throws)}{getBatsLabel(player.batting?.bats || player.physical?.bats)}
         </td>
-        {/* 野手能力: ミート、パワー、走力、肩、守備 */}
-        {isPitcher ? <><EmptyCell /><EmptyCell /><EmptyCell /><EmptyCell /><EmptyCell /></> : <>
-          <StatCell value={player.batting?.meet || 0} />
-          <StatCell value={player.batting?.power || 0} />
-          <StatCell value={player.physical?.speed || 0} />
-          <StatCell value={player.physical?.arm || 0} />
-          <StatCell value={player.fielding?.defense || 0} />
-        </>}
-        {/* 投手能力: 球速、制球、スタミナ */}
-        {isPitcher ? <>
-          <StatCell value={player.pitching?.velocity || 0} isVelocity />
-          <StatCell value={player.pitching?.control || 0} />
-          <StatCell value={player.pitching?.stamina || 0} />
-        </> : <><EmptyCell /><EmptyCell /><EmptyCell /></>}
+        {/* 野手能力: ミート、パワー、走力、肩、守備（全選手表示） */}
+        <StatCell value={player.batting?.meet || 0} />
+        <StatCell value={player.batting?.power || 0} />
+        <StatCell value={player.physical?.speed || 0} />
+        <StatCell value={player.physical?.arm || 0} />
+        <StatCell value={player.fielding?.defense || 0} />
+        {/* 投手能力: 球速、制球、スタミナ（全選手表示） */}
+        <StatCell value={player.pitching?.velocity || 0} isVelocity />
+        <StatCell value={player.pitching?.control || 0} />
+        <StatCell value={player.pitching?.stamina || 0} />
       </tr>
     );
   };
