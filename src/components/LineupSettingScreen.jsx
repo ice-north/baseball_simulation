@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
@@ -57,48 +57,57 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const pitchers = team.players.filter(p => p.position === 'pitcher');
   const lineup = team.lineupSettings.battingOrder;
 
-  // 投手枠がどの打順にあるか
-  const pitcherEntry = lineup.find(e => e.position === 'pitcher');
-  const pitcherBattingOrder = pitcherEntry?.battingOrder || null;
+  // 初期化：投手枠がなければ9番に投手を自動設定
+  useEffect(() => {
+    const hasPitcherSlot = lineup.some(e => e.position === 'pitcher');
+    if (!hasPitcherSlot && pitchers.length > 0) {
+      // 先発ローテーションの最初の投手、または最初の投手を9番に配置
+      const starterId = team.pitchingRotation?.starters?.[0] || pitchers[0].id;
+      lineup.push({ playerId: starterId, position: 'pitcher', battingOrder: 9 });
+      setUpdateTrigger(prev => prev + 1);
+    }
+  }, []);
 
   const handleAddToLineup = (playerId) => {
     if (!selectedBattingOrder) {
-      alert('打順を選択してください（1-9番の枠をクリック）');
+      alert('打順を選択してください（1-8番の枠をクリック）');
       return;
     }
 
     const player = team.players.find(p => p.id === playerId);
     const isPitcher = player.position === 'pitcher';
 
-    // 投手を投手枠以外に配置しようとした場合
+    // 投手は投手枠にのみ配置可能（投手の交換は投手リストから）
     if (isPitcher) {
-      // 投手は投手枠にのみ配置可能
-      const existingIndex = lineup.findIndex(entry => entry.battingOrder === selectedBattingOrder);
-      if (existingIndex !== -1) lineup.splice(existingIndex, 1);
-      const playerIndex = lineup.findIndex(entry => entry.playerId === playerId);
-      if (playerIndex !== -1) lineup.splice(playerIndex, 1);
-
-      lineup.push({ playerId, position: 'pitcher', battingOrder: selectedBattingOrder });
+      // 投手枠の打順を検索
+      const pitcherEntry = lineup.find(e => e.position === 'pitcher');
+      if (pitcherEntry) {
+        pitcherEntry.playerId = playerId;
+      } else {
+        lineup.push({ playerId, position: 'pitcher', battingOrder: 9 });
+      }
       lineup.sort((a, b) => a.battingOrder - b.battingOrder);
-      setSelectedBattingOrder(null);
       setUpdateTrigger(prev => prev + 1);
       return;
     }
 
-    // 野手の配置
-    const existingIndex = lineup.findIndex(entry => entry.battingOrder === selectedBattingOrder);
-    // 投手枠に野手を配置しようとした場合は拒否
-    if (existingIndex !== -1 && lineup[existingIndex].position === 'pitcher') {
-      alert('この打順は投手枠です。投手を配置してください。');
+    // 投手枠への野手配置は不可
+    const existingEntry = lineup.find(e => e.battingOrder === selectedBattingOrder);
+    if (existingEntry?.position === 'pitcher') {
+      alert('この打順は投手枠です');
       return;
     }
-    if (existingIndex !== -1) lineup.splice(existingIndex, 1);
+
+    // 野手の配置
+    if (existingEntry) {
+      const idx = lineup.indexOf(existingEntry);
+      lineup.splice(idx, 1);
+    }
     const playerIndex = lineup.findIndex(entry => entry.playerId === playerId);
     if (playerIndex !== -1) lineup.splice(playerIndex, 1);
 
     let assignedPosition = player.position;
-
-    const existingPositionEntry = lineup.find(e => e.position === assignedPosition && e.battingOrder !== selectedBattingOrder);
+    const existingPositionEntry = lineup.find(e => e.position === assignedPosition && e.position !== 'pitcher' && e.battingOrder !== selectedBattingOrder);
     if (existingPositionEntry) {
       const allPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
       const usedPositions = lineup.filter(e => e.position !== 'pitcher').map(e => e.position);
@@ -113,36 +122,26 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
     lineup.push({ playerId, position: assignedPosition, battingOrder: selectedBattingOrder });
     lineup.sort((a, b) => a.battingOrder - b.battingOrder);
-    const nextOrder = selectedBattingOrder < 9 ? selectedBattingOrder + 1 : 1;
+    const nextOrder = selectedBattingOrder < 8 ? selectedBattingOrder + 1 : 1;
     setSelectedBattingOrder(nextOrder);
     setUpdateTrigger(prev => prev + 1);
   };
 
   const handleChangePosition = (battingOrder, newPosition) => {
     const entry = lineup.find(e => e.battingOrder === battingOrder);
-    if (entry) {
-      if (newPosition === 'pitcher') {
-        // 投手ポジションへの変更は不可（投手枠は別管理）
-        return;
-      }
-      if (entry.position === 'pitcher') {
-        // 投手枠のポジション変更は不可
-        return;
-      }
-      const existingEntry = lineup.find(e => e.position === newPosition && e.battingOrder !== battingOrder && e.position !== 'pitcher');
-      if (existingEntry) {
-        const oldPosition = entry.position;
-        existingEntry.position = oldPosition;
-        entry.position = newPosition;
-        setUpdateTrigger(prev => prev + 1);
-        return;
-      }
+    if (!entry || entry.position === 'pitcher' || newPosition === 'pitcher') return;
+    const existingEntry = lineup.find(e => e.position === newPosition && e.battingOrder !== battingOrder && e.position !== 'pitcher');
+    if (existingEntry) {
+      const oldPosition = entry.position;
+      existingEntry.position = oldPosition;
       entry.position = newPosition;
-      setUpdateTrigger(prev => prev + 1);
+    } else {
+      entry.position = newPosition;
     }
+    setUpdateTrigger(prev => prev + 1);
   };
 
-  // 打順入れ替え
+  // 打順入れ替え（投手含む全打順で可能）
   const handleSwapBattingOrder = (order1, order2) => {
     const entry1 = lineup.find(e => e.battingOrder === order1);
     const entry2 = lineup.find(e => e.battingOrder === order2);
@@ -155,7 +154,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   };
 
   const handleRemoveFromLineup = (playerId) => {
-    team.lineupSettings.battingOrder = team.lineupSettings.battingOrder.filter(entry => entry.playerId !== playerId);
+    const entry = lineup.find(e => e.playerId === playerId);
+    if (entry?.position === 'pitcher') {
+      alert('投手枠は外せません。投手を交換するには投手リストから別の投手を選択してください。');
+      return;
+    }
+    team.lineupSettings.battingOrder = lineup.filter(entry => entry.playerId !== playerId);
     setUpdateTrigger(prev => prev + 1);
   };
 
@@ -189,6 +193,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     setUpdateTrigger(prev => prev + 1);
   };
 
+  // 投手を交換（投手枠の選手を入れ替え）
+  const handleChangePitcher = (newPitcherId) => {
+    const pitcherEntry = lineup.find(e => e.position === 'pitcher');
+    if (pitcherEntry) {
+      pitcherEntry.playerId = newPitcherId;
+    }
+    setUpdateTrigger(prev => prev + 1);
+  };
+
   return (
     <div className="p-8">
       <div className="max-w-7xl mx-auto">
@@ -213,8 +226,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           <div className="grid grid-cols-2 gap-6">
             <div className="bg-gray-800 rounded-lg p-6">
               <h2 className="text-xl font-bold text-white mb-4">スタメン設定 ({lineup.length}/9人)</h2>
-              <p className="text-sm text-gray-400 mb-2">打順をクリック → 右側から選手を追加</p>
-              <p className="text-sm text-yellow-400 mb-4">※ 9枠のうち1枠は投手です（投手リストから追加）</p>
+              <p className="text-sm text-gray-400 mb-2">1-8番: 野手を配置 / 投手は打順変更のみ可能</p>
+              <p className="text-sm text-indigo-400 mb-4">※ 投手枠は常に存在し、↑↓で打順を移動できます</p>
               <div className="space-y-2">
                 {[1,2,3,4,5,6,7,8,9].map(order => {
                   const entry = lineup.find(e => e.battingOrder === order);
@@ -222,7 +235,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   const isSelected = selectedBattingOrder === order;
                   const isPitcherSlot = entry?.position === 'pitcher';
                   return (
-                    <div key={order} onClick={() => setSelectedBattingOrder(order)} className={`rounded p-3 cursor-pointer transition ${isSelected ? 'bg-blue-700 ring-2 ring-blue-400' : player ? (isPitcherSlot ? 'bg-indigo-800 hover:bg-indigo-700' : 'bg-gray-700 hover:bg-gray-600') : 'bg-gray-900 hover:bg-gray-800 border border-dashed border-gray-600'}`}>
+                    <div key={order} onClick={() => !isPitcherSlot && setSelectedBattingOrder(order)} className={`rounded p-3 cursor-pointer transition ${isSelected ? 'bg-blue-700 ring-2 ring-blue-400' : player ? (isPitcherSlot ? 'bg-indigo-800 hover:bg-indigo-700' : 'bg-gray-700 hover:bg-gray-600') : 'bg-gray-900 hover:bg-gray-800 border border-dashed border-gray-600'}`}>
                       <div className="flex items-center gap-3">
                         <div className={`font-bold text-lg w-6 ${isSelected ? 'text-blue-300' : 'text-white'}`}>{order}</div>
                         {player ? (
@@ -251,7 +264,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 {order < 9 && (
                                   <button onClick={(e) => { e.stopPropagation(); handleSwapBattingOrder(order, order + 1); }} className="bg-gray-500 hover:bg-gray-400 text-white px-2 py-1 rounded text-xs">↓</button>
                                 )}
-                                <button onClick={(e) => { e.stopPropagation(); handleRemoveFromLineup(player.id); }} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">外す</button>
+                                {!isPitcherSlot && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleRemoveFromLineup(player.id); }} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">外す</button>
+                                )}
                               </div>
                             </div>
                             <div className="text-xs mt-2 space-y-0.5">
@@ -289,7 +304,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               </h2>
 
               {/* 野手セクション */}
-              <h3 className="text-lg font-bold text-gray-300 mb-2">野手</h3>
+              <h3 className="text-lg font-bold text-gray-300 mb-2">野手（1-8番に配置）</h3>
               <div className="space-y-2 max-h-[400px] overflow-y-auto mb-4">
                 {fielders.map(player => {
                   const isInLineup = lineup.some(entry => entry.playerId === player.id);
@@ -318,19 +333,19 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               </div>
 
               {/* 投手セクション */}
-              <h3 className="text-lg font-bold text-indigo-300 mb-2">投手（スタメン投手枠）</h3>
+              <h3 className="text-lg font-bold text-indigo-300 mb-2">投手（投手枠に配置 / クリックで交換）</h3>
               <div className="space-y-2 max-h-[250px] overflow-y-auto">
                 {pitchers.map(player => {
-                  const isInLineup = lineup.some(entry => entry.playerId === player.id);
+                  const isPitcherInLineup = lineup.some(entry => entry.playerId === player.id && entry.position === 'pitcher');
                   const velocityRank = getVelocityRank(player.pitching?.velocity || 0);
                   const controlRank = getAbilityRank(player.pitching?.control || 0);
                   return (
-                    <div key={player.id} className={`rounded p-3 cursor-pointer transition ${isInLineup ? 'bg-gray-900 opacity-50' : 'bg-indigo-900 hover:bg-indigo-800'}`} onClick={() => !isInLineup && handleAddToLineup(player.id)}>
+                    <div key={player.id} className={`rounded p-3 cursor-pointer transition ${isPitcherInLineup ? 'bg-indigo-900 ring-2 ring-indigo-500' : 'bg-indigo-900 hover:bg-indigo-800'}`} onClick={() => handleChangePitcher(player.id)}>
                       <div className="flex items-center justify-between mb-1">
                         <div>
                           <div className="text-white font-bold flex items-center gap-2">
                             {player.name}
-                            {isInLineup && <span className="text-xs bg-indigo-600 px-2 py-0.5 rounded">スタメン</span>}
+                            {isPitcherInLineup && <span className="text-xs bg-indigo-600 px-2 py-0.5 rounded">先発</span>}
                           </div>
                           <div className="text-xs text-gray-400">{getThrowsLabel(player.physical?.throws)} | {getFormLabel(player.pitching?.form)}</div>
                         </div>

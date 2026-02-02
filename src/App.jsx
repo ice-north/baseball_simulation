@@ -34,7 +34,7 @@ import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, 
 import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
 import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
-import { progressDate, progressToNextGame, progressToNextPhase } from './season/dateProgression.js';
+import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
 
@@ -3257,6 +3257,8 @@ if (newOuts === 3) {
         const [positionTab, setPositionTab] = useState('all'); // 'all', 'pitcher', 'catcher', 'infielder', 'outfielder'
         const [draftComplete, setDraftComplete] = useState(false);
         const [viewTab, setViewTab] = useState('draft'); // 'draft' or 'details'
+        const [sortKey, setSortKey] = useState('overall'); // ソートキー
+        const [sortDir, setSortDir] = useState('desc'); // 'asc' or 'desc'
 
         // ポジション名をカタカナに変換
         const getPositionName = (position) => {
@@ -3409,10 +3411,55 @@ if (newOuts === 3) {
           }
         }, [currentPick, draftOrder.length, draftComplete, tryoutCandidates.length, teamRosters]);
 
+        // ソート切り替え
+        const handleSort = (key) => {
+          if (sortKey === key) {
+            setSortDir(sortDir === 'desc' ? 'asc' : 'desc');
+          } else {
+            setSortKey(key);
+            setSortDir('desc');
+          }
+        };
+
+        const getSortIndicator = (key) => sortKey === key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '';
+
+        // 選手の総合値を計算
+        const getFielderOverall = (p) => {
+          return Math.round(((p.batting?.meet||0) + (p.batting?.power||0) + (p.physical?.speed||0) + (p.physical?.arm||0) + (p.fielding?.defense||0)) / 5);
+        };
+        const getPitcherOverall = (p) => {
+          const vel = ((p.pitching?.velocity||130) - 115) * 2.5;
+          const ctrl = p.pitching?.control || 50;
+          const sta = (p.pitching?.stamina || 100) / 2;
+          return Math.round((vel + ctrl + sta) / 3);
+        };
+
+        // ソート値を取得
+        const getSortValue = (p, key) => {
+          switch(key) {
+            case 'name': return p.name;
+            case 'age': return p.age || 20;
+            case 'position': return p.position;
+            case 'meet': return p.batting?.meet || 0;
+            case 'power': return p.batting?.power || 0;
+            case 'speed': return p.physical?.speed || 0;
+            case 'arm': return p.physical?.arm || 0;
+            case 'defense': return p.fielding?.defense || 0;
+            case 'velocity': return p.pitching?.velocity || 0;
+            case 'control': return p.pitching?.control || 0;
+            case 'stamina': return p.pitching?.stamina || 0;
+            case 'fielderOverall': return getFielderOverall(p);
+            case 'pitcherOverall': return getPitcherOverall(p);
+            case 'overall': default: {
+              const isPitcher = p.position === 'pitcher';
+              return isPitcher ? getPitcherOverall(p) : getFielderOverall(p);
+            }
+          }
+        };
+
         // フィルター＆ソート処理
         const filteredCandidates = tryoutCandidates
           .filter(player => {
-            // ポジションタブフィルター
             if (positionTab !== 'all') {
               const category = getPositionCategory(player.position);
               if (category !== positionTab) return false;
@@ -3420,11 +3467,11 @@ if (newOuts === 3) {
             return true;
           })
           .sort((a, b) => {
-            // ランク順にソート（S→A→B→C→D）
-            const rankOrder = { S: 5, A: 4, B: 3, C: 2, D: 1 };
-            const rankA = calculatePlayerRank(a);
-            const rankB = calculatePlayerRank(b);
-            return rankOrder[rankB] - rankOrder[rankA];
+            const aVal = getSortValue(a, sortKey);
+            const bVal = getSortValue(b, sortKey);
+            const dir = sortDir === 'desc' ? -1 : 1;
+            if (typeof aVal === 'string') return dir * aVal.localeCompare(bVal);
+            return dir * (aVal - bVal);
           });
 
         const currentTeam = currentPick < draftOrder.length ? draftOrder[currentPick].team : null;
@@ -3677,79 +3724,60 @@ if (newOuts === 3) {
                     </div>
                   </div>
 
-                  {/* 候補者リスト（4グリッド） */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {filteredCandidates.map(player => {
-                  const overallRank = calculatePlayerRank(player);
-                  const isPitcher = player.position === 'pitcher';
-
-                  return (
-                    <div
-                      key={player.id}
-                      className={`bg-gray-800 rounded-lg p-4 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition`}
-                      onClick={() => isUserTurn && handleSelectPlayer(player)}
-                    >
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <div className="text-white font-bold text-lg">{player.name}</div>
-                          <div className="text-sm text-gray-400">{player.age}歳 | {getPositionName(player.position)}</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xs text-gray-400">総合</div>
-                          <div className={`text-2xl font-bold ${getRankColor(overallRank)}`}>{overallRank}</div>
-                        </div>
-                      </div>
-
-                      {isPitcher ? (
-                        // 投手表示
-                        <div className="text-sm space-y-1">
-                          <div className="text-gray-300">
-                            {player.physical.throws === 'left' ? '左投げ' : '右投げ'} | {
-                              player.pitching.form === 'overhand' ? 'オーバー' :
-                              player.pitching.form === 'threeQuarter' ? 'スリークォーター' :
-                              player.pitching.form === 'sidearm' ? 'サイド' : 'アンダー'
-                            }
-                          </div>
-                          <div className="flex gap-2 flex-wrap">
-                            <span className={getRankColor(getAbilityRank(player.pitching.velocity, true))}>
-                              球速{getAbilityRank(player.pitching.velocity, true)}
-                            </span>
-                            <span className={getRankColor(getAbilityRank(player.pitching.control))}>
-                              制球{getAbilityRank(player.pitching.control)}
-                            </span>
-                            <span className={getRankColor(getAbilityRank(player.pitching.stamina, false, true))}>
-                              スタミナ{getAbilityRank(player.pitching.stamina, false, true)}
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        // 野手表示
-                        <div className="text-sm space-y-1">
-                          <div className="text-gray-300">
-                            {player.batting.bats === 'left' ? '左打ち' : player.batting.bats === 'switch' ? 'スイッチ' : '右打ち'}
-                          </div>
-                          <div className="flex gap-2 flex-wrap">
-                            <span className={getRankColor(getAbilityRank(player.batting.meet))}>
-                              ミート{getAbilityRank(player.batting.meet)}
-                            </span>
-                            <span className={getRankColor(getAbilityRank(player.batting.power))}>
-                              パワー{getAbilityRank(player.batting.power)}
-                            </span>
-                            <span className={getRankColor(getAbilityRank(player.physical.speed))}>
-                              走力{getAbilityRank(player.physical.speed)}
-                            </span>
-                            <span className={getRankColor(getAbilityRank(player.physical.arm))}>
-                              肩{getAbilityRank(player.physical.arm)}
-                            </span>
-                            <span className={getRankColor(getAbilityRank(player.fielding.defense))}>
-                              守備{getAbilityRank(player.fielding.defense)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                  {/* 候補者リスト（1行テーブル） */}
+                  <div className="bg-gray-800 rounded-lg overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-700 text-gray-300 text-xs sticky top-0">
+                        <tr>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('name')}>名前{getSortIndicator('name')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('age')}>年齢{getSortIndicator('age')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('position')}>守備{getSortIndicator('position')}</th>
+                          <th className="px-2 py-2 whitespace-nowrap">投打</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('meet')}>ミート{getSortIndicator('meet')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('power')}>パワー{getSortIndicator('power')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('speed')}>走力{getSortIndicator('speed')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('arm')}>肩{getSortIndicator('arm')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('defense')}>守備{getSortIndicator('defense')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('velocity')}>球速{getSortIndicator('velocity')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('control')}>制球{getSortIndicator('control')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('stamina')}>スタミナ{getSortIndicator('stamina')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野手総合{getSortIndicator('fielderOverall')}</th>
+                          <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投手総合{getSortIndicator('pitcherOverall')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredCandidates.map(player => {
+                          const throwLabel = player.physical?.throws === 'left' ? '左投' : '右投';
+                          const batLabel = player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打';
+                          const fOverall = getFielderOverall(player);
+                          const pOverall = getPitcherOverall(player);
+                          const fRank = getAbilityRank(fOverall);
+                          const pRank = getAbilityRank(pOverall);
+                          return (
+                            <tr
+                              key={player.id}
+                              className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition`}
+                              onClick={() => isUserTurn && handleSelectPlayer(player)}
+                            >
+                              <td className="px-2 py-1.5 text-white font-bold whitespace-nowrap">{player.name}</td>
+                              <td className="px-2 py-1.5 text-gray-300">{player.age}</td>
+                              <td className="px-2 py-1.5 text-gray-300 whitespace-nowrap">{getPositionName(player.position)}</td>
+                              <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{throwLabel}{batLabel}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.batting?.meet||0))}`}>{getAbilityRank(player.batting?.meet||0)}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.batting?.power||0))}`}>{getAbilityRank(player.batting?.power||0)}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.physical?.speed||0))}`}>{getAbilityRank(player.physical?.speed||0)}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.physical?.arm||0))}`}>{getAbilityRank(player.physical?.arm||0)}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.fielding?.defense||0))}`}>{getAbilityRank(player.fielding?.defense||0)}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(fRank)}`}>{fRank}</td>
+                              <td className={`px-2 py-1.5 font-bold ${getRankColor(pRank)}`}>{pRank}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </>
               )}
@@ -4761,6 +4789,44 @@ if (newOuts === 3) {
     </div>
   );
 
+  // フェーズ遷移検出＆自動画面遷移
+  const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData) => {
+    const oldPhase = oldSeasonData.phase;
+    const newPhase = newSeasonData.phase;
+
+    // フェーズが変わった場合の処理
+    if (oldPhase !== newPhase) {
+      newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
+    }
+
+    // 特定日付での強制イベント
+    const { month, day } = newSeasonData.currentDate;
+
+    // 10月10日以降でプレーオフフェーズ → プレーオフ試合がスケジュールに追加済み
+    // （handlePhaseTransitionで処理済み）
+
+    // 11月10日: トライアウト強制
+    if (month === 11 && day >= 10 && newPhase === SEASON_PHASES.TRYOUT) {
+      setSeasonData(newSeasonData);
+      setScreenMode('management');
+      setManagementView('tryout');
+      return null; // setSeasonData済みなので呼び出し元でsetしない
+    }
+
+    // 11月最終日（11/30）: オフシーズン強制
+    if (month >= 12 || (month === 11 && day >= 30)) {
+      if (newPhase === SEASON_PHASES.OFF_SEASON || newPhase === SEASON_PHASES.TRYOUT) {
+        newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.OFF_SEASON };
+        setSeasonData(newSeasonData);
+        setScreenMode('management');
+        setManagementView('offseason');
+        return null;
+      }
+    }
+
+    return newSeasonData;
+  };
+
   // 日付進行ハンドラー
   const handleProgressDate = (days) => {
     if (!seasonData) return;
@@ -4769,7 +4835,9 @@ if (newOuts === 3) {
     // 新しい日付の試合を自動シミュレーション
     newSeasonData = simulateGamesOnDate(newSeasonData);
 
-    setSeasonData(newSeasonData);
+    // フェーズ遷移チェック
+    const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
+    if (result !== null) setSeasonData(result);
   };
 
   const handleProgressToNextGame = () => {
@@ -4779,17 +4847,22 @@ if (newOuts === 3) {
     // 試合日まで進んだら、その日の試合を自動シミュレーション
     newSeasonData = simulateGamesOnDate(newSeasonData);
 
-    setSeasonData(newSeasonData);
+    const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
+    if (result !== null) setSeasonData(result);
   };
 
   const handleProgressToNextPhase = () => {
     if (!seasonData) return;
-    let newSeasonData = progressToNextPhase(seasonData);
 
-    // フェーズ遷移時に途中の全試合を自動シミュレーション
-    newSeasonData = simulateAllRemainingGames(newSeasonData);
+    // まず現フェーズの残り試合をシミュレーション
+    let newSeasonData = simulateAllRemainingGames(seasonData);
 
-    setSeasonData(newSeasonData);
+    // 次フェーズへ
+    newSeasonData = progressToNextPhase(newSeasonData);
+
+    // フェーズ遷移処理（プレーオフスケジュール生成など）
+    const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
+    if (result !== null) setSeasonData(result);
   };
 
   // 指定日の試合を自動シミュレーション
@@ -5158,6 +5231,11 @@ if (newOuts === 3) {
         if (managementView === 'offseason') return <OffSeasonScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}
+          onSave={() => saveGame(0)}
+          onStartNextSeason={() => {
+            // トライアウトへ遷移（次年度）
+            setManagementView('tryout');
+          }}
         />;
         if (managementView === 'stats') return <PlayerStatsScreen
           seasonData={seasonData}

@@ -4,8 +4,8 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData }) => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
       <div className="text-center">
-        <h1 className="text-6xl font-bold text-white mb-4">⚾ 野球シミュレーター</h1>
-        <p className="text-xl text-gray-400 mb-12">Baseball Management Simulator</p>
+        <h1 className="text-6xl font-bold text-white mb-1">⚾ NEXT STAGE</h1>
+        <p className="text-2xl text-gray-300 mb-10">～独立リーグシミュレーター～</p>
 
         <div className="space-y-4">
           <button

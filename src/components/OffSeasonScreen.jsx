@@ -3,7 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear } from '../season/yearProgressionSystem.js';
 
-const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
+const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason }) => {
   const [processing, setProcessing] = useState(false);
   const [seasonResults, setSeasonResults] = useState(null);
 
@@ -48,13 +48,23 @@ const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
               4. シーズン成績を通算成績に加算<br/>
               5. 次年度（{seasonData.year + 1}年目）へ移行
             </p>
-            <button
-              onClick={handleAdvanceYear}
-              disabled={processing}
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition disabled:bg-gray-600"
-            >
-              {processing ? '処理中...' : `${seasonData.year + 1}年目へ進む`}
-            </button>
+            <div className="flex gap-4 justify-center">
+              {onSave && (
+                <button
+                  onClick={() => { onSave(); alert('セーブしました'); }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"
+                >
+                  💾 セーブ
+                </button>
+              )}
+              <button
+                onClick={handleAdvanceYear}
+                disabled={processing}
+                className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition disabled:bg-gray-600"
+              >
+                {processing ? '処理中...' : `${seasonData.year + 1}年目へ進む`}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -162,12 +172,23 @@ const OffSeasonScreen = ({ seasonData, setSeasonData }) => {
           </div>
         )}
 
-        <div className="text-center">
+        <div className="text-center flex gap-4 justify-center">
+          {onSave && (
+            <button
+              onClick={() => { onSave(); alert('セーブしました'); }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"
+            >
+              💾 セーブ
+            </button>
+          )}
           <button
-            onClick={() => setSeasonResults(null)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"
+            onClick={() => {
+              setSeasonResults(null);
+              if (onStartNextSeason) onStartNextSeason();
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"
           >
-            {seasonData.year}年目を開始
+            🏕️ キャンプへ進む
           </button>
         </div>
       </div>

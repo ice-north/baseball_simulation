@@ -575,50 +575,115 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     return null;
   };
 
-  // 代打判定（AI監督）
+  // 代打判定（AI監督）- より積極的に控え選手を起用
   const considerPinchHitter = (offenseTeam, batter) => {
-    // 7回以降、投手の打順で代打を検討
-    if (gameState.inning >= 7 && batter.position === 'pitcher') {
-      // ベンチにいる野手で打撃能力が高い選手を探す
-      const pinchHitter = offenseTeam.players.find(p =>
-        p.battingOrder === 0 &&
-        p.position !== 'pitcher' &&
-        (p.batting?.meet || 0) > (batter.batting?.meet || 0)
-      );
+    const benchFielders = offenseTeam.players.filter(p =>
+      p.battingOrder === 0 && p.position !== 'pitcher'
+    );
+    if (benchFielders.length === 0) return batter;
 
-      if (pinchHitter) {
+    // 1. 投手の打順：6回以降で代打（投手は打撃が弱い）
+    if (batter.position === 'pitcher' && gameState.inning >= 6) {
+      const pinchHitter = benchFielders.reduce((best, p) =>
+        (p.batting?.meet || 0) + (p.batting?.power || 0) >
+        (best.batting?.meet || 0) + (best.batting?.power || 0) ? p : best
+      , benchFielders[0]);
+
+      if (pinchHitter && ((pinchHitter.batting?.meet || 0) > (batter.batting?.meet || 0) + 5)) {
         console.log(`   🔄 代打: ${batter.name} → ${pinchHitter.name}`);
-        // 代打を送る
         const batterData = offenseTeam.players.find(p => p.id === batter.id);
         const phData = offenseTeam.players.find(p => p.id === pinchHitter.id);
         if (batterData && phData) {
           phData.battingOrder = batterData.battingOrder;
+          phData.position = batterData.position;
           batterData.battingOrder = 0;
           return pinchHitter;
         }
       }
     }
+
+    // 2. 7回以降、得点圏にランナーがいて打撃力の低い野手に代打
+    if (gameState.inning >= 7 && (gameState.bases[1] || gameState.bases[2])) {
+      const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
+      const bestBench = benchFielders.reduce((best, p) => {
+        const total = (p.batting?.meet || 0) + (p.batting?.power || 0);
+        const bestTotal = (best.batting?.meet || 0) + (best.batting?.power || 0);
+        return total > bestTotal ? p : best;
+      }, benchFielders[0]);
+
+      if (bestBench) {
+        const benchTotal = (bestBench.batting?.meet || 0) + (bestBench.batting?.power || 0);
+        if (benchTotal > batterTotal + 10) { // 差がある場合
+          console.log(`   🔄 代打(チャンス): ${batter.name} → ${bestBench.name}`);
+          const batterData = offenseTeam.players.find(p => p.id === batter.id);
+          const phData = offenseTeam.players.find(p => p.id === bestBench.id);
+          if (batterData && phData) {
+            phData.battingOrder = batterData.battingOrder;
+            phData.position = batterData.position;
+            batterData.battingOrder = 0;
+            return bestBench;
+          }
+        }
+      }
+    }
+
+    // 3. 8回以降、ビハインドで打撃力の低い下位打線に代打
+    if (gameState.inning >= 8) {
+      const isLosing = gameState.isTopInning
+        ? gameState.score.away < gameState.score.home
+        : gameState.score.home < gameState.score.away;
+      if (isLosing && batter.battingOrder >= 6) {
+        const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
+        const bestBench = benchFielders.reduce((best, p) => {
+          const total = (p.batting?.meet || 0) + (p.batting?.power || 0);
+          const bestTotal = (best.batting?.meet || 0) + (best.batting?.power || 0);
+          return total > bestTotal ? p : best;
+        }, benchFielders[0]);
+
+        if (bestBench) {
+          const benchTotal = (bestBench.batting?.meet || 0) + (bestBench.batting?.power || 0);
+          if (benchTotal > batterTotal + 5) {
+            console.log(`   🔄 代打(ビハインド): ${batter.name} → ${bestBench.name}`);
+            const batterData = offenseTeam.players.find(p => p.id === batter.id);
+            const phData = offenseTeam.players.find(p => p.id === bestBench.id);
+            if (batterData && phData) {
+              phData.battingOrder = batterData.battingOrder;
+              phData.position = batterData.position;
+              batterData.battingOrder = 0;
+              return bestBench;
+            }
+          }
+        }
+      }
+    }
+
     return batter;
   };
 
   // 守備固め判定（AI監督）- イニング終了時に呼ばれる
   const considerDefensiveReplacement = (defenseTeam) => {
-    // 7回以降、リード時に守備固めを検討
     const isLeading = gameState.isTopInning
       ? gameState.score.home > gameState.score.away
       : gameState.score.away > gameState.score.home;
+    const scoreDiff = gameState.isTopInning
+      ? gameState.score.home - gameState.score.away
+      : gameState.score.away - gameState.score.home;
 
+    const benchFielders = defenseTeam.players.filter(p =>
+      p.battingOrder === 0 && p.position !== 'pitcher'
+    );
+    if (benchFielders.length === 0) return;
+
+    // 1. 7回以降リード時: 守備力が低いスタメンを守備固め（閾値緩め）
     if (gameState.inning >= 7 && isLeading) {
       defenseTeam.players.forEach(starter => {
         if (starter.battingOrder > 0 && starter.battingOrder < 9) {
-          // 守備が弱い選手を探す
-          if ((starter.fielding?.defense || 50) < 50) {
-            const replacement = defenseTeam.players.find(p =>
+          const starterDef = starter.fielding?.defense || 50;
+          if (starterDef < 60) {
+            const replacement = benchFielders.find(p =>
               p.battingOrder === 0 &&
-              p.position !== 'pitcher' &&
-              (p.fielding?.defense || 0) > (starter.fielding?.defense || 0) + 15
+              (p.fielding?.defense || 0) > starterDef + 8
             );
-
             if (replacement) {
               console.log(`   🔄 守備固め: ${starter.name} → ${replacement.name} (${starter.position})`);
               replacement.battingOrder = starter.battingOrder;
@@ -628,6 +693,60 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           }
         }
       });
+    }
+
+    // 2. 8回以降リード時: 代走要員（足が速い控えで塁上のランナーを入れ替え）
+    if (gameState.inning >= 8 && isLeading && scoreDiff <= 3) {
+      for (let base = 2; base >= 0; base--) {
+        const runner = gameState.bases[base];
+        if (runner) {
+          const runnerSpeed = runner.physical?.speed || 50;
+          if (runnerSpeed < 55) {
+            const fastRunner = benchFielders.find(p =>
+              p.battingOrder === 0 &&
+              (p.physical?.speed || 0) > runnerSpeed + 15
+            );
+            if (fastRunner) {
+              console.log(`   🔄 代走: ${runner.name} → ${fastRunner.name} (${base + 1}塁)`);
+              const runnerData = defenseTeam.players.find(p => p.id === runner.id);
+              if (runnerData) {
+                fastRunner.battingOrder = runnerData.battingOrder;
+                fastRunner.position = runnerData.position;
+                runnerData.battingOrder = 0;
+                gameState.bases[base] = fastRunner;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 3. 6回以降大量リード: 控え野手を順番に出場させる（経験積ませる）
+    if (gameState.inning >= 6 && scoreDiff >= 5) {
+      const activeBench = benchFielders.filter(p => p.battingOrder === 0);
+      if (activeBench.length > 0) {
+        // 出場機会が少ない控えを優先
+        const leastUsed = activeBench.reduce((best, p) => {
+          const pGames = (p.seasonStats?.games || 0);
+          const bGames = (best.seasonStats?.games || 0);
+          return pGames < bGames ? p : best;
+        }, activeBench[0]);
+
+        // 打撃が最も弱いスタメンと交代
+        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.battingOrder < 9);
+        if (starters.length > 0) {
+          const weakest = starters.reduce((w, p) => {
+            const wBat = (w.batting?.meet || 0) + (w.batting?.power || 0);
+            const pBat = (p.batting?.meet || 0) + (p.batting?.power || 0);
+            return pBat < wBat ? p : w;
+          }, starters[0]);
+
+          console.log(`   🔄 選手交代(大量リード): ${weakest.name} → ${leastUsed.name}`);
+          leastUsed.battingOrder = weakest.battingOrder;
+          leastUsed.position = weakest.position;
+          weakest.battingOrder = 0;
+        }
+      }
     }
   };
 
@@ -855,7 +974,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             reliefTrack.relieverOutsPitched += 3; // 1イニング = 3アウト
           }
 
-          // AI監督: 役割ベースの投手交代判定
+          // AI監督: 役割ベースの投手交代判定（より積極的に継投）
           const staminaRate = pitcherData.currentStamina / pitcher.pitching.stamina;
           const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
           let shouldChange = false;
@@ -865,8 +984,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           const isReliever = reliefTrack.currentRelieverId === pitcher.id;
           if (isReliever) {
             const starterLeft = reliefTrack.starterLeftInning || 9;
-            // 先発が1-3回で降板した場合は5イニング（15アウト）まで、それ以外は2イニング（6アウト）
-            const maxOuts = starterLeft <= 3 ? 15 : 6;
+            const maxOuts = starterLeft <= 3 ? 12 : 6; // ロングリリーフ4回、通常2回
             if (reliefTrack.relieverOutsPitched >= maxOuts) {
               console.log(`   ⏱️ ${pitcher.name}が登板制限(${Math.floor(reliefTrack.relieverOutsPitched / 3)}回)に達しました`);
               shouldChange = true;
@@ -874,19 +992,37 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             }
           }
 
-          // 通常の交代判定条件
+          // 通常の交代判定条件（より積極的に）
           if (!shouldChange) {
-            if (staminaRate < 0.25 && gameState.inning >= 5) {
+            // 先発は5-6回を目安に降板（スタミナ40%以下）
+            if (!isReliever && gameState.inning >= 5 && staminaRate < 0.40) {
               shouldChange = true;
               situation = 'middle';
-            } else if (gameState.inning === 9 && !gameState.isTopInning && scoreDiff > 0 && scoreDiff <= 3) {
-              // 9回裏、3点差以内のリード → クローザー
+            }
+            // 先発がスタミナ25%以下なら即交代
+            else if (staminaRate < 0.25) {
+              shouldChange = true;
+              situation = 'middle';
+            }
+            // 7回以降は積極的に継投（先発スタミナ50%以下）
+            else if (!isReliever && gameState.inning >= 7 && staminaRate < 0.50) {
+              shouldChange = true;
+              situation = gameState.inning >= 8 ? 'hold' : 'middle';
+            }
+            // 9回、3点差以内のリード → クローザー
+            else if (gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
               shouldChange = true;
               situation = 'save';
-            } else if (gameState.inning >= 7 && Math.abs(scoreDiff) <= 2 && staminaRate < 0.40) {
-              // 7回以降で僅差 → セットアッパー
+            }
+            // 8回以降で僅差 → セットアッパー
+            else if (gameState.inning >= 8 && Math.abs(scoreDiff) <= 2 && staminaRate < 0.55) {
               shouldChange = true;
               situation = 'hold';
+            }
+            // 6回以降、大量リードでも中継ぎへ（先発温存）
+            else if (!isReliever && gameState.inning >= 6 && Math.abs(scoreDiff) >= 5 && staminaRate < 0.50) {
+              shouldChange = true;
+              situation = 'middle';
             }
           }
 
