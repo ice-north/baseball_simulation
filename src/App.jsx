@@ -5313,6 +5313,11 @@ if (newOuts === 3) {
         if (managementView === 'dateprogress') return <DateProgressScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}
+          onForceEvent={(eventType) => {
+            if (eventType === 'contract') setManagementView('contract');
+            else if (eventType === 'tryout') setManagementView('tryout');
+            else if (eventType === 'offseason') setManagementView('offseason');
+          }}
         />;
         if (managementView === 'offseason') return <OffSeasonScreen
           seasonData={seasonData}
