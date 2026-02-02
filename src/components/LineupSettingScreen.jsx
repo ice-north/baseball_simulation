@@ -30,6 +30,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   };
 
   const getThrowsLabel = (throws) => throws === 'left' ? '左投' : '右投';
+  const getBatsLabel = (bats) => bats === 'left' ? '左打' : bats === 'switch' ? '両打' : '右打';
 
   const getFormLabel = (form) => {
     const forms = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
@@ -57,11 +58,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const pitchers = team.players.filter(p => p.position === 'pitcher');
   const lineup = team.lineupSettings.battingOrder;
 
+  // スタメン入りしている選手IDのセット
+  const lineupPlayerIds = new Set(lineup.map(e => e.playerId));
+
+  // 控え選手（スタメンに入っていない全選手）
+  const benchPlayers = team.players.filter(p => !lineupPlayerIds.has(p.id));
+
   // 初期化：投手枠がなければ9番に投手を自動設定
   useEffect(() => {
     const hasPitcherSlot = lineup.some(e => e.position === 'pitcher');
     if (!hasPitcherSlot && pitchers.length > 0) {
-      // 先発ローテーションの最初の投手、または最初の投手を9番に配置
       const starterId = team.pitchingRotation?.starters?.[0] || pitchers[0].id;
       lineup.push({ playerId: starterId, position: 'pitcher', battingOrder: 9 });
       setUpdateTrigger(prev => prev + 1);
@@ -77,9 +83,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     const player = team.players.find(p => p.id === playerId);
     const isPitcher = player.position === 'pitcher';
 
-    // 投手は投手枠にのみ配置可能（投手の交換は投手リストから）
     if (isPitcher) {
-      // 投手枠の打順を検索
       const pitcherEntry = lineup.find(e => e.position === 'pitcher');
       if (pitcherEntry) {
         pitcherEntry.playerId = playerId;
@@ -91,14 +95,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       return;
     }
 
-    // 投手枠への野手配置は不可
     const existingEntry = lineup.find(e => e.battingOrder === selectedBattingOrder);
     if (existingEntry?.position === 'pitcher') {
       alert('この打順は投手枠です');
       return;
     }
 
-    // 野手の配置
     if (existingEntry) {
       const idx = lineup.indexOf(existingEntry);
       lineup.splice(idx, 1);
@@ -141,7 +143,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     setUpdateTrigger(prev => prev + 1);
   };
 
-  // 打順入れ替え（投手含む全打順で可能）
   const handleSwapBattingOrder = (order1, order2) => {
     const entry1 = lineup.find(e => e.battingOrder === order1);
     const entry2 = lineup.find(e => e.battingOrder === order2);
@@ -193,13 +194,83 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     setUpdateTrigger(prev => prev + 1);
   };
 
-  // 投手を交換（投手枠の選手を入れ替え）
   const handleChangePitcher = (newPitcherId) => {
     const pitcherEntry = lineup.find(e => e.position === 'pitcher');
     if (pitcherEntry) {
       pitcherEntry.playerId = newPitcherId;
     }
     setUpdateTrigger(prev => prev + 1);
+  };
+
+  // 1行表示用の控え選手行コンポーネント
+  const BenchPlayerRow = ({ player }) => {
+    const isPitcher = player.position === 'pitcher';
+    const isInLineup = lineupPlayerIds.has(player.id);
+    const rotation = team.pitchingRotation || {};
+    const isStarter = rotation.starters?.includes(player.id);
+    const isMiddle = rotation.middleRelievers?.includes(player.id);
+    const isSetup = rotation.setupMen?.includes(player.id);
+    const isCloser = rotation.closer === player.id;
+    const roleLabel = isStarter ? '先発' : isMiddle ? '中継' : isSetup ? 'SU' : isCloser ? '抑え' : '';
+
+    return (
+      <tr
+        className={`border-b border-gray-700 cursor-pointer transition ${isInLineup ? 'opacity-40' : 'hover:bg-gray-600'}`}
+        onClick={() => {
+          if (isInLineup) return;
+          if (isPitcher) {
+            handleChangePitcher(player.id);
+          } else {
+            handleAddToLineup(player.id);
+          }
+        }}
+      >
+        <td className="py-1 px-1 text-sm text-white font-bold">{player.name}</td>
+        <td className="py-1 px-1 text-xs text-gray-400">{player.age}</td>
+        <td className="py-1 px-1 text-xs">
+          <span className={isPitcher ? 'text-indigo-300' : 'text-gray-300'}>
+            {POSITION_NAMES[player.position] || player.position}
+          </span>
+          {roleLabel && <span className="ml-1 text-xs text-yellow-400">({roleLabel})</span>}
+        </td>
+        <td className="py-1 px-1 text-xs text-gray-400">
+          {getThrowsLabel(player.physical?.throws)}{getBatsLabel(player.batting?.bats || player.physical?.bats)}
+        </td>
+        {isPitcher ? (
+          <>
+            <td className={`py-1 px-1 text-xs ${getRankColor(getVelocityRank(player.pitching?.velocity || 0))}`}>
+              {player.pitching?.velocity || 0}
+            </td>
+            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.pitching?.control || 0))}`}>
+              {player.pitching?.control || 0}
+            </td>
+            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(Math.min(99, Math.floor((player.pitching?.stamina || 0) / 2))))}`}>
+              {player.pitching?.stamina || 0}
+            </td>
+            <td className="py-1 px-1 text-xs text-gray-500">-</td>
+            <td className="py-1 px-1 text-xs text-gray-500">-</td>
+          </>
+        ) : (
+          <>
+            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.batting?.meet || 0))}`}>
+              {player.batting?.meet || 0}
+            </td>
+            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.batting?.power || 0))}`}>
+              {player.batting?.power || 0}
+            </td>
+            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.physical?.speed || 0))}`}>
+              {player.physical?.speed || 0}
+            </td>
+            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.physical?.arm || 0))}`}>
+              {player.physical?.arm || 0}
+            </td>
+            <td className={`py-1 px-1 text-xs ${getRankColor(getAbilityRank(player.fielding?.defense || 0))}`}>
+              {player.fielding?.defense || 0}
+            </td>
+          </>
+        )}
+      </tr>
+    );
   };
 
   return (
@@ -224,10 +295,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
         {tab === 'lineup' && (
           <div className="grid grid-cols-2 gap-6">
+            {/* 左側: スタメン */}
             <div className="bg-gray-800 rounded-lg p-6">
               <h2 className="text-xl font-bold text-white mb-4">スタメン設定 ({lineup.length}/9人)</h2>
-              <p className="text-sm text-gray-400 mb-2">1-8番: 野手を配置 / 投手は打順変更のみ可能</p>
-              <p className="text-sm text-indigo-400 mb-4">※ 投手枠は常に存在し、↑↓で打順を移動できます</p>
+              <p className="text-sm text-gray-400 mb-2">1-8番: 野手を配置 / 9番: 投手（試合時に先発投手が入る）</p>
               <div className="space-y-2">
                 {[1,2,3,4,5,6,7,8,9].map(order => {
                   const entry = lineup.find(e => e.battingOrder === order);
@@ -238,22 +309,30 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <div key={order} onClick={() => !isPitcherSlot && setSelectedBattingOrder(order)} className={`rounded p-3 cursor-pointer transition ${isSelected ? 'bg-blue-700 ring-2 ring-blue-400' : player ? (isPitcherSlot ? 'bg-indigo-800 hover:bg-indigo-700' : 'bg-gray-700 hover:bg-gray-600') : 'bg-gray-900 hover:bg-gray-800 border border-dashed border-gray-600'}`}>
                       <div className="flex items-center gap-3">
                         <div className={`font-bold text-lg w-6 ${isSelected ? 'text-blue-300' : 'text-white'}`}>{order}</div>
-                        {player ? (
+                        {isPitcherSlot ? (
+                          <div className="flex-1 flex items-center justify-between">
+                            <div>
+                              <span className="text-indigo-300 font-bold">投手</span>
+                              <span className="text-xs text-gray-500 ml-2">（試合時に先発投手が打席に立つ）</span>
+                            </div>
+                            <div className="flex gap-2">
+                              {order > 1 && (
+                                <button onClick={(e) => { e.stopPropagation(); handleSwapBattingOrder(order, order - 1); }} className="bg-gray-500 hover:bg-gray-400 text-white px-2 py-1 rounded text-xs">↑</button>
+                              )}
+                              {order < 9 && (
+                                <button onClick={(e) => { e.stopPropagation(); handleSwapBattingOrder(order, order + 1); }} className="bg-gray-500 hover:bg-gray-400 text-white px-2 py-1 rounded text-xs">↓</button>
+                              )}
+                            </div>
+                          </div>
+                        ) : player ? (
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
                               <div>
-                                <div className="text-white font-bold flex items-center gap-2">
-                                  {player.name}
-                                  {isPitcherSlot && <span className="text-xs bg-indigo-600 px-2 py-0.5 rounded">投手</span>}
-                                </div>
+                                <div className="text-white font-bold">{player.name}</div>
                                 <div className="text-xs text-gray-400 flex items-center gap-2">
-                                  {isPitcherSlot ? (
-                                    <span className="text-indigo-300">投手</span>
-                                  ) : (
-                                    <select value={entry.position} onChange={(e) => { e.stopPropagation(); handleChangePosition(order, e.target.value); }} className="bg-gray-600 text-white rounded px-2 py-0.5 text-xs" onClick={(e) => e.stopPropagation()}>
-                                      <option value="catcher">捕手</option><option value="first">一塁</option><option value="second">二塁</option><option value="third">三塁</option><option value="short">遊撃</option><option value="left">左翼</option><option value="center">中堅</option><option value="right">右翼</option>
-                                    </select>
-                                  )}
+                                  <select value={entry.position} onChange={(e) => { e.stopPropagation(); handleChangePosition(order, e.target.value); }} className="bg-gray-600 text-white rounded px-2 py-0.5 text-xs" onClick={(e) => e.stopPropagation()}>
+                                    <option value="catcher">捕手</option><option value="first">一塁</option><option value="second">二塁</option><option value="third">三塁</option><option value="short">遊撃</option><option value="left">左翼</option><option value="center">中堅</option><option value="right">右翼</option>
+                                  </select>
                                   <span>| {player.age}歳</span>
                                 </div>
                               </div>
@@ -264,27 +343,14 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 {order < 9 && (
                                   <button onClick={(e) => { e.stopPropagation(); handleSwapBattingOrder(order, order + 1); }} className="bg-gray-500 hover:bg-gray-400 text-white px-2 py-1 rounded text-xs">↓</button>
                                 )}
-                                {!isPitcherSlot && (
-                                  <button onClick={(e) => { e.stopPropagation(); handleRemoveFromLineup(player.id); }} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">外す</button>
-                                )}
+                                <button onClick={(e) => { e.stopPropagation(); handleRemoveFromLineup(player.id); }} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">外す</button>
                               </div>
                             </div>
-                            <div className="text-xs mt-2 space-y-0.5">
-                              {isPitcherSlot ? (
-                                <div className="flex gap-2">
-                                  {[{label:'球速',value:player.pitching?.velocity||0,isVel:true},{label:'制球',value:player.pitching?.control||0},{label:'スタ',value:Math.min(99,Math.floor((player.pitching?.stamina||0)/2))}].map(stat => {
-                                    const rank = stat.isVel ? getVelocityRank(stat.value) : getAbilityRank(stat.value);
-                                    return <span key={stat.label} className={getRankColor(rank)}>{stat.label} {rank}{stat.value}</span>;
-                                  })}
-                                </div>
-                              ) : (
-                                <div className="flex gap-2">
-                                  {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0}].map(stat => {
-                                    const rank = getAbilityRank(stat.value);
-                                    return <span key={stat.label} className={getRankColor(rank)}>{stat.label} {rank}{stat.value}</span>;
-                                  })}
-                                </div>
-                              )}
+                            <div className="text-xs mt-1 flex gap-2">
+                              {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0}].map(stat => {
+                                const rank = getAbilityRank(stat.value);
+                                return <span key={stat.label} className={getRankColor(rank)}>{stat.label}{stat.value}</span>;
+                              })}
                             </div>
                           </div>
                         ) : (
@@ -297,66 +363,34 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               </div>
             </div>
 
+            {/* 右側: 控え選手一覧（1行テーブル） */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-4">
-                選手リスト
+              <h2 className="text-xl font-bold text-white mb-2">
+                控え選手 ({benchPlayers.length}人)
                 {selectedBattingOrder && <span className="text-blue-400 text-sm ml-2">→ {selectedBattingOrder}番に追加</span>}
               </h2>
-
-              {/* 野手セクション */}
-              <h3 className="text-lg font-bold text-gray-300 mb-2">野手（1-8番に配置）</h3>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto mb-4">
-                {fielders.map(player => {
-                  const isInLineup = lineup.some(entry => entry.playerId === player.id);
-                  return (
-                    <div key={player.id} className={`rounded p-3 cursor-pointer transition ${isInLineup ? 'bg-gray-900 opacity-50' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => !isInLineup && handleAddToLineup(player.id)}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <div className="text-white font-bold flex items-center gap-2">
-                            {player.name}
-                            {isInLineup && <span className="text-xs bg-blue-600 px-2 py-0.5 rounded">スタメン</span>}
-                          </div>
-                          <div className="text-xs text-gray-400">{POSITION_NAMES[player.position]} | {player.age}歳</div>
-                        </div>
-                      </div>
-                      <div className="text-xs space-y-0.5">
-                        <div className="flex gap-2">
-                          {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0}].map(stat => {
-                            const rank = getAbilityRank(stat.value);
-                            return <span key={stat.label} className={getRankColor(rank)}>{stat.label} {rank}{stat.value}</span>;
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* 投手セクション */}
-              <h3 className="text-lg font-bold text-indigo-300 mb-2">投手（投手枠に配置 / クリックで交換）</h3>
-              <div className="space-y-2 max-h-[250px] overflow-y-auto">
-                {pitchers.map(player => {
-                  const isPitcherInLineup = lineup.some(entry => entry.playerId === player.id && entry.position === 'pitcher');
-                  const velocityRank = getVelocityRank(player.pitching?.velocity || 0);
-                  const controlRank = getAbilityRank(player.pitching?.control || 0);
-                  return (
-                    <div key={player.id} className={`rounded p-3 cursor-pointer transition ${isPitcherInLineup ? 'bg-indigo-900 ring-2 ring-indigo-500' : 'bg-indigo-900 hover:bg-indigo-800'}`} onClick={() => handleChangePitcher(player.id)}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div>
-                          <div className="text-white font-bold flex items-center gap-2">
-                            {player.name}
-                            {isPitcherInLineup && <span className="text-xs bg-indigo-600 px-2 py-0.5 rounded">先発</span>}
-                          </div>
-                          <div className="text-xs text-gray-400">{getThrowsLabel(player.physical?.throws)} | {getFormLabel(player.pitching?.form)}</div>
-                        </div>
-                      </div>
-                      <div className="text-xs flex gap-2">
-                        <span className={getRankColor(velocityRank)}>球速 {velocityRank}{player.pitching?.velocity}</span>
-                        <span className={getRankColor(controlRank)}>制球 {controlRank}{player.pitching?.control}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+              <p className="text-xs text-gray-400 mb-3">クリックでスタメンに追加（投手は投手枠を交換）</p>
+              <div className="overflow-y-auto max-h-[700px]">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-gray-600 text-xs text-gray-400">
+                      <th className="py-1 px-1">名前</th>
+                      <th className="py-1 px-1">齢</th>
+                      <th className="py-1 px-1">守備</th>
+                      <th className="py-1 px-1">投打</th>
+                      <th className="py-1 px-1">ミ/球速</th>
+                      <th className="py-1 px-1">パ/制球</th>
+                      <th className="py-1 px-1">走/スタ</th>
+                      <th className="py-1 px-1">肩</th>
+                      <th className="py-1 px-1">守</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {benchPlayers.map(player => (
+                      <BenchPlayerRow key={player.id} player={player} />
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

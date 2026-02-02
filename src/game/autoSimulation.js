@@ -992,30 +992,35 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             }
           }
 
-          // 通常の交代判定条件（より積極的に）
+          // 通常の交代判定条件（積極的な継投策）
           if (!shouldChange) {
-            // 先発は5-6回を目安に降板（スタミナ40%以下）
-            if (!isReliever && gameState.inning >= 5 && staminaRate < 0.40) {
+            // 先発の投球回数上限: 7回完了で交代（完封ペースでも8回まで）
+            if (!isReliever && gameState.inning >= 8) {
+              shouldChange = true;
+              situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
+            }
+            // 先発は5回以降でスタミナ40%以下 → 交代
+            else if (!isReliever && gameState.inning >= 5 && staminaRate < 0.40) {
               shouldChange = true;
               situation = 'middle';
             }
-            // 先発がスタミナ25%以下なら即交代
+            // スタミナ25%以下なら即交代（先発・リリーフ問わず）
             else if (staminaRate < 0.25) {
               shouldChange = true;
               situation = 'middle';
             }
-            // 7回以降は積極的に継投（先発スタミナ50%以下）
+            // 7回以降、先発スタミナ50%以下 → 交代
             else if (!isReliever && gameState.inning >= 7 && staminaRate < 0.50) {
               shouldChange = true;
-              situation = gameState.inning >= 8 ? 'hold' : 'middle';
+              situation = 'hold';
             }
             // 9回、3点差以内のリード → クローザー
             else if (gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
               shouldChange = true;
               situation = 'save';
             }
-            // 8回以降で僅差 → セットアッパー
-            else if (gameState.inning >= 8 && Math.abs(scoreDiff) <= 2 && staminaRate < 0.55) {
+            // 8回で僅差 → セットアッパー
+            else if (gameState.inning === 8 && Math.abs(scoreDiff) <= 2) {
               shouldChange = true;
               situation = 'hold';
             }
@@ -1026,12 +1031,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             }
           }
 
-          if (shouldChange && rotation) {
+          if (shouldChange) {
             let reliever = null;
-            const fatigue = rotation.reliefFatigue || {};
+            const fatigue = rotation?.reliefFatigue || {};
 
             // セーブ場面: クローザー優先
-            if (situation === 'save' && rotation.closer) {
+            if (situation === 'save' && rotation?.closer) {
               const closerData = team.players.find(p => p.id === rotation.closer && p.battingOrder === 0);
               if (closerData && (fatigue[rotation.closer] || 0) < 50) {
                 reliever = closerData;
@@ -1040,7 +1045,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
             // ホールド場面: セットアッパー優先
             if (!reliever && (situation === 'hold' || situation === 'save')) {
-              for (const setupId of (rotation.setupMen || [])) {
+              for (const setupId of (rotation?.setupMen || [])) {
                 const setupData = team.players.find(p => p.id === setupId && p.battingOrder === 0);
                 if (setupData && (fatigue[setupId] || 0) < 50) {
                   reliever = setupData;
@@ -1051,7 +1056,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
             // 通常の中継ぎ（疲労が少ない順）
             if (!reliever) {
-              const sortedMiddle = (rotation.middleRelievers || [])
+              const sortedMiddle = (rotation?.middleRelievers || [])
                 .filter(id => {
                   const p = team.players.find(pl => pl.id === id && pl.battingOrder === 0);
                   return p && (fatigue[id] || 0) < 50;
@@ -1065,7 +1070,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
             // フォールバック（先発ローテーション投手は除外）
             if (!reliever) {
-              const starterIds = new Set(rotation.starters || []);
+              const starterIds = new Set(rotation?.starters || []);
               reliever = team.players.find(p =>
                 p.position === 'pitcher' &&
                 p.battingOrder === 0 &&

@@ -5053,7 +5053,7 @@ if (newOuts === 3) {
                 </div>
                 {day.opponent ? (
                   <>
-                    <div className="text-xs text-white font-bold mb-0.5">{day.venue} {day.opponent}</div>
+                    <div className="text-xs text-white font-bold mb-0.5">{day.venue} {day.opponent?.slice(0, 4)}</div>
                     {day.result ? (
                       <div className={`text-sm font-bold ${
                         day.result === '○' ? 'text-green-400' :
@@ -5084,9 +5084,9 @@ if (newOuts === 3) {
           {todayGames.length > 0 ? todayGames.map((game, index) => (
             <div key={index} className="bg-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-center gap-4 mb-3">
-                <div className="text-white font-bold text-lg">{game.away}</div>
+                <div className="text-white font-bold text-lg">{game.away?.slice(0, 4)}</div>
                 <div className="text-gray-400">vs</div>
-                <div className="text-white font-bold text-lg">{game.home}</div>
+                <div className="text-white font-bold text-lg">{game.home?.slice(0, 4)}</div>
               </div>
               <div className="flex items-center justify-center gap-4 text-sm text-gray-300 mb-2">
                 <div className="text-right flex-1">
@@ -5153,7 +5153,20 @@ if (newOuts === 3) {
       </div>
 
       {/* タブコンテンツ */}
-      {scheduleTab === 'league' && (
+      {scheduleTab === 'league' && (() => {
+        const totalGames = seasonData?.settings?.gamesPerSeason || 60;
+        const leader = leagueStandings[0];
+        const leaderWins = leader?.wins || 0;
+        const leaderLosses = leader?.losses || 0;
+        const leaderWinRate = leaderWins + leaderLosses > 0 ? leaderWins / (leaderWins + leaderLosses) : 0;
+        const leaderRemaining = totalGames - (leaderWins + leaderLosses + (leader?.draws || 0));
+        const isChampionDecided = leader && leagueStandings.length > 1 && (() => {
+          const second = leagueStandings[1];
+          const secondRemaining = totalGames - (second.wins + second.losses + (second.draws || 0));
+          return leaderWins > second.wins + secondRemaining;
+        })();
+
+        return (
         <div className="bg-gray-800 rounded-lg p-6">
           <h2 className="text-2xl font-bold mb-4 text-white">リーグ順位表</h2>
           <table className="w-full text-white">
@@ -5165,27 +5178,60 @@ if (newOuts === 3) {
                 <th className="text-center py-3 text-lg">敗</th>
                 <th className="text-center py-3 text-lg">分</th>
                 <th className="text-center py-3 text-lg">勝率</th>
+                <th className="text-center py-3 text-lg">差</th>
+                <th className="text-center py-3 text-lg">M</th>
               </tr>
             </thead>
             <tbody>
-              {leagueStandings.map((team, index) => (
-                <tr key={index} className="border-b border-gray-700">
+              {leagueStandings.map((team, index) => {
+                const winRate = team.wins + team.losses > 0
+                  ? (team.wins / (team.wins + team.losses))
+                  : 0;
+                const teamPlayed = team.wins + team.losses + (team.draws || 0);
+                const teamRemaining = totalGames - teamPlayed;
+
+                // ゲーム差（首位との差）
+                let gameBehind = '';
+                if (index === 0) {
+                  gameBehind = isChampionDecided ? '優勝' : '-';
+                } else {
+                  const diff = ((leaderWins - team.wins) - (leaderLosses - team.losses)) / 2;
+                  gameBehind = diff === 0 ? '-' : diff.toFixed(1);
+                }
+
+                // マジック（首位チームのみ、2位チームの残り試合に基づく計算）
+                let magic = '';
+                if (index === 0 && leagueStandings.length > 1) {
+                  const second = leagueStandings[1];
+                  const secondMaxWins = second.wins + (totalGames - (second.wins + second.losses + (second.draws || 0)));
+                  const magicNum = secondMaxWins - leaderWins + 1;
+                  if (magicNum > 0 && !isChampionDecided) {
+                    magic = `M${magicNum}`;
+                  } else if (isChampionDecided) {
+                    magic = '-';
+                  }
+                }
+
+                return (
+                <tr key={index} className={`border-b border-gray-700 ${index === 0 && isChampionDecided ? 'bg-yellow-900/30' : ''}`}>
                   <td className="py-3 text-lg font-bold">{index + 1}</td>
                   <td className="py-3 text-lg font-bold">{team.team}</td>
                   <td className="text-center py-3 text-lg">{team.wins}</td>
                   <td className="text-center py-3 text-lg">{team.losses}</td>
                   <td className="text-center py-3 text-lg">{team.draws}</td>
-                  <td className="text-center py-3 text-lg">
-                    {team.wins + team.losses > 0
-                      ? (team.wins / (team.wins + team.losses)).toFixed(3)
-                      : '.000'}
+                  <td className="text-center py-3 text-lg">{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
+                  <td className={`text-center py-3 text-lg font-bold ${index === 0 && isChampionDecided ? 'text-yellow-400' : 'text-gray-300'}`}>
+                    {gameBehind}
                   </td>
+                  <td className="text-center py-3 text-lg text-red-400 font-bold">{magic}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
-      )}
+        );
+      })()}
 
       {scheduleTab === 'batting' && (
         <div className="grid grid-cols-4 gap-4">

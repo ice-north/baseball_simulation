@@ -5,6 +5,7 @@
 // ============================================================
 
 import { createSeasonData, initializeStandings } from './seasonManager.js';
+import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 
 /**
  * シーズン終了処理
