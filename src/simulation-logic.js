@@ -99,8 +99,8 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // ミート品質と打者パワーで決定
   let exitVelocity = 0;
   if (isContact) {
-    // 基本初速: 80-100km/h（芯を外した弱い打球）
-    const baseVelocity = 80 + (batter.power * 0.2);  // 80-100km/h
+    // 基本初速: パワーに強く依存（80-110km/h）
+    const baseVelocity = 80 + (batter.power * 0.30);
 
     // ミート品質ボーナス: 最大+50km/h（芯を捉えた時）
     const qualityBonus = meetQuality * 50;
@@ -113,8 +113,8 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     // ランダム要素（±5km/h）
     exitVelocity += (Math.random() * 10 - 5);
 
-    // 現実的な範囲に制限: 70-175km/h
-    exitVelocity = Math.max(70, Math.min(175, exitVelocity));
+    // 現実的な範囲に制限: 70-180km/h
+    exitVelocity = Math.max(70, Math.min(180, exitVelocity));
   }
 
   return {
@@ -238,9 +238,10 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     return { result: 'homerun', bases: 4, description: 'ホームラン！' };
   }
 
-  // 長打圏フライ（100m以上の深いフライ）
-  if (distance > 100 && launchAngle >= 25 && launchAngle <= 42 && exitVelocity >= 145) {
-    if (Math.random() < 0.5) {
+  // 長打圏フライ（98m以上の深いフライ、パワー依存確率）
+  if (distance > 98 && launchAngle >= 22 && launchAngle <= 42 && exitVelocity >= 143) {
+    const hrProb = 0.09 + Math.max(0, (batter.power || 50) - 40) * 0.004;
+    if (Math.random() < hrProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス越え）' };
     }
   }
