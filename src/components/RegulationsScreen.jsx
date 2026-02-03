@@ -2,11 +2,11 @@ import React from 'react';
 import { REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from '../season/regulationSettings.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 
-const RegulationsScreen = ({ seasonData, setSeasonData }) => {
+const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
   const currentPhase = seasonData.phase || 'off_season';
-  const canModify = canModifyRegulations(currentPhase);
+  const canModify = onConfirm ? true : canModifyRegulations(currentPhase);
   const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
     ? PHASE_INFO[currentPhase]
     : { name: '', color: 'bg-gray-100', description: '' };
@@ -104,6 +104,20 @@ const RegulationsScreen = ({ seasonData, setSeasonData }) => {
           <div>延長最大: {seasonData.settings.maxExtraInnings}回</div>
         </div>
       </div>
+
+      {onConfirm && (
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => {
+              handleSaveSettings();
+              onConfirm();
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white px-10 py-4 rounded-lg font-bold text-xl transition"
+          >
+            確定 → キャンプへ進む
+          </button>
+        </div>
+      )}
     </div>
   );
 };

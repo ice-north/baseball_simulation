@@ -3356,17 +3356,24 @@ if (newOuts === 3) {
 
           if (currentTeam !== 'ユーザー') {
             setTimeout(() => {
-              // 現在のチームのロスターを取得して能力バランスを考慮
+              // AIチームの既存人数+ドラフト人数を確認
+              const existingCount = TEAMS_DATA[currentTeam]?.players?.length || 0;
+              const draftedCount = (teamRosters[currentTeam] || []).length;
+              if (existingCount + draftedCount >= 24) {
+                // 24人に達したらスキップ
+                setCurrentPick(currentPick + 1);
+                return;
+              }
               const currentTeamRoster = teamRosters[currentTeam] || [];
               const selected = selectPlayerForAI(tryoutCandidates, currentTeamRoster);
               if (selected) {
-                console.log(`🤖 ${currentTeam}が${selected.name}（${selected.position}）を指名`);
-                // チームロスターに追加
                 setTeamRosters(prev => ({
                   ...prev,
                   [currentTeam]: [...(prev[currentTeam] || []), selected]
                 }));
                 setTryoutCandidates(tryoutCandidates.filter(c => c.id !== selected.id));
+                setCurrentPick(currentPick + 1);
+              } else {
                 setCurrentPick(currentPick + 1);
               }
             }, 500);
@@ -3376,33 +3383,23 @@ if (newOuts === 3) {
         // ドラフト完了処理
         const finalizeDraft = () => {
           if (draftComplete) return;
-            console.log(`✅ ドラフト完了: ${currentPick}/${draftOrder.length}`);
-            console.log('📋 各チームのドラフト結果:', teamRosters);
-
-            // TEAMS_DATAに選手を追加（既存選手は保持）
-            const teamsArrayForSave = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
-            Object.keys(teamRosters).forEach(teamName => {
-              const draftedPlayers = teamRosters[teamName] || [];
-              const actualTeamName = teamName === 'ユーザー' ? teamsArrayForSave[0] : teamName;
-
-              if (TEAMS_DATA[actualTeamName]) {
-                console.log(`👥 ${actualTeamName}に${draftedPlayers.length}人の選手を追加 (既存: ${TEAMS_DATA[actualTeamName].players?.length || 0}人)`);
-                TEAMS_DATA[actualTeamName].players = [
-                  ...(TEAMS_DATA[actualTeamName].players || []),
-                  ...draftedPlayers
-                ];
-              }
-            });
-
-            // 全チームの投手ローテーションを再初期化
-            console.log('⚾ 全チームの投手ローテーションを設定');
-            initializeAllPitchingRotations();
-
-            setDraftComplete(true);
-            if (isInitialTryout && onComplete) {
-              console.log('🏕️ キャンプ画面へ移動');
-              setTimeout(() => onComplete(), 1000);
+          // TEAMS_DATAに選手を追加（既存選手は保持）
+          const teamsArrayForSave = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+          Object.keys(teamRosters).forEach(teamName => {
+            const draftedPlayers = teamRosters[teamName] || [];
+            const actualTeamName = teamName === 'ユーザー' ? teamsArrayForSave[0] : teamName;
+            if (TEAMS_DATA[actualTeamName]) {
+              TEAMS_DATA[actualTeamName].players = [
+                ...(TEAMS_DATA[actualTeamName].players || []),
+                ...draftedPlayers
+              ];
             }
+          });
+          initializeAllPitchingRotations();
+          setDraftComplete(true);
+          if (isInitialTryout && onComplete) {
+            setTimeout(() => onComplete(), 1000);
+          }
         };
 
         // ドラフト完了検出（全ピック消化 or 候補者枯渇）
@@ -3526,8 +3523,18 @@ if (newOuts === 3) {
                   </button>
                 )}
                 {draftComplete && (
-                  <div className="mt-4 text-green-400 font-bold text-lg">
-                    ドラフト完了 - 各チームの選手がロスターに追加されました
+                  <div className="mt-4">
+                    <div className="text-green-400 font-bold text-lg mb-3">
+                      ドラフト完了 - 各チームの選手がロスターに追加されました
+                    </div>
+                    {!isInitialTryout && onComplete && (
+                      <button
+                        onClick={() => onComplete()}
+                        className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded font-bold transition"
+                      >
+                        トライアウト終了 →
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -5297,6 +5304,12 @@ if (newOuts === 3) {
         if (managementView === 'tryout') return <TryoutScreen
           seasonData={seasonData}
           allTeams={allTeams}
+          onComplete={() => {
+            // トライアウト完了 → カレンダーに戻る（11/11へ進める）
+            const newData = { ...seasonData, currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
+            setSeasonData(newData);
+            setManagementView('dateprogress');
+          }}
         />;
         if (managementView === 'contract') return <ContractScreen
           seasonData={seasonData}
@@ -5316,6 +5329,7 @@ if (newOuts === 3) {
           onForceEvent={(eventType) => {
             if (eventType === 'contract') setManagementView('contract');
             else if (eventType === 'tryout') setManagementView('tryout');
+            else if (eventType === 'draft') setManagementView('dateprogress'); // ドラフトは自動処理後にカレンダーへ
             else if (eventType === 'offseason') setManagementView('offseason');
           }}
         />;
@@ -5324,8 +5338,36 @@ if (newOuts === 3) {
           setSeasonData={setSeasonData}
           onSave={() => saveGame(0)}
           onStartNextSeason={() => {
-            // トライアウトへ遷移（次年度）
-            setManagementView('tryout');
+            // レギュレーション設定画面へ
+            setManagementView('regulations_next');
+          }}
+        />;
+        if (managementView === 'regulations_next') return <RegulationsScreen
+          seasonData={seasonData}
+          setSeasonData={setSeasonData}
+          onConfirm={() => {
+            // キャンプ画面へ
+            setManagementView('camp');
+          }}
+        />;
+        if (managementView === 'camp') return <CampScreen
+          seasonData={seasonData}
+          allTeams={allTeams}
+          onComplete={() => {
+            // キャンプ終了: 全チームのスタメンを自動生成し、3月へ
+            Object.keys(TEAMS_DATA).forEach(teamName => {
+              const teamData = TEAMS_DATA[teamName];
+              if (teamData && teamData.players && teamData.players.length > 0) {
+                generateAILineup(teamData, teamName);
+              }
+            });
+            setSeasonData(prev => ({
+              ...prev,
+              currentDate: { ...prev.currentDate, month: 4, day: 1 },
+              phase: SEASON_PHASES.REGULAR_SEASON
+            }));
+            setSelectedMonth(4);
+            setManagementView('dateprogress');
           }}
         />;
         if (managementView === 'stats') return <PlayerStatsScreen

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
-import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition } from '../season/dateProgression.js';
+import { progressDate, handlePhaseTransition } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
@@ -95,35 +95,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     return { data: { ...sData, schedule: updatedSchedule, standings: updatedStandings, results: updatedResults }, results: gameResults };
   };
 
-  const simulateAllRemainingGames = (sData) => {
-    const remainingGames = sData.schedule.filter(game => !game.result && game.phase === sData.phase);
-    if (remainingGames.length === 0) return sData;
-    let updatedSchedule = [...sData.schedule];
-    let updatedStandings = [...sData.standings];
-    let updatedResults = [...sData.results];
-    remainingGames.forEach(game => {
-      const homeTeam = TEAMS_DATA[game.home];
-      const awayTeam = TEAMS_DATA[game.away];
-      if (!homeTeam || !awayTeam) return;
-      const result = autoSimulateGame(game.home, game.away);
-      const scheduleIndex = updatedSchedule.findIndex(g => g.id === game.id);
-      if (scheduleIndex !== -1) updatedSchedule[scheduleIndex] = { ...game, result };
-      updatedResults.push({ gameId: game.id, date: game.date, home: game.home, away: game.away, result });
-      const standingHome = updatedStandings.find(s => s.team === game.home);
-      const standingAway = updatedStandings.find(s => s.team === game.away);
-      if (standingHome && standingAway) {
-        standingHome.gamesPlayed++; standingAway.gamesPlayed++;
-        if (result.homeScore > result.awayScore) { standingHome.wins++; standingAway.losses++; }
-        else if (result.awayScore > result.homeScore) { standingAway.wins++; standingHome.losses++; }
-        else { standingHome.draws = (standingHome.draws || 0) + 1; standingAway.draws = (standingAway.draws || 0) + 1; }
-        standingHome.winRate = standingHome.gamesPlayed > 0 ? standingHome.wins / standingHome.gamesPlayed : 0;
-        standingAway.winRate = standingAway.gamesPlayed > 0 ? standingAway.wins / standingAway.gamesPlayed : 0;
-      }
-    });
-    updatedStandings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-    return { ...sData, schedule: updatedSchedule, standings: updatedStandings, results: updatedResults };
-  };
-
   // フェーズ遷移検出＆強制イベント発火
   const checkAndTriggerEvents = (oldData, newData) => {
     const oldPhase = oldData.phase;
@@ -139,11 +110,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
       if (onForceEvent) onForceEvent('contract');
       return null;
     }
-    // 11/10〜29: トライアウト
-    if (month === 11 && day >= 10 && day < 30 && (newPhase === SEASON_PHASES.TRYOUT || newPhase === SEASON_PHASES.CONTRACT)) {
-      newData = { ...newData, phase: SEASON_PHASES.TRYOUT };
+    // 11/10: トライアウト
+    if (month === 11 && day === 10 && newPhase === SEASON_PHASES.TRYOUT) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('tryout');
+      return null;
+    }
+    // 11/24: ドラフト
+    if (month === 11 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
+      setSeasonData(newData);
+      if (onForceEvent) onForceEvent('draft');
       return null;
     }
     // 11/30〜: オフシーズン
@@ -162,28 +138,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     let newSeasonData = progressDate(afterSimData, days);
     setLastGameResults(results);
     // 月を追従
-    if (newSeasonData.currentDate.month !== selectedMonth) setSelectedMonth(newSeasonData.currentDate.month);
-    const finalData = checkAndTriggerEvents(seasonData, newSeasonData);
-    if (finalData !== null) setSeasonData(finalData);
-    setIsSimulating(false);
-  };
-
-  const handleProgressToNextGame = () => {
-    setIsSimulating(true);
-    let newSeasonData = progressToNextGame(seasonData, userTeamName);
-    const { data, results } = simulateGamesOnDate(newSeasonData);
-    setLastGameResults(results);
-    if (data.currentDate.month !== selectedMonth) setSelectedMonth(data.currentDate.month);
-    const finalData = checkAndTriggerEvents(seasonData, data);
-    if (finalData !== null) setSeasonData(finalData);
-    setIsSimulating(false);
-  };
-
-  const handleProgressToNextPhase = () => {
-    setIsSimulating(true);
-    let newSeasonData = simulateAllRemainingGames(seasonData);
-    newSeasonData = progressToNextPhase(newSeasonData);
-    setLastGameResults([]);
     if (newSeasonData.currentDate.month !== selectedMonth) setSelectedMonth(newSeasonData.currentDate.month);
     const finalData = checkAndTriggerEvents(seasonData, newSeasonData);
     if (finalData !== null) setSeasonData(finalData);
@@ -256,12 +210,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
           <div className="flex items-center gap-3">
             <button onClick={() => handleProgressDate(1)} disabled={isSimulating} className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-lg font-bold transition shadow disabled:opacity-50">
               {isSimulating ? '...' : '1日進める'}
-            </button>
-            <button onClick={handleProgressToNextGame} disabled={isSimulating} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg font-bold transition text-sm disabled:opacity-50">
-              次の試合日
-            </button>
-            <button onClick={handleProgressToNextPhase} disabled={isSimulating} className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg font-bold transition text-sm disabled:opacity-50">
-              次フェーズ
             </button>
             <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
           </div>

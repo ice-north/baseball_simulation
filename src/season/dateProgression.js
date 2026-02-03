@@ -75,12 +75,7 @@ export const progressToNextPhase = (seasonData) => {
       break;
 
     case SEASON_PHASES.PLAYOFFS:
-      // プレーオフ → ドラフト（10月21日）
-      targetDate = { year: seasonData.currentDate.year, month: 10, day: 21 };
-      break;
-
-    case SEASON_PHASES.DRAFT:
-      // ドラフト → 契約更改（11月9日）
+      // プレーオフ → 契約更改（11月9日）
       targetDate = { year: seasonData.currentDate.year, month: 11, day: 9 };
       break;
 
@@ -90,7 +85,12 @@ export const progressToNextPhase = (seasonData) => {
       break;
 
     case SEASON_PHASES.TRYOUT:
-      // トライアウト → オフシーズン（11月30日）
+      // トライアウト → ドラフト（11月24日）
+      targetDate = { year: seasonData.currentDate.year, month: 11, day: 24 };
+      break;
+
+    case SEASON_PHASES.DRAFT:
+      // ドラフト → オフシーズン（11月30日）
       targetDate = { year: seasonData.currentDate.year, month: 11, day: 30 };
       break;
 
