@@ -41,7 +41,7 @@ export const PHASE_INFO = {
   },
   [SEASON_PHASES.DRAFT]: {
     name: 'ドラフト',
-    months: [11],
+    months: [10],
     days: [24],
     color: 'bg-purple-100',
     description: 'プロ野球ドラフト会議'
@@ -88,7 +88,11 @@ export const getCurrentPhase = (month, day) => {
     return SEASON_PHASES.REGULAR_SEASON;
   } else if (month === 10 && day >= 10 && day <= 20) {
     return SEASON_PHASES.PLAYOFFS;
-  } else if (month === 10 && day > 20) {
+  } else if (month === 10 && day >= 21 && day < 24) {
+    return SEASON_PHASES.OFF_SEASON;
+  } else if (month === 10 && day === 24) {
+    return SEASON_PHASES.DRAFT;
+  } else if (month === 10 && day > 24) {
     return SEASON_PHASES.OFF_SEASON;
   } else if (month === 11 && day < 9) {
     return SEASON_PHASES.OFF_SEASON;
@@ -96,11 +100,7 @@ export const getCurrentPhase = (month, day) => {
     return SEASON_PHASES.CONTRACT;
   } else if (month === 11 && day === 10) {
     return SEASON_PHASES.TRYOUT;
-  } else if (month === 11 && day > 10 && day < 24) {
-    return SEASON_PHASES.OFF_SEASON;
-  } else if (month === 11 && day === 24) {
-    return SEASON_PHASES.DRAFT;
-  } else if (month === 11 && day > 24 && day < 30) {
+  } else if (month === 11 && day > 10 && day < 30) {
     return SEASON_PHASES.OFF_SEASON;
   } else if (month === 11 && day >= 30) {
     return SEASON_PHASES.OFF_SEASON;

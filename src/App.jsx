@@ -20,6 +20,8 @@ import {
   getHandednessEffect
 } from './utils/physics.js';
 
+import { compressData, decompressData, getLocalStorageUsage } from './utils/compression.js';
+
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
 import { initializeTeamsData, TEAMS_DATA, initializeAllPitchingRotations, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue } from './teams-data.js';
@@ -139,14 +141,17 @@ import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
       const refreshSaveSlots = () => {
         const slots = SAVE_SLOT_KEYS.map(key => {
           try {
-            const json = localStorage.getItem(key);
-            if (!json) return null;
-            const data = JSON.parse(json);
+            const savedData = localStorage.getItem(key);
+            if (!savedData) return null;
+            // 圧縮データか非圧縮データかを判定して解凍
+            const data = decompressData(savedData);
+            if (!data) return null;
             return {
               timestamp: data.timestamp,
               year: data.seasonData?.year || 1,
               date: data.seasonData?.currentDate || { month: 4, day: 1 },
-              phase: data.seasonData?.phase || 'regular_season'
+              phase: data.seasonData?.phase || 'regular_season',
+              version: data.version || 'unknown'
             };
           } catch { return null; }
         });
@@ -165,11 +170,15 @@ import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
         }
       }, []);
 
-      // ゲームデータを保存（スロット指定）
+      // ゲームデータを保存（スロット指定、圧縮対応）
       const saveGame = (slotIndex = 0) => {
         try {
+          // 保存前にストレージ使用状況をログ
+          const beforeUsage = getLocalStorageUsage();
+          console.log(`📊 保存前ストレージ: ${(beforeUsage.used / 1024).toFixed(1)}KB / ${(beforeUsage.total / 1024).toFixed(1)}KB (${beforeUsage.percentage}%)`);
+
           const saveData = {
-            version: '2.8.0',
+            version: '2.9.0', // 圧縮対応バージョン
             timestamp: new Date().toISOString(),
             slotIndex,
             seasonData: seasonData,
@@ -180,26 +189,51 @@ import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
             gameFlowState,
             selectedMonth
           };
-          localStorage.setItem(SAVE_SLOT_KEYS[slotIndex], JSON.stringify(saveData));
-          console.log(`💾 スロット${slotIndex + 1}にセーブしました`);
+
+          // 圧縮してから保存
+          const compressed = compressData(saveData);
+          const uncompressedSize = JSON.stringify(saveData).length;
+          const compressedSize = compressed.length;
+          const ratio = ((1 - compressedSize / uncompressedSize) * 100).toFixed(1);
+
+          localStorage.setItem(SAVE_SLOT_KEYS[slotIndex], compressed);
+          console.log(`💾 スロット${slotIndex + 1}にセーブしました (圧縮率: ${ratio}%, ${(uncompressedSize/1024).toFixed(1)}KB → ${(compressedSize/1024).toFixed(1)}KB)`);
+
+          // 保存後のストレージ使用状況
+          const afterUsage = getLocalStorageUsage();
+          console.log(`📊 保存後ストレージ: ${(afterUsage.used / 1024).toFixed(1)}KB / ${(afterUsage.total / 1024).toFixed(1)}KB (${afterUsage.percentage}%)`);
+
           refreshSaveSlots();
           return true;
         } catch (error) {
           console.error('セーブ失敗:', error);
+          // QuotaExceededError の場合、詳細をログ
+          if (error.name === 'QuotaExceededError') {
+            const usage = getLocalStorageUsage();
+            console.error(`💥 ストレージ容量超過: ${(usage.used / 1024).toFixed(1)}KB / ${(usage.total / 1024).toFixed(1)}KB`);
+            alert('セーブデータの容量が限界を超えました。古いセーブデータを削除してください。');
+          }
           return false;
         }
       };
 
-      // ゲームデータを読み込み（スロット指定）
+      // ゲームデータを読み込み（スロット指定、圧縮対応）
       const loadGame = (slotIndex = 0) => {
         try {
-          const savedJson = localStorage.getItem(SAVE_SLOT_KEYS[slotIndex]);
-          if (!savedJson) {
+          const savedData = localStorage.getItem(SAVE_SLOT_KEYS[slotIndex]);
+          if (!savedData) {
             console.warn('セーブデータがありません');
             return false;
           }
-          const saveData = JSON.parse(savedJson);
-          console.log(`📂 スロット${slotIndex + 1}からロード開始`);
+
+          // 圧縮データか非圧縮データかを判定して解凍
+          const saveData = decompressData(savedData);
+          if (!saveData) {
+            console.error('セーブデータの解凍に失敗しました');
+            return false;
+          }
+
+          console.log(`📂 スロット${slotIndex + 1}からロード開始 (version: ${saveData.version || 'unknown'})`);
 
           // TEAMS_DATAを復元
           if (saveData.teamsData) {

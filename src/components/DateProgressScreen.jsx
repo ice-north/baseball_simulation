@@ -104,6 +104,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     }
     const { month, day } = newData.currentDate;
 
+    // 10/24: ドラフト
+    if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
+      setSeasonData(newData);
+      if (onForceEvent) onForceEvent('draft');
+      return null;
+    }
     // 11/9: 契約更改
     if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
       setSeasonData(newData);
@@ -114,12 +120,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     if (month === 11 && day === 10 && newPhase === SEASON_PHASES.TRYOUT) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('tryout');
-      return null;
-    }
-    // 11/24: ドラフト
-    if (month === 11 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
-      setSeasonData(newData);
-      if (onForceEvent) onForceEvent('draft');
       return null;
     }
     // 11/30〜: オフシーズン

@@ -86,21 +86,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     const player = team.players.find(p => p.id === playerId);
     const isPitcher = player.position === 'pitcher';
 
-    if (isPitcher) {
-      const pitcherEntry = lineup.find(e => e.position === 'pitcher');
-      if (pitcherEntry) {
-        pitcherEntry.playerId = playerId;
-      } else {
-        lineup.push({ playerId, position: 'pitcher', battingOrder: 9 });
-      }
-      lineup.sort((a, b) => a.battingOrder - b.battingOrder);
-      setUpdateTrigger(prev => prev + 1);
-      return;
-    }
-
     const existingEntry = lineup.find(e => e.battingOrder === selectedBattingOrder);
     if (existingEntry?.position === 'pitcher') {
-      alert('この打順は投手枠です');
+      // 投手枠に別の選手を入れる場合、投手として入れる
+      if (existingEntry) {
+        const idx = lineup.indexOf(existingEntry);
+        lineup.splice(idx, 1);
+      }
+      lineup.push({ playerId, position: 'pitcher', battingOrder: selectedBattingOrder });
+      lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+      setUpdateTrigger(prev => prev + 1);
       return;
     }
 
@@ -111,17 +106,28 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     const playerIndex = lineup.findIndex(entry => entry.playerId === playerId);
     if (playerIndex !== -1) lineup.splice(playerIndex, 1);
 
-    let assignedPosition = player.position;
-    const existingPositionEntry = lineup.find(e => e.position === assignedPosition && e.position !== 'pitcher' && e.battingOrder !== selectedBattingOrder);
-    if (existingPositionEntry) {
+    // 投手が野手枠に入る場合、適正の高いポジションを選ぶ
+    let assignedPosition = isPitcher ? 'first' : player.position;
+    if (isPitcher && player.positionFitness) {
       const allPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
       const usedPositions = lineup.filter(e => e.position !== 'pitcher').map(e => e.position);
       const availablePositions = allPositions.filter(pos => !usedPositions.includes(pos));
       if (availablePositions.length > 0) {
-        if (player.positionFitness) {
-          availablePositions.sort((a, b) => (player.positionFitness[b] || 0) - (player.positionFitness[a] || 0));
-        }
+        availablePositions.sort((a, b) => (player.positionFitness[b] || 0) - (player.positionFitness[a] || 0));
         assignedPosition = availablePositions[0];
+      }
+    } else {
+      const existingPositionEntry = lineup.find(e => e.position === assignedPosition && e.position !== 'pitcher' && e.battingOrder !== selectedBattingOrder);
+      if (existingPositionEntry) {
+        const allPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
+        const usedPositions = lineup.filter(e => e.position !== 'pitcher').map(e => e.position);
+        const availablePositions = allPositions.filter(pos => !usedPositions.includes(pos));
+        if (availablePositions.length > 0) {
+          if (player.positionFitness) {
+            availablePositions.sort((a, b) => (player.positionFitness[b] || 0) - (player.positionFitness[a] || 0));
+          }
+          assignedPosition = availablePositions[0];
+        }
       }
     }
 
@@ -134,8 +140,14 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
   const handleChangePosition = (battingOrder, newPosition) => {
     const entry = lineup.find(e => e.battingOrder === battingOrder);
-    if (!entry || entry.position === 'pitcher' || newPosition === 'pitcher') return;
-    const existingEntry = lineup.find(e => e.position === newPosition && e.battingOrder !== battingOrder && e.position !== 'pitcher');
+    if (!entry) return;
+    // 投手枠（9番投手）の場合は投手から変更不可
+    const isPitcherSlot = entry.position === 'pitcher' && lineup.filter(e => e.position === 'pitcher').length === 1;
+    if (isPitcherSlot && newPosition !== 'pitcher') {
+      alert('投手枠は投手のまま維持する必要があります');
+      return;
+    }
+    const existingEntry = lineup.find(e => e.position === newPosition && e.battingOrder !== battingOrder);
     if (existingEntry) {
       const oldPosition = entry.position;
       existingEntry.position = oldPosition;
@@ -359,7 +371,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 <div className="text-white font-bold">{player.name}</div>
                                 <div className="text-xs text-gray-400 flex items-center gap-2">
                                   <select value={entry.position} onChange={(e) => { e.stopPropagation(); handleChangePosition(order, e.target.value); }} className="bg-gray-600 text-white rounded px-2 py-0.5 text-xs" onClick={(e) => e.stopPropagation()}>
-                                    <option value="catcher">捕手</option><option value="first">一塁</option><option value="second">二塁</option><option value="third">三塁</option><option value="short">遊撃</option><option value="left">左翼</option><option value="center">中堅</option><option value="right">右翼</option>
+                                    <option value="pitcher">投手</option><option value="catcher">捕手</option><option value="first">一塁</option><option value="second">二塁</option><option value="third">三塁</option><option value="short">遊撃</option><option value="left">左翼</option><option value="center">中堅</option><option value="right">右翼</option>
                                   </select>
                                   <span>| {player.age}歳</span>
                                 </div>

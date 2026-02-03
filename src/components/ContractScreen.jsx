@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
@@ -67,6 +67,8 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
   const [releasedPlayers, setReleasedPlayers] = useState({});
   const [aiProcessed, setAiProcessed] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [sortKey, setSortKey] = useState(null);
+  const [sortAsc, setSortAsc] = useState(false);
 
   // AI チームの自動解雇処理
   useEffect(() => {
@@ -88,6 +90,59 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
   const teamData = TEAMS_DATA[userTeamName];
   const players = teamData?.players || [];
   const userReleased = releasedPlayers[userTeamName] || [];
+
+  // ソート用の値を取得
+  const getSortValue = (player, key) => {
+    const isPitcher = player.position === 'pitcher';
+    switch (key) {
+      case 'name': return player.name;
+      case 'age': return player.age || 0;
+      case 'position': return POSITION_NAMES[player.position] || '';
+      case 'meet': return player.batting?.meet || 0;
+      case 'power': return player.batting?.power || 0;
+      case 'speed': return player.physical?.speed || 0;
+      case 'arm': return player.physical?.arm || 0;
+      case 'defense': return player.fielding?.defense || 0;
+      case 'velocity': return player.pitching?.velocity || 0;
+      case 'control': return player.pitching?.control || 0;
+      case 'stamina': return player.pitching?.stamina || 0;
+      case 'games': return isPitcher ? (player.seasonStats?.pitching?.games || 0) : (player.seasonStats?.batting?.games || 0);
+      case 'overall':
+        if (isPitcher) {
+          return ((player.pitching?.velocity || 130) - 115) * 2.5 + (player.pitching?.control || 50) + ((player.pitching?.stamina || 100) / 2);
+        }
+        return ((player.batting?.meet||0) + (player.batting?.power||0) + (player.physical?.speed||0) + (player.physical?.arm||0) + (player.fielding?.defense||0)) / 5;
+      default: return 0;
+    }
+  };
+
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
+  };
+
+  const sortedPlayers = useMemo(() => {
+    if (!sortKey) return players;
+    return [...players].sort((a, b) => {
+      const va = getSortValue(a, sortKey);
+      const vb = getSortValue(b, sortKey);
+      if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      return sortAsc ? va - vb : vb - va;
+    });
+  }, [players, sortKey, sortAsc]);
+
+  const SortHeader = ({ label, sortKeyVal, className = '' }) => (
+    <th
+      className={`py-1 px-2 cursor-pointer hover:text-white transition select-none ${className}`}
+      onClick={() => handleSort(sortKeyVal)}
+    >
+      {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
+    </th>
+  );
 
   const toggleRelease = (playerId) => {
     const current = releasedPlayers[userTeamName] || [];
@@ -146,23 +201,23 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
               <thead>
                 <tr className="border-b border-gray-600 text-xs text-gray-400">
                   <th className="py-1 px-2">契約</th>
-                  <th className="py-1 px-2">名前</th>
-                  <th className="py-1 px-2">齢</th>
-                  <th className="py-1 px-2">守備</th>
-                  <th className="py-1 px-2 text-center">ミ</th>
-                  <th className="py-1 px-2 text-center">パ</th>
-                  <th className="py-1 px-2 text-center">走</th>
-                  <th className="py-1 px-2 text-center">肩</th>
-                  <th className="py-1 px-2 text-center">守</th>
-                  <th className="py-1 px-2 text-center">球速</th>
-                  <th className="py-1 px-2 text-center">制球</th>
-                  <th className="py-1 px-2 text-center">スタ</th>
-                  <th className="py-1 px-2 text-center">試合</th>
-                  <th className="py-1 px-2 text-center">成績</th>
+                  <SortHeader label="名前" sortKeyVal="name" />
+                  <SortHeader label="齢" sortKeyVal="age" />
+                  <SortHeader label="守備" sortKeyVal="position" />
+                  <SortHeader label="ミ" sortKeyVal="meet" className="text-center" />
+                  <SortHeader label="パ" sortKeyVal="power" className="text-center" />
+                  <SortHeader label="走" sortKeyVal="speed" className="text-center" />
+                  <SortHeader label="肩" sortKeyVal="arm" className="text-center" />
+                  <SortHeader label="守" sortKeyVal="defense" className="text-center" />
+                  <SortHeader label="球速" sortKeyVal="velocity" className="text-center" />
+                  <SortHeader label="制球" sortKeyVal="control" className="text-center" />
+                  <SortHeader label="スタ" sortKeyVal="stamina" className="text-center" />
+                  <SortHeader label="試合" sortKeyVal="games" className="text-center" />
+                  <SortHeader label="総合" sortKeyVal="overall" className="text-center" />
                 </tr>
               </thead>
               <tbody>
-                {players.map(player => {
+                {sortedPlayers.map(player => {
                   const isPitcher = player.position === 'pitcher';
                   const isReleased = userReleased.includes(player.id);
                   const batting = player.seasonStats?.batting || {};
