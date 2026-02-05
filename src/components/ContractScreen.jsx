@@ -137,8 +137,8 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const SortHeader = ({ label, sortKeyVal, className = '' }) => (
     <th
-      className={`py-1 px-2 cursor-pointer hover:text-white transition select-none ${className}`}
-      onClick={() => handleSort(sortKeyVal)}
+      className={`py-1 px-2 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
+      onClick={(e) => { e.stopPropagation(); handleSort(sortKeyVal); }}
     >
       {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
     </th>
@@ -198,7 +198,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
           <div className="overflow-y-auto max-h-[500px] mb-4">
             <table className="w-full text-left">
-              <thead>
+              <thead className="sticky top-0 bg-gray-800 z-10">
                 <tr className="border-b border-gray-600 text-xs text-gray-400">
                   <th className="py-1 px-2">契約</th>
                   <SortHeader label="名前" sortKeyVal="name" />

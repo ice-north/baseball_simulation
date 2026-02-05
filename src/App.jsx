@@ -4036,6 +4036,21 @@ if (newOuts === 3) {
           seasonData={seasonData}
           setSeasonData={setSeasonData}
           onConfirm={() => {
+            // レギュレーション確定後、スケジュールを生成
+            const teams = Object.keys(TEAMS_DATA);
+            const schedule = generateFullSeasonSchedule({
+              teams,
+              gamesPerSeason: seasonData.settings?.gamesPerSeason || 60,
+              startDate: { year: 2024 + seasonData.year, month: 3, day: 1 },
+              endDate: { year: 2024 + seasonData.year, month: 9, day: 30 }
+            });
+            setSeasonData(prev => ({
+              ...prev,
+              schedule,
+              standings: prev.standings.length > 0 ? prev.standings : teams.map(t => ({
+                team: t, wins: 0, losses: 0, draws: 0, winRate: 0
+              }))
+            }));
             // キャンプ画面へ
             setManagementView('camp');
           }}

@@ -294,21 +294,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
         )}
       </div>
 
-      {/* 順位表（マジック・優勝表示付き） */}
+      {/* 順位表（マジック・優勝表示・打率・防御率付き） */}
       <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
         <h2 className="text-xl font-bold text-white mb-4">順位表</h2>
         <table className="w-full text-white">
           <thead>
             <tr className="border-b border-gray-600 text-gray-400 text-sm">
-              <th className="py-2 px-2 text-left w-12">順位</th>
-              <th className="py-2 px-2 text-left">チーム</th>
-              <th className="py-2 px-3 text-center">試合</th>
-              <th className="py-2 px-3 text-center">勝</th>
-              <th className="py-2 px-3 text-center">負</th>
-              <th className="py-2 px-3 text-center">分</th>
-              <th className="py-2 px-3 text-center">勝率</th>
-              <th className="py-2 px-3 text-center">差</th>
-              <th className="py-2 px-3 text-center">M</th>
+              <th className="py-2 px-1 text-left w-10">順位</th>
+              <th className="py-2 px-1 text-left">チーム</th>
+              <th className="py-2 px-1 text-center">試合</th>
+              <th className="py-2 px-1 text-center">勝</th>
+              <th className="py-2 px-1 text-center">負</th>
+              <th className="py-2 px-1 text-center">分</th>
+              <th className="py-2 px-1 text-center">勝率</th>
+              <th className="py-2 px-1 text-center">差</th>
+              <th className="py-2 px-1 text-center">打率</th>
+              <th className="py-2 px-1 text-center">防御率</th>
+              <th className="py-2 px-1 text-center">M</th>
             </tr>
           </thead>
           <tbody>
@@ -317,6 +319,24 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
               const winRate = (team.wins || 0) + (team.losses || 0) > 0
                 ? ((team.wins || 0) / ((team.wins || 0) + (team.losses || 0))).toFixed(3)
                 : '.000';
+
+              // チーム打率・防御率を計算
+              const teamData = TEAMS_DATA[team.team];
+              let teamAvg = '-';
+              let teamEra = '-';
+              if (teamData?.players) {
+                let totalHits = 0, totalAB = 0, totalER = 0, totalIP = 0;
+                teamData.players.forEach(p => {
+                  const bs = p.seasonStats?.batting || {};
+                  const ps = p.seasonStats?.pitching || {};
+                  totalHits += bs.hits || 0;
+                  totalAB += bs.atBats || 0;
+                  totalER += ps.earnedRuns || 0;
+                  totalIP += (ps.inningsPitched || 0) / 3;
+                });
+                teamAvg = totalAB > 0 ? (totalHits / totalAB).toFixed(3) : '-';
+                teamEra = totalIP > 0 ? (totalER / totalIP * 9).toFixed(2) : '-';
+              }
 
               let gameBehind = '';
               if (index === 0) {
@@ -337,17 +357,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
 
               return (
                 <tr key={team.team} className={`border-b border-gray-700 ${isUserTeam ? 'bg-blue-900/50' : ''} ${index === 0 && isChampionDecided ? 'bg-yellow-900/30' : ''}`}>
-                  <td className="py-3 px-2">
+                  <td className="py-2 px-1">
                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${index === 0 ? 'bg-yellow-500 text-black' : index === 1 ? 'bg-gray-400 text-black' : index === 2 ? 'bg-orange-600 text-white' : 'bg-gray-600 text-white'}`}>{index + 1}</span>
                   </td>
-                  <td className={`py-3 px-2 font-bold ${isUserTeam ? 'text-yellow-300' : ''}`}>{team.team}</td>
-                  <td className="py-3 px-3 text-center">{team.gamesPlayed || 0}</td>
-                  <td className="py-3 px-3 text-center text-green-400 font-bold">{team.wins || 0}</td>
-                  <td className="py-3 px-3 text-center text-red-400 font-bold">{team.losses || 0}</td>
-                  <td className="py-3 px-3 text-center text-gray-400">{team.draws || 0}</td>
-                  <td className="py-3 px-3 text-center font-mono">{winRate}</td>
-                  <td className={`py-3 px-3 text-center font-bold ${index === 0 && isChampionDecided ? 'text-yellow-400' : 'text-gray-400'}`}>{gameBehind}</td>
-                  <td className="py-3 px-3 text-center text-red-400 font-bold">{magic}</td>
+                  <td className={`py-2 px-1 font-bold ${isUserTeam ? 'text-yellow-300' : ''}`}>{team.team}</td>
+                  <td className="py-2 px-1 text-center text-sm">{team.gamesPlayed || 0}</td>
+                  <td className="py-2 px-1 text-center text-green-400 font-bold text-sm">{team.wins || 0}</td>
+                  <td className="py-2 px-1 text-center text-red-400 font-bold text-sm">{team.losses || 0}</td>
+                  <td className="py-2 px-1 text-center text-gray-400 text-sm">{team.draws || 0}</td>
+                  <td className="py-2 px-1 text-center font-mono text-sm">{winRate}</td>
+                  <td className={`py-2 px-1 text-center font-bold text-sm ${index === 0 && isChampionDecided ? 'text-yellow-400' : 'text-gray-400'}`}>{gameBehind}</td>
+                  <td className="py-2 px-1 text-center font-mono text-sm text-blue-300">{teamAvg}</td>
+                  <td className="py-2 px-1 text-center font-mono text-sm text-orange-300">{teamEra}</td>
+                  <td className="py-2 px-1 text-center text-red-400 font-bold text-sm">{magic}</td>
                 </tr>
               );
             })}

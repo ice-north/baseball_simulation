@@ -65,12 +65,14 @@ function getSpecialistType() {
 
 /**
  * トライアウト候補者を生成
- * @param {number} year - 年数（1年目は30人/チーム、2年目以降は15人/チーム）
+ * @param {number} year - 年数（0=初回30人/チーム、1以降=15人/チーム）
  * @param {number} teamCount - チーム数
+ * @param {boolean} isInitial - 初回トライアウトかどうか
  * @returns {Array} トライアウト候補者の配列
  */
-export function generateTryoutCandidates(year, teamCount) {
-  const candidatesPerTeam = year === 1 ? 30 : 15;
+export function generateTryoutCandidates(year, teamCount, isInitial = false) {
+  // 初回は30人/チーム、それ以外は15人/チーム
+  const candidatesPerTeam = isInitial ? 30 : 15;
   const totalCandidates = teamCount * candidatesPerTeam;
   const candidates = [];
 
@@ -82,11 +84,18 @@ export function generateTryoutCandidates(year, teamCount) {
     const throws = handedness.throws;
     const bats = handedness.bats;
 
+    // 二刀流選手かどうか（5%の確率、右投げのみ）
+    const isTwoWay = throws === 'right' && Math.random() < 0.05;
+
     // 投手と野手を1:1の比率で生成（ただし左投げは制限あり）
     let isPitcher = Math.random() < 0.5;
     let position;
 
-    if (throws === 'left') {
+    if (isTwoWay) {
+      // 二刀流選手は外野手または一塁手として登録
+      position = Math.random() < 0.7 ? fieldPositions[Math.floor(Math.random() * 3) + 5] : 'first'; // 外野 or 一塁
+      isPitcher = false;
+    } else if (throws === 'left') {
       // 左投げの場合、ポジションを制限
       position = getPositionForLeftHander();
       isPitcher = position === 'pitcher';
@@ -95,8 +104,8 @@ export function generateTryoutCandidates(year, teamCount) {
       position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
     }
 
-    // 一芸に秀でた選手かどうか（20%の確率）
-    const isSpecialist = Math.random() < 0.2;
+    // 一芸に秀でた選手かどうか（20%の確率、二刀流以外）
+    const isSpecialist = !isTwoWay && Math.random() < 0.2;
     const specialistType = isSpecialist ? getSpecialistType() : null;
 
     // 投球フォームを先に決定（能力に影響するため）
@@ -119,8 +128,8 @@ export function generateTryoutCandidates(year, teamCount) {
     // 年齢を先に決定（18-25歳）
     const age = Math.floor(Math.random() * 8) + 18;
 
-    // 能力値生成（一芸選手の場合は特殊な分布、年齢補正あり）
-    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age);
+    // 能力値生成（一芸選手の場合は特殊な分布、年齢補正あり、二刀流対応）
+    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay);
 
     const player = {
       id: i,
@@ -129,6 +138,7 @@ export function generateTryoutCandidates(year, teamCount) {
       position: position,
       battingOrder: 0,
       isStarter: false,
+      isTwoWay: isTwoWay, // 二刀流フラグ
       batting: {
         meet: abilities.meet,
         power: abilities.power,
@@ -145,19 +155,19 @@ export function generateTryoutCandidates(year, teamCount) {
         defense: abilities.defense
       },
       catching: {
-        lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 40 : Math.floor(Math.random() * 26) + 25
+        lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 35 : Math.floor(Math.random() * 26) + 20
       },
       pitching: {
         velocity: abilities.velocity,
         control: abilities.control,
         stamina: abilities.stamina,
         form: pitchingForm,
-        arsenal: isPitcher ? generateRandomArsenal() : [
+        arsenal: (isPitcher || isTwoWay) ? generateRandomArsenal() : [
           { id: 1, type: 'straight', level: 100 },
           { id: 2, type: 'slider', level: 50 }
         ]
       },
-      positionFitness: generatePositionFitness(position),
+      positionFitness: isTwoWay ? generateTwoWayPositionFitness(position) : generatePositionFitness(position),
       professionalCareer: {
         isDrafted: false,
         draftYear: null,
@@ -183,41 +193,62 @@ export function generateTryoutCandidates(year, teamCount) {
 }
 
 /**
- * 能力値を生成（一芸選手対応、フォーム別球速調整、年齢補正）
+ * 能力値を生成（一芸選手対応、フォーム別球速調整、年齢補正、二刀流対応）
  * 重要: 球速・ミート・パワーは一芸でも最大Aランク(79)まで
  * 年齢補正: 18歳基準で、1歳につき平均+1ポイント（ただしランダム範囲内なので例外あり）
+ * 全体的に能力値を5ポイント程度下げ、バラつきを大きくする
  */
-function generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age = 20) {
+function generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age = 20, isTwoWay = false) {
   // フォームによる球速・制球の調整
   // サイドスロー・アンダースローは球速-10、制球+15
   const isSideOrUnder = pitchingForm === 'sidearm' || pitchingForm === 'submarine';
   const velocityAdjust = isSideOrUnder ? -10 : 0;
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
-  // 年齢補正: 18歳を基準に、1歳につき+2ポイント（19歳=+2, 25歳=+14）
-  // ただしランダムの範囲は広いので、18歳でも高能力、25歳でも低能力の可能性あり
-  const ageBonus = Math.max(0, (age - 18) * 2);
+  // 年齢補正: 18歳を基準に、1歳につき+1.5ポイント（19歳=+1.5, 25歳=+10.5）
+  const ageBonus = Math.max(0, Math.floor((age - 18) * 1.5));
 
-  // 年齢補正付きランダム生成（範囲をシフト）
-  const randRangeWithAge = (min, max, bonus = ageBonus) => {
-    const adjustedMin = Math.min(min + bonus, max);
-    return Math.floor(Math.random() * (max - adjustedMin + 1)) + adjustedMin;
+  // バラつき付きランダム生成（範囲を広げる）
+  const randRangeWithVariance = (min, max, bonus = ageBonus) => {
+    // 範囲を広げてバラつきを大きくする
+    const variance = Math.floor(Math.random() * 15) - 7; // -7 ~ +7 のランダム変動
+    const adjustedMin = Math.max(10, Math.min(min + bonus, max));
+    const base = Math.floor(Math.random() * (max - adjustedMin + 1)) + adjustedMin;
+    return Math.max(10, Math.min(99, base + variance));
   };
 
-  // 通常の能力値範囲（投手能力-2、野手能力+2調整、年齢補正適用）
+  // 二刀流選手の場合は投打両方に能力を持つ
+  if (isTwoWay) {
+    return {
+      // 野手能力（平均的）
+      meet: randRangeWithVariance(40, 65),
+      power: randRangeWithVariance(35, 60),
+      eye: randRangeWithVariance(35, 65),
+      steal: randRangeWithVariance(30, 60),
+      speed: randRangeWithVariance(40, 70),
+      arm: randRangeWithVariance(50, 80),
+      defense: randRangeWithVariance(40, 65),
+      // 投手能力（平均的だが投げられる）
+      velocity: Math.min(randRangeWithVariance(130, 148) + velocityAdjust, 150),
+      control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
+      stamina: randRangeWithVariance(80, 130)
+    };
+  }
+
+  // 通常の能力値範囲（能力値を5ポイント程度下げ、バラつきを増加）
   const normalAbilities = {
-    // 野手能力（+2調整、年齢補正）
-    meet: isPitcher ? randRangeWithAge(20, 45) : randRangeWithAge(37, 72),
-    power: isPitcher ? randRangeWithAge(15, 40) : randRangeWithAge(32, 67),
-    eye: isPitcher ? randRangeWithAge(30, 55) : randRangeWithAge(37, 77),
-    steal: isPitcher ? randRangeWithAge(15, 30, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithAge(27, 77, Math.max(0, Math.floor(ageBonus * 0.7))), // 盗塁はフィジカル系で年齢補正控えめ
-    speed: isPitcher ? randRangeWithAge(35, 60, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithAge(37, 77, Math.max(0, Math.floor(ageBonus * 0.7))), // 走力はフィジカル系で年齢補正控えめ
-    arm: isPitcher ? randRangeWithAge(45, 70) : randRangeWithAge(37, 77),
-    defense: isPitcher ? randRangeWithAge(45, 70) : randRangeWithAge(37, 77),
-    // 投手能力（フォーム調整適用、-2調整、年齢補正）
-    velocity: isPitcher ? Math.min(randRangeWithAge(125, 145) + velocityAdjust, 152) : randRange(115, 130),
-    control: isPitcher ? Math.min(randRangeWithAge(40, 70) + controlAdjust, 87) : randRange(35, 60),
-    stamina: isPitcher ? randRangeWithAge(100, 160) : randRange(55, 95)
+    // 野手能力（-5調整、バラつき増加）
+    meet: isPitcher ? randRangeWithVariance(15, 40) : randRangeWithVariance(30, 67),
+    power: isPitcher ? randRangeWithVariance(10, 35) : randRangeWithVariance(25, 62),
+    eye: isPitcher ? randRangeWithVariance(25, 50) : randRangeWithVariance(30, 70),
+    steal: isPitcher ? randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithVariance(20, 70, Math.max(0, Math.floor(ageBonus * 0.7))),
+    speed: isPitcher ? randRangeWithVariance(30, 55, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithVariance(30, 70, Math.max(0, Math.floor(ageBonus * 0.7))),
+    arm: isPitcher ? randRangeWithVariance(40, 65) : randRangeWithVariance(30, 70),
+    defense: isPitcher ? randRangeWithVariance(40, 65) : randRangeWithVariance(30, 70),
+    // 投手能力（-5調整、バラつき増加）
+    velocity: isPitcher ? Math.min(randRangeWithVariance(120, 142) + velocityAdjust, 150) : randRange(110, 125),
+    control: isPitcher ? Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85) : randRange(30, 55),
+    stamina: isPitcher ? randRangeWithVariance(90, 150) : randRange(50, 90)
   };
 
   if (!isSpecialist) {
@@ -379,6 +410,33 @@ export const generatePositionFitness = (mainPosition) => {
       fitness[adj] = Math.floor(Math.random() * 30) + 60; // 60-90
     });
   }
+
+  return fitness;
+}
+
+/**
+ * 二刀流選手のポジション適性を生成
+ * 投手と野手の両方に高い適性を持つ
+ */
+export const generateTwoWayPositionFitness = (mainPosition) => {
+  const fitness = {
+    pitcher: 80, // 投手としても高い適性
+    catcher: 30, first: 30,
+    second: 30, third: 30, short: 30,
+    left: 30, center: 30, right: 30
+  };
+
+  // メインポジションは100
+  fitness[mainPosition] = 100;
+
+  // 投手適性を高く設定
+  fitness.pitcher = Math.floor(Math.random() * 15) + 75; // 75-90
+
+  // 外野と一塁の適性も高め
+  if (mainPosition !== 'first') fitness.first = Math.floor(Math.random() * 20) + 60;
+  if (mainPosition !== 'left') fitness.left = Math.floor(Math.random() * 20) + 55;
+  if (mainPosition !== 'center') fitness.center = Math.floor(Math.random() * 20) + 55;
+  if (mainPosition !== 'right') fitness.right = Math.floor(Math.random() * 20) + 55;
 
   return fitness;
 }

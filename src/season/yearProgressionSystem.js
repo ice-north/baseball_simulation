@@ -440,16 +440,10 @@ export function advanceToNextYear(seasonData, allTeams) {
   const newSeasonData = createSeasonData(newYear);
   newSeasonData.settings = { ...seasonData.settings };
 
-  // スケジュール生成
+  // スケジュールはレギュレーション設定後に生成するため、ここでは空のまま
+  // 順位表のみ初期化
   const teams = Object.keys(teamsAfterRetirement);
-  const schedule = generateFullSeasonSchedule({
-    teams,
-    gamesPerSeason: newSeasonData.settings.gamesPerSeason,
-    startDate: { year: 2024 + newYear, month: 3, day: 1 },
-    endDate: { year: 2024 + newYear, month: 9, day: 30 }
-  });
-
-  newSeasonData.schedule = schedule;
+  newSeasonData.schedule = [];
   newSeasonData.standings = initializeStandings(teams);
 
   return {

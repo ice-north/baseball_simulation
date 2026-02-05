@@ -143,43 +143,6 @@ export const REGULATION_PRESETS = {
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
-  },
-  kansai: {
-    name: '関西独立リーグ',
-    description: '年間48試合、プレーオフなし',
-    regulations: {
-      useDH: false,
-      gamesPerSeason: 48,
-      teamsCount: 6,
-      playoffFormat: 'none',  // プレーオフなし
-      maxExtraInnings: 12,
-      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
-    }
-  },
-  // 汎用プリセット（参考用）
-  independent: {
-    name: '独立リーグ（汎用）',
-    description: '標準的な独立リーグ設定',
-    regulations: {
-      useDH: false,
-      gamesPerSeason: 60,
-      teamsCount: 4,
-      playoffFormat: 'single',
-      maxExtraInnings: 12,
-      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
-    }
-  },
-  professional: {
-    name: 'プロ野球（参考）',
-    description: 'NPB標準設定',
-    regulations: {
-      useDH: true,
-      gamesPerSeason: 143,
-      teamsCount: 6,
-      playoffFormat: 'double',
-      maxExtraInnings: 12,
-      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
-    }
   }
 };
 

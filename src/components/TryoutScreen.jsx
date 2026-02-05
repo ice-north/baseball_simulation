@@ -13,6 +13,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   const [viewTab, setViewTab] = useState('draft');
   const [sortKey, setSortKey] = useState('overall');
   const [sortDir, setSortDir] = useState('desc');
+  const [draftHistory, setDraftHistory] = useState([]);
 
   const getPositionName = (position) => {
     const positionNames = {
@@ -55,7 +56,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     if (tryoutCandidates.length === 0) {
       const year = isInitialTryout ? 1 : (seasonData?.year || 1);
       const teamCount = seasonData?.settings?.teamsCount || Object.keys(allTeams).length || 4;
-      const candidates = generateTryoutCandidates(year, teamCount);
+      const candidates = generateTryoutCandidates(year, teamCount, isInitialTryout);
       setTryoutCandidates(candidates);
 
       const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
@@ -73,6 +74,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     }
     const currentTeam = draftOrder[currentPick].team;
     if (currentTeam === 'ユーザー') {
+      const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+      const actualTeamName = teamsArray[0];
+      setDraftHistory(prev => [...prev, {
+        pick: currentPick + 1,
+        round: draftOrder[currentPick].round,
+        team: actualTeamName,
+        player: player
+      }]);
       setUserRoster([...userRoster, player]);
       setTeamRosters({
         ...teamRosters,
@@ -97,6 +106,12 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         const currentTeamRoster = teamRosters[currentTeam] || [];
         const selected = selectPlayerForAI(tryoutCandidates, currentTeamRoster);
         if (selected) {
+          setDraftHistory(prev => [...prev, {
+            pick: currentPick + 1,
+            round: draftOrder[currentPick].round,
+            team: currentTeam,
+            player: selected
+          }]);
           setTeamRosters(prev => ({
             ...prev,
             [currentTeam]: [...(prev[currentTeam] || []), selected]
@@ -271,6 +286,22 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
             ドラフト
           </button>
           <button
+            onClick={() => setViewTab('roster')}
+            className={`flex-1 px-4 py-2 rounded font-bold transition ${
+              viewTab === 'roster' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            現有戦力
+          </button>
+          <button
+            onClick={() => setViewTab('history')}
+            className={`flex-1 px-4 py-2 rounded font-bold transition ${
+              viewTab === 'history' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            指名結果
+          </button>
+          <button
             onClick={() => setViewTab('details')}
             className={`flex-1 px-4 py-2 rounded font-bold transition ${
               viewTab === 'details' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -317,6 +348,140 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {viewTab === 'roster' && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <h2 className="text-2xl font-bold text-white mb-4">📋 現有戦力一覧</h2>
+            {(() => {
+              const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+              const userTeamName = teamsArray[0];
+              const existingPlayers = TEAMS_DATA[userTeamName]?.players || [];
+              const total = existingPlayers.length + userRoster.length;
+              const positionCounts = { pitcher: 0, catcher: 0, infielder: 0, outfielder: 0 };
+              existingPlayers.forEach(p => {
+                const category = getPositionCategory(p.position);
+                if (category in positionCounts) positionCounts[category]++;
+              });
+              userRoster.forEach(p => {
+                const category = getPositionCategory(p.position);
+                if (category in positionCounts) positionCounts[category]++;
+              });
+              return (
+                <>
+                  <div className="bg-gray-700 rounded-lg p-4 mb-4">
+                    <div className="text-white font-bold text-lg mb-2">
+                      {userTeamName} - 現在 {existingPlayers.length}人 + ドラフト {userRoster.length}人 = 合計 {total}人
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 mb-2">
+                      <div className="bg-gray-600 rounded p-2 text-center">
+                        <div className="text-sm text-gray-300">投手</div>
+                        <div className="text-white font-bold">{positionCounts.pitcher}人</div>
+                      </div>
+                      <div className="bg-gray-600 rounded p-2 text-center">
+                        <div className="text-sm text-gray-300">捕手</div>
+                        <div className="text-white font-bold">{positionCounts.catcher}人</div>
+                      </div>
+                      <div className="bg-gray-600 rounded p-2 text-center">
+                        <div className="text-sm text-gray-300">内野手</div>
+                        <div className="text-white font-bold">{positionCounts.infielder}人</div>
+                      </div>
+                      <div className="bg-gray-600 rounded p-2 text-center">
+                        <div className="text-sm text-gray-300">外野手</div>
+                        <div className="text-white font-bold">{positionCounts.outfielder}人</div>
+                      </div>
+                    </div>
+                    {total > 24 && (
+                      <div className="text-red-400 text-sm mt-2">⚠️ ロスター上限(24人)を超えています。トライアウト後に解雇が必要です。</div>
+                    )}
+                  </div>
+                  {existingPlayers.length > 0 ? (
+                    <div className="space-y-4">
+                      {['pitcher', 'catcher', 'infielder', 'outfielder'].map(category => {
+                        const categoryPlayers = existingPlayers.filter(p => getPositionCategory(p.position) === category);
+                        if (categoryPlayers.length === 0) return null;
+                        const categoryLabels = { pitcher: '投手', catcher: '捕手', infielder: '内野手', outfielder: '外野手' };
+                        return (
+                          <div key={category}>
+                            <h3 className="text-white font-bold mb-2 text-sm border-b border-gray-600 pb-1">{categoryLabels[category]} ({categoryPlayers.length}人)</h3>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs text-left">
+                                <thead className="bg-gray-600 text-gray-300">
+                                  <tr>
+                                    <th className="px-2 py-1">名前</th>
+                                    <th className="px-2 py-1">年齢</th>
+                                    <th className="px-2 py-1">守備</th>
+                                    <th className="px-2 py-1">ミ</th>
+                                    <th className="px-2 py-1">パ</th>
+                                    <th className="px-2 py-1">走</th>
+                                    <th className="px-2 py-1">肩</th>
+                                    <th className="px-2 py-1">守</th>
+                                    <th className="px-2 py-1">球速</th>
+                                    <th className="px-2 py-1">制球</th>
+                                    <th className="px-2 py-1">スタ</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {categoryPlayers.map(player => (
+                                    <tr key={player.id} className="border-b border-gray-700">
+                                      <td className="px-2 py-1 text-white font-bold">{player.name}</td>
+                                      <td className="px-2 py-1 text-gray-300">{player.age || '?'}</td>
+                                      <td className="px-2 py-1 text-gray-300">{getPositionName(player.position)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.batting?.meet||0))}`}>{getAbilityRank(player.batting?.meet||0)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.batting?.power||0))}`}>{getAbilityRank(player.batting?.power||0)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.physical?.speed||0))}`}>{getAbilityRank(player.physical?.speed||0)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.physical?.arm||0))}`}>{getAbilityRank(player.physical?.arm||0)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.fielding?.defense||0))}`}>{getAbilityRank(player.fielding?.defense||0)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-gray-400 text-center py-8">現有選手はいません（初回トライアウト）</div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {viewTab === 'history' && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <h2 className="text-2xl font-bold text-white mb-4">📋 ドラフト指名結果</h2>
+            {draftHistory.length > 0 ? (
+              <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                {draftHistory.map((entry, index) => {
+                  const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+                  const isUserTeam = entry.team === teamsArray[0];
+                  const positionLabel = entry.player.position === 'pitcher' ? '投手' :
+                    entry.player.position === 'catcher' ? '捕手' :
+                    ['first', 'second', 'third', 'short'].includes(entry.player.position) ? '内野手' : '外野手';
+                  return (
+                    <div
+                      key={index}
+                      className={`flex items-center gap-3 p-2 rounded ${isUserTeam ? 'bg-blue-900/50' : 'bg-gray-700/50'}`}
+                    >
+                      <span className="text-yellow-400 font-bold w-24 shrink-0">ドラフト{entry.round}位</span>
+                      <span className="text-white font-bold w-24 shrink-0">{entry.player.name}</span>
+                      <span className="text-gray-300 w-16 shrink-0">{positionLabel}</span>
+                      <span className="text-gray-400 w-12 shrink-0">{entry.player.age}歳</span>
+                      <span className={`font-bold ${isUserTeam ? 'text-blue-400' : 'text-gray-400'}`}>{entry.team}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-gray-400 text-center py-8">まだ指名がありません</div>
+            )}
           </div>
         )}
 

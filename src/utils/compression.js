@@ -399,12 +399,86 @@ function decompressFromBase64(input) {
 }
 
 /**
+ * Optimize save data to reduce size before compression
+ * @param {Object} saveData - Save data to optimize
+ * @returns {Object} Optimized save data
+ */
+export function optimizeSaveData(saveData) {
+  const optimized = JSON.parse(JSON.stringify(saveData));
+
+  // Optimize teamsData - remove non-essential player fields
+  if (optimized.teamsData) {
+    Object.keys(optimized.teamsData).forEach(teamName => {
+      const team = optimized.teamsData[teamName];
+      if (team.players) {
+        team.players = team.players.map(p => {
+          // Remove large nested objects that can be recalculated
+          const { gameLog, lastAtBat, lastPitch, ...essentialData } = p;
+          // Trim pitching change balls to just names (not full objects)
+          if (essentialData.pitching?.changeBalls) {
+            essentialData.pitching.changeBalls = essentialData.pitching.changeBalls.map(b =>
+              typeof b === 'object' ? b.name || b.type : b
+            );
+          }
+          return essentialData;
+        });
+      }
+    });
+  }
+
+  // Optimize seasonData - remove detailed game logs from results
+  if (optimized.seasonData) {
+    // Trim results to essential info only
+    if (optimized.seasonData.results) {
+      optimized.seasonData.results = optimized.seasonData.results.map(r => ({
+        gameId: r.gameId,
+        date: r.date,
+        homeTeam: r.homeTeam,
+        awayTeam: r.awayTeam,
+        homeScore: r.homeScore,
+        awayScore: r.awayScore,
+        winner: r.winner,
+        phase: r.phase
+        // Exclude: playByPlay, boxScore, detailed logs
+      }));
+    }
+
+    // Trim schedule - for completed games, remove unnecessary fields
+    if (optimized.seasonData.schedule) {
+      optimized.seasonData.schedule = optimized.seasonData.schedule.map(g => {
+        if (g.result) {
+          // Game is complete - only keep essential info
+          return {
+            gameId: g.gameId,
+            date: g.date,
+            homeTeam: g.homeTeam,
+            awayTeam: g.awayTeam,
+            phase: g.phase,
+            result: {
+              homeScore: g.result.homeScore,
+              awayScore: g.result.awayScore,
+              winner: g.result.winner
+            }
+          };
+        }
+        // Game not played yet - keep all info needed
+        return g;
+      });
+    }
+  }
+
+  return optimized;
+}
+
+/**
  * Compress JSON data for localStorage
  * @param {Object} data - Data to compress
  * @returns {string} Compressed string
  */
 export function compressData(data) {
-  const jsonStr = JSON.stringify(data);
+  // Optimize before compression to reduce size
+  const optimizedData = optimizeSaveData(data);
+  const jsonStr = JSON.stringify(optimizedData);
   return 'LZ:' + compressToBase64(jsonStr);
 }
 
