@@ -18,17 +18,28 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason 
     try {
       const allTeams = TEAMS_DATA || {};
       const result = advanceToNextYear(seasonData, allTeams);
-      setSeasonResults(result);
+
+      // seasonDataを更新
       setSeasonData(result.newSeasonData);
+
+      // TEAMS_DATAを更新
       Object.keys(result.updatedTeams).forEach(teamName => {
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];
       });
+
+      console.log('年度処理完了: ', result);
+      console.log('レギュレーション画面へ遷移します...');
+
+      // 直接レギュレーション画面へ遷移（結果画面をスキップ）
+      if (onStartNextSeason) {
+        onStartNextSeason();
+      }
     } catch (error) {
       console.error('年度進行エラー:', error);
       alert('年度進行中にエラーが発生しました');
-    } finally {
       setProcessing(false);
     }
+    // processingは遷移するのでfalseにしない（遷移前にボタンが再度押されるのを防ぐ）
   };
 
   if (!seasonResults) {
@@ -62,7 +73,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason 
                 disabled={processing}
                 className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition disabled:bg-gray-600"
               >
-                {processing ? '処理中...' : `${seasonData.year + 1}年目へ進む`}
+                {processing ? '処理中...' : `${seasonData.year + 1}年目へ進む（レギュレーション設定へ）`}
               </button>
             </div>
           </div>

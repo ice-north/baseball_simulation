@@ -395,7 +395,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const rand = Math.random() * 100;
 
     // ストライク/ボールの判定
-    const strikeChance = 45 + effectiveControl * 0.3;
+    // 四球を増やすためストライク率を下げる（制球の影響も調整）
+    // 制球65で約52%、制球52で約48%がストライクゾーン
+    const strikeChance = 35 + effectiveControl * 0.25;
 
     if (rand < strikeChance) {
       // ストライクゾーン
@@ -475,7 +477,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     } else {
       // ボールゾーン
       const swingRand = Math.random() * 100;
-      const chaseChance = 15 + (3 - batter.eye * 0.1) + count.strikes * 5;
+      // 選球眼が高いほどボール球を振らない（四球を増やす）
+      const chaseChance = 12 + (3 - batter.eye * 0.12) + count.strikes * 4;
 
       if (swingRand < chaseChance) {
         // ボール球をスイング

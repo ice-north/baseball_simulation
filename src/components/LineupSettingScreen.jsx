@@ -276,7 +276,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         className={`border-b border-gray-700 cursor-pointer transition ${isInLineup ? 'opacity-40' : 'hover:bg-gray-600'}`}
         onClick={() => {
           if (isInLineup) return;
-          if (isPitcher) { handleChangePitcher(player.id); } else { handleAddToLineup(player.id); }
+          // 1-8番が選択されている場合は、投手でも野手としてスタメンに追加
+          if (selectedBattingOrder && selectedBattingOrder >= 1 && selectedBattingOrder <= 8) {
+            handleAddToLineup(player.id);
+          } else if (isPitcher) {
+            // 打順未選択または9番の場合は投手枠を交換
+            handleChangePitcher(player.id);
+          } else {
+            handleAddToLineup(player.id);
+          }
         }}
       >
         <td className="py-1 px-1 text-sm text-white font-bold whitespace-nowrap">{player.name}</td>
