@@ -12,6 +12,7 @@ export const DEFAULT_REGULATIONS = {
   useDH: false,           // DH制
   gamesPerSeason: 60,     // 年間試合数（チームあたり）
   teamsCount: 4,          // チーム数
+  leagueFormat: 'single', // リーグ形式: 'single'=1リーグ, 'two'=2リーグ制
   playoffFormat: 'single', // プレーオフ形式
   maxExtraInnings: 12,    // 延長最大回数
   roster: {
@@ -80,16 +81,21 @@ export const canModifyRegulations = (phase) => {
  * @param {string} format - 形式
  * @returns {string} 説明文
  */
-export const getPlayoffFormatDescription = (format) => {
+export const getPlayoffFormatDescription = (format, leagueFormat) => {
   const descriptions = {
     'single': '1位 vs 2位の対戦（3戦2勝制、最大3試合）',
     'double': '4チームトーナメント（1位vs4位、2位vs3位 → 決勝）',
     'tournament': 'トーナメント制（3位vs4位 → 勝者vs2位 → 勝者vs1位）',
     'top2': '上位2チーム対決（5戦3勝制、最大5試合）',
     'split': '前期・後期優勝チーム対決（3戦2勝制）',
+    'championship': '両リーグ優勝チーム対決（3戦2勝制）',
     'none': 'プレーオフなし（レギュラーシーズンの優勝チームが年間王者）'
   };
-  return descriptions[format] || '';
+  let desc = descriptions[format] || '';
+  if (leagueFormat === 'two') {
+    desc = '【2リーグ制】' + desc;
+  }
+  return desc;
 };
 
 /**
@@ -115,7 +121,9 @@ export const REGULATION_PRESETS = {
       useDH: false,
       gamesPerSeason: 58,
       teamsCount: 8,  // 2リーグ×4チーム
-      playoffFormat: 'single',  // 両リーグ優勝チーム対決（3戦2勝制）
+      leagueFormat: 'two',  // 2リーグ制
+      leagueNames: ['ルートインBC信越', 'ルートインBC北陸'],  // リーグ名
+      playoffFormat: 'championship',  // 両リーグ優勝チーム対決（3戦2勝制）
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }

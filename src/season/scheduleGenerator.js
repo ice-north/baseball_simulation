@@ -47,6 +47,54 @@ export const generateRoundRobin = (teams) => {
 };
 
 /**
+ * 2リーグ制のラウンドロビンを生成
+ * @param {Array} league1 - リーグ1のチーム配列
+ * @param {Array} league2 - リーグ2のチーム配列
+ * @param {number} intraLeagueGames - 同一リーグ内の対戦数（チーム当たり）
+ * @param {number} interLeagueGames - 異リーグとの対戦数（チーム当たり）
+ * @returns {Array} 対戦カード配列
+ */
+export const generateTwoLeagueMatchups = (league1, league2, intraLeagueGames, interLeagueGames) => {
+  const allMatchups = [];
+
+  // リーグ内対戦（多め）
+  const addIntraLeagueGames = (leagueTeams, gamesPerPair) => {
+    const roundRobin = generateRoundRobin(leagueTeams);
+    for (let rep = 0; rep < gamesPerPair; rep++) {
+      roundRobin.forEach(roundGames => {
+        roundGames.forEach(game => {
+          if (rep % 2 === 0) {
+            allMatchups.push({ home: game.home, away: game.away, isInterLeague: false });
+          } else {
+            allMatchups.push({ home: game.away, away: game.home, isInterLeague: false });
+          }
+        });
+      });
+    }
+  };
+
+  // リーグ間対戦（少なめ）
+  const addInterLeagueGames = (games) => {
+    for (let rep = 0; rep < games; rep++) {
+      league1.forEach((team1, idx) => {
+        const team2 = league2[idx % league2.length];
+        if (rep % 2 === 0) {
+          allMatchups.push({ home: team1, away: team2, isInterLeague: true });
+        } else {
+          allMatchups.push({ home: team2, away: team1, isInterLeague: true });
+        }
+      });
+    }
+  };
+
+  addIntraLeagueGames(league1, Math.ceil(intraLeagueGames / (league1.length - 1)));
+  addIntraLeagueGames(league2, Math.ceil(intraLeagueGames / (league2.length - 1)));
+  addInterLeagueGames(interLeagueGames);
+
+  return allMatchups;
+};
+
+/**
  * 年間スケジュールを生成（レギュラーシーズン）
  * 月間バランス型: 土日優先、平日も含めて全試合を配置
  *
@@ -55,61 +103,79 @@ export const generateRoundRobin = (teams) => {
  *   - gamesPerSeason: 年間試合数（チームあたり）
  *   - startDate: 開始日 {year, month, day}
  *   - endDate: 終了日 {year, month, day}
+ *   - leagueFormat: 'single' or 'two'
+ *   - leagueNames: リーグ名配列（2リーグ制の場合）
  * @returns {Array} スケジュール配列
  */
 export const generateFullSeasonSchedule = (config) => {
-  const { teams, gamesPerSeason = 60, startDate, endDate } = config;
+  const { teams, gamesPerSeason = 60, startDate, endDate, leagueFormat = 'single', leagueNames } = config;
   const teamsCount = teams.length;
+  let allMatchups = [];
 
-  // 各チームが何回対戦するか計算
-  const opponentsCount = teamsCount - 1;
-  const gamesPerOpponent = Math.ceil(gamesPerSeason / opponentsCount);
+  // 2リーグ制の場合
+  if (leagueFormat === 'two' && teamsCount >= 4) {
+    const halfTeams = Math.floor(teamsCount / 2);
+    const league1 = teams.slice(0, halfTeams);
+    const league2 = teams.slice(halfTeams);
 
-  // ラウンドロビン方式で1周分の対戦カードを生成
-  const oneRound = generateRoundRobin(teams);
+    // リーグ内対戦を多め（約70%）、リーグ間対戦を少なめ（約30%）
+    const intraLeagueGames = Math.floor(gamesPerSeason * 0.7);
+    const interLeagueGames = Math.floor(gamesPerSeason * 0.3 / league2.length);
 
-  // 必要な周回数を計算（ホーム・アウェイの入れ替えを考慮）
-  const totalRounds = Math.ceil(gamesPerOpponent);
+    console.log(`🏟️ 2リーグ制スケジュール: ${leagueNames?.[0] || 'リーグ1'}(${league1.length}チーム) vs ${leagueNames?.[1] || 'リーグ2'}(${league2.length}チーム)`);
+    console.log(`   リーグ内対戦: 約${intraLeagueGames}試合, リーグ間対戦: 約${interLeagueGames * league2.length}試合`);
 
-  // 全対戦カードを生成
-  const allMatchups = [];
-  for (let round = 0; round < totalRounds; round++) {
-    oneRound.forEach(roundGames => {
-      roundGames.forEach(game => {
-        // 各チームの試合数が目標に達するまで追加
+    allMatchups = generateTwoLeagueMatchups(league1, league2, intraLeagueGames, interLeagueGames);
+
+    // リーグ情報をチームに付与（後で順位表で使用）
+    teams.forEach((team, idx) => {
+      const leagueIdx = idx < halfTeams ? 0 : 1;
+      // チームオブジェクトにリーグ情報を付与する処理は外部で行う
+    });
+  } else {
+    // 1リーグ制（従来のロジック）
+    const opponentsCount = teamsCount - 1;
+    const gamesPerOpponent = Math.ceil(gamesPerSeason / opponentsCount);
+    const oneRound = generateRoundRobin(teams);
+    const totalRounds = Math.ceil(gamesPerOpponent);
+
+    for (let round = 0; round < totalRounds; round++) {
+      oneRound.forEach(roundGames => {
+        roundGames.forEach(game => {
+          const teamGames = (teamName) => allMatchups.filter(m =>
+            m.home === teamName || m.away === teamName
+          ).length;
+
+          if (teamGames(game.home) < gamesPerSeason && teamGames(game.away) < gamesPerSeason) {
+            if (round % 2 === 0) {
+              allMatchups.push({ home: game.home, away: game.away });
+            } else {
+              allMatchups.push({ home: game.away, away: game.home });
+            }
+          }
+        });
+      });
+    }
+
+    // 目標試合数に達していない場合、追加カードを生成
+    let attempts = 0;
+    while (allMatchups.length < (teamsCount * gamesPerSeason / 2) && attempts < 100) {
+      const round = oneRound[attempts % oneRound.length];
+      for (const game of round) {
         const teamGames = (teamName) => allMatchups.filter(m =>
           m.home === teamName || m.away === teamName
         ).length;
 
         if (teamGames(game.home) < gamesPerSeason && teamGames(game.away) < gamesPerSeason) {
-          if (round % 2 === 0) {
+          if (attempts % 2 === 0) {
             allMatchups.push({ home: game.home, away: game.away });
           } else {
             allMatchups.push({ home: game.away, away: game.home });
           }
         }
-      });
-    });
-  }
-
-  // 目標試合数に達していない場合、追加カードを生成
-  let attempts = 0;
-  while (allMatchups.length < (teamsCount * gamesPerSeason / 2) && attempts < 100) {
-    const round = oneRound[attempts % oneRound.length];
-    for (const game of round) {
-      const teamGames = (teamName) => allMatchups.filter(m =>
-        m.home === teamName || m.away === teamName
-      ).length;
-
-      if (teamGames(game.home) < gamesPerSeason && teamGames(game.away) < gamesPerSeason) {
-        if (attempts % 2 === 0) {
-          allMatchups.push({ home: game.home, away: game.away });
-        } else {
-          allMatchups.push({ home: game.away, away: game.home });
-        }
       }
+      attempts++;
     }
-    attempts++;
   }
 
   const gamesPerDay = Math.floor(teamsCount / 2); // 同時開催試合数

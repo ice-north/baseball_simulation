@@ -6,6 +6,8 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     useDH: false,
     gamesPerSeason: 76,
     teamsCount: 4,
+    leagueFormat: 'single',
+    leagueNames: null,
     playoffFormat: 'split',
     maxExtraInnings: 12,
     teamNames: ['チームA', 'チームB', 'チームC', 'チームD']
@@ -99,7 +101,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                 📋 {REGULATION_PRESETS[selectedPreset].name}
               </div>
               <div className="text-sm text-blue-200">
-                {getPlayoffFormatDescription(tempSettings.playoffFormat)}
+                {getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}
               </div>
             </div>
           </div>
@@ -121,6 +123,13 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
               <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value) || 4)} className="bg-gray-700 rounded px-3 py-2 w-24" />
             </div>
             <div className="flex items-center justify-between">
+              <label className="font-medium">リーグ形式</label>
+              <select value={tempSettings.leagueFormat || 'single'} onChange={(e) => setTempSettings({...tempSettings, leagueFormat: e.target.value})} className="bg-gray-700 rounded px-3 py-2">
+                <option value="single">1リーグ制</option>
+                <option value="two" disabled={tempSettings.teamsCount < 4}>2リーグ制（{Math.floor(tempSettings.teamsCount / 2)}チーム×2）</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between">
               <label className="font-medium">年間試合数</label>
               <input type="number" min="10" max="200" value={tempSettings.gamesPerSeason} onChange={(e) => setTempSettings({...tempSettings, gamesPerSeason: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24" />
             </div>
@@ -132,6 +141,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                 <option value="top2">上位2チーム（5戦3勝）</option>
                 <option value="tournament">トーナメント</option>
                 <option value="double">4チーム</option>
+                <option value="championship">リーグ優勝決定戦（3戦2勝）</option>
                 <option value="none">なし</option>
               </select>
             </div>
@@ -145,21 +155,70 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
         {/* チーム名設定 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <h2 className="text-xl font-bold mb-4 text-white">📝 チーム名設定</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {tempSettings.teamNames.map((name, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm w-8">#{index + 1}</span>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => handleTeamNameChange(index, e.target.value)}
-                  maxLength={15}
-                  className="bg-gray-700 text-white rounded px-3 py-2 flex-1 w-full"
-                  placeholder={`チーム${String.fromCharCode(65 + index)}`}
-                />
+          {tempSettings.leagueFormat === 'two' ? (
+            <>
+              {/* 2リーグ制の場合はリーグごとに表示 */}
+              <div className="mb-4">
+                <h3 className="text-lg font-bold text-blue-400 mb-2">
+                  {tempSettings.leagueNames?.[0] || 'リーグ1'}
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {tempSettings.teamNames.slice(0, Math.floor(tempSettings.teamsCount / 2)).map((name, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="text-blue-400 text-sm w-8">#{index + 1}</span>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => handleTeamNameChange(index, e.target.value)}
+                        maxLength={15}
+                        className="bg-gray-700 text-white rounded px-3 py-2 flex-1 w-full border border-blue-600"
+                        placeholder={`チーム${String.fromCharCode(65 + index)}`}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+              <div>
+                <h3 className="text-lg font-bold text-orange-400 mb-2">
+                  {tempSettings.leagueNames?.[1] || 'リーグ2'}
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {tempSettings.teamNames.slice(Math.floor(tempSettings.teamsCount / 2)).map((name, index) => {
+                    const actualIndex = Math.floor(tempSettings.teamsCount / 2) + index;
+                    return (
+                      <div key={actualIndex} className="flex items-center gap-2">
+                        <span className="text-orange-400 text-sm w-8">#{actualIndex + 1}</span>
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={(e) => handleTeamNameChange(actualIndex, e.target.value)}
+                          maxLength={15}
+                          className="bg-gray-700 text-white rounded px-3 py-2 flex-1 w-full border border-orange-600"
+                          placeholder={`チーム${String.fromCharCode(65 + actualIndex)}`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {tempSettings.teamNames.map((name, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm w-8">#{index + 1}</span>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => handleTeamNameChange(index, e.target.value)}
+                    maxLength={15}
+                    className="bg-gray-700 text-white rounded px-3 py-2 flex-1 w-full"
+                    placeholder={`チーム${String.fromCharCode(65 + index)}`}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           <p className="text-gray-500 text-xs mt-3">※チーム名はカレンダー・成績表に反映されます（最大15文字）</p>
         </div>
 

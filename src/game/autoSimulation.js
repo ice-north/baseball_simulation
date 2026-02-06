@@ -2,6 +2,17 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 
+// 選手が投手かどうかを判定（positionだけでなく能力値も確認）
+export const isPitcherPlayer = (player) => {
+  // 明示的にpitcherと設定されている場合
+  if (player.position === 'pitcher') return true;
+  // 投手としての能力を持っている（スタミナ100以上は投手専用）
+  if (player.pitching?.stamina >= 100) return true;
+  // primaryRoleが設定されている場合はそれを優先
+  if (player.primaryRole === 'pitcher') return true;
+  return false;
+};
+
 // AI監督がスタメンを自動生成する機能（エクスポート）
 // 毎試合呼ばれ、ローテーション・疲労を考慮して合理的なラインナップを組む
 export const generateAILineup = (teamData, teamName) => {
@@ -16,8 +27,8 @@ export const generateAILineup = (teamData, teamName) => {
   // 全員の打順をリセット
   players.forEach(p => { p.battingOrder = 0; });
 
-  // 投手を除いた野手を取得
-  const fieldPlayers = players.filter(p => p.position !== 'pitcher');
+  // 投手を除いた野手を取得（投手能力でも判定）
+  const fieldPlayers = players.filter(p => !isPitcherPlayer(p));
 
   // ポジションごとに最適な選手を選ぶ（守備適性+打撃力の総合判断）
   const lineup = [];
@@ -100,7 +111,7 @@ export const generateAILineup = (teamData, teamName) => {
 
   // 先発投手をローテーションから選択
   const rotation = teamData.pitchingRotation;
-  const allPitchers = players.filter(p => p.position === 'pitcher');
+  const allPitchers = players.filter(p => isPitcherPlayer(p));
   let starter = null;
 
   if (rotation?.starters?.length > 0) {
@@ -315,17 +326,25 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   };
 
   // 現在の投手を取得
+  // 選手が投手かどうかを判定（ローカル版）
+  const isPitcher = (player) => {
+    if (player.position === 'pitcher') return true;
+    if (player.pitching?.stamina >= 100) return true;
+    if (player.primaryRole === 'pitcher') return true;
+    return false;
+  };
+
   const getCurrentPitcher = (team) => {
     // 先発投手は打順9番
-    const pitcher = team.players.find(p => p.battingOrder === 9 && p.position === 'pitcher');
+    const pitcher = team.players.find(p => p.battingOrder === 9 && isPitcher(p));
     if (pitcher) return pitcher;
 
     // 見つからない場合は投手能力を持つ選手を探す
-    const reliever = team.players.find(p => p.position === 'pitcher' && p.pitching);
+    const reliever = team.players.find(p => isPitcher(p) && p.pitching);
     if (reliever) return reliever;
 
-    // それでも見つからない場合は最初の投手能力を持つ選手
-    return team.players.find(p => p.pitching);
+    // それでも見つからない場合は投手能力（スタミナ100以上）を持つ選手
+    return team.players.find(p => p.pitching?.stamina >= 100);
   };
 
   // 現在の捕手を取得
@@ -578,12 +597,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   // 代打判定（AI監督）- より積極的に控え選手を起用
   const considerPinchHitter = (offenseTeam, batter) => {
     const benchFielders = offenseTeam.players.filter(p =>
-      p.battingOrder === 0 && p.position !== 'pitcher'
+      p.battingOrder === 0 && !isPitcher(p)
     );
     if (benchFielders.length === 0) return batter;
 
     // 1. 投手の打順：6回以降で代打（投手は打撃が弱い）
-    if (batter.position === 'pitcher' && gameState.inning >= 6) {
+    if (isPitcher(batter) && gameState.inning >= 6) {
       const pinchHitter = benchFielders.reduce((best, p) =>
         (p.batting?.meet || 0) + (p.batting?.power || 0) >
         (best.batting?.meet || 0) + (best.batting?.power || 0) ? p : best
@@ -670,7 +689,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       : gameState.score.away - gameState.score.home;
 
     const benchFielders = defenseTeam.players.filter(p =>
-      p.battingOrder === 0 && p.position !== 'pitcher'
+      p.battingOrder === 0 && !isPitcher(p)
     );
     if (benchFielders.length === 0) return;
 
@@ -1072,7 +1091,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             if (!reliever) {
               const starterIds = new Set(rotation?.starters || []);
               reliever = team.players.find(p =>
-                p.position === 'pitcher' &&
+                isPitcher(p) &&
                 p.battingOrder === 0 &&
                 p.id !== pitcher.id &&
                 !starterIds.has(p.id) &&
@@ -1081,7 +1100,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               // リリーフが全員使えない場合のみ先発を緊急登板
               if (!reliever) {
                 reliever = team.players.find(p =>
-                  p.position === 'pitcher' &&
+                  isPitcher(p) &&
                   p.battingOrder === 0 &&
                   p.id !== pitcher.id &&
                   (p.currentStamina || 80) > 20
