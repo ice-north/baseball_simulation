@@ -55,10 +55,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     { key: 'shikoku', name: '四国IL', icon: '🏝️' },
     { key: 'bc', name: 'BCリーグ', icon: '⚾' },
     { key: 'kyushu', name: '九州AL', icon: '🌸' },
-    { key: 'hokkaido', name: '北海道FL', icon: '🐻' },
-    { key: 'kansai', name: '関西BL', icon: '🏯' },
-    { key: 'independent', name: '汎用', icon: '⚡' },
-    { key: 'professional', name: 'NPB', icon: '🏆' }
+    { key: 'hokkaido', name: '北海道FL', icon: '🐻' }
   ];
 
   return (
