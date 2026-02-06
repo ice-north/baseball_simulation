@@ -124,7 +124,9 @@ import HallOfFameScreen from './components/HallOfFameScreen.jsx';
           teams: teamNames,
           gamesPerSeason: regulations.gamesPerSeason || 60,
           startDate: { year: 2024, month: 4, day: 1 },
-          endDate: { year: 2024, month: 9, day: 30 }
+          endDate: { year: 2024, month: 9, day: 30 },
+          leagueFormat: regulations.leagueFormat || 'single',
+          leagueNames: regulations.leagueNames
         });
 
         newSeasonData.schedule = schedule;
@@ -4018,7 +4020,8 @@ if (newOuts === 3) {
         if (managementView === 'offseason') return <OffSeasonScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}
-          onSave={() => saveGame(0)}
+          onSave={(slotIndex) => { saveGame(slotIndex); refreshSaveSlots(); }}
+          saveSlots={saveSlots}
           onStartNextSeason={() => {
             // レギュレーション設定画面へ
             setManagementView('regulations_next');
@@ -4031,19 +4034,23 @@ if (newOuts === 3) {
           seasonData={seasonData}
           setSeasonData={setSeasonData}
           onConfirm={() => {
-            // レギュレーション確定後、スケジュールを生成
+            // レギュレーション確定後、スケジュールを生成（2年目以降対応）
             const teams = Object.keys(TEAMS_DATA);
+            const settings = seasonData.settings || {};
             const schedule = generateFullSeasonSchedule({
               teams,
-              gamesPerSeason: seasonData.settings?.gamesPerSeason || 60,
+              gamesPerSeason: settings.gamesPerSeason || 60,
               startDate: { year: 2024 + seasonData.year, month: 3, day: 1 },
-              endDate: { year: 2024 + seasonData.year, month: 9, day: 30 }
+              endDate: { year: 2024 + seasonData.year, month: 9, day: 30 },
+              leagueFormat: settings.leagueFormat || 'single',
+              leagueNames: settings.leagueNames
             });
+            console.log(`📅 ${seasonData.year}年目スケジュール生成: ${schedule.length}試合`);
             setSeasonData(prev => ({
               ...prev,
               schedule,
-              standings: prev.standings.length > 0 ? prev.standings : teams.map(t => ({
-                team: t, wins: 0, losses: 0, draws: 0, winRate: 0
+              standings: teams.map(t => ({
+                team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
               }))
             }));
             // キャンプ画面へ
@@ -4178,9 +4185,9 @@ if (newOuts === 3) {
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
-          {screenMode === 'management' && <Sidebar />}
+          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next'].includes(managementView) && <Sidebar />}
 
-          <div className={screenMode === 'management' ? 'ml-64' : ''}>
+          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next'].includes(managementView) ? 'ml-64' : ''}>
             {screenMode === 'game' ? (
               <div className="p-2">
           {/* 管理画面へボタン */}

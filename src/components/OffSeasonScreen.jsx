@@ -3,9 +3,19 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear } from '../season/yearProgressionSystem.js';
 
-const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers }) => {
+const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, saveSlots }) => {
   const [processing, setProcessing] = useState(false);
   const [seasonResults, setSeasonResults] = useState(null);
+  const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  const handleSaveToSlot = () => {
+    if (onSave) {
+      onSave(selectedSaveSlot);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
 
   const handleAdvanceYear = () => {
     if (!advanceToNextYear) {
@@ -50,16 +60,54 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     // processingは遷移するのでfalseにしない（遷移前にボタンが再度押されるのを防ぐ）
   };
 
+  const slotNames = ['スロット1', 'スロット2', 'スロット3'];
+
+  const SaveSlotSelector = () => (
+    <div className="bg-gray-700 rounded-lg p-4 mb-6">
+      <h3 className="text-lg font-bold text-white mb-3">💾 セーブスロット選択</h3>
+      <div className="flex gap-3 mb-3">
+        {slotNames.map((name, idx) => {
+          const info = saveSlots?.[idx];
+          return (
+            <button
+              key={idx}
+              onClick={() => setSelectedSaveSlot(idx)}
+              className={`flex-1 p-3 rounded-lg text-left transition ${
+                selectedSaveSlot === idx
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-400'
+                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+              }`}
+            >
+              <div className="font-bold text-sm">{name}</div>
+              <div className="text-xs opacity-80 mt-1">
+                {info ? `${info.year}年目 ${info.date?.month}/${info.date?.day}` : '空き'}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <button
+        onClick={handleSaveToSlot}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold text-lg transition"
+      >
+        💾 {slotNames[selectedSaveSlot]}に保存
+      </button>
+      {saveStatus === 'saved' && (
+        <div className="mt-2 text-green-400 text-center font-bold">セーブしました</div>
+      )}
+    </div>
+  );
+
   if (!seasonResults) {
     return (
       <div className="p-8">
         <div className="max-w-7xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-6">🏆 オフシーズン</h1>
-          <div className="bg-gray-800 rounded-lg p-8 text-center">
-            <h2 className="text-2xl font-bold text-white mb-4">
+          <div className="bg-gray-800 rounded-lg p-8">
+            <h2 className="text-2xl font-bold text-white mb-4 text-center">
               {seasonData.year}年目のシーズンを終了しますか？
             </h2>
-            <p className="text-gray-300 mb-8">
+            <p className="text-gray-300 mb-6 text-center">
               シーズン終了処理を実行すると、以下の処理が行われます：<br/>
               1. 表彰（首位打者・本塁打王など）<br/>
               2. 選手の年齢+1<br/>
@@ -67,15 +115,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               4. シーズン成績を通算成績に加算<br/>
               5. 次年度（{seasonData.year + 1}年目）へ移行
             </p>
-            <div className="flex gap-4 justify-center">
-              {onSave && (
-                <button
-                  onClick={() => { onSave(); alert('セーブしました'); }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"
-                >
-                  💾 セーブ
-                </button>
-              )}
+            <SaveSlotSelector />
+            <div className="text-center">
               <button
                 onClick={handleAdvanceYear}
                 disabled={processing}
@@ -191,18 +232,10 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           </div>
         )}
 
-        <div className="text-center flex gap-4 justify-center">
-          {onSave && (
-            <button
-              onClick={() => { onSave(); alert('セーブしました'); }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"
-            >
-              💾 セーブ
-            </button>
-          )}
+        <SaveSlotSelector />
+        <div className="text-center">
           <button
             onClick={() => {
-              // 次のシーズン（レギュレーション設定画面）へ遷移
               if (onStartNextSeason) onStartNextSeason();
             }}
             className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-xl transition"

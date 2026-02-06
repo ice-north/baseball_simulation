@@ -14,7 +14,7 @@ export const DEFAULT_REGULATIONS = {
   teamsCount: 4,          // チーム数
   leagueFormat: 'single', // リーグ形式: 'single'=1リーグ, 'two'=2リーグ制
   playoffFormat: 'single', // プレーオフ形式
-  maxExtraInnings: 18,    // 延長最大回数
+  maxExtraInnings: 12,    // 延長最大回数
   roster: {
     starters: 9,          // スタメン人数
     benchFielders: 8,     // 控え野手数
@@ -110,7 +110,7 @@ export const REGULATION_PRESETS = {
       gamesPerSeason: 76,  // 前期38＋後期38
       teamsCount: 4,
       playoffFormat: 'split',  // 前期・後期優勝チーム対決
-      maxExtraInnings: 18,
+      maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   },
@@ -124,7 +124,7 @@ export const REGULATION_PRESETS = {
       leagueFormat: 'two',  // 2リーグ制
       leagueNames: ['ルートインBC信越', 'ルートインBC北陸'],  // リーグ名
       playoffFormat: 'championship',  // 両リーグ優勝チーム対決（3戦2勝制）
-      maxExtraInnings: 18,
+      maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   },
@@ -136,7 +136,7 @@ export const REGULATION_PRESETS = {
       gamesPerSeason: 76,
       teamsCount: 4,
       playoffFormat: 'tournament',  // 3位vs4位→勝者vs2位→勝者vs1位
-      maxExtraInnings: 18,
+      maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   },
@@ -148,7 +148,7 @@ export const REGULATION_PRESETS = {
       gamesPerSeason: 54,
       teamsCount: 4,
       playoffFormat: 'top2',  // 上位2チーム、5戦3勝制
-      maxExtraInnings: 18,
+      maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   }

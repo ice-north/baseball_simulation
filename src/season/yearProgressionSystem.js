@@ -590,7 +590,7 @@ export function applyAgeCurveChanges(allTeams) {
           // スタミナも変動幅を2倍
           if (stat === 'stamina') change = Math.round((base + variance) * 1.5);
 
-          const newValue = Math.min(99, Math.max(1, currentValue + change));
+          const newValue = Math.max(1, currentValue + change);
 
           if (change !== 0) {
             updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
@@ -672,6 +672,20 @@ export const TRAINING_MENUS = {
     description: '選球眼を強化',
     targets: ['eye'],
     category: 'batting'
+  },
+  breaking: {
+    name: '変化球練習',
+    icon: '🌀',
+    description: '変化球レベルを強化',
+    targets: ['breaking'],
+    category: 'pitching'
+  },
+  newpitch: {
+    name: '新球種習得',
+    icon: '✨',
+    description: '新しい変化球を覚える',
+    targets: ['newpitch'],
+    category: 'pitching'
   }
 };
 
@@ -784,13 +798,21 @@ function getBattingOrderGrowthBonus(player, targetStat) {
   return weightedBonus || 1.0;
 }
 
+// 利用可能な全変化球（新球種習得用）
+const ALL_PITCH_TYPES = [
+  'slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
+  'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
+];
+
 /**
- * キャンプ練習を実行
+ * キャンプ練習を実行（1クール分）
+ * 成長量は1/4に調整済み
  * @param {Object} player - 選手データ
  * @param {string} trainingType - 練習メニューのキー
+ * @param {string} [newPitchType] - 新球種習得時の球種キー
  * @returns {Object} - 成長結果 { player, growthReport }
  */
-export function executeCampTraining(player, trainingType) {
+export function executeCampTraining(player, trainingType, newPitchType) {
   const menu = TRAINING_MENUS[trainingType];
   if (!menu) {
     console.warn(`Unknown training type: ${trainingType}`);
@@ -800,55 +822,93 @@ export function executeCampTraining(player, trainingType) {
   const experience = player.experience || 0;
   const age = player.age || 20;
   const growthReport = [];
-  let updatedPlayer = { ...player };
+  let updatedPlayer = JSON.parse(JSON.stringify(player));
 
-  // 各対象能力について成長判定
+  // 変化球練習の場合
+  if (trainingType === 'breaking') {
+    const arsenal = updatedPlayer.pitching?.arsenal || [];
+    const nonStraight = arsenal.filter(p => p.type !== 'straight');
+    if (nonStraight.length > 0) {
+      nonStraight.forEach(pitch => {
+        const ageBase = getAgeGrowthBase(age, false);
+        const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
+        // 成長量1/4: 元(1-3 + 1-4) → 1/4
+        const rawGrowth = (Math.floor(Math.random() * 3) + 1 + Math.floor(Math.random() * 4) + 1) * ageMultiplier;
+        const growth = Math.max(1, Math.round(rawGrowth * 0.25));
+        const before = pitch.level;
+        pitch.level = before + growth; // 上限なし
+        growthReport.push({
+          stat: 'breaking',
+          statName: `${getPitchTypeName(pitch.type)}`,
+          before, after: pitch.level, growth: pitch.level - before, isAwakening: false
+        });
+      });
+    }
+    return { player: updatedPlayer, growthReport };
+  }
+
+  // 新球種習得の場合
+  if (trainingType === 'newpitch') {
+    const arsenal = updatedPlayer.pitching?.arsenal || [];
+    const existingTypes = arsenal.map(p => p.type);
+    const targetType = newPitchType || ALL_PITCH_TYPES.find(t => !existingTypes.includes(t));
+    if (targetType && !existingTypes.includes(targetType)) {
+      const newId = arsenal.length > 0 ? Math.max(...arsenal.map(a => a.id)) + 1 : 1;
+      const startLevel = Math.floor(Math.random() * 10) + 10; // 10-19
+      arsenal.push({ id: newId, type: targetType, level: startLevel });
+      updatedPlayer.pitching.arsenal = arsenal;
+      growthReport.push({
+        stat: 'newpitch',
+        statName: `${getPitchTypeName(targetType)}習得`,
+        before: 0, after: startLevel, growth: startLevel, isAwakening: false
+      });
+    } else {
+      growthReport.push({
+        stat: 'newpitch',
+        statName: '習得失敗（全球種習得済み）',
+        before: 0, after: 0, growth: 0, isAwakening: false
+      });
+    }
+    return { player: updatedPlayer, growthReport };
+  }
+
+  // 通常の能力練習（成長量1/4）
   menu.targets.forEach(targetStat => {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
     const ageBase = getAgeGrowthBase(age, isPhysical);
-
-    // 年齢による練習効率
     const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
-
-    // ポジション・打順経験ボーナス
     const posBonus = getPositionGrowthBonus(player, targetStat);
     const boBonus = getBattingOrderGrowthBonus(player, targetStat);
     const expBonus = posBonus * boBonus;
 
-    // 1. 基本練習効果: 1-3ポイント × 年齢補正 × 経験ボーナス
-    const baseGrowth = Math.round((Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus);
+    // 元の成長量を1/4に: (base + focus) * 0.25
+    const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
+    const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.25);
 
-    // 2. 集中練習効果: 1-4ポイント × 年齢補正 × 経験ボーナス
-    const focusGrowth = Math.round((Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus);
-
-    // 3. 覚醒判定: 経験10につき1%の確率で爆発成長
+    // 覚醒判定
     const awakeningChance = Math.floor(experience / 10);
     const isAwakening = Math.random() * 100 < awakeningChance;
-    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 10) + 5 : 0;
+    const awakeningGrowth = isAwakening ? Math.round((Math.floor(Math.random() * 10) + 5) * 0.25) : 0;
 
-    const totalGrowth = Math.max(0, baseGrowth + focusGrowth + awakeningGrowth);
+    const totalGrowth = Math.max(0, baseGrowth + awakeningGrowth);
 
-    // 能力値を更新
     const statPath = getStatPath(targetStat);
     if (statPath) {
       const currentValue = getNestedValue(updatedPlayer, statPath) || 50;
-      const newValue = Math.min(currentValue + totalGrowth, 99);
+      const newValue = currentValue + totalGrowth; // 上限なし
       updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
-
       growthReport.push({
         stat: targetStat,
         statName: getStatName(targetStat),
-        before: currentValue,
-        after: newValue,
-        growth: newValue - currentValue,
-        isAwakening: isAwakening
+        before: currentValue, after: newValue,
+        growth: newValue - currentValue, isAwakening
       });
     }
   });
 
   // 経験値を消費（練習に使った分の一部をリセット）
   updatedPlayer.experience = Math.floor(experience * 0.3);
-  // ポジション・打順経験はシーズンごとにリセット
   updatedPlayer.positionExperience = {};
   updatedPlayer.battingOrderExperience = {};
 
@@ -856,24 +916,39 @@ export function executeCampTraining(player, trainingType) {
 }
 
 /**
+ * 球種名を取得
+ */
+function getPitchTypeName(type) {
+  const names = {
+    straight: 'ストレート', slider: 'スライダー', curve: 'カーブ',
+    fork: 'フォーク', changeup: 'チェンジアップ', sinker: 'シンカー',
+    shoot: 'シュート', cutter: 'カッター', splitter: 'スプリッター',
+    twoSeam: 'ツーシーム', palm: 'パーム', knuckle: 'ナックル'
+  };
+  return names[type] || type;
+}
+export { ALL_PITCH_TYPES, getPitchTypeName };
+
+/**
  * チーム全体のキャンプ練習を実行
  * @param {Object} team - チームデータ
  * @param {Object} trainingAssignments - { playerId: trainingType } の形式
+ * @param {Object} [newPitchSelections] - { playerId: pitchType } 新球種選択
  * @returns {Object} - { updatedTeam, allReports }
  */
-export function executeTeamCampTraining(team, trainingAssignments) {
+export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}) {
   const allReports = [];
   const updatedPlayers = team.players.map(player => {
     const trainingType = trainingAssignments[player.id];
     if (!trainingType) {
-      // 練習未指定の選手は自動選択
       const autoTraining = player.position === 'pitcher' ? 'stamina' : 'batting';
       const { player: trained, growthReport } = executeCampTraining(player, autoTraining);
       allReports.push({ player: trained, trainingType: autoTraining, growthReport });
       return trained;
     }
 
-    const { player: trained, growthReport } = executeCampTraining(player, trainingType);
+    const newPitchType = trainingType === 'newpitch' ? newPitchSelections[player.id] : undefined;
+    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType);
     allReports.push({ player: trained, trainingType, growthReport });
     return trained;
   });
