@@ -65,7 +65,8 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
 
         {/* プリセット選択 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 text-white">実在リーグから選択</h2>
+          <h2 className="text-xl font-bold mb-2 text-white">プリセット選択</h2>
+          <p className="text-gray-400 text-sm mb-4">※レギュレーションは毎年オフシーズンに変更することができます</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {presetList.map(preset => {
               const presetData = REGULATION_PRESETS[preset.key];

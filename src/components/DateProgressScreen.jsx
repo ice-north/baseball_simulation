@@ -199,18 +199,27 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
 
   return (
     <div className="p-4 min-h-screen">
-      <div className="text-center mb-4">
-        <span className="text-2xl font-bold text-yellow-400">{seasonData.year}年目</span>
-        <span className="text-gray-400 ml-4">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
-        <span className={`ml-3 px-3 py-1 rounded-full text-sm font-bold ${phaseInfo.color} text-gray-800`}>{phaseInfo.name}</span>
+      {/* ヘッダー：日付進行ボタン + 年表示 */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => handleProgressDate(1)}
+          disabled={isSimulating}
+          className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-8 py-4 rounded-xl font-bold text-xl transition shadow-lg disabled:opacity-50 flex items-center gap-2"
+        >
+          <span className="text-2xl">▶</span>
+          {isSimulating ? '処理中...' : '1日進める'}
+        </button>
+        <div className="text-center flex-1">
+          <span className="text-3xl font-bold text-yellow-400">{seasonData.year}年目</span>
+          <span className="text-gray-400 ml-4 text-lg">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
+          <span className={`ml-3 px-3 py-1 rounded-full text-sm font-bold ${phaseInfo.color} text-gray-800`}>{phaseInfo.name}</span>
+        </div>
+        <div className="w-40"></div>
       </div>
 
       <div className="bg-gray-800 rounded-xl p-4 shadow-lg mb-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <button onClick={() => handleProgressDate(1)} disabled={isSimulating} className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-lg font-bold transition shadow disabled:opacity-50">
-              {isSimulating ? '...' : '1日進める'}
-            </button>
             <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
           </div>
           <div className="flex gap-1">
