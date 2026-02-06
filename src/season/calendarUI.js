@@ -55,7 +55,11 @@ export const generateTeamCalendar = (schedule, teamName, year, month) => {
     // フェーズイベントラベルを付与
     const phase = getCurrentPhase(month, day.day);
     let eventLabel = null;
-    if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
+
+    // 11月30日は「シーズン終了」を表示
+    if (month === 11 && day.day === 30) {
+      eventLabel = 'シーズン終了';
+    } else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
     else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
     else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
     else if (phase === SEASON_PHASES.CONTRACT) eventLabel = '契約更改';

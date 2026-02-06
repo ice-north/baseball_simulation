@@ -230,11 +230,11 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     return Math.max(min, Math.min(160, base + variance));
   };
 
-  // スタミナ用ランダム生成（80-200範囲）
+  // スタミナ用ランダム生成（40-150範囲、2/3に調整済み）
   const randStamina = (min, max, bonus = 0) => {
     const base = Math.floor(Math.random() * (max - min + 1)) + min + bonus;
-    const variance = Math.floor(Math.random() * 21) - 10; // -10 ~ +10
-    return Math.max(60, Math.min(220, base + variance));
+    const variance = Math.floor(Math.random() * 15) - 7; // -7 ~ +7
+    return Math.max(40, Math.min(150, base + variance));
   };
 
   // 二刀流選手の場合は投打両方に能力を持つ
@@ -248,10 +248,10 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       speed: randRangeWithVariance(40, 70),
       arm: randRangeWithVariance(50, 80),
       defense: randRangeWithVariance(40, 65),
-      // 投手能力（平均的だが投げられる）
-      velocity: Math.min(randVelocity(130, 148) + velocityAdjust, 155),
+      // 投手能力（平均的だが投げられる、球速-6km、スタミナ2/3調整済み）
+      velocity: Math.min(randVelocity(124, 142) + velocityAdjust, 149),
       control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
-      stamina: randStamina(100, 150)
+      stamina: randStamina(67, 100)
     };
   }
 
@@ -265,10 +265,10 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     speed: isPitcher ? randRangeWithVariance(30, 55, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithVariance(30, 70, Math.max(0, Math.floor(ageBonus * 0.7))),
     arm: isPitcher ? randRangeWithVariance(40, 65) : randRangeWithVariance(30, 70),
     defense: isPitcher ? randRangeWithVariance(40, 65) : randRangeWithVariance(30, 70),
-    // 投手能力（球速は120-150km/h範囲、スタミナは100-180範囲）
-    velocity: isPitcher ? Math.min(randVelocity(125, 148, ageBonus) + velocityAdjust, 158) : randRange(115, 130),
+    // 投手能力（球速-6km、スタミナ2/3調整済み）
+    velocity: isPitcher ? Math.min(randVelocity(119, 142, ageBonus) + velocityAdjust, 152) : randRange(109, 124),
     control: isPitcher ? Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85) : randRange(30, 55),
-    stamina: isPitcher ? randStamina(110, 170, ageBonus) : randRange(60, 100)
+    stamina: isPitcher ? randStamina(73, 113, ageBonus) : randRange(40, 67)
   };
 
   if (!isSpecialist) {
@@ -324,39 +324,39 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
 
     case 'fireballer':
       // 球速は速いがスタミナ制球弱い（投手用）
-      // 剛速球投手: 150-160km/h
+      // 剛速球投手: 144-152km/h（球速-6km、スタミナ2/3調整済み）
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: Math.min(randVelocity(150, 158) + velocityAdjust, 160),
+          velocity: Math.min(randVelocity(144, 152) + velocityAdjust, 154),
           control: Math.min(randRange(30, 50) + controlAdjust, 65),
-          stamina: randStamina(90, 130)
+          stamina: randStamina(60, 87)
         };
       }
       return normalAbilities;
 
     case 'controlPitcher':
       // 制球はいいが球速遅い（投手用）
-      // 軟投派: 125-140km/h
+      // 軟投派: 119-134km/h（球速-6km、スタミナ2/3調整済み）
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: Math.max(randVelocity(125, 140) + velocityAdjust, 120),
+          velocity: Math.max(randVelocity(119, 134) + velocityAdjust, 114),
           control: Math.min(randRange(75, 90) + controlAdjust, 95),
-          stamina: randStamina(130, 170)
+          stamina: randStamina(87, 113)
         };
       }
       return normalAbilities;
 
     case 'ironman':
       // スタミナあるが球速制球弱い（投手用）
-      // タフネス投手: スタミナ180-220
+      // タフネス投手: スタミナ120-147（球速-6km、スタミナ2/3調整済み）
       if (isPitcher) {
         return {
           ...normalAbilities,
-          velocity: Math.min(randVelocity(130, 145) + velocityAdjust, 150),
+          velocity: Math.min(randVelocity(124, 139) + velocityAdjust, 144),
           control: Math.min(randRange(40, 60) + controlAdjust, 75),
-          stamina: randStamina(180, 220)
+          stamina: randStamina(120, 147)
         };
       }
       return normalAbilities;

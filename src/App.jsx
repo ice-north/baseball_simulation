@@ -55,6 +55,7 @@ import RegulationsScreen from './components/RegulationsScreen.jsx';
 import TryoutScreen from './components/TryoutScreen.jsx';
 import EditScreen from './components/EditScreen.jsx';
 import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
+import HallOfFameScreen from './components/HallOfFameScreen.jsx';
 
     const App = () => {
       // チームデータの初期化
@@ -137,6 +138,7 @@ import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
       const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
       const [saveSlots, setSaveSlots] = useState([null, null, null]);
       const [hasSaveData, setHasSaveData] = useState(false);
+      const [hallOfFamePlayers, setHallOfFamePlayers] = useState([]);
 
       const refreshSaveSlots = () => {
         const slots = SAVE_SLOT_KEYS.map(key => {
@@ -178,7 +180,7 @@ import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
           console.log(`📊 保存前ストレージ: ${(beforeUsage.used / 1024).toFixed(1)}KB / ${(beforeUsage.total / 1024).toFixed(1)}KB (${beforeUsage.percentage}%)`);
 
           const saveData = {
-            version: '2.9.0', // 圧縮対応バージョン
+            version: '2.10.0', // 殿堂入り対応バージョン
             timestamp: new Date().toISOString(),
             slotIndex,
             seasonData: seasonData,
@@ -187,7 +189,8 @@ import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
             screenMode,
             managementView,
             gameFlowState,
-            selectedMonth
+            selectedMonth,
+            hallOfFamePlayers: hallOfFamePlayers
           };
 
           // 圧縮してから保存
@@ -247,6 +250,7 @@ import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
           if (saveData.seasonData) setSeasonData(saveData.seasonData);
           if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
           if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
+          if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
 
           setScreenMode('management');
           setManagementView('dateprogress');
@@ -3003,18 +3007,6 @@ if (newOuts === 3) {
             <button
               onClick={() => {
                 setScreenMode('management');
-                setManagementView('tryout');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'tryout' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              🎯 トライアウト
-            </button>
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
                 setManagementView('roster');
               }}
               className={`w-full text-left px-4 py-3 rounded transition ${
@@ -3022,19 +3014,6 @@ if (newOuts === 3) {
               }`}
             >
               👥 ロスター管理
-            </button>
-
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('offseason');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'offseason' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              🏆 オフシーズン
             </button>
 
             <button
@@ -3059,6 +3038,18 @@ if (newOuts === 3) {
               }`}
             >
               💾 セーブ＆ロード
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('halloffame');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'halloffame' ? 'bg-yellow-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              🏆 殿堂入り選手
             </button>
 
             <div className="border-t border-gray-700 my-4"></div>
@@ -3784,6 +3775,7 @@ if (newOuts === 3) {
                   </>
                 ) : day.eventLabel ? (
                   <div className={`text-xs font-bold ${
+                    day.eventLabel === 'シーズン終了' ? 'text-red-400' :
                     day.eventLabel === 'プレーオフ' ? 'text-yellow-400' :
                     day.eventLabel === '契約更改' ? 'text-teal-400' :
                     day.eventLabel === 'トライアウト' ? 'text-orange-400' :
@@ -4031,6 +4023,9 @@ if (newOuts === 3) {
             // レギュレーション設定画面へ
             setManagementView('regulations_next');
           }}
+          onAddHallOfFamePlayers={(newPlayers) => {
+            setHallOfFamePlayers(prev => [...prev, ...newPlayers]);
+          }}
         />;
         if (managementView === 'regulations_next') return <RegulationsScreen
           seasonData={seasonData}
@@ -4078,6 +4073,10 @@ if (newOuts === 3) {
         if (managementView === 'stats') return <PlayerStatsScreen
           seasonData={seasonData}
           allTeams={allTeams}
+        />;
+        if (managementView === 'halloffame') return <HallOfFameScreen
+          hallOfFamePlayers={hallOfFamePlayers}
+          onClose={() => setManagementView('dateprogress')}
         />;
         if (managementView === 'save') return <SaveLoadScreen
           onSave={saveGame}

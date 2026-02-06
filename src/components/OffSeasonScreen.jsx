@@ -3,7 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear } from '../season/yearProgressionSystem.js';
 
-const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason }) => {
+const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers }) => {
   const [processing, setProcessing] = useState(false);
   const [seasonResults, setSeasonResults] = useState(null);
 
@@ -26,6 +26,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason 
       Object.keys(result.updatedTeams).forEach(teamName => {
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];
       });
+
+      // 殿堂入り選手を親コンポーネントに渡す
+      if (onAddHallOfFamePlayers && result.retirements) {
+        const hofPlayers = result.retirements.filter(r => r.hallOfFame);
+        if (hofPlayers.length > 0) {
+          onAddHallOfFamePlayers(hofPlayers);
+        }
+      }
 
       console.log('年度処理完了: ', result);
       console.log('レギュレーション画面へ遷移します...');

@@ -9,7 +9,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     leagueFormat: 'single',
     leagueNames: null,
     playoffFormat: 'split',
-    maxExtraInnings: 12,
+    maxExtraInnings: 18,
     teamNames: ['チームA', 'チームB', 'チームC', 'チームD']
   });
   const [selectedPreset, setSelectedPreset] = useState('shikoku');

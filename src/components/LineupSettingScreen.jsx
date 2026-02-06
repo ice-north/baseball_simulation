@@ -18,11 +18,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     if (value >= 70) return 'B';
     if (value >= 60) return 'C';
     if (value >= 50) return 'D';
-    return 'E';
+    if (value >= 40) return 'E';
+    return 'F';
   };
 
   const getRankColor = (rank) => {
-    const colors = { S: 'text-pink-400', A: 'text-red-400', B: 'text-orange-400', C: 'text-yellow-400', D: 'text-green-400', E: 'text-gray-400' };
+    const colors = { S: 'text-pink-400', A: 'text-red-400', B: 'text-orange-400', C: 'text-yellow-400', D: 'text-green-400', E: 'text-blue-400', F: 'text-gray-400' };
     return colors[rank] || 'text-gray-400';
   };
 

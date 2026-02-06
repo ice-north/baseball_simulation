@@ -181,43 +181,92 @@ export function updateAllPlayerAges(allTeams) {
 };
 
 /**
- * 引退・殿堂入り判定
+ * NPBドラフト候補条件を判定
+ * 投手: 通算30勝以上、または通算450奪三振以上、または通算50セーブ以上
+ * 野手: 通算打率.280以上、または通算70本塁打以上、または通算500安打以上
  * @param {Object} player - 選手データ
- * @returns {Object} - { shouldRetire: boolean, hallOfFame: boolean, reason: string }
+ * @returns {Object} - { isDraftEligible: boolean, reasons: string[] }
  */
-export function checkRetirement(player) {
-  const age = player.age || 20;
+export function checkNPBDraftEligibility(player) {
+  const isPitcher = player.position === 'pitcher';
+  const reasons = [];
+
+  // 通算成績
+  const careerStats = player.careerStats || { batting: {}, pitching: {} };
+  const careerWins = careerStats.pitching?.wins || 0;
+  const careerStrikeouts = careerStats.pitching?.strikeouts || 0;
+  const careerSaves = careerStats.pitching?.saves || 0;
+  const careerHits = careerStats.batting?.hits || 0;
+  const careerAtBats = careerStats.batting?.atBats || 0;
+  const careerHomeruns = careerStats.batting?.homeruns || 0;
+  const careerAvg = careerAtBats > 0 ? careerHits / careerAtBats : 0;
+
+  if (isPitcher) {
+    if (careerWins >= 30) reasons.push(`通算${careerWins}勝`);
+    if (careerStrikeouts >= 450) reasons.push(`通算${careerStrikeouts}奪三振`);
+    if (careerSaves >= 50) reasons.push(`通算${careerSaves}セーブ`);
+  } else {
+    if (careerAvg >= 0.280 && careerAtBats >= 300) reasons.push(`通算打率${careerAvg.toFixed(3)}`);
+    if (careerHomeruns >= 70) reasons.push(`通算${careerHomeruns}本塁打`);
+    if (careerHits >= 500) reasons.push(`通算${careerHits}安打`);
+  }
+
+  return {
+    isDraftEligible: reasons.length > 0,
+    reasons
+  };
+}
+
+/**
+ * 殿堂入り条件を判定
+ * 投手: 通算100勝、または通算30セーブ、または通算600奪三振
+ * 野手: 通算打率.300以上、または通算150本塁打、または通算1000安打
+ * @param {Object} player - 選手データ
+ * @returns {Object} - { isHallOfFame: boolean, reason: string }
+ */
+export function checkHallOfFame(player) {
   const isPitcher = player.position === 'pitcher';
 
   // 通算成績
-  const careerGames = player.careerStats.batting.games + player.careerStats.pitching.games;
-  const careerHits = player.careerStats.batting.hits;
-  const careerHomeruns = player.careerStats.batting.homeruns;
-  const careerWins = player.careerStats.pitching.wins;
-
-  // 殿堂入り基準（独立リーグ設定）
-  let hallOfFame = false;
-  let reason = '';
+  const careerStats = player.careerStats || { batting: {}, pitching: {} };
+  const careerWins = careerStats.pitching?.wins || 0;
+  const careerStrikeouts = careerStats.pitching?.strikeouts || 0;
+  const careerSaves = careerStats.pitching?.saves || 0;
+  const careerHits = careerStats.batting?.hits || 0;
+  const careerAtBats = careerStats.batting?.atBats || 0;
+  const careerHomeruns = careerStats.batting?.homeruns || 0;
+  const careerAvg = careerAtBats > 0 ? careerHits / careerAtBats : 0;
 
   if (isPitcher) {
-    // 投手: 100勝以上で殿堂入り
-    if (careerWins >= 100) {
-      hallOfFame = true;
-      reason = `通算${careerWins}勝の名投手`;
-    }
+    if (careerWins >= 100) return { isHallOfFame: true, reason: `通算${careerWins}勝の名投手` };
+    if (careerSaves >= 30) return { isHallOfFame: true, reason: `通算${careerSaves}セーブの守護神` };
+    if (careerStrikeouts >= 600) return { isHallOfFame: true, reason: `通算${careerStrikeouts}奪三振のストライカー` };
   } else {
-    // 野手: 1000本安打または200本塁打で殿堂入り
-    if (careerHits >= 1000) {
-      hallOfFame = true;
-      reason = `通算${careerHits}安打の名選手`;
-    } else if (careerHomeruns >= 200) {
-      hallOfFame = true;
-      reason = `通算${careerHomeruns}本塁打の強打者`;
-    }
+    if (careerAvg >= 0.300 && careerAtBats >= 500) return { isHallOfFame: true, reason: `通算打率${careerAvg.toFixed(3)}の安打製造機` };
+    if (careerHomeruns >= 150) return { isHallOfFame: true, reason: `通算${careerHomeruns}本塁打のスラッガー` };
+    if (careerHits >= 1000) return { isHallOfFame: true, reason: `通算${careerHits}安打の名選手` };
   }
+
+  return { isHallOfFame: false, reason: '' };
+}
+
+/**
+ * 引退・殿堂入り判定
+ * @param {Object} player - 選手データ
+ * @returns {Object} - { shouldRetire: boolean, hallOfFame: boolean, reason: string, draftEligible: boolean, draftReasons: string[] }
+ */
+export function checkRetirement(player) {
+  const age = player.age || 20;
+
+  // 殿堂入り判定（新しい条件を使用）
+  const { isHallOfFame: hallOfFame, reason: hofReason } = checkHallOfFame(player);
+
+  // NPBドラフト候補判定
+  const { isDraftEligible: draftEligible, reasons: draftReasons } = checkNPBDraftEligibility(player);
 
   // 引退判定
   let shouldRetire = false;
+  let reason = hofReason;
 
   // 1. 40歳以上は必ず引退
   if (age >= 40) {
@@ -226,7 +275,7 @@ export function checkRetirement(player) {
   }
   // 2. 35歳以上で成績不振
   else if (age >= 35) {
-    const recentGames = player.seasonStats.batting.games + player.seasonStats.pitching.games;
+    const recentGames = (player.seasonStats?.batting?.games || 0) + (player.seasonStats?.pitching?.games || 0);
     if (recentGames < 10) {
       shouldRetire = true;
       if (!reason) reason = '出場機会減少のため引退';
@@ -238,7 +287,7 @@ export function checkRetirement(player) {
     if (!reason) reason = '自己都合による引退';
   }
 
-  return { shouldRetire, hallOfFame, reason };
+  return { shouldRetire, hallOfFame, reason, draftEligible, draftReasons };
 };
 
 /**

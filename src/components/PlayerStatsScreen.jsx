@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { formatInnings } from '../utils/physics.js';
+import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 
 const PlayerStatsScreen = ({ seasonData, allTeams }) => {
   const [statsTab, setStatsTab] = useState('season');
@@ -163,22 +164,30 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                 </tr>
               </thead>
               <tbody>
-                {battingStats.map((player, index) => (
-                  <tr key={player.id + player.teamName} className="border-b border-gray-700 hover:bg-gray-700">
-                    <td className="py-2 px-3">{index + 1}</td>
-                    <td className="py-2 px-3 font-bold">{player.name}</td>
-                    <td className="py-2 px-3">{player.teamName}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.games}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.atBats}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.hits}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.homeruns}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.rbis}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.stolenBases || 0}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.walks}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
-                    <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.avg.toFixed(3)}</td>
-                  </tr>
-                ))}
+                {battingStats.map((player, index) => {
+                  const draftCheck = statsTab === 'career' ? checkNPBDraftEligibility(player) : { isDraftEligible: false, reasons: [] };
+                  return (
+                    <tr key={player.id + player.teamName} className="border-b border-gray-700 hover:bg-gray-700">
+                      <td className="py-2 px-3">{index + 1}</td>
+                      <td className="py-2 px-3 font-bold">
+                        {player.name}
+                        {draftCheck.isDraftEligible && (
+                          <span className="ml-2 text-xs bg-purple-600 text-white px-1 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3">{player.teamName}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.games}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.atBats}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.hits}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.homeruns}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.rbis}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.stolenBases || 0}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.walks}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
+                      <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.avg.toFixed(3)}</td>
+                    </tr>
+                  );
+                })}
                 {battingStats.length === 0 && (
                   <tr>
                     <td colSpan="12" className="py-8 text-center text-gray-500">
@@ -217,23 +226,31 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                 </tr>
               </thead>
               <tbody>
-                {pitchingStats.map((player, index) => (
-                  <tr key={player.id + player.teamName} className="border-b border-gray-700 hover:bg-gray-700">
-                    <td className="py-2 px-3">{index + 1}</td>
-                    <td className="py-2 px-3 font-bold">{player.name}</td>
-                    <td className="py-2 px-3">{player.teamName}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.games}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.wins}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.losses}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.holds || 0}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.saves || 0}</td>
-                    <td className="py-2 px-3 text-right">{player.ip}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.runsAllowed}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
-                    <td className="py-2 px-3 text-right">{player.stats.walks}</td>
-                    <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.era.toFixed(2)}</td>
-                  </tr>
-                ))}
+                {pitchingStats.map((player, index) => {
+                  const draftCheck = statsTab === 'career' ? checkNPBDraftEligibility(player) : { isDraftEligible: false, reasons: [] };
+                  return (
+                    <tr key={player.id + player.teamName} className="border-b border-gray-700 hover:bg-gray-700">
+                      <td className="py-2 px-3">{index + 1}</td>
+                      <td className="py-2 px-3 font-bold">
+                        {player.name}
+                        {draftCheck.isDraftEligible && (
+                          <span className="ml-2 text-xs bg-purple-600 text-white px-1 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3">{player.teamName}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.games}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.wins}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.losses}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.holds || 0}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.saves || 0}</td>
+                      <td className="py-2 px-3 text-right">{player.ip}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.runsAllowed}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
+                      <td className="py-2 px-3 text-right">{player.stats.walks}</td>
+                      <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.era.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
                 {pitchingStats.length === 0 && (
                   <tr>
                     <td colSpan="13" className="py-8 text-center text-gray-500">

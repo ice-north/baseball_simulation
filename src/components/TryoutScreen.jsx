@@ -41,7 +41,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     if (adjustedValue >= 80) return 'A';
     if (adjustedValue >= 70) return 'B';
     if (adjustedValue >= 60) return 'C';
-    return 'D';
+    if (adjustedValue >= 50) return 'D';
+    if (adjustedValue >= 40) return 'E';
+    return 'F';
   };
 
   const getPositionCategory = (position) => {
@@ -218,7 +220,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     A: 'text-red-400',
     B: 'text-orange-400',
     C: 'text-yellow-400',
-    D: 'text-gray-400'
+    D: 'text-green-400',
+    E: 'text-blue-400',
+    F: 'text-gray-400'
   }[rank]);
 
   return (
