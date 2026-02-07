@@ -66,7 +66,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
   // 控え選手（1-8番スタメン野手を除く全選手。投手枠は別管理なので除外しない）
   const fieldLineupIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= 8).map(e => e.playerId));
-  const benchPlayers = team.players.filter(p => !fieldLineupIds.has(p.id));
+  // 重複安全対策: player.id で重複除去
+  const benchPlayers = (() => {
+    const seen = new Set();
+    return team.players.filter(p => {
+      if (fieldLineupIds.has(p.id)) return false;
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  })();
 
   // 初期化：投手枠がなければ9番に投手を自動設定
   useEffect(() => {
@@ -176,7 +185,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       alert('投手枠は外せません。投手を交換するには投手リストから別の投手を選択してください。');
       return;
     }
-    team.lineupSettings.battingOrder = lineup.filter(entry => entry.playerId !== playerId);
+    // splice で配列を直接変更（filter で新配列を作ると lineup 参照がずれてバグの原因になる）
+    const idx = lineup.findIndex(e => e.playerId === playerId);
+    if (idx !== -1) {
+      lineup.splice(idx, 1);
+    }
     setUpdateTrigger(prev => prev + 1);
   };
 
@@ -335,9 +348,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         </div>
 
         <div className="bg-gray-800 rounded-lg p-2 mb-6 flex gap-2">
-          {['lineup', 'rotation', 'usage'].map(t => (
+          {['lineup', 'rotation', 'defense'].map(t => (
             <button key={t} onClick={() => setTab(t)} className={`flex-1 px-4 py-2 rounded font-bold transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-              {t === 'lineup' ? 'スタメン設定' : t === 'rotation' ? '投手ローテーション' : '起用法'}
+              {t === 'lineup' ? 'スタメン設定' : t === 'rotation' ? '投手ローテーション' : '守備分析'}
             </button>
           ))}
         </div>
@@ -582,12 +595,180 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           </div>
         )}
 
-        {tab === 'usage' && (
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-bold text-white mb-4">起用法設定</h2>
-            <p className="text-gray-400">（今後実装予定: 代打・代走の優先順位、リリーフ起用パターンなど）</p>
-          </div>
-        )}
+        {tab === 'defense' && (() => {
+          // スタメン選手のポジション別配置を取得
+          const positionPlayers = {};
+          lineup.forEach(entry => {
+            const player = team.players.find(p => p.id === entry.playerId);
+            if (player) positionPlayers[entry.position] = player;
+          });
+
+          // ダイヤモンド上の各ポジション座標（SVG 500x420）
+          const posCoords = {
+            pitcher:  { x: 250, y: 255 },
+            catcher:  { x: 250, y: 370 },
+            first:    { x: 370, y: 230 },
+            second:   { x: 310, y: 175 },
+            short:    { x: 190, y: 175 },
+            third:    { x: 130, y: 230 },
+            left:     { x: 80,  y: 90 },
+            center:   { x: 250, y: 45 },
+            right:    { x: 420, y: 90 },
+          };
+
+          // 守備範囲の計算（守備力+走力ベース）
+          const getDefenseRange = (player, pos) => {
+            if (!player) return 0;
+            const def = player.fielding?.defense || 50;
+            const spd = player.physical?.speed || 50;
+            const arm = player.physical?.arm || 50;
+            if (['left', 'center', 'right'].includes(pos)) {
+              return (def * 0.3 + spd * 0.5 + arm * 0.2) / 100;
+            } else if (['second', 'short'].includes(pos)) {
+              return (def * 0.4 + spd * 0.3 + arm * 0.3) / 100;
+            } else if (pos === 'catcher') {
+              return (def * 0.5 + arm * 0.5) / 100;
+            } else {
+              return (def * 0.5 + spd * 0.25 + arm * 0.25) / 100;
+            }
+          };
+
+          const posLabels = {
+            pitcher: '投', catcher: '捕', first: '一', second: '二',
+            short: '遊', third: '三', left: '左', center: '中', right: '右'
+          };
+
+          const getRangeColor = (range) => {
+            if (range >= 0.75) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' }; // S
+            if (range >= 0.65) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' }; // A
+            if (range >= 0.55) return { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24' };  // B
+            if (range >= 0.45) return { fill: 'rgba(74,222,128,0.12)', stroke: '#4ade80' };  // C
+            return { fill: 'rgba(96,165,250,0.10)', stroke: '#60a5fa' };                      // D
+          };
+
+          return (
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-gray-800 rounded-lg p-4 col-span-2">
+                <h2 className="text-xl font-bold text-white mb-4">守備分析 - ポジション配置</h2>
+                <svg viewBox="0 0 500 420" className="w-full max-w-2xl mx-auto">
+                  {/* グラウンド背景 */}
+                  <rect x="0" y="0" width="500" height="420" fill="#1a472a" rx="12" />
+
+                  {/* 外野芝 */}
+                  <ellipse cx="250" cy="200" rx="230" ry="190" fill="#1f5c33" />
+
+                  {/* 内野ダイヤモンド */}
+                  <polygon points="250,135 370,250 250,365 130,250" fill="none" stroke="#c4a35a" strokeWidth="2" strokeDasharray="8,4" opacity="0.5" />
+
+                  {/* 内野土 */}
+                  <polygon points="250,180 340,250 250,320 160,250" fill="#8B6914" opacity="0.35" />
+
+                  {/* ベースライン */}
+                  <line x1="250" y1="360" x2="130" y2="245" stroke="#fff" strokeWidth="1.5" opacity="0.4" />
+                  <line x1="250" y1="360" x2="370" y2="245" stroke="#fff" strokeWidth="1.5" opacity="0.4" />
+
+                  {/* ベース */}
+                  <rect x="244" y="354" width="12" height="12" fill="#fff" transform="rotate(45,250,360)" />
+                  <rect x="364" y="244" width="10" height="10" fill="#fff" transform="rotate(45,369,249)" />
+                  <rect x="245" y="169" width="10" height="10" fill="#fff" transform="rotate(45,250,174)" />
+                  <rect x="125" y="244" width="10" height="10" fill="#fff" transform="rotate(45,130,249)" />
+
+                  {/* マウンド */}
+                  <circle cx="250" cy="265" r="10" fill="#8B6914" opacity="0.5" />
+
+                  {/* 守備範囲の円（全ポジション） */}
+                  {Object.entries(posCoords).map(([pos, coord]) => {
+                    const player = positionPlayers[pos];
+                    const range = getDefenseRange(player, pos);
+                    const isOutfield = ['left', 'center', 'right'].includes(pos);
+                    const baseRadius = isOutfield ? 55 : 35;
+                    const radius = baseRadius * (0.5 + range * 0.8);
+                    const colors = getRangeColor(range);
+                    return (
+                      <circle
+                        key={`range-${pos}`}
+                        cx={coord.x} cy={coord.y}
+                        r={player ? radius : 0}
+                        fill={colors.fill}
+                        stroke={colors.stroke}
+                        strokeWidth="1.5"
+                        strokeDasharray="4,3"
+                      />
+                    );
+                  })}
+
+                  {/* 選手マーカーとラベル */}
+                  {Object.entries(posCoords).map(([pos, coord]) => {
+                    const player = positionPlayers[pos];
+                    return (
+                      <g key={pos}>
+                        <circle cx={coord.x} cy={coord.y} r="16" fill={player ? '#1e40af' : '#374151'} stroke={player ? '#60a5fa' : '#6b7280'} strokeWidth="2" />
+                        <text x={coord.x} y={coord.y + 1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="11" fontWeight="bold">{posLabels[pos]}</text>
+                        {player && (
+                          <>
+                            <text x={coord.x} y={coord.y - 24} textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">{player.name}</text>
+                            <text x={coord.x} y={coord.y + 30} textAnchor="middle" fill="#9ca3af" fontSize="9">
+                              守{player.fielding?.defense || 0} 走{player.physical?.speed || 0} 肩{player.physical?.arm || 0}
+                            </text>
+                          </>
+                        )}
+                        {!player && (
+                          <text x={coord.x} y={coord.y - 22} textAnchor="middle" fill="#6b7280" fontSize="10">未配置</text>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* 右側: 守備力サマリー */}
+              <div className="bg-gray-800 rounded-lg p-4 col-span-1">
+                <h2 className="text-lg font-bold text-white mb-4">守備力サマリー</h2>
+                <div className="space-y-2">
+                  {Object.entries(posCoords).map(([pos]) => {
+                    const player = positionPlayers[pos];
+                    const range = getDefenseRange(player, pos);
+                    const rangeLabel = range >= 0.75 ? 'S' : range >= 0.65 ? 'A' : range >= 0.55 ? 'B' : range >= 0.45 ? 'C' : range >= 0.35 ? 'D' : 'E';
+                    const rangeLabelColor = range >= 0.75 ? 'text-pink-400' : range >= 0.65 ? 'text-red-400' : range >= 0.55 ? 'text-orange-400' : range >= 0.45 ? 'text-yellow-400' : range >= 0.35 ? 'text-green-400' : 'text-blue-400';
+                    return (
+                      <div key={pos} className="bg-gray-700 rounded p-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-400 font-bold w-6 text-center">{posLabels[pos]}</span>
+                          <span className="text-white text-sm">{player?.name || '-'}</span>
+                        </div>
+                        {player ? (
+                          <div className="flex items-center gap-3 text-xs">
+                            <span className="text-gray-400">守<span className={getRankColor(getAbilityRank(player.fielding?.defense || 0))}>{player.fielding?.defense || 0}</span></span>
+                            <span className="text-gray-400">走<span className={getRankColor(getAbilityRank(player.physical?.speed || 0))}>{player.physical?.speed || 0}</span></span>
+                            <span className="text-gray-400">肩<span className={getRankColor(getAbilityRank(player.physical?.arm || 0))}>{player.physical?.arm || 0}</span></span>
+                            <span className={`font-bold ${rangeLabelColor}`}>{rangeLabel}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 text-xs">-</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* チーム守備総合評価 */}
+                {(() => {
+                  const allRanges = Object.keys(posCoords).map(pos => getDefenseRange(positionPlayers[pos], pos)).filter(r => r > 0);
+                  const avgRange = allRanges.length > 0 ? allRanges.reduce((a, b) => a + b, 0) / allRanges.length : 0;
+                  const teamGrade = avgRange >= 0.75 ? 'S' : avgRange >= 0.65 ? 'A' : avgRange >= 0.55 ? 'B' : avgRange >= 0.45 ? 'C' : avgRange >= 0.35 ? 'D' : 'E';
+                  const teamColor = avgRange >= 0.75 ? 'text-pink-400' : avgRange >= 0.65 ? 'text-red-400' : avgRange >= 0.55 ? 'text-orange-400' : avgRange >= 0.45 ? 'text-yellow-400' : avgRange >= 0.35 ? 'text-green-400' : 'text-blue-400';
+                  return (
+                    <div className="mt-4 bg-gray-900 rounded p-3 text-center">
+                      <div className="text-gray-400 text-sm mb-1">チーム守備総合</div>
+                      <div className={`text-3xl font-bold ${teamColor}`}>{teamGrade}</div>
+                      <div className="text-gray-500 text-xs mt-1">平均守備力: {Math.round(avgRange * 100)}</div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

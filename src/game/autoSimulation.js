@@ -477,8 +477,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     } else {
       // ボールゾーン
       const swingRand = Math.random() * 100;
-      // 選球眼が高いほどボール球を振らない（四球を増やす）
-      const chaseChance = 12 + (3 - batter.eye * 0.12) + count.strikes * 4;
+      // 選球眼が高いほどボール球を振らない（四球率を抑制調整）
+      const chaseChance = 15 + (3 - batter.eye * 0.10) + count.strikes * 5;
 
       if (swingRand < chaseChance) {
         // ボール球をスイング
@@ -562,16 +562,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const catcherArm = catcher?.physical?.arm || 50;
         const pitcherQuick = pitcher?.pitching?.control || 50;
 
-        // 盗塁成功確率: 走力ベース（50で25%、70で55%、90で85%）
-        const baseChance = (runnerSpeed - 30) * 1.5;
+        // 盗塁成功確率: 走力ベース（50で40%、70で76%、90で112%→capped）
+        const baseChance = (runnerSpeed - 25) * 1.8;
         const catcherPenalty = catcherArm * 0.3;
         const pitcherPenalty = pitcherQuick * 0.1;
         const successChance = baseChance - catcherPenalty - pitcherPenalty + (Math.random() * 20 - 10);
 
-        // 盗塁を試みる条件: 走力55以上、2アウト未満、成功率40%以上
-        const shouldAttempt = runnerSpeed >= 55 && gameState.outs < 2 && successChance > 40;
+        // 盗塁を試みる条件: 走力48以上、2アウト未満、成功率40%以上（走力強化）
+        const shouldAttempt = runnerSpeed >= 48 && gameState.outs < 2 && successChance > 40;
         // 走力が高いほど積極的に走る
-        const aggressiveness = Math.random() * 100 < (runnerSpeed - 40) * 1.5;
+        const aggressiveness = Math.random() * 100 < (runnerSpeed - 35) * 2.0;
 
         if (shouldAttempt && aggressiveness) {
           const rand = Math.random() * 100;

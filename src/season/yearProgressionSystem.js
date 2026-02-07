@@ -218,6 +218,86 @@ export function checkNPBDraftEligibility(player) {
 }
 
 /**
+ * NPBドラフト処理
+ * 全チームの選手をチェックし、ドラフト対象者を抽出・処理
+ * @param {Object} allTeams - TEAMS_DATA
+ * @returns {Object} - { draftedPlayers, nearMissPlayers }
+ */
+export function processNPBDraft(allTeams) {
+  const NPB_TEAMS = [
+    '読売ジャイアンツ', '阪神タイガース', '横浜DeNAベイスターズ',
+    '広島東洋カープ', '中日ドラゴンズ', 'ヤクルトスワローズ',
+    'オリックス・バファローズ', 'ソフトバンクホークス', '西武ライオンズ',
+    '楽天ゴールデンイーグルス', '千葉ロッテマリーンズ', '日本ハムファイターズ'
+  ];
+
+  const draftedPlayers = [];
+  const nearMissPlayers = [];
+
+  Object.entries(allTeams).forEach(([teamName, team]) => {
+    if (!team.players) return;
+    team.players.forEach(player => {
+      const { isDraftEligible, reasons } = checkNPBDraftEligibility(player);
+      if (isDraftEligible) {
+        const npbTeam = NPB_TEAMS[Math.floor(Math.random() * NPB_TEAMS.length)];
+        draftedPlayers.push({
+          player,
+          teamName,
+          npbTeam,
+          reasons,
+          position: player.position,
+          age: player.age,
+          name: player.name,
+          playerId: player.id
+        });
+      } else {
+        // 惜しかった選手の判定（条件の60%以上達成）
+        const isPitcher = player.position === 'pitcher';
+        const career = player.careerStats || { batting: {}, pitching: {} };
+        const nearReasons = [];
+
+        if (isPitcher) {
+          const wins = career.pitching?.wins || 0;
+          const ks = career.pitching?.strikeouts || 0;
+          const sv = career.pitching?.saves || 0;
+          if (wins >= 18 && wins < 30) nearReasons.push(`通算${wins}勝（あと${30 - wins}勝）`);
+          if (ks >= 270 && ks < 450) nearReasons.push(`通算${ks}奪三振（あと${450 - ks}）`);
+          if (sv >= 30 && sv < 50) nearReasons.push(`通算${sv}セーブ（あと${50 - sv}）`);
+        } else {
+          const hits = career.batting?.hits || 0;
+          const ab = career.batting?.atBats || 0;
+          const hr = career.batting?.homeruns || 0;
+          const avg = ab > 0 ? hits / ab : 0;
+          if (avg >= 0.260 && avg < 0.280 && ab >= 300) nearReasons.push(`通算打率${avg.toFixed(3)}（.280まであと${(0.280 - avg).toFixed(3)}）`);
+          if (hr >= 42 && hr < 70) nearReasons.push(`通算${hr}本塁打（あと${70 - hr}本）`);
+          if (hits >= 300 && hits < 500) nearReasons.push(`通算${hits}安打（あと${500 - hits}本）`);
+        }
+
+        if (nearReasons.length > 0) {
+          nearMissPlayers.push({
+            name: player.name,
+            teamName,
+            position: player.position,
+            age: player.age,
+            reasons: nearReasons
+          });
+        }
+      }
+    });
+  });
+
+  // ドラフト対象者をチームから除外
+  draftedPlayers.forEach(({ playerId, teamName }) => {
+    const team = allTeams[teamName];
+    if (team) {
+      team.players = team.players.filter(p => p.id !== playerId);
+    }
+  });
+
+  return { draftedPlayers, nearMissPlayers };
+}
+
+/**
  * 殿堂入り条件を判定
  * 投手: 通算100勝、または通算30セーブ、または通算600奪三振
  * 野手: 通算打率.300以上、または通算150本塁打、または通算1000安打

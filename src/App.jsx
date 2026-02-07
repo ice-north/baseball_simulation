@@ -38,7 +38,7 @@ import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
 import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
-import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
+import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining, processNPBDraft } from './season/yearProgressionSystem.js';
 
 // Component imports
 import StartScreen from './components/StartScreen.jsx';
@@ -56,6 +56,7 @@ import TryoutScreen from './components/TryoutScreen.jsx';
 import EditScreen from './components/EditScreen.jsx';
 import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
 import HallOfFameScreen from './components/HallOfFameScreen.jsx';
+import DraftResultScreen from './components/DraftResultScreen.jsx';
 
     const App = () => {
       // チームデータの初期化
@@ -141,6 +142,7 @@ import HallOfFameScreen from './components/HallOfFameScreen.jsx';
       const [saveSlots, setSaveSlots] = useState([null, null, null]);
       const [hasSaveData, setHasSaveData] = useState(false);
       const [hallOfFamePlayers, setHallOfFamePlayers] = useState([]);
+      const [draftResults, setDraftResults] = useState(null); // { draftedPlayers, nearMissPlayers }
 
       const refreshSaveSlots = () => {
         const slots = SAVE_SLOT_KEYS.map(key => {
@@ -4005,6 +4007,14 @@ if (newOuts === 3) {
             setManagementView('tryout');
           }}
         />;
+        if (managementView === 'draft') return <DraftResultScreen
+          draftedPlayers={draftResults?.draftedPlayers || []}
+          nearMissPlayers={draftResults?.nearMissPlayers || []}
+          onContinue={() => {
+            setDraftResults(null);
+            setManagementView('dateprogress');
+          }}
+        />;
         if (managementView === 'roster') return <RosterScreen />;
         if (managementView === 'teaminfo') return <TeamInfoScreen />;
         if (managementView === 'dateprogress') return <DateProgressScreen
@@ -4013,7 +4023,12 @@ if (newOuts === 3) {
           onForceEvent={(eventType) => {
             if (eventType === 'contract') setManagementView('contract');
             else if (eventType === 'tryout') setManagementView('tryout');
-            else if (eventType === 'draft') setManagementView('dateprogress'); // ドラフトは自動処理後にカレンダーへ
+            else if (eventType === 'draft') {
+              // NPBドラフト処理を実行
+              const results = processNPBDraft(TEAMS_DATA);
+              setDraftResults(results);
+              setManagementView('draft');
+            }
             else if (eventType === 'offseason') setManagementView('offseason');
           }}
         />;
