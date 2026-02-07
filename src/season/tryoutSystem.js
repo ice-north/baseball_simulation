@@ -6,23 +6,25 @@
 import { generateRandomPlayerName } from '../data/playerNames.js';
 
 /**
- * 利き手を決定（リアルな分布）
- * - 右投右打: 50%
- * - 右投左打: 30%
- * - 左投左打: 15%
+ * 利き手を決定（リアルな分布、左投げ増加）
+ * - 右投右打: 45%
+ * - 右投左打: 25%
+ * - 左投左打: 22%（増加）
  * - 右投両打: 5%
- * - 左投右打: 0%（基本的に存在しない）
+ * - 左投右打: 3%（レア）
  */
 function determineHandedness() {
   const rand = Math.random() * 100;
-  if (rand < 50) {
+  if (rand < 45) {
     return { throws: 'right', bats: 'right' };
-  } else if (rand < 80) {
+  } else if (rand < 70) {
     return { throws: 'right', bats: 'left' };
-  } else if (rand < 95) {
+  } else if (rand < 92) {
     return { throws: 'left', bats: 'left' };
-  } else {
+  } else if (rand < 97) {
     return { throws: 'right', bats: 'switch' };
+  } else {
+    return { throws: 'left', bats: 'right' }; // レアな左投右打
   }
 }
 
@@ -48,17 +50,63 @@ function getPositionForLeftHander() {
 }
 
 /**
- * 一芸に秀でた選手タイプを生成
+ * 特性の数を決定（確率分布）
+ * 1つ: 75%, 2つ: 20%, 3つ: 4%, 4つ: 1%
+ */
+function getTraitCount() {
+  const rand = Math.random() * 100;
+  if (rand < 75) return 1;
+  if (rand < 95) return 2;
+  if (rand < 99) return 3;
+  return 4;
+}
+
+/**
+ * 野手用特性リスト
+ */
+const BATTER_TRAITS = [
+  'speedster',      // 俊足タイプ
+  'slugger',        // パワータイプ
+  'defender',       // 守備タイプ
+  'contactHitter',  // 巧打タイプ
+  'eyeMaster',      // 選球眼タイプ
+  'baserunner',     // 走塁タイプ
+  'armStrong',      // 強肩タイプ
+];
+
+/**
+ * 投手用特性リスト
+ */
+const PITCHER_TRAITS = [
+  'fireballer',     // 速球タイプ
+  'controlPitcher', // 制球タイプ
+  'ironman',        // スタミナタイプ
+  'breakingBall',   // 変化球タイプ
+];
+
+/**
+ * 複数特性を選出（重複なし）
+ * @param {boolean} isPitcher - 投手かどうか
+ * @returns {string[]} 選ばれた特性の配列
+ */
+function getPlayerTraits(isPitcher) {
+  const count = getTraitCount();
+  const pool = isPitcher ? [...PITCHER_TRAITS] : [...BATTER_TRAITS];
+  const traits = [];
+  for (let i = 0; i < Math.min(count, pool.length); i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    traits.push(pool.splice(idx, 1)[0]);
+  }
+  return traits;
+}
+
+/**
+ * 一芸に秀でた選手タイプを生成（後方互換）
  */
 function getSpecialistType() {
   const types = [
-    'speedster',      // 俊足だが打撃弱い
-    'slugger',        // パワーはあるが守備走塁弱い
-    'defender',       // 守備の名手だが打撃弱い
-    'contactHitter',  // ミートはいいがパワー無い
-    'fireballer',     // 球速は速いがスタミナ制球弱い
-    'controlPitcher', // 制球はいいが球速遅い
-    'ironman',        // スタミナあるが球速制球弱い
+    'speedster', 'slugger', 'defender', 'contactHitter',
+    'fireballer', 'controlPitcher', 'ironman',
   ];
   return types[Math.floor(Math.random() * types.length)];
 }
@@ -104,9 +152,12 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
     }
 
-    // 一芸に秀でた選手かどうか（20%の確率、二刀流以外）
-    const isSpecialist = !isTwoWay && Math.random() < 0.2;
-    const specialistType = isSpecialist ? getSpecialistType() : null;
+    // 特性を持つ選手かどうか（35%の確率、二刀流以外）
+    const hasTraits = !isTwoWay && Math.random() < 0.35;
+    const playerTraits = hasTraits ? getPlayerTraits(isPitcher) : [];
+    // 後方互換用: 最初の特性をspecialistTypeとして使う
+    const isSpecialist = playerTraits.length > 0;
+    const specialistType = playerTraits[0] || null;
 
     // 投球フォームを先に決定（能力に影響するため）
     // オーバースロー45%、スリークォーター40%、サイドスロー10%、アンダースロー5%
@@ -128,8 +179,8 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
     // 年齢を先に決定（18-25歳）
     const age = Math.floor(Math.random() * 8) + 18;
 
-    // 能力値生成（一芸選手の場合は特殊な分布、年齢補正あり、二刀流対応）
-    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay);
+    // 能力値生成（特性選手の場合は特殊な分布、年齢補正あり、二刀流対応）
+    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay, playerTraits);
 
     const player = {
       id: i,
@@ -162,11 +213,14 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         control: abilities.control,
         stamina: abilities.stamina,
         form: pitchingForm,
-        arsenal: (isPitcher || isTwoWay) ? generateRandomArsenal() : [
-          { id: 1, type: 'straight', level: 100 },
-          { id: 2, type: 'slider', level: 50 }
-        ]
+        arsenal: (isPitcher || isTwoWay)
+          ? generateRandomArsenal(playerTraits.includes('breakingBall') ? 2 : 0)
+          : [
+            { id: 1, type: 'straight', level: 100 },
+            { id: 2, type: 'slider', level: 50 }
+          ]
       },
+      traits: playerTraits, // 選手の特性を保存
       positionFitness: isTwoWay ? generateTwoWayPositionFitness(position) : generatePositionFitness(position),
       professionalCareer: {
         isDrafted: false,
@@ -193,12 +247,11 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
 }
 
 /**
- * 能力値を生成（一芸選手対応、フォーム別球速調整、年齢補正、二刀流対応）
- * 重要: 球速・ミート・パワーは一芸でも最大Aランク(79)まで
- * 年齢補正: 18歳基準で、1歳につき平均+1ポイント（ただしランダム範囲内なので例外あり）
- * 全体的に能力値を5ポイント程度下げ、バラつきを大きくする
+ * 能力値を生成（複数特性対応、フォーム別球速調整、年齢補正、二刀流対応）
+ * 特性が複数ある場合、各特性のボーナスを累積適用
+ * 年齢補正: 18歳基準で、1歳につき平均+1ポイント
  */
-function generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age = 20, isTwoWay = false) {
+function generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age = 20, isTwoWay = false, playerTraits = []) {
   // フォームによる球速・制球の調整
   // サイドスロー・アンダースローは球速-10、制球+15
   const isSideOrUnder = pitchingForm === 'sidearm' || pitchingForm === 'submarine';
@@ -271,99 +324,96 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     stamina: isPitcher ? randStamina(73, 113, ageBonus) : randRange(40, 67)
   };
 
-  if (!isSpecialist) {
+  if (!isSpecialist || playerTraits.length === 0) {
     return normalAbilities;
   }
 
-  // 一芸に秀でた選手の能力調整
-  // 注意: 球速・ミート・パワーの最大値は79（Aランク）
-  switch (specialistType) {
-    case 'speedster':
-      // 俊足だが打撃弱い（+5調整済み）
-      return {
-        ...normalAbilities,
-        speed: randRange(85, 99),
-        steal: randRange(80, 95),
-        meet: randRange(30, 50),
-        power: randRange(20, 40),
-        defense: randRange(60, 80)
-      };
+  // 複数特性の能力調整（各特性のボーナスを累積適用）
+  let abilities = { ...normalAbilities };
 
-    case 'slugger':
-      // パワーはあるが守備走塁弱い（パワー最大79、+5調整済み）
-      return {
-        ...normalAbilities,
-        power: randRange(70, 79),  // 最大Aランク
-        meet: randRange(45, 65),
-        speed: randRange(25, 45),
-        steal: randRange(15, 30),
-        defense: randRange(30, 50),
-        arm: randRange(40, 60)
-      };
+  // 特性ごとのボーナス定義
+  const traitBonuses = {
+    // --- 野手特性 ---
+    speedster: {
+      speed: () => randRange(85, 99),
+      steal: () => randRange(80, 95),
+      meet: () => randRange(30, 50),
+      power: () => randRange(20, 40),
+      defense: () => randRange(60, 80)
+    },
+    slugger: {
+      power: () => randRange(70, 79),
+      meet: () => randRange(45, 65),
+      speed: () => randRange(25, 45),
+      steal: () => randRange(15, 30),
+      defense: () => randRange(30, 50),
+      arm: () => randRange(40, 60)
+    },
+    defender: {
+      defense: () => randRange(85, 99),
+      arm: () => randRange(75, 90),
+      meet: () => randRange(35, 55),
+      power: () => randRange(25, 45),
+      speed: () => randRange(55, 75)
+    },
+    contactHitter: {
+      meet: () => randRange(70, 79),
+      eye: () => randRange(75, 90),
+      power: () => randRange(25, 45),
+      speed: () => randRange(50, 70)
+    },
+    eyeMaster: {
+      eye: () => randRange(80, 95),
+      meet: () => randRange(60, 75),
+      steal: () => randRange(50, 70)
+    },
+    baserunner: {
+      speed: () => randRange(75, 90),
+      steal: () => randRange(80, 99),
+      defense: () => randRange(55, 75)
+    },
+    armStrong: {
+      arm: () => randRange(80, 99),
+      defense: () => randRange(65, 85),
+      power: () => randRange(50, 70)
+    },
+    // --- 投手特性 ---
+    fireballer: {
+      velocity: () => Math.min(randVelocity(144, 152) + velocityAdjust, 154),
+      control: () => Math.min(randRange(30, 50) + controlAdjust, 65),
+      stamina: () => randStamina(60, 87)
+    },
+    controlPitcher: {
+      velocity: () => Math.max(randVelocity(119, 134) + velocityAdjust, 114),
+      control: () => Math.min(randRange(75, 90) + controlAdjust, 95),
+      stamina: () => randStamina(87, 113)
+    },
+    ironman: {
+      velocity: () => Math.min(randVelocity(124, 139) + velocityAdjust, 144),
+      control: () => Math.min(randRange(40, 60) + controlAdjust, 75),
+      stamina: () => randStamina(120, 147)
+    },
+    breakingBall: {
+      control: () => Math.min(randRange(55, 75) + controlAdjust, 85),
+      velocity: () => Math.max(randVelocity(119, 137) + velocityAdjust, 114),
+      stamina: () => randStamina(80, 107)
+    }
+  };
 
-    case 'defender':
-      // 守備の名手だが打撃弱い（+5調整済み）
-      return {
-        ...normalAbilities,
-        defense: randRange(85, 99),
-        arm: randRange(75, 90),
-        meet: randRange(35, 55),
-        power: randRange(25, 45),
-        speed: randRange(55, 75)
-      };
-
-    case 'contactHitter':
-      // ミートはいいがパワー無い（ミート最大79、+5調整済み）
-      return {
-        ...normalAbilities,
-        meet: randRange(70, 79),  // 最大Aランク
-        eye: randRange(75, 90),
-        power: randRange(25, 45),
-        speed: randRange(50, 70)
-      };
-
-    case 'fireballer':
-      // 球速は速いがスタミナ制球弱い（投手用）
-      // 剛速球投手: 144-152km/h（球速-6km、スタミナ2/3調整済み）
-      if (isPitcher) {
-        return {
-          ...normalAbilities,
-          velocity: Math.min(randVelocity(144, 152) + velocityAdjust, 154),
-          control: Math.min(randRange(30, 50) + controlAdjust, 65),
-          stamina: randStamina(60, 87)
-        };
+  // 各特性を順に適用（複数特性は良い方の値を採用）
+  playerTraits.forEach(trait => {
+    const bonuses = traitBonuses[trait];
+    if (!bonuses) return;
+    Object.entries(bonuses).forEach(([stat, generator]) => {
+      const traitValue = generator();
+      // 複数特性がある場合は、より高い値を採用（強化方向で合成）
+      if (traitValue > abilities[stat]) {
+        abilities[stat] = traitValue;
       }
-      return normalAbilities;
+    });
+  });
 
-    case 'controlPitcher':
-      // 制球はいいが球速遅い（投手用）
-      // 軟投派: 119-134km/h（球速-6km、スタミナ2/3調整済み）
-      if (isPitcher) {
-        return {
-          ...normalAbilities,
-          velocity: Math.max(randVelocity(119, 134) + velocityAdjust, 114),
-          control: Math.min(randRange(75, 90) + controlAdjust, 95),
-          stamina: randStamina(87, 113)
-        };
-      }
-      return normalAbilities;
-
-    case 'ironman':
-      // スタミナあるが球速制球弱い（投手用）
-      // タフネス投手: スタミナ120-147（球速-6km、スタミナ2/3調整済み）
-      if (isPitcher) {
-        return {
-          ...normalAbilities,
-          velocity: Math.min(randVelocity(124, 139) + velocityAdjust, 144),
-          control: Math.min(randRange(40, 60) + controlAdjust, 75),
-          stamina: randStamina(120, 147)
-        };
-      }
-      return normalAbilities;
-
-    default:
-      return normalAbilities;
-  }
+  return abilities;
 }
 
 /**
@@ -375,11 +425,13 @@ function randRange(min, max) {
 
 /**
  * ランダムな変化球を生成
+ * @param {number} extraPitches - 追加球種数（breakingBall特性用）
  */
-export const generateRandomArsenal = () => {
+export const generateRandomArsenal = (extraPitches = 0) => {
   const pitchTypes = ['straight', 'twoSeam', 'slider', 'curve', 'fork', 'changeup',
                       'sinker', 'shoot', 'cutter', 'splitter', 'palm', 'knuckle'];
-  const arsenalSize = Math.floor(Math.random() * 3) + 2; // 2-4種類
+  const baseSize = Math.floor(Math.random() * 3) + 2; // 2-4種類
+  const arsenalSize = Math.min(baseSize + extraPitches, 7); // 最大7種類
   const arsenal = [];
   const usedTypes = new Set();
 
@@ -392,7 +444,9 @@ export const generateRandomArsenal = () => {
     if (availableTypes.length === 0) break;
 
     const selectedType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
-    const level = Math.floor(Math.random() * 50) + 50; // 50-100
+    // breakingBall特性の追加分はレベル高め
+    const levelMin = (i > baseSize) ? 70 : 50;
+    const level = Math.floor(Math.random() * (100 - levelMin + 1)) + levelMin;
     arsenal.push({ id: i, type: selectedType, level });
     usedTypes.add(selectedType);
   }

@@ -22,20 +22,42 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
 
+  // ポジション順ソート: 投→捕→一→二→三→遊→左→中→右、同一ポジションは年齢降順
+  const POSITION_ORDER = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  const sortedPlayers = [...(userTeam?.players || [])].sort((a, b) => {
+    const posA = POSITION_ORDER.indexOf(a.position);
+    const posB = POSITION_ORDER.indexOf(b.position);
+    if (posA !== posB) return posA - posB;
+    return (b.age || 20) - (a.age || 20);
+  });
+
   const isPitcher = (player) => player.position === 'pitcher';
 
+  // S~Fランク判定（能力値用）
+  const getAbilityRank = (value, isVelocity = false, isStamina = false) => {
+    let v = value;
+    if (isVelocity) v = (value - 115) * 2.5;
+    else if (isStamina) v = value / 2;
+    if (v >= 90) return { rank: 'S', color: 'text-pink-400' };
+    if (v >= 80) return { rank: 'A', color: 'text-red-400' };
+    if (v >= 70) return { rank: 'B', color: 'text-orange-400' };
+    if (v >= 60) return { rank: 'C', color: 'text-yellow-400' };
+    if (v >= 50) return { rank: 'D', color: 'text-green-400' };
+    if (v >= 40) return { rank: 'E', color: 'text-blue-400' };
+    return { rank: 'F', color: 'text-gray-400' };
+  };
+
+  // 能力値をランク付きで表示するヘルパー
+  const StatValue = ({ value, label, isVelocity = false, isStamina = false }) => {
+    const { rank, color } = getAbilityRank(value, isVelocity, isStamina);
+    return <span className={`${color} font-bold`} title={`${label}: ${value} (${rank})`}>{value}</span>;
+  };
+
   const getMenusForPlayer = (player) => {
+    // 全選手が全練習メニューを選択可能（投手も野手練習、野手も投手練習可能）
     const menus = {};
     Object.entries(TRAINING_MENUS).forEach(([key, menu]) => {
-      if (isPitcher(player)) {
-        if (['stamina', 'control', 'velocity', 'fielding', 'breaking', 'newpitch'].includes(key)) {
-          menus[key] = menu;
-        }
-      } else {
-        if (['batting', 'baserunning', 'fielding', 'eye'].includes(key)) {
-          menus[key] = menu;
-        }
-      }
+      menus[key] = menu;
     });
     return menus;
   };
@@ -116,17 +138,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     setAssignments(init);
   };
 
-  const getStatDisplay = (player) => {
-    const b = player.batting || {};
-    const p = player.pitching || {};
-    const ph = player.physical || {};
-    const f = player.fielding || {};
-    if (isPitcher(player)) {
-      const arsenal = (p.arsenal || []).filter(a => a.type !== 'straight');
-      const pitchStr = arsenal.map(a => `${getPitchTypeName(a.type)}${a.level}`).join(' ');
-      return { main: `球${p.velocity||0} 制${p.control||0} ス${p.stamina||0}`, sub: pitchStr || '-' };
-    }
-    return { main: `ミ${b.meet||0} パ${b.power||0} 走${ph.speed||0} 肩${ph.arm||0} 守${f.defense||0}`, sub: `眼${b.eye||0} 盗${b.steal||0}` };
+  const getArsenalDisplay = (player) => {
+    const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
+    if (arsenal.length === 0) return '-';
+    return arsenal.map(a => `${getPitchTypeName(a.type)}${a.level}`).join(' ');
   };
 
   return (
@@ -163,31 +178,42 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
               ))}
             </div>
 
-            {/* 選手リスト（1行グリッド） */}
-            <div className="bg-gray-800 rounded-lg overflow-hidden">
+            {/* 選手リスト（1行グリッド、ポジション順ソート、S~Fランク色分け） */}
+            <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-700 text-gray-300 text-xs">
                     <th className="py-2 px-2 text-left w-20">選手</th>
-                    <th className="py-2 px-1 text-center w-10">位</th>
+                    <th className="py-2 px-1 text-center w-8">位</th>
                     <th className="py-2 px-1 text-center w-8">齢</th>
-                    <th className="py-2 px-2 text-left">能力値</th>
-                    <th className="py-2 px-2 text-left">変化球/サブ</th>
+                    <th className="py-2 px-1 text-center w-8">ミ</th>
+                    <th className="py-2 px-1 text-center w-8">パ</th>
+                    <th className="py-2 px-1 text-center w-8">走</th>
+                    <th className="py-2 px-1 text-center w-8">肩</th>
+                    <th className="py-2 px-1 text-center w-8">守</th>
+                    <th className="py-2 px-1 text-center w-8">眼</th>
+                    <th className="py-2 px-1 text-center w-10">球速</th>
+                    <th className="py-2 px-1 text-center w-8">制</th>
+                    <th className="py-2 px-1 text-center w-10">スタ</th>
+                    <th className="py-2 px-2 text-left">変化球</th>
                     <th className="py-2 px-2 text-left w-48">練習メニュー</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {userTeam?.players?.map(player => {
-                    const stats = getStatDisplay(player);
+                  {sortedPlayers.map(player => {
+                    const b = player.batting || {};
+                    const p = player.pitching || {};
+                    const ph = player.physical || {};
+                    const f = player.fielding || {};
                     const menus = getMenusForPlayer(player);
-                    const currentTraining = assignments[player.id] || 'batting';
+                    const currentTraining = assignments[player.id] || (isPitcher(player) ? 'stamina' : 'batting');
                     const showNewPitchSelect = currentTraining === 'newpitch';
                     const availableNewPitches = getAvailableNewPitches(player);
 
                     return (
                       <tr key={player.id} className="border-b border-gray-700 hover:bg-gray-750">
                         <td className="py-1 px-2">
-                          <span className={`font-bold text-white ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>
+                          <span className={`font-bold ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>
                             {player.name}
                           </span>
                         </td>
@@ -195,8 +221,16 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           <span className="text-xs text-gray-400">{POSITION_NAMES[player.position] || player.position}</span>
                         </td>
                         <td className="py-1 px-1 text-center text-gray-400 text-xs">{player.age || 20}</td>
-                        <td className="py-1 px-2 text-cyan-400 text-xs font-mono">{stats.main}</td>
-                        <td className="py-1 px-2 text-yellow-400 text-xs font-mono">{stats.sub}</td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={b.power||0} label="パワー" /></td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={ph.speed||0} label="走力" /></td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={ph.arm||0} label="肩力" /></td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={f.defense||0} label="守備" /></td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={b.eye||0} label="選球眼" /></td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={p.control||0} label="制球" /></td>
+                        <td className="py-1 px-1 text-center text-xs font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
+                        <td className="py-1 px-2 text-yellow-400 text-xs font-mono truncate max-w-[140px]">{getArsenalDisplay(player)}</td>
                         <td className="py-1 px-2">
                           <div className="flex items-center gap-1">
                             <select

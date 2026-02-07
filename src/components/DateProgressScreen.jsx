@@ -163,7 +163,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     // フェーズイベントラベル
     const phase = getCurrentPhase(selectedMonth, day);
     let eventLabel = null;
-    if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
+    if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
+    else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
     else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
     else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
     else if (phase === SEASON_PHASES.CONTRACT) eventLabel = '契約更改';
@@ -188,6 +189,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
 
   // イベントラベルの色
   const getEventColor = (label) => {
+    if (label === 'シーズン終了') return 'text-red-400';
     if (label === 'プレーオフ') return 'text-yellow-400';
     if (label === '契約更改') return 'text-teal-400';
     if (label === 'トライアウト') return 'text-orange-400';

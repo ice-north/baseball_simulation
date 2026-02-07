@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI } from '../season/tryoutSystem.js';
+import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
   const [tryoutCandidates, setTryoutCandidates] = useState([]);
@@ -588,6 +589,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('defense')}>守備{getSortIndicator('defense')}</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('velocity')}>球速{getSortIndicator('velocity')}</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('control')}>制球{getSortIndicator('control')}</th>
+                    <th className="px-2 py-2 whitespace-nowrap">変化球</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('stamina')}>スタミナ{getSortIndicator('stamina')}</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野手総合{getSortIndicator('fielderOverall')}</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投手総合{getSortIndicator('pitcherOverall')}</th>
@@ -618,6 +620,13 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.fielding?.defense||0))}`}>{getAbilityRank(player.fielding?.defense||0)}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
+                        <td className="px-2 py-1.5 text-yellow-300 text-xs whitespace-nowrap max-w-[160px] truncate">
+                          {(() => {
+                            const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
+                            if (arsenal.length === 0) return '-';
+                            return arsenal.map(a => getPitchTypeName(a.type)).join('/');
+                          })()}
+                        </td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(fRank)}`}>{fRank}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(pRank)}`}>{pRank}</td>

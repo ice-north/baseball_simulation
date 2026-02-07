@@ -4037,17 +4037,19 @@ if (newOuts === 3) {
             // レギュレーション確定後、スケジュールを生成（2年目以降対応）
             const teams = Object.keys(TEAMS_DATA);
             const settings = seasonData.settings || {};
+            const calendarYear = 2024 + seasonData.year - 1; // 1年目=2024, 2年目=2025...
             const schedule = generateFullSeasonSchedule({
               teams,
               gamesPerSeason: settings.gamesPerSeason || 60,
-              startDate: { year: 2024 + seasonData.year, month: 3, day: 1 },
-              endDate: { year: 2024 + seasonData.year, month: 9, day: 30 },
+              startDate: { year: calendarYear, month: 3, day: 1 },
+              endDate: { year: calendarYear, month: 9, day: 30 },
               leagueFormat: settings.leagueFormat || 'single',
               leagueNames: settings.leagueNames
             });
-            console.log(`📅 ${seasonData.year}年目スケジュール生成: ${schedule.length}試合`);
+            console.log(`📅 ${seasonData.year}年目スケジュール生成: ${schedule.length}試合 (暦年${calendarYear})`);
             setSeasonData(prev => ({
               ...prev,
+              currentDate: { year: calendarYear, month: 1, day: 1 },
               schedule,
               standings: teams.map(t => ({
                 team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
@@ -4068,11 +4070,14 @@ if (newOuts === 3) {
                 generateAILineup(teamData, teamName);
               }
             });
-            setSeasonData(prev => ({
-              ...prev,
-              currentDate: { ...prev.currentDate, month: 4, day: 1 },
-              phase: SEASON_PHASES.REGULAR_SEASON
-            }));
+            setSeasonData(prev => {
+              const calYear = 2024 + prev.year - 1;
+              return {
+                ...prev,
+                currentDate: { year: calYear, month: 4, day: 1 },
+                phase: SEASON_PHASES.REGULAR_SEASON
+              };
+            });
             setSelectedMonth(4);
             setManagementView('dateprogress');
           }}

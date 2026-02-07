@@ -116,7 +116,7 @@ export const getCurrentPhase = (month, day) => {
 export const createSeasonData = (year = 1) => {
   return {
     year,                           // シーズン年数
-    currentDate: { year: 2024, month: 1, day: 1 },  // 現在の日付
+    currentDate: { year: 2024 + (year - 1), month: 1, day: 1 },  // 現在の日付（年数に連動）
     phase: SEASON_PHASES.SPRING_CAMP,  // 現在のフェーズ
     schedule: [],                   // 試合スケジュール
     results: [],                    // 試合結果
