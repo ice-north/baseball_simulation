@@ -231,6 +231,61 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     setUpdateTrigger(prev => prev + 1);
   };
 
+  // 投手起用法を設定（先発/リリーフの詳細ロール）
+  const handleSetPitcherRole = (playerId, newRole) => {
+    const rotation = team.pitchingRotation;
+    if (!rotation.pitcherRoles) rotation.pitcherRoles = {};
+
+    // 全既存配列から除外
+    rotation.starters = (rotation.starters || []).filter(id => id !== playerId);
+    rotation.middleRelievers = (rotation.middleRelievers || []).filter(id => id !== playerId);
+    rotation.setupMen = (rotation.setupMen || []).filter(id => id !== playerId);
+    if (rotation.closer === playerId) rotation.closer = null;
+
+    if (newRole === 'none') {
+      delete rotation.pitcherRoles[playerId];
+    } else {
+      rotation.pitcherRoles[playerId] = newRole;
+      // レガシー配列にも反映
+      if (['complete', 'short', 'quality'].includes(newRole)) {
+        rotation.starters.push(playerId);
+      } else if (['long', 'onepoint'].includes(newRole)) {
+        if (!rotation.middleRelievers) rotation.middleRelievers = [];
+        rotation.middleRelievers.push(playerId);
+      } else if (newRole === 'setup') {
+        if (!rotation.setupMen) rotation.setupMen = [];
+        rotation.setupMen.push(playerId);
+      } else if (newRole === 'closer') {
+        rotation.closer = playerId;
+      }
+    }
+    setUpdateTrigger(prev => prev + 1);
+  };
+
+  // 投手の現在のロールを取得
+  const getPitcherRole = (playerId) => {
+    const rotation = team.pitchingRotation;
+    if (rotation.pitcherRoles?.[playerId]) return rotation.pitcherRoles[playerId];
+    // レガシーデータからの逆引き
+    if (rotation.starters?.includes(playerId)) return 'quality';
+    if (rotation.middleRelievers?.includes(playerId)) return 'long';
+    if (rotation.setupMen?.includes(playerId)) return 'setup';
+    if (rotation.closer === playerId) return 'closer';
+    return 'none';
+  };
+
+  // ロールのラベルと色
+  const PITCHER_ROLES = {
+    none:     { label: '未設定', color: 'bg-gray-600', textColor: 'text-gray-400', group: 'none' },
+    complete: { label: '完投型', color: 'bg-blue-700', textColor: 'text-blue-300', group: 'starter' },
+    short:    { label: 'ショート', color: 'bg-blue-600', textColor: 'text-blue-300', group: 'starter' },
+    quality:  { label: '勝ち権利', color: 'bg-blue-500', textColor: 'text-blue-200', group: 'starter' },
+    long:     { label: 'ロング', color: 'bg-green-700', textColor: 'text-green-300', group: 'relief' },
+    onepoint: { label: 'ワンポイント', color: 'bg-green-600', textColor: 'text-green-300', group: 'relief' },
+    setup:    { label: 'セットアップ', color: 'bg-orange-600', textColor: 'text-orange-300', group: 'relief' },
+    closer:   { label: '守護神', color: 'bg-purple-600', textColor: 'text-purple-300', group: 'relief' },
+  };
+
   // 控え選手のソート用値を取得
   const getBenchSortValue = (player, key) => {
     switch (key) {
@@ -350,7 +405,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         <div className="bg-gray-800 rounded-lg p-2 mb-6 flex gap-2">
           {['lineup', 'rotation', 'defense'].map(t => (
             <button key={t} onClick={() => setTab(t)} className={`flex-1 px-4 py-2 rounded font-bold transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-              {t === 'lineup' ? 'スタメン設定' : t === 'rotation' ? '投手ローテーション' : '守備分析'}
+              {t === 'lineup' ? 'スタメン設定' : t === 'rotation' ? '投手起用' : '守備分析'}
             </button>
           ))}
         </div>
@@ -461,139 +516,143 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           </div>
         )}
 
-        {tab === 'rotation' && (
-          <div className="grid grid-cols-2 gap-6">
+        {tab === 'rotation' && (() => {
+          // 投手をロール別にグループ分け
+          const starterPitchers = pitchers.filter(p => ['complete', 'short', 'quality'].includes(getPitcherRole(p.id)));
+          const reliefPitchers = pitchers.filter(p => ['long', 'onepoint', 'setup', 'closer'].includes(getPitcherRole(p.id)));
+          const unassignedPitchers = pitchers.filter(p => getPitcherRole(p.id) === 'none');
+
+          const StatVal = ({ label, value, isVelocity }) => {
+            const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);
+            return <span className={`${getRankColor(rank)}`}>{label}{value}</span>;
+          };
+
+          // 投手行コンポーネント（2行表示）
+          const PitcherRow = ({ player, index }) => {
+            const role = getPitcherRole(player.id);
+            const roleInfo = PITCHER_ROLES[role];
+            const p = player.pitching || {};
+            const b = player.batting || {};
+            const ph = player.physical || {};
+            const f = player.fielding || {};
+
+            return (
+              <div className="bg-gray-700 rounded p-3">
+                {/* 1行目: 名前・基本情報 + 起用法ボタン */}
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {starterPitchers.includes(player) && (
+                      <span className="text-blue-400 font-bold text-sm w-5 shrink-0">#{index + 1}</span>
+                    )}
+                    <span className="text-white font-bold text-sm truncate">{player.name}</span>
+                    <span className="text-gray-400 text-xs shrink-0">{player.age}歳</span>
+                    <span className="text-gray-400 text-xs shrink-0">{getThrowsLabel(ph.throws)}{getBatsLabel(b.bats || ph.bats)}</span>
+                    <span className="text-gray-500 text-xs shrink-0">{getFormLabel(p.form)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    <span className={`${roleInfo.color} text-white px-2 py-0.5 rounded text-xs font-bold`}>{roleInfo.label}</span>
+                    <select
+                      value={role}
+                      onChange={(e) => handleSetPitcherRole(player.id, e.target.value)}
+                      className="bg-gray-600 text-white rounded px-1 py-0.5 text-xs cursor-pointer"
+                    >
+                      <optgroup label="先発">
+                        <option value="complete">完投型</option>
+                        <option value="short">ショートスターター</option>
+                        <option value="quality">勝ち権利</option>
+                      </optgroup>
+                      <optgroup label="リリーフ">
+                        <option value="long">ロングリリーフ</option>
+                        <option value="onepoint">ワンポイント</option>
+                        <option value="setup">セットアッパー</option>
+                        <option value="closer">守護神</option>
+                      </optgroup>
+                      <option value="none">未設定</option>
+                    </select>
+                  </div>
+                </div>
+                {/* 2行目: 全能力値 */}
+                <div className="flex items-center gap-1 text-xs flex-wrap">
+                  <span className="text-gray-500 mr-1">投:</span>
+                  <StatVal label="球速" value={p.velocity || 0} isVelocity />
+                  <StatVal label=" 制球" value={p.control || 0} />
+                  <StatVal label=" スタ" value={p.stamina || 0} />
+                  <span className="text-gray-600 mx-1">│</span>
+                  <span className="text-gray-500 mr-1">打:</span>
+                  <StatVal label="ミ" value={b.meet || 0} />
+                  <StatVal label=" パ" value={b.power || 0} />
+                  <StatVal label=" 走" value={ph.speed || 0} />
+                  <StatVal label=" 肩" value={ph.arm || 0} />
+                  <StatVal label=" 守" value={f.defense || 0} />
+                </div>
+              </div>
+            );
+          };
+
+          return (
             <div className="space-y-4">
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-bold text-white mb-4">先発ローテーション ({team.pitchingRotation.starters.length}人)</h2>
-                {team.pitchingRotation.starters.length === 0 ? (
-                  <p className="text-gray-400 text-sm">右側の投手一覧から選択してください</p>
+              {/* 先発投手 */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <h2 className="text-xl font-bold text-blue-400">先発投手</h2>
+                  <span className="text-gray-400 text-sm">({starterPitchers.length}人)</span>
+                  <div className="flex gap-2 ml-4 text-xs">
+                    <span className="bg-blue-700 text-white px-2 py-0.5 rounded">完投型</span>
+                    <span className="bg-blue-600 text-white px-2 py-0.5 rounded">ショート</span>
+                    <span className="bg-blue-500 text-white px-2 py-0.5 rounded">勝ち権利</span>
+                  </div>
+                </div>
+                {starterPitchers.length === 0 ? (
+                  <p className="text-gray-500 text-sm py-2">先発投手が設定されていません。下部の未設定投手から起用法を選択してください。</p>
                 ) : (
                   <div className="space-y-2">
-                    {team.pitchingRotation.starters.map((playerId, idx) => {
-                      const player = team.players.find(p => p.id === playerId);
-                      if (!player) return null;
-                      const velocityRank = getVelocityRank(player.pitching.velocity);
-                      const controlRank = getAbilityRank(player.pitching.control);
-                      const staminaRank = getAbilityRank(player.pitching.stamina / 2);
-                      return (
-                        <div key={player.id} className="bg-gray-700 rounded p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div>
-                              <div className="text-white font-bold flex items-center gap-2">
-                                第{idx + 1}先発: {player.name}
-                                <span className="text-xs text-gray-400">{getThrowsLabel(player.physical.throws)} | {getFormLabel(player.pitching.form)}</span>
-                              </div>
-                            </div>
-                            <button onClick={() => handleRemoveFromRotation(player.id, 'starter')} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">外す</button>
-                          </div>
-                          <div className="text-xs flex gap-2">
-                            <span className={getRankColor(velocityRank)}>球速 {velocityRank}{player.pitching.velocity}</span>
-                            <span className={getRankColor(controlRank)}>制球 {controlRank}{player.pitching.control}</span>
-                            <span className={getRankColor(staminaRank)}>スタミナ {staminaRank}{player.pitching.stamina}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {starterPitchers.map((player, idx) => (
+                      <PitcherRow key={player.id} player={player} index={idx} />
+                    ))}
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                {[{key:'middle',label:'中継ぎ',list:team.pitchingRotation.middleRelievers||[]},{key:'setup',label:'セットアップ',list:team.pitchingRotation.setupMen||[]}].map(({key,label,list}) => (
-                  <div key={key} className="bg-gray-800 rounded-lg p-4">
-                    <h2 className="text-lg font-bold text-white mb-3">{label} ({list.length}人)</h2>
-                    <div className="space-y-2">
-                      {list.map(playerId => {
-                        const player = team.players.find(p => p.id === playerId);
-                        if (!player) return null;
-                        return (
-                          <div key={player.id} className="bg-gray-700 rounded p-2">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <div className="text-white text-sm font-bold">{player.name}</div>
-                                <div className="text-xs text-gray-400">{getThrowsLabel(player.physical.throws)}</div>
-                              </div>
-                              <button onClick={() => handleRemoveFromRotation(player.id, key)} className="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-xs">外す</button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h2 className="text-lg font-bold text-white mb-3">守護神 ({team.pitchingRotation.closer ? 1 : 0}人)</h2>
-                  <div className="space-y-2">
-                    {team.pitchingRotation.closer && (() => {
-                      const player = team.players.find(p => p.id === team.pitchingRotation.closer);
-                      if (!player) return null;
-                      return (
-                        <div key={player.id} className="bg-gray-700 rounded p-2">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="text-white text-sm font-bold">{player.name}</div>
-                              <div className="text-xs text-gray-400">{getThrowsLabel(player.physical.throws)}</div>
-                            </div>
-                            <button onClick={() => handleRemoveFromRotation(player.id, 'closer')} className="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-xs">外す</button>
-                          </div>
-                        </div>
-                      );
-                    })()}
+              {/* リリーフ投手 */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <h2 className="text-xl font-bold text-green-400">リリーフ投手</h2>
+                  <span className="text-gray-400 text-sm">({reliefPitchers.length}人)</span>
+                  <div className="flex gap-2 ml-4 text-xs">
+                    <span className="bg-green-700 text-white px-2 py-0.5 rounded">ロング</span>
+                    <span className="bg-green-600 text-white px-2 py-0.5 rounded">ワンポイント</span>
+                    <span className="bg-orange-600 text-white px-2 py-0.5 rounded">セットアップ</span>
+                    <span className="bg-purple-600 text-white px-2 py-0.5 rounded">守護神</span>
                   </div>
                 </div>
+                {reliefPitchers.length === 0 ? (
+                  <p className="text-gray-500 text-sm py-2">リリーフ投手が設定されていません。</p>
+                ) : (
+                  <div className="space-y-2">
+                    {reliefPitchers.map((player, idx) => (
+                      <PitcherRow key={player.id} player={player} index={idx} />
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
 
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-white mb-4">投手一覧（クリックでローテーションに追加）</h2>
-              <div className="space-y-2 max-h-[700px] overflow-y-auto">
-                {pitchers.map(player => {
-                  const rotation = team.pitchingRotation || {};
-                  const isStarter = rotation.starters?.includes(player.id) || false;
-                  const isMiddle = rotation.middleRelievers?.includes(player.id) || false;
-                  const isSetup = rotation.setupMen?.includes(player.id) || false;
-                  const isCloser = rotation.closer === player.id;
-                  const velocityRank = getVelocityRank(player.pitching.velocity);
-                  const controlRank = getAbilityRank(player.pitching.control);
-                  const staminaRank = getAbilityRank(player.pitching.stamina / 2);
-                  return (
-                    <div key={player.id} className="bg-gray-700 rounded p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <div className="text-white font-bold">
-                            {player.name}
-                            <span className="text-xs text-gray-400 ml-2">{getThrowsLabel(player.physical.throws)} | {getFormLabel(player.pitching.form)}</span>
-                          </div>
-                          <div className="text-xs space-y-1 mt-1">
-                            <div className="flex gap-3">
-                              <span className={getRankColor(velocityRank)}>球速 {velocityRank}{player.pitching.velocity}</span>
-                              <span className={getRankColor(controlRank)}>制球 {controlRank}{player.pitching.control}</span>
-                              <span className={getRankColor(staminaRank)}>スタミナ {staminaRank}{player.pitching.stamina}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {isStarter && <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs">先発</span>}
-                          {isMiddle && <span className="bg-green-600 text-white px-2 py-1 rounded text-xs">中継ぎ</span>}
-                          {isSetup && <span className="bg-orange-600 text-white px-2 py-1 rounded text-xs">セットアップ</span>}
-                          {isCloser && <span className="bg-purple-600 text-white px-2 py-1 rounded text-xs">守護神</span>}
-                        </div>
-                      </div>
-                      <div className="flex gap-2 flex-wrap">
-                        {[{role:'starter',label:'先発',disabled:isStarter,color:'blue'},{role:'middle',label:'中継ぎ',disabled:isMiddle,color:'green'},{role:'setup',label:'セットアップ',disabled:isSetup,color:'orange'},{role:'closer',label:'守護神',disabled:isCloser,color:'purple'}].map(({role,label,disabled,color}) => (
-                          <button key={role} onClick={() => handleAddToRotation(player.id, role)} disabled={disabled} className={`px-3 py-1 rounded text-sm transition ${disabled ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : `bg-${color}-600 hover:bg-${color}-700 text-white`}`}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* 未設定投手 */}
+              {unassignedPitchers.length > 0 && (
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <h2 className="text-xl font-bold text-gray-400">未設定</h2>
+                    <span className="text-gray-500 text-sm">({unassignedPitchers.length}人)</span>
+                  </div>
+                  <div className="space-y-2">
+                    {unassignedPitchers.map((player, idx) => (
+                      <PitcherRow key={player.id} player={player} index={idx} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {tab === 'defense' && (() => {
           // スタメン選手のポジション別配置を取得
