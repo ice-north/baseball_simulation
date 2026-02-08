@@ -352,14 +352,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     return team.players.find(p => p.position === 'catcher') || team.players[0];
   };
 
-  // 守備データを構築
+  // 守備データを構築（守備位置適正を反映: 適正100→100%、適正0→50%）
   const buildDefense = (team) => {
     const defense = {};
     team.players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9).forEach(player => {
+      const fitness = player.positionFitness?.[player.position] ?? 50;
+      const fitnessMult = 0.5 + (fitness / 100) * 0.5;
       defense[player.position] = {
-        defense: player.fielding?.defense || 50,
-        speed: player.physical?.speed || 50,
-        arm: player.physical?.arm || 50,
+        defense: Math.round((player.fielding?.defense || 50) * fitnessMult),
+        speed: Math.round((player.physical?.speed || 50) * fitnessMult),
+        arm: Math.round((player.physical?.arm || 50) * fitnessMult),
         throws: player.physical?.throws || 'right'
       };
     });

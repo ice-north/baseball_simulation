@@ -8,6 +8,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [selectedBattingOrder, setSelectedBattingOrder] = useState(null);
   const [benchSortKey, setBenchSortKey] = useState(null);
   const [benchSortAsc, setBenchSortAsc] = useState(false);
+  const [selectedDefensePos, setSelectedDefensePos] = useState(null);
 
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
@@ -657,9 +658,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         {tab === 'defense' && (() => {
           // スタメン選手のポジション別配置を取得
           const positionPlayers = {};
+          const positionEntries = {};
           lineup.forEach(entry => {
             const player = team.players.find(p => p.id === entry.playerId);
-            if (player) positionPlayers[entry.position] = player;
+            if (player) {
+              positionPlayers[entry.position] = player;
+              positionEntries[entry.position] = entry;
+            }
           });
 
           // ダイヤモンド上の各ポジション座標（SVG 500x420）
@@ -675,67 +680,136 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             right:    { x: 420, y: 90 },
           };
 
-          // 守備範囲の計算（守備力+走力ベース）
+          // 守備位置適正の取得（0-100）
+          const getFitness = (player, pos) => {
+            if (!player) return 0;
+            return player.positionFitness?.[pos] ?? 50;
+          };
+
+          // 適正による能力補正倍率（適正100→100%、適正0→50%）
+          const getFitnessMult = (player, pos) => {
+            const fitness = getFitness(player, pos);
+            return 0.5 + (fitness / 100) * 0.5;
+          };
+
+          // 守備範囲の計算（守備力+走力ベース × 適正補正）
           const getDefenseRange = (player, pos) => {
             if (!player) return 0;
             const def = player.fielding?.defense || 50;
             const spd = player.physical?.speed || 50;
             const arm = player.physical?.arm || 50;
+            const mult = getFitnessMult(player, pos);
+            let raw;
             if (['left', 'center', 'right'].includes(pos)) {
-              return (def * 0.3 + spd * 0.5 + arm * 0.2) / 100;
+              raw = (def * 0.3 + spd * 0.5 + arm * 0.2) / 100;
             } else if (['second', 'short'].includes(pos)) {
-              return (def * 0.4 + spd * 0.3 + arm * 0.3) / 100;
+              raw = (def * 0.4 + spd * 0.3 + arm * 0.3) / 100;
             } else if (pos === 'catcher') {
-              return (def * 0.5 + arm * 0.5) / 100;
+              raw = (def * 0.5 + arm * 0.5) / 100;
             } else {
-              return (def * 0.5 + spd * 0.25 + arm * 0.25) / 100;
+              raw = (def * 0.5 + spd * 0.25 + arm * 0.25) / 100;
             }
+            return raw * mult;
           };
 
           const posLabels = {
             pitcher: '投', catcher: '捕', first: '一', second: '二',
             short: '遊', third: '三', left: '左', center: '中', right: '右'
           };
+          const posFullLabels = {
+            pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁',
+            short: '遊撃', third: '三塁', left: '左翼', center: '中堅', right: '右翼'
+          };
 
           const getRangeColor = (range) => {
-            if (range >= 0.75) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' }; // S
-            if (range >= 0.65) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' }; // A
-            if (range >= 0.55) return { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24' };  // B
-            if (range >= 0.45) return { fill: 'rgba(74,222,128,0.12)', stroke: '#4ade80' };  // C
-            return { fill: 'rgba(96,165,250,0.10)', stroke: '#60a5fa' };                      // D
+            if (range >= 0.75) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' };
+            if (range >= 0.65) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' };
+            if (range >= 0.55) return { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24' };
+            if (range >= 0.45) return { fill: 'rgba(74,222,128,0.12)', stroke: '#4ade80' };
+            return { fill: 'rgba(96,165,250,0.10)', stroke: '#60a5fa' };
           };
+
+          const getFitnessColor = (fitness) => {
+            if (fitness >= 90) return '#ec4899';
+            if (fitness >= 70) return '#f87171';
+            if (fitness >= 50) return '#fbbf24';
+            if (fitness >= 30) return '#4ade80';
+            return '#60a5fa';
+          };
+
+          const getRangeGrade = (range) => {
+            if (range >= 0.75) return { label: 'S', color: 'text-pink-400' };
+            if (range >= 0.65) return { label: 'A', color: 'text-red-400' };
+            if (range >= 0.55) return { label: 'B', color: 'text-orange-400' };
+            if (range >= 0.45) return { label: 'C', color: 'text-yellow-400' };
+            if (range >= 0.35) return { label: 'D', color: 'text-green-400' };
+            return { label: 'E', color: 'text-blue-400' };
+          };
+
+          // 守備位置クリック → 選択 or スワップ
+          const handleDefenseClick = (pos) => {
+            if (pos === 'pitcher') return; // 投手は変更不可
+            if (!selectedDefensePos) {
+              setSelectedDefensePos(pos);
+            } else if (selectedDefensePos === pos) {
+              setSelectedDefensePos(null);
+            } else {
+              // 2つの位置をスワップ
+              const entry1 = lineup.find(e => e.position === selectedDefensePos && e.battingOrder >= 1 && e.battingOrder <= 8);
+              const entry2 = lineup.find(e => e.position === pos && e.battingOrder >= 1 && e.battingOrder <= 8);
+              if (entry1 && entry2) {
+                entry1.position = pos;
+                entry2.position = selectedDefensePos;
+              } else if (entry1 && !entry2) {
+                entry1.position = pos;
+              } else if (!entry1 && entry2) {
+                entry2.position = selectedDefensePos;
+              }
+              setSelectedDefensePos(null);
+              setUpdateTrigger(prev => prev + 1);
+            }
+          };
+
+          // 野手ポジションのみ（投手除く）
+          const fieldPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
+
+          // 選択中ポジションの候補者一覧
+          const selectedPosSwapCandidates = selectedDefensePos ? lineup
+            .filter(e => e.battingOrder >= 1 && e.battingOrder <= 8 && e.position !== selectedDefensePos)
+            .map(e => {
+              const player = team.players.find(p => p.id === e.playerId);
+              return player ? { player, entry: e } : null;
+            })
+            .filter(Boolean) : [];
 
           return (
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-gray-800 rounded-lg p-4 col-span-2">
-                <h2 className="text-xl font-bold text-white mb-4">守備分析 - ポジション配置</h2>
-                <svg viewBox="0 0 500 420" className="w-full max-w-2xl mx-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-white">守備分析 - ポジション配置</h2>
+                  {selectedDefensePos && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-400 text-sm font-bold">{posFullLabels[selectedDefensePos]}を選択中</span>
+                      <span className="text-gray-400 text-xs">→ 交換先をクリック</span>
+                      <button onClick={() => setSelectedDefensePos(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-2 py-0.5 rounded text-xs">解除</button>
+                    </div>
+                  )}
+                </div>
+                <svg viewBox="0 0 500 440" className="w-full max-w-2xl mx-auto">
                   {/* グラウンド背景 */}
-                  <rect x="0" y="0" width="500" height="420" fill="#1a472a" rx="12" />
+                  <rect x="0" y="0" width="500" height="440" fill="#1a472a" rx="12" />
+                  <ellipse cx="250" cy="210" rx="230" ry="190" fill="#1f5c33" />
+                  <polygon points="250,145 370,260 250,375 130,260" fill="none" stroke="#c4a35a" strokeWidth="2" strokeDasharray="8,4" opacity="0.5" />
+                  <polygon points="250,190 340,260 250,330 160,260" fill="#8B6914" opacity="0.35" />
+                  <line x1="250" y1="370" x2="130" y2="255" stroke="#fff" strokeWidth="1.5" opacity="0.4" />
+                  <line x1="250" y1="370" x2="370" y2="255" stroke="#fff" strokeWidth="1.5" opacity="0.4" />
+                  <rect x="244" y="364" width="12" height="12" fill="#fff" transform="rotate(45,250,370)" />
+                  <rect x="364" y="254" width="10" height="10" fill="#fff" transform="rotate(45,369,259)" />
+                  <rect x="245" y="179" width="10" height="10" fill="#fff" transform="rotate(45,250,184)" />
+                  <rect x="125" y="254" width="10" height="10" fill="#fff" transform="rotate(45,130,259)" />
+                  <circle cx="250" cy="275" r="10" fill="#8B6914" opacity="0.5" />
 
-                  {/* 外野芝 */}
-                  <ellipse cx="250" cy="200" rx="230" ry="190" fill="#1f5c33" />
-
-                  {/* 内野ダイヤモンド */}
-                  <polygon points="250,135 370,250 250,365 130,250" fill="none" stroke="#c4a35a" strokeWidth="2" strokeDasharray="8,4" opacity="0.5" />
-
-                  {/* 内野土 */}
-                  <polygon points="250,180 340,250 250,320 160,250" fill="#8B6914" opacity="0.35" />
-
-                  {/* ベースライン */}
-                  <line x1="250" y1="360" x2="130" y2="245" stroke="#fff" strokeWidth="1.5" opacity="0.4" />
-                  <line x1="250" y1="360" x2="370" y2="245" stroke="#fff" strokeWidth="1.5" opacity="0.4" />
-
-                  {/* ベース */}
-                  <rect x="244" y="354" width="12" height="12" fill="#fff" transform="rotate(45,250,360)" />
-                  <rect x="364" y="244" width="10" height="10" fill="#fff" transform="rotate(45,369,249)" />
-                  <rect x="245" y="169" width="10" height="10" fill="#fff" transform="rotate(45,250,174)" />
-                  <rect x="125" y="244" width="10" height="10" fill="#fff" transform="rotate(45,130,249)" />
-
-                  {/* マウンド */}
-                  <circle cx="250" cy="265" r="10" fill="#8B6914" opacity="0.5" />
-
-                  {/* 守備範囲の円（全ポジション） */}
+                  {/* 守備範囲の円 */}
                   {Object.entries(posCoords).map(([pos, coord]) => {
                     const player = positionPlayers[pos];
                     const range = getDefenseRange(player, pos);
@@ -744,31 +818,41 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     const radius = baseRadius * (0.5 + range * 0.8);
                     const colors = getRangeColor(range);
                     return (
-                      <circle
-                        key={`range-${pos}`}
-                        cx={coord.x} cy={coord.y}
-                        r={player ? radius : 0}
-                        fill={colors.fill}
-                        stroke={colors.stroke}
-                        strokeWidth="1.5"
-                        strokeDasharray="4,3"
-                      />
+                      <circle key={`range-${pos}`} cx={coord.x} cy={coord.y}
+                        r={player ? radius : 0} fill={colors.fill} stroke={colors.stroke}
+                        strokeWidth="1.5" strokeDasharray="4,3" />
                     );
                   })}
 
-                  {/* 選手マーカーとラベル */}
+                  {/* 選手マーカー（クリック可能） */}
                   {Object.entries(posCoords).map(([pos, coord]) => {
                     const player = positionPlayers[pos];
+                    const isSelected = selectedDefensePos === pos;
+                    const fitness = player ? getFitness(player, pos) : 0;
+                    const fitnessColor = getFitnessColor(fitness);
+                    const isPitcherPos = pos === 'pitcher';
+
                     return (
-                      <g key={pos}>
-                        <circle cx={coord.x} cy={coord.y} r="16" fill={player ? '#1e40af' : '#374151'} stroke={player ? '#60a5fa' : '#6b7280'} strokeWidth="2" />
+                      <g key={pos} onClick={() => !isPitcherPos && handleDefenseClick(pos)}
+                         style={{ cursor: isPitcherPos ? 'default' : 'pointer' }}>
+                        {/* 選択リング */}
+                        {isSelected && (
+                          <circle cx={coord.x} cy={coord.y} r="22" fill="none" stroke="#facc15" strokeWidth="3" strokeDasharray="6,3">
+                            <animate attributeName="stroke-dashoffset" from="0" to="18" dur="1s" repeatCount="indefinite" />
+                          </circle>
+                        )}
+                        {/* マーカー */}
+                        <circle cx={coord.x} cy={coord.y} r="16"
+                          fill={isSelected ? '#854d0e' : player ? '#1e40af' : '#374151'}
+                          stroke={isSelected ? '#facc15' : player ? '#60a5fa' : '#6b7280'} strokeWidth="2" />
                         <text x={coord.x} y={coord.y + 1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="11" fontWeight="bold">{posLabels[pos]}</text>
                         {player && (
                           <>
                             <text x={coord.x} y={coord.y - 24} textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">{player.name}</text>
-                            <text x={coord.x} y={coord.y + 30} textAnchor="middle" fill="#9ca3af" fontSize="9">
-                              守{player.fielding?.defense || 0} 走{player.physical?.speed || 0} 肩{player.physical?.arm || 0}
-                            </text>
+                            {/* 適正バー */}
+                            <rect x={coord.x - 18} y={coord.y + 24} width="36" height="4" rx="2" fill="#374151" />
+                            <rect x={coord.x - 18} y={coord.y + 24} width={36 * fitness / 100} height="4" rx="2" fill={fitnessColor} />
+                            <text x={coord.x} y={coord.y + 38} textAnchor="middle" fill={fitnessColor} fontSize="8" fontWeight="bold">適正{fitness}%</text>
                           </>
                         )}
                         {!player && (
@@ -778,49 +862,88 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     );
                   })}
                 </svg>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  ポジションをクリックして選択 → 交換先をクリックで守備位置を入れ替え（投手は変更不可）
+                </p>
               </div>
 
-              {/* 右側: 守備力サマリー */}
+              {/* 右側: 守備力サマリー + 適正 */}
               <div className="bg-gray-800 rounded-lg p-4 col-span-1">
-                <h2 className="text-lg font-bold text-white mb-4">守備力サマリー</h2>
-                <div className="space-y-2">
+                <h2 className="text-lg font-bold text-white mb-3">守備力サマリー</h2>
+                <div className="space-y-1.5">
                   {Object.entries(posCoords).map(([pos]) => {
                     const player = positionPlayers[pos];
                     const range = getDefenseRange(player, pos);
-                    const rangeLabel = range >= 0.75 ? 'S' : range >= 0.65 ? 'A' : range >= 0.55 ? 'B' : range >= 0.45 ? 'C' : range >= 0.35 ? 'D' : 'E';
-                    const rangeLabelColor = range >= 0.75 ? 'text-pink-400' : range >= 0.65 ? 'text-red-400' : range >= 0.55 ? 'text-orange-400' : range >= 0.45 ? 'text-yellow-400' : range >= 0.35 ? 'text-green-400' : 'text-blue-400';
+                    const grade = getRangeGrade(range);
+                    const fitness = player ? getFitness(player, pos) : 0;
+                    const fitColor = fitness >= 80 ? 'text-pink-400' : fitness >= 60 ? 'text-red-400' : fitness >= 40 ? 'text-yellow-400' : fitness >= 20 ? 'text-green-400' : 'text-blue-400';
+                    const isSelected = selectedDefensePos === pos;
+                    const isPitcherPos = pos === 'pitcher';
+
                     return (
-                      <div key={pos} className="bg-gray-700 rounded p-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-blue-400 font-bold w-6 text-center">{posLabels[pos]}</span>
-                          <span className="text-white text-sm">{player?.name || '-'}</span>
-                        </div>
-                        {player ? (
-                          <div className="flex items-center gap-3 text-xs">
-                            <span className="text-gray-400">守<span className={getRankColor(getAbilityRank(player.fielding?.defense || 0))}>{player.fielding?.defense || 0}</span></span>
-                            <span className="text-gray-400">走<span className={getRankColor(getAbilityRank(player.physical?.speed || 0))}>{player.physical?.speed || 0}</span></span>
-                            <span className="text-gray-400">肩<span className={getRankColor(getAbilityRank(player.physical?.arm || 0))}>{player.physical?.arm || 0}</span></span>
-                            <span className={`font-bold ${rangeLabelColor}`}>{rangeLabel}</span>
+                      <div key={pos}
+                        onClick={() => !isPitcherPos && handleDefenseClick(pos)}
+                        className={`rounded p-2 transition cursor-pointer ${isSelected ? 'bg-yellow-900 ring-1 ring-yellow-400' : 'bg-gray-700 hover:bg-gray-600'} ${isPitcherPos ? 'cursor-default opacity-60' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-400 font-bold w-6 text-center text-sm">{posLabels[pos]}</span>
+                            <span className="text-white text-sm font-bold">{player?.name || '-'}</span>
                           </div>
-                        ) : (
-                          <span className="text-gray-500 text-xs">-</span>
+                          {player && <span className={`font-bold text-lg ${grade.color}`}>{grade.label}</span>}
+                        </div>
+                        {player && (
+                          <div className="flex items-center justify-between mt-1">
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-gray-400">守<span className={getRankColor(getAbilityRank(player.fielding?.defense || 0))}>{player.fielding?.defense || 0}</span></span>
+                              <span className="text-gray-400">走<span className={getRankColor(getAbilityRank(player.physical?.speed || 0))}>{player.physical?.speed || 0}</span></span>
+                              <span className="text-gray-400">肩<span className={getRankColor(getAbilityRank(player.physical?.arm || 0))}>{player.physical?.arm || 0}</span></span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-12 h-2 bg-gray-600 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${fitness}%`, backgroundColor: getFitnessColor(fitness) }} />
+                              </div>
+                              <span className={`text-xs font-bold ${fitColor}`}>{fitness}%</span>
+                            </div>
+                          </div>
                         )}
                       </div>
                     );
                   })}
                 </div>
 
+                {/* 選択中ポジションの交換候補 */}
+                {selectedDefensePos && selectedPosSwapCandidates.length > 0 && (
+                  <div className="mt-3 bg-gray-900 rounded p-3">
+                    <div className="text-yellow-400 text-xs font-bold mb-2">{posFullLabels[selectedDefensePos]}と交換:</div>
+                    <div className="space-y-1">
+                      {selectedPosSwapCandidates.map(({ player, entry }) => {
+                        const targetFitness = getFitness(player, selectedDefensePos);
+                        const currentFitness = getFitness(player, entry.position);
+                        const diff = targetFitness - currentFitness;
+                        return (
+                          <div key={player.id} onClick={() => handleDefenseClick(entry.position)}
+                            className="bg-gray-700 hover:bg-gray-600 rounded px-2 py-1 cursor-pointer flex items-center justify-between text-xs">
+                            <span className="text-white">{posLabels[entry.position]} {player.name}</span>
+                            <span className={diff >= 0 ? 'text-green-400' : 'text-red-400'}>
+                              適正{targetFitness}% ({diff >= 0 ? '+' : ''}{diff})
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* チーム守備総合評価 */}
                 {(() => {
                   const allRanges = Object.keys(posCoords).map(pos => getDefenseRange(positionPlayers[pos], pos)).filter(r => r > 0);
                   const avgRange = allRanges.length > 0 ? allRanges.reduce((a, b) => a + b, 0) / allRanges.length : 0;
-                  const teamGrade = avgRange >= 0.75 ? 'S' : avgRange >= 0.65 ? 'A' : avgRange >= 0.55 ? 'B' : avgRange >= 0.45 ? 'C' : avgRange >= 0.35 ? 'D' : 'E';
-                  const teamColor = avgRange >= 0.75 ? 'text-pink-400' : avgRange >= 0.65 ? 'text-red-400' : avgRange >= 0.55 ? 'text-orange-400' : avgRange >= 0.45 ? 'text-yellow-400' : avgRange >= 0.35 ? 'text-green-400' : 'text-blue-400';
+                  const teamGrade = getRangeGrade(avgRange);
                   return (
-                    <div className="mt-4 bg-gray-900 rounded p-3 text-center">
+                    <div className="mt-3 bg-gray-900 rounded p-3 text-center">
                       <div className="text-gray-400 text-sm mb-1">チーム守備総合</div>
-                      <div className={`text-3xl font-bold ${teamColor}`}>{teamGrade}</div>
-                      <div className="text-gray-500 text-xs mt-1">平均守備力: {Math.round(avgRange * 100)}</div>
+                      <div className={`text-3xl font-bold ${teamGrade.color}`}>{teamGrade.label}</div>
+                      <div className="text-gray-500 text-xs mt-1">平均実効守備力: {Math.round(avgRange * 100)}</div>
                     </div>
                   );
                 })()}

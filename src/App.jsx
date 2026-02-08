@@ -1706,14 +1706,16 @@ import DraftResultScreen from './components/DraftResultScreen.jsx';
           throws: currentCatcher.physical.throws
         };
         
-        // 守備データ（守備チームの選手データから構築）
+        // 守備データ（守備チームの選手データから構築、守備位置適正を反映）
         const defenseTeam = getDefenseTeam();
         const defense = {};
         defenseTeam.players.forEach(player => {
+          const fitness = player.positionFitness?.[player.position] ?? 50;
+          const fitMult = 0.5 + (fitness / 100) * 0.5;
           defense[player.position] = {
-            defense: player.fielding.defense,
-            speed: player.physical.speed,
-            arm: player.physical.arm,
+            defense: Math.round(player.fielding.defense * fitMult),
+            speed: Math.round(player.physical.speed * fitMult),
+            arm: Math.round(player.physical.arm * fitMult),
             throws: player.physical.throws
           };
         });
@@ -1815,13 +1817,15 @@ import DraftResultScreen from './components/DraftResultScreen.jsx';
           throws: currentCatcher.physical.throws
         };
         
-        // 守備データ
+        // 守備データ（守備位置適正を反映）
         const defense = {};
         defenseTeam.players.forEach(player => {
+          const fitness = player.positionFitness?.[player.position] ?? 50;
+          const fitMult = 0.5 + (fitness / 100) * 0.5;
           defense[player.position] = {
-            defense: player.fielding.defense,
-            speed: player.physical.speed,
-            arm: player.physical.arm,
+            defense: Math.round(player.fielding.defense * fitMult),
+            speed: Math.round(player.physical.speed * fitMult),
+            arm: Math.round(player.physical.arm * fitMult),
             throws: player.physical.throws
           };
         });
