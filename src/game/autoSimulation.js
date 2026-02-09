@@ -157,6 +157,30 @@ export const generateAILineup = (teamData, teamName) => {
   console.log(`    スタメン: ${battingOrder.map(e => `${e.battingOrder}番${e.position}:${e.player.name}`).join(', ')}`);
 };
 
+// ユーザーチームに推奨スタメンを設定
+export const setRecommendedLineup = (teamData, teamName) => {
+  // AI同様の最適配置を作成し、lineupSettingsに保存
+  const players = teamData.players || [];
+  if (players.length === 0) return;
+
+  // 一旦AIロジックでスタメンを組む
+  generateAILineup(teamData, teamName);
+
+  // 結果をlineupSettingsに保存
+  if (!teamData.lineupSettings) {
+    teamData.lineupSettings = { battingOrder: [], benchPlayers: [], substitutionRules: { pinchHitter: [], pinchRunner: [] } };
+  }
+
+  const starters = players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9);
+  teamData.lineupSettings.battingOrder = starters.map(p => ({
+    playerId: p.id,
+    battingOrder: p.battingOrder,
+    position: p.position
+  }));
+
+  console.log(`  📋 ${teamName}: 推奨スタメンを設定 (${starters.length}人)`);
+};
+
 // 全チームの投手疲労を回復（日次処理）
 export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
   Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
@@ -355,11 +379,18 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   // 守備データを構築（守備位置適正を反映: 適正100→100%、適正0→50%）
   const buildDefense = (team) => {
     const defense = {};
+    const defStrat = team.strategy?.defense || 'normal';
+    // 守備方針: 前進守備は内野守備+10/外野守備-5, シフトは全体+5
+    const infieldBonus = defStrat === 'infield_in' ? 10 : defStrat === 'shift' ? 5 : 0;
+    const outfieldBonus = defStrat === 'infield_in' ? -5 : defStrat === 'shift' ? 5 : 0;
+    const infieldPositions = ['first', 'second', 'short', 'third', 'catcher', 'pitcher'];
+
     team.players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9).forEach(player => {
       const fitness = player.positionFitness?.[player.position] ?? 50;
       const fitnessMult = 0.5 + (fitness / 100) * 0.5;
+      const posBonus = infieldPositions.includes(player.position) ? infieldBonus : outfieldBonus;
       defense[player.position] = {
-        defense: Math.round((player.fielding?.defense || 50) * fitnessMult),
+        defense: Math.round((player.fielding?.defense || 50) * fitnessMult) + posBonus,
         speed: Math.round((player.physical?.speed || 50) * fitnessMult),
         arm: Math.round((player.physical?.arm || 50) * fitnessMult),
         throws: player.physical?.throws || 'right'
@@ -369,11 +400,19 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   };
 
   // 一球シミュレーション（自己完結型）
-  const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, lastPitch) => {
+  const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, lastPitch, offenseStrategy, defenseStrategy) => {
+    const battingStrat = offenseStrategy?.batting || 'balanced';
+    const pitchingStrat = defenseStrategy?.pitching || 'balanced';
+
+    // 打撃方針の効果
+    const stratMeetMod = battingStrat === 'patient' ? 3 : battingStrat === 'aggressive' ? -5 : 0;
+    const stratPowerMod = battingStrat === 'aggressive' ? 8 : battingStrat === 'patient' ? -5 : 0;
+    const stratEyeMod = battingStrat === 'patient' ? 10 : battingStrat === 'aggressive' ? -5 : 0;
+
     const batter = {
-      meet: batterPlayer.batting?.meet || 50,
-      power: batterPlayer.batting?.power || 50,
-      eye: batterPlayer.batting?.eye || 50,
+      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod,
+      power: (batterPlayer.batting?.power || 50) + stratPowerMod,
+      eye: (batterPlayer.batting?.eye || 50) + stratEyeMod,
       speed: batterPlayer.physical?.speed || 50,
       bats: batterPlayer.batting?.bats || 'right'
     };
@@ -393,30 +432,60 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const sameHand = pitcher.throws === batter.bats;
     const handBonus = sameHand ? -5 : 5;
 
+    // 投球する球種を選択（投手のarsenalから）
+    const arsenal = pitcherPlayer.pitching?.arsenal || [{ type: 'straight', level: 50 }];
+    const breakingBalls = arsenal.filter(a => a.type !== 'straight');
+    let selectedPitch;
+    // 投球方針による変化球選択率調整
+    const breakingBallBonus = pitchingStrat === 'strikeout' ? 0.12 : pitchingStrat === 'contact' ? -0.08 : 0;
+    if (breakingBalls.length > 0 && Math.random() < 0.35 + breakingBalls.length * 0.06 + breakingBallBonus) {
+      selectedPitch = breakingBalls[Math.floor(Math.random() * breakingBalls.length)];
+    } else {
+      selectedPitch = arsenal.find(a => a.type === 'straight') || { type: 'straight', level: 50 };
+    }
+
+    // 変化球の球速減速（緩急効果）
+    let pitchVelocityFinal = effectiveVelocity;
+    if (selectedPitch.type !== 'straight') {
+      const speedReduction = 8 + (selectedPitch.level / 100) * 15;
+      pitchVelocityFinal = effectiveVelocity - speedReduction;
+    }
+
+    // 緩急ペナルティ: 前球と球種が違うと打者のタイミングが狂う
+    let speedDiffPenalty = 0;
+    if (lastPitch && selectedPitch.type !== lastPitch.type) {
+      const veloDiff = Math.abs(effectiveVelocity - pitchVelocityFinal);
+      speedDiffPenalty = veloDiff * 0.15;
+    }
+
     // 投球結果を決定
     const rand = Math.random() * 100;
 
-    // ストライク/ボールの判定
-    // 四球を増やすためストライク率を下げる（制球の影響も調整）
-    // 制球65で約52%、制球52で約48%がストライクゾーン
-    const strikeChance = 35 + effectiveControl * 0.25;
+    // 投球方針の効果
+    const pitchStrikeBonus = pitchingStrat === 'contact' ? 5 : pitchingStrat === 'strikeout' ? -3 : 0;
 
-    if (rand < strikeChance) {
+    // ストライク/ボールの判定（変化球は制球が落ちる）
+    const strikeChance = 35 + effectiveControl * 0.25 + pitchStrikeBonus;
+    const breakingControlPenalty = selectedPitch.type !== 'straight' ? (100 - (selectedPitch.level || 50)) * 0.05 : 0;
+    const adjustedStrikeChance = strikeChance - breakingControlPenalty;
+
+    if (rand < adjustedStrikeChance) {
       // ストライクゾーン
       const swingRand = Math.random() * 100;
-      const swingChance = 60 + (2 - count.strikes) * 10; // ストライク追い込まれるとスイングしやすい
+      const swingChance = 60 + (2 - count.strikes) * 10;
 
       if (swingRand < swingChance) {
-        // スイング
+        // スイング - 変化球のコンタクトペナルティ
         const contactRand = Math.random() * 100;
-        const contactChance = 40 + batter.meet * 0.4 + handBonus;
+        const breakingPenalty = selectedPitch.type !== 'straight' ? (selectedPitch.level || 50) * 0.12 : 0;
+        const contactChance = 40 + batter.meet * 0.4 + handBonus - breakingPenalty - speedDiffPenalty;
 
         if (contactRand < contactChance) {
           // コンタクト成功 - 物理エンジンで打球・守備を判定
           const pitchData = {
-            type: 'straight',
-            velocity: effectiveVelocity,
-            level: 50
+            type: selectedPitch.type,
+            velocity: pitchVelocityFinal,
+            level: selectedPitch.level || 50
           };
           const handEffect = {
             powerBonus: sameHand ? -3 : 3,
@@ -428,7 +497,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           const physicsResult = calculatePhysicsContact(
             { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter' },
             batter,
-            Math.random() < 0.3, // 球種予測的中率30%
+            Math.random() < (selectedPitch.type === 'straight' ? 0.3 : 0.2),
             pitchData,
             tunnelingEffect,
             handEffect
@@ -441,13 +510,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           // 打球物理パラメータ計算
           const battedBall = calculateBattedBallPhysics(batter, pitcher, pitchData, physicsResult);
 
-          // 守備判定（ポジション別の守備力を使用）
+          // 守備判定
           const fieldResult = judgeFielderReach(battedBall, defense, batter);
 
           if (fieldResult.result === 'homerun') {
             return { type: 'homerun' };
           } else if (fieldResult.result === 'out') {
-            // ゲッツー判定（内野ゴロでランナー1塁）
             if (bases[0] && battedBall.launchAngle < 10 && battedBall.distance < 40) {
               const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
               const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
@@ -479,19 +547,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     } else {
       // ボールゾーン
       const swingRand = Math.random() * 100;
-      // 選球眼が高いほどボール球を振らない（四球率を抑制調整）
-      const chaseChance = 15 + (3 - batter.eye * 0.10) + count.strikes * 5;
+      // 変化球のボール球は追いかけやすい
+      const breakingChaseBonus = selectedPitch.type !== 'straight' ? (selectedPitch.level || 50) * 0.05 : 0;
+      const chaseChance = 15 + (3 - batter.eye * 0.10) + count.strikes * 5 + breakingChaseBonus;
 
       if (swingRand < chaseChance) {
-        // ボール球をスイング
         const contactRand = Math.random() * 100;
         if (contactRand < 20) {
-          // ファウル
           return { type: 'foul' };
         }
         return { type: 'swinging_strike' };
       } else {
-        // ボール
         return { type: 'ball' };
       }
     }
@@ -570,10 +636,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const pitcherPenalty = pitcherQuick * 0.1;
         const successChance = baseChance - catcherPenalty - pitcherPenalty + (Math.random() * 20 - 10);
 
-        // 盗塁を試みる条件: 走力48以上、2アウト未満、成功率40%以上（走力強化）
-        const shouldAttempt = runnerSpeed >= 48 && gameState.outs < 2 && successChance > 40;
-        // 走力が高いほど積極的に走る
-        const aggressiveness = Math.random() * 100 < (runnerSpeed - 35) * 2.0;
+        // 走塁方針の効果
+        const baseRunStrat = offenseTeam.strategy?.baseRunning || 'normal';
+        const stealThreshold = baseRunStrat === 'aggressive' ? 30 : baseRunStrat === 'conservative' ? 55 : 40;
+        const stealAggressMod = baseRunStrat === 'aggressive' ? 1.5 : baseRunStrat === 'conservative' ? 0.5 : 1.0;
+
+        // 盗塁を試みる条件
+        const shouldAttempt = runnerSpeed >= 48 && gameState.outs < 2 && successChance > stealThreshold;
+        // 走力が高いほど積極的に走る（方針で補正）
+        const aggressiveness = Math.random() * 100 < (runnerSpeed - 35) * 2.0 * stealAggressMod;
 
         if (shouldAttempt && aggressiveness) {
           const rand = Math.random() * 100;
@@ -820,8 +891,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
       const pitcherStamina = pitcherData.currentStamina;
 
+      // チームの作戦設定を取得
+      const offenseStrategy = (gameState.isTopInning ? gameState.awayTeam : gameState.homeTeam).strategy;
+      const defenseStrategy = (gameState.isTopInning ? gameState.homeTeam : gameState.awayTeam).strategy;
+
       // 一球シミュレーション（simulation-logic.jsの物理エンジンを使用）
-      const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, lastPitch);
+      const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, lastPitch, offenseStrategy, defenseStrategy);
 
       // 次回のトンネリング効果のために今回の投球を記録
       if (result.lastPitch) {
@@ -930,7 +1005,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           batter.gameStats.batting.atBats++;
           batter.gameStats.batting.hits++;
           batter.gameStats.batting.rbis += runsScored;
+          if (result.type === 'double') batter.gameStats.batting.doubles = (batter.gameStats.batting.doubles || 0) + 1;
+          if (result.type === 'triple') batter.gameStats.batting.triples = (batter.gameStats.batting.triples || 0) + 1;
           if (result.type === 'homerun') batter.gameStats.batting.homeruns++;
+
+          // 投手の被安打・被本塁打を記録
+          pitcher.gameStats.pitching.hits = (pitcher.gameStats.pitching.hits || 0) + 1;
+          if (result.type === 'homerun') pitcher.gameStats.pitching.homeruns = (pitcher.gameStats.pitching.homeruns || 0) + 1;
 
           if (gameState.isTopInning) gameState.score.away += runsScored;
           else gameState.score.home += runsScored;
@@ -1205,6 +1286,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         season.games++;
         season.atBats += b.atBats;
         season.hits += b.hits;
+        season.doubles = (season.doubles || 0) + (b.doubles || 0);
+        season.triples = (season.triples || 0) + (b.triples || 0);
         season.homeruns += b.homeruns;
         season.rbis += b.rbis;
         season.walks += b.walks;
@@ -1214,6 +1297,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         career.games++;
         career.atBats += b.atBats;
         career.hits += b.hits;
+        career.doubles = (career.doubles || 0) + (b.doubles || 0);
+        career.triples = (career.triples || 0) + (b.triples || 0);
         career.homeruns += b.homeruns;
         career.rbis += b.rbis;
         career.walks += b.walks;
@@ -1246,6 +1331,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         season.inningsPitched += p.outs;
         season.runsAllowed += p.runsAllowed;
         season.earnedRuns += p.runsAllowed; // 簡易版：全て自責点とする
+        season.hits = (season.hits || 0) + (p.hits || 0);
+        season.homeruns = (season.homeruns || 0) + (p.homeruns || 0);
         season.strikeouts += p.strikeouts;
         season.walks += p.walks;
         season.pitches += p.pitches;
@@ -1254,6 +1341,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         career.inningsPitched += p.outs;
         career.runsAllowed += p.runsAllowed;
         career.earnedRuns += p.runsAllowed;
+        career.hits = (career.hits || 0) + (p.hits || 0);
+        career.homeruns = (career.homeruns || 0) + (p.homeruns || 0);
         career.strikeouts += p.strikeouts;
         career.walks += p.walks;
         career.pitches += p.pitches;

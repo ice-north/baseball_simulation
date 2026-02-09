@@ -38,7 +38,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
       setPitchingSortDir(pitchingSortDir === 'asc' ? 'desc' : 'asc');
     } else {
       setPitchingSortKey(key);
-      setPitchingSortDir(['era', 'runsAllowed', 'walks'].includes(key) ? 'asc' : 'desc');
+      setPitchingSortDir(['era', 'runsAllowed', 'walks', 'whip'].includes(key) ? 'asc' : 'desc');
     }
   };
 
@@ -50,12 +50,22 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.batting : p.careerStats.batting;
       const avg = stats.atBats > 0 ? (stats.hits / stats.atBats) : 0;
-      return { ...p, stats, avg };
+      // OPS計算: OBP(出塁率) + SLG(長打率)
+      const pa = stats.atBats + (stats.walks || 0); // 打席数（簡易版: 打数+四球）
+      const obp = pa > 0 ? ((stats.hits + (stats.walks || 0)) / pa) : 0;
+      const singles = stats.hits - (stats.doubles || 0) - (stats.triples || 0) - stats.homeruns;
+      const slg = stats.atBats > 0 ? ((singles + (stats.doubles || 0) * 2 + (stats.triples || 0) * 3 + stats.homeruns * 4) / stats.atBats) : 0;
+      const ops = obp + slg;
+      return { ...p, stats, avg, obp, slg, ops };
     })
     .sort((a, b) => {
       let valA, valB;
       if (battingSortKey === 'avg') {
         valA = a.avg; valB = b.avg;
+      } else if (battingSortKey === 'ops') {
+        valA = a.ops; valB = b.ops;
+      } else if (battingSortKey === 'obp') {
+        valA = a.obp; valB = b.obp;
       } else {
         valA = a.stats[battingSortKey] || 0;
         valB = b.stats[battingSortKey] || 0;
@@ -73,12 +83,21 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
       const stats = statsTab === 'season' ? p.seasonStats.pitching : p.careerStats.pitching;
       const era = stats.inningsPitched > 0 ? (stats.earnedRuns * 27) / stats.inningsPitched : 0;
       const ip = formatInnings(stats.inningsPitched);
-      return { ...p, stats, era, ip };
+      // WHIP = (与四球 + 被安打) / 投球回
+      const innings = stats.inningsPitched / 3; // アウト数→投球回
+      const whip = innings > 0 ? ((stats.walks || 0) + (stats.hits || 0)) / innings : 0;
+      // K/BB = 奪三振 / 与四球
+      const kbb = (stats.walks || 0) > 0 ? (stats.strikeouts / stats.walks) : stats.strikeouts > 0 ? 99.9 : 0;
+      return { ...p, stats, era, ip, whip, kbb };
     })
     .sort((a, b) => {
       let valA, valB;
       if (pitchingSortKey === 'era') {
         valA = a.era; valB = b.era;
+      } else if (pitchingSortKey === 'whip') {
+        valA = a.whip; valB = b.whip;
+      } else if (pitchingSortKey === 'kbb') {
+        valA = a.kbb; valB = b.kbb;
       } else if (pitchingSortKey === 'inningsPitched') {
         valA = a.stats.inningsPitched || 0; valB = b.stats.inningsPitched || 0;
       } else {
@@ -161,6 +180,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                   <SortableHeader label="四球" sortKey="walks" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="三振" sortKey="strikeouts" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="打率" sortKey="avg" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="出塁率" sortKey="obp" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="OPS" sortKey="ops" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                 </tr>
               </thead>
               <tbody>
@@ -185,12 +206,14 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                       <td className="py-2 px-3 text-right">{player.stats.walks}</td>
                       <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
                       <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.avg.toFixed(3)}</td>
+                      <td className="py-2 px-3 text-right">{player.obp.toFixed(3)}</td>
+                      <td className="py-2 px-3 text-right font-bold text-cyan-400">{player.ops.toFixed(3)}</td>
                     </tr>
                   );
                 })}
                 {battingStats.length === 0 && (
                   <tr>
-                    <td colSpan="12" className="py-8 text-center text-gray-500">
+                    <td colSpan="14" className="py-8 text-center text-gray-500">
                       まだ野手成績がありません。試合を進行してください。
                     </td>
                   </tr>
@@ -223,6 +246,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                   <SortableHeader label="奪三振" sortKey="strikeouts" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="与四球" sortKey="walks" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="防御率" sortKey="era" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="WHIP" sortKey="whip" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="K/BB" sortKey="kbb" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                 </tr>
               </thead>
               <tbody>
@@ -248,12 +273,14 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                       <td className="py-2 px-3 text-right">{player.stats.strikeouts}</td>
                       <td className="py-2 px-3 text-right">{player.stats.walks}</td>
                       <td className="py-2 px-3 text-right font-bold text-yellow-400">{player.era.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-cyan-400">{player.whip.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right">{player.kbb >= 99 ? '-' : player.kbb.toFixed(2)}</td>
                     </tr>
                   );
                 })}
                 {pitchingStats.length === 0 && (
                   <tr>
-                    <td colSpan="13" className="py-8 text-center text-gray-500">
+                    <td colSpan="15" className="py-8 text-center text-gray-500">
                       まだ投手成績がありません。試合を進行してください。
                     </td>
                   </tr>

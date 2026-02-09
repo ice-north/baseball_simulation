@@ -3,7 +3,7 @@
 // 日付を進めてフェーズを遷移
 // ============================================================
 
-import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule } from './seasonManager.js';
+import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 
@@ -251,5 +251,7 @@ export const startNewSeason = (seasonData) => {
 
   return newSeasonData;
 };
+
+export { updatePlayoffProgress };
 
 // ES module exports

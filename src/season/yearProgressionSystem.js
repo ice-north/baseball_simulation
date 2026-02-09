@@ -240,6 +240,8 @@ export function processNPBDraft(allTeams) {
       const { isDraftEligible, reasons } = checkNPBDraftEligibility(player);
       if (isDraftEligible) {
         const npbTeam = NPB_TEAMS[Math.floor(Math.random() * NPB_TEAMS.length)];
+        // 殿堂入り判定
+        const hofResult = checkHallOfFame(player);
         draftedPlayers.push({
           player,
           teamName,
@@ -248,7 +250,11 @@ export function processNPBDraft(allTeams) {
           position: player.position,
           age: player.age,
           name: player.name,
-          playerId: player.id
+          playerId: player.id,
+          hallOfFame: hofResult.isHallOfFame,
+          hofReason: hofResult.reason,
+          careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
+          yearsPlayed: player.yearsPlayed || 1
         });
       } else {
         // 惜しかった選手の判定（条件の60%以上達成）
@@ -768,6 +774,164 @@ export const TRAINING_MENUS = {
     category: 'pitching'
   }
 };
+
+/**
+ * サブ練習メニュー（基礎体力・弱点補強系）
+ */
+export const SUB_TRAINING_MENUS = {
+  running: {
+    name: 'ランニング',
+    icon: '🏃',
+    description: '基礎体力UP（走力+スタミナ微増）',
+    targets: ['speed', 'stamina_sub'],
+  },
+  muscle: {
+    name: '筋トレ',
+    icon: '💪',
+    description: 'パワー+肩力微増',
+    targets: ['power', 'arm'],
+  },
+  stretch: {
+    name: 'ストレッチ',
+    icon: '🧘',
+    description: '怪我予防・全能力微増',
+    targets: ['all_minor'],
+  },
+  defense_sub: {
+    name: '守備補強',
+    icon: '🧤',
+    description: '非適正ポジションの守備練習',
+    targets: ['defense', 'fitness'],
+  },
+  form_change: {
+    name: 'フォーム改造',
+    icon: '🔄',
+    description: '投球/打撃フォーム改善（制球orミート微増）',
+    targets: ['control', 'meet'],
+  },
+  switch_hit: {
+    name: '打席変更練習',
+    icon: '↔️',
+    description: 'スイッチヒッターへの挑戦（ミート微減リスク有）',
+    targets: ['switch_bats'],
+  },
+};
+
+/**
+ * サブ練習を実行（メイン練習の半分程度の効果）
+ */
+export function executeSubTraining(player, subType) {
+  const menu = SUB_TRAINING_MENUS[subType];
+  if (!menu) return { player, growthReport: [] };
+
+  const growthReport = [];
+  const growthAmount = () => Math.random() < 0.4 ? (Math.random() < 0.3 ? 2 : 1) : 0;
+
+  switch (subType) {
+    case 'running': {
+      const spd = growthAmount();
+      if (spd > 0 && player.physical) {
+        player.physical.speed = Math.min(100, (player.physical.speed || 50) + spd);
+        growthReport.push({ statName: '走力', before: player.physical.speed - spd, after: player.physical.speed, growth: spd });
+      }
+      if (player.pitching?.stamina && Math.random() < 0.2) {
+        player.pitching.stamina = Math.min(200, player.pitching.stamina + 1);
+        growthReport.push({ statName: 'スタミナ', before: player.pitching.stamina - 1, after: player.pitching.stamina, growth: 1 });
+      }
+      break;
+    }
+    case 'muscle': {
+      const pwr = growthAmount();
+      if (pwr > 0 && player.batting) {
+        player.batting.power = Math.min(100, (player.batting.power || 50) + pwr);
+        growthReport.push({ statName: 'パワー', before: player.batting.power - pwr, after: player.batting.power, growth: pwr });
+      }
+      const arm = Math.random() < 0.25 ? 1 : 0;
+      if (arm > 0 && player.physical) {
+        player.physical.arm = Math.min(100, (player.physical.arm || 50) + arm);
+        growthReport.push({ statName: '肩力', before: player.physical.arm - arm, after: player.physical.arm, growth: arm });
+      }
+      break;
+    }
+    case 'stretch': {
+      // 全能力微増（10%の確率で各能力+1）
+      const stats = [
+        { key: 'batting.meet', name: 'ミート' },
+        { key: 'batting.power', name: 'パワー' },
+        { key: 'physical.speed', name: '走力' },
+        { key: 'physical.arm', name: '肩力' },
+        { key: 'fielding.defense', name: '守備' },
+      ];
+      stats.forEach(({ key, name }) => {
+        if (Math.random() < 0.1) {
+          const [obj, prop] = key.split('.');
+          if (player[obj]) {
+            const old = player[obj][prop] || 50;
+            player[obj][prop] = Math.min(100, old + 1);
+            growthReport.push({ statName: name, before: old, after: old + 1, growth: 1 });
+          }
+        }
+      });
+      break;
+    }
+    case 'defense_sub': {
+      const def = growthAmount();
+      if (def > 0 && player.fielding) {
+        player.fielding.defense = Math.min(100, (player.fielding.defense || 50) + def);
+        growthReport.push({ statName: '守備', before: player.fielding.defense - def, after: player.fielding.defense, growth: def });
+      }
+      // 守備適正も微増
+      if (player.positionFitness && Math.random() < 0.3) {
+        const positions = Object.keys(player.positionFitness);
+        const weakPos = positions.filter(p => (player.positionFitness[p] || 0) < 70);
+        if (weakPos.length > 0) {
+          const pos = weakPos[Math.floor(Math.random() * weakPos.length)];
+          const old = player.positionFitness[pos] || 0;
+          player.positionFitness[pos] = Math.min(100, old + 3);
+          growthReport.push({ statName: `${POSITION_NAMES_MAP[pos] || pos}適正`, before: old, after: old + 3, growth: 3 });
+        }
+      }
+      break;
+    }
+    case 'form_change': {
+      if (player.position === 'pitcher' && player.pitching) {
+        const ctrl = growthAmount();
+        if (ctrl > 0) {
+          player.pitching.control = Math.min(100, (player.pitching.control || 50) + ctrl);
+          growthReport.push({ statName: '制球', before: player.pitching.control - ctrl, after: player.pitching.control, growth: ctrl });
+        }
+      } else if (player.batting) {
+        const mt = growthAmount();
+        if (mt > 0) {
+          player.batting.meet = Math.min(100, (player.batting.meet || 50) + mt);
+          growthReport.push({ statName: 'ミート', before: player.batting.meet - mt, after: player.batting.meet, growth: mt });
+        }
+      }
+      break;
+    }
+    case 'switch_hit': {
+      if (player.batting?.bats !== 'switch') {
+        if (Math.random() < 0.15) {
+          player.batting.bats = 'switch';
+          growthReport.push({ statName: '打席', before: '片打', after: '両打', growth: 0, isAwakening: true });
+          // ミート微減リスク
+          if (player.batting.meet > 30) {
+            const penalty = Math.floor(Math.random() * 3) + 1;
+            player.batting.meet = Math.max(20, player.batting.meet - penalty);
+            growthReport.push({ statName: 'ミート', before: player.batting.meet + penalty, after: player.batting.meet, growth: -penalty });
+          }
+        } else {
+          growthReport.push({ statName: '打席変更', before: '-', after: '習得失敗', growth: 0 });
+        }
+      }
+      break;
+    }
+  }
+
+  return { player, growthReport };
+}
+
+const POSITION_NAMES_MAP = { pitcher: '投', catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
 
 /**
  * シーズン終了時に経験値を集計

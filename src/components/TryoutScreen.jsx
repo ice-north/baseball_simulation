@@ -620,11 +620,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.fielding?.defense||0))}`}>{getAbilityRank(player.fielding?.defense||0)}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
-                        <td className="px-2 py-1.5 text-yellow-300 text-xs whitespace-nowrap max-w-[160px] truncate">
+                        <td className="px-2 py-1.5 text-xs whitespace-nowrap max-w-[160px] truncate">
                           {(() => {
                             const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
-                            if (arsenal.length === 0) return '-';
-                            return arsenal.map(a => getPitchTypeName(a.type)).join('/');
+                            if (arsenal.length === 0) return <span className="text-gray-500">-</span>;
+                            return arsenal.map((a, i) => {
+                              const rank = getAbilityRank(a.level || 0);
+                              return <span key={i} className={getRankColor(rank)}>{i > 0 ? '/' : ''}{getPitchTypeName(a.type)}{rank}</span>;
+                            });
                           })()}
                         </td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>

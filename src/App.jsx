@@ -29,14 +29,14 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
 import { calculatePhysicsContact, calculateDefensiveFitness } from './simulation-logic.js';
-import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate, generateAILineup } from './game/autoSimulation.js';
+import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate, generateAILineup, setRecommendedLineup } from './game/autoSimulation.js';
 
 // Season management imports
 import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
 import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
 import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
-import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult } from './season/dateProgression.js';
+import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining, processNPBDraft } from './season/yearProgressionSystem.js';
 
@@ -3591,6 +3591,9 @@ if (newOuts === 3) {
       // 既に結果がある場合はスキップ
       if (game.result) return;
 
+      // TBDチームやキャンセル済みはスキップ
+      if (game.home === 'TBD' || game.away === 'TBD') return;
+
       // チームデータの存在確認
       const homeTeam = TEAMS_DATA?.[game.home];
       const awayTeam = TEAMS_DATA?.[game.away];
@@ -3614,6 +3617,9 @@ if (newOuts === 3) {
       }
     });
 
+    // プレーオフ進行を更新（シリーズ決着・TBD確定）
+    updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
+
     return updatedSeasonData;
   };
 
@@ -3629,27 +3635,47 @@ if (newOuts === 3) {
       return gamePhase === currentPhase && !game.result;
     });
 
-    phaseGames.forEach(game => {
-      const homeTeam = TEAMS_DATA?.[game.home];
-      const awayTeam = TEAMS_DATA?.[game.away];
-
-      if (!homeTeam || !awayTeam) return;
-
-      // 試合をシミュレーション（チーム名を渡す）
-      const gameResult = autoSimulateGame?.(game.home, game.away);
-
-      if (gameResult) {
-        const result = {
-          date: game.date,
-          home: game.home,
-          away: game.away,
-          homeScore: gameResult.homeScore,
-          awayScore: gameResult.awayScore
-        };
-
-        updatedSeasonData = recordGameResult(updatedSeasonData, result);
+    // プレーオフは1試合ずつシミュレーション（シリーズ決着を管理するため）
+    const isPlayoff = currentPhase === 'playoffs';
+    if (isPlayoff) {
+      // 日付順にソートして1試合ずつ処理
+      const sortedGames = [...phaseGames].sort((a, b) => {
+        if (a.date.month !== b.date.month) return a.date.month - b.date.month;
+        return a.date.day - b.date.day;
+      });
+      for (const game of sortedGames) {
+        if (game.result) continue;
+        if (game.home === 'TBD' || game.away === 'TBD') {
+          updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
+          continue;
+        }
+        const homeTeam = TEAMS_DATA?.[game.home];
+        const awayTeam = TEAMS_DATA?.[game.away];
+        if (!homeTeam || !awayTeam) continue;
+        const gameResult = autoSimulateGame?.(game.home, game.away);
+        if (gameResult) {
+          updatedSeasonData = recordGameResult(updatedSeasonData, {
+            date: game.date, home: game.home, away: game.away,
+            homeScore: gameResult.homeScore, awayScore: gameResult.awayScore
+          });
+          updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
+        }
       }
-    });
+    } else {
+      phaseGames.forEach(game => {
+        if (game.result) return;
+        const homeTeam = TEAMS_DATA?.[game.home];
+        const awayTeam = TEAMS_DATA?.[game.away];
+        if (!homeTeam || !awayTeam) return;
+        const gameResult = autoSimulateGame?.(game.home, game.away);
+        if (gameResult) {
+          updatedSeasonData = recordGameResult(updatedSeasonData, {
+            date: game.date, home: game.home, away: game.away,
+            homeScore: gameResult.homeScore, awayScore: gameResult.awayScore
+          });
+        }
+      });
+    }
 
     return updatedSeasonData;
   };
@@ -4031,6 +4057,21 @@ if (newOuts === 3) {
               // NPBドラフト処理を実行
               const results = processNPBDraft(TEAMS_DATA);
               setDraftResults(results);
+              // ドラフト指名選手の殿堂入りを反映
+              const hofFromDraft = results.draftedPlayers.filter(d => d.hallOfFame);
+              if (hofFromDraft.length > 0) {
+                setHallOfFamePlayers(prev => [...prev, ...hofFromDraft.map(d => ({
+                  name: d.name,
+                  position: d.position,
+                  teamName: d.teamName,
+                  hallOfFame: true,
+                  hofReason: d.hofReason,
+                  reason: `NPBドラフト指名 (${d.npbTeam}) - ${d.hofReason}`,
+                  careerStats: d.careerStats,
+                  age: d.age,
+                  yearsPlayed: d.yearsPlayed
+                }))]);
+              }
               setManagementView('draft');
             }
             else if (eventType === 'offseason') setManagementView('offseason');
@@ -4086,7 +4127,12 @@ if (newOuts === 3) {
             Object.keys(TEAMS_DATA).forEach(teamName => {
               const teamData = TEAMS_DATA[teamName];
               if (teamData && teamData.players && teamData.players.length > 0) {
-                generateAILineup(teamData, teamName);
+                if (teamName === userTeamName && (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length)) {
+                  // ユーザーチーム（未設定の場合のみ推奨スタメンを再設定）
+                  setRecommendedLineup(teamData, teamName);
+                } else {
+                  generateAILineup(teamData, teamName);
+                }
               }
             });
             setSeasonData(prev => {
@@ -4166,7 +4212,19 @@ if (newOuts === 3) {
           isInitialTryout={true}
           initializeAllPitchingRotations={initializeAllPitchingRotations}
           onComplete={() => {
-            // トライアウト完了後、直接シーズンへ移行（キャンプスキップ）
+            // トライアウト完了後、全チームのスタメンを自動設定
+            Object.keys(TEAMS_DATA).forEach(teamName => {
+              const teamData = TEAMS_DATA[teamName];
+              if (teamData && teamData.players && teamData.players.length > 0) {
+                if (teamName === userTeamName) {
+                  // ユーザーチームは推奨スタメンを設定（lineupSettingsに保存）
+                  setRecommendedLineup(teamData, teamName);
+                } else {
+                  generateAILineup(teamData, teamName);
+                }
+              }
+            });
+            // 直接シーズンへ移行（キャンプスキップ）
             setSeasonData(prev => ({
               ...prev,
               currentDate: { year: 2024, month: 4, day: 1 },

@@ -54,9 +54,9 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // トンネリング効果で窓が狭まる（錯覚で準備が遅れる）
   timingWindow *= (1 - tunnelingEffect * 0.3);  // 30%
 
-  // 変化球はさらに窓を狭める（軌道予測が難しい）
+  // 変化球はさらに窓を狭める（軌道予測が難しい、レベルが高いほど曲がる）
   if (pitch.type !== 'straight' && pitch.level) {
-    const breakingBallPenalty = (pitch.level / 100) * 0.10;  // 10%
+    const breakingBallPenalty = (pitch.level / 100) * 0.18;  // 18%（強化: 旧10%）
     timingWindow *= (1 - breakingBallPenalty);
   }
 

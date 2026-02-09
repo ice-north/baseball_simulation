@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
+import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 
 const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup');
@@ -404,9 +405,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         </div>
 
         <div className="bg-gray-800 rounded-lg p-2 mb-6 flex gap-2">
-          {['lineup', 'rotation', 'defense'].map(t => (
+          {['lineup', 'rotation', 'defense', 'strategy'].map(t => (
             <button key={t} onClick={() => setTab(t)} className={`flex-1 px-4 py-2 rounded font-bold transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-              {t === 'lineup' ? 'スタメン設定' : t === 'rotation' ? '投手起用' : '守備分析'}
+              {t === 'lineup' ? 'スタメン設定' : t === 'rotation' ? '投手起用' : t === 'defense' ? '守備分析' : '作戦指示'}
             </button>
           ))}
         </div>
@@ -518,37 +519,70 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         )}
 
         {tab === 'rotation' && (() => {
-          // 投手をロール別にグループ分け
-          const starterPitchers = pitchers.filter(p => ['complete', 'short', 'quality'].includes(getPitcherRole(p.id)));
-          const reliefPitchers = pitchers.filter(p => ['long', 'onepoint', 'setup', 'closer'].includes(getPitcherRole(p.id)));
-          const unassignedPitchers = pitchers.filter(p => getPitcherRole(p.id) === 'none');
+          // 全選手をロール別にグループ分け（投手以外の野手も表示可能に）
+          const allPlayers = team.players || [];
+          const starterPitchers = allPlayers.filter(p => ['complete', 'short', 'quality'].includes(getPitcherRole(p.id)));
+          const reliefPitchers = allPlayers.filter(p => ['long', 'onepoint', 'setup', 'closer'].includes(getPitcherRole(p.id)));
+          const unassignedPitchers = allPlayers.filter(p => p.position === 'pitcher' && getPitcherRole(p.id) === 'none');
+          const fieldersForConvert = allPlayers.filter(p => p.position !== 'pitcher' && getPitcherRole(p.id) === 'none');
+
+          // ポジション変更ハンドラー
+          const handleConvertPosition = (playerId, newPosition) => {
+            const player = allPlayers.find(p => p.id === playerId);
+            if (!player) return;
+            const oldPos = player.position;
+            player.position = newPosition;
+            // 投手→野手に変更した場合、投手ロールをクリア
+            if (oldPos === 'pitcher' && newPosition !== 'pitcher') {
+              handleSetPitcherRole(playerId, 'none');
+            }
+            setUpdateTrigger(prev => prev + 1);
+          };
 
           const StatVal = ({ label, value, isVelocity }) => {
             const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);
             return <span className={`${getRankColor(rank)}`}>{label}{value}</span>;
           };
 
-          // 投手行コンポーネント（2行表示）
-          const PitcherRow = ({ player, index }) => {
+          const getArsenalDisplay = (player) => {
+            const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
+            if (arsenal.length === 0) return null;
+            return arsenal.map((a, i) => {
+              const rank = getAbilityRank(a.level || 0);
+              return <span key={i} className={`${getRankColor(rank)}`}>{i > 0 ? '/' : ''}{getPitchTypeName(a.type)}{rank}</span>;
+            });
+          };
+
+          // 投手行コンポーネント（2行表示、変化球+コンバート対応）
+          const PitcherRow = ({ player, index, showConvert }) => {
             const role = getPitcherRole(player.id);
             const roleInfo = PITCHER_ROLES[role];
             const p = player.pitching || {};
             const b = player.batting || {};
             const ph = player.physical || {};
             const f = player.fielding || {};
+            const arsenalDisplay = getArsenalDisplay(player);
 
             return (
               <div className="bg-gray-700 rounded p-3">
-                {/* 1行目: 名前・基本情報 + 起用法ボタン */}
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     {starterPitchers.includes(player) && (
                       <span className="text-blue-400 font-bold text-sm w-5 shrink-0">#{index + 1}</span>
                     )}
-                    <span className="text-white font-bold text-sm truncate">{player.name}</span>
+                    <span className={`font-bold text-sm truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`}>{player.name}</span>
                     <span className="text-gray-400 text-xs shrink-0">{player.age}歳</span>
                     <span className="text-gray-400 text-xs shrink-0">{getThrowsLabel(ph.throws)}{getBatsLabel(b.bats || ph.bats)}</span>
-                    <span className="text-gray-500 text-xs shrink-0">{getFormLabel(p.form)}</span>
+                    {p.form && <span className="text-gray-500 text-xs shrink-0">{getFormLabel(p.form)}</span>}
+                    {showConvert && (
+                      <select
+                        value={player.position}
+                        onChange={(e) => handleConvertPosition(player.id, e.target.value)}
+                        className="bg-gray-600 text-white rounded px-1 py-0.5 text-xs"
+                      >
+                        <option value="pitcher">投手</option><option value="catcher">捕手</option><option value="first">一塁</option><option value="second">二塁</option><option value="third">三塁</option><option value="short">遊撃</option><option value="left">左翼</option><option value="center">中堅</option><option value="right">右翼</option>
+                      </select>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
                     <span className={`${roleInfo.color} text-white px-2 py-0.5 rounded text-xs font-bold`}>{roleInfo.label}</span>
@@ -572,12 +606,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     </select>
                   </div>
                 </div>
-                {/* 2行目: 全能力値 */}
                 <div className="flex items-center gap-1 text-xs flex-wrap">
                   <span className="text-gray-500 mr-1">投:</span>
                   <StatVal label="球速" value={p.velocity || 0} isVelocity />
                   <StatVal label=" 制球" value={p.control || 0} />
                   <StatVal label=" スタ" value={p.stamina || 0} />
+                  {arsenalDisplay && <>
+                    <span className="text-gray-600 mx-1">│</span>
+                    <span className="text-gray-500 mr-1">変:</span>
+                    {arsenalDisplay}
+                  </>}
                   <span className="text-gray-600 mx-1">│</span>
                   <span className="text-gray-500 mr-1">打:</span>
                   <StatVal label="ミ" value={b.meet || 0} />
@@ -597,18 +635,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <div className="flex items-center gap-3 mb-3">
                   <h2 className="text-xl font-bold text-blue-400">先発投手</h2>
                   <span className="text-gray-400 text-sm">({starterPitchers.length}人)</span>
-                  <div className="flex gap-2 ml-4 text-xs">
-                    <span className="bg-blue-700 text-white px-2 py-0.5 rounded">完投型</span>
-                    <span className="bg-blue-600 text-white px-2 py-0.5 rounded">ショート</span>
-                    <span className="bg-blue-500 text-white px-2 py-0.5 rounded">勝ち権利</span>
-                  </div>
                 </div>
                 {starterPitchers.length === 0 ? (
-                  <p className="text-gray-500 text-sm py-2">先発投手が設定されていません。下部の未設定投手から起用法を選択してください。</p>
+                  <p className="text-gray-500 text-sm py-2">先発投手が設定されていません。</p>
                 ) : (
                   <div className="space-y-2">
                     {starterPitchers.map((player, idx) => (
-                      <PitcherRow key={player.id} player={player} index={idx} />
+                      <PitcherRow key={player.id} player={player} index={idx} showConvert />
                     ))}
                   </div>
                 )}
@@ -619,19 +652,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <div className="flex items-center gap-3 mb-3">
                   <h2 className="text-xl font-bold text-green-400">リリーフ投手</h2>
                   <span className="text-gray-400 text-sm">({reliefPitchers.length}人)</span>
-                  <div className="flex gap-2 ml-4 text-xs">
-                    <span className="bg-green-700 text-white px-2 py-0.5 rounded">ロング</span>
-                    <span className="bg-green-600 text-white px-2 py-0.5 rounded">ワンポイント</span>
-                    <span className="bg-orange-600 text-white px-2 py-0.5 rounded">セットアップ</span>
-                    <span className="bg-purple-600 text-white px-2 py-0.5 rounded">守護神</span>
-                  </div>
                 </div>
                 {reliefPitchers.length === 0 ? (
                   <p className="text-gray-500 text-sm py-2">リリーフ投手が設定されていません。</p>
                 ) : (
                   <div className="space-y-2">
                     {reliefPitchers.map((player, idx) => (
-                      <PitcherRow key={player.id} player={player} index={idx} />
+                      <PitcherRow key={player.id} player={player} index={idx} showConvert />
                     ))}
                   </div>
                 )}
@@ -641,16 +668,30 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               {unassignedPitchers.length > 0 && (
                 <div className="bg-gray-800 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    <h2 className="text-xl font-bold text-gray-400">未設定</h2>
+                    <h2 className="text-xl font-bold text-gray-400">未設定投手</h2>
                     <span className="text-gray-500 text-sm">({unassignedPitchers.length}人)</span>
                   </div>
                   <div className="space-y-2">
                     {unassignedPitchers.map((player, idx) => (
-                      <PitcherRow key={player.id} player={player} index={idx} />
+                      <PitcherRow key={player.id} player={player} index={idx} showConvert />
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* 野手（コンバート候補） */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <h2 className="text-xl font-bold text-cyan-400">野手</h2>
+                  <span className="text-gray-400 text-sm">({fieldersForConvert.length}人)</span>
+                  <span className="text-gray-500 text-xs">ポジションを「投手」に変更するか、起用法を設定するとコンバートできます</span>
+                </div>
+                <div className="space-y-2">
+                  {fieldersForConvert.map((player, idx) => (
+                    <PitcherRow key={player.id} player={player} index={idx} showConvert />
+                  ))}
+                </div>
+              </div>
             </div>
           );
         })()}
@@ -947,6 +988,97 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     </div>
                   );
                 })()}
+              </div>
+            </div>
+          );
+        })()}
+        {tab === 'strategy' && (() => {
+          // チームの作戦設定
+          if (!team.strategy) {
+            team.strategy = {
+              batting: 'balanced',     // 打撃方針: aggressive/balanced/patient
+              pitching: 'balanced',    // 投球方針: strikeout/balanced/contact
+              baseRunning: 'normal',   // 走塁方針: aggressive/normal/conservative
+              defense: 'normal'        // 守備方針: shift/normal/infield_in
+            };
+          }
+          const strat = team.strategy;
+
+          const STRATEGY_OPTIONS = {
+            batting: [
+              { value: 'aggressive', label: '強振重視', desc: 'パワー+15%, ミート-10%, 三振率↑', color: 'text-red-400' },
+              { value: 'balanced', label: 'バランス', desc: '全体的にバランス良く打つ', color: 'text-green-400' },
+              { value: 'patient', label: '待ち球', desc: '四球率+20%, パワー-10%, 出塁率↑', color: 'text-blue-400' }
+            ],
+            pitching: [
+              { value: 'strikeout', label: '奪三振重視', desc: '奪三振+20%, スタミナ消費↑, 球数↑', color: 'text-red-400' },
+              { value: 'balanced', label: 'バランス', desc: '状況に応じた投球', color: 'text-green-400' },
+              { value: 'contact', label: '打たせて取る', desc: '球数-20%, 被安打率やや↑, スタミナ温存', color: 'text-blue-400' }
+            ],
+            baseRunning: [
+              { value: 'aggressive', label: '積極走塁', desc: '盗塁+30%, 走塁アウト↑', color: 'text-red-400' },
+              { value: 'normal', label: '通常', desc: '状況に応じた走塁', color: 'text-green-400' },
+              { value: 'conservative', label: '慎重走塁', desc: '盗塁-50%, 走塁アウト↓', color: 'text-blue-400' }
+            ],
+            defense: [
+              { value: 'shift', label: 'シフト守備', desc: 'プルヒッター対策○, 流し打ち×', color: 'text-red-400' },
+              { value: 'normal', label: '定位置', desc: '標準的な守備陣形', color: 'text-green-400' },
+              { value: 'infield_in', label: '前進守備', desc: 'バント/ゴロ処理○, 長打×', color: 'text-blue-400' }
+            ]
+          };
+
+          const STRATEGY_LABELS = {
+            batting: '打撃方針',
+            pitching: '投球方針',
+            baseRunning: '走塁方針',
+            defense: '守備方針'
+          };
+
+          const handleStrategyChange = (category, value) => {
+            team.strategy[category] = value;
+            setUpdateTrigger(prev => prev + 1);
+          };
+
+          return (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-white mb-4">作戦指示</h2>
+              {Object.entries(STRATEGY_OPTIONS).map(([category, options]) => (
+                <div key={category} className="bg-gray-800 rounded-lg p-4">
+                  <h3 className="text-lg font-bold text-white mb-3">{STRATEGY_LABELS[category]}</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {options.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleStrategyChange(category, opt.value)}
+                        className={`p-4 rounded-lg text-left transition border-2 ${
+                          strat[category] === opt.value
+                            ? 'border-blue-500 bg-blue-900/50'
+                            : 'border-gray-600 bg-gray-700 hover:bg-gray-600'
+                        }`}
+                      >
+                        <div className={`font-bold text-lg ${opt.color}`}>{opt.label}</div>
+                        <div className="text-sm text-gray-400 mt-1">{opt.desc}</div>
+                        {strat[category] === opt.value && (
+                          <div className="text-xs text-blue-400 mt-2 font-bold">現在の設定</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-bold text-white mb-2">現在の作戦</h3>
+                <div className="grid grid-cols-4 gap-4">
+                  {Object.entries(STRATEGY_OPTIONS).map(([category, options]) => {
+                    const current = options.find(o => o.value === strat[category]);
+                    return (
+                      <div key={category} className="text-center">
+                        <div className="text-sm text-gray-400">{STRATEGY_LABELS[category]}</div>
+                        <div className={`font-bold ${current?.color || 'text-white'}`}>{current?.label || '-'}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           );

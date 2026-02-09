@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, executeTeamCampTraining, ALL_PITCH_TYPES, getPitchTypeName } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
@@ -15,6 +15,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     const init = {};
     userTeam?.players?.forEach(p => {
       init[p.id] = p.position === 'pitcher' ? 'stamina' : 'batting';
+    });
+    return init;
+  });
+  const [subAssignments, setSubAssignments] = useState(() => {
+    const init = {};
+    userTeam?.players?.forEach(p => {
+      init[p.id] = 'running';
     });
     return init;
   });
@@ -75,6 +82,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     setNewPitchSelections(prev => ({ ...prev, [playerId]: pitchType }));
   };
 
+  const handleSubAssignmentChange = (playerId, training) => {
+    setSubAssignments(prev => ({ ...prev, [playerId]: training }));
+  };
+
   const setAllTraining = (training) => {
     const updated = {};
     userTeam?.players?.forEach(p => {
@@ -100,6 +111,17 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       userTeam, finalAssignments, newPitchSelections
     );
     TEAMS_DATA[userTeamName] = updatedTeam;
+
+    // サブ練習を実行
+    updatedTeam.players.forEach(p => {
+      const subType = subAssignments[p.id] || 'running';
+      const { growthReport: subGrowth } = executeSubTraining(p, subType);
+      const mainReport = allReports.find(r => r.player.id === p.id);
+      if (mainReport && subGrowth.length > 0) {
+        mainReport.subGrowthReport = subGrowth;
+        mainReport.subTrainingType = subType;
+      }
+    });
 
     // AIチームも練習
     teamNames.forEach(tn => {
@@ -196,7 +218,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-2 px-1 text-center w-8">制</th>
                     <th className="py-2 px-1 text-center w-10">スタ</th>
                     <th className="py-2 px-2 text-left">変化球</th>
-                    <th className="py-2 px-2 text-left w-48">練習メニュー</th>
+                    <th className="py-2 px-2 text-left w-36">メイン練習</th>
+                    <th className="py-2 px-2 text-left w-36">サブ練習</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -255,6 +278,17 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             )}
                           </div>
                         </td>
+                        <td className="py-1 px-2">
+                          <select
+                            value={subAssignments[player.id] || 'running'}
+                            onChange={(e) => handleSubAssignmentChange(player.id, e.target.value)}
+                            className="bg-gray-700 text-white text-xs px-2 py-1 rounded w-28"
+                          >
+                            {Object.entries(SUB_TRAINING_MENUS).map(([key, menu]) => (
+                              <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                            ))}
+                          </select>
+                        </td>
                       </tr>
                     );
                   })}
@@ -282,8 +316,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                 <thead>
                   <tr className="bg-gray-700 text-gray-300 text-xs">
                     <th className="py-1 px-2 text-left">選手</th>
-                    <th className="py-1 px-2 text-left">練習</th>
-                    <th className="py-1 px-2 text-left">成長結果</th>
+                    <th className="py-1 px-2 text-left">メイン</th>
+                    <th className="py-1 px-2 text-left">メイン結果</th>
+                    <th className="py-1 px-2 text-left">サブ結果</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -316,6 +351,32 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             </span>
                           ))}
                           {result.growthReport.length === 0 && (
+                            <span className="text-gray-500 text-xs">変化なし</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-1 px-2">
+                        <div className="flex flex-wrap gap-1">
+                          {(result.subGrowthReport || []).map((growth, gIdx) => (
+                            <span
+                              key={gIdx}
+                              className={`px-2 py-0.5 rounded text-xs ${
+                                growth.isAwakening
+                                  ? 'bg-yellow-500 text-black font-bold'
+                                  : growth.growth > 0
+                                    ? 'bg-teal-700 text-white'
+                                    : growth.growth < 0
+                                      ? 'bg-red-700 text-white'
+                                      : 'bg-gray-600 text-gray-300'
+                              }`}
+                            >
+                              {growth.statName}: {growth.before}→{growth.after}
+                              {growth.growth > 0 && ` (+${growth.growth})`}
+                              {growth.growth < 0 && ` (${growth.growth})`}
+                              {growth.isAwakening && ' 覚醒!'}
+                            </span>
+                          ))}
+                          {(!result.subGrowthReport || result.subGrowthReport.length === 0) && (
                             <span className="text-gray-500 text-xs">変化なし</span>
                           )}
                         </div>

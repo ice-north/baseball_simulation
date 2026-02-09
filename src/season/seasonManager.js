@@ -274,8 +274,8 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
     const team2 = teams[1];
 
     for (let game = 1; game <= 5; game++) {
-      const date = advanceDate(startDate, (game - 1) * 2); // 1日おき
-      const isHomeTeam1 = game <= 2 || game === 5; // 1,2,5試合目はチーム1がホーム
+      const date = advanceDate(startDate, game - 1); // 毎日開催
+      const isHomeTeam1 = game <= 2 || game === 5;
 
       schedule.push({
         date,
@@ -285,51 +285,163 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
         awayPitcher: null,
         result: null,
         phase: SEASON_PHASES.PLAYOFFS,
-        seriesGame: game
+        playoffRound: 'final',
+        seriesGame: game,
+        seriesId: 'final'
       });
     }
   } else if (format === 'double' && teams.length >= 4) {
-    // 4チームトーナメント（準決勝2試合 + 決勝）
-    // 準決勝: 1位vs4位、2位vs3位
+    // 4チームトーナメント: 準決勝3戦先取(最大5試合)×2 + 決勝3戦先取(最大5試合)
+    // 準決勝1: 1位 vs 4位
+    for (let game = 1; game <= 5; game++) {
+      const date = advanceDate(startDate, game - 1);
+      const isHome1 = game <= 2 || game === 5;
+      schedule.push({
+        date,
+        home: isHome1 ? teams[0] : teams[3],
+        away: isHome1 ? teams[3] : teams[0],
+        homePitcher: null, awayPitcher: null, result: null,
+        phase: SEASON_PHASES.PLAYOFFS,
+        playoffRound: 'semi',
+        seriesGame: game,
+        seriesId: 'semi1'
+      });
+    }
+    // 準決勝2: 2位 vs 3位
+    for (let game = 1; game <= 5; game++) {
+      const date = advanceDate(startDate, game - 1);
+      const isHome1 = game <= 2 || game === 5;
+      schedule.push({
+        date,
+        home: isHome1 ? teams[1] : teams[2],
+        away: isHome1 ? teams[2] : teams[1],
+        homePitcher: null, awayPitcher: null, result: null,
+        phase: SEASON_PHASES.PLAYOFFS,
+        playoffRound: 'semi',
+        seriesGame: game,
+        seriesId: 'semi2'
+      });
+    }
+    // 決勝（TBD - 準決勝結果で埋まる）
+    for (let game = 1; game <= 5; game++) {
+      const date = advanceDate(startDate, 6 + game - 1); // 準決勝後1日空けて
+      schedule.push({
+        date,
+        home: 'TBD', away: 'TBD',
+        homePitcher: null, awayPitcher: null, result: null,
+        phase: SEASON_PHASES.PLAYOFFS,
+        playoffRound: 'final',
+        seriesGame: game,
+        seriesId: 'final'
+      });
+    }
+  } else if (format === 'top2') {
+    // 上位2チームの1戦勝負
     schedule.push({
       date: { ...startDate },
-      home: teams[0],
-      away: teams[3],
-      homePitcher: null,
-      awayPitcher: null,
-      result: null,
+      home: teams[0], away: teams[1],
+      homePitcher: null, awayPitcher: null, result: null,
       phase: SEASON_PHASES.PLAYOFFS,
-      round: 'semi',
-      seriesGame: 1
+      playoffRound: 'final',
+      seriesGame: 1,
+      seriesId: 'final'
     });
-
+  } else if (format === 'tournament') {
+    // トーナメント: 上位4チーム、1戦勝負の準決勝→決勝
+    schedule.push({
+      date: { ...startDate },
+      home: teams[0], away: teams[3],
+      homePitcher: null, awayPitcher: null, result: null,
+      phase: SEASON_PHASES.PLAYOFFS,
+      playoffRound: 'semi', seriesGame: 1, seriesId: 'semi1'
+    });
     schedule.push({
       date: advanceDate(startDate, 1),
-      home: teams[1],
-      away: teams[2],
-      homePitcher: null,
-      awayPitcher: null,
-      result: null,
+      home: teams[1], away: teams[2],
+      homePitcher: null, awayPitcher: null, result: null,
       phase: SEASON_PHASES.PLAYOFFS,
-      round: 'semi',
-      seriesGame: 2
+      playoffRound: 'semi', seriesGame: 1, seriesId: 'semi2'
     });
-
-    // 決勝（仮）
     schedule.push({
       date: advanceDate(startDate, 3),
-      home: 'TBD',
-      away: 'TBD',
-      homePitcher: null,
-      awayPitcher: null,
-      result: null,
+      home: 'TBD', away: 'TBD',
+      homePitcher: null, awayPitcher: null, result: null,
       phase: SEASON_PHASES.PLAYOFFS,
-      round: 'final',
-      seriesGame: 1
+      playoffRound: 'final', seriesGame: 1, seriesId: 'final'
     });
   }
 
   return schedule;
+};
+
+/**
+ * プレーオフシリーズの進行を管理
+ * 3戦先取なら3勝した時点でシリーズ終了、残りの試合をスキップ
+ * 準決勝が終わったら決勝のTBDチームを確定
+ */
+export const updatePlayoffProgress = (seasonData) => {
+  const schedule = seasonData.schedule;
+  const playoffGames = schedule.filter(g => g.phase === SEASON_PHASES.PLAYOFFS);
+  if (playoffGames.length === 0) return seasonData;
+
+  // シリーズIDごとに勝敗を集計
+  const seriesMap = {};
+  playoffGames.forEach(g => {
+    if (!g.seriesId) return;
+    if (!seriesMap[g.seriesId]) seriesMap[g.seriesId] = { games: [], teams: new Set() };
+    seriesMap[g.seriesId].games.push(g);
+    if (g.home !== 'TBD') seriesMap[g.seriesId].teams.add(g.home);
+    if (g.away !== 'TBD') seriesMap[g.seriesId].teams.add(g.away);
+  });
+
+  let updated = false;
+
+  // 各シリーズの勝敗チェック
+  Object.entries(seriesMap).forEach(([seriesId, series]) => {
+    const teams = [...series.teams];
+    if (teams.length < 2 || teams.includes('TBD')) return;
+
+    const wins = {};
+    teams.forEach(t => { wins[t] = 0; });
+
+    const completedGames = series.games.filter(g => g.result);
+    completedGames.forEach(g => {
+      if (g.result.homeScore > g.result.awayScore) wins[g.home] = (wins[g.home] || 0) + 1;
+      else if (g.result.awayScore > g.result.homeScore) wins[g.away] = (wins[g.away] || 0) + 1;
+    });
+
+    // 3勝でシリーズ決着 → 残り試合をキャンセル
+    const winsNeeded = series.games.length === 1 ? 1 : 3;
+    const winner = teams.find(t => (wins[t] || 0) >= winsNeeded);
+    if (winner) {
+      series.games.forEach(g => {
+        if (!g.result) {
+          g.result = { homeScore: 0, awayScore: 0, cancelled: true };
+          updated = true;
+        }
+      });
+      series.winner = winner;
+    }
+  });
+
+  // 準決勝が両方終わったら決勝のTBDを確定
+  const semi1 = seriesMap['semi1'];
+  const semi2 = seriesMap['semi2'];
+  const final = seriesMap['final'];
+
+  if (semi1?.winner && semi2?.winner && final) {
+    const hasRealTeams = final.games.some(g => g.home !== 'TBD');
+    if (!hasRealTeams) {
+      final.games.forEach(g => {
+        // 上位シードがホーム
+        g.home = semi1.winner;
+        g.away = semi2.winner;
+      });
+      updated = true;
+    }
+  }
+
+  return updated ? { ...seasonData, schedule: [...schedule] } : seasonData;
 };
 
 /**
