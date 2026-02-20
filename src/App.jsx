@@ -57,6 +57,7 @@ import EditScreen from './components/EditScreen.jsx';
 import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
 import HallOfFameScreen from './components/HallOfFameScreen.jsx';
 import DraftResultScreen from './components/DraftResultScreen.jsx';
+import TradeScreen from './components/TradeScreen.jsx';
 
     const App = () => {
       // チームデータの初期化
@@ -279,6 +280,65 @@ import DraftResultScreen from './components/DraftResultScreen.jsx';
           console.error('削除失敗:', error);
           return false;
         }
+      };
+
+      // チームエクスポート（JSON形式でダウンロード）
+      const exportTeam = (teamName) => {
+        const team = TEAMS_DATA[teamName];
+        if (!team) return;
+        const exportData = {
+          version: '2.0',
+          exportDate: new Date().toISOString(),
+          teamName: teamName,
+          team: JSON.parse(JSON.stringify(team))
+        };
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `team_${teamName.replace(/[^a-zA-Z0-9\u3040-\u9FFF]/g, '_')}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        console.log(`📤 ${teamName}をエクスポートしました`);
+      };
+
+      // チームインポート（JSONファイルから読み込み、指定チームに上書き）
+      const importTeam = (targetTeamName) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              const data = JSON.parse(ev.target.result);
+              if (!data.team || !data.team.players) {
+                alert('無効なチームデータです');
+                return;
+              }
+              // IDの重複を防ぐため、インポート時にIDを再生成
+              const maxId = Object.values(TEAMS_DATA).flatMap(t => t.players || []).reduce((max, p) => Math.max(max, p.id || 0), 0);
+              data.team.players.forEach((p, i) => { p.id = maxId + i + 1; });
+              // ターゲットチームに上書き
+              TEAMS_DATA[targetTeamName] = {
+                ...TEAMS_DATA[targetTeamName],
+                players: data.team.players,
+                lineupSettings: data.team.lineupSettings || null,
+                pitchingRotation: data.team.pitchingRotation || { starters: [], middleRelievers: [], setupMen: [], closer: null, currentStarterIndex: 0, pitcherRoles: {} },
+                strategy: data.team.strategy || null
+              };
+              setUpdateTrigger(prev => prev + 1);
+              alert(`${data.teamName || 'チーム'}のデータを${targetTeamName}にインポートしました（選手${data.team.players.length}名）`);
+              console.log(`📥 ${targetTeamName}にインポート完了: ${data.team.players.length}人`);
+            } catch (err) {
+              alert('ファイルの読み込みに失敗しました: ' + err.message);
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
       };
 
       // 後方互換性のため、既存の変数名でもアクセス可能にする
@@ -3060,6 +3120,32 @@ if (newOuts === 3) {
               🏆 殿堂入り選手
             </button>
 
+            <button
+              onClick={() => exportTeam(userTeamName)}
+              className="w-full text-left px-4 py-3 rounded transition hover:bg-gray-800"
+            >
+              📤 チームエクスポート
+            </button>
+
+            <button
+              onClick={() => importTeam(userTeamName)}
+              className="w-full text-left px-4 py-3 rounded transition hover:bg-gray-800"
+            >
+              📥 チームインポート
+            </button>
+
+            <button
+              onClick={() => {
+                setScreenMode('management');
+                setManagementView('trade');
+              }}
+              className={`w-full text-left px-4 py-3 rounded transition ${
+                screenMode === 'management' && managementView === 'trade' ? 'bg-green-600' : 'hover:bg-gray-800'
+              }`}
+            >
+              🔄 トレード
+            </button>
+
             <div className="border-t border-gray-700 my-4"></div>
 
             <button
@@ -3538,22 +3624,59 @@ if (newOuts === 3) {
     }
   };
 
+  // ユーザーチームのスタメンが完成しているか確認
+  const checkUserLineupComplete = () => {
+    const team = TEAMS_DATA[userTeamName];
+    if (!team) return true;
+    const settings = team.lineupSettings;
+    if (!settings || !settings.battingOrder) return false;
+    const starterCount = settings.battingOrder.filter(e => e.battingOrder >= 1 && e.battingOrder <= 9).length;
+    return starterCount >= 9;
+  };
+
   const handleProgressDate = (days) => {
     if (!seasonData) return;
+
+    // スタメンチェック（レギュラーシーズン/プレーオフ中のみ）
+    if ((seasonData.phase === SEASON_PHASES.REGULAR_SEASON || seasonData.phase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
+      alert('スタメンが9人揃っていません。スタメン設定画面で打順を設定してください。');
+      return;
+    }
+
     let newSeasonData = progressDate(seasonData, days);
+
+    // フェーズ遷移チェック（プレーオフスケジュール生成等を先に処理）
+    const oldPhase = seasonData.phase;
+    const newPhase = newSeasonData.phase;
+    if (oldPhase !== newPhase) {
+      newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
+    }
 
     // 新しい日付の試合を自動シミュレーション
     newSeasonData = simulateGamesOnDate(newSeasonData);
 
     autoFollowMonth(newSeasonData);
-    // フェーズ遷移チェック
+    // 強制イベント処理
     const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
     if (result !== null) setSeasonData(result);
   };
 
   const handleProgressToNextGame = () => {
     if (!seasonData) return;
+
+    if ((seasonData.phase === SEASON_PHASES.REGULAR_SEASON || seasonData.phase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
+      alert('スタメンが9人揃っていません。スタメン設定画面で打順を設定してください。');
+      return;
+    }
+
     let newSeasonData = progressToNextGame(seasonData, userTeamName);
+
+    // フェーズ遷移チェック（プレーオフスケジュール生成等を先に処理）
+    const oldPhase = seasonData.phase;
+    const newPhase = newSeasonData.phase;
+    if (oldPhase !== newPhase) {
+      newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
+    }
 
     // 試合日まで進んだら、その日の試合を自動シミュレーション
     newSeasonData = simulateGamesOnDate(newSeasonData);
@@ -3566,14 +3689,26 @@ if (newOuts === 3) {
   const handleProgressToNextPhase = () => {
     if (!seasonData) return;
 
+    if ((seasonData.phase === SEASON_PHASES.REGULAR_SEASON || seasonData.phase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
+      alert('スタメンが9人揃っていません。スタメン設定画面で打順を設定してください。');
+      return;
+    }
+
     // まず現フェーズの残り試合をシミュレーション
     let newSeasonData = simulateAllRemainingGames(seasonData);
 
     // 次フェーズへ
     newSeasonData = progressToNextPhase(newSeasonData);
 
+    // フェーズ遷移チェック（プレーオフスケジュール生成等を先に処理）
+    const oldPhase = seasonData.phase;
+    const newPhase = newSeasonData.phase;
+    if (oldPhase !== newPhase) {
+      newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
+    }
+
     autoFollowMonth(newSeasonData);
-    // フェーズ遷移処理（プレーオフスケジュール生成など）
+    // 強制イベント処理
     const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
     if (result !== null) setSeasonData(result);
   };
@@ -4047,6 +4182,10 @@ if (newOuts === 3) {
         />;
         if (managementView === 'roster') return <RosterScreen />;
         if (managementView === 'teaminfo') return <TeamInfoScreen />;
+        if (managementView === 'trade') return <TradeScreen
+          userTeamName={userTeamName}
+          onBack={() => setManagementView('dateprogress')}
+        />;
         if (managementView === 'dateprogress') return <DateProgressScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}

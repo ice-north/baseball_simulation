@@ -478,7 +478,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         // スイング - 変化球のコンタクトペナルティ
         const contactRand = Math.random() * 100;
         const breakingPenalty = selectedPitch.type !== 'straight' ? (selectedPitch.level || 50) * 0.12 : 0;
-        const contactChance = 40 + batter.meet * 0.4 + handBonus - breakingPenalty - speedDiffPenalty;
+        const contactChance = 45 + batter.meet * 0.45 + handBonus - breakingPenalty - speedDiffPenalty;
 
         if (contactRand < contactChance) {
           // コンタクト成功 - 物理エンジンで打球・守備を判定
@@ -549,7 +549,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       const swingRand = Math.random() * 100;
       // 変化球のボール球は追いかけやすい
       const breakingChaseBonus = selectedPitch.type !== 'straight' ? (selectedPitch.level || 50) * 0.05 : 0;
-      const chaseChance = 15 + (3 - batter.eye * 0.10) + count.strikes * 5 + breakingChaseBonus;
+      const chaseChance = 12 + (3 - batter.eye * 0.12) + count.strikes * 4 + breakingChaseBonus;
 
       if (swingRand < chaseChance) {
         const contactRand = Math.random() * 100;

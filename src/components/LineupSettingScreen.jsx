@@ -249,9 +249,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     } else {
       rotation.pitcherRoles[playerId] = newRole;
       // レガシー配列にも反映
-      if (['complete', 'short', 'quality'].includes(newRole)) {
+      if (['complete', 'short', 'quality', 'auto_s'].includes(newRole)) {
         rotation.starters.push(playerId);
-      } else if (['long', 'onepoint'].includes(newRole)) {
+      } else if (['long', 'onepoint', 'ace_relief', 'mopup', 'auto_r'].includes(newRole)) {
         if (!rotation.middleRelievers) rotation.middleRelievers = [];
         rotation.middleRelievers.push(playerId);
       } else if (newRole === 'setup') {
@@ -278,14 +278,18 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
   // ロールのラベルと色
   const PITCHER_ROLES = {
-    none:     { label: '未設定', color: 'bg-gray-600', textColor: 'text-gray-400', group: 'none' },
-    complete: { label: '完投型', color: 'bg-blue-700', textColor: 'text-blue-300', group: 'starter' },
-    short:    { label: 'ショート', color: 'bg-blue-600', textColor: 'text-blue-300', group: 'starter' },
-    quality:  { label: '勝ち権利', color: 'bg-blue-500', textColor: 'text-blue-200', group: 'starter' },
-    long:     { label: 'ロング', color: 'bg-green-700', textColor: 'text-green-300', group: 'relief' },
-    onepoint: { label: 'ワンポイント', color: 'bg-green-600', textColor: 'text-green-300', group: 'relief' },
-    setup:    { label: 'セットアップ', color: 'bg-orange-600', textColor: 'text-orange-300', group: 'relief' },
-    closer:   { label: '守護神', color: 'bg-purple-600', textColor: 'text-purple-300', group: 'relief' },
+    none:       { label: '未設定', color: 'bg-gray-600', textColor: 'text-gray-400', group: 'none' },
+    auto_s:     { label: 'おまかせ', color: 'bg-gray-500', textColor: 'text-gray-200', group: 'starter' },
+    complete:   { label: '完投型', color: 'bg-blue-700', textColor: 'text-blue-300', group: 'starter' },
+    short:      { label: 'ショート', color: 'bg-blue-600', textColor: 'text-blue-300', group: 'starter' },
+    quality:    { label: '勝ち権利', color: 'bg-blue-500', textColor: 'text-blue-200', group: 'starter' },
+    auto_r:     { label: 'おまかせ', color: 'bg-gray-500', textColor: 'text-gray-200', group: 'relief' },
+    long:       { label: 'ロング', color: 'bg-green-700', textColor: 'text-green-300', group: 'relief' },
+    ace_relief: { label: '中継ぎエース', color: 'bg-green-500', textColor: 'text-green-200', group: 'relief' },
+    mopup:      { label: '敗戦処理', color: 'bg-gray-700', textColor: 'text-gray-300', group: 'relief' },
+    onepoint:   { label: 'ワンポイント', color: 'bg-green-600', textColor: 'text-green-300', group: 'relief' },
+    setup:      { label: 'セットアップ', color: 'bg-orange-600', textColor: 'text-orange-300', group: 'relief' },
+    closer:     { label: '守護神', color: 'bg-purple-600', textColor: 'text-purple-300', group: 'relief' },
   };
 
   // 控え選手のソート用値を取得

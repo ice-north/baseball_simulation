@@ -308,11 +308,11 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     };
   }
 
-  // 通常の能力値範囲（能力値を5ポイント程度下げ、バラつきを増加）
+  // 通常の能力値範囲
   const normalAbilities = {
-    // 野手能力（-5調整、バラつき増加）
-    meet: isPitcher ? randRangeWithVariance(15, 40) : randRangeWithVariance(30, 67),
-    power: isPitcher ? randRangeWithVariance(10, 35) : randRangeWithVariance(25, 62),
+    // 野手能力（ミート+5強化、パワー-3調整）
+    meet: isPitcher ? randRangeWithVariance(15, 40) : randRangeWithVariance(35, 72),
+    power: isPitcher ? randRangeWithVariance(8, 32) : randRangeWithVariance(22, 59),
     eye: isPitcher ? randRangeWithVariance(25, 50) : randRangeWithVariance(30, 70),
     steal: isPitcher ? randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithVariance(20, 70, Math.max(0, Math.floor(ageBonus * 0.7))),
     speed: isPitcher ? randRangeWithVariance(30, 55, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithVariance(30, 70, Math.max(0, Math.floor(ageBonus * 0.7))),

@@ -335,17 +335,24 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
         seriesId: 'final'
       });
     }
-  } else if (format === 'top2') {
-    // 上位2チームの1戦勝負
-    schedule.push({
-      date: { ...startDate },
-      home: teams[0], away: teams[1],
-      homePitcher: null, awayPitcher: null, result: null,
-      phase: SEASON_PHASES.PLAYOFFS,
-      playoffRound: 'final',
-      seriesGame: 1,
-      seriesId: 'final'
-    });
+  } else if (format === 'top2' || format === 'split' || format === 'championship') {
+    // 上位2チーム / 前後期 / 両リーグ：5戦3勝制
+    const team1 = teams[0];
+    const team2 = teams[1];
+    for (let game = 1; game <= 5; game++) {
+      const date = advanceDate(startDate, game - 1);
+      const isHomeTeam1 = game <= 2 || game === 5;
+      schedule.push({
+        date,
+        home: isHomeTeam1 ? team1 : team2,
+        away: isHomeTeam1 ? team2 : team1,
+        homePitcher: null, awayPitcher: null, result: null,
+        phase: SEASON_PHASES.PLAYOFFS,
+        playoffRound: 'final',
+        seriesGame: game,
+        seriesId: 'final'
+      });
+    }
   } else if (format === 'tournament') {
     // トーナメント: 上位4チーム、1戦勝負の準決勝→決勝
     schedule.push({

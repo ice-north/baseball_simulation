@@ -83,7 +83,7 @@ export const canModifyRegulations = (phase) => {
  */
 export const getPlayoffFormatDescription = (format, leagueFormat) => {
   const descriptions = {
-    'single': '1位 vs 2位の対戦（3戦2勝制、最大3試合）',
+    'single': '1位 vs 2位の対戦（5戦3勝制、最大5試合）',
     'double': '4チームトーナメント（1位vs4位、2位vs3位 → 決勝）',
     'tournament': 'トーナメント制（3位vs4位 → 勝者vs2位 → 勝者vs1位）',
     'top2': '上位2チーム対決（5戦3勝制、最大5試合）',

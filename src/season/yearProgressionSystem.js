@@ -190,25 +190,49 @@ export function updateAllPlayerAges(allTeams) {
 export function checkNPBDraftEligibility(player) {
   const isPitcher = player.position === 'pitcher';
   const reasons = [];
+  const age = player.age || 20;
 
-  // 通算成績
-  const careerStats = player.careerStats || { batting: {}, pitching: {} };
-  const careerWins = careerStats.pitching?.wins || 0;
-  const careerStrikeouts = careerStats.pitching?.strikeouts || 0;
-  const careerSaves = careerStats.pitching?.saves || 0;
-  const careerHits = careerStats.batting?.hits || 0;
-  const careerAtBats = careerStats.batting?.atBats || 0;
-  const careerHomeruns = careerStats.batting?.homeruns || 0;
-  const careerAvg = careerAtBats > 0 ? careerHits / careerAtBats : 0;
+  // 能力ベースのドラフト評価（年齢が若いほど低い能力でも指名される）
+  // 年齢ボーナス: 若い選手ほど将来性で高評価
+  const ageBonus = age <= 20 ? 15 : age <= 22 ? 10 : age <= 24 ? 5 : age <= 26 ? 0 : -5;
 
   if (isPitcher) {
-    if (careerWins >= 30) reasons.push(`通算${careerWins}勝`);
-    if (careerStrikeouts >= 450) reasons.push(`通算${careerStrikeouts}奪三振`);
-    if (careerSaves >= 50) reasons.push(`通算${careerSaves}セーブ`);
+    const velocity = player.pitching?.velocity || 0;
+    const control = player.pitching?.control || 0;
+    const stamina = player.pitching?.stamina || 0;
+    const arsenal = player.pitching?.arsenal || [];
+    const bestBreaking = arsenal.filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
+
+    // 総合投手力 = 球速評価 + 制球 + スタミナ/2 + 変化球 + 年齢ボーナス
+    const velocityScore = Math.max(0, (velocity - 130) * 2); // 130km以上で評価
+    const pitcherScore = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus;
+
+    if (pitcherScore >= 130) {
+      reasons.push(`投手力${Math.round(pitcherScore)}pt`);
+      if (velocity >= 148) reasons.push(`球速${velocity}km`);
+      if (control >= 75) reasons.push(`制球力${control}`);
+      if (bestBreaking >= 70) reasons.push(`変化球${bestBreaking}`);
+      if (age <= 22) reasons.push(`${age}歳の将来性`);
+    }
   } else {
-    if (careerAvg >= 0.280 && careerAtBats >= 300) reasons.push(`通算打率${careerAvg.toFixed(3)}`);
-    if (careerHomeruns >= 70) reasons.push(`通算${careerHomeruns}本塁打`);
-    if (careerHits >= 500) reasons.push(`通算${careerHits}安打`);
+    const meet = player.batting?.meet || 0;
+    const power = player.batting?.power || 0;
+    const eye = player.batting?.eye || 0;
+    const speed = player.physical?.speed || 0;
+    const defense = player.fielding?.defense || 0;
+    const arm = player.physical?.arm || 0;
+
+    // 総合野手力 = ミート + パワー + 選球眼/2 + 走力/3 + 守備/3 + 肩/3 + 年齢ボーナス
+    const batterScore = meet + power + eye * 0.5 + speed * 0.3 + defense * 0.3 + arm * 0.3 + ageBonus;
+
+    if (batterScore >= 140) {
+      reasons.push(`野手力${Math.round(batterScore)}pt`);
+      if (meet >= 75) reasons.push(`ミート${meet}`);
+      if (power >= 75) reasons.push(`パワー${power}`);
+      if (speed >= 80) reasons.push(`俊足${speed}`);
+      if (defense >= 80) reasons.push(`守備${defense}`);
+      if (age <= 22) reasons.push(`${age}歳の将来性`);
+    }
   }
 
   return {
@@ -257,26 +281,34 @@ export function processNPBDraft(allTeams) {
           yearsPlayed: player.yearsPlayed || 1
         });
       } else {
-        // 惜しかった選手の判定（条件の60%以上達成）
+        // 惜しかった選手の判定（ドラフト基準の85%以上）
         const isPitcher = player.position === 'pitcher';
-        const career = player.careerStats || { batting: {}, pitching: {} };
+        const age = player.age || 20;
+        const ageBonus = age <= 20 ? 15 : age <= 22 ? 10 : age <= 24 ? 5 : age <= 26 ? 0 : -5;
         const nearReasons = [];
 
         if (isPitcher) {
-          const wins = career.pitching?.wins || 0;
-          const ks = career.pitching?.strikeouts || 0;
-          const sv = career.pitching?.saves || 0;
-          if (wins >= 18 && wins < 30) nearReasons.push(`通算${wins}勝（あと${30 - wins}勝）`);
-          if (ks >= 270 && ks < 450) nearReasons.push(`通算${ks}奪三振（あと${450 - ks}）`);
-          if (sv >= 30 && sv < 50) nearReasons.push(`通算${sv}セーブ（あと${50 - sv}）`);
+          const velocity = player.pitching?.velocity || 0;
+          const control = player.pitching?.control || 0;
+          const stamina = player.pitching?.stamina || 0;
+          const arsenal = player.pitching?.arsenal || [];
+          const bestBreaking = arsenal.filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
+          const velocityScore = Math.max(0, (velocity - 130) * 2);
+          const score = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus;
+          if (score >= 110 && score < 130) {
+            nearReasons.push(`投手力${Math.round(score)}pt（あと${Math.round(130 - score)}pt）`);
+          }
         } else {
-          const hits = career.batting?.hits || 0;
-          const ab = career.batting?.atBats || 0;
-          const hr = career.batting?.homeruns || 0;
-          const avg = ab > 0 ? hits / ab : 0;
-          if (avg >= 0.260 && avg < 0.280 && ab >= 300) nearReasons.push(`通算打率${avg.toFixed(3)}（.280まであと${(0.280 - avg).toFixed(3)}）`);
-          if (hr >= 42 && hr < 70) nearReasons.push(`通算${hr}本塁打（あと${70 - hr}本）`);
-          if (hits >= 300 && hits < 500) nearReasons.push(`通算${hits}安打（あと${500 - hits}本）`);
+          const meet = player.batting?.meet || 0;
+          const power = player.batting?.power || 0;
+          const eye = player.batting?.eye || 0;
+          const speed = player.physical?.speed || 0;
+          const defense = player.fielding?.defense || 0;
+          const arm = player.physical?.arm || 0;
+          const score = meet + power + eye * 0.5 + speed * 0.3 + defense * 0.3 + arm * 0.3 + ageBonus;
+          if (score >= 120 && score < 140) {
+            nearReasons.push(`野手力${Math.round(score)}pt（あと${Math.round(140 - score)}pt）`);
+          }
         }
 
         if (nearReasons.length > 0) {
@@ -765,13 +797,6 @@ export const TRAINING_MENUS = {
     description: '変化球レベルを強化',
     targets: ['breaking'],
     category: 'pitching'
-  },
-  newpitch: {
-    name: '新球種習得',
-    icon: '✨',
-    description: '新しい変化球を覚える',
-    targets: ['newpitch'],
-    category: 'pitching'
   }
 };
 
@@ -814,6 +839,18 @@ export const SUB_TRAINING_MENUS = {
     icon: '↔️',
     description: 'スイッチヒッターへの挑戦（ミート微減リスク有）',
     targets: ['switch_bats'],
+  },
+  newpitch: {
+    name: '新球種習得',
+    icon: '✨',
+    description: '新しい変化球を覚える（投手のみ）',
+    targets: ['newpitch'],
+  },
+  subposition: {
+    name: 'サブポジ練習',
+    icon: '🔀',
+    description: '別ポジションの守備練習（適正UP）',
+    targets: ['subposition'],
   },
 };
 
@@ -922,6 +959,47 @@ export function executeSubTraining(player, subType) {
           }
         } else {
           growthReport.push({ statName: '打席変更', before: '-', after: '習得失敗', growth: 0 });
+        }
+      }
+      break;
+    }
+    case 'newpitch': {
+      // 新球種習得（サブ練習版 - 成功率低め）
+      if (player.position === 'pitcher' && player.pitching) {
+        const allPitchTypes = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'cutter', 'knuckle', 'shoot'];
+        const currentArsenal = (player.pitching.arsenal || []).map(a => a.type);
+        const available = allPitchTypes.filter(t => !currentArsenal.includes(t));
+        if (available.length > 0 && Math.random() < 0.12) {
+          const newType = available[Math.floor(Math.random() * available.length)];
+          const level = 20 + Math.floor(Math.random() * 20);
+          if (!player.pitching.arsenal) player.pitching.arsenal = [{ type: 'straight', level: 50 }];
+          player.pitching.arsenal.push({ type: newType, level });
+          growthReport.push({ statName: '新球種', before: '-', after: `${getPitchTypeName(newType)}Lv${level}`, growth: 0, isAwakening: true });
+        } else if (available.length === 0) {
+          growthReport.push({ statName: '新球種', before: '-', after: '習得済み', growth: 0 });
+        } else {
+          growthReport.push({ statName: '新球種', before: '-', after: '習得失敗', growth: 0 });
+        }
+      }
+      break;
+    }
+    case 'subposition': {
+      // サブポジション練習 - 適正が低いポジションのフィットネスを上げる
+      if (!player.positionFitness) player.positionFitness = {};
+      const allPos = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+      const nonMainPos = allPos.filter(p => p !== player.position);
+      // 適正の低いポジション優先で1-2ポジション上昇
+      const weakPositions = nonMainPos.filter(p => (player.positionFitness[p] || 0) < 80);
+      const targets = weakPositions.length > 0 ? weakPositions : nonMainPos;
+      const picked = targets[Math.floor(Math.random() * targets.length)];
+      if (picked) {
+        const gain = Math.random() < 0.5 ? (Math.random() < 0.3 ? 5 : 3) : 0;
+        if (gain > 0) {
+          const old = player.positionFitness[picked] || 0;
+          player.positionFitness[picked] = Math.min(100, old + gain);
+          growthReport.push({ statName: `${POSITION_NAMES_MAP[picked] || picked}適正`, before: old, after: old + gain, growth: gain });
+        } else {
+          growthReport.push({ statName: 'サブポジ', before: '-', after: '変化なし', growth: 0 });
         }
       }
       break;

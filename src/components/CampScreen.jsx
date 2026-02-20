@@ -140,6 +140,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       });
       const aiResult = executeTeamCampTraining(aiTeam, aiAssign);
       TEAMS_DATA[tn] = aiResult.updatedTeam;
+      // AIチームもサブ練習を実行
+      const subMenuKeys = Object.keys(SUB_TRAINING_MENUS);
+      aiResult.updatedTeam.players.forEach(p => {
+        const aiSubType = subMenuKeys[Math.floor(Math.random() * subMenuKeys.length)];
+        executeSubTraining(p, aiSubType);
+      });
     });
 
     setRoundResults(allReports);
