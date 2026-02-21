@@ -182,12 +182,14 @@ export function updateAllPlayerAges(allTeams) {
 
 /**
  * NPBドラフト候補条件を判定
- * 投手: 通算30勝以上、または通算450奪三振以上、または通算50セーブ以上
- * 野手: 通算打率.280以上、または通算70本塁打以上、または通算500安打以上
+ * 能力ベース評価 + シーズン個人成績ボーナス（1位+10pt、2位+5pt）
+ * 統一指名ライン: 220pt
  * @param {Object} player - 選手データ
- * @returns {Object} - { isDraftEligible: boolean, reasons: string[] }
+ * @param {number} awardBonus - シーズン個人成績ボーナス（デフォルト0）
+ * @returns {Object} - { isDraftEligible: boolean, reasons: string[], totalScore: number }
  */
-export function checkNPBDraftEligibility(player) {
+export function checkNPBDraftEligibility(player, awardBonus = 0) {
+  const DRAFT_THRESHOLD = 220;
   const isPitcher = player.position === 'pitcher';
   const reasons = [];
   const age = player.age || 20;
@@ -195,6 +197,8 @@ export function checkNPBDraftEligibility(player) {
   // 能力ベースのドラフト評価（年齢が若いほど低い能力でも指名される）
   // 年齢ボーナス: 若い選手ほど将来性で高評価
   const ageBonus = age <= 20 ? 15 : age <= 22 ? 10 : age <= 24 ? 5 : age <= 26 ? 0 : -5;
+
+  let baseScore = 0;
 
   if (isPitcher) {
     const velocity = player.pitching?.velocity || 0;
@@ -205,10 +209,13 @@ export function checkNPBDraftEligibility(player) {
 
     // 総合投手力 = 球速評価 + 制球 + スタミナ/2 + 変化球 + 年齢ボーナス
     const velocityScore = Math.max(0, (velocity - 130) * 2); // 130km以上で評価
-    const pitcherScore = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus;
+    baseScore = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus;
+    const totalScore = baseScore + awardBonus;
 
-    if (pitcherScore >= 130) {
-      reasons.push(`投手力${Math.round(pitcherScore)}pt`);
+    if (totalScore >= DRAFT_THRESHOLD) {
+      reasons.push(`投手力${Math.round(baseScore)}pt`);
+      if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
+      reasons.push(`総合${Math.round(totalScore)}pt`);
       if (velocity >= 148) reasons.push(`球速${velocity}km`);
       if (control >= 75) reasons.push(`制球力${control}`);
       if (bestBreaking >= 70) reasons.push(`変化球${bestBreaking}`);
@@ -223,10 +230,13 @@ export function checkNPBDraftEligibility(player) {
     const arm = player.physical?.arm || 0;
 
     // 総合野手力 = ミート + パワー + 選球眼/2 + 走力/3 + 守備/3 + 肩/3 + 年齢ボーナス
-    const batterScore = meet + power + eye * 0.5 + speed * 0.3 + defense * 0.3 + arm * 0.3 + ageBonus;
+    baseScore = meet + power + eye * 0.5 + speed * 0.3 + defense * 0.3 + arm * 0.3 + ageBonus;
+    const totalScore = baseScore + awardBonus;
 
-    if (batterScore >= 140) {
-      reasons.push(`野手力${Math.round(batterScore)}pt`);
+    if (totalScore >= DRAFT_THRESHOLD) {
+      reasons.push(`野手力${Math.round(baseScore)}pt`);
+      if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
+      reasons.push(`総合${Math.round(totalScore)}pt`);
       if (meet >= 75) reasons.push(`ミート${meet}`);
       if (power >= 75) reasons.push(`パワー${power}`);
       if (speed >= 80) reasons.push(`俊足${speed}`);
@@ -237,17 +247,128 @@ export function checkNPBDraftEligibility(player) {
 
   return {
     isDraftEligible: reasons.length > 0,
-    reasons
+    reasons,
+    totalScore: baseScore + awardBonus
   };
+}
+
+/**
+ * シーズン個人成績ランキングからボーナスを計算
+ * 各部門1位: +10pt、2位: +5pt
+ * 打撃: 首位打者、本塁打王、打点王、盗塁王
+ * 投手: 最優秀防御率、最多勝、最多セーブ、最多奪三振
+ * @param {Object} allTeams - TEAMS_DATA
+ * @returns {Object} - playerId -> { bonus: number, awards: string[] }
+ */
+function computeSeasonAwardBonuses(allTeams) {
+  const bonusMap = {}; // playerId -> { bonus, awards }
+
+  const addBonus = (playerId, points, awardName) => {
+    if (!bonusMap[playerId]) bonusMap[playerId] = { bonus: 0, awards: [] };
+    bonusMap[playerId].bonus += points;
+    bonusMap[playerId].awards.push(awardName);
+  };
+
+  // 全選手を収集
+  const allPlayers = [];
+  Object.entries(allTeams).forEach(([teamName, team]) => {
+    if (!team.players) return;
+    team.players.forEach(player => {
+      if (player.seasonStats) {
+        allPlayers.push(player);
+      }
+    });
+  });
+
+  // 打撃ランキング（規定打席: 100打席以上）
+  const qualifiedBatters = allPlayers.filter(p => p.seasonStats?.batting?.atBats >= 100);
+
+  if (qualifiedBatters.length >= 1) {
+    // 首位打者（打率）
+    const baSorted = [...qualifiedBatters].sort((a, b) => {
+      const avgA = a.seasonStats.batting.hits / a.seasonStats.batting.atBats;
+      const avgB = b.seasonStats.batting.hits / b.seasonStats.batting.atBats;
+      return avgB - avgA;
+    });
+    addBonus(baSorted[0].id, 10, '首位打者1位');
+    if (baSorted.length >= 2) addBonus(baSorted[1].id, 5, '首位打者2位');
+
+    // 本塁打王
+    const hrSorted = [...qualifiedBatters].sort((a, b) =>
+      (b.seasonStats.batting.homeruns || 0) - (a.seasonStats.batting.homeruns || 0)
+    );
+    addBonus(hrSorted[0].id, 10, '本塁打王1位');
+    if (hrSorted.length >= 2) addBonus(hrSorted[1].id, 5, '本塁打王2位');
+
+    // 打点王
+    const rbiSorted = [...qualifiedBatters].sort((a, b) =>
+      (b.seasonStats.batting.rbis || 0) - (a.seasonStats.batting.rbis || 0)
+    );
+    addBonus(rbiSorted[0].id, 10, '打点王1位');
+    if (rbiSorted.length >= 2) addBonus(rbiSorted[1].id, 5, '打点王2位');
+
+    // 盗塁王
+    const sbSorted = [...qualifiedBatters].sort((a, b) =>
+      (b.seasonStats.batting.stolenBases || 0) - (a.seasonStats.batting.stolenBases || 0)
+    );
+    addBonus(sbSorted[0].id, 10, '盗塁王1位');
+    if (sbSorted.length >= 2) addBonus(sbSorted[1].id, 5, '盗塁王2位');
+  }
+
+  // 投手ランキング（規定投球回: 30イニング以上）
+  const qualifiedPitchers = allPlayers.filter(p => p.seasonStats?.pitching?.inningsPitched >= 30);
+
+  if (qualifiedPitchers.length >= 1) {
+    // 最優秀防御率（低いほど良い）
+    const eraSorted = [...qualifiedPitchers].sort((a, b) => {
+      const eraA = a.seasonStats.pitching.inningsPitched > 0
+        ? (a.seasonStats.pitching.earnedRuns * 27) / a.seasonStats.pitching.inningsPitched : 99.99;
+      const eraB = b.seasonStats.pitching.inningsPitched > 0
+        ? (b.seasonStats.pitching.earnedRuns * 27) / b.seasonStats.pitching.inningsPitched : 99.99;
+      return eraA - eraB;
+    });
+    addBonus(eraSorted[0].id, 10, '最優秀防御率1位');
+    if (eraSorted.length >= 2) addBonus(eraSorted[1].id, 5, '最優秀防御率2位');
+
+    // 最多勝
+    const winsSorted = [...qualifiedPitchers].sort((a, b) =>
+      (b.seasonStats.pitching.wins || 0) - (a.seasonStats.pitching.wins || 0)
+    );
+    addBonus(winsSorted[0].id, 10, '最多勝1位');
+    if (winsSorted.length >= 2) addBonus(winsSorted[1].id, 5, '最多勝2位');
+
+    // 最多奪三振
+    const soSorted = [...qualifiedPitchers].sort((a, b) =>
+      (b.seasonStats.pitching.strikeouts || 0) - (a.seasonStats.pitching.strikeouts || 0)
+    );
+    addBonus(soSorted[0].id, 10, '最多奪三振1位');
+    if (soSorted.length >= 2) addBonus(soSorted[1].id, 5, '最多奪三振2位');
+  }
+
+  // 最多セーブ（規定投球回不要、セーブ1以上）
+  const savePitchers = allPlayers.filter(p => (p.seasonStats?.pitching?.saves || 0) > 0);
+  if (savePitchers.length >= 1) {
+    const savesSorted = [...savePitchers].sort((a, b) =>
+      (b.seasonStats.pitching.saves || 0) - (a.seasonStats.pitching.saves || 0)
+    );
+    addBonus(savesSorted[0].id, 10, '最多セーブ1位');
+    if (savesSorted.length >= 2) addBonus(savesSorted[1].id, 5, '最多セーブ2位');
+  }
+
+  return bonusMap;
 }
 
 /**
  * NPBドラフト処理
  * 全チームの選手をチェックし、ドラフト対象者を抽出・処理
+ * シーズン個人成績ボーナス付き（1位+10pt、2位+5pt）
  * @param {Object} allTeams - TEAMS_DATA
  * @returns {Object} - { draftedPlayers, nearMissPlayers }
  */
 export function processNPBDraft(allTeams) {
+  const DRAFT_THRESHOLD = 220;
+  const NEAR_MISS_THRESHOLD = Math.round(DRAFT_THRESHOLD * 0.85); // 187pt
+
   const NPB_TEAMS = [
     '読売ジャイアンツ', '阪神タイガース', '横浜DeNAベイスターズ',
     '広島東洋カープ', '中日ドラゴンズ', 'ヤクルトスワローズ',
@@ -255,13 +376,18 @@ export function processNPBDraft(allTeams) {
     '楽天ゴールデンイーグルス', '千葉ロッテマリーンズ', '日本ハムファイターズ'
   ];
 
+  // シーズン個人成績ボーナスを計算
+  const awardBonusMap = computeSeasonAwardBonuses(allTeams);
+
   const draftedPlayers = [];
   const nearMissPlayers = [];
 
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team.players) return;
     team.players.forEach(player => {
-      const { isDraftEligible, reasons } = checkNPBDraftEligibility(player);
+      const playerBonus = awardBonusMap[player.id]?.bonus || 0;
+      const playerAwards = awardBonusMap[player.id]?.awards || [];
+      const { isDraftEligible, reasons, totalScore } = checkNPBDraftEligibility(player, playerBonus);
       if (isDraftEligible) {
         const npbTeam = NPB_TEAMS[Math.floor(Math.random() * NPB_TEAMS.length)];
         // 殿堂入り判定
@@ -278,40 +404,18 @@ export function processNPBDraft(allTeams) {
           hallOfFame: hofResult.isHallOfFame,
           hofReason: hofResult.reason,
           careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
-          yearsPlayed: player.yearsPlayed || 1
+          yearsPlayed: player.yearsPlayed || 1,
+          awardBonus: playerBonus,
+          seasonAwards: playerAwards
         });
       } else {
         // 惜しかった選手の判定（ドラフト基準の85%以上）
-        const isPitcher = player.position === 'pitcher';
-        const age = player.age || 20;
-        const ageBonus = age <= 20 ? 15 : age <= 22 ? 10 : age <= 24 ? 5 : age <= 26 ? 0 : -5;
-        const nearReasons = [];
-
-        if (isPitcher) {
-          const velocity = player.pitching?.velocity || 0;
-          const control = player.pitching?.control || 0;
-          const stamina = player.pitching?.stamina || 0;
-          const arsenal = player.pitching?.arsenal || [];
-          const bestBreaking = arsenal.filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
-          const velocityScore = Math.max(0, (velocity - 130) * 2);
-          const score = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus;
-          if (score >= 110 && score < 130) {
-            nearReasons.push(`投手力${Math.round(score)}pt（あと${Math.round(130 - score)}pt）`);
-          }
-        } else {
-          const meet = player.batting?.meet || 0;
-          const power = player.batting?.power || 0;
-          const eye = player.batting?.eye || 0;
-          const speed = player.physical?.speed || 0;
-          const defense = player.fielding?.defense || 0;
-          const arm = player.physical?.arm || 0;
-          const score = meet + power + eye * 0.5 + speed * 0.3 + defense * 0.3 + arm * 0.3 + ageBonus;
-          if (score >= 120 && score < 140) {
-            nearReasons.push(`野手力${Math.round(score)}pt（あと${Math.round(140 - score)}pt）`);
-          }
-        }
-
-        if (nearReasons.length > 0) {
+        const { totalScore: playerScore } = checkNPBDraftEligibility(player, playerBonus);
+        if (playerScore >= NEAR_MISS_THRESHOLD && playerScore < DRAFT_THRESHOLD) {
+          const nearReasons = [];
+          const isPitcher = player.position === 'pitcher';
+          nearReasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(playerScore)}pt（あと${Math.round(DRAFT_THRESHOLD - playerScore)}pt）`);
+          if (playerBonus > 0) nearReasons.push(`成績ボーナス+${playerBonus}pt`);
           nearMissPlayers.push({
             name: player.name,
             teamName,

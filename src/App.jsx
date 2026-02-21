@@ -3625,13 +3625,18 @@ if (newOuts === 3) {
   };
 
   // ユーザーチームのスタメンが完成しているか確認
+  // battingOrder内の選手が実際にロスターに存在するかも検証する
   const checkUserLineupComplete = () => {
     const team = TEAMS_DATA[userTeamName];
     if (!team) return true;
     const settings = team.lineupSettings;
-    if (!settings || !settings.battingOrder) return false;
-    const starterCount = settings.battingOrder.filter(e => e.battingOrder >= 1 && e.battingOrder <= 9).length;
-    return starterCount >= 9;
+    if (!settings || !settings.battingOrder || settings.battingOrder.length === 0) return false;
+    // battingOrder 1-9の各エントリが存在し、かつその選手がチームに在籍しているか確認
+    const validStarters = settings.battingOrder.filter(e => {
+      if (e.battingOrder < 1 || e.battingOrder > 9) return false;
+      return team.players.some(p => p.id === e.playerId);
+    });
+    return validStarters.length >= 9;
   };
 
   const handleProgressDate = (days) => {
@@ -4266,9 +4271,12 @@ if (newOuts === 3) {
             Object.keys(TEAMS_DATA).forEach(teamName => {
               const teamData = TEAMS_DATA[teamName];
               if (teamData && teamData.players && teamData.players.length > 0) {
-                if (teamName === userTeamName && (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length)) {
-                  // ユーザーチーム（未設定の場合のみ推奨スタメンを再設定）
-                  setRecommendedLineup(teamData, teamName);
+                if (teamName === userTeamName) {
+                  // ユーザーチーム: lineupSettings未設定 or 在籍選手が足りない場合のみ再設定
+                  if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
+                    setRecommendedLineup(teamData, teamName);
+                  }
+                  // 既に設定済みの場合はそのまま保持（ユーザーの設定を尊重）
                 } else {
                   generateAILineup(teamData, teamName);
                 }
