@@ -8,6 +8,49 @@ import { createSeasonData, initializeStandings } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 
 /**
+ * チームから選手IDを除去した際にlineupSettings/pitchingRotationを清掃
+ * @param {Object} team - チームデータ
+ * @param {string} playerId - 除去された選手ID
+ */
+export function cleanupPlayerReferences(team, playerId) {
+  // lineupSettings.battingOrderから除去
+  if (team.lineupSettings?.battingOrder) {
+    const idx = team.lineupSettings.battingOrder.findIndex(e => e.playerId === playerId);
+    if (idx !== -1) {
+      team.lineupSettings.battingOrder.splice(idx, 1);
+    }
+  }
+
+  // pitchingRotationから除去
+  const rotation = team.pitchingRotation;
+  if (!rotation) return;
+
+  if (rotation.starters) {
+    const idx = rotation.starters.indexOf(playerId);
+    if (idx !== -1) rotation.starters.splice(idx, 1);
+  }
+  if (rotation.closer === playerId) {
+    rotation.closer = null;
+  }
+  if (rotation.setupMen) {
+    const idx = rotation.setupMen.indexOf(playerId);
+    if (idx !== -1) rotation.setupMen.splice(idx, 1);
+  }
+  if (rotation.middleRelievers) {
+    const idx = rotation.middleRelievers.indexOf(playerId);
+    if (idx !== -1) rotation.middleRelievers.splice(idx, 1);
+  }
+  // pitcherRolesマップからも除去
+  if (rotation.pitcherRoles) {
+    delete rotation.pitcherRoles[playerId];
+  }
+  // reliefFatigueからも除去
+  if (rotation.reliefFatigue) {
+    delete rotation.reliefFatigue[playerId];
+  }
+}
+
+/**
  * シーズン終了処理
  * @param {Object} seasonData - シーズンデータ
  * @param {Object} allTeams - 全チームデータ
@@ -64,6 +107,7 @@ export function processSeasonEnd(seasonData, allTeams) {
       return avg > bestAvg ? p : best;
     });
     awards.battingChampion = {
+      id: battingLeader.id,
       name: battingLeader.name,
       team: battingLeader.teamName,
       avg: (battingLeader.seasonStats.batting.hits / battingLeader.seasonStats.batting.atBats).toFixed(3)
@@ -74,6 +118,7 @@ export function processSeasonEnd(seasonData, allTeams) {
       p.seasonStats.batting.homeruns > best.seasonStats.batting.homeruns ? p : best
     );
     awards.homeRunKing = {
+      id: hrLeader.id,
       name: hrLeader.name,
       team: hrLeader.teamName,
       homeruns: hrLeader.seasonStats.batting.homeruns
@@ -84,6 +129,7 @@ export function processSeasonEnd(seasonData, allTeams) {
       p.seasonStats.batting.rbis > best.seasonStats.batting.rbis ? p : best
     );
     awards.rbiKing = {
+      id: rbiLeader.id,
       name: rbiLeader.name,
       team: rbiLeader.teamName,
       rbis: rbiLeader.seasonStats.batting.rbis
@@ -94,6 +140,7 @@ export function processSeasonEnd(seasonData, allTeams) {
       p.seasonStats.batting.stolenBases > best.seasonStats.batting.stolenBases ? p : best
     );
     awards.stolenBaseKing = {
+      id: sbLeader.id,
       name: sbLeader.name,
       team: sbLeader.teamName,
       stolenBases: sbLeader.seasonStats.batting.stolenBases
@@ -118,6 +165,7 @@ export function processSeasonEnd(seasonData, allTeams) {
     });
     const era = (eraLeader.seasonStats.pitching.earnedRuns * 27) / eraLeader.seasonStats.pitching.inningsPitched;
     awards.eraChampion = {
+      id: eraLeader.id,
       name: eraLeader.name,
       team: eraLeader.teamName,
       era: era.toFixed(2)
@@ -128,6 +176,7 @@ export function processSeasonEnd(seasonData, allTeams) {
       p.seasonStats.pitching.wins > best.seasonStats.pitching.wins ? p : best
     );
     awards.winsLeader = {
+      id: winsLeader.id,
       name: winsLeader.name,
       team: winsLeader.teamName,
       wins: winsLeader.seasonStats.pitching.wins
@@ -139,6 +188,7 @@ export function processSeasonEnd(seasonData, allTeams) {
     );
     if (savesLeader.seasonStats.pitching.saves > 0) {
       awards.savesLeader = {
+        id: savesLeader.id,
         name: savesLeader.name,
         team: savesLeader.teamName,
         saves: savesLeader.seasonStats.pitching.saves
@@ -150,6 +200,7 @@ export function processSeasonEnd(seasonData, allTeams) {
       p.seasonStats.pitching.strikeouts > best.seasonStats.pitching.strikeouts ? p : best
     );
     awards.strikeoutKing = {
+      id: soLeader.id,
       name: soLeader.name,
       team: soLeader.teamName,
       strikeouts: soLeader.seasonStats.pitching.strikeouts
@@ -428,10 +479,11 @@ export function processNPBDraft(allTeams) {
     });
   });
 
-  // ドラフト対象者をチームから除外
+  // ドラフト対象者をチームから除外（lineupSettings/pitchingRotationも清掃）
   draftedPlayers.forEach(({ playerId, teamName }) => {
     const team = allTeams[teamName];
     if (team) {
+      cleanupPlayerReferences(team, playerId);
       team.players = team.players.filter(p => p.id !== playerId);
     }
   });
@@ -523,11 +575,13 @@ export function processRetirements(allTeams) {
 
   Object.entries(allTeams).forEach(([teamName, team]) => {
     const remainingPlayers = [];
+    const retiredIds = [];
 
     team.players.forEach(player => {
       const { shouldRetire, hallOfFame, reason } = checkRetirement(player);
 
       if (shouldRetire) {
+        retiredIds.push(player.id);
         retirements.push({
           name: player.name,
           team: teamName,
@@ -541,6 +595,9 @@ export function processRetirements(allTeams) {
         remainingPlayers.push(player);
       }
     });
+
+    // lineupSettings/pitchingRotationから引退選手の参照を清掃
+    retiredIds.forEach(id => cleanupPlayerReferences(team, id));
 
     updatedTeams[teamName] = {
       ...team,
@@ -576,34 +633,38 @@ export function resetSeasonStats(allTeams) {
     updatedTeams[teamName] = {
       ...team,
       players: team.players.map(player => {
-        // シーズン成績を通算成績に加算
+        // シーズン成績を通算成績に加算（古いセーブデータ対応: || 0）
+        const cb = player.careerStats.batting;
+        const sb = player.seasonStats.batting;
         const updatedCareerBatting = {
-          games: player.careerStats.batting.games + player.seasonStats.batting.games,
-          atBats: player.careerStats.batting.atBats + player.seasonStats.batting.atBats,
-          hits: player.careerStats.batting.hits + player.seasonStats.batting.hits,
-          doubles: player.careerStats.batting.doubles + player.seasonStats.batting.doubles,
-          triples: player.careerStats.batting.triples + player.seasonStats.batting.triples,
-          homeruns: player.careerStats.batting.homeruns + player.seasonStats.batting.homeruns,
-          rbis: player.careerStats.batting.rbis + player.seasonStats.batting.rbis,
-          walks: player.careerStats.batting.walks + player.seasonStats.batting.walks,
-          strikeouts: player.careerStats.batting.strikeouts + player.seasonStats.batting.strikeouts,
-          stolenBases: player.careerStats.batting.stolenBases + player.seasonStats.batting.stolenBases
+          games: (cb.games || 0) + (sb.games || 0),
+          atBats: (cb.atBats || 0) + (sb.atBats || 0),
+          hits: (cb.hits || 0) + (sb.hits || 0),
+          doubles: (cb.doubles || 0) + (sb.doubles || 0),
+          triples: (cb.triples || 0) + (sb.triples || 0),
+          homeruns: (cb.homeruns || 0) + (sb.homeruns || 0),
+          rbis: (cb.rbis || 0) + (sb.rbis || 0),
+          walks: (cb.walks || 0) + (sb.walks || 0),
+          strikeouts: (cb.strikeouts || 0) + (sb.strikeouts || 0),
+          stolenBases: (cb.stolenBases || 0) + (sb.stolenBases || 0)
         };
 
+        const cp = player.careerStats.pitching;
+        const sp = player.seasonStats.pitching;
         const updatedCareerPitching = {
-          games: player.careerStats.pitching.games + player.seasonStats.pitching.games,
-          wins: player.careerStats.pitching.wins + player.seasonStats.pitching.wins,
-          losses: player.careerStats.pitching.losses + player.seasonStats.pitching.losses,
-          saves: player.careerStats.pitching.saves + player.seasonStats.pitching.saves,
-          holds: player.careerStats.pitching.holds + player.seasonStats.pitching.holds,
-          inningsPitched: player.careerStats.pitching.inningsPitched + player.seasonStats.pitching.inningsPitched,
-          runsAllowed: player.careerStats.pitching.runsAllowed + player.seasonStats.pitching.runsAllowed,
-          earnedRuns: player.careerStats.pitching.earnedRuns + player.seasonStats.pitching.earnedRuns,
-          hits: player.careerStats.pitching.hits + player.seasonStats.pitching.hits,
-          homeruns: player.careerStats.pitching.homeruns + player.seasonStats.pitching.homeruns,
-          walks: player.careerStats.pitching.walks + player.seasonStats.pitching.walks,
-          strikeouts: player.careerStats.pitching.strikeouts + player.seasonStats.pitching.strikeouts,
-          pitches: player.careerStats.pitching.pitches + player.seasonStats.pitching.pitches
+          games: (cp.games || 0) + (sp.games || 0),
+          wins: (cp.wins || 0) + (sp.wins || 0),
+          losses: (cp.losses || 0) + (sp.losses || 0),
+          saves: (cp.saves || 0) + (sp.saves || 0),
+          holds: (cp.holds || 0) + (sp.holds || 0),
+          inningsPitched: (cp.inningsPitched || 0) + (sp.inningsPitched || 0),
+          runsAllowed: (cp.runsAllowed || 0) + (sp.runsAllowed || 0),
+          earnedRuns: (cp.earnedRuns || 0) + (sp.earnedRuns || 0),
+          hits: (cp.hits || 0) + (sp.hits || 0),
+          homeruns: (cp.homeruns || 0) + (sp.homeruns || 0),
+          walks: (cp.walks || 0) + (sp.walks || 0),
+          strikeouts: (cp.strikeouts || 0) + (sp.strikeouts || 0),
+          pitches: (cp.pitches || 0) + (sp.pitches || 0)
         };
 
         // シーズン成績をリセット
@@ -640,29 +701,31 @@ export function recordAwardsToPlayers(allTeams, awards) {
       players: team.players.map(player => {
         const achievements = [...(player.professionalCareer?.achievements || [])];
 
-        // 各タイトルをチェック
-        if (awards.battingChampion?.name === player.name) {
-          achievements.push({ year: 0, title: '首位打者' }); // yearは後で設定
+        // 各タイトルをチェック（IDで照合、IDがない場合は名前で照合）
+        const matchAward = (award) => award && (award.id ? award.id === player.id : award.name === player.name);
+
+        if (matchAward(awards.battingChampion)) {
+          achievements.push({ year: 0, title: '首位打者' });
         }
-        if (awards.homeRunKing?.name === player.name) {
+        if (matchAward(awards.homeRunKing)) {
           achievements.push({ year: 0, title: '本塁打王' });
         }
-        if (awards.rbiKing?.name === player.name) {
+        if (matchAward(awards.rbiKing)) {
           achievements.push({ year: 0, title: '打点王' });
         }
-        if (awards.stolenBaseKing?.name === player.name) {
+        if (matchAward(awards.stolenBaseKing)) {
           achievements.push({ year: 0, title: '盗塁王' });
         }
-        if (awards.eraChampion?.name === player.name) {
+        if (matchAward(awards.eraChampion)) {
           achievements.push({ year: 0, title: '最優秀防御率' });
         }
-        if (awards.winsLeader?.name === player.name) {
+        if (matchAward(awards.winsLeader)) {
           achievements.push({ year: 0, title: '最多勝' });
         }
-        if (awards.savesLeader?.name === player.name) {
+        if (matchAward(awards.savesLeader)) {
           achievements.push({ year: 0, title: '最多セーブ' });
         }
-        if (awards.strikeoutKing?.name === player.name) {
+        if (matchAward(awards.strikeoutKing)) {
           achievements.push({ year: 0, title: '最多奪三振' });
         }
 

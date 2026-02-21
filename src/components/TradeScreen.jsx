@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
+import { cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
 
 const TradeScreen = ({ userTeamName, onBack }) => {
   const [selectedMyPlayer, setSelectedMyPlayer] = useState(null);
@@ -86,15 +87,9 @@ const TradeScreen = ({ userTeamName, onBack }) => {
       selectedMyPlayer.battingOrder = 0;
       selectedTargetPlayer.battingOrder = 0;
 
-      // lineupSettingsからも除去
-      if (myTeam.lineupSettings?.battingOrder) {
-        const idx = myTeam.lineupSettings.battingOrder.findIndex(e => e.playerId === selectedMyPlayer.id);
-        if (idx !== -1) myTeam.lineupSettings.battingOrder.splice(idx, 1);
-      }
-      if (targetTeam.lineupSettings?.battingOrder) {
-        const idx = targetTeam.lineupSettings.battingOrder.findIndex(e => e.playerId === selectedTargetPlayer.id);
-        if (idx !== -1) targetTeam.lineupSettings.battingOrder.splice(idx, 1);
-      }
+      // lineupSettings/pitchingRotationから除去（両チーム）
+      cleanupPlayerReferences(myTeam, selectedMyPlayer.id);
+      cleanupPlayerReferences(targetTeam, selectedTargetPlayer.id);
 
       // 入れ替え実行
       myTeam.players.splice(myIdx, 1);
