@@ -4359,7 +4359,20 @@ if (newOuts === 3) {
           isInitialTryout={true}
           initializeAllPitchingRotations={initializeAllPitchingRotations}
           onComplete={() => {
-            // トライアウト完了後、全チームのスタメンを自動設定
+            // トライアウト完了後、キャンプへ遷移
+            setGameFlowState('newgame_camp');
+          }}
+        />;
+      }
+
+      // NEW GAME: キャンプ
+      if (screenMode === 'start' && gameFlowState === 'newgame_camp') {
+        return <CampScreen
+          seasonData={seasonData}
+          allTeams={allTeams}
+          onComplete={() => {
+            // キャンプ終了時に全チームのスタメンを自動生成
+            console.log('🏕️ キャンプ終了: 全チームのスタメンを生成');
             Object.keys(TEAMS_DATA).forEach(teamName => {
               const teamData = TEAMS_DATA[teamName];
               if (teamData && teamData.players && teamData.players.length > 0) {
@@ -4369,43 +4382,19 @@ if (newOuts === 3) {
                 } else {
                   generateAILineup(teamData, teamName);
                 }
-              }
-            });
-            // 直接シーズンへ移行（キャンプスキップ）
-            setSeasonData(prev => ({
-              ...prev,
-              currentDate: { year: 2024, month: 4, day: 1 },
-              phase: SEASON_PHASES.REGULAR_SEASON
-            }));
-            setSelectedMonth(4); // 4月から試合開始
-            setManagementView('dateprogress');
-            setScreenMode('management');
-            setGameFlowState('season');
-          }}
-        />;
-      }
-
-      // NEW GAME: キャンプ
-      if (screenMode === 'start' && gameFlowState === 'newgame_camp') {
-        return <CampScreen
-          onComplete={() => {
-            // キャンプ終了時に全チームのスタメンを自動生成
-            console.log('🏕️ キャンプ終了: 全チームのスタメンを生成');
-            Object.keys(TEAMS_DATA).forEach(teamName => {
-              const teamData = TEAMS_DATA[teamName];
-              if (teamData && teamData.players && teamData.players.length > 0) {
-                generateAILineup(teamData, teamName);
-                // 生成結果をTEAMS_DATAに反映
                 console.log(`  ✅ ${teamName}のスタメンを生成完了`);
               }
             });
 
             // 日付を4/1に設定し、レギュラーシーズンに移行
+            const calYear = 2024 + (seasonData?.year || 1) - 1;
             setSeasonData(prev => ({
               ...prev,
-              currentDate: { year: 2024, month: 4, day: 1 },
+              currentDate: { year: calYear, month: 4, day: 1 },
               phase: SEASON_PHASES.REGULAR_SEASON
             }));
+            setSelectedMonth(4);
+            setManagementView('dateprogress');
             setScreenMode('management');
             setGameFlowState('season');
           }}

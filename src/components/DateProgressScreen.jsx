@@ -132,7 +132,26 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     return newData;
   };
 
+  // ユーザーチームのスタメンが9人揃っているかチェック
+  const checkUserLineupComplete = () => {
+    const team = TEAMS_DATA[userTeamName];
+    if (!team) return true;
+    const settings = team.lineupSettings;
+    if (!settings || !settings.battingOrder || settings.battingOrder.length === 0) return false;
+    const validStarters = settings.battingOrder.filter(e => {
+      if (e.battingOrder < 1 || e.battingOrder > 9) return false;
+      return team.players.some(p => p.id === e.playerId);
+    });
+    return validStarters.length >= 9;
+  };
+
   const handleProgressDate = (days) => {
+    // スタメンチェック（レギュラーシーズン/プレーオフ中のみ）
+    if ((currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
+      alert('スタメンが9人揃っていません。ロスター管理で打順を設定してください。');
+      return;
+    }
+
     setIsSimulating(true);
     const { data: afterSimData, results } = simulateGamesOnDate(seasonData);
     let newSeasonData = progressDate(afterSimData, days);

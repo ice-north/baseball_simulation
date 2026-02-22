@@ -20,10 +20,16 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     for (let i = 0; i < newCount; i++) {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
     }
+    // 試合数を新しいチーム数-1の倍数に自動調整
+    const newDivisor = newCount - 1;
+    const oldGames = tempSettings.gamesPerSeason || 60;
+    const roundsPerTeam = Math.max(1, Math.round(oldGames / ((tempSettings.teamsCount || 4) - 1)));
+    const adjustedGames = newDivisor * roundsPerTeam;
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
-      teamNames: newNames
+      teamNames: newNames,
+      gamesPerSeason: adjustedGames
     });
   };
 
@@ -131,7 +137,22 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
             </div>
             <div className="flex items-center justify-between">
               <label className="font-medium">年間試合数</label>
-              <input type="number" min="10" max="200" value={tempSettings.gamesPerSeason} onChange={(e) => setTempSettings({...tempSettings, gamesPerSeason: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24" />
+              <div className="flex items-center gap-2">
+                <select
+                  value={tempSettings.gamesPerSeason}
+                  onChange={(e) => setTempSettings({...tempSettings, gamesPerSeason: parseInt(e.target.value)})}
+                  className="bg-gray-700 rounded px-3 py-2"
+                >
+                  {(() => {
+                    const d = (tempSettings.teamsCount || 4) - 1;
+                    const options = [];
+                    for (let i = 1; i <= 50; i++) {
+                      options.push(d * i);
+                    }
+                    return options.map(v => <option key={v} value={v}>{v}試合（各{v / d}戦）</option>);
+                  })()}
+                </select>
+              </div>
             </div>
             <div className="flex items-center justify-between">
               <label className="font-medium">プレーオフ形式</label>
