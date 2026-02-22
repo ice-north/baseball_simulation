@@ -444,9 +444,10 @@ export const generateRandomArsenal = (extraPitches = 0) => {
     if (availableTypes.length === 0) break;
 
     const selectedType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
-    // breakingBall特性の追加分はレベル高め
-    const levelMin = (i > baseSize) ? 70 : 50;
-    const level = Math.floor(Math.random() * (100 - levelMin + 1)) + levelMin;
+    // 独立リーグレベル: 変化球レベルを抑える（S/Aランクは稀に）
+    const levelMin = (i > baseSize) ? 40 : 25;
+    const levelMax = (i > baseSize) ? 80 : 70;
+    const level = Math.floor(Math.random() * (levelMax - levelMin + 1)) + levelMin;
     arsenal.push({ id: i, type: selectedType, level });
     usedTypes.add(selectedType);
   }

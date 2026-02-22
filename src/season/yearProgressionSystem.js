@@ -1321,9 +1321,9 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       nonStraight.forEach(pitch => {
         const ageBase = getAgeGrowthBase(age, false);
         const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
-        // 成長量1/4: 元(1-3 + 1-4) → 1/4
+        // 成長量1/6: 元(1-3 + 1-4) → 1/6（元1/4の2/3）
         const rawGrowth = (Math.floor(Math.random() * 3) + 1 + Math.floor(Math.random() * 4) + 1) * ageMultiplier;
-        const growth = Math.max(1, Math.round(rawGrowth * 0.25));
+        const growth = Math.max(1, Math.round(rawGrowth * 0.167));
         const before = pitch.level;
         pitch.level = before + growth; // 上限なし
         growthReport.push({
@@ -1361,7 +1361,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     return { player: updatedPlayer, growthReport };
   }
 
-  // 通常の能力練習（成長量1/4）
+  // 通常の能力練習（成長量1/6 = 元1/4の2/3）
   menu.targets.forEach(targetStat => {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
     const ageBase = getAgeGrowthBase(age, isPhysical);
@@ -1370,15 +1370,15 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const boBonus = getBattingOrderGrowthBonus(player, targetStat);
     const expBonus = posBonus * boBonus;
 
-    // 元の成長量を1/4に: (base + focus) * 0.25
+    // 元の成長量を1/6に: (base + focus) * 0.167（元1/4の2/3）
     const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
     const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.25);
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.167);
 
     // 覚醒判定
     const awakeningChance = Math.floor(experience / 10);
     const isAwakening = Math.random() * 100 < awakeningChance;
-    const awakeningGrowth = isAwakening ? Math.round((Math.floor(Math.random() * 10) + 5) * 0.25) : 0;
+    const awakeningGrowth = isAwakening ? Math.round((Math.floor(Math.random() * 10) + 5) * 0.167) : 0;
 
     const totalGrowth = Math.max(0, baseGrowth + awakeningGrowth);
 

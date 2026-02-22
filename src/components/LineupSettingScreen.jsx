@@ -251,7 +251,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       // レガシー配列にも反映
       if (['complete', 'short', 'quality', 'auto_s'].includes(newRole)) {
         rotation.starters.push(playerId);
-      } else if (['long', 'onepoint', 'ace_relief', 'mopup', 'auto_r'].includes(newRole)) {
+      } else if (['long', 'onepoint', 'ace_relief', 'mopup', 'behind', 'auto_r'].includes(newRole)) {
         if (!rotation.middleRelievers) rotation.middleRelievers = [];
         rotation.middleRelievers.push(playerId);
       } else if (newRole === 'setup') {
@@ -287,6 +287,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     long:       { label: 'ロング', color: 'bg-green-700', textColor: 'text-green-300', group: 'relief' },
     ace_relief: { label: '中継ぎエース', color: 'bg-green-500', textColor: 'text-green-200', group: 'relief' },
     mopup:      { label: '敗戦処理', color: 'bg-gray-700', textColor: 'text-gray-300', group: 'relief' },
+    behind:     { label: 'ビハインド', color: 'bg-yellow-700', textColor: 'text-yellow-300', group: 'relief' },
     onepoint:   { label: 'ワンポイント', color: 'bg-green-600', textColor: 'text-green-300', group: 'relief' },
     setup:      { label: 'セットアップ', color: 'bg-orange-600', textColor: 'text-orange-300', group: 'relief' },
     closer:     { label: '守護神', color: 'bg-purple-600', textColor: 'text-purple-300', group: 'relief' },
@@ -596,12 +597,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                       className="bg-gray-600 text-white rounded px-1 py-0.5 text-xs cursor-pointer"
                     >
                       <optgroup label="先発">
+                        <option value="auto_s">おまかせ</option>
                         <option value="complete">完投型</option>
                         <option value="short">ショートスターター</option>
                         <option value="quality">勝ち権利</option>
                       </optgroup>
                       <optgroup label="リリーフ">
+                        <option value="auto_r">おまかせ</option>
                         <option value="long">ロングリリーフ</option>
+                        <option value="mopup">敗戦処理</option>
+                        <option value="behind">ビハインド</option>
                         <option value="onepoint">ワンポイント</option>
                         <option value="setup">セットアッパー</option>
                         <option value="closer">守護神</option>
