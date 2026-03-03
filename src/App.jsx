@@ -4201,19 +4201,21 @@ if (newOuts === 3) {
               // NPBドラフト処理を実行
               const results = processNPBDraft(TEAMS_DATA);
               setDraftResults(results);
-              // ドラフト指名選手の殿堂入りを反映
-              const hofFromDraft = results.draftedPlayers.filter(d => d.hallOfFame);
-              if (hofFromDraft.length > 0) {
-                setHallOfFamePlayers(prev => [...prev, ...hofFromDraft.map(d => ({
+              // 全ドラフト指名選手を記録
+              if (results.draftedPlayers.length > 0) {
+                setHallOfFamePlayers(prev => [...prev, ...results.draftedPlayers.map(d => ({
                   name: d.name,
                   position: d.position,
                   teamName: d.teamName,
-                  hallOfFame: true,
+                  departureType: 'npb_drafted',
+                  npbTeam: d.npbTeam,
+                  hallOfFame: d.hallOfFame || false,
                   hofReason: d.hofReason,
-                  reason: `NPBドラフト指名 (${d.npbTeam}) - ${d.hofReason}`,
+                  reason: `NPBドラフト指名 (${d.npbTeam})`,
                   careerStats: d.careerStats,
                   age: d.age,
-                  yearsPlayed: d.yearsPlayed
+                  yearsPlayed: d.yearsPlayed,
+                  year: seasonData?.year
                 }))]);
               }
               setManagementView('draft');
@@ -4300,6 +4302,7 @@ if (newOuts === 3) {
         />;
         if (managementView === 'halloffame') return <HallOfFameScreen
           hallOfFamePlayers={hallOfFamePlayers}
+          allTeams={TEAMS_DATA}
           onClose={() => setManagementView('dateprogress')}
         />;
         if (managementView === 'save') return <SaveLoadScreen

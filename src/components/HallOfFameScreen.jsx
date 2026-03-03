@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 
 /**
- * 殿堂入り選手表示画面
- * 殿堂入り条件:
- * - 投手: 通算100勝、または通算30セーブ、または通算600奪三振
- * - 野手: 通算打率.300以上、または通算150本塁打、または通算1000安打
+ * 選手記録画面（旧殿堂入り画面）
+ * タブ1: ドラフト指名選手一覧
+ * タブ2: 通算成績ランキング
  */
-const HallOfFameScreen = ({ hallOfFamePlayers = [], onClose }) => {
-  const [selectedPlayer, setSelectedPlayer] = useState(null);
+const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) => {
+  const [activeTab, setActiveTab] = useState('draft');
+  const [statCategory, setStatCategory] = useState('avg');
 
-  // ポジション名の日本語表示
   const getPositionName = (pos) => {
     const names = {
       pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手',
@@ -18,210 +17,293 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], onClose }) => {
     return names[pos] || pos;
   };
 
-  // 選手がいない場合
-  if (!hallOfFamePlayers || hallOfFamePlayers.length === 0) {
-    return (
-      <div className="p-8 bg-gray-900 min-h-screen">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-bold text-yellow-400 mb-8 text-center">
-            🏆 殿堂入り選手
-          </h1>
-          <div className="bg-gray-800 rounded-lg p-8 text-center">
-            <p className="text-gray-400 text-xl">まだ殿堂入り選手はいません</p>
-            <p className="text-gray-500 mt-4">
-              殿堂入り条件を満たした選手が引退すると、ここに表示されます
-            </p>
-            <div className="mt-6 text-left bg-gray-700 rounded-lg p-4 max-w-md mx-auto">
-              <h3 className="text-yellow-400 font-bold mb-2">殿堂入り条件</h3>
-              <div className="text-sm text-gray-300 space-y-2">
-                <p><span className="text-blue-400">【投手】</span> 通算100勝 / 通算30セーブ / 通算600奪三振</p>
-                <p><span className="text-green-400">【野手】</span> 通算打率.300 / 通算150本塁打 / 通算1000安打</p>
-              </div>
-            </div>
-          </div>
-          {onClose && (
-            <div className="text-center mt-6">
-              <button
-                onClick={onClose}
-                className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-3 rounded-lg"
-              >
-                閉じる
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // ドラフト指名選手（departureType === 'npb_drafted' または reason に NPBドラフト）
+  const draftedPlayers = useMemo(() =>
+    hallOfFamePlayers.filter(p =>
+      p.departureType === 'npb_drafted' || (p.reason && p.reason.includes('NPBドラフト'))
+    ).sort((a, b) => (b.year || 0) - (a.year || 0)),
+    [hallOfFamePlayers]
+  );
+
+  // 通算成績: 過去の選手 + 現在の全チーム選手を統合
+  const allPlayersForStats = useMemo(() => {
+    const players = [];
+    // 過去の選手（引退＋ドラフト指名）
+    hallOfFamePlayers.forEach(p => {
+      if (p.careerStats) {
+        players.push({
+          name: p.name,
+          position: p.position,
+          teamName: p.teamName || p.team,
+          careerStats: p.careerStats,
+          status: p.departureType === 'npb_drafted' ? 'NPB' : '引退',
+          age: p.age,
+          yearsPlayed: p.yearsPlayed
+        });
+      }
+    });
+    // 現役選手
+    Object.entries(allTeams).forEach(([teamName, team]) => {
+      if (!team?.players) return;
+      team.players.forEach(p => {
+        if (p.careerStats) {
+          players.push({
+            name: p.name,
+            position: p.position,
+            teamName,
+            careerStats: p.careerStats,
+            status: '現役',
+            age: p.age,
+            yearsPlayed: p.yearsPlayed
+          });
+        }
+      });
+    });
+    return players;
+  }, [hallOfFamePlayers, allTeams]);
+
+  // 打撃成績カテゴリ
+  const battingCategories = [
+    { key: 'avg', label: '打率', getValue: (s) => {
+      const ab = s.batting?.atBats || 0;
+      return ab >= 30 ? (s.batting?.hits || 0) / ab : 0;
+    }, format: (v) => v > 0 ? v.toFixed(3) : '.000', minAB: 30 },
+    { key: 'hits', label: '安打', getValue: (s) => s.batting?.hits || 0, format: (v) => v },
+    { key: 'homeruns', label: '本塁打', getValue: (s) => s.batting?.homeruns || 0, format: (v) => v },
+    { key: 'rbis', label: '打点', getValue: (s) => s.batting?.rbis || 0, format: (v) => v },
+    { key: 'stolenBases', label: '盗塁', getValue: (s) => s.batting?.stolenBases || 0, format: (v) => v },
+    { key: 'atBats', label: '打数', getValue: (s) => s.batting?.atBats || 0, format: (v) => v },
+  ];
+
+  // 投手成績カテゴリ
+  const pitchingCategories = [
+    { key: 'era', label: '防御率', getValue: (s) => {
+      const ip = s.pitching?.inningsPitched || 0;
+      return ip >= 10 ? ((s.pitching?.earnedRuns || 0) / ip) * 9 : 999;
+    }, format: (v) => v < 999 ? v.toFixed(2) : '-', ascending: true, minIP: 10 },
+    { key: 'wins', label: '勝利', getValue: (s) => s.pitching?.wins || 0, format: (v) => v },
+    { key: 'saves', label: 'セーブ', getValue: (s) => s.pitching?.saves || 0, format: (v) => v },
+    { key: 'strikeouts', label: '奪三振', getValue: (s) => s.pitching?.strikeouts || 0, format: (v) => v },
+    { key: 'inningsPitched', label: '投球回', getValue: (s) => s.pitching?.inningsPitched || 0, format: (v) => v.toFixed(1) },
+  ];
+
+  const allCategories = [...battingCategories, ...pitchingCategories];
+  const currentCategory = allCategories.find(c => c.key === statCategory) || battingCategories[0];
+
+  // ランキング生成
+  const rankings = useMemo(() => {
+    const cat = currentCategory;
+    let eligible = allPlayersForStats.filter(p => {
+      const val = cat.getValue(p.careerStats);
+      if (cat.minAB && (p.careerStats.batting?.atBats || 0) < cat.minAB) return false;
+      if (cat.minIP && (p.careerStats.pitching?.inningsPitched || 0) < cat.minIP) return false;
+      if (cat.ascending) return val < 999;
+      return val > 0;
+    });
+    eligible.sort((a, b) => {
+      const va = cat.getValue(a.careerStats);
+      const vb = cat.getValue(b.careerStats);
+      return cat.ascending ? va - vb : vb - va;
+    });
+    return eligible.slice(0, 50);
+  }, [allPlayersForStats, statCategory, currentCategory]);
+
+  const statusColor = (status) => {
+    if (status === '現役') return 'text-green-400';
+    if (status === 'NPB') return 'text-yellow-400';
+    return 'text-gray-400';
+  };
 
   return (
-    <div className="p-8 bg-gray-900 min-h-screen">
+    <div className="p-4 bg-gray-900 min-h-screen">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-4xl font-bold text-yellow-400 mb-2 text-center">
-          🏆 殿堂入り選手
+        <h1 className="text-3xl font-bold text-yellow-400 mb-4 text-center">
+          選手記録
         </h1>
-        <p className="text-gray-400 text-center mb-8">
-          独立リーグの歴史に名を刻んだ偉大な選手たち
-        </p>
 
-        {/* 選手リスト */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {hallOfFamePlayers.map((player, index) => {
-            const isPitcher = player.position === 'pitcher';
-            const stats = player.careerStats || { batting: {}, pitching: {} };
-
-            return (
-              <div
-                key={index}
-                onClick={() => setSelectedPlayer(player)}
-                className="bg-gradient-to-br from-yellow-900 to-gray-800 border-2 border-yellow-600 rounded-lg p-4 cursor-pointer hover:border-yellow-400 transition"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-3xl">🥇</span>
-                  <div>
-                    <h3 className="text-xl font-bold text-yellow-300">{player.name}</h3>
-                    <p className="text-gray-400 text-sm">
-                      {getPositionName(player.position)} | {player.team}
-                    </p>
-                  </div>
-                </div>
-
-                <p className="text-yellow-400 text-sm font-medium mb-2">{player.reason}</p>
-
-                {isPitcher ? (
-                  <div className="text-sm text-gray-300 grid grid-cols-3 gap-2">
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-white">{stats.pitching?.wins || 0}</div>
-                      <div className="text-xs text-gray-500">勝</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-white">{stats.pitching?.saves || 0}</div>
-                      <div className="text-xs text-gray-500">S</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-white">{stats.pitching?.strikeouts || 0}</div>
-                      <div className="text-xs text-gray-500">K</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-300 grid grid-cols-3 gap-2">
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-white">
-                        {stats.batting?.atBats > 0
-                          ? (stats.batting.hits / stats.batting.atBats).toFixed(3)
-                          : '.000'}
-                      </div>
-                      <div className="text-xs text-gray-500">打率</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-white">{stats.batting?.homeruns || 0}</div>
-                      <div className="text-xs text-gray-500">HR</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-white">{stats.batting?.hits || 0}</div>
-                      <div className="text-xs text-gray-500">安打</div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        {/* タブ */}
+        <div className="flex gap-2 mb-4 justify-center">
+          <button
+            onClick={() => setActiveTab('draft')}
+            className={`px-6 py-2 rounded-lg font-bold transition ${
+              activeTab === 'draft'
+                ? 'bg-yellow-600 text-white'
+                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+            }`}
+          >
+            ドラフト指名選手
+          </button>
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={`px-6 py-2 rounded-lg font-bold transition ${
+              activeTab === 'stats'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+            }`}
+          >
+            通算成績ランキング
+          </button>
         </div>
 
-        {/* 選手詳細モーダル */}
-        {selectedPlayer && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
-            onClick={() => setSelectedPlayer(null)}
-          >
-            <div
-              className="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-lg w-full mx-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <span className="text-5xl">🏆</span>
-                <div>
-                  <h2 className="text-2xl font-bold text-yellow-300">{selectedPlayer.name}</h2>
-                  <p className="text-gray-400">
-                    {getPositionName(selectedPlayer.position)} | {selectedPlayer.team}
-                  </p>
-                  <p className="text-yellow-400 font-medium">{selectedPlayer.reason}</p>
-                </div>
+        {/* ドラフト指名タブ */}
+        {activeTab === 'draft' && (
+          <div>
+            {draftedPlayers.length === 0 ? (
+              <div className="bg-gray-800 rounded-lg p-8 text-center">
+                <p className="text-gray-400 text-xl">まだドラフト指名選手はいません</p>
+                <p className="text-gray-500 mt-2">NPBドラフトで指名された選手がここに表示されます</p>
               </div>
-
-              <div className="bg-gray-700 rounded-lg p-4 mb-4">
-                <h3 className="text-white font-bold mb-2">通算成績</h3>
-                {selectedPlayer.position === 'pitcher' ? (
-                  <div className="grid grid-cols-4 gap-2 text-center">
-                    <div>
-                      <div className="text-xl font-bold text-white">
-                        {selectedPlayer.careerStats?.pitching?.wins || 0}
-                      </div>
-                      <div className="text-xs text-gray-400">勝利</div>
-                    </div>
-                    <div>
-                      <div className="text-xl font-bold text-white">
-                        {selectedPlayer.careerStats?.pitching?.losses || 0}
-                      </div>
-                      <div className="text-xs text-gray-400">敗戦</div>
-                    </div>
-                    <div>
-                      <div className="text-xl font-bold text-white">
-                        {selectedPlayer.careerStats?.pitching?.saves || 0}
-                      </div>
-                      <div className="text-xs text-gray-400">セーブ</div>
-                    </div>
-                    <div>
-                      <div className="text-xl font-bold text-white">
-                        {selectedPlayer.careerStats?.pitching?.strikeouts || 0}
-                      </div>
-                      <div className="text-xs text-gray-400">奪三振</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-4 gap-2 text-center">
-                    <div>
-                      <div className="text-xl font-bold text-white">
-                        {selectedPlayer.careerStats?.batting?.atBats > 0
-                          ? (selectedPlayer.careerStats.batting.hits / selectedPlayer.careerStats.batting.atBats).toFixed(3)
-                          : '.000'}
-                      </div>
-                      <div className="text-xs text-gray-400">打率</div>
-                    </div>
-                    <div>
-                      <div className="text-xl font-bold text-white">
-                        {selectedPlayer.careerStats?.batting?.hits || 0}
-                      </div>
-                      <div className="text-xs text-gray-400">安打</div>
-                    </div>
-                    <div>
-                      <div className="text-xl font-bold text-white">
-                        {selectedPlayer.careerStats?.batting?.homeruns || 0}
-                      </div>
-                      <div className="text-xs text-gray-400">本塁打</div>
-                    </div>
-                    <div>
-                      <div className="text-xl font-bold text-white">
-                        {selectedPlayer.careerStats?.batting?.rbis || 0}
-                      </div>
-                      <div className="text-xs text-gray-400">打点</div>
-                    </div>
-                  </div>
-                )}
+            ) : (
+              <div className="bg-gray-800 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-700 text-gray-300 text-xs">
+                      <th className="py-2 px-3 text-left">年</th>
+                      <th className="py-2 px-3 text-left">選手名</th>
+                      <th className="py-2 px-3 text-center">位</th>
+                      <th className="py-2 px-3 text-center">年齢</th>
+                      <th className="py-2 px-3 text-left">所属</th>
+                      <th className="py-2 px-3 text-left">指名先</th>
+                      <th className="py-2 px-3 text-right">主要成績</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draftedPlayers.map((player, idx) => {
+                      const isPitcher = player.position === 'pitcher';
+                      const stats = player.careerStats || { batting: {}, pitching: {} };
+                      let mainStat = '';
+                      if (isPitcher) {
+                        const w = stats.pitching?.wins || 0;
+                        const s = stats.pitching?.saves || 0;
+                        const k = stats.pitching?.strikeouts || 0;
+                        mainStat = `${w}勝 ${s}S ${k}K`;
+                      } else {
+                        const ab = stats.batting?.atBats || 0;
+                        const avg = ab > 0 ? (stats.batting.hits / ab).toFixed(3) : '.000';
+                        const hr = stats.batting?.homeruns || 0;
+                        const h = stats.batting?.hits || 0;
+                        mainStat = `${avg} ${hr}HR ${h}安`;
+                      }
+                      return (
+                        <tr key={idx} className={`border-b border-gray-700 ${player.hallOfFame ? 'bg-yellow-900/30' : ''}`}>
+                          <td className="py-2 px-3 text-gray-400">{player.year || '-'}年目</td>
+                          <td className="py-2 px-3">
+                            <span className={`font-bold ${isPitcher ? 'text-red-400' : 'text-blue-300'}`}>
+                              {player.hallOfFame && '🏛️ '}{player.name}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-center text-gray-400 text-xs">{getPositionName(player.position)}</td>
+                          <td className="py-2 px-3 text-center text-gray-400">{player.age}歳</td>
+                          <td className="py-2 px-3 text-gray-300">{player.teamName || player.team}</td>
+                          <td className="py-2 px-3 text-yellow-400">{player.npbTeam || '-'}</td>
+                          <td className="py-2 px-3 text-right text-gray-300 font-mono text-xs">{mainStat}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+            )}
+          </div>
+        )}
 
-              <button
-                onClick={() => setSelectedPlayer(null)}
-                className="w-full bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg"
-              >
-                閉じる
-              </button>
+        {/* 通算成績ランキングタブ */}
+        {activeTab === 'stats' && (
+          <div>
+            {/* カテゴリ選択 */}
+            <div className="bg-gray-800 rounded-lg p-3 mb-3">
+              <div className="mb-2">
+                <span className="text-gray-400 text-sm mr-3">打撃:</span>
+                {battingCategories.map(cat => (
+                  <button
+                    key={cat.key}
+                    onClick={() => setStatCategory(cat.key)}
+                    className={`px-3 py-1 mr-1 mb-1 text-xs rounded transition ${
+                      statCategory === cat.key
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+              <div>
+                <span className="text-gray-400 text-sm mr-3">投手:</span>
+                {pitchingCategories.map(cat => (
+                  <button
+                    key={cat.key}
+                    onClick={() => setStatCategory(cat.key)}
+                    className={`px-3 py-1 mr-1 mb-1 text-xs rounded transition ${
+                      statCategory === cat.key
+                        ? 'bg-red-600 text-white'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* ランキング表 */}
+            {rankings.length === 0 ? (
+              <div className="bg-gray-800 rounded-lg p-8 text-center">
+                <p className="text-gray-400">データがありません</p>
+              </div>
+            ) : (
+              <div className="bg-gray-800 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-700 text-gray-300 text-xs">
+                      <th className="py-2 px-3 text-center w-10">#</th>
+                      <th className="py-2 px-3 text-left">選手名</th>
+                      <th className="py-2 px-3 text-center">位</th>
+                      <th className="py-2 px-3 text-left">チーム</th>
+                      <th className="py-2 px-3 text-center">状態</th>
+                      <th className="py-2 px-3 text-right font-bold">{currentCategory.label}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rankings.map((player, idx) => {
+                      const val = currentCategory.getValue(player.careerStats);
+                      const isPitcher = player.position === 'pitcher';
+                      return (
+                        <tr key={idx} className="border-b border-gray-700 hover:bg-gray-750">
+                          <td className="py-2 px-3 text-center">
+                            {idx < 3 ? (
+                              <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : 'text-orange-400'}`}>
+                                {idx + 1}
+                              </span>
+                            ) : (
+                              <span className="text-gray-500">{idx + 1}</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className={`font-bold ${isPitcher ? 'text-red-400' : 'text-blue-300'}`}>
+                              {player.name}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-center text-gray-400 text-xs">{getPositionName(player.position)}</td>
+                          <td className="py-2 px-3 text-gray-300">{player.teamName}</td>
+                          <td className={`py-2 px-3 text-center text-xs font-bold ${statusColor(player.status)}`}>
+                            {player.status}
+                          </td>
+                          <td className="py-2 px-3 text-right font-bold text-white text-lg">
+                            {currentCategory.format(val)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
         {onClose && (
-          <div className="text-center mt-8">
+          <div className="text-center mt-6">
             <button
               onClick={onClose}
               className="bg-gray-600 hover:bg-gray-500 text-white px-8 py-3 rounded-lg text-lg"

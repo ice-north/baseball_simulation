@@ -37,12 +37,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];
       });
 
-      // 殿堂入り選手を親コンポーネントに渡す
-      if (onAddHallOfFamePlayers && result.retirements) {
-        const hofPlayers = result.retirements.filter(r => r.hallOfFame);
-        if (hofPlayers.length > 0) {
-          onAddHallOfFamePlayers(hofPlayers);
-        }
+      // 全引退選手を親コンポーネントに渡す（通算成績記録用）
+      if (onAddHallOfFamePlayers && result.retirements && result.retirements.length > 0) {
+        const retiredPlayers = result.retirements.map(r => ({
+          ...r,
+          departureType: 'retired',
+          year: seasonData.year
+        }));
+        onAddHallOfFamePlayers(retiredPlayers);
       }
 
       console.log('年度処理完了: ', result);

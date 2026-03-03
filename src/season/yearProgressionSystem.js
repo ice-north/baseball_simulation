@@ -240,8 +240,8 @@ export function updateAllPlayerAges(allTeams) {
  * @returns {Object} - { isDraftEligible: boolean, reasons: string[], totalScore: number }
  */
 export function checkNPBDraftEligibility(player, awardBonus = 0) {
-  const DRAFT_THRESHOLD = 220;
   const isPitcher = player.position === 'pitcher';
+  const DRAFT_THRESHOLD = isPitcher ? 220 : 250; // 投手220pt、野手250pt
   const reasons = [];
   const age = player.age || 20;
 
@@ -417,8 +417,8 @@ function computeSeasonAwardBonuses(allTeams) {
  * @returns {Object} - { draftedPlayers, nearMissPlayers }
  */
 export function processNPBDraft(allTeams) {
-  const DRAFT_THRESHOLD = 220;
-  const NEAR_MISS_THRESHOLD = Math.round(DRAFT_THRESHOLD * 0.85); // 187pt
+  const PITCHER_THRESHOLD = 220;
+  const FIELDER_THRESHOLD = 250;
 
   const NPB_TEAMS = [
     '読売ジャイアンツ', '阪神タイガース', '横浜DeNAベイスターズ',
@@ -462,10 +462,12 @@ export function processNPBDraft(allTeams) {
       } else {
         // 惜しかった選手の判定（ドラフト基準の85%以上）
         const { totalScore: playerScore } = checkNPBDraftEligibility(player, playerBonus);
-        if (playerScore >= NEAR_MISS_THRESHOLD && playerScore < DRAFT_THRESHOLD) {
+        const isPitcher = player.position === 'pitcher';
+        const threshold = isPitcher ? PITCHER_THRESHOLD : FIELDER_THRESHOLD;
+        const nearMissThreshold = Math.round(threshold * 0.85);
+        if (playerScore >= nearMissThreshold && playerScore < threshold) {
           const nearReasons = [];
-          const isPitcher = player.position === 'pitcher';
-          nearReasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(playerScore)}pt（あと${Math.round(DRAFT_THRESHOLD - playerScore)}pt）`);
+          nearReasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(playerScore)}pt（あと${Math.round(threshold - playerScore)}pt）`);
           if (playerBonus > 0) nearReasons.push(`成績ボーナス+${playerBonus}pt`);
           nearMissPlayers.push({
             name: player.name,
@@ -998,13 +1000,13 @@ export const SUB_TRAINING_MENUS = {
   form_change: {
     name: 'フォーム改造',
     icon: '🔄',
-    description: '投球/打撃フォーム改善（制球orミート微増）',
+    description: '投球フォーム変更に挑戦（成功20%/失敗で制球低下）',
     targets: ['control', 'meet'],
   },
   switch_hit: {
-    name: '打席変更練習',
+    name: '打席変更',
     icon: '↔️',
-    description: 'スイッチヒッターへの挑戦（ミート微減リスク有）',
+    description: '打席変更に挑戦（失敗でミート低下リスク）',
     targets: ['switch_bats'],
   },
   newpitch: {
@@ -1016,15 +1018,18 @@ export const SUB_TRAINING_MENUS = {
   subposition: {
     name: 'サブポジ練習',
     icon: '🔀',
-    description: '別ポジションの守備練習（適正UP）',
+    description: '指定ポジションの守備練習（適正大幅UP）',
     targets: ['subposition'],
   },
 };
 
 /**
  * サブ練習を実行（メイン練習の半分程度の効果）
+ * @param {Object} player - 選手
+ * @param {string} subType - サブ練習タイプ
+ * @param {Object} options - オプション { targetPosition, targetForm, targetBats }
  */
-export function executeSubTraining(player, subType) {
+export function executeSubTraining(player, subType, options = {}) {
   const menu = SUB_TRAINING_MENUS[subType];
   if (!menu) return { player, growthReport: [] };
 
@@ -1099,12 +1104,33 @@ export function executeSubTraining(player, subType) {
     }
     case 'form_change': {
       if (player.position === 'pitcher' && player.pitching) {
-        const ctrl = growthAmount();
-        if (ctrl > 0) {
-          player.pitching.control = Math.min(100, (player.pitching.control || 50) + ctrl);
-          growthReport.push({ statName: '制球', before: player.pitching.control - ctrl, after: player.pitching.control, growth: ctrl });
+        const currentForm = player.pitching.form || 'threeQuarter';
+        const forms = ['overhand', 'threeQuarter', 'sidearm', 'submarine'];
+        const targetForm = options.targetForm && options.targetForm !== currentForm
+          ? options.targetForm
+          : forms.filter(f => f !== currentForm)[Math.floor(Math.random() * (forms.length - 1))];
+        const FORM_NAMES = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+        // ハイリスクハイリターン: 20%で成功、成功時は制球+球速ボーナス、失敗時は制球低下
+        if (Math.random() < 0.20) {
+          player.pitching.form = targetForm;
+          growthReport.push({ statName: 'フォーム', before: FORM_NAMES[currentForm], after: FORM_NAMES[targetForm], growth: 0, isAwakening: true });
+          // 成功ボーナス: 制球+3~5
+          const bonus = Math.floor(Math.random() * 3) + 3;
+          const oldCtrl = player.pitching.control || 50;
+          player.pitching.control = oldCtrl + bonus;
+          growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: bonus });
+        } else {
+          growthReport.push({ statName: 'フォーム改造', before: FORM_NAMES[currentForm], after: '変更失敗', growth: 0 });
+          // 失敗ペナルティ: 制球-1~3
+          const penalty = Math.floor(Math.random() * 3) + 1;
+          if (player.pitching.control > 20) {
+            const oldCtrl = player.pitching.control;
+            player.pitching.control = Math.max(15, oldCtrl - penalty);
+            growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: player.pitching.control - oldCtrl });
+          }
         }
       } else if (player.batting) {
+        // 野手のフォーム改造: ミート微増（従来通り）
         const mt = growthAmount();
         if (mt > 0) {
           player.batting.meet = Math.min(100, (player.batting.meet || 50) + mt);
@@ -1114,18 +1140,38 @@ export function executeSubTraining(player, subType) {
       break;
     }
     case 'switch_hit': {
-      if (player.batting?.bats !== 'switch') {
-        if (Math.random() < 0.15) {
-          player.batting.bats = 'switch';
-          growthReport.push({ statName: '打席', before: '片打', after: '両打', growth: 0, isAwakening: true });
-          // ミート微減リスク
-          if (player.batting.meet > 30) {
-            const penalty = Math.floor(Math.random() * 3) + 1;
-            player.batting.meet = Math.max(20, player.batting.meet - penalty);
-            growthReport.push({ statName: 'ミート', before: player.batting.meet + penalty, after: player.batting.meet, growth: -penalty });
-          }
-        } else {
-          growthReport.push({ statName: '打席変更', before: '-', after: '習得失敗', growth: 0 });
+      const currentBats = player.batting?.bats || player.physical?.bats || 'right';
+      const targetBats = options.targetBats && options.targetBats !== currentBats
+        ? options.targetBats
+        : (currentBats === 'switch' ? null : 'switch');
+      const BATS_NAMES = { right: '右打', left: '左打', switch: '両打' };
+      if (!targetBats || targetBats === currentBats) {
+        growthReport.push({ statName: '打席変更', before: BATS_NAMES[currentBats], after: '変更不要', growth: 0 });
+        break;
+      }
+      // ハイリスクハイリターン: switch→片打は30%、片打→switchは15%、片打→反対は20%
+      const isToSwitch = targetBats === 'switch';
+      const isFromSwitch = currentBats === 'switch';
+      const successRate = isToSwitch ? 0.15 : isFromSwitch ? 0.30 : 0.20;
+      if (Math.random() < successRate) {
+        if (!player.batting) player.batting = {};
+        player.batting.bats = targetBats;
+        growthReport.push({ statName: '打席', before: BATS_NAMES[currentBats], after: BATS_NAMES[targetBats], growth: 0, isAwakening: true });
+        // ミート微減リスク（switchへの場合のみ）
+        if (isToSwitch && player.batting.meet > 30) {
+          const penalty = Math.floor(Math.random() * 3) + 1;
+          const oldMeet = player.batting.meet;
+          player.batting.meet = Math.max(20, oldMeet - penalty);
+          growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: player.batting.meet - oldMeet });
+        }
+      } else {
+        growthReport.push({ statName: '打席変更', before: BATS_NAMES[currentBats], after: '変更失敗', growth: 0 });
+        // 失敗ペナルティ: ミート-1~2
+        if (player.batting?.meet > 25) {
+          const penalty = Math.floor(Math.random() * 2) + 1;
+          const oldMeet = player.batting.meet;
+          player.batting.meet = Math.max(20, oldMeet - penalty);
+          growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: player.batting.meet - oldMeet });
         }
       }
       break;
@@ -1151,23 +1197,24 @@ export function executeSubTraining(player, subType) {
       break;
     }
     case 'subposition': {
-      // サブポジション練習 - 適正が低いポジションのフィットネスを上げる
+      // サブポジション練習 - 指定ポジションまたはランダムの適正を上げる（成長3倍）
       if (!player.positionFitness) player.positionFitness = {};
       const allPos = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
       const nonMainPos = allPos.filter(p => p !== player.position);
-      // 適正の低いポジション優先で1-2ポジション上昇
-      const weakPositions = nonMainPos.filter(p => (player.positionFitness[p] || 0) < 80);
-      const targets = weakPositions.length > 0 ? weakPositions : nonMainPos;
-      const picked = targets[Math.floor(Math.random() * targets.length)];
+      let picked = options.targetPosition;
+      if (!picked || picked === player.position || !allPos.includes(picked)) {
+        // 指定なしならランダム（弱いポジション優先）
+        const weakPositions = nonMainPos.filter(p => (player.positionFitness[p] || 0) < 80);
+        const targets = weakPositions.length > 0 ? weakPositions : nonMainPos;
+        picked = targets[Math.floor(Math.random() * targets.length)];
+      }
       if (picked) {
-        const gain = Math.random() < 0.5 ? (Math.random() < 0.3 ? 5 : 3) : 0;
-        if (gain > 0) {
-          const old = player.positionFitness[picked] || 0;
-          player.positionFitness[picked] = Math.min(100, old + gain);
-          growthReport.push({ statName: `${POSITION_NAMES_MAP[picked] || picked}適正`, before: old, after: old + gain, growth: gain });
-        } else {
-          growthReport.push({ statName: 'サブポジ', before: '-', after: '変化なし', growth: 0 });
-        }
+        // 3倍成長: 元(50%で0,30%で3,20%で5) → 常に成長、9-15程度
+        const baseGain = Math.floor(Math.random() * 7) + 9; // 9-15
+        const old = player.positionFitness[picked] || 0;
+        player.positionFitness[picked] = Math.min(100, old + baseGain);
+        const actual = player.positionFitness[picked] - old;
+        growthReport.push({ statName: `${POSITION_NAMES_MAP[picked] || picked}適正`, before: old, after: player.positionFitness[picked], growth: actual });
       }
       break;
     }

@@ -26,6 +26,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     return init;
   });
   const [newPitchSelections, setNewPitchSelections] = useState({});
+  const [subPositionSelections, setSubPositionSelections] = useState({});
+  const [formSelections, setFormSelections] = useState({});
+  const [batsSelections, setBatsSelections] = useState({});
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
 
@@ -115,7 +118,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     // サブ練習を実行
     updatedTeam.players.forEach(p => {
       const subType = subAssignments[p.id] || 'running';
-      const { growthReport: subGrowth } = executeSubTraining(p, subType);
+      const subOptions = {
+        targetPosition: subPositionSelections[p.id],
+        targetForm: formSelections[p.id],
+        targetBats: batsSelections[p.id],
+      };
+      const { growthReport: subGrowth } = executeSubTraining(p, subType, subOptions);
       const mainReport = allReports.find(r => r.player.id === p.id);
       if (mainReport && subGrowth.length > 0) {
         mainReport.subGrowthReport = subGrowth;
@@ -285,15 +293,53 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           </div>
                         </td>
                         <td className="py-1 px-2">
-                          <select
-                            value={subAssignments[player.id] || 'running'}
-                            onChange={(e) => handleSubAssignmentChange(player.id, e.target.value)}
-                            className="bg-gray-700 text-white text-xs px-2 py-1 rounded w-28"
-                          >
-                            {Object.entries(SUB_TRAINING_MENUS).map(([key, menu]) => (
-                              <option key={key} value={key}>{menu.icon} {menu.name}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={subAssignments[player.id] || 'running'}
+                              onChange={(e) => handleSubAssignmentChange(player.id, e.target.value)}
+                              className="bg-gray-700 text-white text-xs px-2 py-1 rounded w-28"
+                            >
+                              {Object.entries(SUB_TRAINING_MENUS).map(([key, menu]) => (
+                                <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                              ))}
+                            </select>
+                            {(subAssignments[player.id] || 'running') === 'subposition' && (
+                              <select
+                                value={subPositionSelections[player.id] || ''}
+                                onChange={(e) => setSubPositionSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-xs px-1 py-1 rounded w-16"
+                              >
+                                <option value="">自動</option>
+                                {['catcher','first','second','third','short','left','center','right']
+                                  .filter(p => p !== player.position)
+                                  .map(p => <option key={p} value={p}>{POSITION_NAMES[p]}</option>)}
+                              </select>
+                            )}
+                            {(subAssignments[player.id] || 'running') === 'form_change' && player.position === 'pitcher' && (
+                              <select
+                                value={formSelections[player.id] || ''}
+                                onChange={(e) => setFormSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-xs px-1 py-1 rounded w-24"
+                              >
+                                <option value="">自動</option>
+                                {[['overhand','オーバー'],['threeQuarter','スリクォ'],['sidearm','サイド'],['submarine','アンダー']]
+                                  .filter(([k]) => k !== player.pitching?.form)
+                                  .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                              </select>
+                            )}
+                            {(subAssignments[player.id] || 'running') === 'switch_hit' && (
+                              <select
+                                value={batsSelections[player.id] || ''}
+                                onChange={(e) => setBatsSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-xs px-1 py-1 rounded w-16"
+                              >
+                                <option value="">自動</option>
+                                {[['right','右打'],['left','左打'],['switch','両打']]
+                                  .filter(([k]) => k !== (player.batting?.bats || player.physical?.bats))
+                                  .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                              </select>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

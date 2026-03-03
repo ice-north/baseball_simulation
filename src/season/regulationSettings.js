@@ -53,16 +53,17 @@ export const validateRegulations = (regulations) => {
     errors.push('延長最大回数は0〜30の間で設定してください');
   }
 
-  // ロスター検証
-  if (regulations.roster.starters < 8 || regulations.roster.starters > 10) {
+  // ロスター検証（roster未設定の場合はデフォルト値を適用）
+  const roster = regulations.roster || { starters: 9, benchFielders: 8, benchPitchers: 7 };
+  if (roster.starters < 8 || roster.starters > 10) {
     errors.push('スタメン人数は8〜10の間で設定してください');
   }
 
-  if (regulations.roster.benchFielders < 0 || regulations.roster.benchFielders > 15) {
+  if (roster.benchFielders < 0 || roster.benchFielders > 15) {
     errors.push('控え野手数は0〜15の間で設定してください');
   }
 
-  if (regulations.roster.benchPitchers < 0 || regulations.roster.benchPitchers > 15) {
+  if (roster.benchPitchers < 0 || roster.benchPitchers > 15) {
     errors.push('控え投手数は0〜15の間で設定してください');
   }
 
