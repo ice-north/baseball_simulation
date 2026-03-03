@@ -95,7 +95,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     return { data: { ...sData, schedule: updatedSchedule, standings: updatedStandings, results: updatedResults }, results: gameResults };
   };
 
-  // フェーズ遷移検出＆強制イベント発火
   const checkAndTriggerEvents = (oldData, newData) => {
     const oldPhase = oldData.phase;
     const newPhase = newData.phase;
@@ -103,26 +102,21 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
       newData = handlePhaseTransition(newData, newPhase);
     }
     const { month, day } = newData.currentDate;
-
-    // 10/24: ドラフト
     if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('draft');
       return null;
     }
-    // 11/9: 契約更改
     if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('contract');
       return null;
     }
-    // 11/10: トライアウト
     if (month === 11 && day === 10 && newPhase === SEASON_PHASES.TRYOUT) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('tryout');
       return null;
     }
-    // 11/30〜: オフシーズン
     if (month >= 12 || (month === 11 && day >= 30)) {
       newData = { ...newData, phase: SEASON_PHASES.OFF_SEASON };
       setSeasonData(newData);
@@ -132,7 +126,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     return newData;
   };
 
-  // ユーザーチームのスタメンが9人揃っているかチェック
   const checkUserLineupComplete = () => {
     const team = TEAMS_DATA[userTeamName];
     if (!team) return true;
@@ -146,24 +139,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
   };
 
   const handleProgressDate = (days) => {
-    // スタメンチェック（レギュラーシーズン/プレーオフ中のみ）
     if ((currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
       alert('スタメンが9人揃っていません。ロスター管理で打順を設定してください。');
       return;
     }
-
     setIsSimulating(true);
     const { data: afterSimData, results } = simulateGamesOnDate(seasonData);
     let newSeasonData = progressDate(afterSimData, days);
     setLastGameResults(results);
-    // 月を追従
     if (newSeasonData.currentDate.month !== selectedMonth) setSelectedMonth(newSeasonData.currentDate.month);
     const finalData = checkAndTriggerEvents(seasonData, newSeasonData);
     if (finalData !== null) setSeasonData(finalData);
     setIsSimulating(false);
   };
 
-  // カレンダーデータ生成
   const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
   const getFirstDayOfWeek = (year, month) => new Date(year, month - 1, 1).getDay();
 
@@ -179,7 +168,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     const dateObj = { year, month: selectedMonth, day };
     const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
     const isToday = seasonData.currentDate.year === year && seasonData.currentDate.month === selectedMonth && seasonData.currentDate.day === day;
-    // フェーズイベントラベル
     const phase = getCurrentPhase(selectedMonth, day);
     let eventLabel = null;
     if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
@@ -194,7 +182,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
 
   const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
 
-  // 順位表計算
   const totalGames = seasonData?.settings?.gamesPerSeason || 60;
   const standings = seasonData.standings || [];
   const leader = standings[0];
@@ -206,7 +193,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     return leaderWins > (second.wins || 0) + secondRemaining;
   })();
 
-  // イベントラベルの色
   const getEventColor = (label) => {
     if (label === 'シーズン終了') return 'text-red-400';
     if (label === 'プレーオフ') return 'text-yellow-400';
@@ -219,213 +205,221 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
   };
 
   return (
-    <div className="p-4 min-h-screen">
-      {/* ヘッダー：日付進行ボタン + 年表示 */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="p-3 min-h-screen">
+      {/* ヘッダー：コンパクト化 */}
+      <div className="flex items-center gap-3 mb-3">
         <button
           onClick={() => handleProgressDate(1)}
           disabled={isSimulating}
-          className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-8 py-4 rounded-xl font-bold text-xl transition shadow-lg disabled:opacity-50 flex items-center gap-2"
+          className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-3 rounded-lg font-bold text-lg transition shadow-md disabled:opacity-50 flex items-center gap-2 shrink-0"
         >
-          <span className="text-2xl">▶</span>
+          <span className="text-xl">▶</span>
           {isSimulating ? '処理中...' : '1日進める'}
         </button>
-        <div className="text-center flex-1">
-          <span className="text-3xl font-bold text-yellow-400">{seasonData.year}年目</span>
-          <span className="text-gray-400 ml-4 text-lg">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
-          <span className={`ml-3 px-3 py-1 rounded-full text-sm font-bold ${phaseInfo.color} text-gray-800`}>{phaseInfo.name}</span>
+        <div className="flex items-center gap-3 flex-1 justify-center">
+          <span className="text-2xl font-bold text-yellow-400">{seasonData.year}年目</span>
+          <span className="text-gray-400 text-base">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${phaseInfo.color} text-gray-800`}>{phaseInfo.name}</span>
         </div>
-        <div className="w-40"></div>
       </div>
 
-      <div className="bg-gray-800 rounded-xl p-4 shadow-lg mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-white">{selectedMonth}月</h2>
-          </div>
-          <div className="flex gap-1">
-            <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center">◀</button>
-            <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center">▶</button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {dayNames.map((name, i) => (
-            <div key={i} className={`text-center text-sm font-bold py-2 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>{name}</div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 gap-1">
-          {calendarCells.map((cell, i) => {
-            const showAsScheduled = cell.isToday;
-            return (
-              <div key={i} className={`min-h-[80px] p-2 rounded text-sm transition ${cell.day === null ? 'bg-transparent' : cell.isToday ? 'bg-green-800 border-2 border-green-400 shadow-lg' : 'bg-gray-700'}`}>
-                {cell.day && (
-                  <>
-                    <div className={`font-bold mb-1 ${i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'}`}>{cell.day}</div>
-                    {cell.games.length > 0 ? (
-                      <div className="space-y-0.5">
-                        {cell.games.map((game, gIdx) => {
-                          const awayShort = (game.away || '').slice(0, 4);
-                          const homeShort = (game.home || '').slice(0, 4);
-                          if (showAsScheduled || !game.result) {
-                            return <div key={gIdx} className="text-[11px] text-yellow-300">{awayShort} vs {homeShort}</div>;
-                          }
-                          const awayWin = game.result.awayScore > game.result.homeScore;
-                          const homeWin = game.result.homeScore > game.result.awayScore;
-                          return (
-                            <div key={gIdx} className="text-[11px]">
-                              <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-400'}>{awayShort}</span>
-                              <span className="text-gray-500 mx-0.5">{game.result.awayScore}-{game.result.homeScore}</span>
-                              <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-400'}>{homeShort}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : cell.eventLabel ? (
-                      <div className={`text-[11px] font-bold ${getEventColor(cell.eventLabel)}`}>{cell.eventLabel}</div>
-                    ) : (
-                      <div className="text-[10px] text-gray-500">-</div>
-                    )}
-                  </>
-                )}
+      {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
+      <div className="flex gap-3">
+        {/* 左カラム: カレンダー＋本日の試合 */}
+        <div className="flex-1 min-w-0">
+          <div className="bg-gray-800 rounded-lg p-3 shadow mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-bold text-white">{selectedMonth}月</h2>
+              <div className="flex gap-1">
+                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700 hover:bg-gray-600 text-white w-7 h-7 rounded flex items-center justify-center text-sm">◀</button>
+                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700 hover:bg-gray-600 text-white w-7 h-7 rounded flex items-center justify-center text-sm">▶</button>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </div>
 
-      <div className="bg-gray-800 rounded-xl p-4 shadow-lg mb-4">
-        <h2 className="text-lg font-bold text-white mb-3">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)}) の対戦</h2>
-        {todaysGames.length === 0 ? (
-          <div className="text-center py-4"><span className="text-gray-400">本日は試合がありません</span></div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            {todaysGames.map(game => {
-              const awayPitcher = getStartingPitcher(game.away);
-              const homePitcher = getStartingPitcher(game.home);
-              return (
-                <div key={game.id} className="rounded-lg p-3 bg-gray-700">
-                  <div className="flex items-center justify-between">
-                    <div className="text-center flex-1">
-                      <div className="text-white font-bold text-lg">{(game.away || '').slice(0, 4)}</div>
-                      <div className="text-xs text-gray-400 mt-1">先発: {awayPitcher ? `${awayPitcher.name} (${awayPitcher.physical?.throws === 'left' ? '左' : '右'})` : '未定'}</div>
-                    </div>
-                    <div className="px-4 text-gray-500 text-xl">vs</div>
-                    <div className="text-center flex-1">
-                      <div className="text-white font-bold text-lg">{(game.home || '').slice(0, 4)}</div>
-                      <div className="text-xs text-gray-400 mt-1">先発: {homePitcher ? `${homePitcher.name} (${homePitcher.physical?.throws === 'left' ? '左' : '右'})` : '未定'}</div>
-                    </div>
+            <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+              {dayNames.map((name, i) => (
+                <div key={i} className={`text-center text-xs font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-500'}`}>{name}</div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-0.5">
+              {calendarCells.map((cell, i) => {
+                const showAsScheduled = cell.isToday;
+                return (
+                  <div key={i} className={`min-h-[56px] p-1 rounded text-xs transition ${cell.day === null ? 'bg-transparent' : cell.isToday ? 'bg-green-900/80 border border-green-400 shadow' : 'bg-gray-700/70'}`}>
+                    {cell.day && (
+                      <>
+                        <div className={`font-bold mb-0.5 text-[11px] ${i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'}`}>{cell.day}</div>
+                        {cell.games.length > 0 ? (
+                          <div className="space-y-0">
+                            {cell.games.map((game, gIdx) => {
+                              const awayShort = (game.away || '').slice(0, 3);
+                              const homeShort = (game.home || '').slice(0, 3);
+                              if (showAsScheduled || !game.result) {
+                                return <div key={gIdx} className="text-[10px] text-yellow-300 leading-tight">{awayShort}-{homeShort}</div>;
+                              }
+                              const awayWin = game.result.awayScore > game.result.homeScore;
+                              const homeWin = game.result.homeScore > game.result.awayScore;
+                              return (
+                                <div key={gIdx} className="text-[10px] leading-tight">
+                                  <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-400'}>{awayShort}</span>
+                                  <span className="text-gray-500 mx-px">{game.result.awayScore}-{game.result.homeScore}</span>
+                                  <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-400'}>{homeShort}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : cell.eventLabel ? (
+                          <div className={`text-[10px] font-bold leading-tight ${getEventColor(cell.eventLabel)}`}>{cell.eventLabel}</div>
+                        ) : (
+                          <div className="text-[9px] text-gray-600">-</div>
+                        )}
+                      </>
+                    )}
                   </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 本日の対戦 */}
+          <div className="bg-gray-800 rounded-lg p-3 shadow">
+            <h2 className="text-sm font-bold text-white mb-2">{formatDate(seasonData.currentDate)} の対戦</h2>
+            {todaysGames.length === 0 ? (
+              <div className="text-center py-2"><span className="text-gray-500 text-sm">本日は試合がありません</span></div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {todaysGames.map(game => {
+                  const awayPitcher = getStartingPitcher(game.away);
+                  const homePitcher = getStartingPitcher(game.home);
+                  return (
+                    <div key={game.id} className="rounded-lg p-2.5 bg-gray-700/80">
+                      <div className="flex items-center justify-between">
+                        <div className="text-center flex-1">
+                          <div className="text-white font-bold text-sm">{(game.away || '').slice(0, 5)}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{awayPitcher ? `${awayPitcher.name}` : '未定'}</div>
+                        </div>
+                        <div className="px-2 text-gray-500 text-sm font-bold">vs</div>
+                        <div className="text-center flex-1">
+                          <div className="text-white font-bold text-sm">{(game.home || '').slice(0, 5)}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{homePitcher ? `${homePitcher.name}` : '未定'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 右カラム: 順位表 */}
+        <div className="w-[420px] shrink-0">
+          {(() => {
+            const leagueFormat = seasonData?.settings?.leagueFormat || 'single';
+            const isTwoLeague = leagueFormat === 'two';
+            const teamNamesList = seasonData?.settings?.teamNames || [];
+            const leagueNamesList = seasonData?.settings?.leagueNames || ['リーグ1', 'リーグ2'];
+            const halfTeams = Math.floor((seasonData?.settings?.teamsCount || 4) / 2);
+            const league1Teams = teamNamesList.slice(0, halfTeams);
+            const league2Teams = teamNamesList.slice(halfTeams);
+
+            const renderStandingsTable = (leagueStandings, title, titleColor) => {
+              const lLeader = leagueStandings[0];
+              const lLeaderWins = lLeader?.wins || 0;
+              const lLeaderLosses = lLeader?.losses || 0;
+              const isLChampionDecided = lLeader && leagueStandings.length > 1 && (() => {
+                const second = leagueStandings[1];
+                const secondRemaining = totalGames - ((second.wins || 0) + (second.losses || 0) + (second.draws || 0));
+                return lLeaderWins > (second.wins || 0) + secondRemaining;
+              })();
+
+              return (
+                <div className="bg-gray-800 rounded-lg p-3 shadow">
+                  <h2 className={`text-sm font-bold mb-2 ${titleColor || 'text-white'}`}>{title}</h2>
+                  <table className="w-full text-white text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-600 text-gray-500 text-[10px]">
+                        <th className="py-1 px-0.5 text-center w-6">#</th>
+                        <th className="py-1 px-1 text-left">チーム</th>
+                        <th className="py-1 px-0.5 text-center">試</th>
+                        <th className="py-1 px-0.5 text-center">勝</th>
+                        <th className="py-1 px-0.5 text-center">負</th>
+                        <th className="py-1 px-0.5 text-center">分</th>
+                        <th className="py-1 px-0.5 text-center">率</th>
+                        <th className="py-1 px-0.5 text-center">差</th>
+                        <th className="py-1 px-0.5 text-center">打率</th>
+                        <th className="py-1 px-0.5 text-center">防</th>
+                        <th className="py-1 px-0.5 text-center">M</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leagueStandings.map((team, index) => {
+                        const isUser = team.team === userTeamName;
+                        const wr = (team.wins || 0) + (team.losses || 0) > 0
+                          ? ((team.wins || 0) / ((team.wins || 0) + (team.losses || 0))).toFixed(3) : '.000';
+                        const td = TEAMS_DATA[team.team];
+                        let tAvg = '-', tEra = '-';
+                        if (td?.players) {
+                          let tH = 0, tAB = 0, tER = 0, tIP = 0;
+                          td.players.forEach(p => {
+                            tH += p.seasonStats?.batting?.hits || 0;
+                            tAB += p.seasonStats?.batting?.atBats || 0;
+                            tER += p.seasonStats?.pitching?.earnedRuns || 0;
+                            tIP += (p.seasonStats?.pitching?.inningsPitched || 0) / 3;
+                          });
+                          tAvg = tAB > 0 ? (tH / tAB).toFixed(3) : '-';
+                          tEra = tIP > 0 ? (tER / tIP * 9).toFixed(2) : '-';
+                        }
+                        let gb = '';
+                        if (index === 0) gb = isLChampionDecided ? '優勝' : '-';
+                        else { const d = ((lLeaderWins - (team.wins || 0)) - (lLeaderLosses - (team.losses || 0))) / 2; gb = d === 0 ? '-' : d.toFixed(1); }
+                        let mg = '';
+                        if (index === 0 && leagueStandings.length > 1) {
+                          const sec = leagueStandings[1];
+                          const secMax = (sec.wins || 0) + (totalGames - ((sec.wins || 0) + (sec.losses || 0) + (sec.draws || 0)));
+                          const mn = secMax - lLeaderWins + 1;
+                          if (mn > 0 && !isLChampionDecided) mg = `M${mn}`;
+                          else if (isLChampionDecided) mg = '-';
+                        }
+                        return (
+                          <tr key={team.team} className={`border-b border-gray-700/50 ${isUser ? 'bg-blue-900/40' : ''} ${index === 0 && isLChampionDecided ? 'bg-yellow-900/20' : ''}`}>
+                            <td className="py-1.5 px-0.5 text-center">
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mx-auto ${index === 0 ? 'bg-yellow-500 text-black' : index === 1 ? 'bg-gray-400 text-black' : index === 2 ? 'bg-orange-600 text-white' : 'bg-gray-600 text-white'}`}>{index + 1}</span>
+                            </td>
+                            <td className={`py-1.5 px-1 font-bold text-xs ${isUser ? 'text-yellow-300' : ''}`}>{team.team}</td>
+                            <td className="py-1.5 px-0.5 text-center text-gray-400">{team.gamesPlayed || 0}</td>
+                            <td className="py-1.5 px-0.5 text-center text-green-400 font-bold">{team.wins || 0}</td>
+                            <td className="py-1.5 px-0.5 text-center text-red-400 font-bold">{team.losses || 0}</td>
+                            <td className="py-1.5 px-0.5 text-center text-gray-500">{team.draws || 0}</td>
+                            <td className="py-1.5 px-0.5 text-center font-mono">{wr}</td>
+                            <td className={`py-1.5 px-0.5 text-center font-bold ${index === 0 && isLChampionDecided ? 'text-yellow-400 text-[10px]' : 'text-gray-400'}`}>{gb}</td>
+                            <td className="py-1.5 px-0.5 text-center font-mono text-blue-300">{tAvg}</td>
+                            <td className="py-1.5 px-0.5 text-center font-mono text-orange-300">{tEra}</td>
+                            <td className="py-1.5 px-0.5 text-center text-red-400 font-bold">{mg}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               );
-            })}
-          </div>
-        )}
+            };
+
+            if (isTwoLeague) {
+              const l1 = standings.filter(s => league1Teams.includes(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+              const l2 = standings.filter(s => league2Teams.includes(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+              return (
+                <div className="space-y-3">
+                  {renderStandingsTable(l1, `${leagueNamesList[0]} 順位表`, 'text-blue-400')}
+                  {renderStandingsTable(l2, `${leagueNamesList[1]} 順位表`, 'text-orange-400')}
+                </div>
+              );
+            }
+            return renderStandingsTable(standings, '順位表', 'text-white');
+          })()}
+        </div>
       </div>
-
-      {/* 順位表（マジック・優勝表示・打率・防御率付き、2リーグ対応） */}
-      {(() => {
-        const leagueFormat = seasonData?.settings?.leagueFormat || 'single';
-        const isTwoLeague = leagueFormat === 'two';
-        const teamNamesList = seasonData?.settings?.teamNames || [];
-        const leagueNamesList = seasonData?.settings?.leagueNames || ['リーグ1', 'リーグ2'];
-        const halfTeams = Math.floor((seasonData?.settings?.teamsCount || 4) / 2);
-        const league1Teams = teamNamesList.slice(0, halfTeams);
-        const league2Teams = teamNamesList.slice(halfTeams);
-
-        const renderStandingsTable = (leagueStandings, title, titleColor) => {
-          const lLeader = leagueStandings[0];
-          const lLeaderWins = lLeader?.wins || 0;
-          const lLeaderLosses = lLeader?.losses || 0;
-          const isLChampionDecided = lLeader && leagueStandings.length > 1 && (() => {
-            const second = leagueStandings[1];
-            const secondRemaining = totalGames - ((second.wins || 0) + (second.losses || 0) + (second.draws || 0));
-            return lLeaderWins > (second.wins || 0) + secondRemaining;
-          })();
-
-          return (
-            <div className="bg-gray-800 rounded-xl p-4 shadow-lg">
-              <h2 className={`text-xl font-bold mb-4 ${titleColor || 'text-white'}`}>{title}</h2>
-              <table className="w-full text-white">
-                <thead>
-                  <tr className="border-b border-gray-600 text-gray-400 text-sm">
-                    <th className="py-2 px-1 text-left w-10">順位</th>
-                    <th className="py-2 px-1 text-left">チーム</th>
-                    <th className="py-2 px-1 text-center">試合</th>
-                    <th className="py-2 px-1 text-center">勝</th>
-                    <th className="py-2 px-1 text-center">負</th>
-                    <th className="py-2 px-1 text-center">分</th>
-                    <th className="py-2 px-1 text-center">勝率</th>
-                    <th className="py-2 px-1 text-center">差</th>
-                    <th className="py-2 px-1 text-center">打率</th>
-                    <th className="py-2 px-1 text-center">防御率</th>
-                    <th className="py-2 px-1 text-center">M</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leagueStandings.map((team, index) => {
-                    const isUser = team.team === userTeamName;
-                    const wr = (team.wins || 0) + (team.losses || 0) > 0
-                      ? ((team.wins || 0) / ((team.wins || 0) + (team.losses || 0))).toFixed(3) : '.000';
-                    const td = TEAMS_DATA[team.team];
-                    let tAvg = '-', tEra = '-';
-                    if (td?.players) {
-                      let tH = 0, tAB = 0, tER = 0, tIP = 0;
-                      td.players.forEach(p => {
-                        tH += p.seasonStats?.batting?.hits || 0;
-                        tAB += p.seasonStats?.batting?.atBats || 0;
-                        tER += p.seasonStats?.pitching?.earnedRuns || 0;
-                        tIP += (p.seasonStats?.pitching?.inningsPitched || 0) / 3;
-                      });
-                      tAvg = tAB > 0 ? (tH / tAB).toFixed(3) : '-';
-                      tEra = tIP > 0 ? (tER / tIP * 9).toFixed(2) : '-';
-                    }
-                    let gb = '';
-                    if (index === 0) gb = isLChampionDecided ? '優勝' : '-';
-                    else { const d = ((lLeaderWins - (team.wins || 0)) - (lLeaderLosses - (team.losses || 0))) / 2; gb = d === 0 ? '-' : d.toFixed(1); }
-                    let mg = '';
-                    if (index === 0 && leagueStandings.length > 1) {
-                      const sec = leagueStandings[1];
-                      const secMax = (sec.wins || 0) + (totalGames - ((sec.wins || 0) + (sec.losses || 0) + (sec.draws || 0)));
-                      const mn = secMax - lLeaderWins + 1;
-                      if (mn > 0 && !isLChampionDecided) mg = `M${mn}`;
-                      else if (isLChampionDecided) mg = '-';
-                    }
-                    return (
-                      <tr key={team.team} className={`border-b border-gray-700 ${isUser ? 'bg-blue-900/50' : ''} ${index === 0 && isLChampionDecided ? 'bg-yellow-900/30' : ''}`}>
-                        <td className="py-2 px-1"><span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${index === 0 ? 'bg-yellow-500 text-black' : index === 1 ? 'bg-gray-400 text-black' : index === 2 ? 'bg-orange-600 text-white' : 'bg-gray-600 text-white'}`}>{index + 1}</span></td>
-                        <td className={`py-2 px-1 font-bold ${isUser ? 'text-yellow-300' : ''}`}>{team.team}</td>
-                        <td className="py-2 px-1 text-center text-sm">{team.gamesPlayed || 0}</td>
-                        <td className="py-2 px-1 text-center text-green-400 font-bold text-sm">{team.wins || 0}</td>
-                        <td className="py-2 px-1 text-center text-red-400 font-bold text-sm">{team.losses || 0}</td>
-                        <td className="py-2 px-1 text-center text-gray-400 text-sm">{team.draws || 0}</td>
-                        <td className="py-2 px-1 text-center font-mono text-sm">{wr}</td>
-                        <td className={`py-2 px-1 text-center font-bold text-sm ${index === 0 && isLChampionDecided ? 'text-yellow-400' : 'text-gray-400'}`}>{gb}</td>
-                        <td className="py-2 px-1 text-center font-mono text-sm text-blue-300">{tAvg}</td>
-                        <td className="py-2 px-1 text-center font-mono text-sm text-orange-300">{tEra}</td>
-                        <td className="py-2 px-1 text-center text-red-400 font-bold text-sm">{mg}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          );
-        };
-
-        if (isTwoLeague) {
-          const l1 = standings.filter(s => league1Teams.includes(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-          const l2 = standings.filter(s => league2Teams.includes(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-          return (
-            <div className="space-y-4">
-              {renderStandingsTable(l1, `${leagueNamesList[0]} 順位表`, 'text-blue-400')}
-              {renderStandingsTable(l2, `${leagueNamesList[1]} 順位表`, 'text-orange-400')}
-            </div>
-          );
-        }
-        return renderStandingsTable(standings, '順位表', 'text-white');
-      })()}
     </div>
   );
 };

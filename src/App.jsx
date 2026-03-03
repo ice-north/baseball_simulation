@@ -3042,140 +3042,55 @@ if (newOuts === 3) {
       );
 
       // サイドバーコンポーネント
+      const SidebarButton = ({ view, icon, label, color = 'green' }) => {
+        const isActive = screenMode === 'management' && managementView === view;
+        const activeColors = { green: 'bg-green-600/90 text-white', yellow: 'bg-yellow-600/90 text-white', blue: 'bg-blue-600/90 text-white' };
+        return (
+          <button
+            onClick={() => { setScreenMode('management'); setManagementView(view); }}
+            className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-all ${
+              isActive ? `${activeColors[color] || activeColors.green} shadow-sm` : 'text-gray-300 hover:bg-gray-800/80 hover:text-white'
+            }`}
+          >
+            <span className="mr-2">{icon}</span>{label}
+          </button>
+        );
+      };
       const Sidebar = () => (
-        <div className="w-64 bg-gray-900 text-white h-screen fixed left-0 top-0 p-4 flex flex-col">
-          <h2 className="text-2xl font-bold mb-6 text-green-400">⚾ 野球シミュレーター</h2>
+        <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-800">
+          <div className="px-4 py-3 border-b border-gray-800">
+            <h2 className="text-lg font-bold text-green-400">⚾ {userTeamName}</h2>
+            <div className="text-xs text-gray-500 mt-0.5">{seasonData?.year || 1}年目 {seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}</div>
+          </div>
 
-          {/* メニュー */}
-          <nav className="flex-1 space-y-2">
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('dateprogress');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'dateprogress' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              📅 日程進行
-            </button>
+          <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-2 pb-1">進行</div>
+            <SidebarButton view="dateprogress" icon="📅" label="日程進行" />
+            <SidebarButton view="roster" icon="📋" label="ロスター管理" />
+            <SidebarButton view="stats" icon="📊" label="選手成績" />
 
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('teaminfo');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'teaminfo' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              👥 チーム情報
-            </button>
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-3 pb-1">チーム</div>
+            <SidebarButton view="teaminfo" icon="👥" label="チーム情報" />
+            <SidebarButton view="trade" icon="🔄" label="トレード" />
+            <SidebarButton view="halloffame" icon="🏆" label="選手記録" color="yellow" />
 
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('roster');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'roster' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              👥 ロスター管理
-            </button>
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('stats');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'stats' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              📈 選手成績
-            </button>
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('save');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'save' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              💾 セーブ＆ロード
-            </button>
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('halloffame');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'halloffame' ? 'bg-yellow-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              🏆 殿堂入り選手
-            </button>
-
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-3 pb-1">システム</div>
+            <SidebarButton view="save" icon="💾" label="セーブ＆ロード" />
+            <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" />
             <button
               onClick={() => exportTeam(userTeamName)}
-              className="w-full text-left px-4 py-3 rounded transition hover:bg-gray-800"
+              className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-gray-800/80 hover:text-white transition-all"
             >
-              📤 チームエクスポート
+              <span className="mr-2">📤</span>エクスポート
             </button>
-
             <button
               onClick={() => importTeam(userTeamName)}
-              className="w-full text-left px-4 py-3 rounded transition hover:bg-gray-800"
+              className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-gray-800/80 hover:text-white transition-all"
             >
-              📥 チームインポート
+              <span className="mr-2">📥</span>インポート
             </button>
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('trade');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'trade' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              🔄 トレード
-            </button>
-
-            <div className="border-t border-gray-700 my-4"></div>
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('regulations');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'regulations' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              ⚙️ レギュレーション設定
-            </button>
-
-            <button
-              onClick={() => {
-                setScreenMode('management');
-                setManagementView('edit');
-              }}
-              className={`w-full text-left px-4 py-3 rounded transition ${
-                screenMode === 'management' && managementView === 'edit' ? 'bg-green-600' : 'hover:bg-gray-800'
-              }`}
-            >
-              ✏️ エディット（開発用）
-            </button>
+            <SidebarButton view="edit" icon="🛠️" label="エディット" />
           </nav>
-
-          <div className="mt-auto text-xs text-gray-500 border-t border-gray-700 pt-4">
-            v2.6.0 - 管理画面追加
-          </div>
         </div>
       );
 
@@ -4408,7 +4323,7 @@ if (newOuts === 3) {
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
           {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next'].includes(managementView) && <Sidebar />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next'].includes(managementView) ? 'ml-64' : ''}>
+          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
               <div className="p-2">
           {/* 管理画面へボタン */}
