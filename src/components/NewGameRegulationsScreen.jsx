@@ -4,7 +4,7 @@ import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regul
 const NewGameRegulationsScreen = ({ onComplete }) => {
   const [tempSettings, setTempSettings] = useState({
     useDH: false,
-    gamesPerSeason: 76,
+    gamesPerSeason: 75,
     teamsCount: 4,
     leagueFormat: 'single',
     leagueNames: null,

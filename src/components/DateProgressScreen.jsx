@@ -253,8 +253,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
                         {cell.games.length > 0 ? (
                           <div className="space-y-0">
                             {cell.games.map((game, gIdx) => {
-                              const awayShort = (game.away || '').slice(0, 3);
-                              const homeShort = (game.home || '').slice(0, 3);
+                              const awayShort = (game.away || '').slice(0, 5);
+                              const homeShort = (game.home || '').slice(0, 5);
                               if (showAsScheduled || !game.result) {
                                 return <div key={gIdx} className="text-[10px] text-yellow-300 leading-tight">{awayShort}-{homeShort}</div>;
                               }

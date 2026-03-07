@@ -128,9 +128,22 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     }
   }, [currentPick, draftOrder, tryoutCandidates, teamRosters]);
 
-  const finalizeDraft = () => {
+  const finalizeDraft = (skipCheck = false) => {
     if (draftComplete) return;
     const teamsArrayForSave = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+
+    // 全チームの最終人数チェック（9人未満のチームがあれば警告）
+    if (!skipCheck) {
+      const userTeamName = teamsArrayForSave[0];
+      const userDrafted = teamRosters['ユーザー'] || [];
+      const existingPlayers = TEAMS_DATA[userTeamName]?.players || [];
+      const totalPlayers = existingPlayers.length + userDrafted.length;
+      if (totalPlayers < 9) {
+        alert(`チームの合計人数が${totalPlayers}人です。試合に必要な最低9人になるまで指名を続けてください。`);
+        return;
+      }
+    }
+
     Object.keys(teamRosters).forEach(teamName => {
       const draftedPlayers = teamRosters[teamName] || [];
       const actualTeamName = teamName === 'ユーザー' ? teamsArrayForSave[0] : teamName;
@@ -150,7 +163,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
   useEffect(() => {
     if ((currentPick >= draftOrder.length || tryoutCandidates.length === 0) && draftOrder.length > 0 && !draftComplete) {
-      finalizeDraft();
+      finalizeDraft(true); // 自動完了時はチェックスキップ
     }
   }, [currentPick, draftOrder.length, draftComplete, tryoutCandidates.length, teamRosters]);
 

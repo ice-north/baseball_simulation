@@ -215,10 +215,7 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         form: pitchingForm,
         arsenal: (isPitcher || isTwoWay)
           ? generateRandomArsenal(playerTraits.includes('breakingBall') ? 2 : 0)
-          : [
-            { id: 1, type: 'straight', level: 100 },
-            { id: 2, type: 'slider', level: 50 }
-          ]
+          : generateFielderArsenal()
       },
       traits: playerTraits, // 選手の特性を保存
       positionFitness: isTwoWay ? generateTwoWayPositionFitness(position) : generatePositionFitness(position),
@@ -308,21 +305,53 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     };
   }
 
-  // 通常の能力値範囲
-  const normalAbilities = {
-    // 野手能力（ミート+5強化、パワー-3調整）
-    meet: isPitcher ? randRangeWithVariance(15, 40) : randRangeWithVariance(35, 72),
-    power: isPitcher ? randRangeWithVariance(8, 32) : randRangeWithVariance(22, 59),
-    eye: isPitcher ? randRangeWithVariance(25, 50) : randRangeWithVariance(30, 70),
-    steal: isPitcher ? randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithVariance(20, 70, Math.max(0, Math.floor(ageBonus * 0.7))),
-    speed: isPitcher ? randRangeWithVariance(30, 55, Math.max(0, Math.floor(ageBonus * 0.5))) : randRangeWithVariance(30, 70, Math.max(0, Math.floor(ageBonus * 0.7))),
-    arm: isPitcher ? randRangeWithVariance(40, 65) : randRangeWithVariance(30, 70),
-    defense: isPitcher ? randRangeWithVariance(40, 65) : randRangeWithVariance(30, 70),
-    // 投手能力（球速-6km、スタミナ2/3調整済み）
-    velocity: isPitcher ? Math.min(randVelocity(119, 142, ageBonus) + velocityAdjust, 152) : randRange(109, 124),
-    control: isPitcher ? Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85) : randRange(30, 55),
-    stamina: isPitcher ? randStamina(73, 113, ageBonus) : randRange(40, 67)
-  };
+  // 通常の能力値範囲（投手用 or 野手アーキタイプ別）
+  let normalAbilities;
+  if (isPitcher) {
+    normalAbilities = {
+      meet: randRangeWithVariance(15, 40),
+      power: randRangeWithVariance(8, 32),
+      eye: randRangeWithVariance(25, 50),
+      steal: randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
+      speed: randRangeWithVariance(30, 55, Math.max(0, Math.floor(ageBonus * 0.5))),
+      arm: randRangeWithVariance(40, 65),
+      defense: randRangeWithVariance(40, 65),
+      velocity: Math.min(randVelocity(119, 142, ageBonus) + velocityAdjust, 152),
+      control: Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85),
+      stamina: randStamina(73, 113, ageBonus)
+    };
+  } else {
+    // 野手アーキタイプ: 特性なしの選手にも個性を持たせる
+    const archetypes = [
+      // 巧打タイプ: ミート高、パワー低
+      { meet: [50, 75], power: [15, 40], eye: [45, 75], steal: [25, 55], speed: [30, 60], arm: [25, 55], defense: [30, 60] },
+      // 強打タイプ: パワー高、走力低
+      { meet: [30, 55], power: [45, 70], eye: [25, 55], steal: [15, 40], speed: [20, 50], arm: [35, 65], defense: [25, 55] },
+      // 俊足タイプ: 走力高、パワー低
+      { meet: [35, 60], power: [15, 40], eye: [30, 60], steal: [55, 80], speed: [55, 80], arm: [25, 55], defense: [35, 65] },
+      // 守備タイプ: 守備高、打撃低
+      { meet: [25, 50], power: [15, 40], eye: [30, 55], steal: [25, 55], speed: [35, 65], arm: [50, 75], defense: [55, 80] },
+      // バランスタイプ: 平均的
+      { meet: [35, 65], power: [25, 55], eye: [30, 65], steal: [25, 60], speed: [30, 65], arm: [30, 65], defense: [30, 65] },
+      // 打撃特化タイプ: 打撃全般高、守備走力低
+      { meet: [45, 70], power: [40, 65], eye: [40, 70], steal: [15, 40], speed: [20, 45], arm: [25, 50], defense: [20, 45] },
+      // 肩力タイプ: 肩力高、ミート低
+      { meet: [25, 50], power: [30, 55], eye: [25, 55], steal: [20, 50], speed: [30, 60], arm: [60, 85], defense: [40, 70] },
+    ];
+    const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
+    normalAbilities = {
+      meet: randRangeWithVariance(arch.meet[0], arch.meet[1]),
+      power: randRangeWithVariance(arch.power[0], arch.power[1]),
+      eye: randRangeWithVariance(arch.eye[0], arch.eye[1]),
+      steal: randRangeWithVariance(arch.steal[0], arch.steal[1], Math.max(0, Math.floor(ageBonus * 0.7))),
+      speed: randRangeWithVariance(arch.speed[0], arch.speed[1], Math.max(0, Math.floor(ageBonus * 0.7))),
+      arm: randRangeWithVariance(arch.arm[0], arch.arm[1]),
+      defense: randRangeWithVariance(arch.defense[0], arch.defense[1]),
+      velocity: randRange(109, 124),
+      control: randRange(30, 55),
+      stamina: randRange(40, 67)
+    };
+  }
 
   if (!isSpecialist || playerTraits.length === 0) {
     return normalAbilities;
@@ -421,6 +450,20 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
  */
 function randRange(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/**
+ * 野手用の簡易変化球を生成（投手適正なし）
+ * 基本的な変化球からランダムに1つ、レベルはF〜Eランク
+ */
+function generateFielderArsenal() {
+  const basicPitches = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'cutter'];
+  const selectedType = basicPitches[Math.floor(Math.random() * basicPitches.length)];
+  const level = Math.floor(Math.random() * 21) + 20; // 20-40 (F〜Eランク)
+  return [
+    { id: 1, type: 'straight', level: 100 },
+    { id: 2, type: selectedType, level }
+  ];
 }
 
 /**

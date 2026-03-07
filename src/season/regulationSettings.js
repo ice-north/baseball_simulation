@@ -113,7 +113,7 @@ export const REGULATION_PRESETS = {
     description: '前期38試合＋後期38試合、前後期優勝者による決戦',
     regulations: {
       useDH: false,
-      gamesPerSeason: 76,  // 前期38＋後期38
+      gamesPerSeason: 75,  // 3の倍数（各チーム25戦）
       teamsCount: 4,
       playoffFormat: 'split',  // 前期・後期優勝チーム対決
       maxExtraInnings: 12,
@@ -125,7 +125,7 @@ export const REGULATION_PRESETS = {
     description: '2リーグ制（4チーム×2）、両リーグ優勝チームによる決戦',
     regulations: {
       useDH: false,
-      gamesPerSeason: 58,
+      gamesPerSeason: 56,  // 7の倍数（各チーム8戦）
       teamsCount: 8,  // 2リーグ×4チーム
       leagueFormat: 'two',  // 2リーグ制
       leagueNames: ['ルートインBC信越', 'ルートインBC北陸'],  // リーグ名
@@ -136,10 +136,10 @@ export const REGULATION_PRESETS = {
   },
   kyushu: {
     name: '九州アジアリーグ',
-    description: '年間76試合、トーナメント制プレーオフ',
+    description: '年間75試合、トーナメント制プレーオフ',
     regulations: {
       useDH: false,
-      gamesPerSeason: 76,
+      gamesPerSeason: 75,  // 3の倍数（各チーム25戦）
       teamsCount: 4,
       playoffFormat: 'tournament',  // 3位vs4位→勝者vs2位→勝者vs1位
       maxExtraInnings: 12,
