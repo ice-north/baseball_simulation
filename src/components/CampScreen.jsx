@@ -5,6 +5,97 @@ import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
 
+// 練習プリセット定義
+const CAMP_PRESETS = {
+  fielder_balanced: {
+    name: '野手総合', icon: '⚾',
+    desc: '打撃・守備・走力をバランスよく強化',
+    getMain: () => 'batting',
+    getSub: () => 'running',
+    effect: 'ミート/パワー+2〜5, 走力+1〜3',
+  },
+  pitcher_balanced: {
+    name: '投手総合', icon: '⚾',
+    desc: '球速・制球・スタミナをバランスよく強化',
+    getMain: () => 'stamina',
+    getSub: () => 'running',
+    effect: 'スタミナ+2〜5, 走力+1〜3',
+  },
+  weakness: {
+    name: '弱点克服', icon: '📈',
+    desc: '最も低い能力を集中的に強化',
+    getMain: (p) => {
+      if (p.position === 'pitcher') {
+        const stats = { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
+        const lowest = Object.entries(stats).sort((a,b) => a[1]-b[1])[0][0];
+        return lowest === 'velocity' ? 'velocity' : lowest === 'control' ? 'control' : 'stamina';
+      }
+      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
+      const lowest = Object.entries(stats).sort((a,b) => a[1]-b[1])[0][0];
+      if (lowest === 'meet' || lowest === 'power') return 'batting';
+      if (lowest === 'speed') return 'baserunning';
+      if (lowest === 'defense') return 'fielding';
+      return 'eye';
+    },
+    getSub: (p) => {
+      if (p.position === 'pitcher') return 'running';
+      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0 };
+      const sorted = Object.entries(stats).sort((a,b) => a[1]-b[1]);
+      const secondLowest = sorted[1][0];
+      if (secondLowest === 'speed') return 'running';
+      return 'mental';
+    },
+    effect: '最低能力+2〜5',
+  },
+  strength: {
+    name: '長所強化', icon: '💪',
+    desc: '最も高い能力をさらに伸ばす',
+    getMain: (p) => {
+      if (p.position === 'pitcher') {
+        const stats = { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
+        const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
+        return highest === 'velocity' ? 'velocity' : highest === 'control' ? 'control' : 'stamina';
+      }
+      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
+      const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
+      if (highest === 'meet' || highest === 'power') return 'batting';
+      if (highest === 'speed') return 'baserunning';
+      if (highest === 'defense') return 'fielding';
+      return 'eye';
+    },
+    getSub: () => 'mental',
+    effect: '最高能力+2〜5, 精神+1〜3',
+  },
+  batting_focus: {
+    name: '打撃特化', icon: '🏏',
+    desc: 'ミート・パワー・選球眼を集中強化',
+    getMain: () => 'batting',
+    getSub: () => 'mental',
+    effect: 'ミート/パワー+2〜5, 精神+1〜3',
+  },
+  pitching_velocity: {
+    name: '球速強化', icon: '🔥',
+    desc: '球速とスタミナを集中強化',
+    getMain: () => 'velocity',
+    getSub: () => 'running',
+    effect: '球速+1〜3km, 走力+1〜3',
+  },
+  defense_focus: {
+    name: '守備強化', icon: '🧤',
+    desc: '守備力・肩力・走力を強化',
+    getMain: () => 'fielding',
+    getSub: () => 'running',
+    effect: '守備/肩+2〜5, 走力+1〜3',
+  },
+  subposition: {
+    name: 'サブポジ開発', icon: '🔄',
+    desc: '守備位置の適性を集中的に向上',
+    getMain: (p) => p.position === 'pitcher' ? 'control' : 'fielding',
+    getSub: () => 'subposition',
+    effect: 'サブ適性+9〜15, 守備+2〜5',
+  },
+};
+
 const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
   const userTeamName = teamNames[0] || 'チームA';
@@ -20,9 +111,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   });
   const [subAssignments, setSubAssignments] = useState(() => {
     const init = {};
-    userTeam?.players?.forEach(p => {
-      init[p.id] = 'running';
-    });
+    userTeam?.players?.forEach(p => { init[p.id] = 'running'; });
     return init;
   });
   const [newPitchSelections, setNewPitchSelections] = useState({});
@@ -31,6 +120,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const [batsSelections, setBatsSelections] = useState({});
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
+  const [settingMode, setSettingMode] = useState('preset'); // 'preset' or 'individual'
 
   const POSITION_ORDER = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
   const sortedPlayers = [...(userTeam?.players || [])].sort((a, b) => {
@@ -56,16 +146,14 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   };
 
   const StatValue = ({ value, label, isVelocity = false, isStamina = false }) => {
-    const { rank, color } = getAbilityRank(value, isVelocity, isStamina);
-    return <span className={`${color} font-bold`} title={`${label}: ${value} (${rank})`}>{value}</span>;
+    const { color } = getAbilityRank(value, isVelocity, isStamina);
+    return <span className={`${color} font-bold`} title={`${label}: ${value}`}>{value}</span>;
   };
 
-  const getMenusForPlayer = (player) => {
-    const menus = {};
-    Object.entries(TRAINING_MENUS).forEach(([key, menu]) => {
-      menus[key] = menu;
-    });
-    return menus;
+  const FitnessValue = ({ value }) => {
+    if (value === undefined || value === null) return <span className="text-gray-700">-</span>;
+    const color = value >= 80 ? 'text-green-400' : value >= 60 ? 'text-yellow-400' : value >= 40 ? 'text-orange-400' : 'text-red-400';
+    return <span className={`${color} text-[10px]`}>{value}</span>;
   };
 
   const getAvailableNewPitches = (player) => {
@@ -73,29 +161,17 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     return ALL_PITCH_TYPES.filter(t => !existing.includes(t));
   };
 
-  const handleAssignmentChange = (playerId, training) => {
-    setAssignments(prev => ({ ...prev, [playerId]: training }));
-  };
-
-  const handleNewPitchSelect = (playerId, pitchType) => {
-    setNewPitchSelections(prev => ({ ...prev, [playerId]: pitchType }));
-  };
-
-  const handleSubAssignmentChange = (playerId, training) => {
-    setSubAssignments(prev => ({ ...prev, [playerId]: training }));
-  };
-
-  const setAllTraining = (training) => {
-    const updated = {};
+  const applyPreset = (presetKey) => {
+    const preset = CAMP_PRESETS[presetKey];
+    if (!preset) return;
+    const newAssign = {};
+    const newSubAssign = {};
     userTeam?.players?.forEach(p => {
-      const menus = getMenusForPlayer(p);
-      if (menus[training]) {
-        updated[p.id] = training;
-      } else {
-        updated[p.id] = assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting');
-      }
+      newAssign[p.id] = preset.getMain(p);
+      newSubAssign[p.id] = preset.getSub(p);
     });
-    setAssignments(updated);
+    setAssignments(newAssign);
+    setSubAssignments(newSubAssign);
   };
 
   const handleExecuteTraining = () => {
@@ -158,12 +234,6 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     setCurrentRound(currentRound + 1);
     setRoundResults(null);
     setViewMode('select');
-    const team = TEAMS_DATA[userTeamName];
-    const init = {};
-    team?.players?.forEach(p => {
-      init[p.id] = assignments[p.id] || (p.position === 'pitcher' ? 'stamina' : 'batting');
-    });
-    setAssignments(init);
   };
 
   const getArsenalDisplay = (player) => {
@@ -172,11 +242,14 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     return arsenal.map(a => `${getPitchTypeName(a.type)}${a.level}`).join(' ');
   };
 
+  const subPosHeaders = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  const subPosShort = { catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
+
   return (
     <div className="p-3 bg-gray-900 min-h-screen">
       <div className="max-w-full mx-auto">
         {/* ヘッダー */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <h1 className="text-xl font-bold text-white">春季キャンプ - {userTeamName}</h1>
           <div className="flex items-center gap-2">
             {[1, 2, 3, 4].map(r => (
@@ -192,19 +265,66 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
 
         {viewMode === 'select' ? (
           <>
-            {/* 一括設定 */}
-            <div className="bg-gray-800 rounded-lg p-2 mb-2 flex items-center flex-wrap gap-1">
-              <span className="text-gray-500 text-xs mr-1">一括:</span>
-              {Object.entries(TRAINING_MENUS).filter(([k]) => !['newpitch'].includes(k)).map(([key, menu]) => (
+            {/* プリセット / 個別切替 */}
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex gap-1">
                 <button
-                  key={key}
-                  onClick={() => setAllTraining(key)}
-                  className="px-2 py-0.5 text-[11px] rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition"
+                  onClick={() => setSettingMode('preset')}
+                  className={`px-3 py-1 text-xs rounded-md font-bold transition ${settingMode === 'preset' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
                 >
-                  {menu.icon} {menu.name}
+                  プリセット
                 </button>
-              ))}
+                <button
+                  onClick={() => setSettingMode('individual')}
+                  className={`px-3 py-1 text-xs rounded-md font-bold transition ${settingMode === 'individual' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                >
+                  個別設定
+                </button>
+              </div>
             </div>
+
+            {/* プリセット選択UI */}
+            {settingMode === 'preset' && (
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {Object.entries(CAMP_PRESETS).map(([key, preset]) => (
+                  <button
+                    key={key}
+                    onClick={() => applyPreset(key)}
+                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-lg p-2 text-left transition group"
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="text-sm">{preset.icon}</span>
+                      <span className="text-xs font-bold text-white group-hover:text-blue-300">{preset.name}</span>
+                    </div>
+                    <div className="text-[10px] text-gray-500 mb-0.5">{preset.desc}</div>
+                    <div className="text-[10px] text-green-400/70">効果: {preset.effect}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* 個別設定時の一括ボタン */}
+            {settingMode === 'individual' && (
+              <div className="bg-gray-800 rounded-lg p-2 mb-2 flex items-center flex-wrap gap-1">
+                <span className="text-gray-500 text-xs mr-1">一括:</span>
+                {Object.entries(TRAINING_MENUS).filter(([k]) => !['newpitch'].includes(k)).map(([key, menu]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      const updated = {};
+                      userTeam?.players?.forEach(p => {
+                        const menus = TRAINING_MENUS;
+                        updated[p.id] = menus[key] ? key : (assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting'));
+                      });
+                      setAssignments(updated);
+                    }}
+                    className="px-2 py-0.5 text-[11px] rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition"
+                  >
+                    {menu.icon} {menu.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* 選手テーブル */}
             <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto">
@@ -224,8 +344,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-1 text-center w-7">制</th>
                     <th className="py-1.5 px-1 text-center w-9">ス</th>
                     <th className="py-1.5 px-2 text-left">変化球</th>
-                    <th className="py-1.5 px-2 text-left w-36">メイン</th>
-                    <th className="py-1.5 px-2 text-left w-36">サブ</th>
+                    {/* サブポジション適性 */}
+                    {subPosHeaders.map(pos => (
+                      <th key={pos} className="py-1.5 px-0.5 text-center w-6" title={POSITION_NAMES[pos]}>{subPosShort[pos]}</th>
+                    ))}
+                    <th className="py-1.5 px-2 text-left w-28">メイン</th>
+                    <th className="py-1.5 px-2 text-left w-28">サブ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -234,7 +358,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     const p = player.pitching || {};
                     const ph = player.physical || {};
                     const f = player.fielding || {};
-                    const menus = getMenusForPlayer(player);
+                    const pf = player.positionFitness || {};
                     const currentTraining = assignments[player.id] || (isPitcher(player) ? 'stamina' : 'batting');
                     const showNewPitchSelect = currentTraining === 'newpitch';
                     const availableNewPitches = getAvailableNewPitches(player);
@@ -259,23 +383,32 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
-                        <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono truncate max-w-[120px]">{getArsenalDisplay(player)}</td>
+                        <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono truncate max-w-[100px]">{getArsenalDisplay(player)}</td>
+                        {/* サブポジション適性 */}
+                        {subPosHeaders.map(pos => (
+                          <td key={pos} className="py-1 px-0.5 text-center font-mono">
+                            {pos === player.position
+                              ? <span className="text-white text-[10px] font-bold">主</span>
+                              : <FitnessValue value={pf[pos]} />
+                            }
+                          </td>
+                        ))}
                         <td className="py-1 px-2">
                           <div className="flex items-center gap-1">
                             <select
                               value={currentTraining}
-                              onChange={(e) => handleAssignmentChange(player.id, e.target.value)}
+                              onChange={(e) => setAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
                               className="bg-gray-700 text-white text-[11px] px-1.5 py-0.5 rounded w-24"
                             >
-                              {Object.entries(menus).map(([key, menu]) => (
+                              {Object.entries(TRAINING_MENUS).map(([key, menu]) => (
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
                             </select>
                             {showNewPitchSelect && availableNewPitches.length > 0 && (
                               <select
                                 value={newPitchSelections[player.id] || availableNewPitches[0]}
-                                onChange={(e) => handleNewPitchSelect(player.id, e.target.value)}
-                                className="bg-gray-600 text-white text-[11px] px-1.5 py-0.5 rounded w-24"
+                                onChange={(e) => setNewPitchSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-[11px] px-1.5 py-0.5 rounded w-20"
                               >
                                 {availableNewPitches.map(pt => (
                                   <option key={pt} value={pt}>{getPitchTypeName(pt)}</option>
@@ -288,7 +421,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           <div className="flex items-center gap-1">
                             <select
                               value={subAssignments[player.id] || 'running'}
-                              onChange={(e) => handleSubAssignmentChange(player.id, e.target.value)}
+                              onChange={(e) => setSubAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
                               className="bg-gray-700 text-white text-[11px] px-1.5 py-0.5 rounded w-24"
                             >
                               {Object.entries(SUB_TRAINING_MENUS).map(([key, menu]) => (
@@ -303,8 +436,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                               >
                                 <option value="">自動</option>
                                 {['catcher','first','second','third','short','left','center','right']
-                                  .filter(p => p !== player.position)
-                                  .map(p => <option key={p} value={p}>{POSITION_NAMES[p]}</option>)}
+                                  .filter(pos => pos !== player.position)
+                                  .map(pos => <option key={pos} value={pos}>{POSITION_NAMES[pos]}</option>)}
                               </select>
                             )}
                             {(subAssignments[player.id] || 'running') === 'form_change' && player.position === 'pitcher' && (

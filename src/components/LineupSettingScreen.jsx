@@ -526,8 +526,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         {tab === 'rotation' && (() => {
           // 全選手をロール別にグループ分け（投手以外の野手も表示可能に）
           const allPlayers = team.players || [];
-          const starterPitchers = allPlayers.filter(p => ['complete', 'short', 'quality'].includes(getPitcherRole(p.id)));
-          const reliefPitchers = allPlayers.filter(p => ['long', 'onepoint', 'setup', 'closer'].includes(getPitcherRole(p.id)));
+          const starterPitchers = allPlayers.filter(p => ['complete', 'short', 'quality', 'auto_s'].includes(getPitcherRole(p.id)));
+          const reliefPitchers = allPlayers.filter(p => ['long', 'onepoint', 'ace_relief', 'mopup', 'behind', 'auto_r', 'setup', 'closer'].includes(getPitcherRole(p.id)));
           const unassignedPitchers = allPlayers.filter(p => p.position === 'pitcher' && getPitcherRole(p.id) === 'none');
           const fieldersForConvert = allPlayers.filter(p => p.position !== 'pitcher' && getPitcherRole(p.id) === 'none');
 
