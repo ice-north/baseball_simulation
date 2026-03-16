@@ -482,6 +482,18 @@ import TradeScreen from './components/TradeScreen.jsx';
         }));
       };
 
+      const addAtBatResult = (playerId, teamType, label) => {
+        const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
+        setTeam(prev => ({
+          ...prev,
+          players: prev.players.map(p =>
+            p.id === playerId
+              ? { ...p, gameStats: { ...(p.gameStats || {}), atBatResults: [...(p.gameStats?.atBatResults || []), label] } }
+              : p
+          )
+        }));
+      };
+
       const updatePitcherStats = (playerId, teamType, statUpdates) => {
         const setTeam = teamType === 'home' ? setHomeTeam : setAwayTeam;
         setTeam(prev => ({
@@ -2008,6 +2020,7 @@ import TradeScreen from './components/TradeScreen.jsx';
                 newBases[0] = true;
               }
               atBatOver = true;
+              addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '四球');
             }
             break;
           case 'called_strike':
@@ -2047,6 +2060,7 @@ import TradeScreen from './components/TradeScreen.jsx';
               
               newOuts++;
               atBatOver = true;
+              addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '三振');
             }
             break;
           case 'double_play':
@@ -2064,6 +2078,7 @@ import TradeScreen from './components/TradeScreen.jsx';
             newOuts += 2;  // 2アウト追加
             newBases[0] = false;  // 一塁ランナー消える
             atBatOver = true;
+            addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '併殺');
             break;
           case 'foul':
             newCount.strikes++;
@@ -2127,6 +2142,10 @@ import TradeScreen from './components/TradeScreen.jsx';
         isTopInning ? (newScore.away += runs) : (newScore.home += runs);
         newBases = updatedBases;
         atBatOver = true;
+        {
+          const hitLabel = result.type === 'homerun' ? '本塁打' : result.type === 'triple' ? '三塁打' : result.type === 'double' ? '二塁打' : '安打';
+          addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', hitLabel);
+        }
         break;
       case 'out':
         // 打者成績: アウト
@@ -2198,9 +2217,14 @@ import TradeScreen from './components/TradeScreen.jsx';
         }
         
         atBatOver = true;
+        {
+          const desc = result.description || '';
+          const outLabel = desc.replace('アウト', '').replace('（ポップフライ）', '') || 'アウト';
+          addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', outLabel);
+        }
         break;
     }
-    
+
     // ワイルドピッチ/パスボール判定
     if (!atBatOver && newOuts < 3 && (bases[0] || bases[1] || bases[2])) {
       const pitcherControl = pitcher.control / 100;
@@ -3383,7 +3407,7 @@ if (newOuts === 3) {
             isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
             hasSubbedOut: false,
             originalPosition: p.position,
-            gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+            gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
           })),
           currentBatterOrder: 1
         });
@@ -3395,7 +3419,7 @@ if (newOuts === 3) {
             isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
             hasSubbedOut: false,
             originalPosition: p.position,
-            gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+            gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
           })),
           currentBatterOrder: 1
         });
@@ -4840,6 +4864,19 @@ if (newOuts === 3) {
                           <span className="font-bold">{player.name}</span>
                           <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
+                            <span className="flex gap-0.5 text-[10px] text-gray-300 ml-1">
+                              {player.gameStats.atBatResults.map((r, i) => (
+                                <span key={i} className={`px-0.5 rounded ${
+                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'text-yellow-400' :
+                                  r === '本塁打' ? 'text-red-400 font-bold' :
+                                  r === '三振' ? 'text-blue-400' :
+                                  r === '四球' ? 'text-green-400' :
+                                  'text-gray-400'
+                                }`}>{r}</span>
+                              ))}
+                            </span>
+                          )}
                           <span className="flex-1"></span>
                           {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                           {isCurrentBatter && <span>⚾</span>}
@@ -4847,22 +4884,47 @@ if (newOuts === 3) {
                           {isSelected && <span>👆</span>}
                           {isPositionSelected && <span>🔄</span>}
                         </div>
-                        <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
-                          <span>M{player.batting.meet}</span>
-                          <span>P{player.batting.power}</span>
-                          <span>E{player.batting.eye}</span>
-                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
-                        </div>
-                        {!gameStarted && (
-                          <div className={`text-[10px] ml-6 mt-0.5 ${
-                            fitness.grade === 'S' ? 'text-yellow-400' :
-                            fitness.grade === 'A' ? 'text-green-400' :
-                            fitness.grade === 'B' ? 'text-blue-400' :
-                            fitness.grade === 'D' ? 'text-red-400' :
-                            'text-gray-400'
-                          }`}>
-                            守備適性 [{fitness.grade}] {fitness.comments}
+                        {gameStarted ? (
+                          <div className={`flex gap-2 text-[10px] ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-500'}`}>
+                            {(() => {
+                              const ss = player.seasonStats?.batting;
+                              if (ss && ss.atBats > 0) {
+                                const avg = (ss.hits / ss.atBats).toFixed(3);
+                                return <>
+                                  <span>.{avg.split('.')[1]}</span>
+                                  <span>{ss.homeruns || 0}本</span>
+                                  <span>{ss.rbis || 0}点</span>
+                                  <span>{ss.hits || 0}安</span>
+                                </>;
+                              }
+                              if (isPitcher) {
+                                const ps = player.seasonStats?.pitching;
+                                if (ps && ps.inningsPitched > 0) {
+                                  const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
+                                  return <span>ERA {era}</span>;
+                                }
+                              }
+                              return <span>---</span>;
+                            })()}
                           </div>
+                        ) : (
+                          <>
+                            <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
+                              <span>M{player.batting.meet}</span>
+                              <span>P{player.batting.power}</span>
+                              <span>E{player.batting.eye}</span>
+                              {isPitcher && <span className={isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
+                            </div>
+                            <div className={`text-[10px] ml-6 mt-0.5 ${
+                              fitness.grade === 'S' ? 'text-yellow-400' :
+                              fitness.grade === 'A' ? 'text-green-400' :
+                              fitness.grade === 'B' ? 'text-blue-400' :
+                              fitness.grade === 'D' ? 'text-red-400' :
+                              'text-gray-400'
+                            }`}>
+                              守備適性 [{fitness.grade}] {fitness.comments}
+                            </div>
+                          </>
                         )}
                       </div>
                     );
@@ -5114,14 +5176,14 @@ if (newOuts === 3) {
                         ...prev,
                         players: prev.players.map(p => ({
                           ...p,
-                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
                         }))
                       }));
                       setHomeTeam(prev => ({
                         ...prev,
                         players: prev.players.map(p => ({
                           ...p,
-                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
                         }))
                       }));
                     }}
@@ -5375,10 +5437,6 @@ if (newOuts === 3) {
                   <button onClick={() => multiPitch(1000)} disabled={isAutoSimulating || gameOver}
                     className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50">
                     ⚾×1000
-                  </button>
-                  <button onClick={resetGame}
-                    className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700">
-                    🔄 リセット
                   </button>
                   <button
                     onClick={() => setAutoManagerMode(!autoManagerMode)}
@@ -5762,6 +5820,19 @@ if (newOuts === 3) {
                           <span className="font-bold">{player.name}</span>
                           <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
+                            <span className="flex gap-0.5 text-[10px] text-gray-300 ml-1">
+                              {player.gameStats.atBatResults.map((r, i) => (
+                                <span key={i} className={`px-0.5 rounded ${
+                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'text-yellow-400' :
+                                  r === '本塁打' ? 'text-red-400 font-bold' :
+                                  r === '三振' ? 'text-blue-400' :
+                                  r === '四球' ? 'text-green-400' :
+                                  'text-gray-400'
+                                }`}>{r}</span>
+                              ))}
+                            </span>
+                          )}
                           <span className="flex-1"></span>
                           {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                           {isCurrentBatter && <span>⚾</span>}
@@ -5769,22 +5840,47 @@ if (newOuts === 3) {
                           {isSelected && <span>👆</span>}
                           {isPositionSelected && <span>🔄</span>}
                         </div>
-                        <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
-                          <span>M{player.batting.meet}</span>
-                          <span>P{player.batting.power}</span>
-                          <span>E{player.batting.eye}</span>
-                          {isPitcher && <span className={isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
-                        </div>
-                        {!gameStarted && (
-                          <div className={`text-[10px] ml-6 mt-0.5 ${
-                            fitness.grade === 'S' ? 'text-yellow-400' :
-                            fitness.grade === 'A' ? 'text-green-400' :
-                            fitness.grade === 'B' ? 'text-blue-400' :
-                            fitness.grade === 'D' ? 'text-red-400' :
-                            'text-gray-400'
-                          }`}>
-                            守備適性 [{fitness.grade}] {fitness.comments}
+                        {gameStarted ? (
+                          <div className={`flex gap-2 text-[10px] ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-500'}`}>
+                            {(() => {
+                              const ss = player.seasonStats?.batting;
+                              if (ss && ss.atBats > 0) {
+                                const avg = (ss.hits / ss.atBats).toFixed(3);
+                                return <>
+                                  <span>.{avg.split('.')[1]}</span>
+                                  <span>{ss.homeruns || 0}本</span>
+                                  <span>{ss.rbis || 0}点</span>
+                                  <span>{ss.hits || 0}安</span>
+                                </>;
+                              }
+                              if (isPitcher) {
+                                const ps = player.seasonStats?.pitching;
+                                if (ps && ps.inningsPitched > 0) {
+                                  const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
+                                  return <span>ERA {era}</span>;
+                                }
+                              }
+                              return <span>---</span>;
+                            })()}
                           </div>
+                        ) : (
+                          <>
+                            <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
+                              <span>M{player.batting.meet}</span>
+                              <span>P{player.batting.power}</span>
+                              <span>E{player.batting.eye}</span>
+                              {isPitcher && <span className={isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
+                            </div>
+                            <div className={`text-[10px] ml-6 mt-0.5 ${
+                              fitness.grade === 'S' ? 'text-yellow-400' :
+                              fitness.grade === 'A' ? 'text-green-400' :
+                              fitness.grade === 'B' ? 'text-blue-400' :
+                              fitness.grade === 'D' ? 'text-red-400' :
+                              'text-gray-400'
+                            }`}>
+                              守備適性 [{fitness.grade}] {fitness.comments}
+                            </div>
+                          </>
                         )}
                       </div>
                     );
