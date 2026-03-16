@@ -4509,13 +4509,14 @@ if (newOuts === 3) {
       if (screenMode === 'start' && gameFlowState === 'title') {
         return <StartScreen
           onNewGame={() => setGameFlowState('newgame_regulations')}
-          onContinue={() => {
-            if (loadGame()) {
+          onContinue={(slotIndex) => {
+            if (loadGame(slotIndex)) {
               console.log('✅ ゲームをロードしました');
             }
           }}
           onEdit={() => alert('開発中')}
           hasSaveData={hasSaveData}
+          saveSlots={saveSlots}
         />;
       }
 
