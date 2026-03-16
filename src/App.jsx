@@ -488,7 +488,7 @@ import TradeScreen from './components/TradeScreen.jsx';
           ...prev,
           players: prev.players.map(p =>
             p.id === playerId
-              ? { ...p, stats: { ...p.stats, pitching: { ...p.stats.pitching, ...statUpdates } } }
+              ? { ...p, stats: { ...(p.stats || {}), pitching: { ...(p.stats?.pitching || {}), ...statUpdates } } }
               : p
           )
         }));
