@@ -6,6 +6,7 @@
 import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
+import { updateAllPlayersCondition } from '../game/condition.js';
 
 /**
  * 日付を進行（1日/1週間/1ヶ月）
@@ -17,9 +18,10 @@ export const progressDate = (seasonData, days = 1) => {
   const newDate = advanceDate(seasonData.currentDate, days);
   const newPhase = getCurrentPhase(newDate.month, newDate.day);
 
-  // 投手の疲労を回復（1日あたり20）
+  // 投手の疲労を回復（1日あたり20）+ コンディション更新
   for (let i = 0; i < days; i++) {
     recoverAllPitcherFatigue(20);
+    updateAllPlayersCondition();
   }
 
   return {

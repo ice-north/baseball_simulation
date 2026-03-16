@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
+import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 
 const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup');
@@ -363,7 +364,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           }
         }}
       >
-        <td className="py-1 px-1 text-sm text-white font-bold whitespace-nowrap">{player.name}</td>
+        <td className="py-1 px-1 text-sm text-white font-bold whitespace-nowrap">{player.name} <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span></td>
         <td className="py-1 px-1 text-xs text-gray-400 text-center">{player.age}</td>
         <td className="py-1 px-1 text-xs whitespace-nowrap">
           <span className={isPitcher ? 'text-indigo-300' : 'text-gray-300'}>
@@ -575,7 +576,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     {starterPitchers.includes(player) && (
                       <span className="text-blue-400 font-bold text-sm w-5 shrink-0">#{index + 1}</span>
                     )}
-                    <span className={`font-bold text-sm truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`}>{player.name}</span>
+                    <span className={`font-bold text-sm truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`}>{player.name} <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span></span>
                     <span className="text-gray-400 text-xs shrink-0">{player.age}歳</span>
                     <span className="text-gray-400 text-xs shrink-0">{getThrowsLabel(ph.throws)}{getBatsLabel(b.bats || ph.bats)}</span>
                     {p.form && <span className="text-gray-500 text-xs shrink-0">{getFormLabel(p.form)}</span>}

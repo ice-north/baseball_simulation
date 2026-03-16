@@ -1,6 +1,7 @@
 import { TEAMS_DATA } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 
 // 選手が投手かどうかを判定（positionだけでなく能力値も確認）
 export const isPitcherPlayer = (player) => {
@@ -409,9 +410,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const stratPowerMod = battingStrat === 'aggressive' ? 8 : battingStrat === 'patient' ? -5 : 0;
     const stratEyeMod = battingStrat === 'patient' ? 10 : battingStrat === 'aggressive' ? -5 : 0;
 
+    // コンディション補正
+    const batterCondition = batterPlayer.condition ?? CONDITION_LEVELS.NORMAL;
+    const pitcherCondition = pitcherPlayer.condition ?? CONDITION_LEVELS.NORMAL;
+    const batterCondMod = CONDITION_BATTING_MODIFIER[batterCondition] || 0;
+    const pitcherCondMod = CONDITION_PITCHING_MODIFIER[pitcherCondition] || 0;
+
     const batter = {
-      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod,
-      power: (batterPlayer.batting?.power || 50) + stratPowerMod,
+      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod,
+      power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod,
       eye: (batterPlayer.batting?.eye || 50) + stratEyeMod,
       speed: batterPlayer.physical?.speed || 50,
       bats: batterPlayer.batting?.bats || 'right'
@@ -419,7 +426,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     const pitcher = {
       velocity: pitcherPlayer.pitching?.velocity || 140,
-      control: pitcherPlayer.pitching?.control || 50,
+      control: (pitcherPlayer.pitching?.control || 50) + pitcherCondMod,
       throws: pitcherPlayer.physical?.throws || 'right'
     };
 

@@ -4,11 +4,13 @@ import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } 
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
+import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 
-const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
+const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
   const [lastGameResults, setLastGameResults] = useState([]);
+  const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -143,6 +145,22 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
       alert('スタメンが9人揃っていません。ロスター管理で打順を設定してください。');
       return;
     }
+
+    // ユーザーチームの試合があるかチェック
+    const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+    const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
+
+    if (userGame && onSetupManagedGame && (currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS)) {
+      // ユーザーチームの試合がある日 → 試合スキップ/采配モード選択を表示
+      setShowGameChoiceModal(true);
+      return;
+    }
+
+    // 試合がない日 or ユーザー試合がない → 通常進行
+    executeSkipDay(days);
+  };
+
+  const executeSkipDay = (days) => {
     setIsSimulating(true);
     const { data: afterSimData, results } = simulateGamesOnDate(seasonData);
     let newSeasonData = progressDate(afterSimData, days);
@@ -151,6 +169,27 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
     const finalData = checkAndTriggerEvents(seasonData, newSeasonData);
     if (finalData !== null) setSeasonData(finalData);
     setIsSimulating(false);
+  };
+
+  const handleGameChoice = (choice) => {
+    setShowGameChoiceModal(false);
+    if (choice === 'skip') {
+      executeSkipDay(1);
+    } else if (choice === 'manage') {
+      // 采配モードへ移行
+      const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+      const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
+      const otherGames = todayGames.filter(g => !g.result && g.home !== userTeamName && g.away !== userTeamName);
+
+      if (userGame && onSetupManagedGame) {
+        onSetupManagedGame({
+          gameId: userGame.id,
+          home: userGame.home,
+          away: userGame.away,
+          otherGames: otherGames.map(g => ({ gameId: g.id, home: g.home, away: g.away }))
+        });
+      }
+    }
   };
 
   const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
@@ -420,6 +459,95 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent }) => {
           })()}
         </div>
       </div>
+
+      {/* 試合選択モーダル */}
+      {showGameChoiceModal && (() => {
+        const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+        const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
+        const opponentName = userGame ? (userGame.home === userTeamName ? userGame.away : userGame.home) : '';
+        const isHome = userGame ? userGame.home === userTeamName : true;
+        const userTeam = TEAMS_DATA[userTeamName];
+        const opponentTeam = TEAMS_DATA[opponentName];
+
+        // スタメン選手のコンディション取得
+        const getStarters = (team) => {
+          if (!team?.players) return [];
+          const settings = team.lineupSettings;
+          if (settings?.battingOrder?.length > 0) {
+            return settings.battingOrder
+              .sort((a, b) => a.battingOrder - b.battingOrder)
+              .map(entry => team.players.find(p => p.id === entry.playerId))
+              .filter(Boolean);
+          }
+          return team.players
+            .filter(p => p.battingOrder > 0 && p.battingOrder <= 9)
+            .sort((a, b) => a.battingOrder - b.battingOrder);
+        };
+
+        const userStarters = getStarters(userTeam);
+
+        return (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+            <div className="bg-gray-800 rounded-xl p-6 max-w-xl w-full mx-4 shadow-2xl border border-gray-600">
+              <h2 className="text-xl font-bold text-white text-center mb-4">
+                {formatDate(seasonData.currentDate)} の試合
+              </h2>
+
+              <div className="flex items-center justify-center gap-6 mb-5">
+                <div className="text-center">
+                  <div className={`font-bold text-lg ${isHome ? 'text-blue-400' : 'text-red-400'}`}>
+                    {isHome ? '🏠' : '✈️'} {userTeamName}
+                  </div>
+                </div>
+                <div className="text-2xl text-gray-500 font-bold">VS</div>
+                <div className="text-center">
+                  <div className={`font-bold text-lg ${!isHome ? 'text-blue-400' : 'text-red-400'}`}>
+                    {!isHome ? '🏠' : '✈️'} {opponentName}
+                  </div>
+                </div>
+              </div>
+
+              {/* スタメンコンディション一覧 */}
+              <div className="bg-gray-900 rounded-lg p-3 mb-5">
+                <h3 className="text-sm font-bold text-gray-400 mb-2">スタメン コンディション</h3>
+                <div className="grid grid-cols-3 gap-1 text-xs">
+                  {userStarters.map((player, i) => {
+                    const cond = player.condition ?? CONDITION_LEVELS.NORMAL;
+                    return (
+                      <div key={player.id} className="flex items-center gap-1 bg-gray-800 rounded px-2 py-1">
+                        <span className="text-gray-500 w-4">{i + 1}</span>
+                        <span className="text-white truncate flex-1">{player.name}</span>
+                        <span className={CONDITION_COLORS[cond]}>{CONDITION_ICONS[cond]}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => handleGameChoice('manage')}
+                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition text-lg shadow-lg"
+                >
+                  試合采配
+                </button>
+                <button
+                  onClick={() => handleGameChoice('skip')}
+                  className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-lg transition text-lg"
+                >
+                  試合スキップ
+                </button>
+              </div>
+              <button
+                onClick={() => setShowGameChoiceModal(false)}
+                className="mt-3 w-full text-center text-gray-500 hover:text-gray-300 text-sm transition"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

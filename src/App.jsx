@@ -30,6 +30,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 // Game logic imports
 import { calculatePhysicsContact, calculateDefensiveFitness } from './simulation-logic.js';
 import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate, generateAILineup, setRecommendedLineup } from './game/autoSimulation.js';
+import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Season management imports
 import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
@@ -257,6 +258,9 @@ import TradeScreen from './components/TradeScreen.jsx';
           if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
           if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
 
+          // コンディション初期化（古いセーブデータ対応）
+          initializeAllPlayersCondition();
+
           setScreenMode('management');
           setManagementView('dateprogress');
           setGameFlowState('season');
@@ -377,6 +381,9 @@ import TradeScreen from './components/TradeScreen.jsx';
       const [showBenchHome, setShowBenchHome] = useState(false);  // ベンチ表示切り替え（ホーム）
       const [autoManagerMode, setAutoManagerMode] = useState(true);  // 監督AI自動采配モード
       const isSubstituting = React.useRef(false);  // 交代処理中フラグ（二重実行防止）
+      // 采配モード（日程進行から起動した試合）
+      const [managedGameInfo, setManagedGameInfo] = useState(null);  // { gameId, home, away, otherGames }
+      const managedGameInfoRef = useRef(null);
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -1738,21 +1745,25 @@ import TradeScreen from './components/TradeScreen.jsx';
         const currentPitcher = getCurrentPitcher();
         const currentCatcher = getCurrentCatcher();
 
+        // コンディション補正
+        const batterCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+        const pitcherCondMod = CONDITION_PITCHING_MODIFIER[currentPitcher.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+
         // 選手データから必要な情報を展開
         const batter = {
           name: currentBatter.name,
-          meet: currentBatter.batting.meet,
-          power: currentBatter.batting.power,
+          meet: currentBatter.batting.meet + batterCondMod,
+          power: currentBatter.batting.power + batterCondMod,
           eye: currentBatter.batting.eye,
           speed: currentBatter.physical.speed,
           steal: currentBatter.batting.steal,
           bats: currentBatter.batting.bats
         };
-        
+
         const pitcher = {
           name: currentPitcher.name,
           velocity: currentPitcher.pitching.velocity,
-          control: currentPitcher.pitching.control,
+          control: currentPitcher.pitching.control + pitcherCondMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
           pitches: currentPitcher.pitching.arsenal,
@@ -1849,21 +1860,25 @@ import TradeScreen from './components/TradeScreen.jsx';
         const currentCatcher = getCurrentCatcher();
         const defenseTeam = getDefenseTeam();
         
+        // コンディション補正
+        const bCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+        const pCondMod = CONDITION_PITCHING_MODIFIER[currentPitcher.condition ?? CONDITION_LEVELS.NORMAL] || 0;
+
         // ローカル変数として展開
         const batter = {
           name: currentBatter.name,
-          meet: currentBatter.batting.meet,
-          power: currentBatter.batting.power,
+          meet: currentBatter.batting.meet + bCondMod,
+          power: currentBatter.batting.power + bCondMod,
           eye: currentBatter.batting.eye,
           speed: currentBatter.physical.speed,
           steal: currentBatter.batting.steal,
           bats: currentBatter.batting.bats
         };
-        
+
         const pitcher = {
           name: currentPitcher.name,
           velocity: currentPitcher.pitching.velocity,
-          control: currentPitcher.pitching.control,
+          control: currentPitcher.pitching.control + pCondMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
           pitches: currentPitcher.pitching.arsenal,
@@ -3633,6 +3648,269 @@ if (newOuts === 3) {
     if (result !== null) setSeasonData(result);
   };
 
+  // 采配モード: 試合セットアップ（DateProgressScreenから呼ばれる）
+  const setupManagedGame = (gameInfo) => {
+    // gameInfo: { gameId, home, away, otherGames: [{gameId, home, away}, ...] }
+    const homeTeamName = gameInfo.home;
+    const awayTeamName = gameInfo.away;
+    const homeTeamData = TEAMS_DATA[homeTeamName];
+    const awayTeamData = TEAMS_DATA[awayTeamName];
+
+    if (!homeTeamData || !awayTeamData) return;
+
+    // ユーザーチームがどちら側かに応じてスタメンを適用
+    const applyLineup = (teamData, teamName) => {
+      const players = JSON.parse(JSON.stringify(teamData.players));
+      const settings = teamData.lineupSettings;
+      const isUserTeam = settings?.battingOrder?.length > 0;
+
+      if (isUserTeam) {
+        // ユーザー設定のスタメンを適用
+        players.forEach(p => { p.battingOrder = 0; });
+        settings.battingOrder.forEach(entry => {
+          const player = players.find(p => p.id === entry.playerId);
+          if (player) {
+            player.battingOrder = entry.battingOrder;
+            player.position = entry.position;
+          }
+        });
+      } else {
+        // AIスタメンを生成（元データのコピーに対して）
+        const tempTeamData = { ...teamData, players };
+        generateAILineup(tempTeamData, teamName);
+      }
+
+      // 投手ローテーションから先発を選択
+      const rotation = teamData.pitchingRotation;
+      if (rotation?.starters?.length > 0) {
+        const index = rotation.currentStarterIndex || 0;
+        const starterId = rotation.starters[index];
+        players.forEach(p => {
+          if (p.id === starterId) {
+            p.battingOrder = 9;
+            p.position = 'pitcher';
+          } else if (p.battingOrder === 9 && p.id !== starterId) {
+            p.battingOrder = 0;
+          }
+        });
+      }
+
+      return players;
+    };
+
+    const homePlayers = applyLineup(homeTeamData, homeTeamName);
+    const awayPlayers = applyLineup(awayTeamData, awayTeamName);
+
+    // ゲーム状態をリセット
+    setCount({ balls: 0, strikes: 0 });
+    setBases([false, false, false]);
+    setOuts(0);
+    setInning(1);
+    setScore({ home: 0, away: 0 });
+    setGameOver(false);
+    setGameStarted(false);
+    setRemainingPitches(0);
+    setInningScores({
+      away: [null, null, null, null, null, null, null, null, null],
+      home: [null, null, null, null, null, null, null, null, null]
+    });
+    setExtraInningScores({ away: [], home: [] });
+    setCurrentInningScore({ away: 0, home: 0 });
+    setTeamHits({ home: 0, away: 0 });
+    setTeamErrors({ home: 0, away: 0 });
+    setTeamRBIs({ home: 0, away: 0 });
+    setIsTopInning(true);
+    setGameLog([]);
+    setLastResult(null);
+    setStatistics(null);
+    setRecentVelocities([]);
+
+    // チームを設定
+    setHomeTeam({
+      name: homeTeamName,
+      players: homePlayers.map(p => ({
+        ...p,
+        isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+        hasSubbedOut: false,
+        originalPosition: p.position,
+        gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+      })),
+      currentBatterOrder: 1
+    });
+
+    setAwayTeam({
+      name: awayTeamName,
+      players: awayPlayers.map(p => ({
+        ...p,
+        isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+        hasSubbedOut: false,
+        originalPosition: p.position,
+        gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+      })),
+      currentBatterOrder: 1
+    });
+
+    // 先発投手のスタミナを設定
+    const startingPitcher = homePlayers.find(p => p.battingOrder === 9);
+    if (startingPitcher) {
+      setCurrentStamina(startingPitcher.pitching?.stamina || 100);
+    }
+
+    // 管理対象ゲーム情報を保存
+    setManagedGameInfo(gameInfo);
+    managedGameInfoRef.current = gameInfo;
+
+    // ゲーム画面に遷移
+    setScreenMode('game');
+  };
+
+  // 采配モード: 試合終了後の処理
+  const handleManagedGameEnd = () => {
+    const info = managedGameInfoRef.current;
+    if (!info) return;
+
+    const finalScore = { ...score };
+    const homeTeamName = homeTeam.name;
+    const awayTeamName = awayTeam.name;
+
+    // 1. ユーザー試合の結果を記録
+    const gameResult = {
+      date: seasonData.currentDate,
+      home: homeTeamName,
+      away: awayTeamName,
+      homeScore: finalScore.home,
+      awayScore: finalScore.away
+    };
+
+    let updatedSeasonData = recordGameResult(seasonData, gameResult);
+
+    // 2. 投手のローテーションインデックスを進める
+    [homeTeamName, awayTeamName].forEach(teamName => {
+      const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
+      if (rotation?.starters?.length > 0) {
+        rotation.currentStarterIndex =
+          ((rotation.currentStarterIndex || 0) + 1) % rotation.starters.length;
+      }
+    });
+
+    // 3. 選手のシーズン成績を更新（homeTeam/awayTeamのgameStatsから）
+    const updateManagedGameStats = (teamState, teamName) => {
+      const teamData = TEAMS_DATA[teamName];
+      if (!teamData) return;
+
+      teamState.players.forEach(p => {
+        const playerData = teamData.players.find(pl => pl.id === p.id);
+        if (!playerData) return;
+
+        // 打撃成績
+        const gs = p.gameStats || {};
+        if (gs.atBats > 0 || gs.walks > 0) {
+          if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
+          if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
+          const season = playerData.seasonStats.batting;
+          season.games = (season.games || 0) + 1;
+          season.atBats = (season.atBats || 0) + (gs.atBats || 0);
+          season.hits = (season.hits || 0) + (gs.hits || 0);
+          season.homeruns = (season.homeruns || 0) + (gs.homeruns || 0);
+          season.rbis = (season.rbis || 0) + (gs.rbis || 0);
+          season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
+          season.walks = (season.walks || 0) + (gs.walks || 0);
+
+          // 通算成績
+          if (!playerData.careerStats) playerData.careerStats = { batting: {}, pitching: {} };
+          if (!playerData.careerStats.batting) playerData.careerStats.batting = {};
+          const career = playerData.careerStats.batting;
+          career.games = (career.games || 0) + 1;
+          career.atBats = (career.atBats || 0) + (gs.atBats || 0);
+          career.hits = (career.hits || 0) + (gs.hits || 0);
+          career.homeruns = (career.homeruns || 0) + (gs.homeruns || 0);
+          career.rbis = (career.rbis || 0) + (gs.rbis || 0);
+          career.strikeouts = (career.strikeouts || 0) + (gs.strikeouts || 0);
+          career.walks = (career.walks || 0) + (gs.walks || 0);
+        }
+
+        // 投手成績
+        const ps = p.stats?.pitching || {};
+        if (ps.outs > 0 || ps.pitches > 0) {
+          if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
+          const sp = playerData.seasonStats.pitching;
+          sp.games = (sp.games || 0) + 1;
+          sp.inningsPitched = (sp.inningsPitched || 0) + (ps.outs || 0);
+          sp.strikeouts = (sp.strikeouts || 0) + (ps.strikeouts || 0);
+          sp.walks = (sp.walks || 0) + (ps.walks || 0);
+          sp.runsAllowed = (sp.runsAllowed || 0) + (ps.runsAllowed || 0);
+          sp.earnedRuns = (sp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
+          sp.hits = (sp.hits || 0) + (ps.hits || 0);
+          sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
+          sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
+
+          if (!playerData.careerStats.pitching) playerData.careerStats.pitching = {};
+          const cp = playerData.careerStats.pitching;
+          cp.games = (cp.games || 0) + 1;
+          cp.inningsPitched = (cp.inningsPitched || 0) + (ps.outs || 0);
+          cp.strikeouts = (cp.strikeouts || 0) + (ps.strikeouts || 0);
+          cp.walks = (cp.walks || 0) + (ps.walks || 0);
+          cp.runsAllowed = (cp.runsAllowed || 0) + (ps.runsAllowed || 0);
+          cp.earnedRuns = (cp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
+          cp.hits = (cp.hits || 0) + (ps.hits || 0);
+          cp.homeruns = (cp.homeruns || 0) + (ps.homeruns || 0);
+          cp.pitches = (cp.pitches || 0) + (ps.pitches || 0);
+
+          // 疲労蓄積
+          const fatigue = Math.floor((ps.pitches || 0) / (p.battingOrder === 9 ? 2 : 3));
+          playerData.fatigue = (playerData.fatigue || 0) + fatigue;
+        }
+      });
+    };
+
+    updateManagedGameStats(homeTeam, homeTeamName);
+    updateManagedGameStats(awayTeam, awayTeamName);
+
+    // 4. 他チームの試合を自動シミュレーション
+    if (info.otherGames && info.otherGames.length > 0) {
+      info.otherGames.forEach(otherGame => {
+        const otherHomeTeam = TEAMS_DATA[otherGame.home];
+        const otherAwayTeam = TEAMS_DATA[otherGame.away];
+        if (!otherHomeTeam || !otherAwayTeam) return;
+
+        const otherResult = autoSimulateGame(otherGame.home, otherGame.away);
+        if (otherResult) {
+          const result = {
+            date: seasonData.currentDate,
+            home: otherGame.home,
+            away: otherGame.away,
+            homeScore: otherResult.homeScore,
+            awayScore: otherResult.awayScore
+          };
+          updatedSeasonData = recordGameResult(updatedSeasonData, result);
+        }
+      });
+    }
+
+    // 5. プレーオフ進行更新
+    updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
+
+    // 6. 日付を進める
+    updatedSeasonData = progressDate(updatedSeasonData, 1);
+
+    // フェーズ遷移チェック
+    const oldPhase = seasonData.phase;
+    const newPhase = updatedSeasonData.phase;
+    if (oldPhase !== newPhase) {
+      updatedSeasonData = handlePhaseTransition(updatedSeasonData, newPhase);
+    }
+
+    autoFollowMonth(updatedSeasonData);
+    const finalResult = checkPhaseTransitionAndNavigate(seasonData, updatedSeasonData);
+    if (finalResult !== null) setSeasonData(finalResult);
+
+    // 7. 管理画面に戻る
+    setManagedGameInfo(null);
+    managedGameInfoRef.current = null;
+    setScreenMode('management');
+    setManagementView('dateprogress');
+  };
+
   // 指定日の試合を自動シミュレーション
   const simulateGamesOnDate = (seasonData) => {
     const currentDate = seasonData.currentDate;
@@ -4109,6 +4387,7 @@ if (newOuts === 3) {
         if (managementView === 'dateprogress') return <DateProgressScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}
+          onSetupManagedGame={setupManagedGame}
           onForceEvent={(eventType) => {
             if (eventType === 'contract') setManagementView('contract');
             else if (eventType === 'tryout') setManagementView('tryout');
@@ -4289,6 +4568,8 @@ if (newOuts === 3) {
           seasonData={seasonData}
           allTeams={allTeams}
           onComplete={() => {
+            // 全選手のコンディション初期化
+            initializeAllPlayersCondition();
             // キャンプ終了時に全チームのスタメンを自動生成
             console.log('🏕️ キャンプ終了: 全チームのスタメンを生成');
             Object.keys(TEAMS_DATA).forEach(teamName => {
@@ -4326,14 +4607,23 @@ if (newOuts === 3) {
           <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
               <div className="p-2">
-          {/* 管理画面へボタン */}
-          <div className="max-w-[1800px] mx-auto mb-2 flex justify-end">
-            <button
-              onClick={() => setScreenMode('management')}
-              className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded transition"
-            >
-              ⚙️ 管理画面へ
-            </button>
+          {/* 管理画面へボタン（采配モード中は非表示） */}
+          <div className="max-w-[1800px] mx-auto mb-2 flex justify-between items-center">
+            {managedGameInfo && (
+              <span className="text-yellow-400 text-sm font-bold">
+                {formatDate(seasonData?.currentDate)} - 采配モード
+              </span>
+            )}
+            <div className="ml-auto">
+              {!managedGameInfo && (
+                <button
+                  onClick={() => setScreenMode('management')}
+                  className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded transition"
+                >
+                  ⚙️ 管理画面へ
+                </button>
+              )}
+            </div>
           </div>
 
           {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は中央重視(3-6-3) */}
@@ -4406,6 +4696,7 @@ if (newOuts === 3) {
                                 </button>
                                 <span className="font-medium text-base truncate flex-1">
                                   {player.name}
+                                  <span className={`ml-0.5 text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                                 </span>
                                 <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
 <span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
@@ -4565,6 +4856,7 @@ if (newOuts === 3) {
                             <span className={`w-6 text-center rounded text-sm py-0.5 font-bold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           )}
                           <span className="font-bold">{player.name}</span>
+                          <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
                           {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
@@ -5233,18 +5525,27 @@ if (newOuts === 3) {
                     </div>
                   </div>
 
-                  <div className="text-center mt-4">
-                    <button
-                      onClick={() => {
-                        resetGame();
-                        setGameStarted(false);
-                        setSelectedBatterAway(null);
-                        setSelectedBatterHome(null);
-                      }}
-                      className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
-                    >
-                      新しい試合
-                    </button>
+                  <div className="text-center mt-4 flex justify-center gap-3">
+                    {managedGameInfo ? (
+                      <button
+                        onClick={handleManagedGameEnd}
+                        className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition text-lg"
+                      >
+                        結果確定・翌日へ
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          resetGame();
+                          setGameStarted(false);
+                          setSelectedBatterAway(null);
+                          setSelectedBatterHome(null);
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                      >
+                        新しい試合
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -5317,6 +5618,7 @@ if (newOuts === 3) {
                                 </button>
                                 <span className="font-medium text-base truncate flex-1">
                                   {player.name}
+                                  <span className={`ml-0.5 text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                                 </span>
                                 <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
 <span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
@@ -5476,6 +5778,7 @@ if (newOuts === 3) {
                             <span className={`w-6 text-center rounded text-sm py-0.5 font-bold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           )}
                           <span className="font-bold">{player.name}</span>
+                          <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           <span className="flex-1"></span>
                           {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
