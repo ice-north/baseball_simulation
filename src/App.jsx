@@ -474,8 +474,8 @@ import TradeScreen from './components/TradeScreen.jsx';
             p.id === playerId
               ? {
                   ...p,
-                  stats: { ...p.stats, batting: { ...p.stats.batting, ...statUpdates } },
-                  gameStats: { ...p.gameStats, ...statUpdates }
+                  stats: { ...(p.stats || {}), batting: { ...(p.stats?.batting || {}), ...statUpdates } },
+                  gameStats: { ...(p.gameStats || {}), ...statUpdates }
                 }
               : p
           )
