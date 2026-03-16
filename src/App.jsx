@@ -3302,6 +3302,250 @@ if (newOuts === 3) {
 
 
 
+      // 采配モード: 試合セットアップ（DateProgressScreenから呼ばれる）
+      const setupManagedGame = (gameInfo) => {
+        // gameInfo: { gameId, home, away, otherGames: [{gameId, home, away}, ...] }
+        const htn = gameInfo.home;
+        const atn = gameInfo.away;
+        const htd = TEAMS_DATA[htn];
+        const atd = TEAMS_DATA[atn];
+
+        if (!htd || !atd) return;
+
+        // ユーザーチームがどちら側かに応じてスタメンを適用
+        const applyLineup = (teamData, teamName) => {
+          const players = JSON.parse(JSON.stringify(teamData.players));
+          const settings = teamData.lineupSettings;
+          const isUserTeam = settings?.battingOrder?.length > 0;
+
+          if (isUserTeam) {
+            players.forEach(p => { p.battingOrder = 0; });
+            settings.battingOrder.forEach(entry => {
+              const player = players.find(p => p.id === entry.playerId);
+              if (player) {
+                player.battingOrder = entry.battingOrder;
+                player.position = entry.position;
+              }
+            });
+          } else {
+            const tempTeamData = { ...teamData, players };
+            generateAILineup(tempTeamData, teamName);
+          }
+
+          const rotation = teamData.pitchingRotation;
+          if (rotation?.starters?.length > 0) {
+            const index = rotation.currentStarterIndex || 0;
+            const starterId = rotation.starters[index];
+            players.forEach(p => {
+              if (p.id === starterId) {
+                p.battingOrder = 9;
+                p.position = 'pitcher';
+              } else if (p.battingOrder === 9 && p.id !== starterId) {
+                p.battingOrder = 0;
+              }
+            });
+          }
+
+          return players;
+        };
+
+        const homePlayers = applyLineup(htd, htn);
+        const awayPlayers = applyLineup(atd, atn);
+
+        // ゲーム状態をリセット
+        setCount({ balls: 0, strikes: 0 });
+        setBases([false, false, false]);
+        setOuts(0);
+        setInning(1);
+        setScore({ home: 0, away: 0 });
+        setGameOver(false);
+        setGameStarted(false);
+        setRemainingPitches(0);
+        setInningScores({
+          away: [null, null, null, null, null, null, null, null, null],
+          home: [null, null, null, null, null, null, null, null, null]
+        });
+        setExtraInningScores({ away: [], home: [] });
+        setCurrentInningScore({ away: 0, home: 0 });
+        setTeamHits({ home: 0, away: 0 });
+        setTeamErrors({ home: 0, away: 0 });
+        setTeamRBIs({ home: 0, away: 0 });
+        setIsTopInning(true);
+        setGameLog([]);
+        setLastResult(null);
+        setStatistics(null);
+        setRecentVelocities([]);
+
+        setHomeTeam({
+          name: htn,
+          players: homePlayers.map(p => ({
+            ...p,
+            isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+            hasSubbedOut: false,
+            originalPosition: p.position,
+            gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+          })),
+          currentBatterOrder: 1
+        });
+
+        setAwayTeam({
+          name: atn,
+          players: awayPlayers.map(p => ({
+            ...p,
+            isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+            hasSubbedOut: false,
+            originalPosition: p.position,
+            gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
+          })),
+          currentBatterOrder: 1
+        });
+
+        const startingPitcher = homePlayers.find(p => p.battingOrder === 9);
+        if (startingPitcher) {
+          setCurrentStamina(startingPitcher.pitching?.stamina || 100);
+        }
+
+        setManagedGameInfo(gameInfo);
+        managedGameInfoRef.current = gameInfo;
+        setScreenMode('game');
+      };
+
+      // 采配モード: 試合終了後の処理
+      const handleManagedGameEnd = () => {
+        const info = managedGameInfoRef.current;
+        if (!info) return;
+
+        const finalScore = { ...score };
+        const htn = homeTeam.name;
+        const atn = awayTeam.name;
+
+        const gameResult = {
+          date: seasonData.currentDate,
+          home: htn,
+          away: atn,
+          homeScore: finalScore.home,
+          awayScore: finalScore.away
+        };
+
+        let updatedSeasonData = recordGameResult(seasonData, gameResult);
+
+        [htn, atn].forEach(teamName => {
+          const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
+          if (rotation?.starters?.length > 0) {
+            rotation.currentStarterIndex =
+              ((rotation.currentStarterIndex || 0) + 1) % rotation.starters.length;
+          }
+        });
+
+        const updateManagedGameStats = (teamState, teamName) => {
+          const teamData = TEAMS_DATA[teamName];
+          if (!teamData) return;
+
+          teamState.players.forEach(p => {
+            const playerData = teamData.players.find(pl => pl.id === p.id);
+            if (!playerData) return;
+
+            const gs = p.gameStats || {};
+            if (gs.atBats > 0 || gs.walks > 0) {
+              if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
+              if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
+              const season = playerData.seasonStats.batting;
+              season.games = (season.games || 0) + 1;
+              season.atBats = (season.atBats || 0) + (gs.atBats || 0);
+              season.hits = (season.hits || 0) + (gs.hits || 0);
+              season.homeruns = (season.homeruns || 0) + (gs.homeruns || 0);
+              season.rbis = (season.rbis || 0) + (gs.rbis || 0);
+              season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
+              season.walks = (season.walks || 0) + (gs.walks || 0);
+
+              if (!playerData.careerStats) playerData.careerStats = { batting: {}, pitching: {} };
+              if (!playerData.careerStats.batting) playerData.careerStats.batting = {};
+              const career = playerData.careerStats.batting;
+              career.games = (career.games || 0) + 1;
+              career.atBats = (career.atBats || 0) + (gs.atBats || 0);
+              career.hits = (career.hits || 0) + (gs.hits || 0);
+              career.homeruns = (career.homeruns || 0) + (gs.homeruns || 0);
+              career.rbis = (career.rbis || 0) + (gs.rbis || 0);
+              career.strikeouts = (career.strikeouts || 0) + (gs.strikeouts || 0);
+              career.walks = (career.walks || 0) + (gs.walks || 0);
+            }
+
+            const ps = p.stats?.pitching || {};
+            if (ps.outs > 0 || ps.pitches > 0) {
+              if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
+              const sp = playerData.seasonStats.pitching;
+              sp.games = (sp.games || 0) + 1;
+              sp.inningsPitched = (sp.inningsPitched || 0) + (ps.outs || 0);
+              sp.strikeouts = (sp.strikeouts || 0) + (ps.strikeouts || 0);
+              sp.walks = (sp.walks || 0) + (ps.walks || 0);
+              sp.runsAllowed = (sp.runsAllowed || 0) + (ps.runsAllowed || 0);
+              sp.earnedRuns = (sp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
+              sp.hits = (sp.hits || 0) + (ps.hits || 0);
+              sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
+              sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
+
+              if (!playerData.careerStats.pitching) playerData.careerStats.pitching = {};
+              const cp = playerData.careerStats.pitching;
+              cp.games = (cp.games || 0) + 1;
+              cp.inningsPitched = (cp.inningsPitched || 0) + (ps.outs || 0);
+              cp.strikeouts = (cp.strikeouts || 0) + (ps.strikeouts || 0);
+              cp.walks = (cp.walks || 0) + (ps.walks || 0);
+              cp.runsAllowed = (cp.runsAllowed || 0) + (ps.runsAllowed || 0);
+              cp.earnedRuns = (cp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
+              cp.hits = (cp.hits || 0) + (ps.hits || 0);
+              cp.homeruns = (cp.homeruns || 0) + (ps.homeruns || 0);
+              cp.pitches = (cp.pitches || 0) + (ps.pitches || 0);
+
+              const fatigue = Math.floor((ps.pitches || 0) / (p.battingOrder === 9 ? 2 : 3));
+              playerData.fatigue = (playerData.fatigue || 0) + fatigue;
+            }
+          });
+        };
+
+        updateManagedGameStats(homeTeam, htn);
+        updateManagedGameStats(awayTeam, atn);
+
+        if (info.otherGames && info.otherGames.length > 0) {
+          info.otherGames.forEach(otherGame => {
+            const oh = TEAMS_DATA[otherGame.home];
+            const oa = TEAMS_DATA[otherGame.away];
+            if (!oh || !oa) return;
+
+            const otherResult = autoSimulateGame(otherGame.home, otherGame.away);
+            if (otherResult) {
+              updatedSeasonData = recordGameResult(updatedSeasonData, {
+                date: seasonData.currentDate,
+                home: otherGame.home,
+                away: otherGame.away,
+                homeScore: otherResult.homeScore,
+                awayScore: otherResult.awayScore
+              });
+            }
+          });
+        }
+
+        updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
+        updatedSeasonData = progressDate(updatedSeasonData, 1);
+
+        const oldPhase = seasonData.phase;
+        const newPhase = updatedSeasonData.phase;
+        if (oldPhase !== newPhase) {
+          updatedSeasonData = handlePhaseTransition(updatedSeasonData, newPhase);
+        }
+
+        // カレンダー月を追従
+        if (updatedSeasonData?.currentDate?.month && updatedSeasonData.currentDate.month !== selectedMonth) {
+          setSelectedMonth(updatedSeasonData.currentDate.month);
+        }
+
+        setSeasonData(updatedSeasonData);
+
+        setManagedGameInfo(null);
+        managedGameInfoRef.current = null;
+        setScreenMode('management');
+        setManagementView('dateprogress');
+      };
+
 // 日程進行画面コンポーネント
       const ScheduleScreen = ({ seasonData, setSeasonData, allTeams, selectedMonth, setSelectedMonth }) => {
   // 全選手の成績を取得してランキング形式に変換
@@ -3646,269 +3890,6 @@ if (newOuts === 3) {
     // 強制イベント処理
     const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
     if (result !== null) setSeasonData(result);
-  };
-
-  // 采配モード: 試合セットアップ（DateProgressScreenから呼ばれる）
-  const setupManagedGame = (gameInfo) => {
-    // gameInfo: { gameId, home, away, otherGames: [{gameId, home, away}, ...] }
-    const homeTeamName = gameInfo.home;
-    const awayTeamName = gameInfo.away;
-    const homeTeamData = TEAMS_DATA[homeTeamName];
-    const awayTeamData = TEAMS_DATA[awayTeamName];
-
-    if (!homeTeamData || !awayTeamData) return;
-
-    // ユーザーチームがどちら側かに応じてスタメンを適用
-    const applyLineup = (teamData, teamName) => {
-      const players = JSON.parse(JSON.stringify(teamData.players));
-      const settings = teamData.lineupSettings;
-      const isUserTeam = settings?.battingOrder?.length > 0;
-
-      if (isUserTeam) {
-        // ユーザー設定のスタメンを適用
-        players.forEach(p => { p.battingOrder = 0; });
-        settings.battingOrder.forEach(entry => {
-          const player = players.find(p => p.id === entry.playerId);
-          if (player) {
-            player.battingOrder = entry.battingOrder;
-            player.position = entry.position;
-          }
-        });
-      } else {
-        // AIスタメンを生成（元データのコピーに対して）
-        const tempTeamData = { ...teamData, players };
-        generateAILineup(tempTeamData, teamName);
-      }
-
-      // 投手ローテーションから先発を選択
-      const rotation = teamData.pitchingRotation;
-      if (rotation?.starters?.length > 0) {
-        const index = rotation.currentStarterIndex || 0;
-        const starterId = rotation.starters[index];
-        players.forEach(p => {
-          if (p.id === starterId) {
-            p.battingOrder = 9;
-            p.position = 'pitcher';
-          } else if (p.battingOrder === 9 && p.id !== starterId) {
-            p.battingOrder = 0;
-          }
-        });
-      }
-
-      return players;
-    };
-
-    const homePlayers = applyLineup(homeTeamData, homeTeamName);
-    const awayPlayers = applyLineup(awayTeamData, awayTeamName);
-
-    // ゲーム状態をリセット
-    setCount({ balls: 0, strikes: 0 });
-    setBases([false, false, false]);
-    setOuts(0);
-    setInning(1);
-    setScore({ home: 0, away: 0 });
-    setGameOver(false);
-    setGameStarted(false);
-    setRemainingPitches(0);
-    setInningScores({
-      away: [null, null, null, null, null, null, null, null, null],
-      home: [null, null, null, null, null, null, null, null, null]
-    });
-    setExtraInningScores({ away: [], home: [] });
-    setCurrentInningScore({ away: 0, home: 0 });
-    setTeamHits({ home: 0, away: 0 });
-    setTeamErrors({ home: 0, away: 0 });
-    setTeamRBIs({ home: 0, away: 0 });
-    setIsTopInning(true);
-    setGameLog([]);
-    setLastResult(null);
-    setStatistics(null);
-    setRecentVelocities([]);
-
-    // チームを設定
-    setHomeTeam({
-      name: homeTeamName,
-      players: homePlayers.map(p => ({
-        ...p,
-        isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
-        hasSubbedOut: false,
-        originalPosition: p.position,
-        gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
-      })),
-      currentBatterOrder: 1
-    });
-
-    setAwayTeam({
-      name: awayTeamName,
-      players: awayPlayers.map(p => ({
-        ...p,
-        isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
-        hasSubbedOut: false,
-        originalPosition: p.position,
-        gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 }
-      })),
-      currentBatterOrder: 1
-    });
-
-    // 先発投手のスタミナを設定
-    const startingPitcher = homePlayers.find(p => p.battingOrder === 9);
-    if (startingPitcher) {
-      setCurrentStamina(startingPitcher.pitching?.stamina || 100);
-    }
-
-    // 管理対象ゲーム情報を保存
-    setManagedGameInfo(gameInfo);
-    managedGameInfoRef.current = gameInfo;
-
-    // ゲーム画面に遷移
-    setScreenMode('game');
-  };
-
-  // 采配モード: 試合終了後の処理
-  const handleManagedGameEnd = () => {
-    const info = managedGameInfoRef.current;
-    if (!info) return;
-
-    const finalScore = { ...score };
-    const homeTeamName = homeTeam.name;
-    const awayTeamName = awayTeam.name;
-
-    // 1. ユーザー試合の結果を記録
-    const gameResult = {
-      date: seasonData.currentDate,
-      home: homeTeamName,
-      away: awayTeamName,
-      homeScore: finalScore.home,
-      awayScore: finalScore.away
-    };
-
-    let updatedSeasonData = recordGameResult(seasonData, gameResult);
-
-    // 2. 投手のローテーションインデックスを進める
-    [homeTeamName, awayTeamName].forEach(teamName => {
-      const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
-      if (rotation?.starters?.length > 0) {
-        rotation.currentStarterIndex =
-          ((rotation.currentStarterIndex || 0) + 1) % rotation.starters.length;
-      }
-    });
-
-    // 3. 選手のシーズン成績を更新（homeTeam/awayTeamのgameStatsから）
-    const updateManagedGameStats = (teamState, teamName) => {
-      const teamData = TEAMS_DATA[teamName];
-      if (!teamData) return;
-
-      teamState.players.forEach(p => {
-        const playerData = teamData.players.find(pl => pl.id === p.id);
-        if (!playerData) return;
-
-        // 打撃成績
-        const gs = p.gameStats || {};
-        if (gs.atBats > 0 || gs.walks > 0) {
-          if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
-          if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
-          const season = playerData.seasonStats.batting;
-          season.games = (season.games || 0) + 1;
-          season.atBats = (season.atBats || 0) + (gs.atBats || 0);
-          season.hits = (season.hits || 0) + (gs.hits || 0);
-          season.homeruns = (season.homeruns || 0) + (gs.homeruns || 0);
-          season.rbis = (season.rbis || 0) + (gs.rbis || 0);
-          season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
-          season.walks = (season.walks || 0) + (gs.walks || 0);
-
-          // 通算成績
-          if (!playerData.careerStats) playerData.careerStats = { batting: {}, pitching: {} };
-          if (!playerData.careerStats.batting) playerData.careerStats.batting = {};
-          const career = playerData.careerStats.batting;
-          career.games = (career.games || 0) + 1;
-          career.atBats = (career.atBats || 0) + (gs.atBats || 0);
-          career.hits = (career.hits || 0) + (gs.hits || 0);
-          career.homeruns = (career.homeruns || 0) + (gs.homeruns || 0);
-          career.rbis = (career.rbis || 0) + (gs.rbis || 0);
-          career.strikeouts = (career.strikeouts || 0) + (gs.strikeouts || 0);
-          career.walks = (career.walks || 0) + (gs.walks || 0);
-        }
-
-        // 投手成績
-        const ps = p.stats?.pitching || {};
-        if (ps.outs > 0 || ps.pitches > 0) {
-          if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
-          const sp = playerData.seasonStats.pitching;
-          sp.games = (sp.games || 0) + 1;
-          sp.inningsPitched = (sp.inningsPitched || 0) + (ps.outs || 0);
-          sp.strikeouts = (sp.strikeouts || 0) + (ps.strikeouts || 0);
-          sp.walks = (sp.walks || 0) + (ps.walks || 0);
-          sp.runsAllowed = (sp.runsAllowed || 0) + (ps.runsAllowed || 0);
-          sp.earnedRuns = (sp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
-          sp.hits = (sp.hits || 0) + (ps.hits || 0);
-          sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
-          sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
-
-          if (!playerData.careerStats.pitching) playerData.careerStats.pitching = {};
-          const cp = playerData.careerStats.pitching;
-          cp.games = (cp.games || 0) + 1;
-          cp.inningsPitched = (cp.inningsPitched || 0) + (ps.outs || 0);
-          cp.strikeouts = (cp.strikeouts || 0) + (ps.strikeouts || 0);
-          cp.walks = (cp.walks || 0) + (ps.walks || 0);
-          cp.runsAllowed = (cp.runsAllowed || 0) + (ps.runsAllowed || 0);
-          cp.earnedRuns = (cp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
-          cp.hits = (cp.hits || 0) + (ps.hits || 0);
-          cp.homeruns = (cp.homeruns || 0) + (ps.homeruns || 0);
-          cp.pitches = (cp.pitches || 0) + (ps.pitches || 0);
-
-          // 疲労蓄積
-          const fatigue = Math.floor((ps.pitches || 0) / (p.battingOrder === 9 ? 2 : 3));
-          playerData.fatigue = (playerData.fatigue || 0) + fatigue;
-        }
-      });
-    };
-
-    updateManagedGameStats(homeTeam, homeTeamName);
-    updateManagedGameStats(awayTeam, awayTeamName);
-
-    // 4. 他チームの試合を自動シミュレーション
-    if (info.otherGames && info.otherGames.length > 0) {
-      info.otherGames.forEach(otherGame => {
-        const otherHomeTeam = TEAMS_DATA[otherGame.home];
-        const otherAwayTeam = TEAMS_DATA[otherGame.away];
-        if (!otherHomeTeam || !otherAwayTeam) return;
-
-        const otherResult = autoSimulateGame(otherGame.home, otherGame.away);
-        if (otherResult) {
-          const result = {
-            date: seasonData.currentDate,
-            home: otherGame.home,
-            away: otherGame.away,
-            homeScore: otherResult.homeScore,
-            awayScore: otherResult.awayScore
-          };
-          updatedSeasonData = recordGameResult(updatedSeasonData, result);
-        }
-      });
-    }
-
-    // 5. プレーオフ進行更新
-    updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
-
-    // 6. 日付を進める
-    updatedSeasonData = progressDate(updatedSeasonData, 1);
-
-    // フェーズ遷移チェック
-    const oldPhase = seasonData.phase;
-    const newPhase = updatedSeasonData.phase;
-    if (oldPhase !== newPhase) {
-      updatedSeasonData = handlePhaseTransition(updatedSeasonData, newPhase);
-    }
-
-    autoFollowMonth(updatedSeasonData);
-    const finalResult = checkPhaseTransitionAndNavigate(seasonData, updatedSeasonData);
-    if (finalResult !== null) setSeasonData(finalResult);
-
-    // 7. 管理画面に戻る
-    setManagedGameInfo(null);
-    managedGameInfoRef.current = null;
-    setScreenMode('management');
-    setManagementView('dateprogress');
   };
 
   // 指定日の試合を自動シミュレーション

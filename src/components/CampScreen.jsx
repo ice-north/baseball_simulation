@@ -400,7 +400,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                               onChange={(e) => setAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
                               className="bg-gray-700 text-white text-[11px] px-1.5 py-0.5 rounded w-24"
                             >
-                              {Object.entries(TRAINING_MENUS).map(([key, menu]) => (
+                              {Object.entries(TRAINING_MENUS)
+                                .filter(([key]) => key !== 'newpitch' || isPitcher(player))
+                                .map(([key, menu]) => (
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
                             </select>

@@ -63,7 +63,16 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       setTryoutCandidates(candidates);
 
       const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
-      const teamNames = ['ユーザー', ...teamsArray.slice(1)];
+      let teamNames = ['ユーザー', ...teamsArray.slice(1)];
+
+      // 非初回トライアウト: 順位の低いチームから指名（最下位が1巡目1位）
+      if (!isInitialTryout && seasonData?.standings?.length > 0) {
+        const standingsSorted = [...seasonData.standings].sort((a, b) => a.winRate - b.winRate);
+        teamNames = standingsSorted.map(s => {
+          return s.team === teamsArray[0] ? 'ユーザー' : s.team;
+        });
+      }
+
       const rounds = isInitialTryout ? 24 : Math.min(24, Math.floor(candidates.length / teamNames.length));
       const order = generateSnakeDraftOrder(teamNames, rounds);
       setDraftOrder(order);

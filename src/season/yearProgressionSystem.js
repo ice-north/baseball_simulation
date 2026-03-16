@@ -966,6 +966,13 @@ export const TRAINING_MENUS = {
     description: '変化球レベルを強化',
     targets: ['breaking'],
     category: 'pitching'
+  },
+  newpitch: {
+    name: '新球種習得',
+    icon: '✨',
+    description: '新しい変化球を覚える（投手のみ）',
+    targets: ['newpitch'],
+    category: 'pitching'
   }
 };
 
