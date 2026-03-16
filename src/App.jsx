@@ -4865,14 +4865,15 @@ if (newOuts === 3) {
                           <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-[10px] text-gray-300 ml-1">
+                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap">
                               {player.gameStats.atBatResults.map((r, i) => (
-                                <span key={i} className={`px-0.5 rounded ${
-                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'text-yellow-400' :
-                                  r === '本塁打' ? 'text-red-400 font-bold' :
-                                  r === '三振' ? 'text-blue-400' :
-                                  r === '四球' ? 'text-green-400' :
-                                  'text-gray-400'
+                                <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
+                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
+                                  r === '本塁打' ? 'bg-red-600' :
+                                  r === '三振' ? 'bg-blue-700' :
+                                  r === '四球' ? 'bg-green-700' :
+                                  r === '併殺' ? 'bg-purple-700' :
+                                  'bg-gray-600'
                                 }`}>{r}</span>
                               ))}
                             </span>
@@ -4885,7 +4886,7 @@ if (newOuts === 3) {
                           {isPositionSelected && <span>🔄</span>}
                         </div>
                         {gameStarted ? (
-                          <div className={`flex gap-2 text-[10px] ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-500'}`}>
+                          <div className={`flex gap-2 text-xs ml-6 mt-0.5 font-bold ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
                             {(() => {
                               const ss = player.seasonStats?.batting;
                               if (ss && ss.atBats > 0) {
@@ -5515,7 +5516,52 @@ if (newOuts === 3) {
               )}
 
               {/* 試合結果（下段に配置） */}
-              {gameOver && (
+              {gameOver && (() => {
+                // 勝利/敗戦/セーブ投手と本塁打の判定
+                const isHomeWin = score.home > score.away;
+                const isDraw = score.home === score.away;
+                const winTeam = isHomeWin ? homeTeam : awayTeam;
+                const loseTeam = isHomeWin ? awayTeam : homeTeam;
+
+                // 勝利投手: 勝ちチームで最も長く投げた投手（先発5回以上 or 最多アウト）
+                const winPitchers = winTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0).sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
+                const starter = winPitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9);
+                const winPitcher = !isDraw ? (starter && (starter.stats?.pitching?.outs || 0) >= 15 ? starter : winPitchers[0]) : null;
+
+                // 敗戦投手: 負けチームの先発（最多投球）
+                const losePitchers = loseTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0).sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
+                const losePitcher = !isDraw ? losePitchers[0] : null;
+
+                // セーブ投手: 勝ちチームの最後の投手（勝利投手と異なり、3アウト以上取得）
+                const lastPitcher = winPitchers.length > 1 ? winPitchers.find(p => p !== winPitcher && p.position === 'pitcher') || winPitchers.find(p => p !== winPitcher) : null;
+                const savePitcher = !isDraw && lastPitcher && lastPitcher !== winPitcher && (lastPitcher.stats?.pitching?.outs || 0) >= 3 ? lastPitcher : null;
+
+                // 本塁打を打った選手
+                const hrHitters = [
+                  ...awayTeam.players.filter(p => (p.gameStats?.homeruns || 0) > 0).map(p => ({ ...p, team: awayTeam.name })),
+                  ...homeTeam.players.filter(p => (p.gameStats?.homeruns || 0) > 0).map(p => ({ ...p, team: homeTeam.name }))
+                ];
+
+                // スクロール用テキスト組み立て
+                const scrollParts = [];
+                if (!isDraw) {
+                  scrollParts.push(`🏆 ${isHomeWin ? homeTeam.name : awayTeam.name} の勝利！`);
+                } else {
+                  scrollParts.push('引き分け');
+                }
+                if (winPitcher) scrollParts.push(`○${winPitcher.name}`);
+                if (losePitcher) scrollParts.push(`●${losePitcher.name}`);
+                if (savePitcher) scrollParts.push(`S${savePitcher.name}`);
+                hrHitters.forEach(p => {
+                  const seasonHR = (p.seasonStats?.batting?.homeruns || 0) + (p.gameStats?.homeruns || 0);
+                  const count = p.gameStats?.homeruns || 0;
+                  for (let i = 0; i < count; i++) {
+                    scrollParts.push(`⚾${p.name}（${p.team}）${seasonHR - count + i + 1}号`);
+                  }
+                });
+                const scrollText = scrollParts.join('　　');
+
+                return (
                 <div className="bg-gray-900 rounded-lg p-4 text-white">
                   <h3 className="text-2xl font-bold mb-3 text-center text-yellow-400">🏆 試合終了</h3>
                   <div className="flex justify-center items-center gap-8 text-xl font-bold mb-4">
@@ -5529,9 +5575,57 @@ if (newOuts === 3) {
                       <div className="text-4xl mt-1">{score.home}</div>
                     </div>
                   </div>
-                  <div className="text-center text-lg mb-3">
-                    {score.away > score.home ? `${awayTeam.name} の勝利！` : score.home > score.away ? `${homeTeam.name} の勝利！` : '引き分け'}
+
+                  {/* スクロールテロップ */}
+                  <div className="overflow-hidden bg-gray-800 rounded-lg mb-3 py-2">
+                    <div className="whitespace-nowrap text-lg font-bold text-yellow-300" style={{
+                      animation: 'marquee 15s linear infinite',
+                    }}>
+                      {scrollText}　　{scrollText}
+                    </div>
+                    <style>{`
+                      @keyframes marquee {
+                        0% { transform: translateX(0%); }
+                        100% { transform: translateX(-50%); }
+                      }
+                    `}</style>
                   </div>
+
+                  {/* 投手・本塁打情報 */}
+                  <div className="flex justify-center gap-6 text-sm mb-3">
+                    {winPitcher && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-red-400 font-bold">○</span>
+                        <span>{winPitcher.name}</span>
+                      </div>
+                    )}
+                    {losePitcher && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-blue-400 font-bold">●</span>
+                        <span>{losePitcher.name}</span>
+                      </div>
+                    )}
+                    {savePitcher && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-green-400 font-bold">S</span>
+                        <span>{savePitcher.name}</span>
+                      </div>
+                    )}
+                  </div>
+                  {hrHitters.length > 0 && (
+                    <div className="text-center text-sm mb-3">
+                      <span className="text-gray-400 mr-2">本塁打</span>
+                      {hrHitters.map((p, i) => {
+                        const seasonHR = (p.seasonStats?.batting?.homeruns || 0) + (p.gameStats?.homeruns || 0);
+                        const count = p.gameStats?.homeruns || 0;
+                        return (
+                          <span key={i} className="text-yellow-300 mr-3">
+                            {p.name}（{p.team}）{Array.from({length: count}, (_, j) => `${seasonHR - count + j + 1}号`).join('・')}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* 打撃成績サマリー */}
                   <div className="grid grid-cols-2 gap-4 text-sm">
@@ -5588,7 +5682,8 @@ if (newOuts === 3) {
                     )}
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* ===== 右カラム: ホームチーム ===== */}
@@ -5821,14 +5916,15 @@ if (newOuts === 3) {
                           <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-[10px] text-gray-300 ml-1">
+                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap">
                               {player.gameStats.atBatResults.map((r, i) => (
-                                <span key={i} className={`px-0.5 rounded ${
-                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'text-yellow-400' :
-                                  r === '本塁打' ? 'text-red-400 font-bold' :
-                                  r === '三振' ? 'text-blue-400' :
-                                  r === '四球' ? 'text-green-400' :
-                                  'text-gray-400'
+                                <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
+                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
+                                  r === '本塁打' ? 'bg-red-600' :
+                                  r === '三振' ? 'bg-blue-700' :
+                                  r === '四球' ? 'bg-green-700' :
+                                  r === '併殺' ? 'bg-purple-700' :
+                                  'bg-gray-600'
                                 }`}>{r}</span>
                               ))}
                             </span>
@@ -5841,7 +5937,7 @@ if (newOuts === 3) {
                           {isPositionSelected && <span>🔄</span>}
                         </div>
                         {gameStarted ? (
-                          <div className={`flex gap-2 text-[10px] ml-6 mt-0.5 ${isCurrentBatter ? 'text-yellow-800' : 'text-gray-500'}`}>
+                          <div className={`flex gap-2 text-xs ml-6 mt-0.5 font-bold ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
                             {(() => {
                               const ss = player.seasonStats?.batting;
                               if (ss && ss.atBats > 0) {
