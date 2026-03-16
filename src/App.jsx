@@ -28,7 +28,7 @@ import { initializeTeamsData, TEAMS_DATA, initializeAllPitchingRotations, initia
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
-import { calculatePhysicsContact, calculateBattedBallPhysics, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
+import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate, generateAILineup, setRecommendedLineup } from './game/autoSimulation.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
