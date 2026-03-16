@@ -58,14 +58,14 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData, saveSlots = [
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col items-center space-y-3">
             <p className="text-lg text-gray-300 mb-4">セーブデータを選択</p>
             {saveSlots.map((slot, index) => (
               <button
                 key={index}
                 onClick={() => slot && onContinue(index)}
                 disabled={!slot}
-                className={`w-80 px-6 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
+                className={`block w-80 px-6 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
                   slot
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
@@ -88,7 +88,7 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData, saveSlots = [
             ))}
             <button
               onClick={() => setShowSlotSelect(false)}
-              className="w-80 px-6 py-2 rounded-lg text-gray-400 hover:text-white transition text-sm mt-2"
+              className="block w-80 px-6 py-2 rounded-lg text-gray-400 hover:text-white transition text-sm mt-2"
             >
               戻る
             </button>
