@@ -3356,18 +3356,22 @@ if (newOuts === 3) {
             generateAILineup(tempTeamData, teamName);
           }
 
-          const rotation = teamData.pitchingRotation;
-          if (rotation?.starters?.length > 0) {
-            const index = rotation.currentStarterIndex || 0;
-            const starterId = rotation.starters[index];
-            players.forEach(p => {
-              if (p.id === starterId) {
-                p.battingOrder = 9;
-                p.position = 'pitcher';
-              } else if (p.battingOrder === 9 && p.id !== starterId) {
-                p.battingOrder = 0;
-              }
-            });
+          // ユーザーチームのみローテーションから先発を設定
+          // （AIチームはgenerateAILineup内で先発選択＆index更新済み）
+          if (isUserTeam) {
+            const rotation = teamData.pitchingRotation;
+            if (rotation?.starters?.length > 0) {
+              const index = rotation.currentStarterIndex || 0;
+              const starterId = rotation.starters[index];
+              players.forEach(p => {
+                if (p.id === starterId) {
+                  p.battingOrder = 9;
+                  p.position = 'pitcher';
+                } else if (p.battingOrder === 9 && p.id !== starterId) {
+                  p.battingOrder = 0;
+                }
+              });
+            }
           }
 
           return players;
@@ -3453,11 +3457,17 @@ if (newOuts === 3) {
 
         let updatedSeasonData = recordGameResult(seasonData, gameResult);
 
+        // ユーザーチームのみローテインデックスを進める
+        // （AIチームはgenerateAILineup内で既にインデックス更新済み）
         [htn, atn].forEach(teamName => {
-          const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
-          if (rotation?.starters?.length > 0) {
-            rotation.currentStarterIndex =
-              ((rotation.currentStarterIndex || 0) + 1) % rotation.starters.length;
+          const teamData = TEAMS_DATA[teamName];
+          const isUserTeam = teamData?.lineupSettings?.battingOrder?.length > 0;
+          if (isUserTeam) {
+            const rotation = teamData?.pitchingRotation;
+            if (rotation?.starters?.length > 0) {
+              rotation.currentStarterIndex =
+                ((rotation.currentStarterIndex || 0) + 1) % rotation.starters.length;
+            }
           }
         });
 
@@ -3528,6 +3538,51 @@ if (newOuts === 3) {
 
         updateManagedGameStats(homeTeam, htn);
         updateManagedGameStats(awayTeam, atn);
+
+        // 勝敗セーブの記録
+        if (finalScore.home !== finalScore.away) {
+          const isHomeWin = finalScore.home > finalScore.away;
+          const winTeamState = isHomeWin ? homeTeam : awayTeam;
+          const loseTeamState = isHomeWin ? awayTeam : homeTeam;
+          const winTeamName = isHomeWin ? htn : atn;
+          const loseTeamName = isHomeWin ? atn : htn;
+
+          // 勝利投手判定
+          const winPitchers = winTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
+            .sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
+          const winStarter = winPitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9);
+          const winPitcher = winStarter && (winStarter.stats?.pitching?.outs || 0) >= 15 ? winStarter : winPitchers[0];
+
+          // 敗戦投手判定
+          const losePitchers = loseTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
+            .sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
+          const losePitcher = losePitchers[0];
+
+          // セーブ投手判定
+          const lastPitcher = winPitchers.length > 1
+            ? winPitchers.find(p => p !== winPitcher && p.position === 'pitcher') || winPitchers.find(p => p !== winPitcher)
+            : null;
+          const scoreDiff = Math.abs(finalScore.home - finalScore.away);
+          const savePitcher = lastPitcher && lastPitcher !== winPitcher && (lastPitcher.stats?.pitching?.outs || 0) >= 3 && scoreDiff <= 3 ? lastPitcher : null;
+
+          // TEAMS_DATAに反映
+          const updatePitcherDecision = (playerState, teamName, stat) => {
+            const teamData = TEAMS_DATA[teamName];
+            if (!teamData) return;
+            const playerData = teamData.players.find(pl => pl.id === playerState.id);
+            if (!playerData) return;
+            if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
+            if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
+            if (!playerData.careerStats) playerData.careerStats = { batting: {}, pitching: {} };
+            if (!playerData.careerStats.pitching) playerData.careerStats.pitching = {};
+            playerData.seasonStats.pitching[stat] = (playerData.seasonStats.pitching[stat] || 0) + 1;
+            playerData.careerStats.pitching[stat] = (playerData.careerStats.pitching[stat] || 0) + 1;
+          };
+
+          if (winPitcher) updatePitcherDecision(winPitcher, winTeamName, 'wins');
+          if (losePitcher) updatePitcherDecision(losePitcher, loseTeamName, 'losses');
+          if (savePitcher) updatePitcherDecision(savePitcher, winTeamName, 'saves');
+        }
 
         if (info.otherGames && info.otherGames.length > 0) {
           info.otherGames.forEach(otherGame => {
@@ -4636,7 +4691,7 @@ if (newOuts === 3) {
           <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '3fr 6fr 3fr' : '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
-            <div className="bg-gray-900 rounded-lg p-2 text-white">
+            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
                 <h3 className="font-bold text-red-400">✈️ {awayTeam.name}</h3>
                 <span className="text-2xl font-bold text-red-400">{score?.away || 0}</span>
@@ -5016,9 +5071,9 @@ if (newOuts === 3) {
                                 const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
                                 const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
                                 return (
-                                  <div key={p.id} className="flex justify-between text-gray-300">
-                                    <span>{p.name}</span>
-                                    <span className="text-gray-400">
+                                  <div key={p.id} className="flex justify-between text-gray-300 gap-1">
+                                    <span className="truncate">{p.name}</span>
+                                    <span className="text-gray-400 whitespace-nowrap text-[10px]">
                                       {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
                                     </span>
                                   </div>
@@ -5542,6 +5597,21 @@ if (newOuts === 3) {
                   ...homeTeam.players.filter(p => (p.gameStats?.homeruns || 0) > 0).map(p => ({ ...p, team: homeTeam.name }))
                 ];
 
+                // 投手の成績を取得（今の試合結果を含む）
+                const getPitcherRecord = (pitcher, teamState, decisionType) => {
+                  if (!pitcher) return '';
+                  const teamName = teamState === winTeam ? (isHomeWin ? homeTeam.name : awayTeam.name) : (isHomeWin ? awayTeam.name : homeTeam.name);
+                  const teamData = TEAMS_DATA[teamName];
+                  const playerData = teamData?.players?.find(p => p.id === pitcher.id);
+                  const sp = playerData?.seasonStats?.pitching || {};
+                  // 今の試合の結果を加算（handleManagedGameEnd前に表示されるため）
+                  const wins = (sp.wins || 0) + (decisionType === 'win' ? 1 : 0);
+                  const losses = (sp.losses || 0) + (decisionType === 'lose' ? 1 : 0);
+                  const saves = (sp.saves || 0) + (decisionType === 'save' ? 1 : 0);
+                  if (decisionType === 'save') return `${saves}S`;
+                  return `${wins}勝${losses}敗`;
+                };
+
                 // スクロール用テキスト組み立て
                 const scrollParts = [];
                 if (!isDraw) {
@@ -5549,9 +5619,9 @@ if (newOuts === 3) {
                 } else {
                   scrollParts.push('引き分け');
                 }
-                if (winPitcher) scrollParts.push(`○${winPitcher.name}`);
-                if (losePitcher) scrollParts.push(`●${losePitcher.name}`);
-                if (savePitcher) scrollParts.push(`S${savePitcher.name}`);
+                if (winPitcher) scrollParts.push(`勝利投手：${winPitcher.name}（${getPitcherRecord(winPitcher, winTeam, 'win')}）`);
+                if (losePitcher) scrollParts.push(`敗戦投手：${losePitcher.name}（${getPitcherRecord(losePitcher, loseTeam, 'lose')}）`);
+                if (savePitcher) scrollParts.push(`セーブ：${savePitcher.name}（${getPitcherRecord(savePitcher, winTeam, 'save')}）`);
                 hrHitters.forEach(p => {
                   const seasonHR = (p.seasonStats?.batting?.homeruns || 0) + (p.gameStats?.homeruns || 0);
                   const count = p.gameStats?.homeruns || 0;
@@ -5597,18 +5667,21 @@ if (newOuts === 3) {
                       <div className="flex items-center gap-1">
                         <span className="text-red-400 font-bold">○</span>
                         <span>{winPitcher.name}</span>
+                        <span className="text-gray-400 text-xs">{getPitcherRecord(winPitcher, winTeam, 'win')}</span>
                       </div>
                     )}
                     {losePitcher && (
                       <div className="flex items-center gap-1">
                         <span className="text-blue-400 font-bold">●</span>
                         <span>{losePitcher.name}</span>
+                        <span className="text-gray-400 text-xs">{getPitcherRecord(losePitcher, loseTeam, 'lose')}</span>
                       </div>
                     )}
                     {savePitcher && (
                       <div className="flex items-center gap-1">
                         <span className="text-green-400 font-bold">S</span>
                         <span>{savePitcher.name}</span>
+                        <span className="text-gray-400 text-xs">{getPitcherRecord(savePitcher, winTeam, 'save')}</span>
                       </div>
                     )}
                   </div>
@@ -5687,7 +5760,7 @@ if (newOuts === 3) {
             </div>
 
             {/* ===== 右カラム: ホームチーム ===== */}
-            <div className="bg-gray-900 rounded-lg p-2 text-white">
+            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
                 <span className="text-2xl font-bold text-blue-400">{score?.home || 0}</span>
                 <h3 className="font-bold text-blue-400">🏠 {homeTeam.name}</h3>
@@ -6067,9 +6140,9 @@ if (newOuts === 3) {
                                 const ip = outs > 0 ? formatInnings(outs) : '0回0/3';
                                 const era = outs > 0 ? ((s.runsAllowed || 0) * 27 / outs).toFixed(2) : '-.--';
                                 return (
-                                  <div key={p.id} className="flex justify-between text-gray-300">
-                                    <span>{p.name}</span>
-                                    <span className="text-gray-400">
+                                  <div key={p.id} className="flex justify-between text-gray-300 gap-1">
+                                    <span className="truncate">{p.name}</span>
+                                    <span className="text-gray-400 whitespace-nowrap text-[10px]">
                                       {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
                                     </span>
                                   </div>
