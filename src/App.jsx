@@ -4433,6 +4433,7 @@ if (newOuts === 3) {
         if (managementView === 'draft') return <DraftResultScreen
           draftedPlayers={draftResults?.draftedPlayers || []}
           nearMissPlayers={draftResults?.nearMissPlayers || []}
+          proBonus={draftResults?.proBonus || []}
           onContinue={() => {
             setDraftResults(null);
             setManagementView('dateprogress');
@@ -4593,7 +4594,12 @@ if (newOuts === 3) {
               console.log('✅ ゲームをロードしました');
             }
           }}
-          onEdit={() => setShowEditScreen(true)}
+          onEdit={(slotIndex) => {
+            if (loadGame(slotIndex)) {
+              setManagementView('edit');
+              console.log('✅ エディットモードでロードしました');
+            }
+          }}
           hasSaveData={hasSaveData}
           saveSlots={saveSlots}
         />;

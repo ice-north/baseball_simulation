@@ -1,7 +1,7 @@
 import React from 'react';
 import { POSITION_NAMES } from '../utils/constants.js';
 
-const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, onContinue }) => {
+const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContinue }) => {
   const hasDrafted = draftedPlayers && draftedPlayers.length > 0;
 
   return (
@@ -37,6 +37,32 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, onContinue }) => {
         <div className="bg-gray-800 rounded-lg p-6 mb-3 text-center">
           <p className="text-gray-300 font-bold mb-1">今シーズン、プロ野球からの指名はありませんでした</p>
           <p className="text-gray-500 text-xs">NPBドラフト指名条件に達した選手がいませんでした。</p>
+        </div>
+      )}
+
+      {proBonus && proBonus.length > 0 && hasDrafted && (
+        <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 rounded-lg p-4 mb-3 border border-green-700/30">
+          <h2 className="text-sm font-bold text-green-400 mb-2">プロ輩出ボーナス</h2>
+          <div className="space-y-1.5">
+            {proBonus.map((bonus, idx) => (
+              <div key={idx} className="bg-gray-700/40 rounded p-2.5 text-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-white font-bold">{bonus.teamName}</span>
+                  <span className="text-green-400 font-bold">+{bonus.reputationGain} 育成評判</span>
+                </div>
+                <div className="text-gray-400 space-x-3">
+                  <span>プロ輩出: {bonus.draftCount}人</span>
+                  <span>育成評判: {bonus.currentReputation}pt</span>
+                  {bonus.boostedYoungPlayers > 0 && (
+                    <span className="text-green-300">若手{bonus.boostedYoungPlayers}人が刺激を受けて成長!</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-gray-500 text-[10px] mt-2">
+            育成評判が高いリーグには、次のトライアウトでより優秀な候補者が集まります。
+          </p>
         </div>
       )}
 

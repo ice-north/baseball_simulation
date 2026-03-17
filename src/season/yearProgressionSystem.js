@@ -481,6 +481,53 @@ export function processNPBDraft(allTeams) {
     });
   });
 
+  // === プロ輩出ボーナスを適用 ===
+  const teamDraftCounts = {};
+  draftedPlayers.forEach(({ teamName }) => {
+    teamDraftCounts[teamName] = (teamDraftCounts[teamName] || 0) + 1;
+  });
+
+  const proBonus = [];
+
+  Object.entries(teamDraftCounts).forEach(([teamName, count]) => {
+    const team = allTeams[teamName];
+    if (!team) return;
+
+    // 1. 育成評価ボーナス: チームの育成力を記録（次回トライアウトで良い選手が集まる）
+    if (!team.developmentReputation) team.developmentReputation = 0;
+    const reputationGain = count * 15;
+    team.developmentReputation = Math.min(100, team.developmentReputation + reputationGain);
+
+    // 2. 指導効果: プロ入り選手と一緒にプレーしていた若手に能力ブースト
+    const youngPlayers = team.players.filter(p => p.age <= 25);
+    let boostedCount = 0;
+    youngPlayers.forEach(player => {
+      // 各能力にランダムで+1～3のボーナス（プロの影響を受けた成長）
+      const boostAmount = Math.floor(Math.random() * 3) + 1;
+      if (player.position === 'pitcher') {
+        const stat = ['control', 'stamina'][Math.floor(Math.random() * 2)];
+        if (stat === 'stamina') {
+          player.pitching.stamina = Math.min(200, player.pitching.stamina + boostAmount * 2);
+        } else {
+          player.pitching[stat] = Math.min(100, player.pitching[stat] + boostAmount);
+        }
+      } else {
+        const stats = ['meet', 'power', 'eye'];
+        const stat = stats[Math.floor(Math.random() * stats.length)];
+        player.batting[stat] = Math.min(100, player.batting[stat] + boostAmount);
+      }
+      boostedCount++;
+    });
+
+    proBonus.push({
+      teamName,
+      draftCount: count,
+      reputationGain,
+      currentReputation: team.developmentReputation,
+      boostedYoungPlayers: boostedCount
+    });
+  });
+
   // ドラフト対象者をチームから除外（lineupSettings/pitchingRotationも清掃）
   draftedPlayers.forEach(({ playerId, teamName }) => {
     const team = allTeams[teamName];
@@ -490,7 +537,7 @@ export function processNPBDraft(allTeams) {
     }
   });
 
-  return { draftedPlayers, nearMissPlayers };
+  return { draftedPlayers, nearMissPlayers, proBonus };
 }
 
 /**

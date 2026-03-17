@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI } from '../season/tryoutSystem.js';
+import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
@@ -59,7 +59,11 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     if (tryoutCandidates.length === 0) {
       const year = isInitialTryout ? 1 : (seasonData?.year || 1);
       const teamCount = seasonData?.settings?.teamsCount || Object.keys(allTeams).length || 4;
-      const candidates = generateTryoutCandidates(year, teamCount, isInitialTryout);
+      let candidates = generateTryoutCandidates(year, teamCount, isInitialTryout);
+      // 育成評判ボーナス: プロ輩出実績があるリーグには良い選手が集まる
+      if (!isInitialTryout) {
+        candidates = applyReputationBonus(candidates, allTeams);
+      }
       setTryoutCandidates(candidates);
 
       const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);

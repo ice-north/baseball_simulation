@@ -244,6 +244,56 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
 }
 
 /**
+ * リーグ全体の育成評判に基づいてトライアウト候補者を強化
+ * プロ輩出実績のあるリーグには良い選手が集まりやすくなる
+ * @param {Array} candidates - トライアウト候補者の配列
+ * @param {Object} allTeams - TEAMS_DATA
+ * @returns {Array} 強化された候補者の配列
+ */
+export function applyReputationBonus(candidates, allTeams) {
+  // リーグ全体の育成評判の平均を計算
+  const teams = Object.values(allTeams);
+  const totalReputation = teams.reduce((sum, team) => sum + (team.developmentReputation || 0), 0);
+  const avgReputation = teams.length > 0 ? totalReputation / teams.length : 0;
+
+  if (avgReputation <= 0) return candidates;
+
+  // 評判に応じて候補者の一部を強化（評判が高いほど多くの候補者が強化される）
+  const boostRate = Math.min(0.5, avgReputation / 200); // 最大50%の候補者を強化
+  const boostAmount = Math.min(8, Math.floor(avgReputation / 10)); // 最大+8ポイント
+
+  candidates.forEach(player => {
+    if (Math.random() < boostRate) {
+      if (player.position === 'pitcher') {
+        // 投手: 球速+1~2km/h or 制球+ボーナス or スタミナ+ボーナス
+        const roll = Math.random();
+        if (roll < 0.33) {
+          player.pitching.velocity = Math.min(165, player.pitching.velocity + Math.ceil(boostAmount / 3));
+        } else if (roll < 0.66) {
+          player.pitching.control = Math.min(100, player.pitching.control + boostAmount);
+        } else {
+          player.pitching.stamina = Math.min(200, player.pitching.stamina + boostAmount * 2);
+        }
+      } else {
+        // 野手: ランダムな能力を強化
+        const roll = Math.random();
+        if (roll < 0.25) {
+          player.batting.meet = Math.min(100, player.batting.meet + boostAmount);
+        } else if (roll < 0.5) {
+          player.batting.power = Math.min(100, player.batting.power + boostAmount);
+        } else if (roll < 0.75) {
+          player.physical.speed = Math.min(100, player.physical.speed + boostAmount);
+        } else {
+          player.fielding.defense = Math.min(100, player.fielding.defense + boostAmount);
+        }
+      }
+    }
+  });
+
+  return candidates;
+}
+
+/**
  * 能力値を生成（複数特性対応、フォーム別球速調整、年齢補正、二刀流対応）
  * 特性が複数ある場合、各特性のボーナスを累積適用
  * 年齢補正: 18歳基準で、1歳につき平均+1ポイント
@@ -653,13 +703,15 @@ export function analyzeRosterBalance(roster) {
     count: fielders.length,
     avgOffense: 0,  // ミート + パワーの平均
     avgDefense: 0,
-    avgSpeed: 0
+    avgSpeed: 0,
+    avgPower: 0
   };
 
   if (fielders.length > 0) {
     fielderAnalysis.avgOffense = fielders.reduce((sum, p) => sum + (p.batting.meet + p.batting.power) / 2, 0) / fielders.length;
     fielderAnalysis.avgDefense = fielders.reduce((sum, p) => sum + p.fielding.defense, 0) / fielders.length;
     fielderAnalysis.avgSpeed = fielders.reduce((sum, p) => sum + p.physical.speed, 0) / fielders.length;
+    fielderAnalysis.avgPower = fielders.reduce((sum, p) => sum + p.batting.power, 0) / fielders.length;
   }
 
   return {
@@ -678,59 +730,137 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
   const rank = calculatePlayerRank(player);
   const rankScore = { S: 100, A: 80, B: 60, C: 40, D: 20 }[rank] || 0;
   let bonusScore = 0;
+  let specialistScore = 0;
 
   if (player.position === 'pitcher') {
-    const { avgStamina, avgVelocity, avgControl } = rosterAnalysis.pitchers;
+    const { avgStamina, avgVelocity, avgControl, count: pitcherCount } = rosterAnalysis.pitchers;
 
-    // スタミナが不足している場合、スタミナの高い投手にボーナス
-    if (avgStamina < 120 && player.pitching.stamina >= 140) {
-      bonusScore += 30;
-    } else if (avgStamina < 130 && player.pitching.stamina >= 140) {
-      bonusScore += 15;
+    // === 一芸ボーナス（総合ランクが低くても突出した能力を評価） ===
+    // 剛速球投手（150km/h以上）
+    if (player.pitching.velocity >= 150) {
+      specialistScore += 40;
+    } else if (player.pitching.velocity >= 145) {
+      specialistScore += 25;
+    }
+    // 精密制球（制球70以上）
+    if (player.pitching.control >= 70) {
+      specialistScore += 35;
+    } else if (player.pitching.control >= 60) {
+      specialistScore += 15;
+    }
+    // 鉄腕（スタミナ160以上）
+    if (player.pitching.stamina >= 160) {
+      specialistScore += 30;
+    }
+    // 魔球使い（変化球レベル最高が70以上）
+    const bestBreaking = player.pitching.arsenal
+      ? Math.max(...player.pitching.arsenal.map(p => p.level || 0))
+      : 0;
+    if (bestBreaking >= 70) {
+      specialistScore += 30;
     }
 
-    // 球速が高い投手ばかりの場合、制球力の高い投手にボーナス
-    if (avgVelocity >= 135 && player.pitching.control >= 60) {
+    // === チーム補強ボーナス（不足を埋める） ===
+    // スタミナ不足 → スタミナ型投手を優先
+    if (avgStamina < 120 && player.pitching.stamina >= 140) {
+      bonusScore += 35;
+    } else if (avgStamina < 130 && player.pitching.stamina >= 140) {
       bonusScore += 20;
     }
 
-    // 制球力が低い投手が多い場合、制球力の高い投手にボーナス
-    if (avgControl < 50 && player.pitching.control >= 60) {
+    // 速球派ばかり → 制球派を求める
+    if (avgVelocity >= 135 && player.pitching.control >= 60) {
       bonusScore += 25;
     }
 
-    // バランス型投手にもボーナス（全能力が平均以上）
+    // 制球力不足 → 制球力の高い投手を優先
+    if (avgControl < 50 && player.pitching.control >= 60) {
+      bonusScore += 30;
+    }
+
+    // 速球派不足 → 剛速球投手を求める
+    if (avgVelocity < 138 && player.pitching.velocity >= 145) {
+      bonusScore += 25;
+    }
+
+    // 先発候補不足（投手が少ない時、スタミナ型を重視）
+    if (pitcherCount < 5 && player.pitching.stamina >= 130) {
+      bonusScore += 20;
+    }
+
+    // バランス型投手にもボーナス
     if (player.pitching.stamina >= 130 && player.pitching.velocity >= 135 && player.pitching.control >= 55) {
       bonusScore += 10;
     }
 
   } else {
-    const { avgOffense, avgDefense, avgSpeed } = rosterAnalysis.fielders;
+    const { avgOffense, avgDefense, avgSpeed, count: fielderCount } = rosterAnalysis.fielders;
 
-    // 打撃偏重チームの場合、守備・走力特化型にボーナス
+    // === 一芸ボーナス（突出した能力を評価） ===
+    // スラッガー（パワー75以上）
+    if (player.batting.power >= 75) {
+      specialistScore += 40;
+    } else if (player.batting.power >= 65) {
+      specialistScore += 20;
+    }
+    // 安打製造機（ミート75以上）
+    if (player.batting.meet >= 75) {
+      specialistScore += 35;
+    } else if (player.batting.meet >= 65) {
+      specialistScore += 15;
+    }
+    // 韋駄天（走力75以上）
+    if (player.physical.speed >= 75) {
+      specialistScore += 35;
+    } else if (player.physical.speed >= 65) {
+      specialistScore += 15;
+    }
+    // 守備の名手（守備70以上）
+    if (player.fielding.defense >= 70) {
+      specialistScore += 30;
+    }
+    // 強肩（肩力75以上）
+    if (player.physical.arm >= 75) {
+      specialistScore += 20;
+    }
+    // 選球眼マスター（選球眼70以上）
+    if (player.batting.eye >= 70) {
+      specialistScore += 15;
+    }
+
+    // === チーム補強ボーナス（不足を埋める） ===
+    // 打撃偏重チーム → 守備・走力を求める
     if (avgOffense >= 50) {
       if (player.fielding.defense >= 65) {
-        bonusScore += 25; // 守備職人
+        bonusScore += 30; // 守備職人
       }
       if (player.physical.speed >= 65) {
-        bonusScore += 20; // 俊足
+        bonusScore += 25; // 俊足
       }
     }
 
-    // 守備が弱いチームの場合、守備の良い選手にボーナス
-    if (avgDefense < 45 && player.fielding.defense >= 60) {
-      bonusScore += 20;
+    // 守備が弱いチーム → 守備の良い選手を優先
+    if (avgDefense < 45 && player.fielding.defense >= 55) {
+      bonusScore += 30;
     }
 
-    // 足が遅いチームの場合、俊足選手にボーナス
-    if (avgSpeed < 45 && player.physical.speed >= 65) {
-      bonusScore += 20;
+    // 足が遅いチーム → 俊足選手を優先
+    if (avgSpeed < 45 && player.physical.speed >= 60) {
+      bonusScore += 30;
     }
 
-    // 打撃が弱いチームの場合、打撃の良い選手にボーナス
+    // 打撃が弱いチーム → 強打者を優先
     if (avgOffense < 40) {
       const offense = (player.batting.meet + player.batting.power) / 2;
       if (offense >= 55) {
+        bonusScore += 30;
+      }
+    }
+
+    // パワー不足 → スラッガーを優先
+    if (fielderCount > 0) {
+      const avgPower = rosterAnalysis.fielders.avgPower || 0;
+      if (avgPower < 45 && player.batting.power >= 60) {
         bonusScore += 25;
       }
     }
@@ -738,11 +868,11 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
     // 5ツール型選手にボーナス
     const offense = (player.batting.meet + player.batting.power) / 2;
     if (offense >= 55 && player.physical.speed >= 60 && player.fielding.defense >= 60) {
-      bonusScore += 15; // バランス型
+      bonusScore += 15;
     }
   }
 
-  return rankScore + bonusScore;
+  return rankScore + bonusScore + specialistScore;
 }
 
 /**
@@ -802,6 +932,11 @@ export function selectPlayerForAI(candidates, currentRoster = []) {
         candidate.valueScore += 30; // 不足している場合
       }
     }
+  });
+
+  // ランダム要素を加えて各チームの個性を出す（±15pt）
+  scoredCandidates.forEach(candidate => {
+    candidate.valueScore += (Math.random() - 0.5) * 30;
   });
 
   // スコアが高い順にソート
