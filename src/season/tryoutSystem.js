@@ -258,33 +258,43 @@ export function applyReputationBonus(candidates, allTeams) {
 
   if (avgReputation <= 0) return candidates;
 
-  // 評判に応じて候補者の一部を強化（評判が高いほど多くの候補者が強化される）
-  const boostRate = Math.min(0.5, avgReputation / 200); // 最大50%の候補者を強化
-  const boostAmount = Math.min(8, Math.floor(avgReputation / 10)); // 最大+8ポイント
+  // 評判に応じて「一芸に秀でた」尖った候補者が出やすくなる
+  // 全体的な底上げではなく、1つの能力だけが突出する
+  const boostRate = Math.min(0.4, avgReputation / 250); // 最大40%の候補者に一芸ブースト
+  const spikeAmount = Math.min(15, Math.floor(avgReputation / 7)); // 最大+15ポイント（1つの能力のみ）
 
   candidates.forEach(player => {
     if (Math.random() < boostRate) {
       if (player.position === 'pitcher') {
-        // 投手: 球速+1~2km/h or 制球+ボーナス or スタミナ+ボーナス
+        // 投手: 1つだけ突出させる（他は据え置き）
         const roll = Math.random();
-        if (roll < 0.33) {
-          player.pitching.velocity = Math.min(165, player.pitching.velocity + Math.ceil(boostAmount / 3));
-        } else if (roll < 0.66) {
-          player.pitching.control = Math.min(100, player.pitching.control + boostAmount);
+        if (roll < 0.4) {
+          // 剛速球タイプ
+          player.pitching.velocity = Math.min(158, player.pitching.velocity + Math.ceil(spikeAmount / 2));
+        } else if (roll < 0.7) {
+          // 精密制球タイプ
+          player.pitching.control = Math.min(99, player.pitching.control + spikeAmount);
         } else {
-          player.pitching.stamina = Math.min(200, player.pitching.stamina + boostAmount * 2);
+          // 鉄腕タイプ
+          player.pitching.stamina = Math.min(200, player.pitching.stamina + spikeAmount * 2);
         }
       } else {
-        // 野手: ランダムな能力を強化
+        // 野手: 1つの能力だけ突出させる
         const roll = Math.random();
         if (roll < 0.25) {
-          player.batting.meet = Math.min(100, player.batting.meet + boostAmount);
+          // 巧打タイプ
+          player.batting.meet = Math.min(99, player.batting.meet + spikeAmount);
         } else if (roll < 0.5) {
-          player.batting.power = Math.min(100, player.batting.power + boostAmount);
+          // 強打タイプ
+          player.batting.power = Math.min(99, player.batting.power + spikeAmount);
         } else if (roll < 0.75) {
-          player.physical.speed = Math.min(100, player.physical.speed + boostAmount);
+          // 俊足タイプ
+          player.physical.speed = Math.min(99, player.physical.speed + spikeAmount);
+          player.batting.steal = Math.min(99, (player.batting.steal || 30) + spikeAmount);
         } else {
-          player.fielding.defense = Math.min(100, player.fielding.defense + boostAmount);
+          // 守備の名手タイプ
+          player.fielding.defense = Math.min(99, player.fielding.defense + spikeAmount);
+          player.physical.arm = Math.min(99, (player.physical.arm || 40) + Math.ceil(spikeAmount / 2));
         }
       }
     }

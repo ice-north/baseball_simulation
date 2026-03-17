@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, DISPATCH_DESTINATIONS, checkDispatchEligibility, dispatchPlayer, calcPlayerOverall, processDispatchReturns, cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
@@ -100,6 +100,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
   const userTeamName = teamNames[0] || 'チームA';
   const userTeam = TEAMS_DATA[userTeamName];
+  const currentYear = seasonData?.year || 1;
 
   const [currentRound, setCurrentRound] = useState(1);
   const [assignments, setAssignments] = useState(() => {
@@ -121,6 +122,54 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
   const [settingMode, setSettingMode] = useState('preset'); // 'preset' or 'individual'
+  const [campTab, setCampTab] = useState('training'); // 'training' or 'dispatch'
+  const [returnReports, setReturnReports] = useState(null); // 帰還レポート
+  const [dispatchConfirm, setDispatchConfirm] = useState(null); // { playerId, destKey }
+
+  // キャンプ開始時に派遣帰還を処理 & AI派遣
+  useEffect(() => {
+    if (currentYear <= 1) return;
+    const { returnedPlayers } = processDispatchReturns(userTeam, currentYear);
+    // AIチームも帰還処理 & 派遣判定
+    teamNames.forEach(tn => {
+      if (tn === userTeamName) return;
+      const aiTeam = TEAMS_DATA[tn];
+      if (!aiTeam) return;
+      processDispatchReturns(aiTeam, currentYear);
+      // AIチーム: 若くて能力の低い選手を30%の確率で派遣
+      aiTeam.players.forEach(p => {
+        if (p.dispatched) return;
+        if (Math.random() > 0.3) return;
+        const destKeys = Object.keys(DISPATCH_DESTINATIONS);
+        for (const dk of destKeys) {
+          const { eligible } = checkDispatchEligibility(p, dk);
+          if (eligible) {
+            dispatchPlayer(p, dk, currentYear);
+            cleanupPlayerReferences(aiTeam, p.id);
+            break;
+          }
+        }
+      });
+    });
+    if (returnedPlayers.length > 0) {
+      setReturnReports(returnedPlayers);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDispatch = (playerId, destKey) => {
+    const player = userTeam?.players?.find(p => p.id === playerId);
+    if (!player) return;
+    dispatchPlayer(player, destKey, currentYear);
+    // 派遣中の選手をラインナップから除去
+    cleanupPlayerReferences(userTeam, playerId);
+    setDispatchConfirm(null);
+    // 再レンダリングのためassignmentsを更新
+    setAssignments(prev => {
+      const next = { ...prev };
+      delete next[playerId];
+      return next;
+    });
+  };
 
   const POSITION_ORDER = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
   const sortedPlayers = [...(userTeam?.players || [])].sort((a, b) => {
@@ -179,6 +228,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
 
     const finalAssignments = {};
     userTeam.players.forEach(p => {
+      if (p.dispatched) return; // 派遣中の選手はスキップ
       finalAssignments[p.id] = assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting');
     });
 
@@ -210,6 +260,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       const pitcherMenus = ['stamina', 'control', 'velocity', 'breaking'];
       const batterMenus = ['batting', 'baserunning', 'fielding', 'eye'];
       aiTeam.players.forEach(p => {
+        if (p.dispatched) return; // 派遣中はスキップ
         if (p.position === 'pitcher') {
           aiAssign[p.id] = pitcherMenus[Math.floor(Math.random() * pitcherMenus.length)];
         } else {
@@ -245,12 +296,101 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const subPosHeaders = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
   const subPosShort = { catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
 
+  // 派遣中でない選手のみ表示
+  const activePlayers = sortedPlayers.filter(p => !p.dispatched);
+  const dispatchedPlayers = sortedPlayers.filter(p => p.dispatched);
+
   return (
     <div className="p-3 bg-gray-900 min-h-screen">
       <div className="max-w-full mx-auto">
+        {/* 帰還レポートモーダル */}
+        {returnReports && (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div className="bg-gray-800 rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-5">
+              <h2 className="text-lg font-bold text-yellow-400 mb-3 text-center">派遣選手が帰還しました!</h2>
+              {returnReports.map((report, idx) => (
+                <div key={idx} className="bg-gray-700/60 rounded-lg p-3 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`font-bold text-sm ${report.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>
+                      {report.player.name}
+                    </span>
+                    <span className="text-gray-400 text-xs">({POSITION_NAMES[report.player.position]} / {report.player.age}歳)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {report.growthReport.map((g, gIdx) => (
+                      <span key={gIdx} className={`px-2 py-0.5 rounded text-xs font-bold ${
+                        g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
+                      }`}>
+                        {g.statName}: {g.before} → {g.after} (+{g.growth})
+                        {g.isAwakening && ' 覚醒!'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div className="text-center mt-3">
+                <button
+                  onClick={() => setReturnReports(null)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-lg font-bold text-sm transition"
+                >
+                  確認
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 派遣確認モーダル */}
+        {dispatchConfirm && (() => {
+          const player = userTeam?.players?.find(p => p.id === dispatchConfirm.playerId);
+          const dest = DISPATCH_DESTINATIONS[dispatchConfirm.destKey];
+          if (!player || !dest) return null;
+          return (
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-800 rounded-xl max-w-md w-full p-5">
+                <h2 className="text-base font-bold text-white mb-3 text-center">{dest.icon} {dest.name}に派遣</h2>
+                <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
+                  <div className="text-white font-bold text-lg mb-1">{player.name}</div>
+                  <div className="text-gray-400 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
+                </div>
+                <div className="text-yellow-400 text-xs mb-3 text-center space-y-0.5">
+                  <p>{dest.duration}シーズンの間、試合に出場できません</p>
+                  <p>帰還時に大幅な能力アップが期待できます</p>
+                </div>
+                <div className="flex gap-2 justify-center">
+                  <button onClick={() => setDispatchConfirm(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
+                    キャンセル
+                  </button>
+                  <button onClick={() => handleDispatch(dispatchConfirm.playerId, dispatchConfirm.destKey)} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
+                    派遣する
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-xl font-bold text-white">春季キャンプ - {userTeamName}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-white">春季キャンプ - {userTeamName}</h1>
+            {currentYear > 1 && (
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setCampTab('training')}
+                  className={`px-3 py-1 text-xs rounded-md font-bold transition ${campTab === 'training' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                >
+                  練習
+                </button>
+                <button
+                  onClick={() => setCampTab('dispatch')}
+                  className={`px-3 py-1 text-xs rounded-md font-bold transition ${campTab === 'dispatch' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                >
+                  派遣 {dispatchedPlayers.length > 0 && `(${dispatchedPlayers.length})`}
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {[1, 2, 3, 4].map(r => (
               <div key={r} className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
@@ -263,7 +403,131 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
           </div>
         </div>
 
-        {viewMode === 'select' ? (
+        {/* 派遣タブ */}
+        {campTab === 'dispatch' && (
+          <div className="mb-3">
+            {/* 派遣先の説明 */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {Object.entries(DISPATCH_DESTINATIONS).map(([key, dest]) => (
+                <div key={key} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-lg">{dest.icon}</span>
+                    <span className="text-white font-bold text-sm">{dest.name}</span>
+                  </div>
+                  <div className="text-gray-400 text-xs mb-1">{dest.desc}</div>
+                  <div className="text-[10px] text-gray-500 space-y-0.5">
+                    <div>対象: {dest.maxAge}歳以下 / 総合力{dest.maxOverall}以下</div>
+                    <div>期間: {dest.duration}シーズン</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 派遣中の選手 */}
+            {dispatchedPlayers.length > 0 && (
+              <div className="bg-gray-800 rounded-lg p-3 mb-3">
+                <h3 className="text-sm font-bold text-orange-400 mb-2">派遣中の選手</h3>
+                <div className="space-y-1">
+                  {dispatchedPlayers.map(p => (
+                    <div key={p.id} className="bg-gray-700/50 rounded px-3 py-1.5 flex items-center justify-between">
+                      <div>
+                        <span className={`font-bold text-xs ${p.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
+                        <span className="text-gray-500 text-[10px] ml-2">{POSITION_NAMES[p.position]} / {p.age}歳</span>
+                      </div>
+                      <div className="text-[10px] text-orange-400">
+                        {p.dispatched.destinationName} (帰還: {p.dispatched.returnYear}年目)
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 派遣可能な選手リスト */}
+            <div className="bg-gray-800 rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+                    <th className="py-1.5 px-2 text-left w-20">選手</th>
+                    <th className="py-1.5 px-1 text-center w-7">位</th>
+                    <th className="py-1.5 px-1 text-center w-6">齢</th>
+                    <th className="py-1.5 px-1 text-center w-9">総合</th>
+                    <th className="py-1.5 px-1 text-center w-7">ミ</th>
+                    <th className="py-1.5 px-1 text-center w-7">パ</th>
+                    <th className="py-1.5 px-1 text-center w-7">走</th>
+                    <th className="py-1.5 px-1 text-center w-7">守</th>
+                    <th className="py-1.5 px-1 text-center w-9">速</th>
+                    <th className="py-1.5 px-1 text-center w-7">制</th>
+                    <th className="py-1.5 px-1 text-center w-9">ス</th>
+                    <th className="py-1.5 px-2 text-center">派遣</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activePlayers.map(player => {
+                    const b = player.batting || {};
+                    const p = player.pitching || {};
+                    const ph = player.physical || {};
+                    const f = player.fielding || {};
+                    const overall = calcPlayerOverall(player);
+
+                    return (
+                      <tr key={player.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                        <td className="py-1 px-2">
+                          <span className={`font-bold text-xs ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>{player.name}</span>
+                        </td>
+                        <td className="py-1 px-1 text-center text-[10px] text-gray-500">{POSITION_NAMES[player.position]}</td>
+                        <td className="py-1 px-1 text-center text-gray-500 text-[10px]">{player.age || 20}</td>
+                        <td className="py-1 px-1 text-center">
+                          <span className={`text-[10px] font-bold ${overall <= 40 ? 'text-gray-400' : overall <= 50 ? 'text-blue-400' : overall <= 55 ? 'text-green-400' : 'text-yellow-400'}`}>{overall}</span>
+                        </td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.speed||0} label="走力" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={f.defense||0} label="守備" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
+                        <td className="py-1 px-2 text-center">
+                          <div className="flex gap-1 justify-center">
+                            {Object.entries(DISPATCH_DESTINATIONS).map(([destKey, dest]) => {
+                              const { eligible, reason } = checkDispatchEligibility(player, destKey);
+                              return (
+                                <button
+                                  key={destKey}
+                                  onClick={() => eligible && setDispatchConfirm({ playerId: player.id, destKey })}
+                                  disabled={!eligible}
+                                  title={eligible ? `${dest.name}に派遣` : reason}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                                    eligible
+                                      ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
+                                      : 'bg-gray-700 text-gray-600 cursor-not-allowed'
+                                  }`}
+                                >
+                                  {dest.icon}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="text-center mt-3">
+              <button
+                onClick={() => setCampTab('training')}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-lg font-bold text-sm transition"
+              >
+                練習に戻る
+              </button>
+            </div>
+          </div>
+        )}
+
+        {campTab === 'training' && viewMode === 'select' && (
           <>
             {/* プリセット / 個別切替 */}
             <div className="flex items-center gap-2 mb-2">
@@ -353,7 +617,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedPlayers.map(player => {
+                  {activePlayers.map(player => {
                     const b = player.batting || {};
                     const p = player.pitching || {};
                     const ph = player.physical || {};
@@ -484,7 +748,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
               </button>
             </div>
           </>
-        ) : (
+        )}
+
+        {campTab === 'training' && viewMode === 'results' && (
           <>
             {/* 練習結果 */}
             <div className="bg-gray-800 rounded-lg overflow-hidden mb-3">
