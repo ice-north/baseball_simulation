@@ -29,7 +29,7 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData, saveSlots = [
         <p className="text-2xl text-gray-300 mb-10">～独立リーグシミュレーター～</p>
 
         {!showSlotSelect ? (
-          <div className="space-y-4">
+          <div className="flex flex-col items-center space-y-4">
             <button
               onClick={onNewGame}
               className="w-80 bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg"
@@ -51,8 +51,7 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData, saveSlots = [
 
             <button
               onClick={onEdit}
-              disabled
-              className="w-80 bg-gray-600 text-gray-400 px-8 py-4 rounded-lg font-bold text-2xl cursor-not-allowed shadow-lg"
+              className="w-80 bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg"
             >
               EDIT
             </button>
@@ -95,7 +94,7 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData, saveSlots = [
           </div>
         )}
 
-        <p className="text-sm text-gray-500 mt-8">{hasSaveData ? 'セーブデータあり' : ''} | EDITは開発中です</p>
+        <p className="text-sm text-gray-500 mt-8">{hasSaveData ? 'セーブデータあり' : ''}</p>
       </div>
     </div>
   );

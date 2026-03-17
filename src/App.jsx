@@ -4593,7 +4593,7 @@ if (newOuts === 3) {
               console.log('✅ ゲームをロードしました');
             }
           }}
-          onEdit={() => alert('開発中')}
+          onEdit={() => setShowEditScreen(true)}
           hasSaveData={hasSaveData}
           saveSlots={saveSlots}
         />;
@@ -5247,14 +5247,6 @@ if (newOuts === 3) {
                   >
                     ⚾ 試合開始
                   </button>
-                  <div className="mt-6">
-                    <button
-                      onClick={() => setShowEditScreen(true)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition shadow-lg"
-                    >
-                      ✏️ エディット
-                    </button>
-                  </div>
                 </div>
               )}
 
