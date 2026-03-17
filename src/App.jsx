@@ -4687,8 +4687,8 @@ if (newOuts === 3) {
             </div>
           </div>
 
-          {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は中央重視(3-6-3) */}
-          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '3fr 6fr 3fr' : '5fr 3fr 5fr'}}>
+          {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は中央重視(2fr auto 2fr) */}
+          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? 'minmax(180px, 2fr) minmax(0, 5fr) minmax(180px, 2fr)' : '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
             <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
@@ -5184,7 +5184,7 @@ if (newOuts === 3) {
             </div>
             
             {/* ===== 中央カラム: メイン試合画面 ===== */}
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
 
               {/* 試合開始前の画面 */}
               {!gameStarted && (
@@ -5262,57 +5262,57 @@ if (newOuts === 3) {
               {gameStarted && (
               <div className="bg-black rounded-lg p-1 font-mono border-4 border-gray-800 shadow-2xl overflow-hidden">
                 {/* 上段: イニングスコア（電光掲示板風） */}
-                <div className="bg-black rounded-t overflow-x-auto p-2">
-                  <table className="w-full text-center text-sm">
+                <div className="bg-black rounded-t overflow-x-auto p-1">
+                  <table className="w-full text-center text-xs table-fixed">
                     {/* ヘッダー行 */}
                     <thead>
                       <tr className="border-b border-gray-700">
-                        <th className="py-1.5 px-2 w-24 text-left text-orange-600">TEAM</th>
+                        <th className="py-1 px-1 text-left text-orange-600" style={{width: '20%'}}>TEAM</th>
                         {inning <= 9 ? (
                           // 9回まで: 1-9回を表示
                           [1,2,3,4,5,6,7,8,9].map(i => (
-                            <th key={i} className={`py-1.5 px-1 w-8 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
+                            <th key={i} className={`py-1 px-0 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
                           ))
                         ) : (
                           // 延長: 10回以降を表示（最大3イニング分）
                           [0,1,2].map(i => {
                             const extraInn = 10 + i;
                             return (
-                              <th key={i} className={`py-1.5 px-1 w-8 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
+                              <th key={i} className={`py-1 px-0 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
                             );
                           })
                         )}
-                        <th className="py-1.5 px-2 w-12 text-orange-400 font-bold border-l border-gray-700">計</th>
-                        <th className="py-1.5 px-2 w-10 text-orange-600">安</th>
-                        <th className="py-1.5 px-2 w-10 text-orange-600">失</th>
+                        <th className="py-1 px-1 text-orange-400 font-bold border-l border-gray-700" style={{width: '8%'}}>計</th>
+                        <th className="py-1 px-1 text-orange-600" style={{width: '7%'}}>安</th>
+                        <th className="py-1 px-1 text-orange-600" style={{width: '7%'}}>失</th>
                       </tr>
                     </thead>
                     <tbody>
                       {/* アウェイチーム */}
                       <tr className="border-b border-gray-800">
-                        <td className={`py-2 px-2 text-left font-bold ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
+                        <td className={`py-1 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => (
-                            <td key={i} className="py-2 px-1 text-orange-400 font-bold" style={{textShadow: inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                            <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                               {inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? inningScores.away[i] : ''}
                             </td>
                           ))
                         ) : (
                           // 延長（アウェイ）
                           [0,1,2].map(i => (
-                            <td key={i} className="py-2 px-1 text-orange-400 font-bold" style={{textShadow: extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                            <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                               {extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? extraInningScores.away[i] : ''}
                             </td>
                           ))
                         )}
-                        <td className="py-2 px-2 font-bold text-2xl text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
-                        <td className="py-2 px-2 text-orange-400">{teamHits?.away || 0}</td>
-                        <td className="py-2 px-2 text-orange-400">{teamErrors?.home || 0}</td>
+                        <td className="py-1 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
+                        <td className="py-1 px-1 text-orange-400">{teamHits?.away || 0}</td>
+                        <td className="py-1 px-1 text-orange-400">{teamErrors?.home || 0}</td>
                       </tr>
                       {/* ホームチーム */}
                       <tr>
-                        <td className={`py-2 px-2 text-left font-bold ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
+                        <td className={`py-1 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => {
@@ -5320,7 +5320,7 @@ if (newOuts === 3) {
                             // 9回裏、ホームチームがリードしている場合に「X」を表示する判定
                             const showX = i === 8 && inning === 9 && !isTopInning && (score?.home || 0) > (score?.away || 0) && homeScore === null;
                             return (
-                              <td key={i} className="py-2 px-1 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined || showX ? '0 0 6px #fb923c' : 'none'}}>
+                              <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined || showX ? '0 0 6px #fb923c' : 'none'}}>
                                 {showX ? 'X' : (homeScore !== null && homeScore !== undefined ? homeScore : '')}
                               </td>
                             );
@@ -5330,15 +5330,15 @@ if (newOuts === 3) {
                           [0,1,2].map(i => {
                             const homeScore = extraInningScores?.home?.[i];
                             return (
-                              <td key={i} className="py-2 px-1 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                              <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                                 {homeScore !== null && homeScore !== undefined ? homeScore : ''}
                               </td>
                             );
                           })
                         )}
-                        <td className="py-2 px-2 font-bold text-2xl text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
-                        <td className="py-2 px-2 text-orange-400">{teamHits?.home || 0}</td>
-                        <td className="py-2 px-2 text-orange-400">{teamErrors?.away || 0}</td>
+                        <td className="py-1 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
+                        <td className="py-1 px-1 text-orange-400">{teamHits?.home || 0}</td>
+                        <td className="py-1 px-1 text-orange-400">{teamErrors?.away || 0}</td>
                       </tr>
                     </tbody>
                   </table>
