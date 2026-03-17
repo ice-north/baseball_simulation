@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, DISPATCH_DESTINATIONS, checkDispatchEligibility, dispatchPlayer, calcPlayerOverall, processDispatchReturns, cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, DISPATCH_DESTINATIONS, checkDispatchEligibility, executeDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
@@ -123,52 +123,22 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const [viewMode, setViewMode] = useState('select');
   const [settingMode, setSettingMode] = useState('preset'); // 'preset' or 'individual'
   const [campTab, setCampTab] = useState('training'); // 'training' or 'dispatch'
-  const [returnReports, setReturnReports] = useState(null); // 帰還レポート
   const [dispatchConfirm, setDispatchConfirm] = useState(null); // { playerId, destKey }
-
-  // キャンプ開始時に派遣帰還を処理 & AI派遣
-  useEffect(() => {
-    if (currentYear <= 1) return;
-    const { returnedPlayers } = processDispatchReturns(userTeam, currentYear);
-    // AIチームも帰還処理 & 派遣判定
-    teamNames.forEach(tn => {
-      if (tn === userTeamName) return;
-      const aiTeam = TEAMS_DATA[tn];
-      if (!aiTeam) return;
-      processDispatchReturns(aiTeam, currentYear);
-      // AIチーム: 若くて能力の低い選手を30%の確率で派遣
-      aiTeam.players.forEach(p => {
-        if (p.dispatched) return;
-        if (Math.random() > 0.3) return;
-        const destKeys = Object.keys(DISPATCH_DESTINATIONS);
-        for (const dk of destKeys) {
-          const { eligible } = checkDispatchEligibility(p, dk);
-          if (eligible) {
-            dispatchPlayer(p, dk, currentYear);
-            cleanupPlayerReferences(aiTeam, p.id);
-            break;
-          }
-        }
-      });
-    });
-    if (returnedPlayers.length > 0) {
-      setReturnReports(returnedPlayers);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [dispatchResults, setDispatchResults] = useState([]); // 派遣結果の累積表示
+  const [updateKey, setUpdateKey] = useState(0); // 再レンダリング用
 
   const handleDispatch = (playerId, destKey) => {
     const player = userTeam?.players?.find(p => p.id === playerId);
     if (!player) return;
-    dispatchPlayer(player, destKey, currentYear);
-    // 派遣中の選手をラインナップから除去
-    cleanupPlayerReferences(userTeam, playerId);
+    const { growthReport } = executeDispatchTraining(player, destKey);
+    const dest = DISPATCH_DESTINATIONS[destKey];
+    setDispatchResults(prev => [...prev, {
+      player,
+      destination: dest?.name || '不明',
+      growthReport,
+    }]);
     setDispatchConfirm(null);
-    // 再レンダリングのためassignmentsを更新
-    setAssignments(prev => {
-      const next = { ...prev };
-      delete next[playerId];
-      return next;
-    });
+    setUpdateKey(prev => prev + 1); // 再レンダリング
   };
 
   const POSITION_ORDER = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
@@ -228,7 +198,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
 
     const finalAssignments = {};
     userTeam.players.forEach(p => {
-      if (p.dispatched) return; // 派遣中の選手はスキップ
+      if (p.dispatchedThisCamp) return; // 派遣済みの選手はスキップ
       finalAssignments[p.id] = assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting');
     });
 
@@ -256,11 +226,28 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       if (tn === userTeamName) return;
       const aiTeam = TEAMS_DATA[tn];
       if (!aiTeam?.players) return;
+
+      // AIチーム: 第1クールで適格な若手を30%の確率で派遣
+      if (currentRound === 1 && currentYear > 1) {
+        aiTeam.players.forEach(p => {
+          if (p.dispatchedThisCamp) return;
+          if (Math.random() > 0.3) return;
+          const destKeys = Object.keys(DISPATCH_DESTINATIONS);
+          for (const dk of destKeys) {
+            const { eligible } = checkDispatchEligibility(p, dk);
+            if (eligible) {
+              executeDispatchTraining(p, dk);
+              break;
+            }
+          }
+        });
+      }
+
       const aiAssign = {};
       const pitcherMenus = ['stamina', 'control', 'velocity', 'breaking'];
       const batterMenus = ['batting', 'baserunning', 'fielding', 'eye'];
       aiTeam.players.forEach(p => {
-        if (p.dispatched) return; // 派遣中はスキップ
+        if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
         if (p.position === 'pitcher') {
           aiAssign[p.id] = pitcherMenus[Math.floor(Math.random() * pitcherMenus.length)];
         } else {
@@ -297,49 +284,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const subPosShort = { catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
 
   // 派遣中でない選手のみ表示
-  const activePlayers = sortedPlayers.filter(p => !p.dispatched);
-  const dispatchedPlayers = sortedPlayers.filter(p => p.dispatched);
+  const activePlayers = sortedPlayers.filter(p => !p.dispatchedThisCamp);
+  const dispatchedPlayers = sortedPlayers.filter(p => p.dispatchedThisCamp);
 
   return (
     <div className="p-3 bg-gray-900 min-h-screen">
       <div className="max-w-full mx-auto">
-        {/* 帰還レポートモーダル */}
-        {returnReports && (
-          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-            <div className="bg-gray-800 rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-5">
-              <h2 className="text-lg font-bold text-yellow-400 mb-3 text-center">派遣選手が帰還しました!</h2>
-              {returnReports.map((report, idx) => (
-                <div key={idx} className="bg-gray-700/60 rounded-lg p-3 mb-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`font-bold text-sm ${report.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>
-                      {report.player.name}
-                    </span>
-                    <span className="text-gray-400 text-xs">({POSITION_NAMES[report.player.position]} / {report.player.age}歳)</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {report.growthReport.map((g, gIdx) => (
-                      <span key={gIdx} className={`px-2 py-0.5 rounded text-xs font-bold ${
-                        g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
-                      }`}>
-                        {g.statName}: {g.before} → {g.after} (+{g.growth})
-                        {g.isAwakening && ' 覚醒!'}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <div className="text-center mt-3">
-                <button
-                  onClick={() => setReturnReports(null)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-lg font-bold text-sm transition"
-                >
-                  確認
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* 派遣確認モーダル */}
         {dispatchConfirm && (() => {
           const player = userTeam?.players?.find(p => p.id === dispatchConfirm.playerId);
@@ -354,8 +304,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                   <div className="text-gray-400 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
                 </div>
                 <div className="text-yellow-400 text-xs mb-3 text-center space-y-0.5">
-                  <p>{dest.duration}シーズンの間、試合に出場できません</p>
-                  <p>帰還時に大幅な能力アップが期待できます</p>
+                  <p>キャンプ期間中に集中特訓を受けます</p>
+                  <p>通常練習の代わりに大幅な能力アップが期待できます</p>
+                  <p>派遣後もシーズンには通常通り出場できます</p>
                 </div>
                 <div className="flex gap-2 justify-center">
                   <button onClick={() => setDispatchConfirm(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
@@ -417,25 +368,32 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                   <div className="text-gray-400 text-xs mb-1">{dest.desc}</div>
                   <div className="text-[10px] text-gray-500 space-y-0.5">
                     <div>対象: {dest.maxAge}歳以下 / 総合力{dest.maxOverall}以下</div>
-                    <div>期間: {dest.duration}シーズン</div>
+                    <div>キャンプ中に集中特訓（通常練習の代わり）</div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* 派遣中の選手 */}
-            {dispatchedPlayers.length > 0 && (
+            {/* 派遣済みの選手と結果 */}
+            {dispatchResults.length > 0 && (
               <div className="bg-gray-800 rounded-lg p-3 mb-3">
-                <h3 className="text-sm font-bold text-orange-400 mb-2">派遣中の選手</h3>
-                <div className="space-y-1">
-                  {dispatchedPlayers.map(p => (
-                    <div key={p.id} className="bg-gray-700/50 rounded px-3 py-1.5 flex items-center justify-between">
-                      <div>
-                        <span className={`font-bold text-xs ${p.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
-                        <span className="text-gray-500 text-[10px] ml-2">{POSITION_NAMES[p.position]} / {p.age}歳</span>
+                <h3 className="text-sm font-bold text-green-400 mb-2">派遣結果</h3>
+                <div className="space-y-2">
+                  {dispatchResults.map((result, idx) => (
+                    <div key={idx} className="bg-gray-700/50 rounded px-3 py-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`font-bold text-xs ${result.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{result.player.name}</span>
+                        <span className="text-gray-500 text-[10px]">{result.destination}</span>
                       </div>
-                      <div className="text-[10px] text-orange-400">
-                        {p.dispatched.destinationName} (帰還: {p.dispatched.returnYear}年目)
+                      <div className="flex flex-wrap gap-1">
+                        {result.growthReport.map((g, gIdx) => (
+                          <span key={gIdx} className={`px-1.5 py-0 rounded text-[10px] font-bold ${
+                            g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
+                          }`}>
+                            {g.statName}: {g.before}→{g.after} (+{g.growth})
+                            {g.isAwakening && ' 覚醒!'}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -842,7 +800,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                 </button>
               ) : (
                 <button
-                  onClick={onComplete}
+                  onClick={() => {
+                    // キャンプ終了時に派遣フラグをクリア
+                    Object.values(TEAMS_DATA).forEach(team => {
+                      team.players?.forEach(p => { delete p.dispatchedThisCamp; });
+                    });
+                    onComplete();
+                  }}
                   className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
                 >
                   キャンプ終了 → シーズン開始

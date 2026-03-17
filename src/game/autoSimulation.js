@@ -28,8 +28,8 @@ export const generateAILineup = (teamData, teamName) => {
   // 全員の打順をリセット
   players.forEach(p => { p.battingOrder = 0; });
 
-  // 投手を除いた野手を取得（投手能力でも判定）、派遣中の選手を除外
-  const fieldPlayers = players.filter(p => !isPitcherPlayer(p) && !p.dispatched);
+  // 投手を除いた野手を取得（投手能力でも判定）
+  const fieldPlayers = players.filter(p => !isPitcherPlayer(p));
 
   // ポジションごとに最適な選手を選ぶ（守備適性+打撃力の総合判断）
   const lineup = [];

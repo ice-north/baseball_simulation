@@ -1602,7 +1602,8 @@ function setNestedValue(obj, path, value) {
 
 // ============================================================
 // 派遣システム（大学・プロキャンプ）
-// 若くて能力の低い選手を派遣し、大幅にパワーアップして帰還
+// キャンプ期間中に若くて能力の低い選手を派遣
+// キャンプ練習の代わりに大幅パワーアップして即帰還
 // ============================================================
 
 /** 派遣先の定義 */
@@ -1610,8 +1611,7 @@ export const DISPATCH_DESTINATIONS = {
   university: {
     name: '大学野球留学',
     icon: '🎓',
-    desc: '大学で2年間みっちり鍛える。技術系が大きく伸びる',
-    duration: 2,        // 2シーズン
+    desc: 'キャンプ期間に大学で集中特訓。技術系が大きく伸びる',
     maxAge: 22,         // 22歳以下
     maxOverall: 55,     // 総合力55以下
     growthProfile: 'technical', // 技術系メイン
@@ -1619,8 +1619,7 @@ export const DISPATCH_DESTINATIONS = {
   proCamp: {
     name: 'プロ研修',
     icon: '🏟️',
-    desc: 'プロ球団の練習に参加。フィジカルが劇的に伸びる',
-    duration: 1,        // 1シーズン
+    desc: 'キャンプ期間にプロ球団で特訓。フィジカルが劇的に伸びる',
     maxAge: 24,         // 24歳以下
     maxOverall: 50,     // 総合力50以下
     growthProfile: 'physical', // フィジカル系メイン
@@ -1657,7 +1656,7 @@ export function checkDispatchEligibility(player, destKey) {
   const dest = DISPATCH_DESTINATIONS[destKey];
   if (!dest) return { eligible: false, reason: '不明な派遣先' };
 
-  if (player.dispatched) return { eligible: false, reason: '派遣中' };
+  if (player.dispatchedThisCamp) return { eligible: false, reason: '今キャンプで派遣済み' };
   if ((player.age || 20) > dest.maxAge) return { eligible: false, reason: `${dest.maxAge}歳以下のみ` };
 
   const overall = calcPlayerOverall(player);
@@ -1667,48 +1666,27 @@ export function checkDispatchEligibility(player, destKey) {
 }
 
 /**
- * 選手を派遣する
+ * 選手をキャンプ中に派遣し、即座に大幅成長させて帰還させる
+ * キャンプ練習の代わりとして使う（派遣した選手は通常練習不可）
  * @param {Object} player - 選手データ（直接変更）
  * @param {string} destKey - 派遣先キー
- * @param {number} currentYear - 現在の年
+ * @returns {{ growthReport: Array }} 成長レポート
  */
-export function dispatchPlayer(player, destKey, currentYear) {
+export function executeDispatchTraining(player, destKey) {
   const dest = DISPATCH_DESTINATIONS[destKey];
-  if (!dest) return;
-
-  player.dispatched = {
-    destination: destKey,
-    destinationName: dest.name,
-    departYear: currentYear,
-    returnYear: currentYear + dest.duration,
-  };
-}
-
-/**
- * 派遣から帰還した選手に大幅な能力ブーストを適用
- * 無名選手が覚醒するようなドラマチックな成長
- * @param {Object} player - 選手データ（直接変更）
- * @returns {Object} growthReport - 成長レポート
- */
-export function applyDispatchReturn(player) {
-  const dispatched = player.dispatched;
-  if (!dispatched) return { player, growthReport: [] };
-
-  const dest = DISPATCH_DESTINATIONS[dispatched.destination];
-  if (!dest) return { player, growthReport: [] };
+  if (!dest) return { growthReport: [] };
 
   const growthReport = [];
-  const durationBonus = dest.duration; // 2年なら2倍の成長
 
   if (player.position === 'pitcher') {
     if (dest.growthProfile === 'technical') {
       // 大学: 制球と変化球が大幅UP、球速も少し
-      const ctrlGrowth = Math.floor(Math.random() * 12) + 10 + durationBonus * 3; // +13~24
+      const ctrlGrowth = Math.floor(Math.random() * 10) + 8; // +8~17
       const before = player.pitching.control;
       player.pitching.control = Math.min(99, before + ctrlGrowth);
       growthReport.push({ statName: '制球', before, after: player.pitching.control, growth: player.pitching.control - before });
 
-      const velGrowth = Math.floor(Math.random() * 4) + 2; // +2~5
+      const velGrowth = Math.floor(Math.random() * 3) + 1; // +1~3
       const vBefore = player.pitching.velocity;
       player.pitching.velocity = Math.min(155, vBefore + velGrowth);
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
@@ -1716,7 +1694,7 @@ export function applyDispatchReturn(player) {
       // 変化球レベルUP
       const arsenal = player.pitching?.arsenal || [];
       arsenal.filter(p => p.type !== 'straight').forEach(pitch => {
-        const pGrowth = Math.floor(Math.random() * 10) + 8;
+        const pGrowth = Math.floor(Math.random() * 8) + 5;
         const pBefore = pitch.level;
         pitch.level = pBefore + pGrowth;
         growthReport.push({ statName: `${getPitchTypeName(pitch.type)}`, before: pBefore, after: pitch.level, growth: pitch.level - pBefore });
@@ -1724,22 +1702,22 @@ export function applyDispatchReturn(player) {
 
       // スタミナも少し
       const staBefore = player.pitching.stamina;
-      const staGrowth = Math.floor(Math.random() * 15) + 10;
+      const staGrowth = Math.floor(Math.random() * 10) + 5;
       player.pitching.stamina = Math.min(200, staBefore + staGrowth);
       growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
     } else {
       // プロ研修: 球速が劇的UP、スタミナも
-      const velGrowth = Math.floor(Math.random() * 6) + 5; // +5~10
+      const velGrowth = Math.floor(Math.random() * 5) + 4; // +4~8
       const vBefore = player.pitching.velocity;
       player.pitching.velocity = Math.min(158, vBefore + velGrowth);
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
 
-      const staGrowth = Math.floor(Math.random() * 20) + 15;
+      const staGrowth = Math.floor(Math.random() * 15) + 10;
       const staBefore = player.pitching.stamina;
       player.pitching.stamina = Math.min(200, staBefore + staGrowth);
       growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
 
-      const ctrlGrowth = Math.floor(Math.random() * 6) + 3;
+      const ctrlGrowth = Math.floor(Math.random() * 4) + 2;
       const cBefore = player.pitching.control;
       player.pitching.control = Math.min(99, cBefore + ctrlGrowth);
       growthReport.push({ statName: '制球', before: cBefore, after: player.pitching.control, growth: player.pitching.control - cBefore });
@@ -1748,45 +1726,45 @@ export function applyDispatchReturn(player) {
     // 野手
     if (dest.growthProfile === 'technical') {
       // 大学: ミート・選球眼・守備が大幅UP
-      const meetGrowth = Math.floor(Math.random() * 12) + 10 + durationBonus * 3;
+      const meetGrowth = Math.floor(Math.random() * 10) + 8;
       const mBefore = player.batting.meet;
       player.batting.meet = Math.min(99, mBefore + meetGrowth);
       growthReport.push({ statName: 'ミート', before: mBefore, after: player.batting.meet, growth: player.batting.meet - mBefore });
 
-      const eyeGrowth = Math.floor(Math.random() * 10) + 8 + durationBonus * 2;
+      const eyeGrowth = Math.floor(Math.random() * 8) + 6;
       const eBefore = player.batting.eye;
       player.batting.eye = Math.min(99, eBefore + eyeGrowth);
       growthReport.push({ statName: '選球眼', before: eBefore, after: player.batting.eye, growth: player.batting.eye - eBefore });
 
-      const defGrowth = Math.floor(Math.random() * 8) + 6 + durationBonus * 2;
+      const defGrowth = Math.floor(Math.random() * 6) + 5;
       const dBefore = player.fielding.defense;
       player.fielding.defense = Math.min(99, dBefore + defGrowth);
       growthReport.push({ statName: '守備', before: dBefore, after: player.fielding.defense, growth: player.fielding.defense - dBefore });
 
       // パワーも少し
-      const powGrowth = Math.floor(Math.random() * 5) + 3;
+      const powGrowth = Math.floor(Math.random() * 4) + 2;
       const pBefore = player.batting.power;
       player.batting.power = Math.min(99, pBefore + powGrowth);
       growthReport.push({ statName: 'パワー', before: pBefore, after: player.batting.power, growth: player.batting.power - pBefore });
     } else {
       // プロ研修: パワー・走力・肩が劇的UP
-      const powGrowth = Math.floor(Math.random() * 12) + 10;
+      const powGrowth = Math.floor(Math.random() * 10) + 8;
       const pBefore = player.batting.power;
       player.batting.power = Math.min(99, pBefore + powGrowth);
       growthReport.push({ statName: 'パワー', before: pBefore, after: player.batting.power, growth: player.batting.power - pBefore });
 
-      const spdGrowth = Math.floor(Math.random() * 10) + 8;
+      const spdGrowth = Math.floor(Math.random() * 8) + 6;
       const sBefore = player.physical.speed;
       player.physical.speed = Math.min(99, sBefore + spdGrowth);
       growthReport.push({ statName: '走力', before: sBefore, after: player.physical.speed, growth: player.physical.speed - sBefore });
 
-      const armGrowth = Math.floor(Math.random() * 8) + 6;
+      const armGrowth = Math.floor(Math.random() * 6) + 4;
       const aBefore = player.physical.arm;
       player.physical.arm = Math.min(99, aBefore + armGrowth);
       growthReport.push({ statName: '肩力', before: aBefore, after: player.physical.arm, growth: player.physical.arm - aBefore });
 
       // ミートも少し
-      const meetGrowth = Math.floor(Math.random() * 5) + 3;
+      const meetGrowth = Math.floor(Math.random() * 4) + 2;
       const mBefore = player.batting.meet;
       player.batting.meet = Math.min(99, mBefore + meetGrowth);
       growthReport.push({ statName: 'ミート', before: mBefore, after: player.batting.meet, growth: player.batting.meet - mBefore });
@@ -1821,33 +1799,10 @@ export function applyDispatchReturn(player) {
     }
   }
 
-  // 派遣状態を解除
-  delete player.dispatched;
+  // 派遣済みフラグ（キャンプ中に1回のみ）
+  player.dispatchedThisCamp = true;
 
-  return { player, growthReport };
-}
-
-/**
- * チーム全体の派遣帰還処理（キャンプ開始時に呼ぶ）
- * @param {Object} team - チームデータ
- * @param {number} currentYear - 現在の年
- * @returns {{ returnedPlayers: Array }} 帰還した選手のレポート
- */
-export function processDispatchReturns(team, currentYear) {
-  const returnedPlayers = [];
-
-  team.players.forEach(player => {
-    if (player.dispatched && player.dispatched.returnYear <= currentYear) {
-      const { growthReport } = applyDispatchReturn(player);
-      returnedPlayers.push({
-        player,
-        destination: player.dispatched?.destinationName || '不明',
-        growthReport,
-      });
-    }
-  });
-
-  return { returnedPlayers };
+  return { growthReport };
 }
 
 /** ミュータブルなsetNestedValue（player直接変更用） */
