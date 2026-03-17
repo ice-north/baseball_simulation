@@ -4691,7 +4691,7 @@ if (newOuts === 3) {
           <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '3fr 6fr 3fr' : '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
-            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0">
+            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
                 <h3 className="font-bold text-red-400">✈️ {awayTeam.name}</h3>
                 <span className="text-2xl font-bold text-red-400">{score?.away || 0}</span>
@@ -4842,7 +4842,7 @@ if (newOuts === 3) {
               ) : (
                 /* 試合中/試合終了後は現在フィールドにいる選手のみ表示 */
                 <div className="mb-2">
-                  <div className="space-y-1 text-sm">
+                  <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
                     {awayTeam.players
                       .filter(p => {
                         // 試合終了後：実際に出場した選手のみ
@@ -4897,15 +4897,15 @@ if (newOuts === 3) {
                           'hover:bg-gray-800 cursor-pointer'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                          <span className={`w-5 shrink-0 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           {!gameStarted ? (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handlePositionClick('away', player.id);
                               }}
-                              className={`w-6 text-center rounded text-xs py-0.5 font-semibold transition ${
+                              className={`w-6 shrink-0 text-center rounded text-xs py-0.5 font-semibold transition ${
                                 isPositionSelected
                                   ? 'bg-purple-600 text-white ring-2 ring-purple-400'
                                   : getPositionColor(player.position) + ' hover:opacity-80'
@@ -4914,13 +4914,13 @@ if (newOuts === 3) {
                               {posNames[player.position]}
                             </button>
                           ) : (
-                            <span className={`w-6 text-center rounded text-sm py-0.5 font-bold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
+                            <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           )}
-                          <span className="font-bold">{player.name}</span>
-                          <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
-                          <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          <span className="font-bold truncate">{player.name}</span>
+                          <span className={`text-[10px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                          <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap">
+                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap shrink-0">
                               {player.gameStats.atBatResults.map((r, i) => (
                                 <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
                                   r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
@@ -4934,11 +4934,11 @@ if (newOuts === 3) {
                             </span>
                           )}
                           <span className="flex-1"></span>
-                          {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
-                          {isCurrentBatter && <span>⚾</span>}
-                          {isSubSelected && <span className="text-orange-300">⚡</span>}
-                          {isSelected && <span>👆</span>}
-                          {isPositionSelected && <span>🔄</span>}
+                          {isSubbedOut && <span className="text-red-400 text-xs shrink-0">交代済</span>}
+                          {isCurrentBatter && <span className="shrink-0">⚾</span>}
+                          {isSubSelected && <span className="text-orange-300 shrink-0">⚡</span>}
+                          {isSelected && <span className="shrink-0">👆</span>}
+                          {isPositionSelected && <span className="shrink-0">🔄</span>}
                         </div>
                         {gameStarted ? (
                           <div className={`flex gap-2 text-xs ml-6 mt-0.5 font-bold ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
@@ -5260,10 +5260,10 @@ if (newOuts === 3) {
 
               {/* 電光掲示板風スコアボード */}
               {gameStarted && (
-              <div className="bg-black rounded-lg p-1 font-mono border-4 border-gray-800 shadow-2xl">
+              <div className="bg-black rounded-lg p-1 font-mono border-4 border-gray-800 shadow-2xl overflow-hidden">
                 {/* 上段: イニングスコア（電光掲示板風） */}
-                <div className="bg-black rounded-t overflow-hidden p-2">
-                  <table className="w-full text-center text-base">
+                <div className="bg-black rounded-t overflow-x-auto p-2">
+                  <table className="w-full text-center text-sm">
                     {/* ヘッダー行 */}
                     <thead>
                       <tr className="border-b border-gray-700">
@@ -5760,7 +5760,7 @@ if (newOuts === 3) {
             </div>
 
             {/* ===== 右カラム: ホームチーム ===== */}
-            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0">
+            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
                 <span className="text-2xl font-bold text-blue-400">{score?.home || 0}</span>
                 <h3 className="font-bold text-blue-400">🏠 {homeTeam.name}</h3>
@@ -5911,7 +5911,7 @@ if (newOuts === 3) {
               ) : (
                 /* 試合中/試合終了後は現在フィールドにいる選手のみ表示 */
                 <div className="mb-2">
-                  <div className="space-y-1 text-sm">
+                  <div className="space-y-1 text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
                     {homeTeam.players
                       .filter(p => {
                         // 試合終了後：実際に出場した選手のみ
@@ -5966,15 +5966,15 @@ if (newOuts === 3) {
                           'hover:bg-gray-800 cursor-pointer'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-5 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                          <span className={`w-5 shrink-0 ${isCurrentBatter ? 'text-black font-bold' : isSelected ? 'text-white font-bold' : 'text-gray-400'}`}>{player.battingOrder}</span>
                           {!gameStarted ? (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handlePositionClick('home', player.id);
                               }}
-                              className={`w-6 text-center rounded text-xs py-0.5 font-semibold transition ${
+                              className={`w-6 shrink-0 text-center rounded text-xs py-0.5 font-semibold transition ${
                                 isPositionSelected
                                   ? 'bg-purple-600 text-white ring-2 ring-purple-400'
                                   : getPositionColor(player.position) + ' hover:opacity-80'
@@ -5983,13 +5983,13 @@ if (newOuts === 3) {
                               {posNames[player.position]}
                             </button>
                           ) : (
-                            <span className={`w-6 text-center rounded text-sm py-0.5 font-bold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
+                            <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPositionColor(player.position)}`}>{posNames[player.position]}</span>
                           )}
-                          <span className="font-bold">{player.name}</span>
-                          <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
-                          <span className={`text-xs ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          <span className="font-bold truncate">{player.name}</span>
+                          <span className={`text-[10px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                          <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap">
+                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap shrink-0">
                               {player.gameStats.atBatResults.map((r, i) => (
                                 <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
                                   r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
@@ -6003,8 +6003,8 @@ if (newOuts === 3) {
                             </span>
                           )}
                           <span className="flex-1"></span>
-                          {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
-                          {isCurrentBatter && <span>⚾</span>}
+                          {isSubbedOut && <span className="text-red-400 text-xs shrink-0">交代済</span>}
+                          {isCurrentBatter && <span className="shrink-0">⚾</span>}
                           {isSubSelected && <span className="text-orange-300">⚡</span>}
                           {isSelected && <span>👆</span>}
                           {isPositionSelected && <span>🔄</span>}
