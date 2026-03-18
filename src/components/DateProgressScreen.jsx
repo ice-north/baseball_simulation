@@ -440,7 +440,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           return (
                             <div key={p.id} className={`flex items-center text-xs leading-relaxed py-0.5 ${isUser ? 'text-yellow-300' : 'text-gray-300'}`}>
                               <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-600' : 'text-gray-600'}`}>{i + 1}</span>
-                              <span className="flex-1 truncate ml-1 text-sm">{p.name}</span>
+                              <span className="flex-1 truncate ml-1 text-sm">{p.name}<span className="text-gray-500 text-[10px]">({p.teamName.slice(0, 4)})</span></span>
                               <span className={`font-mono font-bold text-xs ${r.color}`}>{r.format(p.value)}</span>
                             </div>
                           );
