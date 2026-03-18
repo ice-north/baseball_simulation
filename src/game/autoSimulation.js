@@ -677,86 +677,72 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     return null;
   };
 
-  // 代打判定（AI監督）- より積極的に控え選手を起用
+  // 代打判定（AI監督）- 状況判断・理由付き版
   const considerPinchHitter = (offenseTeam, batter) => {
     const benchFielders = offenseTeam.players.filter(p =>
       p.battingOrder === 0 && !isPitcher(p)
     );
     if (benchFielders.length === 0) return batter;
 
+    // 控え選手の中から最強打者を選ぶヘルパー
+    const getBestBench = () => benchFielders.reduce((best, p) => {
+      const total = (p.batting?.meet || 0) + (p.batting?.power || 0);
+      const bestTotal = (best.batting?.meet || 0) + (best.batting?.power || 0);
+      return total > bestTotal ? p : best;
+    }, benchFielders[0]);
+
+    // 代打実行ヘルパー
+    const executePinchHit = (pinchHitter, reason) => {
+      const batterData = offenseTeam.players.find(p => p.id === batter.id);
+      const phData = offenseTeam.players.find(p => p.id === pinchHitter.id);
+      if (batterData && phData) {
+        phData.battingOrder = batterData.battingOrder;
+        phData.position = batterData.position;
+        batterData.battingOrder = 0;
+        console.log(`   🔄 代打: ${batter.name} → ${pinchHitter.name}【${reason}】`);
+        return pinchHitter;
+      }
+      return batter;
+    };
+
+    const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
+    const bestBench = getBestBench();
+    const bestBenchTotal = bestBench ? (bestBench.batting?.meet || 0) + (bestBench.batting?.power || 0) : 0;
+
+    const myScore = gameState.isTopInning ? gameState.score.away : gameState.score.home;
+    const oppScore = gameState.isTopInning ? gameState.score.home : gameState.score.away;
+    const scoreDiff = myScore - oppScore;
+    const runnersOn = gameState.bases.filter(Boolean).length;
+    const isScoring = gameState.bases[1] || gameState.bases[2];
+
     // 1. 投手の打順：6回以降で代打（投手は打撃が弱い）
     if (isPitcher(batter) && gameState.inning >= 6) {
-      const pinchHitter = benchFielders.reduce((best, p) =>
-        (p.batting?.meet || 0) + (p.batting?.power || 0) >
-        (best.batting?.meet || 0) + (best.batting?.power || 0) ? p : best
-      , benchFielders[0]);
-
-      if (pinchHitter && ((pinchHitter.batting?.meet || 0) > (batter.batting?.meet || 0) + 5)) {
-        console.log(`   🔄 代打: ${batter.name} → ${pinchHitter.name}`);
-        const batterData = offenseTeam.players.find(p => p.id === batter.id);
-        const phData = offenseTeam.players.find(p => p.id === pinchHitter.id);
-        if (batterData && phData) {
-          phData.battingOrder = batterData.battingOrder;
-          phData.position = batterData.position;
-          batterData.battingOrder = 0;
-          return pinchHitter;
-        }
+      if (bestBench && ((bestBench.batting?.meet || 0) > (batter.batting?.meet || 0) + 5)) {
+        return executePinchHit(bestBench, `${gameState.inning}回、投手に代わり打力アップ`);
       }
     }
 
-    // 2. 7回以降、得点圏にランナーがいて打撃力の低い野手に代打
-    if (gameState.inning >= 7 && (gameState.bases[1] || gameState.bases[2])) {
-      const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
-      const bestBench = benchFielders.reduce((best, p) => {
-        const total = (p.batting?.meet || 0) + (p.batting?.power || 0);
-        const bestTotal = (best.batting?.meet || 0) + (best.batting?.power || 0);
-        return total > bestTotal ? p : best;
-      }, benchFielders[0]);
-
-      if (bestBench) {
-        const benchTotal = (bestBench.batting?.meet || 0) + (bestBench.batting?.power || 0);
-        if (benchTotal > batterTotal + 10) { // 差がある場合
-          console.log(`   🔄 代打(チャンス): ${batter.name} → ${bestBench.name}`);
-          const batterData = offenseTeam.players.find(p => p.id === batter.id);
-          const phData = offenseTeam.players.find(p => p.id === bestBench.id);
-          if (batterData && phData) {
-            phData.battingOrder = batterData.battingOrder;
-            phData.position = batterData.position;
-            batterData.battingOrder = 0;
-            return bestBench;
-          }
-        }
-      }
+    // 2. 7回以降、得点圏にランナーがいて打撃力差が大きい
+    if (gameState.inning >= 7 && isScoring && bestBenchTotal > batterTotal + 10) {
+      const runnerDesc = gameState.bases[2] ? '三塁' : '二塁';
+      return executePinchHit(bestBench, `チャンス(${runnerDesc}にランナー)で打撃力の高い代打`);
     }
 
-    // 3. 8回以降、ビハインドで打撃力の低い下位打線に代打
-    if (gameState.inning >= 8) {
-      const isLosing = gameState.isTopInning
-        ? gameState.score.away < gameState.score.home
-        : gameState.score.home < gameState.score.away;
-      if (isLosing && batter.battingOrder >= 6) {
-        const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
-        const bestBench = benchFielders.reduce((best, p) => {
-          const total = (p.batting?.meet || 0) + (p.batting?.power || 0);
-          const bestTotal = (best.batting?.meet || 0) + (best.batting?.power || 0);
-          return total > bestTotal ? p : best;
-        }, benchFielders[0]);
+    // 3. 8回以降、ビハインドで下位打線に代打
+    if (gameState.inning >= 8 && scoreDiff < 0 && batter.battingOrder >= 6 && bestBenchTotal > batterTotal + 5) {
+      return executePinchHit(bestBench, `${Math.abs(scoreDiff)}点ビハインド、反撃のため代打起用`);
+    }
 
-        if (bestBench) {
-          const benchTotal = (bestBench.batting?.meet || 0) + (bestBench.batting?.power || 0);
-          if (benchTotal > batterTotal + 5) {
-            console.log(`   🔄 代打(ビハインド): ${batter.name} → ${bestBench.name}`);
-            const batterData = offenseTeam.players.find(p => p.id === batter.id);
-            const phData = offenseTeam.players.find(p => p.id === bestBench.id);
-            if (batterData && phData) {
-              phData.battingOrder = batterData.battingOrder;
-              phData.position = batterData.position;
-              batterData.battingOrder = 0;
-              return bestBench;
-            }
-          }
-        }
-      }
+    // 4. 9回以降、接戦でランナーあり、少しでも打力が上がるなら代打
+    if (gameState.inning >= 9 && Math.abs(scoreDiff) <= 2 && runnersOn > 0 && bestBenchTotal > batterTotal + 3) {
+      const situationDesc = scoreDiff < 0 ? `${Math.abs(scoreDiff)}点ビハインド最終回の勝負` :
+                           scoreDiff === 0 ? '同点の勝負所' : 'リード守る一打';
+      return executePinchHit(bestBench, `${situationDesc}、${bestBench.name}に託す`);
+    }
+
+    // 5. 7回以降、接戦でランナー2人以上、控えの方が打撃力が高い
+    if (gameState.inning >= 7 && Math.abs(scoreDiff) <= 3 && runnersOn >= 2 && bestBenchTotal > batterTotal) {
+      return executePinchHit(bestBench, `接戦の大チャンス(ランナー${runnersOn}人)で代打起用`);
     }
 
     return batter;
@@ -852,7 +838,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     }
   };
 
-  // AI監督: 打席間のピンチ投手交代
+  // AI監督: 打席間のピンチ投手交代（ロールベース対応）
   const considerMidInningPitcherChange = (defenseTeam, currentPitcher, gs) => {
     const teamName = defenseTeam === gs.homeTeam ? homeTeamName : awayTeamName;
     const teamKey = defenseTeam === gs.homeTeam ? 'home' : 'away';
@@ -861,6 +847,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const rotation = team.pitchingRotation;
     if (!rotation) return;
     const fatigue = rotation.reliefFatigue || {};
+    const pitcherRoles = rotation.pitcherRoles || {};
     const reliefTrack = gs.reliefTracking[teamKey];
 
     const pitcherData = defenseTeam.players.find(p => p.id === currentPitcher.id);
@@ -874,9 +861,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const runnersOn = gs.bases.filter(Boolean).length;
     const isLate = gs.inning >= 7;
 
-    // ピンチ判定: ランナー2人以上 + 後半 + スタミナ低下
     let shouldChange = false;
     let situation = 'middle';
+    let changeReason = '';
 
     // 9回リード時→クローザー必須
     if (gs.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
@@ -884,6 +871,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       if (!isCloser) {
         shouldChange = true;
         situation = 'save';
+        changeReason = `9回${scoreDiff}点リード、守護神を投入`;
       }
     }
     // 8回僅差→セットアッパー
@@ -893,28 +881,33 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       if (!isSetup && !isCloser && staminaRate < 0.60) {
         shouldChange = true;
         situation = 'hold';
+        changeReason = `8回僅差(${scoreDiff > 0 ? scoreDiff + '点リード' : Math.abs(scoreDiff) + '点ビハインド'})、セットアッパーへ`;
       }
     }
     // ピンチ場面: ランナー2人以上+アウト1以下+後半+スタミナ低い
     else if (runnersOn >= 2 && gs.outs <= 1 && isLate && staminaRate < 0.45) {
       shouldChange = true;
       situation = 'middle';
+      changeReason = `ピンチ(ランナー${runnersOn}人・${gs.outs}アウト)でスタミナ${Math.round(staminaRate * 100)}%`;
     }
     // 満塁+アウト1以下（回に関係なく）でスタミナ低い
     else if (runnersOn === 3 && gs.outs <= 1 && staminaRate < 0.50) {
       shouldChange = true;
       situation = 'middle';
+      changeReason = `満塁のピンチでスタミナ${Math.round(staminaRate * 100)}%、緊急交代`;
     }
 
     if (!shouldChange) return;
 
-    // リリーフ投手選択
+    // リリーフ投手選択（ロールベース）
     let reliever = null;
+    let selectedRoleLabel = '';
 
     if (situation === 'save' && rotation.closer) {
       const closerData = defenseTeam.players.find(p => p.id === rotation.closer && p.id !== currentPitcher.id);
       if (closerData && (fatigue[rotation.closer] || 0) < 50) {
         reliever = closerData;
+        selectedRoleLabel = '守護神';
       }
     }
 
@@ -923,8 +916,21 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const setupData = defenseTeam.players.find(p => p.id === setupId && p.id !== currentPitcher.id);
         if (setupData && (fatigue[setupId] || 0) < 50) {
           reliever = setupData;
+          selectedRoleLabel = 'セットアッパー';
           break;
         }
+      }
+    }
+
+    // 接戦ピンチ: 中継ぎエースを優先
+    if (!reliever && Math.abs(scoreDiff) <= 3) {
+      const aceRelievers = (rotation.middleRelievers || [])
+        .filter(id => pitcherRoles[id] === 'ace_relief' && (fatigue[id] || 0) < 50)
+        .map(id => defenseTeam.players.find(p => p.id === id && p.id !== currentPitcher.id))
+        .filter(Boolean);
+      if (aceRelievers.length > 0) {
+        reliever = aceRelievers[0];
+        selectedRoleLabel = '中継ぎエース';
       }
     }
 
@@ -937,6 +943,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
       if (sortedMiddle.length > 0) {
         reliever = defenseTeam.players.find(p => p.id === sortedMiddle[0]);
+        const role = pitcherRoles[sortedMiddle[0]];
+        selectedRoleLabel = role === 'long' ? 'ロングリリーフ' :
+                           role === 'ace_relief' ? '中継ぎエース' :
+                           role === 'onepoint' ? 'ワンポイント' : '中継ぎ';
       }
     }
 
@@ -949,12 +959,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         !starterIds.has(p.id) &&
         (p.currentStamina || 80) > 40
       );
+      if (reliever) selectedRoleLabel = '緊急中継ぎ';
     }
 
     if (reliever) {
-      const roleLabel = situation === 'save' ? '守護神' :
-                        situation === 'hold' ? 'セットアップ' : '中継ぎ';
-      console.log(`   🔄 ピンチ投手交代: ${teamName} ${currentPitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${roleLabel}) [ランナー${runnersOn}人]`);
+      console.log(`   🔄 ピンチ投手交代: ${teamName} ${currentPitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${selectedRoleLabel})【${changeReason}】`);
 
       if (!reliefTrack.starterLeftInning) {
         reliefTrack.starterLeftInning = gs.inning;
@@ -1215,76 +1224,142 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             reliefTrack.relieverOutsPitched += 3; // 1イニング = 3アウト
           }
 
-          // AI監督: 役割ベースの投手交代判定（より積極的に継投）
+          // AI監督: ロール別の投手交代判定（pitcherRoles対応）
           const staminaRate = pitcherData.currentStamina / pitcher.pitching.stamina;
           const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
+          const pitcherRoles = rotation?.pitcherRoles || {};
+          const currentRole = pitcherRoles[pitcher.id] || '';
           let shouldChange = false;
           let situation = 'middle';
+          let changeReason = '';
 
           // リリーフ投手の登板制限チェック
           const isReliever = reliefTrack.currentRelieverId === pitcher.id;
           if (isReliever) {
-            const starterLeft = reliefTrack.starterLeftInning || 9;
-            const maxOuts = starterLeft <= 3 ? 12 : 6; // ロングリリーフ4回、通常2回
+            const relieverRole = pitcherRoles[pitcher.id] || 'auto_r';
+            // ロール別のイニング制限
+            let maxOuts;
+            if (relieverRole === 'long') {
+              maxOuts = 9; // ロングリリーフ: 3回
+            } else if (relieverRole === 'onepoint') {
+              maxOuts = 3; // ワンポイント: 1回（対1打者）
+            } else if (relieverRole === 'ace_relief') {
+              maxOuts = 6; // 中継ぎエース: 2回
+            } else if (relieverRole === 'setup') {
+              maxOuts = 6; // セットアップ: 2回
+            } else if (relieverRole === 'closer') {
+              maxOuts = 6; // クローザー: 2回
+            } else if (relieverRole === 'mopup' || relieverRole === 'behind') {
+              const starterLeft = reliefTrack.starterLeftInning || 9;
+              maxOuts = starterLeft <= 3 ? 12 : 6; // 早期降板なら4回、通常2回
+            } else {
+              const starterLeft = reliefTrack.starterLeftInning || 9;
+              maxOuts = starterLeft <= 3 ? 12 : 6;
+            }
             if (reliefTrack.relieverOutsPitched >= maxOuts) {
-              console.log(`   ⏱️ ${pitcher.name}が登板制限(${Math.floor(reliefTrack.relieverOutsPitched / 3)}回)に達しました`);
+              const inningsStr = Math.floor(reliefTrack.relieverOutsPitched / 3);
+              changeReason = `${pitcher.name}が登板制限(${inningsStr}回)に到達`;
+              console.log(`   ⏱️ ${changeReason}`);
               shouldChange = true;
               situation = 'middle';
             }
           }
 
-          // 通常の交代判定条件（積極的な継投策）
-          if (!shouldChange) {
-            // 先発の投球回数上限: 7回完了で交代（完封ペースでも8回まで）
-            if (!isReliever && gameState.inning >= 8) {
-              shouldChange = true;
-              situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
+          // 先発ロール別の交代判定
+          if (!shouldChange && !isReliever) {
+            if (currentRole === 'complete') {
+              // 完投型: スタミナ25%以下で交代、得点圏ピンチなら35%
+              if (staminaRate < 0.25) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `完投型${pitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
+              } else if (gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3 && staminaRate < 0.40) {
+                shouldChange = true;
+                situation = 'save';
+                changeReason = `9回セーブ場面、完投型だがスタミナ不足で守護神へ`;
+              }
+            } else if (currentRole === 'short') {
+              // ショートスターター: 3回以降スタミナ50%以下で交代、4回終了で必ず交代
+              if (gameState.inning >= 5) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `ショートスターター${pitcher.name}の予定投球回終了`;
+              } else if (gameState.inning >= 4 && staminaRate < 0.50) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `ショートスターター${pitcher.name}のスタミナ低下(${Math.round(staminaRate * 100)}%)`;
+              }
+            } else if (currentRole === 'quality') {
+              // 勝ち権利交代型: 5回以降スタミナ40%以下、または6回終了で交代
+              if (gameState.inning >= 7) {
+                shouldChange = true;
+                situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
+                changeReason = `${pitcher.name}が勝ち権利達成、温存のため交代`;
+              } else if (gameState.inning >= 5 && staminaRate < 0.40) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `勝ち権利型${pitcher.name}のスタミナ低下(${Math.round(staminaRate * 100)}%)`;
+              }
+            } else {
+              // auto_s / 未設定: 従来ロジック（改良版）
+              if (gameState.inning >= 8) {
+                shouldChange = true;
+                situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
+                changeReason = `${pitcher.name}が7回を投げ切り継投へ`;
+              } else if (gameState.inning >= 5 && staminaRate < 0.40) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `先発${pitcher.name}のスタミナ低下(${Math.round(staminaRate * 100)}%)`;
+              } else if (gameState.inning >= 7 && staminaRate < 0.50) {
+                shouldChange = true;
+                situation = 'hold';
+                changeReason = `終盤で先発${pitcher.name}のスタミナ不足(${Math.round(staminaRate * 100)}%)`;
+              }
             }
-            // 先発は5回以降でスタミナ40%以下 → 交代
-            else if (!isReliever && gameState.inning >= 5 && staminaRate < 0.40) {
-              shouldChange = true;
-              situation = 'middle';
-            }
-            // スタミナ25%以下なら即交代（先発・リリーフ問わず）
-            else if (staminaRate < 0.25) {
-              shouldChange = true;
-              situation = 'middle';
-            }
-            // 7回以降、先発スタミナ50%以下 → 交代
-            else if (!isReliever && gameState.inning >= 7 && staminaRate < 0.50) {
-              shouldChange = true;
-              situation = 'hold';
-            }
-            // 9回、3点差以内のリード → クローザー
-            else if (gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
+          }
+
+          // 共通: スタミナ25%以下なら即交代（先発・リリーフ問わず）
+          if (!shouldChange && staminaRate < 0.25) {
+            shouldChange = true;
+            situation = 'middle';
+            changeReason = `${pitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
+          }
+          // 9回、3点差以内のリード → クローザー
+          if (!shouldChange && gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
+            const closerId = rotation?.closer;
+            if (closerId && pitcher.id !== closerId) {
               shouldChange = true;
               situation = 'save';
+              changeReason = `9回セーブ場面、守護神を投入`;
             }
-            // 8回で僅差 → セットアッパー
-            else if (gameState.inning === 8 && Math.abs(scoreDiff) <= 2) {
-              shouldChange = true;
-              situation = 'hold';
-            }
-            // 6回以降、大量リードでも中継ぎへ（先発温存）
-            else if (!isReliever && gameState.inning >= 6 && Math.abs(scoreDiff) >= 5 && staminaRate < 0.50) {
-              shouldChange = true;
-              situation = 'middle';
-            }
+          }
+          // 8回で僅差リード → セットアッパー
+          if (!shouldChange && gameState.inning === 8 && scoreDiff > 0 && Math.abs(scoreDiff) <= 2 && !isReliever) {
+            shouldChange = true;
+            situation = 'hold';
+            changeReason = `8回僅差リード、セットアッパーへ`;
+          }
+          // 6回以降、大量リードで先発温存
+          if (!shouldChange && !isReliever && gameState.inning >= 6 && Math.abs(scoreDiff) >= 5 && staminaRate < 0.50) {
+            shouldChange = true;
+            situation = scoreDiff < 0 ? 'behind' : 'middle';
+            changeReason = scoreDiff >= 5 ? `大量リードで先発${pitcher.name}を温存` : `大量ビハインドで先発${pitcher.name}を温存`;
           }
 
           if (shouldChange) {
             let reliever = null;
             const fatigue = rotation?.reliefFatigue || {};
+            let selectedRoleLabel = '';
 
             // セーブ場面: クローザー最優先（既にマウンドにいる場合は交代不要）
             if (situation === 'save' && rotation?.closer) {
               if (pitcher.id === rotation.closer) {
-                // クローザーが既に投げている→交代不要
                 shouldChange = false;
               } else {
                 const closerData = team.players.find(p => p.id === rotation.closer && p.id !== pitcher.id);
                 if (closerData && (fatigue[rotation.closer] || 0) < 50) {
                   reliever = closerData;
+                  selectedRoleLabel = '守護神';
                 }
               }
             }
@@ -1295,22 +1370,71 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 const setupData = team.players.find(p => p.id === setupId && p.id !== pitcher.id);
                 if (setupData && (fatigue[setupId] || 0) < 50) {
                   reliever = setupData;
+                  selectedRoleLabel = 'セットアッパー';
                   break;
                 }
               }
             }
 
-            // 通常の中継ぎ（疲労が少ない順）
+            // ビハインド場面: ビハインドロール優先
+            if (shouldChange && !reliever && situation === 'behind') {
+              const behindPitchers = (rotation?.middleRelievers || [])
+                .filter(id => pitcherRoles[id] === 'behind' && (fatigue[id] || 0) < 50)
+                .map(id => team.players.find(p => p.id === id && p.id !== pitcher.id))
+                .filter(Boolean);
+              if (behindPitchers.length > 0) {
+                reliever = behindPitchers[0];
+                selectedRoleLabel = 'ビハインド';
+              }
+            }
+
+            // 大量リード: 敗戦処理ロール優先
+            if (shouldChange && !reliever && scoreDiff >= 5) {
+              const mopupPitchers = (rotation?.middleRelievers || [])
+                .filter(id => pitcherRoles[id] === 'mopup' && (fatigue[id] || 0) < 50)
+                .map(id => team.players.find(p => p.id === id && p.id !== pitcher.id))
+                .filter(Boolean);
+              if (mopupPitchers.length > 0) {
+                reliever = mopupPitchers[0];
+                selectedRoleLabel = '敗戦処理';
+              }
+            }
+
+            // ショートスターター後: ロングリリーフ優先
+            if (shouldChange && !reliever && currentRole === 'short') {
+              const longRelievers = (rotation?.middleRelievers || [])
+                .filter(id => pitcherRoles[id] === 'long' && (fatigue[id] || 0) < 50)
+                .map(id => team.players.find(p => p.id === id && p.id !== pitcher.id))
+                .filter(Boolean);
+              if (longRelievers.length > 0) {
+                reliever = longRelievers[0];
+                selectedRoleLabel = 'ロングリリーフ';
+              }
+            }
+
+            // 中継ぎエース→通常中継ぎ（疲労が少ない順、ロール別ラベル付き）
             if (shouldChange && !reliever) {
               const sortedMiddle = (rotation?.middleRelievers || [])
                 .filter(id => {
                   const p = team.players.find(pl => pl.id === id && pl.id !== pitcher.id);
                   return p && (fatigue[id] || 0) < 50;
                 })
-                .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
+                .sort((a, b) => {
+                  // 中継ぎエースを接戦時に優先
+                  const aIsAce = pitcherRoles[a] === 'ace_relief' ? -1 : 0;
+                  const bIsAce = pitcherRoles[b] === 'ace_relief' ? -1 : 0;
+                  if (Math.abs(scoreDiff) <= 3) return aIsAce - bIsAce || (fatigue[a] || 0) - (fatigue[b] || 0);
+                  return (fatigue[a] || 0) - (fatigue[b] || 0);
+                });
 
               if (sortedMiddle.length > 0) {
                 reliever = team.players.find(p => p.id === sortedMiddle[0]);
+                const role = pitcherRoles[sortedMiddle[0]];
+                selectedRoleLabel = role === 'long' ? 'ロングリリーフ' :
+                                   role === 'ace_relief' ? '中継ぎエース' :
+                                   role === 'onepoint' ? 'ワンポイント' :
+                                   role === 'mopup' ? '敗戦処理' :
+                                   role === 'behind' ? 'ビハインド' : '中継ぎ';
               }
             }
 
@@ -1324,7 +1448,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 !starterIds.has(p.id) &&
                 (p.currentStamina || 80) > 40
               );
-              // リリーフが全員使えない場合のみ先発を緊急登板
+              if (reliever) selectedRoleLabel = '緊急中継ぎ';
               if (!reliever) {
                 reliever = team.players.find(p =>
                   isPitcher(p) &&
@@ -1332,15 +1456,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                   p.id !== pitcher.id &&
                   (p.currentStamina || 80) > 20
                 );
+                if (reliever) selectedRoleLabel = '緊急登板';
               }
             }
 
             if (reliever) {
-              const roleLabel = situation === 'save' ? '守護神' :
-                              situation === 'hold' ? 'セットアップ' : '中継ぎ';
-              console.log(`   🔄 投手交代: ${teamName} ${pitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${roleLabel})`);
+              console.log(`   🔄 投手交代: ${teamName} ${pitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${selectedRoleLabel})【${changeReason}】`);
 
-              // 先発降板時は記録
               if (!reliefTrack.starterLeftInning) {
                 reliefTrack.starterLeftInning = gameState.inning;
                 console.log(`   📊 先発${pitcher.name}が${gameState.inning}回で降板`);
@@ -1354,11 +1476,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               relieverData.position = 'pitcher';
               relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
-              // リリーフ追跡を更新
               reliefTrack.currentRelieverId = reliever.id;
-              reliefTrack.relieverOutsPitched = 0; // 新しいリリーフの投球数をリセット
+              reliefTrack.relieverOutsPitched = 0;
 
-              // リリーフ疲労を記録（TEAMS_DATAに反映）
               if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
                 TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
                   (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 30;

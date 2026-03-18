@@ -733,81 +733,188 @@ import TradeScreen from './components/TradeScreen.jsx';
         </div>
       );
 
-      // 監督AI：自動投手交代ロジック（Phase 2: 状況判断強化版）
+      // 監督AI：自動投手交代ロジック（Phase 3: ロールベース状況判断版）
       const autoSubstitutePitcher = () => {
         if (!autoManagerMode || !gameStarted) return;
-
-        // 交代処理中の場合はスキップ（二重実行防止）
         if (isSubstituting.current) return;
 
         const defenseTeam = getDefenseTeam();
         const currentPitcher = getCurrentPitcher();
-
-        // 投手が見つからない場合はスキップ（既に交代処理中の可能性）
         if (!currentPitcher || !currentPitcher.pitching) return;
 
         const teamType = isTopInning ? 'home' : 'away';
         const setTeam = isTopInning ? setHomeTeam : setAwayTeam;
+        const teamName = isTopInning ? homeTeam.name : awayTeam.name;
+
+        // TEAMS_DATAから投手ロール情報を取得
+        const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
+        const pitcherRoles = rotation?.pitcherRoles || {};
+        const fatigue = rotation?.reliefFatigue || {};
+        const currentRole = pitcherRoles[currentPitcher.id] || 'auto_s';
 
         // 状況分析
         const staminaRate = currentStamina / currentPitcher.pitching.stamina;
-        const scoreDiff = Math.abs(score.home - score.away);
-        const isCloseGame = scoreDiff <= 3; // 3点差以内を接戦とする
+        const myScore = isTopInning ? score.home : score.away;
+        const oppScore = isTopInning ? score.away : score.home;
+        const scoreDiff = myScore - oppScore;
+        const isCloseGame = Math.abs(scoreDiff) <= 3;
         const runnersOnBase = bases.filter(b => b).length;
-        const isScoringSituation = bases[1] || bases[2]; // 得点圏にランナー
+        const isScoringSituation = bases[1] || bases[2];
 
-        // 交代判断（Phase 2: 状況に応じた閾値）
-        let staminaThreshold = 0.2; // 基本20%
+        // 先発ロール別のイニング上限・スタミナ閾値
+        const isStarter = ['complete', 'short', 'quality', 'auto_s'].includes(currentRole);
+        let shouldSubstitute = false;
+        let reason = '';
 
-        // 接戦の場合はより早めに交代
-        if (isCloseGame && inning >= 7) {
-          staminaThreshold = 0.3; // 30%
+        if (isStarter) {
+          if (currentRole === 'complete') {
+            // 完投型: スタミナ25%以下 or 得点圏ピンチでスタミナ35%以下
+            if (staminaRate <= 0.25) {
+              shouldSubstitute = true;
+              reason = `完投型${currentPitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
+            } else if (isScoringSituation && isCloseGame && staminaRate < 0.35) {
+              shouldSubstitute = true;
+              reason = `接戦ピンチ場面でスタミナ低下(${Math.round(staminaRate * 100)}%)`;
+            }
+          } else if (currentRole === 'short') {
+            // ショートスターター: 3回終了以降 or スタミナ50%以下
+            if (inning >= 4 && staminaRate < 0.50) {
+              shouldSubstitute = true;
+              reason = `ショートスターター${currentPitcher.name}の予定投球回到達`;
+            } else if (staminaRate <= 0.30) {
+              shouldSubstitute = true;
+              reason = `スタミナ限界(${Math.round(staminaRate * 100)}%)`;
+            }
+          } else if (currentRole === 'quality') {
+            // 勝ち権利交代: 5回以降スタミナ40%以下 or 6回終了
+            if (inning >= 6 && staminaRate < 0.45) {
+              shouldSubstitute = true;
+              reason = `勝ち権利獲得、${currentPitcher.name}を温存`;
+            } else if (inning >= 7) {
+              shouldSubstitute = true;
+              reason = `${currentPitcher.name}が${inning - 1}回を投げ切り交代`;
+            } else if (staminaRate <= 0.30) {
+              shouldSubstitute = true;
+              reason = `スタミナ限界(${Math.round(staminaRate * 100)}%)`;
+            }
+          } else {
+            // auto_s: 汎用先発（従来ロジック改良版）
+            if (inning >= 8) {
+              shouldSubstitute = true;
+              reason = `${currentPitcher.name}が7回を投げ切り継投へ`;
+            } else if (inning >= 5 && staminaRate < 0.40) {
+              shouldSubstitute = true;
+              reason = `スタミナ低下(${Math.round(staminaRate * 100)}%)で早めの継投`;
+            } else if (isCloseGame && inning >= 7 && staminaRate < 0.50) {
+              shouldSubstitute = true;
+              reason = `接戦終盤でリリーフへ切り替え`;
+            } else if (staminaRate <= 0.25) {
+              shouldSubstitute = true;
+              reason = `スタミナ限界(${Math.round(staminaRate * 100)}%)`;
+            }
+          }
+        } else {
+          // リリーフ投手のスタミナ切れ
+          if (staminaRate <= 0.30) {
+            shouldSubstitute = true;
+            reason = `${currentPitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
+          } else if (isScoringSituation && staminaRate < 0.40) {
+            shouldSubstitute = true;
+            reason = `得点圏ピンチでリリーフ交代`;
+          }
         }
 
-        // 得点圏にランナーがいる場合は更に早めに
-        if (isScoringSituation && isCloseGame) {
-          staminaThreshold = 0.35; // 35%
+        // セーブ場面: 9回リード時にクローザーでなければ交代
+        if (!shouldSubstitute && inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
+          const closerId = rotation?.closer;
+          if (closerId && currentPitcher.id !== closerId) {
+            const closerPlayer = defenseTeam.players.find(p => p.id === closerId && !p.hasSubbedOut);
+            if (closerPlayer && (fatigue[closerId] || 0) < 50) {
+              shouldSubstitute = true;
+              reason = `9回セーブ場面、守護神${closerPlayer.name}を投入`;
+            }
+          }
         }
 
-        const shouldSubstitute = staminaRate <= staminaThreshold;
+        // 8回僅差: セットアッパーでなければ交代
+        if (!shouldSubstitute && inning === 8 && isCloseGame && scoreDiff > 0 && isStarter) {
+          shouldSubstitute = true;
+          reason = `8回僅差リード、セットアッパーへ切り替え`;
+        }
 
         if (!shouldSubstitute) return;
 
-        // 交代候補の投手を選択
+        // ロールベースの投手選択
         const availablePitchers = defenseTeam.players.filter(p =>
-          !p.isStarter &&
-          p.position === 'pitcher' &&
-          !p.hasSubbedOut
+          !p.isStarter && p.position === 'pitcher' && !p.hasSubbedOut
         );
+        if (availablePitchers.length === 0) return;
 
-        if (availablePitchers.length === 0) return; // 交代可能な投手がいない
+        let selectedPitcher = null;
+        let roleLabel = '';
 
-        // イニング数に応じて投手を選択
-        let selectedPitcher;
-        if (inning >= 9) {
-          // 9回以降：クローザー（名前に「クローザー」を含む）
-          selectedPitcher = availablePitchers.find(p => p.name.includes('クローザー'));
-        } else if (inning >= 7) {
-          // 7-8回：セットアッパー
-          selectedPitcher = availablePitchers.find(p => p.name.includes('セットアッパー'));
+        // 状況に応じた投手選択
+        const situation = (inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) ? 'save'
+          : (inning >= 7 && isCloseGame && scoreDiff > 0) ? 'hold'
+          : (scoreDiff < -4) ? 'mopup'
+          : (scoreDiff < 0) ? 'behind'
+          : 'middle';
+
+        if (situation === 'save' && rotation?.closer) {
+          const closer = availablePitchers.find(p => p.id === rotation.closer && (fatigue[rotation.closer] || 0) < 50);
+          if (closer) { selectedPitcher = closer; roleLabel = '守護神'; }
         }
 
-        // 該当する投手がいなければ、最初の未登板投手を選択
+        if (!selectedPitcher && (situation === 'hold' || situation === 'save')) {
+          for (const setupId of (rotation?.setupMen || [])) {
+            const setup = availablePitchers.find(p => p.id === setupId && (fatigue[setupId] || 0) < 50);
+            if (setup) { selectedPitcher = setup; roleLabel = 'セットアッパー'; break; }
+          }
+        }
+
+        if (!selectedPitcher && situation === 'mopup') {
+          // 敗戦処理ロール優先
+          const mopupPitcher = availablePitchers.find(p => pitcherRoles[p.id] === 'mopup' && (fatigue[p.id] || 0) < 50);
+          if (mopupPitcher) { selectedPitcher = mopupPitcher; roleLabel = '敗戦処理'; }
+        }
+
+        if (!selectedPitcher && situation === 'behind') {
+          // ビハインドロール優先
+          const behindPitcher = availablePitchers.find(p => pitcherRoles[p.id] === 'behind' && (fatigue[p.id] || 0) < 50);
+          if (behindPitcher) { selectedPitcher = behindPitcher; roleLabel = 'ビハインド'; }
+        }
+
         if (!selectedPitcher) {
-          selectedPitcher = availablePitchers[0];
+          // ロングリリーフ or 中継ぎエース or 通常中継ぎ
+          const middleIds = rotation?.middleRelievers || [];
+          const sortedMiddle = middleIds
+            .filter(id => availablePitchers.some(p => p.id === id) && (fatigue[id] || 0) < 50)
+            .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
+          if (sortedMiddle.length > 0) {
+            selectedPitcher = availablePitchers.find(p => p.id === sortedMiddle[0]);
+            const role = pitcherRoles[selectedPitcher.id];
+            roleLabel = role === 'long' ? 'ロングリリーフ' :
+                        role === 'ace_relief' ? '中継ぎエース' :
+                        role === 'onepoint' ? 'ワンポイント' : '中継ぎ';
+          }
         }
 
-        // 交代処理開始フラグを立てる
+        if (!selectedPitcher) {
+          // フォールバック: 疲労が少ない投手
+          selectedPitcher = availablePitchers.sort((a, b) => (fatigue[a.id] || 0) - (fatigue[b.id] || 0))[0];
+          roleLabel = '緊急登板';
+        }
+
+        if (!selectedPitcher) return;
+
         isSubstituting.current = true;
 
-        // 投手交代を実行
         setTeam(prev => {
           const players = [...prev.players];
           const oldPitcher = players.find(p => p.id === currentPitcher.id);
           const newPitcher = players.find(p => p.id === selectedPitcher.id);
 
           if (oldPitcher && newPitcher) {
-            // 交代処理
             oldPitcher.isStarter = false;
             oldPitcher.hasSubbedOut = true;
             oldPitcher.battingOrder = 0;
@@ -816,36 +923,37 @@ import TradeScreen from './components/TradeScreen.jsx';
             newPitcher.battingOrder = currentPitcher.battingOrder;
             newPitcher.position = 'pitcher';
 
-            // スタミナをリセット
             setTimeout(() => {
               setCurrentStamina(newPitcher.pitching.stamina);
             }, 0);
 
-            // 試合ログに交代を記録
             setGameLog(prev => {
-              const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
+              const teamLabel = teamType === 'home' ? 'ホーム' : 'アウェイ';
               const updated = [...prev, {
-                description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamName}: 投手交代 ${oldPitcher.name} → ${newPitcher.name}`,
+                description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamLabel}: 投手交代 ${oldPitcher.name} → ${newPitcher.name}（${roleLabel}）【${reason}】`,
                 isSpecial: true
               }];
               return updated.length > 50 ? updated.slice(-50) : updated;
             });
+
+            // リリーフ疲労を記録
+            if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
+              TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] =
+                (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] || 0) + 30;
+            }
           }
 
           return { ...prev, players };
         });
 
-        // 交代処理完了後にフラグを解除（状態更新を待つために遅延）
         setTimeout(() => {
           isSubstituting.current = false;
         }, 100);
       };
 
-      // 監督AI：代打ロジック（Phase 2）
+      // 監督AI：代打ロジック（Phase 3: 状況判断・打撃力比較版）
       const autoSubstitutePinchHitter = () => {
         if (!autoManagerMode || !gameStarted) return;
-
-        // 交代処理中の場合はスキップ（二重実行防止）
         if (isSubstituting.current) return;
 
         const offenseTeam = getOffenseTeam();
@@ -853,52 +961,64 @@ import TradeScreen from './components/TradeScreen.jsx';
         const teamType = isTopInning ? 'away' : 'home';
         const setTeam = isTopInning ? setAwayTeam : setHomeTeam;
 
-        // 代打判断条件
-        const isPitcher = currentBatter.position === 'pitcher';
-
-        // 投手への代打は禁止（投手は投手交代ロジックで対応）
-        if (isPitcher) return;
-
-        const battingAvg = currentBatter.stats?.batting?.atBats > 0
-          ? currentBatter.stats.batting.hits / currentBatter.stats.batting.atBats
-          : 0;
-        const isWeakHitter = battingAvg < 0.150; // 打率.150未満
-
-        // 状況分析
-        const scoreDiff = Math.abs(score.home - score.away);
-        const isCloseGame = scoreDiff <= 3;
-        const runnersOnBase = bases.filter(b => b).length;
-        const isImportantSituation = isCloseGame && runnersOnBase >= 2; // 接戦でランナー2人以上
-        const isLateInning = inning >= 7;
-
-        // 代打を送る条件（弱打者のみ）
-        const shouldPinchHit = isWeakHitter && isImportantSituation && isLateInning;
-
-        if (!shouldPinchHit) return;
+        // 投手への代打は投手交代ロジックで対応
+        if (currentBatter.position === 'pitcher') return;
 
         // 代打候補を選択（ベンチの野手で未出場）
         const availablePinchHitters = offenseTeam.players.filter(p =>
-          !p.isStarter &&
-          p.position !== 'pitcher' &&
-          !p.hasSubbedOut
+          !p.isStarter && p.position !== 'pitcher' && !p.hasSubbedOut
         );
-
         if (availablePinchHitters.length === 0) return;
 
-        // 打率・パワーの高い選手を優先（名前に「代打」を含む選手を最優先）
-        let selectedPinchHitter = availablePinchHitters.find(p => p.name.includes('代打'));
-        if (!selectedPinchHitter) {
-          selectedPinchHitter = availablePinchHitters[0];
+        // 打撃力の計算
+        const batterTotal = (currentBatter.batting?.meet || 0) + (currentBatter.batting?.power || 0);
+        const bestPH = availablePinchHitters.reduce((best, p) => {
+          const total = (p.batting?.meet || 0) + (p.batting?.power || 0);
+          const bestTotal = (best.batting?.meet || 0) + (best.batting?.power || 0);
+          return total > bestTotal ? p : best;
+        }, availablePinchHitters[0]);
+        const bestPHTotal = (bestPH.batting?.meet || 0) + (bestPH.batting?.power || 0);
+
+        // 状況分析
+        const myScore = isTopInning ? score.away : score.home;
+        const oppScore = isTopInning ? score.home : score.away;
+        const scoreDiff = myScore - oppScore;
+        const isCloseGame = Math.abs(scoreDiff) <= 3;
+        const runnersOnBase = bases.filter(b => b).length;
+        const isScoringSituation = bases[1] || bases[2];
+
+        let shouldPinchHit = false;
+        let reason = '';
+
+        // 条件1: 7回以降、得点圏にランナー、控えの方が打撃力が10以上高い
+        if (inning >= 7 && isScoringSituation && bestPHTotal > batterTotal + 10) {
+          shouldPinchHit = true;
+          reason = `チャンス場面で打撃力の高い${bestPH.name}を起用`;
+        }
+        // 条件2: 8回以降、ビハインド、下位打線で控えの方が打撃力が5以上高い
+        else if (inning >= 8 && scoreDiff < 0 && currentBatter.battingOrder >= 6 && bestPHTotal > batterTotal + 5) {
+          shouldPinchHit = true;
+          reason = `ビハインド終盤、打力アップのため${bestPH.name}を起用`;
+        }
+        // 条件3: 接戦9回、ランナーありで控えの方が打撃力が高い
+        else if (inning >= 9 && isCloseGame && runnersOnBase > 0 && bestPHTotal > batterTotal + 3) {
+          shouldPinchHit = true;
+          reason = `最終回の勝負所、${bestPH.name}に託す`;
+        }
+        // 条件4: 7回以降、接戦でランナー2人以上、控えの方が打撃力が高い
+        else if (inning >= 7 && isCloseGame && runnersOnBase >= 2 && bestPHTotal > batterTotal) {
+          shouldPinchHit = true;
+          reason = `接戦の大チャンス、${bestPH.name}を代打に`;
         }
 
-        // 交代処理開始フラグを立てる
+        if (!shouldPinchHit) return;
+
         isSubstituting.current = true;
 
-        // 代打交代を実行（野手のみ）
         setTeam(prev => {
           const players = [...prev.players];
           const oldBatter = players.find(p => p.id === currentBatter.id);
-          const newBatter = players.find(p => p.id === selectedPinchHitter.id);
+          const newBatter = players.find(p => p.id === bestPH.id);
 
           if (oldBatter && newBatter) {
             oldBatter.isStarter = false;
@@ -909,11 +1029,10 @@ import TradeScreen from './components/TradeScreen.jsx';
             newBatter.battingOrder = currentBatter.battingOrder;
             newBatter.position = currentBatter.position;
 
-            // 試合ログに交代を記録
             setGameLog(prev => {
-              const teamName = teamType === 'home' ? 'ホーム' : 'アウェイ';
+              const teamLabel = teamType === 'home' ? 'ホーム' : 'アウェイ';
               const updated = [...prev, {
-                description: `🏏 [${inning}回${isTopInning ? '表' : '裏'}] ${teamName}: 代打 ${newBatter.name} (${oldBatter.name} → 交代)`,
+                description: `🏏 [${inning}回${isTopInning ? '表' : '裏'}] ${teamLabel}: 代打 ${newBatter.name}←${oldBatter.name}【${reason}】`,
                 isSpecial: true
               }];
               return updated.length > 50 ? updated.slice(-50) : updated;
@@ -923,7 +1042,6 @@ import TradeScreen from './components/TradeScreen.jsx';
           return { ...prev, players };
         });
 
-        // 交代処理完了後にフラグを解除（状態更新を待つために遅延）
         setTimeout(() => {
           isSubstituting.current = false;
         }, 100);
@@ -5620,6 +5738,21 @@ if (newOuts === 3) {
                 if (winPitcher) scrollParts.push(`勝利投手：${winPitcher.name}（${getPitcherRecord(winPitcher, winTeam, 'win')}）`);
                 if (losePitcher) scrollParts.push(`敗戦投手：${losePitcher.name}（${getPitcherRecord(losePitcher, loseTeam, 'lose')}）`);
                 if (savePitcher) scrollParts.push(`セーブ：${savePitcher.name}（${getPitcherRecord(savePitcher, winTeam, 'save')}）`);
+
+                // 完封勝利 / 完投勝利
+                if (!isDraw && winPitcher) {
+                  const winTeamPitchers = winTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
+                  if (winTeamPitchers.length === 1) {
+                    const loseScore = isHomeWin ? score.away : score.home;
+                    if (loseScore === 0) {
+                      scrollParts.push(`✨${winPitcher.name}が完封勝利！`);
+                    } else {
+                      scrollParts.push(`💪${winPitcher.name}が完投勝利！`);
+                    }
+                  }
+                }
+
+                // 本塁打ハイライト
                 hrHitters.forEach(p => {
                   const seasonHR = (p.seasonStats?.batting?.homeruns || 0) + (p.gameStats?.homeruns || 0);
                   const count = p.gameStats?.homeruns || 0;
@@ -5627,6 +5760,41 @@ if (newOuts === 3) {
                     scrollParts.push(`⚾${p.name}（${p.team}）${seasonHR - count + i + 1}号`);
                   }
                 });
+
+                // 猛打賞（3打数3安打以上）
+                const allGamePlayers = [
+                  ...awayTeam.players.map(p => ({ ...p, teamLabel: awayTeam.name })),
+                  ...homeTeam.players.map(p => ({ ...p, teamLabel: homeTeam.name }))
+                ];
+                allGamePlayers.forEach(p => {
+                  const gs = p.gameStats || {};
+                  const ab = gs.atBats || 0;
+                  const hits = gs.hits || 0;
+                  if (ab >= 3 && hits >= 3) {
+                    scrollParts.push(`🔥${p.name}（${p.teamLabel}）${ab}打数${hits}安打の猛打賞！`);
+                  }
+                });
+
+                // 多打点（3打点以上）
+                allGamePlayers.forEach(p => {
+                  const rbis = p.gameStats?.rbis || 0;
+                  if (rbis >= 3) {
+                    scrollParts.push(`💥${p.name}（${p.teamLabel}）${rbis}打点の大活躍！`);
+                  }
+                });
+
+                // 二桁奪三振
+                const allPitchers = [
+                  ...awayTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0).map(p => ({ ...p, teamLabel: awayTeam.name })),
+                  ...homeTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0).map(p => ({ ...p, teamLabel: homeTeam.name }))
+                ];
+                allPitchers.forEach(p => {
+                  const so = p.stats?.pitching?.strikeouts || 0;
+                  if (so >= 10) {
+                    scrollParts.push(`🌟${p.name}（${p.teamLabel}）${so}奪三振の力投！`);
+                  }
+                });
+
                 const scrollText = scrollParts.join('　　');
 
                 return (
