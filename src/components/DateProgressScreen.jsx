@@ -245,20 +245,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   return (
     <div className="p-3 min-h-screen">
-      {/* ヘッダー：コンパクト化 */}
-      <div className="flex items-center gap-3 mb-3">
+      {/* ヘッダー */}
+      <div className="flex items-center gap-3 mb-3 bg-gradient-to-r from-gray-800 via-gray-800 to-gray-900 rounded-xl p-3 shadow-lg border border-gray-700/50">
         <button
           onClick={() => handleProgressDate(1)}
           disabled={isSimulating}
-          className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-3 rounded-lg font-bold text-lg transition shadow-md disabled:opacity-50 flex items-center gap-2 shrink-0"
+          className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-lg transition-all shadow-lg shadow-green-900/30 disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95"
         >
           <span className="text-xl">▶</span>
           {isSimulating ? '処理中...' : '1日進める'}
         </button>
         <div className="flex items-center gap-3 flex-1 justify-center">
-          <span className="text-2xl font-bold text-yellow-400">{seasonData.year}年目</span>
-          <span className="text-gray-400 text-base">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${phaseInfo.color} text-gray-800`}>{phaseInfo.name}</span>
+          <span className="text-2xl font-bold bg-gradient-to-r from-yellow-300 to-amber-400 bg-clip-text text-transparent">{seasonData.year}年目</span>
+          <span className="text-gray-300 text-base font-medium">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phaseInfo.color} text-gray-900 shadow-sm`}>{phaseInfo.name}</span>
         </div>
       </div>
 
@@ -266,34 +266,43 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
         <div className="flex-1 min-w-0">
-          <div className="bg-gray-800 rounded-lg p-3 shadow mb-3">
+          <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mb-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-base font-bold text-white">{selectedMonth}月</h2>
+              <h2 className="text-base font-bold text-white flex items-center gap-1.5">
+                <span className="text-blue-400">📅</span> {selectedMonth}月
+              </h2>
               <div className="flex gap-1">
-                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700 hover:bg-gray-600 text-white w-7 h-7 rounded flex items-center justify-center text-sm">◀</button>
-                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700 hover:bg-gray-600 text-white w-7 h-7 rounded flex items-center justify-center text-sm">▶</button>
+                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700 hover:bg-gray-600 text-white w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors active:scale-95">◀</button>
+                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700 hover:bg-gray-600 text-white w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors active:scale-95">▶</button>
               </div>
             </div>
 
             <div className="grid grid-cols-7 gap-0.5 mb-0.5">
               {dayNames.map((name, i) => (
-                <div key={i} className={`text-center text-xs font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-500'}`}>{name}</div>
+                <div key={i} className={`text-center text-[10px] font-bold py-1 rounded ${i === 0 ? 'text-red-400 bg-red-900/20' : i === 6 ? 'text-blue-400 bg-blue-900/20' : 'text-gray-500'}`}>{name}</div>
               ))}
             </div>
 
             <div className="grid grid-cols-7 gap-0.5">
               {calendarCells.map((cell, i) => {
                 const showAsScheduled = cell.isToday;
+                const colIdx = i % 7;
                 return (
-                  <div key={i} className={`min-h-[56px] p-1 rounded text-xs transition ${cell.day === null ? 'bg-transparent' : cell.isToday ? 'bg-green-900/80 border border-green-400 shadow' : 'bg-gray-700/70'}`}>
+                  <div key={i} className={`min-h-[56px] p-1 rounded-lg text-xs transition-all ${
+                    cell.day === null ? 'bg-transparent' :
+                    cell.isToday ? 'bg-gradient-to-br from-green-900/90 to-emerald-900/70 border border-green-400 shadow-md shadow-green-900/40 ring-1 ring-green-400/30' :
+                    colIdx === 0 ? 'bg-gray-700/50 hover:bg-gray-700/80' :
+                    colIdx === 6 ? 'bg-gray-700/50 hover:bg-gray-700/80' :
+                    'bg-gray-700/70 hover:bg-gray-700/90'
+                  }`}>
                     {cell.day && (
                       <>
-                        <div className={`font-bold mb-0.5 text-[11px] ${i % 7 === 0 ? 'text-red-400' : i % 7 === 6 ? 'text-blue-400' : 'text-gray-300'}`}>{cell.day}</div>
+                        <div className={`font-bold mb-0.5 text-[11px] ${cell.isToday ? 'text-green-300' : colIdx === 0 ? 'text-red-400' : colIdx === 6 ? 'text-blue-400' : 'text-gray-300'}`}>{cell.day}</div>
                         {cell.games.length > 0 ? (
                           <div className="space-y-0">
                             {cell.games.map((game, gIdx) => {
-                              const awayShort = (game.away || '').slice(0, 5);
-                              const homeShort = (game.home || '').slice(0, 5);
+                              const awayShort = (game.away || '').slice(0, 4);
+                              const homeShort = (game.home || '').slice(0, 4);
                               if (showAsScheduled || !game.result) {
                                 return <div key={gIdx} className="text-[10px] text-yellow-300 leading-tight">{awayShort}-{homeShort}</div>;
                               }
@@ -301,9 +310,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               const homeWin = game.result.homeScore > game.result.awayScore;
                               return (
                                 <div key={gIdx} className="text-[10px] leading-tight">
-                                  <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-400'}>{awayShort}</span>
-                                  <span className="text-gray-500 mx-px">{game.result.awayScore}-{game.result.homeScore}</span>
-                                  <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-400'}>{homeShort}</span>
+                                  <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-500'}>{awayShort}</span>
+                                  <span className="text-gray-600 mx-px">{game.result.awayScore}-{game.result.homeScore}</span>
+                                  <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-500'}>{homeShort}</span>
                                 </div>
                               );
                             })}
@@ -322,26 +331,29 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           </div>
 
           {/* 本日の対戦 */}
-          <div className="bg-gray-800 rounded-lg p-3 shadow">
-            <h2 className="text-sm font-bold text-white mb-2">{formatDate(seasonData.currentDate)} の対戦</h2>
+          <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40">
+            <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+              <span className="text-orange-400">⚾</span> {formatDate(seasonData.currentDate)} の対戦
+            </h2>
             {todaysGames.length === 0 ? (
-              <div className="text-center py-2"><span className="text-gray-500 text-sm">本日は試合がありません</span></div>
+              <div className="text-center py-3"><span className="text-gray-500 text-sm">本日は試合がありません</span></div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {todaysGames.map(game => {
                   const awayPitcher = getStartingPitcher(game.away);
                   const homePitcher = getStartingPitcher(game.home);
+                  const hasResult = !!game.result;
                   return (
-                    <div key={game.id} className="rounded-lg p-2.5 bg-gray-700/80">
+                    <div key={game.id} className={`rounded-xl p-2.5 transition-all ${hasResult ? 'bg-gray-700/50' : 'bg-gradient-to-r from-gray-700/80 to-gray-700/60 border border-gray-600/30'}`}>
                       <div className="flex items-center justify-between">
                         <div className="text-center flex-1">
-                          <div className="text-white font-bold text-sm">{(game.away || '').slice(0, 5)}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">{awayPitcher ? `${awayPitcher.name}` : '未定'}</div>
+                          <div className="text-white font-bold text-sm">{(game.away || '').slice(0, 4)}</div>
+                          <div className="text-[10px] text-yellow-400/80 mt-0.5">{awayPitcher ? `${awayPitcher.name}` : '未定'}</div>
                         </div>
-                        <div className="px-2 text-gray-500 text-sm font-bold">vs</div>
+                        <div className="px-2 text-gray-500 text-xs font-bold">vs</div>
                         <div className="text-center flex-1">
-                          <div className="text-white font-bold text-sm">{(game.home || '').slice(0, 5)}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">{homePitcher ? `${homePitcher.name}` : '未定'}</div>
+                          <div className="text-white font-bold text-sm">{(game.home || '').slice(0, 4)}</div>
+                          <div className="text-[10px] text-yellow-400/80 mt-0.5">{homePitcher ? `${homePitcher.name}` : '未定'}</div>
                         </div>
                       </div>
                     </div>
@@ -350,6 +362,89 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               </div>
             )}
           </div>
+
+          {/* 個人成績ランキング */}
+          {(() => {
+            const allPlayers = [];
+            Object.entries(TEAMS_DATA || {}).forEach(([teamName, team]) => {
+              if (!team?.players) return;
+              team.players.forEach(p => {
+                allPlayers.push({ ...p, teamName });
+              });
+            });
+
+            const battingQualified = allPlayers.filter(p => (p.seasonStats?.batting?.atBats || 0) >= 10);
+            const pitchingQualified = allPlayers.filter(p => (p.seasonStats?.pitching?.inningsPitched || 0) / 3 >= 3);
+
+            const avgRanking = [...battingQualified]
+              .map(p => ({ ...p, value: p.seasonStats.batting.hits / p.seasonStats.batting.atBats }))
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            const hrRanking = [...allPlayers]
+              .filter(p => (p.seasonStats?.batting?.homeruns || 0) > 0)
+              .map(p => ({ ...p, value: p.seasonStats.batting.homeruns }))
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            const rbiRanking = [...allPlayers]
+              .filter(p => (p.seasonStats?.batting?.rbis || 0) > 0)
+              .map(p => ({ ...p, value: p.seasonStats.batting.rbis }))
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            const eraRanking = [...pitchingQualified]
+              .map(p => ({ ...p, value: (p.seasonStats.pitching.earnedRuns / (p.seasonStats.pitching.inningsPitched / 3)) * 9 }))
+              .sort((a, b) => a.value - b.value).slice(0, 5);
+
+            const winRanking = [...allPlayers]
+              .filter(p => (p.seasonStats?.pitching?.wins || 0) > 0)
+              .map(p => ({ ...p, value: p.seasonStats.pitching.wins }))
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            const soRanking = [...allPlayers]
+              .filter(p => (p.seasonStats?.pitching?.strikeouts || 0) > 0)
+              .map(p => ({ ...p, value: p.seasonStats.pitching.strikeouts }))
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            const rankings = [
+              { title: '打率', data: avgRanking, format: v => v.toFixed(3), color: 'text-blue-400', icon: '🏏' },
+              { title: '本塁打', data: hrRanking, format: v => v, color: 'text-pink-400', icon: '💥' },
+              { title: '打点', data: rbiRanking, format: v => v, color: 'text-green-400', icon: '🔋' },
+              { title: '防御率', data: eraRanking, format: v => v.toFixed(2), color: 'text-orange-400', icon: '🛡' },
+              { title: '勝利', data: winRanking, format: v => v, color: 'text-yellow-400', icon: '🏆' },
+              { title: '奪三振', data: soRanking, format: v => v, color: 'text-purple-400', icon: '🔥' },
+            ];
+
+            const hasAnyData = rankings.some(r => r.data.length > 0);
+            if (!hasAnyData) return null;
+
+            return (
+              <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
+                <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+                  <span className="text-yellow-400">📊</span> 個人成績ランキング
+                </h2>
+                <div className="grid grid-cols-3 gap-2">
+                  {rankings.map(r => (
+                    <div key={r.title} className="bg-gray-900/70 rounded-lg p-2 border border-gray-700/30">
+                      <div className={`text-[10px] font-bold ${r.color} mb-1 pb-0.5 border-b border-gray-700/50`}>{r.icon} {r.title}</div>
+                      {r.data.length === 0 ? (
+                        <div className="text-[10px] text-gray-600">データなし</div>
+                      ) : (
+                        r.data.map((p, i) => {
+                          const isUser = p.teamName === userTeamName;
+                          return (
+                            <div key={p.id} className={`flex items-center text-[10px] leading-relaxed ${isUser ? 'text-yellow-300' : 'text-gray-300'}`}>
+                              <span className={`w-3 text-center font-bold ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-600' : 'text-gray-600'}`}>{i + 1}</span>
+                              <span className="flex-1 truncate ml-1">{p.name}</span>
+                              <span className={`font-mono font-bold ${r.color}`}>{r.format(p.value)}</span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* 右カラム: 順位表 */}
@@ -374,8 +469,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               })();
 
               return (
-                <div className="bg-gray-800 rounded-lg p-3 shadow">
-                  <h2 className={`text-sm font-bold mb-2 ${titleColor || 'text-white'}`}>{title}</h2>
+                <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40">
+                  <h2 className={`text-sm font-bold mb-2 ${titleColor || 'text-white'} flex items-center gap-1.5`}>
+                    <span>📊</span> {title}
+                  </h2>
                   <table className="w-full text-white text-xs">
                     <thead>
                       <tr className="border-b border-gray-600 text-gray-500 text-[10px]">
@@ -487,8 +584,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const userStarters = getStarters(userTeam);
 
         return (
-          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
-            <div className="bg-gray-800 rounded-xl p-6 max-w-xl w-full mx-4 shadow-2xl border border-gray-600">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-xl w-full mx-4 shadow-2xl border border-gray-600/50">
               <h2 className="text-xl font-bold text-white text-center mb-4">
                 {formatDate(seasonData.currentDate)} の試合
               </h2>
@@ -527,13 +624,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <div className="flex gap-3 justify-center">
                 <button
                   onClick={() => handleGameChoice('manage')}
-                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition text-lg shadow-lg"
+                  className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg shadow-lg shadow-green-900/30 active:scale-95"
                 >
                   試合采配
                 </button>
                 <button
                   onClick={() => handleGameChoice('skip')}
-                  className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-lg transition text-lg"
+                  className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg active:scale-95"
                 >
                   試合スキップ
                 </button>
