@@ -256,9 +256,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           {isSimulating ? '処理中...' : '1日進める'}
         </button>
         <div className="flex items-center gap-3 flex-1 justify-center">
-          <span className="text-2xl font-bold bg-gradient-to-r from-yellow-300 to-amber-400 bg-clip-text text-transparent">{seasonData.year}年目</span>
-          <span className="text-gray-300 text-base font-medium">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${phaseInfo.color} text-gray-900 shadow-sm`}>{phaseInfo.name}</span>
+          <span className="text-3xl font-bold bg-gradient-to-r from-yellow-300 to-amber-400 bg-clip-text text-transparent">{seasonData.year}年目</span>
+          <span className="text-gray-300 text-lg font-medium">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
+          <span className={`px-3 py-1 rounded-full text-sm font-bold ${phaseInfo.color} text-gray-900 shadow-sm`}>{phaseInfo.name}</span>
         </div>
       </div>
 
@@ -268,7 +268,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         <div className="flex-1 min-w-0">
           <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mb-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-base font-bold text-white flex items-center gap-1.5">
+              <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
                 <span className="text-blue-400">📅</span> {selectedMonth}月
               </h2>
               <div className="flex gap-1">
@@ -279,7 +279,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
             <div className="grid grid-cols-7 gap-0.5 mb-0.5">
               {dayNames.map((name, i) => (
-                <div key={i} className={`text-center text-[10px] font-bold py-1 rounded ${i === 0 ? 'text-red-400 bg-red-900/20' : i === 6 ? 'text-blue-400 bg-blue-900/20' : 'text-gray-500'}`}>{name}</div>
+                <div key={i} className={`text-center text-xs font-bold py-1 rounded ${i === 0 ? 'text-red-400 bg-red-900/20' : i === 6 ? 'text-blue-400 bg-blue-900/20' : 'text-gray-500'}`}>{name}</div>
               ))}
             </div>
 
@@ -288,7 +288,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 const showAsScheduled = cell.isToday;
                 const colIdx = i % 7;
                 return (
-                  <div key={i} className={`min-h-[56px] p-1 rounded-lg text-xs transition-all ${
+                  <div key={i} className={`min-h-[60px] p-1 rounded-lg text-sm transition-all ${
                     cell.day === null ? 'bg-transparent' :
                     cell.isToday ? 'bg-gradient-to-br from-green-900/90 to-emerald-900/70 border border-green-400 shadow-md shadow-green-900/40 ring-1 ring-green-400/30' :
                     colIdx === 0 ? 'bg-gray-700/50 hover:bg-gray-700/80' :
@@ -297,19 +297,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   }`}>
                     {cell.day && (
                       <>
-                        <div className={`font-bold mb-0.5 text-[11px] ${cell.isToday ? 'text-green-300' : colIdx === 0 ? 'text-red-400' : colIdx === 6 ? 'text-blue-400' : 'text-gray-300'}`}>{cell.day}</div>
+                        <div className={`font-bold mb-0.5 text-xs ${cell.isToday ? 'text-green-300' : colIdx === 0 ? 'text-red-400' : colIdx === 6 ? 'text-blue-400' : 'text-gray-300'}`}>{cell.day}</div>
                         {cell.games.length > 0 ? (
                           <div className="space-y-0">
                             {cell.games.map((game, gIdx) => {
                               const awayShort = (game.away || '').slice(0, 4);
                               const homeShort = (game.home || '').slice(0, 4);
                               if (showAsScheduled || !game.result) {
-                                return <div key={gIdx} className="text-[10px] text-yellow-300 leading-tight">{awayShort}-{homeShort}</div>;
+                                return <div key={gIdx} className="text-[11px] text-yellow-300 leading-tight">{awayShort}-{homeShort}</div>;
                               }
                               const awayWin = game.result.awayScore > game.result.homeScore;
                               const homeWin = game.result.homeScore > game.result.awayScore;
                               return (
-                                <div key={gIdx} className="text-[10px] leading-tight">
+                                <div key={gIdx} className="text-[11px] leading-tight">
                                   <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-500'}>{awayShort}</span>
                                   <span className="text-gray-600 mx-px">{game.result.awayScore}-{game.result.homeScore}</span>
                                   <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-500'}>{homeShort}</span>
@@ -318,9 +318,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                             })}
                           </div>
                         ) : cell.eventLabel ? (
-                          <div className={`text-[10px] font-bold leading-tight ${getEventColor(cell.eventLabel)}`}>{cell.eventLabel}</div>
+                          <div className={`text-[11px] font-bold leading-tight ${getEventColor(cell.eventLabel)}`}>{cell.eventLabel}</div>
                         ) : (
-                          <div className="text-[9px] text-gray-600">-</div>
+                          <div className="text-[10px] text-gray-600">-</div>
                         )}
                       </>
                     )}
@@ -332,11 +332,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
           {/* 本日の対戦 */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40">
-            <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+            <h2 className="text-base font-bold text-white mb-2 flex items-center gap-1.5">
               <span className="text-orange-400">⚾</span> {formatDate(seasonData.currentDate)} の対戦
             </h2>
             {todaysGames.length === 0 ? (
-              <div className="text-center py-3"><span className="text-gray-500 text-sm">本日は試合がありません</span></div>
+              <div className="text-center py-3"><span className="text-gray-500 text-base">本日は試合がありません</span></div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {todaysGames.map(game => {
@@ -347,13 +347,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     <div key={game.id} className={`rounded-xl p-2.5 transition-all ${hasResult ? 'bg-gray-700/50' : 'bg-gradient-to-r from-gray-700/80 to-gray-700/60 border border-gray-600/30'}`}>
                       <div className="flex items-center justify-between">
                         <div className="text-center flex-1">
-                          <div className="text-white font-bold text-sm">{(game.away || '').slice(0, 4)}</div>
-                          <div className="text-[10px] text-yellow-400/80 mt-0.5">{awayPitcher ? `${awayPitcher.name}` : '未定'}</div>
+                          <div className="text-white font-bold text-base">{(game.away || '').slice(0, 4)}</div>
+                          <div className="text-xs text-yellow-400/80 mt-0.5">{awayPitcher ? `${awayPitcher.name}` : '未定'}</div>
                         </div>
-                        <div className="px-2 text-gray-500 text-xs font-bold">vs</div>
+                        <div className="px-2 text-gray-500 text-sm font-bold">vs</div>
                         <div className="text-center flex-1">
-                          <div className="text-white font-bold text-sm">{(game.home || '').slice(0, 4)}</div>
-                          <div className="text-[10px] text-yellow-400/80 mt-0.5">{homePitcher ? `${homePitcher.name}` : '未定'}</div>
+                          <div className="text-white font-bold text-base">{(game.home || '').slice(0, 4)}</div>
+                          <div className="text-xs text-yellow-400/80 mt-0.5">{homePitcher ? `${homePitcher.name}` : '未定'}</div>
                         </div>
                       </div>
                     </div>
@@ -373,19 +373,25 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               });
             });
 
-            const battingQualified = allPlayers.filter(p => (p.seasonStats?.batting?.atBats || 0) >= 10);
-            const pitchingQualified = allPlayers.filter(p => (p.seasonStats?.pitching?.inningsPitched || 0) / 3 >= 3);
+            // 規定打席・規定投球回をシーズン進行度に比例して算出
+            const maxGamesPlayed = Math.max(...(standings.map(s => s.gamesPlayed || 0)), 1);
+            const seasonProgress = Math.min(maxGamesPlayed / totalGames, 1);
+            const qualifiedAB = Math.max(Math.floor(100 * seasonProgress), 10);
+            const qualifiedOuts = Math.max(Math.floor(30 * seasonProgress), 9);
+
+            const battingQualified = allPlayers.filter(p => (p.seasonStats?.batting?.atBats || 0) >= qualifiedAB);
+            const pitchingQualified = allPlayers.filter(p => (p.seasonStats?.pitching?.inningsPitched || 0) >= qualifiedOuts);
 
             const avgRanking = [...battingQualified]
               .map(p => ({ ...p, value: p.seasonStats.batting.hits / p.seasonStats.batting.atBats }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const hrRanking = [...allPlayers]
+            const hrRanking = [...battingQualified]
               .filter(p => (p.seasonStats?.batting?.homeruns || 0) > 0)
               .map(p => ({ ...p, value: p.seasonStats.batting.homeruns }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const rbiRanking = [...allPlayers]
+            const rbiRanking = [...battingQualified]
               .filter(p => (p.seasonStats?.batting?.rbis || 0) > 0)
               .map(p => ({ ...p, value: p.seasonStats.batting.rbis }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
@@ -394,12 +400,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               .map(p => ({ ...p, value: (p.seasonStats.pitching.earnedRuns / (p.seasonStats.pitching.inningsPitched / 3)) * 9 }))
               .sort((a, b) => a.value - b.value).slice(0, 5);
 
-            const winRanking = [...allPlayers]
+            const winRanking = [...pitchingQualified]
               .filter(p => (p.seasonStats?.pitching?.wins || 0) > 0)
               .map(p => ({ ...p, value: p.seasonStats.pitching.wins }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const soRanking = [...allPlayers]
+            const soRanking = [...pitchingQualified]
               .filter(p => (p.seasonStats?.pitching?.strikeouts || 0) > 0)
               .map(p => ({ ...p, value: p.seasonStats.pitching.strikeouts }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
@@ -418,23 +424,24 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
             return (
               <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
-                <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+                <h2 className="text-base font-bold text-white mb-2 flex items-center gap-1.5">
                   <span className="text-yellow-400">📊</span> 個人成績ランキング
+                  <span className="text-[10px] text-gray-500 font-normal ml-1">（規定打席{qualifiedAB}打席 / 規定投球{Math.floor(qualifiedOuts / 3)}回）</span>
                 </h2>
                 <div className="grid grid-cols-3 gap-2">
                   {rankings.map(r => (
-                    <div key={r.title} className="bg-gray-900/70 rounded-lg p-2 border border-gray-700/30">
-                      <div className={`text-[10px] font-bold ${r.color} mb-1 pb-0.5 border-b border-gray-700/50`}>{r.icon} {r.title}</div>
+                    <div key={r.title} className="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/30">
+                      <div className={`text-xs font-bold ${r.color} mb-1.5 pb-1 border-b border-gray-700/50`}>{r.icon} {r.title}</div>
                       {r.data.length === 0 ? (
-                        <div className="text-[10px] text-gray-600">データなし</div>
+                        <div className="text-xs text-gray-600">該当者なし</div>
                       ) : (
                         r.data.map((p, i) => {
                           const isUser = p.teamName === userTeamName;
                           return (
-                            <div key={p.id} className={`flex items-center text-[10px] leading-relaxed ${isUser ? 'text-yellow-300' : 'text-gray-300'}`}>
-                              <span className={`w-3 text-center font-bold ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-600' : 'text-gray-600'}`}>{i + 1}</span>
-                              <span className="flex-1 truncate ml-1">{p.name}</span>
-                              <span className={`font-mono font-bold ${r.color}`}>{r.format(p.value)}</span>
+                            <div key={p.id} className={`flex items-center text-xs leading-relaxed py-0.5 ${isUser ? 'text-yellow-300' : 'text-gray-300'}`}>
+                              <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-600' : 'text-gray-600'}`}>{i + 1}</span>
+                              <span className="flex-1 truncate ml-1 text-sm">{p.name}</span>
+                              <span className={`font-mono font-bold text-xs ${r.color}`}>{r.format(p.value)}</span>
                             </div>
                           );
                         })
@@ -470,12 +477,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
               return (
                 <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40">
-                  <h2 className={`text-sm font-bold mb-2 ${titleColor || 'text-white'} flex items-center gap-1.5`}>
+                  <h2 className={`text-base font-bold mb-2 ${titleColor || 'text-white'} flex items-center gap-1.5`}>
                     <span>📊</span> {title}
                   </h2>
-                  <table className="w-full text-white text-xs">
+                  <table className="w-full text-white text-sm">
                     <thead>
-                      <tr className="border-b border-gray-600 text-gray-500 text-[10px]">
+                      <tr className="border-b border-gray-600 text-gray-500 text-xs">
                         <th className="py-1 px-0.5 text-center w-6">#</th>
                         <th className="py-1 px-1 text-left">チーム</th>
                         <th className="py-1 px-0.5 text-center">試</th>
@@ -523,7 +530,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                             <td className="py-1.5 px-0.5 text-center">
                               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mx-auto ${index === 0 ? 'bg-yellow-500 text-black' : index === 1 ? 'bg-gray-400 text-black' : index === 2 ? 'bg-orange-600 text-white' : 'bg-gray-600 text-white'}`}>{index + 1}</span>
                             </td>
-                            <td className={`py-1.5 px-1 font-bold text-xs ${isUser ? 'text-yellow-300' : ''}`}>{team.team}</td>
+                            <td className={`py-1.5 px-1 font-bold text-sm ${isUser ? 'text-yellow-300' : ''}`}>{team.team}</td>
                             <td className="py-1.5 px-0.5 text-center text-gray-400">{team.gamesPlayed || 0}</td>
                             <td className="py-1.5 px-0.5 text-center text-green-400 font-bold">{team.wins || 0}</td>
                             <td className="py-1.5 px-0.5 text-center text-red-400 font-bold">{team.losses || 0}</td>
