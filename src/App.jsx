@@ -5648,14 +5648,16 @@ if (newOuts === 3) {
                   <div className="overflow-hidden bg-gray-800 rounded-lg mb-3 py-2">
                     <div className="whitespace-nowrap text-lg font-bold text-yellow-300" style={{
                       display: 'inline-block',
-                      animation: 'marquee 7.5s linear infinite',
+                      animation: 'marquee 10s linear infinite',
+                      willChange: 'transform',
+                      backfaceVisibility: 'hidden',
                     }}>
-                      {scrollText}　　　　{scrollText}
+                      <span>{scrollText}　　　　</span><span>{scrollText}　　　　</span>
                     </div>
                     <style>{`
                       @keyframes marquee {
-                        0% { transform: translateX(0); }
-                        100% { transform: translateX(-50%); }
+                        0% { transform: translate3d(0, 0, 0); }
+                        100% { transform: translate3d(-50%, 0, 0); }
                       }
                     `}</style>
                   </div>
