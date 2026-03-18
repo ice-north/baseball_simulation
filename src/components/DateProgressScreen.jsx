@@ -374,10 +374,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             });
 
             // 規定打席・規定投球回をシーズン進行度に比例して算出
+            // NPB基準: 規定打席=試合数×3.1、規定投球回=試合数×1.0（イニング）
             const maxGamesPlayed = Math.max(...(standings.map(s => s.gamesPlayed || 0)), 1);
             const seasonProgress = Math.min(maxGamesPlayed / totalGames, 1);
-            const qualifiedAB = Math.max(Math.floor(100 * seasonProgress), 10);
-            const qualifiedOuts = Math.max(Math.floor(30 * seasonProgress), 9);
+            const qualifiedAB = Math.max(Math.floor(totalGames * 3.1 * seasonProgress), 10);
+            const qualifiedInnings = Math.max(Math.floor(totalGames * 1.0 * seasonProgress), 3);
+            const qualifiedOuts = qualifiedInnings * 3;
 
             const battingQualified = allPlayers.filter(p => (p.seasonStats?.batting?.atBats || 0) >= qualifiedAB);
             const pitchingQualified = allPlayers.filter(p => (p.seasonStats?.pitching?.inningsPitched || 0) >= qualifiedOuts);
@@ -426,7 +428,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
                 <h2 className="text-base font-bold text-white mb-2 flex items-center gap-1.5">
                   <span className="text-yellow-400">📊</span> 個人成績ランキング
-                  <span className="text-[10px] text-gray-500 font-normal ml-1">（規定打席{qualifiedAB}打席 / 規定投球{Math.floor(qualifiedOuts / 3)}回）</span>
+                  <span className="text-[10px] text-gray-500 font-normal ml-1">（規定打席{qualifiedAB} / 規定投球{qualifiedInnings}回）</span>
                 </h2>
                 <div className="grid grid-cols-3 gap-2">
                   {rankings.map(r => (
