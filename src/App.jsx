@@ -5490,7 +5490,7 @@ if (newOuts === 3) {
                   </button>
                   <button onClick={() => multiPitch(1000)} disabled={isAutoSimulating || gameOver}
                     className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50">
-                    ⚾×1000
+                    試合終了まで
                   </button>
                   <button
                     onClick={() => setAutoManagerMode(!autoManagerMode)}
@@ -5647,13 +5647,14 @@ if (newOuts === 3) {
                   {/* スクロールテロップ */}
                   <div className="overflow-hidden bg-gray-800 rounded-lg mb-3 py-2">
                     <div className="whitespace-nowrap text-lg font-bold text-yellow-300" style={{
-                      animation: 'marquee 15s linear infinite',
+                      display: 'inline-block',
+                      animation: 'marquee 7.5s linear infinite',
                     }}>
-                      {scrollText}　　{scrollText}
+                      {scrollText}　　　　{scrollText}
                     </div>
                     <style>{`
                       @keyframes marquee {
-                        0% { transform: translateX(0%); }
+                        0% { transform: translateX(0); }
                         100% { transform: translateX(-50%); }
                       }
                     `}</style>
