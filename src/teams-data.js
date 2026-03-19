@@ -14,8 +14,9 @@ export const TEAMS_DATA = {};
  * 指定したチーム数でTEAMS_DATAを初期化
  * @param {number} teamCount - チーム数（2-12）
  * @param {Array<string>} customNames - カスタムチーム名（省略時はチームA, B, C...）
+ * @param {Array<string>} customAbbreviations - カスタム略称（省略時はＡ, Ｂ, Ｃ...）
  */
-export const initializeTeamsForCount = (teamCount, customNames = null) => {
+export const initializeTeamsForCount = (teamCount, customNames = null, customAbbreviations = null) => {
   // 既存のデータをクリア
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
 
@@ -30,16 +31,30 @@ export const initializeTeamsForCount = (teamCount, customNames = null) => {
   }
 
   // チームを作成
-  teamNames.forEach(teamName => {
+  teamNames.forEach((teamName, i) => {
+    const abbr = (customAbbreviations && customAbbreviations[i]) || String.fromCharCode(0xFF21 + i);
     TEAMS_DATA[teamName] = {
       name: teamName,
+      abbreviation: abbr,
       players: [],
       pitchingRotation: null
     };
-    console.log(`📋 ${teamName}を作成しました`);
+    console.log(`📋 ${teamName}（${abbr}）を作成しました`);
   });
 
   return teamNames;
+};
+
+/**
+ * チーム名から略称を取得するヘルパー
+ * @param {string} teamName - チーム名
+ * @returns {string} 略称（見つからない場合はチーム名の先頭4文字）
+ */
+export const getTeamAbbreviation = (teamName) => {
+  if (!teamName) return '';
+  const team = TEAMS_DATA[teamName];
+  if (team && team.abbreviation) return team.abbreviation;
+  return (teamName || '').slice(0, 3);
 };
 
 /**

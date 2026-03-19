@@ -24,7 +24,7 @@ import { compressData, decompressData, getLocalStorageUsage } from './utils/comp
 
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
-import { initializeTeamsData, TEAMS_DATA, initializeAllPitchingRotations, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue } from './teams-data.js';
+import { initializeTeamsData, TEAMS_DATA, initializeAllPitchingRotations, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue, getTeamAbbreviation } from './teams-data.js';
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
@@ -108,13 +108,15 @@ import TradeScreen from './components/TradeScreen.jsx';
         // チーム数に応じてリーグ構成を更新
         const teamCount = regulations.teamsCount || 4;
         const customNames = regulations.teamNames || null;
+        const customAbbreviations = regulations.teamAbbreviations || null;
 
-        // 動的にチームを作成（カスタム名対応）
-        const teamNames = initializeTeamsForCount(teamCount, customNames);
+        // 動的にチームを作成（カスタム名・略称対応）
+        const teamNames = initializeTeamsForCount(teamCount, customNames, customAbbreviations);
         console.log(`👥 ${teamCount}チームを初期化: ${teamNames.join(', ')}`);
 
-        // チーム名をレギュレーションにも保存（成績表等で使用）
+        // チーム名・略称をレギュレーションにも保存（成績表等で使用）
         newSeasonData.settings.teamNames = teamNames;
+        newSeasonData.settings.teamAbbreviations = customAbbreviations || teamNames.map((_, i) => String.fromCharCode(0xFF21 + i));
 
         setLeagueConfig({
           format: 'single',
@@ -3968,7 +3970,7 @@ if (newOuts === 3) {
               <tr key={index} className="border-b border-gray-700">
                 <td className="py-1">{player.rank}</td>
                 <td className="py-1">{player.name}</td>
-                <td className="py-1 text-xs">{player.team}</td>
+                <td className="py-1 text-xs">{getTeamAbbreviation(player.team)}</td>
                 <td className="text-right py-1">{player.value}</td>
               </tr>
             ))
@@ -4345,7 +4347,7 @@ if (newOuts === 3) {
                 </div>
                 {day.opponent ? (
                   <>
-                    <div className="text-xs text-white font-bold mb-0.5">{day.venue} {day.opponent?.slice(0, 4)}</div>
+                    <div className="text-xs text-white font-bold mb-0.5">{day.venue} {getTeamAbbreviation(day.opponent)}</div>
                     {day.result ? (
                       <div className={`text-sm font-bold ${
                         day.result === '○' ? 'text-green-400' :
@@ -4387,9 +4389,9 @@ if (newOuts === 3) {
           {todayGames.length > 0 ? todayGames.map((game, index) => (
             <div key={index} className="bg-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-center gap-4 mb-3">
-                <div className="text-white font-bold text-lg">{game.away?.slice(0, 4)}</div>
+                <div className="text-white font-bold text-lg">{getTeamAbbreviation(game.away)}</div>
                 <div className="text-gray-400">vs</div>
-                <div className="text-white font-bold text-lg">{game.home?.slice(0, 4)}</div>
+                <div className="text-white font-bold text-lg">{getTeamAbbreviation(game.home)}</div>
               </div>
               <div className="flex items-center justify-center gap-4 text-sm text-gray-300 mb-2">
                 <div className="text-right flex-1">

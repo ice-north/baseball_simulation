@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition } from '../season/dateProgression.js';
@@ -301,8 +301,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         {cell.games.length > 0 ? (
                           <div className="space-y-0">
                             {cell.games.map((game, gIdx) => {
-                              const awayShort = (game.away || '').slice(0, 4);
-                              const homeShort = (game.home || '').slice(0, 4);
+                              const awayShort = getTeamAbbreviation(game.away);
+                              const homeShort = getTeamAbbreviation(game.home);
                               if (showAsScheduled || !game.result) {
                                 return <div key={gIdx} className="text-[11px] text-yellow-300 leading-tight">{awayShort}-{homeShort}</div>;
                               }
@@ -384,12 +384,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       {todaySeriesInfo && <div className="text-center text-[11px] text-yellow-300 font-bold mb-1">{todaySeriesInfo}</div>}
                       <div className="flex items-center justify-between">
                         <div className="text-center flex-1">
-                          <div className="text-white font-bold text-base">{(game.away || '').slice(0, 4)}</div>
+                          <div className="text-white font-bold text-base">{getTeamAbbreviation(game.away)}</div>
                           <div className="text-xs text-yellow-400/80 mt-0.5">{awayPitcher ? `${awayPitcher.name}` : '未定'}</div>
                         </div>
                         <div className="px-2 text-gray-500 text-sm font-bold">vs</div>
                         <div className="text-center flex-1">
-                          <div className="text-white font-bold text-base">{(game.home || '').slice(0, 4)}</div>
+                          <div className="text-white font-bold text-base">{getTeamAbbreviation(game.home)}</div>
                           <div className="text-xs text-yellow-400/80 mt-0.5">{homePitcher ? `${homePitcher.name}` : '未定'}</div>
                         </div>
                       </div>
@@ -486,7 +486,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           return (
                             <div key={p.id} className={`flex items-center text-xs leading-relaxed py-0.5 ${isUser ? 'text-yellow-300' : 'text-gray-300'}`}>
                               <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-600' : 'text-gray-600'}`}>{i + 1}</span>
-                              <span className="flex-1 truncate ml-1 text-sm">{p.name}<span className="text-gray-500 text-[10px]">　({p.teamName.slice(0, 4)})</span></span>
+                              <span className="flex-1 truncate ml-1 text-sm">{p.name}<span className="text-gray-500 text-[10px]">　({getTeamAbbreviation(p.teamName)})</span></span>
                               <span className={`font-mono font-bold text-xs ${r.color}`}>{r.format(p.value)}</span>
                             </div>
                           );

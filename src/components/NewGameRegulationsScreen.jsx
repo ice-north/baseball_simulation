@@ -10,15 +10,24 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     leagueNames: null,
     playoffFormat: 'split',
     maxExtraInnings: 12,
-    teamNames: ['チームA', 'チームB', 'チームC', 'チームD']
+    teamNames: ['チームA', 'チームB', 'チームC', 'チームD'],
+    teamAbbreviations: ['Ａ', 'Ｂ', 'Ｃ', 'Ｄ']
   });
   const [selectedPreset, setSelectedPreset] = useState('shikoku');
 
+  // 半角→全角変換（略称用）
+  const toFullWidth = (str) => str.replace(/[A-Za-z0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
+  // デフォルト略称を生成（全角アルファベット1文字）
+  const defaultAbbr = (i) => String.fromCharCode(0xFF21 + i); // Ａ, Ｂ, Ｃ...
+
   const handleTeamsCountChange = (newCount) => {
     const currentNames = tempSettings.teamNames || [];
+    const currentAbbrs = tempSettings.teamAbbreviations || [];
     const newNames = [];
+    const newAbbrs = [];
     for (let i = 0; i < newCount; i++) {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
+      newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
     // 試合数を新しいチーム数-1の倍数に自動調整
     const newDivisor = newCount - 1;
@@ -29,6 +38,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
       ...tempSettings,
       teamsCount: newCount,
       teamNames: newNames,
+      teamAbbreviations: newAbbrs,
       gamesPerSeason: adjustedGames
     });
   };
@@ -39,17 +49,30 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     setTempSettings({ ...tempSettings, teamNames: newNames });
   };
 
+  const handleTeamAbbrChange = (index, newAbbr) => {
+    // 全角3文字まで（半角入力は全角に変換）
+    const converted = toFullWidth(newAbbr);
+    // 全角文字数で3文字までに制限
+    const trimmed = [...converted].slice(0, 3).join('');
+    const newAbbrs = [...(tempSettings.teamAbbreviations || [])];
+    newAbbrs[index] = trimmed;
+    setTempSettings({ ...tempSettings, teamAbbreviations: newAbbrs });
+  };
+
   const handleApplyPreset = (presetName) => {
     const preset = REGULATION_PRESETS[presetName];
     if (preset) {
       const newTeamsCount = preset.regulations.teamsCount || 4;
       const newNames = [];
+      const newAbbrs = [];
       for (let i = 0; i < newTeamsCount; i++) {
         newNames.push(`チーム${String.fromCharCode(65 + i)}`);
+        newAbbrs.push(defaultAbbr(i));
       }
       setTempSettings({
         ...preset.regulations,
-        teamNames: newNames
+        teamNames: newNames,
+        teamAbbreviations: newAbbrs
       });
       setSelectedPreset(presetName);
     }
@@ -183,7 +206,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                 <h3 className="text-lg font-bold text-blue-400 mb-2">
                   {tempSettings.leagueNames?.[0] || 'リーグ1'}
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {tempSettings.teamNames.slice(0, Math.floor(tempSettings.teamsCount / 2)).map((name, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <span className="text-blue-400 text-sm w-8">#{index + 1}</span>
@@ -192,8 +215,15 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                         value={name}
                         onChange={(e) => handleTeamNameChange(index, e.target.value)}
                         maxLength={15}
-                        className="bg-gray-700 text-white rounded px-3 py-2 flex-1 w-full border border-blue-600"
+                        className="bg-gray-700 text-white rounded px-3 py-2 flex-1 border border-blue-600"
                         placeholder={`チーム${String.fromCharCode(65 + index)}`}
+                      />
+                      <input
+                        type="text"
+                        value={(tempSettings.teamAbbreviations || [])[index] || ''}
+                        onChange={(e) => handleTeamAbbrChange(index, e.target.value)}
+                        className="bg-gray-700 text-white rounded px-2 py-2 w-16 text-center border border-blue-600/50 text-sm"
+                        placeholder="略称"
                       />
                     </div>
                   ))}
@@ -203,7 +233,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                 <h3 className="text-lg font-bold text-orange-400 mb-2">
                   {tempSettings.leagueNames?.[1] || 'リーグ2'}
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {tempSettings.teamNames.slice(Math.floor(tempSettings.teamsCount / 2)).map((name, index) => {
                     const actualIndex = Math.floor(tempSettings.teamsCount / 2) + index;
                     return (
@@ -214,8 +244,15 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                           value={name}
                           onChange={(e) => handleTeamNameChange(actualIndex, e.target.value)}
                           maxLength={15}
-                          className="bg-gray-700 text-white rounded px-3 py-2 flex-1 w-full border border-orange-600"
+                          className="bg-gray-700 text-white rounded px-3 py-2 flex-1 border border-orange-600"
                           placeholder={`チーム${String.fromCharCode(65 + actualIndex)}`}
+                        />
+                        <input
+                          type="text"
+                          value={(tempSettings.teamAbbreviations || [])[actualIndex] || ''}
+                          onChange={(e) => handleTeamAbbrChange(actualIndex, e.target.value)}
+                          className="bg-gray-700 text-white rounded px-2 py-2 w-16 text-center border border-orange-600/50 text-sm"
+                          placeholder="略称"
                         />
                       </div>
                     );
@@ -224,7 +261,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
               </div>
             </>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {tempSettings.teamNames.map((name, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <span className="text-gray-400 text-sm w-8">#{index + 1}</span>
@@ -233,14 +270,21 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                     value={name}
                     onChange={(e) => handleTeamNameChange(index, e.target.value)}
                     maxLength={15}
-                    className="bg-gray-700 text-white rounded px-3 py-2 flex-1 w-full"
+                    className="bg-gray-700 text-white rounded px-3 py-2 flex-1"
                     placeholder={`チーム${String.fromCharCode(65 + index)}`}
+                  />
+                  <input
+                    type="text"
+                    value={(tempSettings.teamAbbreviations || [])[index] || ''}
+                    onChange={(e) => handleTeamAbbrChange(index, e.target.value)}
+                    className="bg-gray-700 text-white rounded px-2 py-2 w-16 text-center border border-gray-600 text-sm"
+                    placeholder="略称"
                   />
                 </div>
               ))}
             </div>
           )}
-          <p className="text-gray-500 text-xs mt-3">※チーム名はカレンダー・成績表に反映されます（最大15文字）</p>
+          <p className="text-gray-500 text-xs mt-3">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表・ランキングで使用されます</p>
         </div>
 
         <div className="text-center">
