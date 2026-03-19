@@ -595,6 +595,158 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               );
             };
 
+            // プレーオフ成績表示コンポーネント
+            const renderPlayoffBracket = () => {
+              const playoffGames = (seasonData.schedule || []).filter(g => g.phase === SEASON_PHASES.PLAYOFFS);
+              if (playoffGames.length === 0) return null;
+              const playoffFormat = seasonData?.settings?.playoffFormat || 'single';
+
+              // シリーズごとの集計
+              const getSeriesData = (seriesId) => {
+                const games = playoffGames.filter(g => g.seriesId === seriesId && !g.cancelled);
+                if (games.length === 0) return null;
+                const firstGame = games.find(g => g.seriesGame === 1);
+                if (!firstGame || firstGame.home === 'TBD') return null;
+                // seriesGame=1のhomeを「上位チーム」とする
+                const team1 = firstGame.home;
+                const team2 = firstGame.away;
+                let team1Wins = 0, team2Wins = 0;
+                const gameResults = games.sort((a, b) => a.seriesGame - b.seriesGame).map(g => {
+                  if (!g.result) return { game: g.seriesGame, status: 'pending' };
+                  const homeWon = g.result.homeScore > g.result.awayScore;
+                  const t1Won = (g.home === team1 && homeWon) || (g.away === team1 && !homeWon);
+                  if (t1Won) team1Wins++;
+                  else team2Wins++;
+                  const t1Score = g.home === team1 ? g.result.homeScore : g.result.awayScore;
+                  const t2Score = g.home === team2 ? g.result.homeScore : g.result.awayScore;
+                  return { game: g.seriesGame, t1Score, t2Score, t1Won, status: 'done' };
+                });
+                const maxWins = playoffFormat === 'tournament' ? 1 : 3;
+                const isComplete = team1Wins >= maxWins || team2Wins >= maxWins;
+                const winner = isComplete ? (team1Wins >= maxWins ? team1 : team2) : null;
+                return { team1, team2, team1Wins, team2Wins, gameResults, isComplete, winner };
+              };
+
+              // シリーズ表示（5戦3勝 or 1戦）
+              const renderSeries = (seriesData, title) => {
+                if (!seriesData) return (
+                  <div className="bg-gray-700/40 rounded-lg p-2 text-center text-gray-500 text-xs">{title}: 未確定</div>
+                );
+                const { team1, team2, team1Wins, team2Wins, gameResults, isComplete, winner } = seriesData;
+                const t1Abbr = getTeamAbbreviation(team1);
+                const t2Abbr = getTeamAbbreviation(team2);
+                return (
+                  <div className="bg-gray-700/40 rounded-lg p-2.5">
+                    <div className="text-xs font-bold text-yellow-400 mb-1.5 text-center">{title}</div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className={`text-sm font-bold flex-1 text-center ${winner === team1 ? 'text-yellow-300' : winner === team2 ? 'text-gray-500' : 'text-white'}`}>
+                        {t1Abbr}
+                      </div>
+                      <div className="px-2 text-xs text-gray-400">
+                        <span className={`font-bold text-lg ${winner === team1 ? 'text-yellow-300' : 'text-white'}`}>{team1Wins}</span>
+                        <span className="mx-1 text-gray-600">-</span>
+                        <span className={`font-bold text-lg ${winner === team2 ? 'text-yellow-300' : 'text-white'}`}>{team2Wins}</span>
+                      </div>
+                      <div className={`text-sm font-bold flex-1 text-center ${winner === team2 ? 'text-yellow-300' : winner === team1 ? 'text-gray-500' : 'text-white'}`}>
+                        {t2Abbr}
+                      </div>
+                    </div>
+                    {gameResults.length > 0 && (
+                      <div className="space-y-0.5">
+                        {gameResults.map(g => (
+                          <div key={g.game} className="flex items-center text-[11px] text-gray-300">
+                            <span className="w-10 text-gray-500">第{g.game}戦</span>
+                            {g.status === 'done' ? (
+                              <>
+                                <span className={`flex-1 text-right font-mono ${g.t1Won ? 'text-green-400 font-bold' : ''}`}>{g.t1Score}</span>
+                                <span className="mx-1 text-gray-600">-</span>
+                                <span className={`flex-1 text-left font-mono ${!g.t1Won ? 'text-green-400 font-bold' : ''}`}>{g.t2Score}</span>
+                              </>
+                            ) : (
+                              <span className="flex-1 text-center text-gray-600">- 未 -</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {isComplete && winner && (
+                      <div className="mt-1.5 text-center text-[11px] font-bold text-yellow-400">
+                        🏆 {winner} 勝利
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+
+              if (playoffFormat === 'tournament') {
+                // トーナメント表（1戦勝負の準決勝 → 決勝）
+                const semi1 = getSeriesData('semi1');
+                const semi2 = getSeriesData('semi2');
+                const final_ = getSeriesData('final');
+                return (
+                  <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
+                    <h2 className="text-base font-bold mb-2 text-white flex items-center gap-1.5">
+                      <span>🏆</span> プレーオフ トーナメント
+                    </h2>
+                    <div className="flex items-stretch gap-2">
+                      {/* 準決勝 */}
+                      <div className="flex-1 space-y-2">
+                        {renderSeries(semi1, '準決勝①')}
+                        {renderSeries(semi2, '準決勝②')}
+                      </div>
+                      {/* 接続線 */}
+                      <div className="flex items-center">
+                        <div className="w-3 border-t border-b border-r border-gray-600 h-[60%] rounded-r"></div>
+                      </div>
+                      {/* 決勝 */}
+                      <div className="flex-1 flex items-center">
+                        {renderSeries(final_, '決勝')}
+                      </div>
+                    </div>
+                  </div>
+                );
+              } else if (playoffFormat === 'double') {
+                // 4チームトーナメント（5戦3勝 準決勝×2 + 決勝）
+                const semi1 = getSeriesData('semi1');
+                const semi2 = getSeriesData('semi2');
+                const final_ = getSeriesData('final');
+                return (
+                  <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
+                    <h2 className="text-base font-bold mb-2 text-white flex items-center gap-1.5">
+                      <span>🏆</span> プレーオフ
+                    </h2>
+                    <div className="flex items-stretch gap-2">
+                      {/* 準決勝 */}
+                      <div className="flex-1 space-y-2">
+                        {renderSeries(semi1, '準決勝① (5戦3勝)')}
+                        {renderSeries(semi2, '準決勝② (5戦3勝)')}
+                      </div>
+                      {/* 接続線 */}
+                      <div className="flex items-center">
+                        <div className="w-3 border-t border-b border-r border-gray-600 h-[60%] rounded-r"></div>
+                      </div>
+                      {/* 決勝 */}
+                      <div className="flex-1 flex items-center">
+                        {renderSeries(final_, '決勝 (5戦3勝)')}
+                      </div>
+                    </div>
+                  </div>
+                );
+              } else {
+                // single, top2, split, championship: 2チームの5戦3勝制
+                const final_ = getSeriesData('final');
+                if (!final_) return null;
+                return (
+                  <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
+                    <h2 className="text-base font-bold mb-2 text-white flex items-center gap-1.5">
+                      <span>🏆</span> プレーオフ (5戦3勝制)
+                    </h2>
+                    {renderSeries(final_, '決勝')}
+                  </div>
+                );
+              }
+            };
+
             if (isTwoLeague) {
               const l1 = standings.filter(s => league1Teams.includes(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
               const l2 = standings.filter(s => league2Teams.includes(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
@@ -602,10 +754,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <div className="space-y-3">
                   {renderStandingsTable(l1, `${leagueNamesList[0]} 順位表`, 'text-blue-400')}
                   {renderStandingsTable(l2, `${leagueNamesList[1]} 順位表`, 'text-orange-400')}
+                  {renderPlayoffBracket()}
                 </div>
               );
             }
-            return renderStandingsTable(standings, '順位表', 'text-white');
+            return (
+              <div className="space-y-0">
+                {renderStandingsTable(standings, '順位表', 'text-white')}
+                {renderPlayoffBracket()}
+              </div>
+            );
           })()}
         </div>
       </div>
