@@ -3970,7 +3970,7 @@ if (newOuts === 3) {
               <tr key={index} className="border-b border-gray-700">
                 <td className="py-1">{player.rank}</td>
                 <td className="py-1">{player.name}</td>
-                <td className="py-1 text-xs">{getTeamAbbreviation(player.team)}</td>
+                <td className="py-1 text-xs text-center">{getTeamAbbreviation(player.team)}</td>
                 <td className="text-right py-1">{player.value}</td>
               </tr>
             ))
@@ -4347,7 +4347,7 @@ if (newOuts === 3) {
                 </div>
                 {day.opponent ? (
                   <>
-                    <div className="text-xs text-white font-bold mb-0.5">{day.venue} {getTeamAbbreviation(day.opponent)}</div>
+                    <div className="text-xs text-white font-bold mb-0.5 text-center">{day.venue} {getTeamAbbreviation(day.opponent)}</div>
                     {day.result ? (
                       <div className={`text-sm font-bold ${
                         day.result === '○' ? 'text-green-400' :

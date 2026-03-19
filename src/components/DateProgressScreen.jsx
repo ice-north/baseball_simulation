@@ -304,7 +304,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               const awayShort = getTeamAbbreviation(game.away);
                               const homeShort = getTeamAbbreviation(game.home);
                               if (showAsScheduled || !game.result) {
-                                return <div key={gIdx} className="text-[11px] text-yellow-300 leading-tight">{awayShort}-{homeShort}</div>;
+                                return <div key={gIdx} className="text-[11px] text-yellow-300 leading-tight text-center">{awayShort}-{homeShort}</div>;
                               }
                               const awayWin = game.result.awayScore > game.result.homeScore;
                               const homeWin = game.result.homeScore > game.result.awayScore;
@@ -326,7 +326,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                 seriesInfo = `${maxGames}戦中${homeWins}勝${awayWins}敗`;
                               }
                               return (
-                                <div key={gIdx} className="leading-tight">
+                                <div key={gIdx} className="leading-tight text-center">
                                   <div className="text-[11px]">
                                     <span className={awayWin ? 'text-green-400 font-bold' : 'text-white'}>{awayShort}</span>
                                     <span className="text-white mx-px">{game.result.awayScore}-{game.result.homeScore}</span>
