@@ -969,6 +969,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             })
             .filter(Boolean) : [];
 
+          // 適正に基づくグラデーション色（HSL: 赤→橙→黄→緑→青）
+          const getFitnessGradient = (fitness) => {
+            if (fitness >= 90) return { main: '#ec4899', glow: 'rgba(236,72,153,0.6)', bg: 'rgba(236,72,153,0.12)' };
+            if (fitness >= 70) return { main: '#f97316', glow: 'rgba(249,115,22,0.5)', bg: 'rgba(249,115,22,0.10)' };
+            if (fitness >= 50) return { main: '#eab308', glow: 'rgba(234,179,8,0.4)', bg: 'rgba(234,179,8,0.08)' };
+            if (fitness >= 30) return { main: '#22c55e', glow: 'rgba(34,197,94,0.35)', bg: 'rgba(34,197,94,0.07)' };
+            return { main: '#3b82f6', glow: 'rgba(59,130,246,0.3)', bg: 'rgba(59,130,246,0.06)' };
+          };
+
           return (
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-gray-800 rounded-lg p-4 col-span-2">
@@ -983,71 +992,218 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   )}
                 </div>
                 <svg viewBox="0 0 500 440" className="w-full max-w-2xl mx-auto">
-                  {/* グラウンド背景 */}
-                  <rect x="0" y="0" width="500" height="440" fill="#1a472a" rx="12" />
-                  <ellipse cx="250" cy="210" rx="230" ry="190" fill="#1f5c33" />
-                  <polygon points="250,145 370,260 250,375 130,260" fill="none" stroke="#c4a35a" strokeWidth="2" strokeDasharray="8,4" opacity="0.5" />
-                  <polygon points="250,190 340,260 250,330 160,260" fill="#8B6914" opacity="0.35" />
-                  <line x1="250" y1="370" x2="130" y2="255" stroke="#fff" strokeWidth="1.5" opacity="0.4" />
-                  <line x1="250" y1="370" x2="370" y2="255" stroke="#fff" strokeWidth="1.5" opacity="0.4" />
-                  <rect x="244" y="364" width="12" height="12" fill="#fff" transform="rotate(45,250,370)" />
-                  <rect x="364" y="254" width="10" height="10" fill="#fff" transform="rotate(45,369,259)" />
-                  <rect x="245" y="179" width="10" height="10" fill="#fff" transform="rotate(45,250,184)" />
-                  <rect x="125" y="254" width="10" height="10" fill="#fff" transform="rotate(45,130,259)" />
-                  <circle cx="250" cy="275" r="10" fill="#8B6914" opacity="0.5" />
+                  <defs>
+                    {/* 各ポジションの守備範囲グラデーション（適正で色変化） */}
+                    {Object.entries(posCoords).map(([pos]) => {
+                      const player = positionPlayers[pos];
+                      const fitness = player ? getFitness(player, pos) : 0;
+                      const grad = getFitnessGradient(fitness);
+                      return (
+                        <radialGradient key={`grad-${pos}`} id={`rangeGrad-${pos}`}>
+                          <stop offset="0%" stopColor={grad.main} stopOpacity="0.35" />
+                          <stop offset="60%" stopColor={grad.main} stopOpacity="0.12" />
+                          <stop offset="100%" stopColor={grad.main} stopOpacity="0.02" />
+                        </radialGradient>
+                      );
+                    })}
+                    {/* マーカーの光彩フィルター */}
+                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                    <filter id="glowStrong" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="5" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                    {/* 芝のパターン */}
+                    <pattern id="grassPattern" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
+                      <rect width="8" height="8" fill="#1f5c33" />
+                      <line x1="0" y1="4" x2="8" y2="4" stroke="#1a522d" strokeWidth="0.5" opacity="0.3" />
+                    </pattern>
+                  </defs>
 
-                  {/* 守備範囲の円 */}
+                  {/* グラウンド背景（リッチ版） */}
+                  <rect x="0" y="0" width="500" height="440" fill="#142e1e" rx="12" />
+                  <ellipse cx="250" cy="210" rx="230" ry="190" fill="url(#grassPattern)" />
+                  {/* 外野の芝模様（同心弧） */}
+                  {[140, 170, 200].map(r => (
+                    <ellipse key={r} cx="250" cy="370" rx={r} ry={r} fill="none" stroke="#1a4a2c" strokeWidth="16" opacity="0.25" />
+                  ))}
+                  {/* 内野ダイヤモンド */}
+                  <polygon points="250,190 340,260 250,330 160,260" fill="#8B6914" opacity="0.3" />
+                  <polygon points="250,145 370,260 250,375 130,260" fill="none" stroke="#c4a35a" strokeWidth="1.5" strokeDasharray="6,3" opacity="0.45" />
+                  {/* ファウルライン */}
+                  <line x1="250" y1="370" x2="60" y2="200" stroke="#fff" strokeWidth="1.2" opacity="0.3" />
+                  <line x1="250" y1="370" x2="440" y2="200" stroke="#fff" strokeWidth="1.2" opacity="0.3" />
+                  {/* ベース */}
+                  <rect x="244" y="364" width="12" height="12" fill="#fff" transform="rotate(45,250,370)" opacity="0.9" />
+                  <rect x="364" y="254" width="10" height="10" fill="#fff" transform="rotate(45,369,259)" opacity="0.8" />
+                  <rect x="245" y="179" width="10" height="10" fill="#fff" transform="rotate(45,250,184)" opacity="0.8" />
+                  <rect x="125" y="254" width="10" height="10" fill="#fff" transform="rotate(45,130,259)" opacity="0.8" />
+                  {/* マウンド */}
+                  <ellipse cx="250" cy="275" rx="12" ry="8" fill="#8B6914" opacity="0.4" />
+
+                  {/* 守備範囲の円（走力+守備力でサイズ、適正で色） */}
                   {Object.entries(posCoords).map(([pos, coord]) => {
                     const player = positionPlayers[pos];
+                    if (!player) return null;
+                    const def = player.fielding?.defense || 50;
+                    const spd = player.physical?.speed || 50;
                     const range = getDefenseRange(player, pos);
                     const isOutfield = ['left', 'center', 'right'].includes(pos);
                     const baseRadius = isOutfield ? 55 : 35;
-                    const radius = baseRadius * (0.5 + range * 0.8);
-                    const colors = getRangeColor(range);
+                    // 円のサイズ: 走力と守備力で決定
+                    const sizeRatio = (spd * 0.55 + def * 0.45) / 100;
+                    const radius = baseRadius * (0.4 + sizeRatio * 0.9);
+                    const fitness = getFitness(player, pos);
+                    const grad = getFitnessGradient(fitness);
+                    const rangeDelay = `${Object.keys(posCoords).indexOf(pos) * 0.06}s`;
                     return (
-                      <circle key={`range-${pos}`} cx={coord.x} cy={coord.y}
-                        r={player ? radius : 0} fill={colors.fill} stroke={colors.stroke}
-                        strokeWidth="1.5" strokeDasharray="4,3" />
+                      <g key={`range-${pos}`}>
+                        {/* 外側のぼかし円 */}
+                        <circle cx={coord.x} cy={coord.y}
+                          fill={grad.bg} stroke="none" opacity="0">
+                          <animate attributeName="r" from="0" to={radius * 1.15} dur="0.7s" begin={rangeDelay} fill="freeze"
+                            calcMode="spline" keySplines="0.25 0.46 0.45 0.94" />
+                          <animate attributeName="opacity" values="0;0.7;0.5;0.7" dur="3s" begin={rangeDelay} repeatCount="indefinite" />
+                        </circle>
+                        {/* メインの守備範囲円 */}
+                        <circle cx={coord.x} cy={coord.y}
+                          fill={`url(#rangeGrad-${pos})`} stroke={grad.main}
+                          strokeWidth="1.5" strokeDasharray="5,3" opacity="0">
+                          <animate attributeName="r" from="0" to={radius} dur="0.6s" begin={rangeDelay} fill="freeze"
+                            calcMode="spline" keySplines="0.25 0.46 0.45 0.94" />
+                          <animate attributeName="opacity" from="0" to="0.9" dur="0.6s" begin={rangeDelay} fill="freeze" />
+                        </circle>
+                        {/* 内側の強調リング */}
+                        <circle cx={coord.x} cy={coord.y} r={radius * 0.6}
+                          fill="none" stroke={grad.main} strokeWidth="0.5" opacity="0.3"
+                          strokeDasharray="3,5">
+                          <animate attributeName="stroke-dashoffset" from="0" to="16" dur="4s" repeatCount="indefinite" />
+                        </circle>
+                      </g>
                     );
                   })}
 
-                  {/* 選手マーカー（クリック可能） */}
-                  {Object.entries(posCoords).map(([pos, coord]) => {
+                  {/* 選手マーカー（クリック可能・アニメーション付き） */}
+                  {Object.entries(posCoords).map(([pos, coord], posIndex) => {
                     const player = positionPlayers[pos];
                     const isSelected = selectedDefensePos === pos;
                     const fitness = player ? getFitness(player, pos) : 0;
-                    const fitnessColor = getFitnessColor(fitness);
+                    const grad = getFitnessGradient(fitness);
                     const isPitcherPos = pos === 'pitcher';
+                    const range = getDefenseRange(player, pos);
+                    const grade = getRangeGrade(range);
+                    // マーカーサイズ: 走力+守備力ベース
+                    const def = player?.fielding?.defense || 50;
+                    const spd = player?.physical?.speed || 50;
+                    const markerSize = player ? 13 + ((spd * 0.5 + def * 0.5) / 100) * 8 : 14;
+                    const animDelay = `${posIndex * 0.08}s`;
 
                     return (
                       <g key={pos} onClick={() => !isPitcherPos && handleDefenseClick(pos)}
                          style={{ cursor: isPitcherPos ? 'default' : 'pointer' }}>
-                        {/* 選択リング */}
+                        {/* 選択リング（強化版） */}
                         {isSelected && (
-                          <circle cx={coord.x} cy={coord.y} r="22" fill="none" stroke="#facc15" strokeWidth="3" strokeDasharray="6,3">
-                            <animate attributeName="stroke-dashoffset" from="0" to="18" dur="1s" repeatCount="indefinite" />
+                          <>
+                            <circle cx={coord.x} cy={coord.y} r={markerSize + 10} fill="none" stroke="#facc15" strokeWidth="2" opacity="0.3">
+                              <animate attributeName="r" values={`${markerSize + 8};${markerSize + 14};${markerSize + 8}`} dur="1.2s" repeatCount="indefinite" />
+                              <animate attributeName="opacity" values="0.4;0.15;0.4" dur="1.2s" repeatCount="indefinite" />
+                            </circle>
+                            <circle cx={coord.x} cy={coord.y} r={markerSize + 6} fill="none" stroke="#facc15" strokeWidth="2.5" strokeDasharray="5,3">
+                              <animate attributeName="stroke-dashoffset" from="0" to="16" dur="0.8s" repeatCount="indefinite" />
+                            </circle>
+                          </>
+                        )}
+
+                        {/* 光彩エフェクト（プレイヤー有の場合） */}
+                        {player && !isSelected && (
+                          <circle cx={coord.x} cy={coord.y} r={markerSize + 4}
+                            fill="none" stroke={grad.main} strokeWidth="1" opacity="0.25">
+                            <animate attributeName="opacity" values="0.25;0.1;0.25" dur="2s" repeatCount="indefinite"
+                              begin={`${posIndex * 0.3}s`} />
                           </circle>
                         )}
-                        {/* マーカー */}
-                        <circle cx={coord.x} cy={coord.y} r="16"
-                          fill={isSelected ? '#854d0e' : player ? '#1e40af' : '#374151'}
-                          stroke={isSelected ? '#facc15' : player ? '#60a5fa' : '#6b7280'} strokeWidth="2" />
-                        <text x={coord.x} y={coord.y + 1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="11" fontWeight="bold">{posLabels[pos]}</text>
+
+                        {/* マーカー本体（グラデーション化・登場アニメーション） */}
+                        <circle cx={coord.x} cy={coord.y}
+                          fill={isSelected ? '#854d0e' : player ? '#1e3a5f' : '#2d3748'}
+                          stroke={isSelected ? '#facc15' : player ? grad.main : '#4a5568'}
+                          strokeWidth={isSelected ? 2.5 : 2}
+                          filter={player ? 'url(#glow)' : undefined}
+                          r={markerSize}>
+                          <animate attributeName="r" from="0" to={markerSize} dur="0.4s" begin={animDelay} fill="freeze"
+                            calcMode="spline" keySplines="0.34 1.56 0.64 1" />
+                        </circle>
+                        {/* マーカーのハイライト（立体感） */}
+                        {player && (
+                          <circle cx={coord.x - markerSize * 0.2} cy={coord.y - markerSize * 0.2}
+                            r={markerSize * 0.5} fill="white" opacity="0.08" />
+                        )}
+
+                        {/* ポジションラベル */}
+                        <text x={coord.x} y={coord.y + 1} textAnchor="middle" dominantBaseline="middle"
+                          fill="white" fontSize={markerSize > 17 ? '13' : '11'} fontWeight="bold">{posLabels[pos]}</text>
+
                         {player && (
                           <>
-                            <text x={coord.x} y={coord.y - 24} textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">{player.name}</text>
-                            {/* 適正バー */}
-                            <rect x={coord.x - 18} y={coord.y + 24} width="36" height="4" rx="2" fill="#374151" />
-                            <rect x={coord.x - 18} y={coord.y + 24} width={36 * fitness / 100} height="4" rx="2" fill={fitnessColor} />
-                            <text x={coord.x} y={coord.y + 38} textAnchor="middle" fill={fitnessColor} fontSize="8" fontWeight="bold">適正{fitness}%</text>
+                            {/* 選手名（影付き） */}
+                            <text x={coord.x} y={coord.y - markerSize - 14} textAnchor="middle"
+                              fill="#000" fontSize="11" fontWeight="bold" opacity="0.4">{player.name}</text>
+                            <text x={coord.x} y={coord.y - markerSize - 15} textAnchor="middle"
+                              fill="white" fontSize="11" fontWeight="bold">{player.name}</text>
+
+                            {/* グレードバッジ */}
+                            <circle cx={coord.x + markerSize + 2} cy={coord.y - markerSize + 2}
+                              r="8" fill="#111827" stroke={grade.color === 'text-pink-400' ? '#ec4899' : grade.color === 'text-red-400' ? '#f87171' : grade.color === 'text-orange-400' ? '#fb923c' : grade.color === 'text-yellow-400' ? '#facc15' : grade.color === 'text-green-400' ? '#4ade80' : '#60a5fa'}
+                              strokeWidth="1.5" />
+                            <text x={coord.x + markerSize + 2} y={coord.y - markerSize + 3}
+                              textAnchor="middle" dominantBaseline="middle"
+                              fill={grade.color === 'text-pink-400' ? '#ec4899' : grade.color === 'text-red-400' ? '#f87171' : grade.color === 'text-orange-400' ? '#fb923c' : grade.color === 'text-yellow-400' ? '#facc15' : grade.color === 'text-green-400' ? '#4ade80' : '#60a5fa'}
+                              fontSize="9" fontWeight="bold">{grade.label}</text>
+
+                            {/* 適正バー（強化版） */}
+                            <rect x={coord.x - 20} y={coord.y + markerSize + 6} width="40" height="5" rx="2.5" fill="#1f2937" stroke="#374151" strokeWidth="0.5" />
+                            <rect x={coord.x - 20} y={coord.y + markerSize + 6} width={40 * fitness / 100} height="5" rx="2.5" fill={grad.main} opacity="0.85">
+                              <animate attributeName="width" from="0" to={40 * fitness / 100} dur="0.6s" begin={animDelay} fill="freeze"
+                                calcMode="spline" keySplines="0.25 0.46 0.45 0.94" />
+                            </rect>
+                            <text x={coord.x} y={coord.y + markerSize + 20} textAnchor="middle"
+                              fill={grad.main} fontSize="8" fontWeight="bold" opacity="0.9">
+                              適正{fitness}%
+                            </text>
+
+                            {/* 守力・走力の小アイコン */}
+                            <text x={coord.x - 14} y={coord.y + markerSize + 29} textAnchor="middle"
+                              fill="#9ca3af" fontSize="7">守{def}</text>
+                            <text x={coord.x + 14} y={coord.y + markerSize + 29} textAnchor="middle"
+                              fill="#9ca3af" fontSize="7">走{spd}</text>
                           </>
                         )}
                         {!player && (
-                          <text x={coord.x} y={coord.y - 22} textAnchor="middle" fill="#6b7280" fontSize="10">未配置</text>
+                          <text x={coord.x} y={coord.y - 22} textAnchor="middle" fill="#4a5568" fontSize="10">未配置</text>
                         )}
                       </g>
                     );
                   })}
+
+                  {/* 凡例 */}
+                  <g transform="translate(10, 405)">
+                    <text x="0" y="0" fill="#9ca3af" fontSize="8">適正:</text>
+                    {[{ label: '90+', color: '#ec4899' }, { label: '70+', color: '#f97316' }, { label: '50+', color: '#eab308' }, { label: '30+', color: '#22c55e' }, { label: '~29', color: '#3b82f6' }].map((item, i) => (
+                      <g key={i} transform={`translate(${32 + i * 45}, 0)`}>
+                        <circle cx="0" cy="-3" r="4" fill={item.color} opacity="0.7" />
+                        <text x="7" y="0" fill="#9ca3af" fontSize="7">{item.label}</text>
+                      </g>
+                    ))}
+                    <text x="270" y="0" fill="#6b7280" fontSize="7">○サイズ = 走力+守備力</text>
+                  </g>
                 </svg>
                 <p className="text-xs text-gray-500 mt-2 text-center">
                   ポジションをクリックして選択 → 交換先をクリックで守備位置を入れ替え（投手は変更不可）
