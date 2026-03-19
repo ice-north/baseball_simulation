@@ -443,11 +443,20 @@ export function processNPBDraft(allTeams) {
         const npbTeam = NPB_TEAMS[Math.floor(Math.random() * NPB_TEAMS.length)];
         // 殿堂入り判定
         const hofResult = checkHallOfFame(player);
+        // ドラフト順位を算出: 閾値から10ptごとに育成→6位→5位→4位→3位→2位→1位
+        const isPitcherForRound = player.position === 'pitcher';
+        const threshold = isPitcherForRound ? PITCHER_THRESHOLD : FIELDER_THRESHOLD;
+        const overThreshold = totalScore - threshold;
+        const DRAFT_ROUND_LABELS = ['育成指名', 'ドラフト6位', 'ドラフト5位', 'ドラフト4位', 'ドラフト3位', 'ドラフト2位', 'ドラフト1位'];
+        const roundIndex = Math.min(Math.floor(overThreshold / 10), DRAFT_ROUND_LABELS.length - 1);
+        const draftRound = DRAFT_ROUND_LABELS[Math.max(0, roundIndex)];
+
         draftedPlayers.push({
           player,
           teamName,
           npbTeam,
           reasons,
+          draftRound,
           position: player.position,
           age: player.age,
           name: player.name,

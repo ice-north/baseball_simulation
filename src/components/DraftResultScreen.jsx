@@ -15,6 +15,9 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContin
             {draftedPlayers.map((entry, idx) => (
               <div key={idx} className="bg-gray-700/60 rounded-lg p-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
+                  <span className={`font-bold text-xs px-1.5 py-0.5 rounded ${entry.draftRound === 'ドラフト1位' ? 'bg-red-600 text-white' : entry.draftRound === 'ドラフト2位' ? 'bg-orange-600 text-white' : entry.draftRound === '育成指名' ? 'bg-gray-600 text-gray-300' : 'bg-yellow-700 text-yellow-200'}`}>
+                    {entry.draftRound || '指名'}
+                  </span>
                   <span className="text-yellow-400 font-bold text-sm">{entry.npbTeam}</span>
                   <div>
                     <span className="text-white font-bold text-sm">{entry.name}</span>
