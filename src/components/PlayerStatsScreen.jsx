@@ -29,7 +29,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
       setBattingSortDir(battingSortDir === 'asc' ? 'desc' : 'asc');
     } else {
       setBattingSortKey(key);
-      setBattingSortDir(['strikeouts'].includes(key) ? 'asc' : 'desc');
+      setBattingSortDir(['strikeouts', 'errors'].includes(key) ? 'asc' : 'desc');
     }
   };
 
@@ -55,13 +55,15 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
       const singles = stats.hits - (stats.doubles || 0) - (stats.triples || 0) - stats.homeruns;
       const slg = stats.atBats > 0 ? ((singles + (stats.doubles || 0) * 2 + (stats.triples || 0) * 3 + stats.homeruns * 4) / stats.atBats) : 0;
       const ops = obp + slg;
-      return { ...p, stats, avg, obp, slg, ops };
+      const fieldingPct = (stats.fieldingChances || 0) > 0 ? ((stats.fieldingChances - (stats.errors || 0)) / stats.fieldingChances) : 0;
+      return { ...p, stats, avg, obp, slg, ops, fieldingPct };
     })
     .sort((a, b) => {
       let valA, valB;
       if (battingSortKey === 'avg') { valA = a.avg; valB = b.avg; }
       else if (battingSortKey === 'ops') { valA = a.ops; valB = b.ops; }
       else if (battingSortKey === 'obp') { valA = a.obp; valB = b.obp; }
+      else if (battingSortKey === 'fieldingPct') { valA = a.fieldingPct; valB = b.fieldingPct; }
       else { valA = a.stats[battingSortKey] || 0; valB = b.stats[battingSortKey] || 0; }
       return battingSortDir === 'asc' ? valA - valB : valB - valA;
     })
@@ -165,6 +167,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                   <SortableHeader label="打率" sortKey="avg" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="出塁" sortKey="obp" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="OPS" sortKey="ops" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="守備率" sortKey="fieldingPct" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
+                  <SortableHeader label="E" sortKey="errors" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                 </tr>
               </thead>
               <tbody>
@@ -191,12 +195,14 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                       <td className="py-1.5 px-1.5 text-right font-bold text-yellow-400">{player.avg.toFixed(3)}</td>
                       <td className="py-1.5 px-1.5 text-right text-gray-300">{player.obp.toFixed(3)}</td>
                       <td className="py-1.5 px-1.5 text-right font-bold text-cyan-400">{player.ops.toFixed(3)}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{(player.stats.fieldingChances || 0) > 0 ? player.fieldingPct.toFixed(3) : '-'}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-400">{player.stats.errors || 0}</td>
                     </tr>
                   );
                 })}
                 {battingStats.length === 0 && (
                   <tr>
-                    <td colSpan="14" className="py-6 text-center text-gray-600 text-sm">
+                    <td colSpan="16" className="py-6 text-center text-gray-600 text-sm">
                       まだ野手成績がありません。試合を進行してください。
                     </td>
                   </tr>
@@ -231,6 +237,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                   <SortableHeader label="防御率" sortKey="era" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="WHIP" sortKey="whip" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="K/BB" sortKey="kbb" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="QS" sortKey="qualityStarts" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
+                  <SortableHeader label="HQS" sortKey="highQualityStarts" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                 </tr>
               </thead>
               <tbody>
@@ -258,12 +266,14 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
                       <td className="py-1.5 px-1.5 text-right font-bold text-yellow-400">{player.era.toFixed(2)}</td>
                       <td className="py-1.5 px-1.5 text-right text-cyan-400">{player.whip.toFixed(2)}</td>
                       <td className="py-1.5 px-1.5 text-right">{player.kbb >= 99 ? '-' : player.kbb.toFixed(2)}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.qualityStarts || 0}</td>
+                      <td className="py-1.5 px-1.5 text-right text-gray-300">{player.stats.highQualityStarts || 0}</td>
                     </tr>
                   );
                 })}
                 {pitchingStats.length === 0 && (
                   <tr>
-                    <td colSpan="15" className="py-6 text-center text-gray-600 text-sm">
+                    <td colSpan="17" className="py-6 text-center text-gray-600 text-sm">
                       まだ投手成績がありません。試合を進行してください。
                     </td>
                   </tr>

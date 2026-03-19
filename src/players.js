@@ -25,7 +25,9 @@ export const createSeasonStats = () => ({
     rbis: 0,
     walks: 0,
     strikeouts: 0,
-    stolenBases: 0
+    stolenBases: 0,
+    errors: 0,
+    fieldingChances: 0
   },
   pitching: {
     games: 0,
@@ -40,7 +42,9 @@ export const createSeasonStats = () => ({
     homeruns: 0,
     walks: 0,
     strikeouts: 0,
-    pitches: 0
+    pitches: 0,
+    qualityStarts: 0,
+    highQualityStarts: 0
   }
 });
 
@@ -58,7 +62,9 @@ export const createCareerStats = () => ({
     rbis: 0,
     walks: 0,
     strikeouts: 0,
-    stolenBases: 0
+    stolenBases: 0,
+    errors: 0,
+    fieldingChances: 0
   },
   pitching: {
     games: 0,
@@ -73,7 +79,9 @@ export const createCareerStats = () => ({
     homeruns: 0,
     walks: 0,
     strikeouts: 0,
-    pitches: 0
+    pitches: 0,
+    qualityStarts: 0,
+    highQualityStarts: 0
   }
 });
 

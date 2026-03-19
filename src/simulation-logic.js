@@ -250,7 +250,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   if (launchAngle >= 60) {
     const catchProb = 0.95 + (safeDefense.catcher?.defense || 70) / 2000;
     if (Math.random() < catchProb) {
-      return { result: 'out', bases: 0, description: 'フライアウト（ポップフライ）', isOutfieldFly: false };
+      return { result: 'out', bases: 0, description: 'フライアウト（ポップフライ）', isOutfieldFly: false, fieldingPosition: 'catcher' };
     }
     return { result: 'single', bases: 1, description: 'ポテンヒット' };
   }
@@ -335,16 +335,16 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
         // エラー判定
         const errorRate = 0.003 + (100 - fielder.defense) / 2000;
         if (Math.random() < errorRate) {
-          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true };
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
         }
-        return { result: 'out', bases: 0, description: `${position === 'pitcher' ? '投' : position === 'first' ? '一' : position === 'second' ? '二' : position === 'short' ? '遊' : '三'}ゴロ`, isOutfieldFly: false };
+        return { result: 'out', bases: 0, description: `${position === 'pitcher' ? '投' : position === 'first' ? '一' : position === 'second' ? '二' : position === 'short' ? '遊' : '三'}ゴロ`, isOutfieldFly: false, fieldingPosition: position };
       }
       return { result: 'single', bases: 1, description: '内野安打' };
     } else {
       // 外野への速いゴロ - 足と守備で大きく変動
       const catchProb = 0.25 + (fielder.speed / 100) * 0.20 * weight + (fielder.defense / 100) * 0.10 * weight;
       if (Math.random() < catchProb) {
-        return { result: 'out', bases: 0, description: '外野ゴロアウト', isOutfieldFly: false };
+        return { result: 'out', bases: 0, description: '外野ゴロアウト', isOutfieldFly: false, fieldingPosition: position };
       }
       return { result: 'single', bases: 1, description: '外野への安打' };
     }
@@ -360,7 +360,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const catchProb = Math.min(0.96, baseOutRate + defenseBonus + speedBonus);
 
       if (Math.random() < catchProb) {
-        return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: false };
+        return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: false, fieldingPosition: position };
       }
       return { result: 'single', bases: 1, description: 'ヒット！' };
     } else {
@@ -371,7 +371,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const catchProb = Math.min(0.94, baseOutRate + defenseBonus + speedBonus);
 
       if (Math.random() < catchProb) {
-        return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: true, tagupThrowbackChance: (fielder.arm / 100) * 0.5 };
+        return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: true, tagupThrowbackChance: (fielder.arm / 100) * 0.5, fieldingPosition: position };
       }
       // 長打判定
       if (distance > 70 && exitVelocity >= 140) {
@@ -386,7 +386,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     // 内野フライ - 旧モデル: 97%アウト
     const catchProb = 0.97 + (fielder.defense / 100) * 0.02;
     if (Math.random() < catchProb) {
-      return { result: 'out', bases: 0, description: 'フライアウト', isOutfieldFly: false };
+      return { result: 'out', bases: 0, description: 'フライアウト', isOutfieldFly: false, fieldingPosition: position };
     }
     return { result: 'single', bases: 1, description: 'ポテンヒット' };
   }
@@ -415,7 +415,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       bases: 0,
       description: 'フライアウト',
       isOutfieldFly: isDeepFly,
-      tagupThrowbackChance: isDeepFly ? (fielder.arm / 100) * 0.6 : 0
+      tagupThrowbackChance: isDeepFly ? (fielder.arm / 100) * 0.6 : 0,
+      fieldingPosition: position
     };
   }
 

@@ -708,7 +708,9 @@ export function resetSeasonStats(allTeams) {
           rbis: (cb.rbis || 0) + (sb.rbis || 0),
           walks: (cb.walks || 0) + (sb.walks || 0),
           strikeouts: (cb.strikeouts || 0) + (sb.strikeouts || 0),
-          stolenBases: (cb.stolenBases || 0) + (sb.stolenBases || 0)
+          stolenBases: (cb.stolenBases || 0) + (sb.stolenBases || 0),
+          errors: (cb.errors || 0) + (sb.errors || 0),
+          fieldingChances: (cb.fieldingChances || 0) + (sb.fieldingChances || 0)
         };
 
         const cp = player.careerStats.pitching;
@@ -726,7 +728,9 @@ export function resetSeasonStats(allTeams) {
           homeruns: (cp.homeruns || 0) + (sp.homeruns || 0),
           walks: (cp.walks || 0) + (sp.walks || 0),
           strikeouts: (cp.strikeouts || 0) + (sp.strikeouts || 0),
-          pitches: (cp.pitches || 0) + (sp.pitches || 0)
+          pitches: (cp.pitches || 0) + (sp.pitches || 0),
+          qualityStarts: (cp.qualityStarts || 0) + (sp.qualityStarts || 0),
+          highQualityStarts: (cp.highQualityStarts || 0) + (sp.highQualityStarts || 0)
         };
 
         // 前年成績を保存してからシーズン成績をリセット
@@ -738,8 +742,8 @@ export function resetSeasonStats(allTeams) {
             pitching: updatedCareerPitching
           },
           seasonStats: {
-            batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-            pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
+            batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, errors: 0, fieldingChances: 0 },
+            pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0, qualityStarts: 0, highQualityStarts: 0 }
           }
         };
       })

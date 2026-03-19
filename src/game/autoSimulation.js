@@ -314,7 +314,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         currentStamina: p.pitching?.stamina || 100,
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-          pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
+          pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 },
+          fielding: { chances: 0, errors: 0 }
         }
       }))
     },
@@ -326,7 +327,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         currentStamina: p.pitching?.stamina || 100,
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-          pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 }
+          pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 },
+          fielding: { chances: 0, errors: 0 }
         }
       }))
     },
@@ -536,14 +538,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             return {
               type: 'out',
               isOutfieldFly: fieldResult.isOutfieldFly || false,
-              tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0
+              tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0,
+              fieldingPosition: fieldResult.fieldingPosition
             };
           } else if (fieldResult.result === 'triple') {
             return { type: 'triple' };
           } else if (fieldResult.result === 'double') {
             return { type: 'double' };
           } else {
-            return { type: 'single' };
+            return { type: 'single', isError: fieldResult.isError || false, errorPosition: fieldResult.errorPosition };
           }
         } else {
           // 空振り
@@ -1145,10 +1148,18 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           // 2ストライク時のファウルはカウント変わらず
           break;
 
-        case 'out':
+        case 'out': {
           batter.gameStats.batting.atBats++;
           pitcher.gameStats.pitching.outs++;
           gameState.outs++;
+
+          // 守備機会を記録（アウトにした野手）
+          if (result.fieldingPosition) {
+            const outFielder = defenseTeam.players.find(p => p.position === result.fieldingPosition && p.battingOrder >= 1);
+            if (outFielder) {
+              outFielder.gameStats.fielding.chances++;
+            }
+          }
 
           // 外野フライでのタッグアップ（犠牲フライ・進塁）
           if (result.isOutfieldFly && gameState.outs < 3) {
@@ -1183,6 +1194,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
           atBatOver = true;
           break;
+        }
 
         case 'double_play':
           batter.gameStats.batting.atBats++;
@@ -1207,6 +1219,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           // 投手の被安打・被本塁打を記録
           pitcher.gameStats.pitching.hits = (pitcher.gameStats.pitching.hits || 0) + 1;
           if (result.type === 'homerun') pitcher.gameStats.pitching.homeruns = (pitcher.gameStats.pitching.homeruns || 0) + 1;
+
+          // エラー記録（守備側の該当野手）
+          if (result.isError && result.errorPosition) {
+            const errorFielder = defenseTeam.players.find(p => p.position === result.errorPosition && p.battingOrder >= 1);
+            if (errorFielder) {
+              errorFielder.gameStats.fielding.errors++;
+              errorFielder.gameStats.fielding.chances++;
+            }
+          }
 
           if (gameState.isTopInning) gameState.score.away += runsScored;
           else gameState.score.home += runsScored;
@@ -1684,6 +1705,22 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         playerData.experience = (playerData.experience || 0) + expGained;
         console.log(`   疲労蓄積: ${playerData.name} +${p.pitches}球 → 疲労${playerData.fatigue}, 経験+${expGained}`);
 
+        // QS/HQS判定（先発投手のみ: 打順9番で最初から投げた投手）
+        if (player.battingOrder === 9) {
+          const innings = p.outs; // アウト数（18アウト = 6回）
+          const earnedRuns = p.runsAllowed; // 簡易版：全て自責点
+          // QS: 6回以上 && 自責点3以下
+          if (innings >= 18 && earnedRuns <= 3) {
+            season.qualityStarts = (season.qualityStarts || 0) + 1;
+            career.qualityStarts = (career.qualityStarts || 0) + 1;
+          }
+          // HQS: 7回以上 && 自責点2以下
+          if (innings >= 21 && earnedRuns <= 2) {
+            season.highQualityStarts = (season.highQualityStarts || 0) + 1;
+            career.highQualityStarts = (career.highQualityStarts || 0) + 1;
+          }
+        }
+
         // 勝敗の判定（簡易版：先発投手のみ）
         if (player.battingOrder === 9 && p.outs >= 15) { // 5イニング以上投げた先発
           if (isWinner) {
@@ -1693,6 +1730,19 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             season.losses++;
             career.losses++;
           }
+        }
+      }
+
+      // 守備成績の集計
+      if (player.gameStats.fielding) {
+        const f = player.gameStats.fielding;
+        if (f.chances > 0 || f.errors > 0) {
+          const season = playerData.seasonStats.batting;
+          const career = playerData.careerStats.batting;
+          season.fieldingChances = (season.fieldingChances || 0) + f.chances;
+          season.errors = (season.errors || 0) + f.errors;
+          career.fieldingChances = (career.fieldingChances || 0) + f.chances;
+          career.errors = (career.errors || 0) + f.errors;
         }
       }
     });
