@@ -4590,6 +4590,7 @@ if (newOuts === 3) {
                     teamName: d.teamName,
                     departureType: 'npb_drafted',
                     npbTeam: d.npbTeam,
+                    draftRound: d.draftRound,
                     hallOfFame: d.hallOfFame || false,
                     hofReason: d.hofReason,
                     reason: `NPBドラフト指名 (${d.npbTeam})`,

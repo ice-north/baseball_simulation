@@ -182,7 +182,14 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) =>
                             </td>
                             <td className="py-1.5 px-1 text-center text-gray-500">{player.age}</td>
                             <td className="py-1.5 px-2 text-gray-400">{player.teamName || player.team}</td>
-                            <td className="py-1.5 px-2 text-yellow-400 font-bold">{player.npbTeam || '-'}</td>
+                            <td className="py-1.5 px-2">
+                              <span className="text-yellow-400 font-bold">{player.npbTeam || '-'}</span>
+                              {player.draftRound && (
+                                <span className={`ml-1 text-[9px] px-1 py-0.5 rounded ${player.draftRound === 'ドラフト1位' ? 'bg-red-600/60 text-red-200' : player.draftRound === 'ドラフト2位' ? 'bg-orange-600/60 text-orange-200' : player.draftRound === '育成指名' ? 'bg-gray-600/60 text-gray-300' : 'bg-yellow-700/60 text-yellow-200'}`}>
+                                  {player.draftRound}
+                                </span>
+                              )}
+                            </td>
                             <td className="py-1.5 px-2 text-right text-gray-300 font-mono text-[10px]">{mainStat}</td>
                           </tr>
                           {isExpanded && (
