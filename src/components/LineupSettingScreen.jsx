@@ -253,8 +253,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     const rotation = team.pitchingRotation;
     if (!rotation.pitcherRoles) rotation.pitcherRoles = {};
 
-    // 全既存配列から除外
-    rotation.starters = (rotation.starters || []).filter(id => id !== playerId);
+    const wasStarter = (rotation.starters || []).includes(playerId);
+    const isNewStarter = ['complete', 'short', 'quality', 'auto_s'].includes(newRole);
+
+    // 先発→先発の変更時はstarters配列を触らない（順番維持）
+    if (!(wasStarter && isNewStarter)) {
+      rotation.starters = (rotation.starters || []).filter(id => id !== playerId);
+    }
     rotation.middleRelievers = (rotation.middleRelievers || []).filter(id => id !== playerId);
     rotation.setupMen = (rotation.setupMen || []).filter(id => id !== playerId);
     if (rotation.closer === playerId) rotation.closer = null;
@@ -263,9 +268,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       delete rotation.pitcherRoles[playerId];
     } else {
       rotation.pitcherRoles[playerId] = newRole;
-      // レガシー配列にも反映
-      if (['complete', 'short', 'quality', 'auto_s'].includes(newRole)) {
-        rotation.starters.push(playerId);
+      // レガシー配列にも反映（先発→先発は既に配列内なのでスキップ）
+      if (isNewStarter) {
+        if (!wasStarter) rotation.starters.push(playerId);
       } else if (['long', 'onepoint', 'ace_relief', 'mopup', 'behind', 'auto_r'].includes(newRole)) {
         if (!rotation.middleRelievers) rotation.middleRelievers = [];
         rotation.middleRelievers.push(playerId);
