@@ -6,22 +6,22 @@
 import { generateRandomPlayerName } from '../data/playerNames.js';
 
 /**
- * 利き手を決定（リアルな分布、左投げ増加）
- * - 右投右打: 45%
- * - 右投左打: 25%
- * - 左投左打: 22%（増加）
- * - 右投両打: 5%
- * - 左投右打: 3%（レア）
+ * 利き手を決定（左投・左打の発生率を強化）
+ * - 右投右打: 35%
+ * - 右投左打: 28%
+ * - 左投左打: 29%
+ * - 右投両打: 4%
+ * - 左投右打: 4%（レア）
  */
 function determineHandedness() {
   const rand = Math.random() * 100;
-  if (rand < 45) {
+  if (rand < 35) {
     return { throws: 'right', bats: 'right' };
-  } else if (rand < 70) {
+  } else if (rand < 63) {
     return { throws: 'right', bats: 'left' };
   } else if (rand < 92) {
     return { throws: 'left', bats: 'left' };
-  } else if (rand < 97) {
+  } else if (rand < 96) {
     return { throws: 'right', bats: 'switch' };
   } else {
     return { throws: 'left', bats: 'right' }; // レアな左投右打
