@@ -580,6 +580,28 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           // 全選手をロール別にグループ分け（投手以外の野手も表示可能に）
           const allPlayers = team.players || [];
           const starterPitchers = allPlayers.filter(p => ['complete', 'short', 'quality', 'auto_s'].includes(getPitcherRole(p.id)));
+          // rotation.starters の順序でソート（ローテ順）
+          const starterOrder = team.pitchingRotation.starters || [];
+          starterPitchers.sort((a, b) => {
+            const ia = starterOrder.indexOf(a.id);
+            const ib = starterOrder.indexOf(b.id);
+            return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+          });
+
+          // 先発ローテ順入れ替え（starterPitchers配列のインデックスからstarters配列内の位置を特定）
+          const handleSwapStarter = (displayIdx, direction) => {
+            const starters = team.pitchingRotation.starters;
+            if (!starters) return;
+            const playerId = starterPitchers[displayIdx]?.id;
+            const targetPlayerId = starterPitchers[displayIdx + direction]?.id;
+            if (!playerId || !targetPlayerId) return;
+            const idx = starters.indexOf(playerId);
+            const targetIdx = starters.indexOf(targetPlayerId);
+            if (idx === -1 || targetIdx === -1) return;
+            starters[idx] = targetPlayerId;
+            starters[targetIdx] = playerId;
+            setUpdateTrigger(prev => prev + 1);
+          };
           const reliefPitchers = allPlayers.filter(p => ['long', 'onepoint', 'ace_relief', 'mopup', 'behind', 'auto_r', 'setup', 'closer'].includes(getPitcherRole(p.id)));
           const unassignedPitchers = allPlayers.filter(p => p.position === 'pitcher' && getPitcherRole(p.id) === 'none');
           const fieldersForConvert = allPlayers.filter(p => p.position !== 'pitcher' && getPitcherRole(p.id) === 'none');
@@ -612,7 +634,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           };
 
           // 投手行コンポーネント（2行表示、変化球+コンバート対応）
-          const PitcherRow = ({ player, index, showConvert }) => {
+          const PitcherRow = ({ player, index, showConvert, showReorder, totalCount }) => {
             const role = getPitcherRole(player.id);
             const roleInfo = PITCHER_ROLES[role];
             const p = player.pitching || {};
@@ -643,6 +665,20 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {showReorder && (
+                      <>
+                        <button
+                          onClick={() => handleSwapStarter(index, -1)}
+                          disabled={index === 0}
+                          className={`px-2 py-0.5 rounded text-xs font-bold ${index === 0 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-500 hover:bg-gray-400 text-white'}`}
+                        >↑</button>
+                        <button
+                          onClick={() => handleSwapStarter(index, 1)}
+                          disabled={index === totalCount - 1}
+                          className={`px-2 py-0.5 rounded text-xs font-bold ${index === totalCount - 1 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-500 hover:bg-gray-400 text-white'}`}
+                        >↓</button>
+                      </>
+                    )}
                     <span className={`${roleInfo.color} text-white px-2 py-0.5 rounded text-xs font-bold`}>{roleInfo.label}</span>
                     <select
                       value={role}
@@ -667,6 +703,20 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                       <option value="none">未設定</option>
                     </select>
                   </div>
+                </div>
+                <div className="text-[10px] text-gray-500 text-right mt-0.5">
+                  {role === 'complete' && '完投を目指して長いイニングを投げる'}
+                  {role === 'short' && '3-4回で降板し中継ぎに繋ぐ'}
+                  {role === 'quality' && '6回・勝ち権利まで投げて降板'}
+                  {role === 'auto_s' && '能力に応じて自動で投球回数を調整'}
+                  {role === 'long' && '先発降板後に長いイニングをカバー'}
+                  {role === 'mopup' && '大差ビハインド時に登板しスタミナ温存'}
+                  {role === 'behind' && 'ビハインド時にイニングを繋ぐ'}
+                  {role === 'onepoint' && '特定の打者1人に対して登板'}
+                  {role === 'ace_relief' && '中継ぎの柱として僅差で登板'}
+                  {role === 'setup' && '7-8回の僅差で守護神に繋ぐ'}
+                  {role === 'closer' && '9回・リード時に試合を締める'}
+                  {role === 'auto_r' && '状況に応じて自動で登板場面を判断'}
                 </div>
                 <div className="flex items-center gap-1 text-xs flex-wrap">
                   <span className="text-gray-500 mr-1">投:</span>
@@ -732,7 +782,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 ) : (
                   <div className="space-y-2">
                     {starterPitchers.map((player, idx) => (
-                      <PitcherRow key={player.id} player={player} index={idx} showConvert />
+                      <PitcherRow key={player.id} player={player} index={idx} showConvert showReorder totalCount={starterPitchers.length} />
                     ))}
                   </div>
                 )}
