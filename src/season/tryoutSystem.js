@@ -10,8 +10,8 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
  * - 右投右打: 35%
  * - 右投左打: 28%
  * - 左投左打: 29%
- * - 右投両打: 4%
- * - 左投右打: 4%（レア）
+ * - 右投両打: 5%
+ * - 左投右打: 1%（レア）
  */
 function determineHandedness() {
   const rand = Math.random() * 100;
@@ -19,9 +19,9 @@ function determineHandedness() {
     return { throws: 'right', bats: 'right' };
   } else if (rand < 63) {
     return { throws: 'right', bats: 'left' };
-  } else if (rand < 92) {
+  } else if (rand < 94) {
     return { throws: 'left', bats: 'left' };
-  } else if (rand < 96) {
+  } else if (rand < 99) {
     return { throws: 'right', bats: 'switch' };
   } else {
     return { throws: 'left', bats: 'right' }; // レアな左投右打
