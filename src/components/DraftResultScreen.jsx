@@ -12,19 +12,27 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContin
         <div className="bg-gray-800 rounded-lg p-4 mb-3">
           <h2 className="text-sm font-bold text-yellow-400 mb-2">ドラフト指名選手</h2>
           <div className="space-y-1.5">
-            {draftedPlayers.map((entry, idx) => (
-              <div key={idx} className="bg-gray-700/60 rounded-lg p-2.5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`font-bold text-xs px-1.5 py-0.5 rounded ${entry.draftRound === 'ドラフト1位' ? 'bg-red-600 text-white' : entry.draftRound === 'ドラフト2位' ? 'bg-orange-600 text-white' : entry.draftRound === '育成指名' ? 'bg-gray-600 text-gray-300' : 'bg-yellow-700 text-yellow-200'}`}>
-                    {entry.draftRound || '指名'}
-                  </span>
-                  <span className="text-yellow-400 font-bold text-sm">{entry.npbTeam}</span>
-                  <div>
-                    <span className="text-white font-bold text-sm">{entry.name}</span>
-                    <span className="text-gray-500 text-xs ml-1.5">{entry.age}歳</span>
-                    <span className="text-blue-400 text-xs ml-1.5">{POSITION_NAMES[entry.position] || entry.position}</span>
+            {draftedPlayers.map((entry, idx) => {
+              const careerTitles = entry.player?.professionalCareer?.achievements || [];
+              const currentSeasonTitles = (entry.seasonAwards || []).filter(a => a.endsWith('1位')).map(a => a.replace('1位', ''));
+              const titleCounts = {};
+              careerTitles.forEach(a => { titleCounts[a.title] = (titleCounts[a.title] || 0) + 1; });
+              currentSeasonTitles.forEach(t => { titleCounts[t] = (titleCounts[t] || 0) + 1; });
+              const allTitles = Object.entries(titleCounts);
+              // reasons から能力値系を除外
+              const filteredReasons = entry.reasons.filter(r => !/ミート|パワー|選球眼|走力|守備|肩力|盗塁|球速|制球|スタミナ|俊足/.test(r));
+              return (
+                <div key={idx} className="bg-gray-700/60 rounded-lg p-2.5">
+                  <div className="flex items-center gap-2 whitespace-nowrap flex-wrap">
+                    <span className={`font-bold text-xs px-1.5 py-0.5 rounded shrink-0 ${entry.draftRound === 'ドラフト1位' ? 'bg-red-600 text-white' : entry.draftRound === 'ドラフト2位' ? 'bg-orange-600 text-white' : entry.draftRound === '育成指名' ? 'bg-gray-600 text-gray-300' : 'bg-yellow-700 text-yellow-200'}`}>
+                      {entry.draftRound || '指名'}
+                    </span>
+                    <span className="text-yellow-400 font-bold text-sm shrink-0">{entry.npbTeam}</span>
+                    <span className="text-white font-bold text-sm shrink-0">{entry.name}</span>
+                    <span className="text-gray-500 text-xs shrink-0">{entry.age}歳</span>
+                    <span className="text-blue-400 text-xs shrink-0">{POSITION_NAMES[entry.position] || entry.position}</span>
                     {entry.player?.physical && entry.player?.batting && (
-                      <span className="text-xs ml-1.5">
+                      <span className="text-xs shrink-0">
                         <span className={entry.player.physical.throws === 'left' ? 'text-green-400' : 'text-gray-400'}>
                           {entry.player.physical.throws === 'left' ? '左' : '右'}投
                         </span>
@@ -33,37 +41,19 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContin
                         </span>
                       </span>
                     )}
+                    <span className="text-xs text-gray-500 shrink-0">元 {entry.teamName}</span>
+                    {allTitles.map(([title, count], i) => (
+                      <span key={i} className="text-[10px] bg-yellow-600/40 text-yellow-300 px-1 py-0.5 rounded font-bold shrink-0">
+                        {title}{count > 1 ? `×${count}` : ''}
+                      </span>
+                    ))}
                   </div>
+                  {filteredReasons.length > 0 && (
+                    <div className="text-[10px] text-yellow-300/70 mt-1">{filteredReasons.join(' / ')}</div>
+                  )}
                 </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-500">元 {entry.teamName}</div>
-                  {(() => {
-                    const careerTitles = entry.player?.professionalCareer?.achievements || [];
-                    const currentSeasonTitles = (entry.seasonAwards || []).filter(a => a.endsWith('1位')).map(a => a.replace('1位', ''));
-                    // 通算タイトル数を集計
-                    const titleCounts = {};
-                    careerTitles.forEach(a => {
-                      titleCounts[a.title] = (titleCounts[a.title] || 0) + 1;
-                    });
-                    // 今シーズンのタイトルも加算
-                    currentSeasonTitles.forEach(t => {
-                      titleCounts[t] = (titleCounts[t] || 0) + 1;
-                    });
-                    const allTitles = Object.entries(titleCounts);
-                    return allTitles.length > 0 ? (
-                      <div className="flex flex-wrap justify-end gap-1 mt-0.5">
-                        {allTitles.map(([title, count], i) => (
-                          <span key={i} className="text-[10px] bg-yellow-600/40 text-yellow-300 px-1 py-0.5 rounded font-bold">
-                            {title}{count > 1 ? `×${count}` : ''}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null;
-                  })()}
-                  <div className="text-[10px] text-yellow-300/70">{entry.reasons.join(' / ')}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <p className="text-gray-500 text-[10px] mt-2">
             指名された選手はチームから離脱し、NPBへ移籍しました。
