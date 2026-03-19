@@ -5608,9 +5608,16 @@ if (newOuts === 3) {
                       {getCurrentPitcher().pitching.velocity}km/h
                     </div>
                     <div className="text-sm font-bold text-blue-700">
-                      防御率 {getCurrentPitcher().stats?.pitching?.outs > 0 
-                        ? ((getCurrentPitcher().stats.pitching.runsAllowed * 27) / getCurrentPitcher().stats.pitching.outs).toFixed(2) 
-                        : '-.--'}
+                      防御率 {(() => {
+                        const p = getCurrentPitcher();
+                        const seasonIP = p.seasonStats?.pitching?.inningsPitched || 0;
+                        const gameOuts = p.stats?.pitching?.outs || 0;
+                        const totalOuts = seasonIP + gameOuts;
+                        if (totalOuts === 0) return '-.--';
+                        const seasonER = p.seasonStats?.pitching?.earnedRuns || 0;
+                        const gameER = p.stats?.pitching?.earnedRuns || p.stats?.pitching?.runsAllowed || 0;
+                        return ((seasonER + gameER) * 27 / totalOuts).toFixed(2);
+                      })()}
                     </div>
                     <div className="text-xs text-orange-500 mt-1">
                       スタミナ: {currentStamina}/{getCurrentPitcher().pitching.stamina}
@@ -5633,11 +5640,19 @@ if (newOuts === 3) {
                       {getCurrentBatter().batting.bats === 'switch' ? '両打' : getCurrentBatter().batting.bats === 'right' ? '右打' : '左打'}
                     </div>
                     <div className="text-sm font-bold text-red-700">
-                      {getCurrentBatter().stats?.batting?.atBats > 0 
-                        ? (getCurrentBatter().stats.batting.hits / getCurrentBatter().stats.batting.atBats).toFixed(3) 
-                        : '.000'} | 
-                      {getCurrentBatter().stats?.batting?.homeruns || 0}本 | 
-                      {getCurrentBatter().stats?.batting?.rbis || 0}打点
+                      {(() => {
+                        const b = getCurrentBatter();
+                        const sAB = b.seasonStats?.batting?.atBats || 0;
+                        const sH = b.seasonStats?.batting?.hits || 0;
+                        const gAB = b.gameStats?.atBats || 0;
+                        const gH = b.gameStats?.hits || 0;
+                        const totalAB = sAB + gAB;
+                        const totalH = sH + gH;
+                        const avg = totalAB > 0 ? (totalH / totalAB).toFixed(3) : '.000';
+                        const hr = (b.seasonStats?.batting?.homeruns || 0) + (b.gameStats?.homeruns || 0);
+                        const rbi = (b.seasonStats?.batting?.rbis || 0) + (b.gameStats?.rbis || 0);
+                        return `${avg} | ${hr}本 | ${rbi}打点`;
+                      })()}
                     </div>
                     <div className="text-xs mt-1">
                       <span className={`px-2 py-0.5 rounded ${
