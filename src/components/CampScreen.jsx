@@ -556,6 +556,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-2 text-left w-20">選手</th>
                     <th className="py-1.5 px-1 text-center w-7">位</th>
                     <th className="py-1.5 px-1 text-center w-6">齢</th>
+                    <th className="py-1.5 px-1 text-center w-8">投/打</th>
                     <th className="py-1.5 px-1 text-center w-7">ミ</th>
                     <th className="py-1.5 px-1 text-center w-7">パ</th>
                     <th className="py-1.5 px-1 text-center w-7">走</th>
@@ -566,6 +567,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-1 text-center w-7">制</th>
                     <th className="py-1.5 px-1 text-center w-9">ス</th>
                     <th className="py-1.5 px-2 text-left">変化球</th>
+                    <th className="py-1.5 px-2 text-left">前年成績</th>
                     {/* サブポジション適性 */}
                     {subPosHeaders.map(pos => (
                       <th key={pos} className="py-1.5 px-0.5 text-center w-6" title={POSITION_NAMES[pos]}>{subPosShort[pos]}</th>
@@ -596,6 +598,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
                         </td>
                         <td className="py-1 px-1 text-center text-gray-500 text-[10px]">{player.age || 20}</td>
+                        <td className="py-1 px-1 text-center text-[10px]">
+                          <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>{ph.throws === 'left' ? '左' : '右'}</span>
+                          <span className="text-gray-600">/</span>
+                          <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
+                        </td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.speed||0} label="走力" /></td>
@@ -606,6 +613,21 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
                         <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono truncate max-w-[100px]">{getArsenalDisplay(player)}</td>
+                        <td className="py-1 px-2 text-[10px] font-mono text-gray-400 whitespace-nowrap">
+                          {(() => {
+                            const prev = player.previousSeasonStats;
+                            if (!prev) return <span className="text-gray-600">-</span>;
+                            if (isPitcher(player)) {
+                              const ip = prev.pitching?.inningsPitched || 0;
+                              const era = ip > 0 ? ((prev.pitching?.earnedRuns || 0) / ip * 9).toFixed(2) : '-';
+                              return <>{era !== '-' ? era : '-'} {prev.pitching?.wins || 0}勝{prev.pitching?.saves || 0}S {prev.pitching?.strikeouts || 0}K</>;
+                            } else {
+                              const ab = prev.batting?.atBats || 0;
+                              const avg = ab > 0 ? (prev.batting.hits / ab).toFixed(3) : '-';
+                              return <>{avg} {prev.batting?.homeruns || 0}HR {prev.batting?.hits || 0}安 {prev.batting?.rbis || 0}点</>;
+                            }
+                          })()}
+                        </td>
                         {/* サブポジション適性 */}
                         {subPosHeaders.map(pos => (
                           <td key={pos} className="py-1 px-0.5 text-center font-mono">

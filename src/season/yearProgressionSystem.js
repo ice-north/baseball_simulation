@@ -718,9 +718,10 @@ export function resetSeasonStats(allTeams) {
           pitches: (cp.pitches || 0) + (sp.pitches || 0)
         };
 
-        // シーズン成績をリセット
+        // 前年成績を保存してからシーズン成績をリセット
         return {
           ...player,
+          previousSeasonStats: JSON.parse(JSON.stringify(player.seasonStats)),
           careerStats: {
             batting: updatedCareerBatting,
             pitching: updatedCareerPitching
