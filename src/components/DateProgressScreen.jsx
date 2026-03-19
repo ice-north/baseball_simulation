@@ -279,7 +279,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
             <div className="grid grid-cols-7 gap-0.5 mb-0.5">
               {dayNames.map((name, i) => (
-                <div key={i} className={`text-center text-xs font-bold py-1 rounded ${i === 0 ? 'text-red-400 bg-red-900/20' : i === 6 ? 'text-blue-400 bg-blue-900/20' : 'text-gray-500'}`}>{name}</div>
+                <div key={i} className={`text-center text-xs font-bold py-1 rounded ${i === 0 ? 'text-red-400 bg-red-900/20' : i === 6 ? 'text-blue-400 bg-blue-900/20' : 'text-white'}`}>{name}</div>
               ))}
             </div>
 
@@ -308,11 +308,31 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               }
                               const awayWin = game.result.awayScore > game.result.homeScore;
                               const homeWin = game.result.homeScore > game.result.awayScore;
+                              // プレーオフの通算成績を計算
+                              let seriesInfo = null;
+                              if (game.seriesId && game.phase === SEASON_PHASES.PLAYOFFS) {
+                                const seriesGames = (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && g.result && !g.cancelled);
+                                const upToThis = seriesGames.filter(g => g.seriesGame <= game.seriesGame);
+                                const homeTeamInSeries = (seasonData.schedule || []).find(g => g.seriesId === game.seriesId && g.seriesGame === 1)?.home || game.home;
+                                let homeWins = 0, awayWins = 0;
+                                upToThis.forEach(g => {
+                                  const hWon = g.result.homeScore > g.result.awayScore;
+                                  const isSeriesHome = g.home === homeTeamInSeries;
+                                  if ((hWon && isSeriesHome) || (!hWon && !isSeriesHome)) homeWins++;
+                                  else awayWins++;
+                                });
+                                const totalPlayed = upToThis.length;
+                                const maxGames = seriesGames.length + (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && !g.result && !g.cancelled).length;
+                                seriesInfo = `${maxGames}戦中${homeWins}勝${awayWins}敗`;
+                              }
                               return (
-                                <div key={gIdx} className="text-[11px] leading-tight">
-                                  <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-500'}>{awayShort}</span>
-                                  <span className="text-gray-600 mx-px">{game.result.awayScore}-{game.result.homeScore}</span>
-                                  <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-500'}>{homeShort}</span>
+                                <div key={gIdx} className="leading-tight">
+                                  <div className="text-[11px]">
+                                    <span className={awayWin ? 'text-green-400 font-bold' : 'text-white'}>{awayShort}</span>
+                                    <span className="text-white mx-px">{game.result.awayScore}-{game.result.homeScore}</span>
+                                    <span className={homeWin ? 'text-green-400 font-bold' : 'text-white'}>{homeShort}</span>
+                                  </div>
+                                  {seriesInfo && <div className="text-[9px] text-yellow-300">{seriesInfo}</div>}
                                 </div>
                               );
                             })}
@@ -343,8 +363,25 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   const awayPitcher = getStartingPitcher(game.away);
                   const homePitcher = getStartingPitcher(game.home);
                   const hasResult = !!game.result;
+                  // プレーオフ通算成績
+                  let todaySeriesInfo = null;
+                  if (game.seriesId && game.phase === SEASON_PHASES.PLAYOFFS) {
+                    const seriesAll = (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && !g.cancelled);
+                    const played = seriesAll.filter(g => g.result);
+                    const homeTeamInSeries = seriesAll.find(g => g.seriesGame === 1)?.home || game.home;
+                    let hWins = 0, aWins = 0;
+                    played.forEach(g => {
+                      const hWon = g.result.homeScore > g.result.awayScore;
+                      const isSeriesHome = g.home === homeTeamInSeries;
+                      if ((hWon && isSeriesHome) || (!hWon && !isSeriesHome)) hWins++;
+                      else aWins++;
+                    });
+                    const roundLabel = game.playoffRound === 'semi' ? '準決勝' : '決勝';
+                    todaySeriesInfo = `${roundLabel} 第${game.seriesGame}戦 (${seriesAll.length}戦中${hWins}勝${aWins}敗)`;
+                  }
                   return (
                     <div key={game.id} className={`rounded-xl p-2.5 transition-all ${hasResult ? 'bg-gray-700/50' : 'bg-gradient-to-r from-gray-700/80 to-gray-700/60 border border-gray-600/30'}`}>
+                      {todaySeriesInfo && <div className="text-center text-[11px] text-yellow-300 font-bold mb-1">{todaySeriesInfo}</div>}
                       <div className="flex items-center justify-between">
                         <div className="text-center flex-1">
                           <div className="text-white font-bold text-base">{(game.away || '').slice(0, 4)}</div>
@@ -356,6 +393,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           <div className="text-xs text-yellow-400/80 mt-0.5">{homePitcher ? `${homePitcher.name}` : '未定'}</div>
                         </div>
                       </div>
+                      {hasResult && (
+                        <div className="text-center mt-1 text-sm font-bold">
+                          <span className={game.result.awayScore > game.result.homeScore ? 'text-green-400' : 'text-white'}>{game.result.awayScore}</span>
+                          <span className="text-gray-400 mx-1">-</span>
+                          <span className={game.result.homeScore > game.result.awayScore ? 'text-green-400' : 'text-white'}>{game.result.homeScore}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -484,7 +528,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   </h2>
                   <table className="w-full text-white text-sm">
                     <thead>
-                      <tr className="border-b border-gray-600 text-gray-500 text-xs">
+                      <tr className="border-b border-gray-600 text-white text-xs">
                         <th className="py-1 px-0.5 text-center w-6">#</th>
                         <th className="py-1 px-1 text-left">チーム</th>
                         <th className="py-1 px-0.5 text-center">試</th>

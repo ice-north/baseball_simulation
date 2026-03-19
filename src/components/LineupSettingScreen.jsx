@@ -385,6 +385,20 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         <StatCell value={player.pitching?.velocity || 0} isVelocity />
         <StatCell value={player.pitching?.control || 0} />
         <StatCell value={player.pitching?.stamina || 0} />
+        <td className="py-1 px-1 text-[10px] text-center whitespace-nowrap">
+          {isPitcher ? (() => {
+            const ps = player.seasonStats?.pitching;
+            if (!ps || !ps.games) return <span className="text-gray-600">-</span>;
+            const ip = ps.inningsPitched ? (ps.inningsPitched / 3).toFixed(1) : '0.0';
+            const era = ps.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : '-';
+            return <span className="text-gray-300">{ps.wins||0}勝{ps.losses||0}敗 防<span className="text-orange-300">{era}</span></span>;
+          })() : (() => {
+            const bs = player.seasonStats?.batting;
+            if (!bs || !bs.atBats) return <span className="text-gray-600">-</span>;
+            const avg = (bs.hits / bs.atBats).toFixed(3);
+            return <span className="text-gray-300"><span className="text-blue-300">{avg}</span> {bs.homeruns||0}本 {bs.rbis||0}点</span>;
+          })()}
+        </td>
       </tr>
     );
   };
@@ -477,6 +491,19 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 return <span key={stat.label} className={getRankColor(rank)}>{stat.label}{stat.value}</span>;
                               })}
                             </div>
+                            {(() => {
+                              const bs = player.seasonStats?.batting;
+                              if (!bs || !bs.atBats) return null;
+                              const avg = bs.atBats > 0 ? (bs.hits / bs.atBats).toFixed(3) : '.000';
+                              return (
+                                <div className="text-[10px] mt-0.5 text-gray-300">
+                                  打率<span className="text-blue-300 font-bold ml-0.5">{avg}</span>
+                                  <span className="ml-1.5">{bs.homeruns || 0}本</span>
+                                  <span className="ml-1.5">{bs.rbis || 0}打点</span>
+                                  <span className="ml-1.5">{bs.hits || 0}安</span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         ) : (
                           <div className="text-gray-500 italic">未設定（クリックして選手を追加）</div>
@@ -511,6 +538,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                       <SortHeader label="球速" sortKey="velocity" className="text-center" />
                       <SortHeader label="制球" sortKey="control" className="text-center" />
                       <SortHeader label="スタ" sortKey="stamina" className="text-center" />
+                      <th className="py-1 px-1 text-center text-xs text-gray-400">成績</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -634,6 +662,35 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   <StatVal label=" 肩" value={ph.arm || 0} />
                   <StatVal label=" 守" value={f.defense || 0} />
                 </div>
+                {(() => {
+                  const ps = player.seasonStats?.pitching;
+                  const bs = player.seasonStats?.batting;
+                  if (!ps?.games && !bs?.atBats) return null;
+                  return (
+                    <div className="flex items-center gap-1 text-[11px] mt-1 flex-wrap">
+                      {ps?.games > 0 && (() => {
+                        const ip = ps.inningsPitched ? (ps.inningsPitched / 3).toFixed(1) : '0.0';
+                        const era = ps.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : '-';
+                        const whip = ps.inningsPitched > 0 ? (((ps.walks || 0) + (ps.hits || 0)) / (ps.inningsPitched / 3)).toFixed(2) : '-';
+                        return <>
+                          <span className="text-gray-500">Season:</span>
+                          <span className="text-white">{ps.wins||0}勝{ps.losses||0}敗</span>
+                          {(ps.saves > 0) && <span className="text-white">{ps.saves}S</span>}
+                          {(ps.holds > 0) && <span className="text-white">{ps.holds}H</span>}
+                          <span className="text-orange-300">防{era}</span>
+                          <span className="text-gray-400">{ip}回</span>
+                          <span className="text-gray-400">WHIP{whip}</span>
+                          <span className="text-gray-400">{ps.games}試合</span>
+                        </>;
+                      })()}
+                      {bs?.atBats > 0 && <>
+                        <span className="text-gray-600 mx-1">│</span>
+                        <span className="text-blue-300">打率{(bs.hits / bs.atBats).toFixed(3)}</span>
+                        {bs.homeruns > 0 && <span className="text-gray-300">{bs.homeruns}本</span>}
+                      </>}
+                    </div>
+                  );
+                })()}
               </div>
             );
           };
