@@ -136,6 +136,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) =>
                       <th className="py-1.5 px-2 text-left">年</th>
                       <th className="py-1.5 px-2 text-left">選手名</th>
                       <th className="py-1.5 px-1 text-center">位</th>
+                      <th className="py-1.5 px-1 text-center">投/打</th>
                       <th className="py-1.5 px-1 text-center">齢</th>
                       <th className="py-1.5 px-2 text-left">所属</th>
                       <th className="py-1.5 px-2 text-left">指名先</th>
@@ -170,6 +171,15 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) =>
                               <span className="text-gray-600 text-[9px] ml-1">{isExpanded ? '▲' : '▼'}</span>
                             </td>
                             <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
+                            <td className="py-1.5 px-1 text-center text-[10px]">
+                              <span className={player.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>
+                                {player.throws === 'left' ? '左' : '右'}
+                              </span>
+                              <span className="text-gray-600">/</span>
+                              <span className={player.bats === 'left' ? 'text-green-400' : player.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>
+                                {player.bats === 'left' ? '左' : player.bats === 'switch' ? '両' : '右'}
+                              </span>
+                            </td>
                             <td className="py-1.5 px-1 text-center text-gray-500">{player.age}</td>
                             <td className="py-1.5 px-2 text-gray-400">{player.teamName || player.team}</td>
                             <td className="py-1.5 px-2 text-yellow-400 font-bold">{player.npbTeam || '-'}</td>
@@ -177,7 +187,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) =>
                           </tr>
                           {isExpanded && (
                             <tr className="bg-gray-800/80">
-                              <td colSpan={7} className="px-3 py-2">
+                              <td colSpan={8} className="px-3 py-2">
                                 {ds ? (
                                   <div className="text-[11px]">
                                     <div className="text-gray-500 text-[9px] mb-1">指名当時の能力値</div>

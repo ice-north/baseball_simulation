@@ -647,6 +647,8 @@ export function processRetirements(allTeams) {
           team: teamName,
           age: player.age,
           position: player.position,
+          throws: player.physical?.throws || 'right',
+          bats: player.batting?.bats || 'right',
           hallOfFame,
           reason,
           careerStats: player.careerStats

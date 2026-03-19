@@ -4595,6 +4595,8 @@ if (newOuts === 3) {
                     reason: `NPBドラフト指名 (${d.npbTeam})`,
                     careerStats: d.careerStats,
                     draftStats,
+                    throws: p?.physical?.throws || 'right',
+                    bats: p?.batting?.bats || 'right',
                     age: d.age,
                     yearsPlayed: d.yearsPlayed,
                     year: seasonData?.year
