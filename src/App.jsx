@@ -404,6 +404,8 @@ import TradeScreen from './components/TradeScreen.jsx';
       const [bases, setBases] = useState([false, false, false]);
       const [outs, setOuts] = useState(0);
       const [remainingPitches, setRemainingPitches] = useState(0);  // 残り投球数（自動投球用）
+      const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
+      const outOccurredRef = React.useRef(false); // アウト発生フラグ
       
       // チームシステム（ホーム vs アウェイ対戦機能）
       const [homeTeam, setHomeTeam] = useState({
@@ -2739,6 +2741,11 @@ if (newOuts === 3) {
           advanceBatter();
         }
         
+        // アウトが増えた場合フラグを立てる（1アウトモード用）
+        if (newOuts > outs || (newOuts === 0 && outs > 0)) {
+          outOccurredRef.current = true;
+        }
+
         setCount(newCount);
         setOuts(newOuts);
         setBases(newBases);
@@ -2761,6 +2768,8 @@ if (newOuts === 3) {
         setScore({ home: 0, away: 0 });
         setGameOver(false);  // 試合終了フラグをリセット
         setRemainingPitches(0);  // 残り投球数をリセット
+        setSimMode(null);
+        outOccurredRef.current = false;
         setInningScores({
           away: [null, null, null, null, null, null, null, null, null],
           home: [null, null, null, null, null, null, null, null, null]
@@ -2878,7 +2887,13 @@ if (newOuts === 3) {
         setRemainingPitches(pitchCount);
         setIsAutoSimulating(true);
       };
-      
+
+      const startSimMode = (mode) => {
+        outOccurredRef.current = false;
+        setSimMode(mode);
+        setIsAutoSimulating(true);
+      };
+
       // 残り投球数がある場合は自動的に投球を続ける
       React.useEffect(() => {
         if (remainingPitches > 0 && !gameOver) {
@@ -2887,10 +2902,33 @@ if (newOuts === 3) {
             setRemainingPitches(prev => prev - 1);
           }, 1);  // 1msごとに投球
           return () => clearTimeout(timer);
-        } else if (remainingPitches === 0 && isAutoSimulating) {
+        } else if (remainingPitches === 0 && isAutoSimulating && !simMode) {
           setIsAutoSimulating(false);
         }
       }, [remainingPitches, gameOver]);
+
+      // simMode による自動投球ループ
+      React.useEffect(() => {
+        if (!simMode || gameOver) {
+          if (simMode) {
+            setSimMode(null);
+            setIsAutoSimulating(false);
+          }
+          return;
+        }
+        if (simMode === 'out' && outOccurredRef.current) {
+          // アウト発生で停止
+          setSimMode(null);
+          setIsAutoSimulating(false);
+          outOccurredRef.current = false;
+          return;
+        }
+        const timer = setTimeout(() => {
+          throwPitch();
+          // throwPitch内でoutOccurredRefが更新される → 次のレンダーで判定
+        }, 1);
+        return () => clearTimeout(timer);
+      });
 
       // --- PositionControl コンポーネント (PitchByPitchSimulator 内部に配置) ---
       const PositionControl = ({ position, label, defense, setDefense }) => {
@@ -3507,6 +3545,8 @@ if (newOuts === 3) {
         setGameOver(false);
         setGameStarted(false);
         setRemainingPitches(0);
+        setSimMode(null);
+        outOccurredRef.current = false;
         setInningScores({
           away: [null, null, null, null, null, null, null, null, null],
           home: [null, null, null, null, null, null, null, null, null]
@@ -5615,11 +5655,11 @@ if (newOuts === 3) {
                     className="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 disabled:opacity-50">
                     ⚾ 1球
                   </button>
-                  <button onClick={() => multiPitch(10)} disabled={isAutoSimulating || gameOver}
+                  <button onClick={() => startSimMode('out')} disabled={isAutoSimulating || gameOver}
                     className="bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50">
-                    ⚾×10
+                    1アウトまで
                   </button>
-                  <button onClick={() => multiPitch(1000)} disabled={isAutoSimulating || gameOver}
+                  <button onClick={() => startSimMode('end')} disabled={isAutoSimulating || gameOver}
                     className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50">
                     試合終了まで
                   </button>
