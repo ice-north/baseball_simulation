@@ -23,10 +23,43 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContin
                     <span className="text-white font-bold text-sm">{entry.name}</span>
                     <span className="text-gray-500 text-xs ml-1.5">{entry.age}歳</span>
                     <span className="text-blue-400 text-xs ml-1.5">{POSITION_NAMES[entry.position] || entry.position}</span>
+                    {entry.player?.physical && entry.player?.batting && (
+                      <span className="text-xs ml-1.5">
+                        <span className={entry.player.physical.throws === 'left' ? 'text-green-400' : 'text-gray-400'}>
+                          {entry.player.physical.throws === 'left' ? '左' : '右'}投
+                        </span>
+                        <span className={entry.player.batting.bats === 'left' ? 'text-green-400' : entry.player.batting.bats === 'switch' ? 'text-purple-400' : 'text-gray-400'}>
+                          {entry.player.batting.bats === 'left' ? '左' : entry.player.batting.bats === 'switch' ? '両' : '右'}打
+                        </span>
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-gray-500">元 {entry.teamName}</div>
+                  {(() => {
+                    const careerTitles = entry.player?.professionalCareer?.achievements || [];
+                    const currentSeasonTitles = (entry.seasonAwards || []).filter(a => a.endsWith('1位')).map(a => a.replace('1位', ''));
+                    // 通算タイトル数を集計
+                    const titleCounts = {};
+                    careerTitles.forEach(a => {
+                      titleCounts[a.title] = (titleCounts[a.title] || 0) + 1;
+                    });
+                    // 今シーズンのタイトルも加算
+                    currentSeasonTitles.forEach(t => {
+                      titleCounts[t] = (titleCounts[t] || 0) + 1;
+                    });
+                    const allTitles = Object.entries(titleCounts);
+                    return allTitles.length > 0 ? (
+                      <div className="flex flex-wrap justify-end gap-1 mt-0.5">
+                        {allTitles.map(([title, count], i) => (
+                          <span key={i} className="text-[10px] bg-yellow-600/40 text-yellow-300 px-1 py-0.5 rounded font-bold">
+                            {title}{count > 1 ? `×${count}` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="text-[10px] text-yellow-300/70">{entry.reasons.join(' / ')}</div>
                 </div>
               </div>
