@@ -335,12 +335,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       home: {
         starterLeftInning: null,  // 先発が降板したイニング
         currentRelieverId: null,  // 現在のリリーフ投手ID
-        relieverOutsPitched: 0    // 現在のリリーフの投球アウト数
+        relieverOutsPitched: 0,   // 現在のリリーフの投球アウト数
+        relieverBattersFaced: 0   // 現在のリリーフの対戦打者数
       },
       away: {
         starterLeftInning: null,
         currentRelieverId: null,
-        relieverOutsPitched: 0
+        relieverOutsPitched: 0,
+        relieverBattersFaced: 0
       }
     }
   };
@@ -865,6 +867,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     let situation = 'middle';
     let changeReason = '';
 
+    // ワンポイント投手の1打者制限チェック
+    const currentPitcherRole = pitcherRoles[currentPitcher.id] || '';
+    if (currentPitcherRole === 'onepoint' && reliefTrack.currentRelieverId === currentPitcher.id) {
+      if (reliefTrack.relieverBattersFaced >= 1) {
+        shouldChange = true;
+        situation = 'middle';
+        changeReason = `ワンポイント${currentPitcher.name}が1打者対戦済み、交代`;
+      }
+    }
+
     // 9回リード時→クローザー必須
     if (gs.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
       const isCloser = rotation.closer && currentPitcher.id === rotation.closer;
@@ -897,11 +909,48 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       changeReason = `満塁のピンチでスタミナ${Math.round(staminaRate * 100)}%、緊急交代`;
     }
 
+    // 左打者にワンポイント左投手を送り込む判定
+    // 条件: 7回以降、僅差、現在の投手が右投げ、次の打者が左打ち
+    const offenseTeamForOnepoint = defenseTeam === gs.homeTeam ? gs.awayTeam : gs.homeTeam;
+    const nextBatter = offenseTeamForOnepoint.players.find(p => p.battingOrder === offenseTeamForOnepoint.currentBatterOrder);
+    const nextBatterBats = nextBatter?.batting?.bats || 'right';
+    const currentPitcherThrows = currentPitcher.physical?.throws || 'right';
+    if (!shouldChange && gs.inning >= 7 && Math.abs(scoreDiff) <= 3 && nextBatterBats === 'left' && currentPitcherThrows !== 'left') {
+      // 左投げのワンポイント投手が使えるか確認
+      const onepointIds = (rotation.middleRelievers || []).filter(id =>
+        pitcherRoles[id] === 'onepoint' && (fatigue[id] || 0) < 50 && id !== currentPitcher.id
+      );
+      for (const opId of onepointIds) {
+        const opPlayer = defenseTeam.players.find(p => p.id === opId);
+        if (opPlayer && (opPlayer.physical?.throws === 'left')) {
+          shouldChange = true;
+          situation = 'lefty';
+          changeReason = `左打者${nextBatter.name}に対し左ワンポイント投入`;
+          break;
+        }
+      }
+    }
+
     if (!shouldChange) return;
 
     // リリーフ投手選択（ロールベース）
     let reliever = null;
     let selectedRoleLabel = '';
+
+    // 左打者対策: ワンポイント左投手を優先選択
+    if (situation === 'lefty') {
+      const onepointIds = (rotation.middleRelievers || []).filter(id =>
+        pitcherRoles[id] === 'onepoint' && (fatigue[id] || 0) < 50 && id !== currentPitcher.id
+      );
+      for (const opId of onepointIds) {
+        const opPlayer = defenseTeam.players.find(p => p.id === opId);
+        if (opPlayer && opPlayer.physical?.throws === 'left') {
+          reliever = opPlayer;
+          selectedRoleLabel = 'ワンポイント(左)';
+          break;
+        }
+      }
+    }
 
     if (situation === 'save' && rotation.closer) {
       const closerData = defenseTeam.players.find(p => p.id === rotation.closer && p.id !== currentPitcher.id);
@@ -938,15 +987,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       const sortedMiddle = (rotation.middleRelievers || [])
         .filter(id => {
           const p = defenseTeam.players.find(pl => pl.id === id && pl.id !== currentPitcher.id);
-          return p && (fatigue[id] || 0) < 50;
+          // ワンポイント投手は左打者対策専用なので一般選択から除外
+          return p && (fatigue[id] || 0) < 50 && pitcherRoles[id] !== 'onepoint';
         })
         .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
       if (sortedMiddle.length > 0) {
         reliever = defenseTeam.players.find(p => p.id === sortedMiddle[0]);
         const role = pitcherRoles[sortedMiddle[0]];
         selectedRoleLabel = role === 'long' ? 'ロングリリーフ' :
-                           role === 'ace_relief' ? '中継ぎエース' :
-                           role === 'onepoint' ? 'ワンポイント' : '中継ぎ';
+                           role === 'ace_relief' ? '中継ぎエース' : '中継ぎ';
       }
     }
 
@@ -979,6 +1028,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
       reliefTrack.currentRelieverId = reliever.id;
       reliefTrack.relieverOutsPitched = 0;
+      reliefTrack.relieverBattersFaced = 0;
 
       if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
         TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
@@ -1168,6 +1218,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       }
     }
 
+    // リリーフ投手の対戦打者数を追跡
+    const teamKeyForReliefBatter = defenseTeam === gameState.homeTeam ? 'home' : 'away';
+    const reliefTrackBatter = gameState.reliefTracking[teamKeyForReliefBatter];
+    if (reliefTrackBatter.currentRelieverId === pitcher.id) {
+      reliefTrackBatter.relieverBattersFaced++;
+    }
+
     // カウントリセット & 打順進行
     gameState.count = { balls: 0, strikes: 0 };
     offenseTeam.currentBatterOrder++;
@@ -1242,7 +1299,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             if (relieverRole === 'long') {
               maxOuts = 9; // ロングリリーフ: 3回
             } else if (relieverRole === 'onepoint') {
-              maxOuts = 3; // ワンポイント: 1回（対1打者）
+              // ワンポイント: 1打者限定（イニング終了時に残っていた場合のフォールバック）
+              if (reliefTrack.relieverBattersFaced >= 1) {
+                changeReason = `ワンポイント${pitcher.name}が1打者対戦済み、交代`;
+                console.log(`   ⏱️ ${changeReason}`);
+                shouldChange = true;
+                situation = 'middle';
+              }
+              maxOuts = 3; // フォールバック（通常はbattersFacedで先に交代する）
             } else if (relieverRole === 'ace_relief') {
               maxOuts = 6; // 中継ぎエース: 2回
             } else if (relieverRole === 'setup') {
@@ -1256,7 +1320,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               const starterLeft = reliefTrack.starterLeftInning || 9;
               maxOuts = starterLeft <= 3 ? 12 : 6;
             }
-            if (reliefTrack.relieverOutsPitched >= maxOuts) {
+            if (!shouldChange && reliefTrack.relieverOutsPitched >= maxOuts) {
               const inningsStr = Math.floor(reliefTrack.relieverOutsPitched / 3);
               changeReason = `${pitcher.name}が登板制限(${inningsStr}回)に到達`;
               console.log(`   ⏱️ ${changeReason}`);
@@ -1413,11 +1477,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             }
 
             // 中継ぎエース→通常中継ぎ（疲労が少ない順、ロール別ラベル付き）
+            // ワンポイント投手は左打者対策専用なので一般選択から除外
             if (shouldChange && !reliever) {
               const sortedMiddle = (rotation?.middleRelievers || [])
                 .filter(id => {
                   const p = team.players.find(pl => pl.id === id && pl.id !== pitcher.id);
-                  return p && (fatigue[id] || 0) < 50;
+                  return p && (fatigue[id] || 0) < 50 && pitcherRoles[id] !== 'onepoint';
                 })
                 .sort((a, b) => {
                   // 中継ぎエースを接戦時に優先
@@ -1432,7 +1497,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 const role = pitcherRoles[sortedMiddle[0]];
                 selectedRoleLabel = role === 'long' ? 'ロングリリーフ' :
                                    role === 'ace_relief' ? '中継ぎエース' :
-                                   role === 'onepoint' ? 'ワンポイント' :
                                    role === 'mopup' ? '敗戦処理' :
                                    role === 'behind' ? 'ビハインド' : '中継ぎ';
               }
@@ -1478,6 +1542,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
               reliefTrack.currentRelieverId = reliever.id;
               reliefTrack.relieverOutsPitched = 0;
+      reliefTrack.relieverBattersFaced = 0;
 
               if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
                 TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
