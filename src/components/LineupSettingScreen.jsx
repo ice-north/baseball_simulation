@@ -917,11 +917,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           };
 
           const getFitnessColor = (fitness) => {
-            if (fitness >= 90) return '#ec4899';
-            if (fitness >= 70) return '#f87171';
-            if (fitness >= 50) return '#fbbf24';
-            if (fitness >= 30) return '#4ade80';
-            return '#60a5fa';
+            if (fitness >= 100) return '#ff1493'; // DeepPink
+            if (fitness >= 90) return '#ec4899';  // Pink
+            if (fitness >= 80) return '#f87171';  // Red
+            if (fitness >= 70) return '#f97316';  // Orange
+            if (fitness >= 60) return '#fbbf24';  // Amber
+            if (fitness >= 50) return '#eab308';  // Yellow
+            if (fitness >= 40) return '#84cc16';  // Lime
+            if (fitness >= 30) return '#22c55e';  // Green
+            if (fitness >= 20) return '#06b6d4';  // Cyan
+            if (fitness >= 10) return '#3b82f6';  // Blue
+            return '#6366f1';                     // Indigo
           };
 
           const getRangeGrade = (range) => {
@@ -969,13 +975,19 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             })
             .filter(Boolean) : [];
 
-          // 適正に基づくグラデーション色（HSL: 赤→橙→黄→緑→青）
+          // 適正に基づくグラデーション色（10刻み）
           const getFitnessGradient = (fitness) => {
-            if (fitness >= 90) return { main: '#ec4899', glow: 'rgba(236,72,153,0.6)', bg: 'rgba(236,72,153,0.12)' };
-            if (fitness >= 70) return { main: '#f97316', glow: 'rgba(249,115,22,0.5)', bg: 'rgba(249,115,22,0.10)' };
-            if (fitness >= 50) return { main: '#eab308', glow: 'rgba(234,179,8,0.4)', bg: 'rgba(234,179,8,0.08)' };
-            if (fitness >= 30) return { main: '#22c55e', glow: 'rgba(34,197,94,0.35)', bg: 'rgba(34,197,94,0.07)' };
-            return { main: '#3b82f6', glow: 'rgba(59,130,246,0.3)', bg: 'rgba(59,130,246,0.06)' };
+            if (fitness >= 100) return { main: '#ff1493', glow: 'rgba(255,20,147,0.6)', bg: 'rgba(255,20,147,0.12)' };
+            if (fitness >= 90) return { main: '#ec4899', glow: 'rgba(236,72,153,0.55)', bg: 'rgba(236,72,153,0.11)' };
+            if (fitness >= 80) return { main: '#f87171', glow: 'rgba(248,113,113,0.5)', bg: 'rgba(248,113,113,0.10)' };
+            if (fitness >= 70) return { main: '#f97316', glow: 'rgba(249,115,22,0.45)', bg: 'rgba(249,115,22,0.09)' };
+            if (fitness >= 60) return { main: '#fbbf24', glow: 'rgba(251,191,36,0.4)', bg: 'rgba(251,191,36,0.08)' };
+            if (fitness >= 50) return { main: '#eab308', glow: 'rgba(234,179,8,0.38)', bg: 'rgba(234,179,8,0.07)' };
+            if (fitness >= 40) return { main: '#84cc16', glow: 'rgba(132,204,22,0.35)', bg: 'rgba(132,204,22,0.07)' };
+            if (fitness >= 30) return { main: '#22c55e', glow: 'rgba(34,197,94,0.32)', bg: 'rgba(34,197,94,0.06)' };
+            if (fitness >= 20) return { main: '#06b6d4', glow: 'rgba(6,182,212,0.3)', bg: 'rgba(6,182,212,0.06)' };
+            if (fitness >= 10) return { main: '#3b82f6', glow: 'rgba(59,130,246,0.28)', bg: 'rgba(59,130,246,0.05)' };
+            return { main: '#6366f1', glow: 'rgba(99,102,241,0.25)', bg: 'rgba(99,102,241,0.04)' };
           };
 
           return (
@@ -1071,7 +1083,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           fill={grad.bg} stroke="none" opacity="0">
                           <animate attributeName="r" from="0" to={radius * 1.15} dur="0.7s" begin={rangeDelay} fill="freeze"
                             calcMode="spline" keySplines="0.25 0.46 0.45 0.94" />
-                          <animate attributeName="opacity" values="0;0.7;0.5;0.7" dur="3s" begin={rangeDelay} repeatCount="indefinite" />
+                          <animate attributeName="opacity" from="0" to="0.6" dur="0.7s" begin={rangeDelay} fill="freeze" />
                         </circle>
                         {/* メインの守備範囲円 */}
                         <circle cx={coord.x} cy={coord.y}
@@ -1084,9 +1096,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         {/* 内側の強調リング */}
                         <circle cx={coord.x} cy={coord.y} r={radius * 0.6}
                           fill="none" stroke={grad.main} strokeWidth="0.5" opacity="0.3"
-                          strokeDasharray="3,5">
-                          <animate attributeName="stroke-dashoffset" from="0" to="16" dur="4s" repeatCount="indefinite" />
-                        </circle>
+                          strokeDasharray="3,5" />
+
                       </g>
                     );
                   })}
@@ -1109,26 +1120,18 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     return (
                       <g key={pos} onClick={() => !isPitcherPos && handleDefenseClick(pos)}
                          style={{ cursor: isPitcherPos ? 'default' : 'pointer' }}>
-                        {/* 選択リング（強化版） */}
+                        {/* 選択リング */}
                         {isSelected && (
                           <>
-                            <circle cx={coord.x} cy={coord.y} r={markerSize + 10} fill="none" stroke="#facc15" strokeWidth="2" opacity="0.3">
-                              <animate attributeName="r" values={`${markerSize + 8};${markerSize + 14};${markerSize + 8}`} dur="1.2s" repeatCount="indefinite" />
-                              <animate attributeName="opacity" values="0.4;0.15;0.4" dur="1.2s" repeatCount="indefinite" />
-                            </circle>
-                            <circle cx={coord.x} cy={coord.y} r={markerSize + 6} fill="none" stroke="#facc15" strokeWidth="2.5" strokeDasharray="5,3">
-                              <animate attributeName="stroke-dashoffset" from="0" to="16" dur="0.8s" repeatCount="indefinite" />
-                            </circle>
+                            <circle cx={coord.x} cy={coord.y} r={markerSize + 10} fill="none" stroke="#facc15" strokeWidth="2" opacity="0.25" />
+                            <circle cx={coord.x} cy={coord.y} r={markerSize + 6} fill="none" stroke="#facc15" strokeWidth="2.5" strokeDasharray="5,3" />
                           </>
                         )}
 
                         {/* 光彩エフェクト（プレイヤー有の場合） */}
                         {player && !isSelected && (
                           <circle cx={coord.x} cy={coord.y} r={markerSize + 4}
-                            fill="none" stroke={grad.main} strokeWidth="1" opacity="0.25">
-                            <animate attributeName="opacity" values="0.25;0.1;0.25" dur="2s" repeatCount="indefinite"
-                              begin={`${posIndex * 0.3}s`} />
-                          </circle>
+                            fill="none" stroke={grad.main} strokeWidth="1" opacity="0.2" />
                         )}
 
                         {/* マーカー本体（グラデーション化・登場アニメーション） */}
@@ -1196,13 +1199,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   {/* 凡例 */}
                   <g transform="translate(10, 405)">
                     <text x="0" y="0" fill="#9ca3af" fontSize="8">適正:</text>
-                    {[{ label: '90+', color: '#ec4899' }, { label: '70+', color: '#f97316' }, { label: '50+', color: '#eab308' }, { label: '30+', color: '#22c55e' }, { label: '~29', color: '#3b82f6' }].map((item, i) => (
-                      <g key={i} transform={`translate(${32 + i * 45}, 0)`}>
+                    {[
+                      { label: '100', color: '#ff1493' }, { label: '90', color: '#ec4899' }, { label: '80', color: '#f87171' },
+                      { label: '70', color: '#f97316' }, { label: '60', color: '#fbbf24' }, { label: '50', color: '#eab308' },
+                      { label: '40', color: '#84cc16' }, { label: '30', color: '#22c55e' }, { label: '20', color: '#06b6d4' },
+                      { label: '10', color: '#3b82f6' }, { label: '0', color: '#6366f1' }
+                    ].map((item, i) => (
+                      <g key={i} transform={`translate(${30 + i * 38}, 0)`}>
                         <circle cx="0" cy="-3" r="4" fill={item.color} opacity="0.7" />
-                        <text x="7" y="0" fill="#9ca3af" fontSize="7">{item.label}</text>
+                        <text x="7" y="0" fill="#9ca3af" fontSize="6">{item.label}</text>
                       </g>
                     ))}
-                    <text x="270" y="0" fill="#6b7280" fontSize="7">○サイズ = 走力+守備力</text>
                   </g>
                 </svg>
                 <p className="text-xs text-gray-500 mt-2 text-center">
@@ -1219,7 +1226,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     const range = getDefenseRange(player, pos);
                     const grade = getRangeGrade(range);
                     const fitness = player ? getFitness(player, pos) : 0;
-                    const fitColor = fitness >= 80 ? 'text-pink-400' : fitness >= 60 ? 'text-red-400' : fitness >= 40 ? 'text-yellow-400' : fitness >= 20 ? 'text-green-400' : 'text-blue-400';
+                    const fitColor = fitness >= 100 ? 'text-pink-500' : fitness >= 90 ? 'text-pink-400' : fitness >= 80 ? 'text-red-400' : fitness >= 70 ? 'text-orange-400' : fitness >= 60 ? 'text-amber-400' : fitness >= 50 ? 'text-yellow-400' : fitness >= 40 ? 'text-lime-400' : fitness >= 30 ? 'text-green-400' : fitness >= 20 ? 'text-cyan-400' : fitness >= 10 ? 'text-blue-400' : 'text-indigo-400';
                     const isSelected = selectedDefensePos === pos;
                     const isPitcherPos = pos === 'pitcher';
 
