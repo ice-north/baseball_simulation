@@ -704,7 +704,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     </select>
                   </div>
                 </div>
-                <div className="text-[10px] text-gray-500 text-right mt-0.5">
+                <div className="text-xs text-gray-300 text-right mt-0.5">
                   {role === 'complete' && '完投を目指して長いイニングを投げる'}
                   {role === 'short' && '3-4回で降板し中継ぎに繋ぐ'}
                   {role === 'quality' && '6回・勝ち権利まで投げて降板'}
