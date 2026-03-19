@@ -4866,8 +4866,8 @@ if (newOuts === 3) {
             </div>
           </div>
 
-          {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は中央重視(2fr auto 2fr) */}
-          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? 'minmax(180px, 2fr) minmax(0, 5fr) minmax(180px, 2fr)' : '5fr 3fr 5fr'}}>
+          {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は1:1:1 */}
+          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '1fr 1fr 1fr' : '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
             <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
