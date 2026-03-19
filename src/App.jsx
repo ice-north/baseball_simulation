@@ -4576,20 +4576,30 @@ if (newOuts === 3) {
               setDraftResults(results);
               // 全ドラフト指名選手を記録
               if (results.draftedPlayers.length > 0) {
-                setHallOfFamePlayers(prev => [...prev, ...results.draftedPlayers.map(d => ({
-                  name: d.name,
-                  position: d.position,
-                  teamName: d.teamName,
-                  departureType: 'npb_drafted',
-                  npbTeam: d.npbTeam,
-                  hallOfFame: d.hallOfFame || false,
-                  hofReason: d.hofReason,
-                  reason: `NPBドラフト指名 (${d.npbTeam})`,
-                  careerStats: d.careerStats,
-                  age: d.age,
-                  yearsPlayed: d.yearsPlayed,
-                  year: seasonData?.year
-                }))]);
+                setHallOfFamePlayers(prev => [...prev, ...results.draftedPlayers.map(d => {
+                  const p = d.player;
+                  const draftStats = p ? {
+                    batting: p.batting ? { meet: p.batting.meet, power: p.batting.power, eye: p.batting.eye, steal: p.batting.steal } : null,
+                    physical: p.physical ? { speed: p.physical.speed, arm: p.physical.arm } : null,
+                    fielding: p.fielding ? { defense: p.fielding.defense } : null,
+                    pitching: p.pitching ? { velocity: p.pitching.velocity, control: p.pitching.control, stamina: p.pitching.stamina } : null
+                  } : null;
+                  return {
+                    name: d.name,
+                    position: d.position,
+                    teamName: d.teamName,
+                    departureType: 'npb_drafted',
+                    npbTeam: d.npbTeam,
+                    hallOfFame: d.hallOfFame || false,
+                    hofReason: d.hofReason,
+                    reason: `NPBドラフト指名 (${d.npbTeam})`,
+                    careerStats: d.careerStats,
+                    draftStats,
+                    age: d.age,
+                    yearsPlayed: d.yearsPlayed,
+                    year: seasonData?.year
+                  };
+                })]);
               }
               setManagementView('draft');
             }

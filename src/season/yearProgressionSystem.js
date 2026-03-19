@@ -241,7 +241,7 @@ export function updateAllPlayerAges(allTeams) {
  */
 export function checkNPBDraftEligibility(player, awardBonus = 0) {
   const isPitcher = player.position === 'pitcher';
-  const DRAFT_THRESHOLD = isPitcher ? 220 : 250; // 投手220pt、野手250pt
+  const DRAFT_THRESHOLD = isPitcher ? 230 : 260; // 投手230pt、野手260pt
   const reasons = [];
   const age = player.age || 20;
 
@@ -417,8 +417,8 @@ function computeSeasonAwardBonuses(allTeams) {
  * @returns {Object} - { draftedPlayers, nearMissPlayers }
  */
 export function processNPBDraft(allTeams) {
-  const PITCHER_THRESHOLD = 220;
-  const FIELDER_THRESHOLD = 250;
+  const PITCHER_THRESHOLD = 230;
+  const FIELDER_THRESHOLD = 260;
 
   const NPB_TEAMS = [
     '読売ジャイアンツ', '阪神タイガース', '横浜DeNAベイスターズ',

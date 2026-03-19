@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) => {
   const [activeTab, setActiveTab] = useState('draft');
   const [statCategory, setStatCategory] = useState('avg');
+  const [expandedPlayer, setExpandedPlayer] = useState(null);
 
   const getPositionName = (pos) => {
     const names = {
@@ -153,20 +154,62 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) =>
                         const avg = ab > 0 ? (stats.batting.hits / ab).toFixed(3) : '.000';
                         mainStat = `${avg} ${stats.batting?.homeruns || 0}HR ${stats.batting?.hits || 0}安`;
                       }
+                      const isExpanded = expandedPlayer === idx;
+                      const ds = player.draftStats;
                       return (
-                        <tr key={idx} className={`border-b border-gray-700/50 ${player.hallOfFame ? 'bg-yellow-900/20' : ''}`}>
-                          <td className="py-1.5 px-2 text-gray-500">{player.year || '-'}年目</td>
-                          <td className="py-1.5 px-2">
-                            <span className={`font-bold ${isP ? 'text-red-400' : 'text-blue-300'}`}>
-                              {player.hallOfFame && '🏛️ '}{player.name}
-                            </span>
-                          </td>
-                          <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
-                          <td className="py-1.5 px-1 text-center text-gray-500">{player.age}</td>
-                          <td className="py-1.5 px-2 text-gray-400">{player.teamName || player.team}</td>
-                          <td className="py-1.5 px-2 text-yellow-400 font-bold">{player.npbTeam || '-'}</td>
-                          <td className="py-1.5 px-2 text-right text-gray-300 font-mono text-[10px]">{mainStat}</td>
-                        </tr>
+                        <React.Fragment key={idx}>
+                          <tr
+                            className={`border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/30 ${player.hallOfFame ? 'bg-yellow-900/20' : ''} ${isExpanded ? 'bg-gray-700/40' : ''}`}
+                            onClick={() => setExpandedPlayer(isExpanded ? null : idx)}
+                          >
+                            <td className="py-1.5 px-2 text-gray-500">{player.year || '-'}年目</td>
+                            <td className="py-1.5 px-2">
+                              <span className={`font-bold ${isP ? 'text-red-400' : 'text-blue-300'}`}>
+                                {player.hallOfFame && '🏛️ '}{player.name}
+                              </span>
+                              <span className="text-gray-600 text-[9px] ml-1">{isExpanded ? '▲' : '▼'}</span>
+                            </td>
+                            <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
+                            <td className="py-1.5 px-1 text-center text-gray-500">{player.age}</td>
+                            <td className="py-1.5 px-2 text-gray-400">{player.teamName || player.team}</td>
+                            <td className="py-1.5 px-2 text-yellow-400 font-bold">{player.npbTeam || '-'}</td>
+                            <td className="py-1.5 px-2 text-right text-gray-300 font-mono text-[10px]">{mainStat}</td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-gray-800/80">
+                              <td colSpan={7} className="px-3 py-2">
+                                {ds ? (
+                                  <div className="text-[11px]">
+                                    <div className="text-gray-500 text-[9px] mb-1">指名当時の能力値</div>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                      {isP ? (
+                                        <>
+                                          <span className="text-gray-400">球速 <span className="text-white font-bold">{ds.pitching?.velocity || '-'}</span>km</span>
+                                          <span className="text-gray-400">制球 <span className="text-white font-bold">{ds.pitching?.control || '-'}</span></span>
+                                          <span className="text-gray-400">スタミナ <span className="text-white font-bold">{ds.pitching?.stamina || '-'}</span></span>
+                                          <span className="text-gray-400">ミート <span className="text-white font-bold">{ds.batting?.meet || '-'}</span></span>
+                                          <span className="text-gray-400">パワー <span className="text-white font-bold">{ds.batting?.power || '-'}</span></span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-gray-400">ミート <span className="text-white font-bold">{ds.batting?.meet || '-'}</span></span>
+                                          <span className="text-gray-400">パワー <span className="text-white font-bold">{ds.batting?.power || '-'}</span></span>
+                                          <span className="text-gray-400">選球眼 <span className="text-white font-bold">{ds.batting?.eye || '-'}</span></span>
+                                          <span className="text-gray-400">走力 <span className="text-white font-bold">{ds.physical?.speed || '-'}</span></span>
+                                          <span className="text-gray-400">守備 <span className="text-white font-bold">{ds.fielding?.defense || '-'}</span></span>
+                                          <span className="text-gray-400">肩力 <span className="text-white font-bold">{ds.physical?.arm || '-'}</span></span>
+                                          <span className="text-gray-400">盗塁 <span className="text-white font-bold">{ds.batting?.steal || '-'}</span></span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-gray-600 text-[10px]">能力値データなし（過去のセーブデータの選手）</div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>

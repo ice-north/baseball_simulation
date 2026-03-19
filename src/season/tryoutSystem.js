@@ -352,14 +352,14 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     return {
       // 野手能力（平均的）
       meet: randRangeWithVariance(40, 65),
-      power: randRangeWithVariance(35, 60),
+      power: randRangeWithVariance(32, 57),
       eye: randRangeWithVariance(35, 65),
       steal: randRangeWithVariance(30, 60),
       speed: randRangeWithVariance(40, 70),
       arm: randRangeWithVariance(50, 80),
       defense: randRangeWithVariance(40, 65),
       // 投手能力（平均的だが投げられる、球速-6km、スタミナ2/3調整済み）
-      velocity: Math.min(randVelocity(124, 142) + velocityAdjust, 149),
+      velocity: Math.min(randVelocity(121, 139) + velocityAdjust, 149),
       control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
       stamina: randStamina(67, 100)
     };
@@ -370,13 +370,13 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   if (isPitcher) {
     normalAbilities = {
       meet: randRangeWithVariance(15, 40),
-      power: randRangeWithVariance(8, 32),
+      power: randRangeWithVariance(5, 29),
       eye: randRangeWithVariance(25, 50),
       steal: randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
       speed: randRangeWithVariance(30, 55, Math.max(0, Math.floor(ageBonus * 0.5))),
       arm: randRangeWithVariance(40, 65),
       defense: randRangeWithVariance(40, 65),
-      velocity: Math.min(randVelocity(119, 142, ageBonus) + velocityAdjust, 152),
+      velocity: Math.min(randVelocity(116, 139, ageBonus) + velocityAdjust, 152),
       control: Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85),
       stamina: randStamina(73, 113, ageBonus)
     };
@@ -384,19 +384,19 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     // 野手アーキタイプ: 特性なしの選手にも個性を持たせる
     const archetypes = [
       // 巧打タイプ: ミート高、パワー低
-      { meet: [50, 75], power: [15, 40], eye: [45, 75], steal: [25, 55], speed: [30, 60], arm: [25, 55], defense: [30, 60] },
+      { meet: [50, 75], power: [12, 37], eye: [45, 75], steal: [25, 55], speed: [30, 60], arm: [25, 55], defense: [30, 60] },
       // 強打タイプ: パワー高、走力低
-      { meet: [30, 55], power: [45, 70], eye: [25, 55], steal: [15, 40], speed: [20, 50], arm: [35, 65], defense: [25, 55] },
+      { meet: [30, 55], power: [42, 67], eye: [25, 55], steal: [15, 40], speed: [20, 50], arm: [35, 65], defense: [25, 55] },
       // 俊足タイプ: 走力高、パワー低
-      { meet: [35, 60], power: [15, 40], eye: [30, 60], steal: [55, 80], speed: [55, 80], arm: [25, 55], defense: [35, 65] },
+      { meet: [35, 60], power: [12, 37], eye: [30, 60], steal: [55, 80], speed: [55, 80], arm: [25, 55], defense: [35, 65] },
       // 守備タイプ: 守備高、打撃低
-      { meet: [25, 50], power: [15, 40], eye: [30, 55], steal: [25, 55], speed: [35, 65], arm: [50, 75], defense: [55, 80] },
+      { meet: [25, 50], power: [12, 37], eye: [30, 55], steal: [25, 55], speed: [35, 65], arm: [50, 75], defense: [55, 80] },
       // バランスタイプ: 平均的
-      { meet: [35, 65], power: [25, 55], eye: [30, 65], steal: [25, 60], speed: [30, 65], arm: [30, 65], defense: [30, 65] },
+      { meet: [35, 65], power: [22, 52], eye: [30, 65], steal: [25, 60], speed: [30, 65], arm: [30, 65], defense: [30, 65] },
       // 打撃特化タイプ: 打撃全般高、守備走力低
-      { meet: [45, 70], power: [40, 65], eye: [40, 70], steal: [15, 40], speed: [20, 45], arm: [25, 50], defense: [20, 45] },
+      { meet: [45, 70], power: [37, 62], eye: [40, 70], steal: [15, 40], speed: [20, 45], arm: [25, 50], defense: [20, 45] },
       // 肩力タイプ: 肩力高、ミート低
-      { meet: [25, 50], power: [30, 55], eye: [25, 55], steal: [20, 50], speed: [30, 60], arm: [60, 85], defense: [40, 70] },
+      { meet: [25, 50], power: [27, 52], eye: [25, 55], steal: [20, 50], speed: [30, 60], arm: [60, 85], defense: [40, 70] },
     ];
     const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
     normalAbilities = {
@@ -407,7 +407,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       speed: randRangeWithVariance(arch.speed[0], arch.speed[1], Math.max(0, Math.floor(ageBonus * 0.7))),
       arm: randRangeWithVariance(arch.arm[0], arch.arm[1]),
       defense: randRangeWithVariance(arch.defense[0], arch.defense[1]),
-      velocity: randRange(109, 124),
+      velocity: randRange(106, 121),
       control: randRange(30, 55),
       stamina: randRange(40, 67)
     };
@@ -431,7 +431,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       defense: () => randRange(60, 80)
     },
     slugger: {
-      power: () => randRange(70, 79),
+      power: () => randRange(67, 76),
       meet: () => randRange(45, 65),
       speed: () => randRange(25, 45),
       steal: () => randRange(15, 30),
@@ -464,27 +464,27 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     armStrong: {
       arm: () => randRange(80, 99),
       defense: () => randRange(65, 85),
-      power: () => randRange(50, 70)
+      power: () => randRange(47, 67)
     },
     // --- 投手特性 ---
     fireballer: {
-      velocity: () => Math.min(randVelocity(144, 152) + velocityAdjust, 154),
+      velocity: () => Math.min(randVelocity(141, 149) + velocityAdjust, 154),
       control: () => Math.min(randRange(30, 50) + controlAdjust, 65),
       stamina: () => randStamina(60, 87)
     },
     controlPitcher: {
-      velocity: () => Math.max(randVelocity(119, 134) + velocityAdjust, 114),
+      velocity: () => Math.max(randVelocity(116, 131) + velocityAdjust, 114),
       control: () => Math.min(randRange(75, 90) + controlAdjust, 95),
       stamina: () => randStamina(87, 113)
     },
     ironman: {
-      velocity: () => Math.min(randVelocity(124, 139) + velocityAdjust, 144),
+      velocity: () => Math.min(randVelocity(121, 136) + velocityAdjust, 144),
       control: () => Math.min(randRange(40, 60) + controlAdjust, 75),
       stamina: () => randStamina(120, 147)
     },
     breakingBall: {
       control: () => Math.min(randRange(55, 75) + controlAdjust, 85),
-      velocity: () => Math.max(randVelocity(119, 137) + velocityAdjust, 114),
+      velocity: () => Math.max(randVelocity(116, 134) + velocityAdjust, 114),
       stamina: () => randStamina(80, 107)
     }
   };
