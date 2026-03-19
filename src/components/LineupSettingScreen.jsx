@@ -38,6 +38,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const getThrowsLabel = (throws) => throws === 'left' ? '左投' : '右投';
   const getBatsLabel = (bats) => bats === 'left' ? '左打' : bats === 'switch' ? '両打' : '右打';
 
+  // メイン守備位置の右に適性90以上のサブポジションを表示（例：遊二左）
+  const getPositionWithSubs = (player, mainPosition) => {
+    const mainLabel = POSITION_NAMES[mainPosition] || mainPosition;
+    if (!player?.positionFitness || mainPosition === 'pitcher') return mainLabel;
+    const allPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
+    const subs = allPositions
+      .filter(pos => pos !== mainPosition && (player.positionFitness[pos] ?? 0) >= 90)
+      .map(pos => POSITION_NAMES[pos]);
+    return mainLabel + subs.join('');
+  };
+
   const getFormLabel = (form) => {
     const forms = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
     return forms[form] || form;
@@ -370,6 +381,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           <span className={isPitcher ? 'text-indigo-300' : 'text-gray-300'}>
             {POSITION_NAMES[player.position] || player.position}
           </span>
+          {!isPitcher && (() => {
+            const subs = getPositionWithSubs(player, player.position);
+            const main = POSITION_NAMES[player.position] || '';
+            const subOnly = subs.slice(main.length);
+            return subOnly ? <span className="text-yellow-400">{subOnly}</span> : null;
+          })()}
           {roleLabel && <span className="ml-1 text-yellow-400">({roleLabel})</span>}
         </td>
         <td className="py-1 px-1 text-xs text-gray-400 whitespace-nowrap">
@@ -472,6 +489,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                   <select value={entry.position} onChange={(e) => { e.stopPropagation(); handleChangePosition(order, e.target.value); }} className="bg-gray-600 text-white rounded px-2 py-0.5 text-xs" onClick={(e) => e.stopPropagation()}>
                                     <option value="pitcher">投手</option><option value="catcher">捕手</option><option value="first">一塁</option><option value="second">二塁</option><option value="third">三塁</option><option value="short">遊撃</option><option value="left">左翼</option><option value="center">中堅</option><option value="right">右翼</option>
                                   </select>
+                                  {(() => {
+                                    const subLabel = getPositionWithSubs(player, entry.position);
+                                    const mainLabel = POSITION_NAMES[entry.position] || '';
+                                    return subLabel.length > mainLabel.length ? (
+                                      <span className="text-yellow-400 font-bold">{subLabel}</span>
+                                    ) : null;
+                                  })()}
                                   <span>| {player.age}歳</span>
                                 </div>
                               </div>
