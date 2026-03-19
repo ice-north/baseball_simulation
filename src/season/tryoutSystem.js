@@ -126,6 +126,9 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
 
   const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
 
+  // ID衝突を防ぐため、年度ベースのオフセットを使用
+  const idBase = (year || 1) * 10000;
+
   for (let i = 1; i <= totalCandidates; i++) {
     // 利き手を決定
     const handedness = determineHandedness();
@@ -183,7 +186,7 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
     const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay, playerTraits);
 
     const player = {
-      id: i,
+      id: idBase + i,
       name: name,
       age: age,
       position: position,

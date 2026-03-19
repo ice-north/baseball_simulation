@@ -75,8 +75,11 @@ const TradeScreen = ({ userTeamName, onBack }) => {
     if (result.accept) {
       const targetTeam = TEAMS_DATA[selectedTargetTeam];
       // 選手を入れ替え（spliceで直接変更）
-      const myIdx = myTeam.players.findIndex(p => p.id === selectedMyPlayer.id);
-      const targetIdx = targetTeam.players.findIndex(p => p.id === selectedTargetPlayer.id);
+      // オブジェクト参照で検索（ID重複時の誤動作を防止）
+      let myIdx = myTeam.players.indexOf(selectedMyPlayer);
+      if (myIdx === -1) myIdx = myTeam.players.findIndex(p => p.id === selectedMyPlayer.id);
+      let targetIdx = targetTeam.players.indexOf(selectedTargetPlayer);
+      if (targetIdx === -1) targetIdx = targetTeam.players.findIndex(p => p.id === selectedTargetPlayer.id);
 
       if (myIdx === -1 || targetIdx === -1) {
         setTradeResult({ success: false, message: '選手が見つかりません' });
@@ -175,11 +178,11 @@ const TradeScreen = ({ userTeamName, onBack }) => {
                 </tr>
               </thead>
               <tbody>
-                {(myTeam.players || []).map(p => (
+                {(myTeam.players || []).map((p, idx) => (
                   <PlayerRow
-                    key={p.id}
+                    key={`my-${p.id}-${idx}`}
                     player={p}
-                    isSelected={selectedMyPlayer?.id === p.id}
+                    isSelected={selectedMyPlayer === p}
                     onSelect={setSelectedMyPlayer}
                   />
                 ))}
@@ -218,11 +221,11 @@ const TradeScreen = ({ userTeamName, onBack }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {(TEAMS_DATA[selectedTargetTeam].players || []).map(p => (
+                  {(TEAMS_DATA[selectedTargetTeam].players || []).map((p, idx) => (
                     <PlayerRow
-                      key={p.id}
+                      key={`target-${p.id}-${idx}`}
                       player={p}
-                      isSelected={selectedTargetPlayer?.id === p.id}
+                      isSelected={selectedTargetPlayer === p}
                       onSelect={setSelectedTargetPlayer}
                     />
                   ))}
