@@ -1683,13 +1683,22 @@ export function calcPlayerOverall(player) {
   }
 }
 
+/** 派遣枠の上限 */
+export const DISPATCH_LIMITS = {
+  perTeamPerDest: 1,  // 各チーム、各派遣先に1人ずつ
+  leagueTotal: 8,     // リーグ全体で合計8人
+};
+
 /**
  * 派遣可能かどうか判定
  * @param {Object} player - 選手データ
  * @param {string} destKey - 派遣先キー ('university' or 'proCamp')
+ * @param {Object} options - { teamPlayers, allTeams }
+ *   teamPlayers: 同じチームの選手配列（チーム枠判定用）
+ *   allTeams: 全チームデータ（リーグ枠判定用）TEAMS_DATAオブジェクト
  * @returns {{ eligible: boolean, reason: string }}
  */
-export function checkDispatchEligibility(player, destKey) {
+export function checkDispatchEligibility(player, destKey, options = {}) {
   const dest = DISPATCH_DESTINATIONS[destKey];
   if (!dest) return { eligible: false, reason: '不明な派遣先' };
 
@@ -1698,6 +1707,26 @@ export function checkDispatchEligibility(player, destKey) {
 
   const overall = calcPlayerOverall(player);
   if (overall > dest.maxOverall) return { eligible: false, reason: `総合力${dest.maxOverall}以下のみ (現在${overall})` };
+
+  // チーム内の同派遣先の枠チェック
+  const teamPlayers = options.teamPlayers || [];
+  const teamDestCount = teamPlayers.filter(p => p.dispatchedThisCamp === destKey).length;
+  if (teamDestCount >= DISPATCH_LIMITS.perTeamPerDest) {
+    return { eligible: false, reason: `${dest.name}の枠は各チーム${DISPATCH_LIMITS.perTeamPerDest}人まで` };
+  }
+
+  // リーグ全体の派遣枠チェック
+  if (options.allTeams) {
+    let leagueTotal = 0;
+    Object.values(options.allTeams).forEach(team => {
+      (team.players || []).forEach(p => {
+        if (p.dispatchedThisCamp) leagueTotal++;
+      });
+    });
+    if (leagueTotal >= DISPATCH_LIMITS.leagueTotal) {
+      return { eligible: false, reason: `リーグ全体の派遣枠(${DISPATCH_LIMITS.leagueTotal}人)が満員` };
+    }
+  }
 
   return { eligible: true, reason: '' };
 }
@@ -1836,8 +1865,8 @@ export function executeDispatchTraining(player, destKey) {
     }
   }
 
-  // 派遣済みフラグ（キャンプ中に1回のみ）
-  player.dispatchedThisCamp = true;
+  // 派遣済みフラグ（派遣先キーを格納）
+  player.dispatchedThisCamp = destKey;
 
   return { growthReport };
 }

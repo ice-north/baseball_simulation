@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, DISPATCH_DESTINATIONS, checkDispatchEligibility, executeDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
@@ -232,7 +232,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
           if (Math.random() > 0.3) return;
           const destKeys = Object.keys(DISPATCH_DESTINATIONS);
           for (const dk of destKeys) {
-            const { eligible } = checkDispatchEligibility(p, dk);
+            const { eligible } = checkDispatchEligibility(p, dk, { teamPlayers: aiTeam.players, allTeams: TEAMS_DATA });
             if (eligible) {
               executeDispatchTraining(p, dk);
               break;
@@ -566,7 +566,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           <td className="py-1 px-1 text-center">
                             <div className="flex gap-0.5 justify-center">
                               {Object.entries(DISPATCH_DESTINATIONS).map(([destKey, dest]) => {
-                                const { eligible, reason } = checkDispatchEligibility(player, destKey);
+                                const { eligible, reason } = checkDispatchEligibility(player, destKey, { teamPlayers: userTeam?.players || [], allTeams: TEAMS_DATA });
                                 return (
                                   <button
                                     key={destKey}
