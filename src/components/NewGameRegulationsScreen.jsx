@@ -29,11 +29,15 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を新しいチーム数-1の倍数に自動調整
-    const newDivisor = newCount - 1;
+    // 試合数を新しいチーム数に合わせて自動調整（近い値に丸める）
     const oldGames = tempSettings.gamesPerSeason || 60;
-    const roundsPerTeam = Math.max(1, Math.round(oldGames / ((tempSettings.teamsCount || 4) - 1)));
-    const adjustedGames = newDivisor * roundsPerTeam;
+    const newDivisor = newCount - 1;
+    // まずチーム数の倍数で近い値を探す
+    const roundsPerTeam = Math.max(1, Math.round(oldGames / newCount));
+    let adjustedGames = newCount * roundsPerTeam;
+    // 範囲内に収める
+    if (adjustedGames < newDivisor) adjustedGames = newDivisor;
+    if (adjustedGames > newDivisor * 50) adjustedGames = newDivisor * 50;
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -167,12 +171,21 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                   className="bg-gray-700 rounded px-3 py-2"
                 >
                   {(() => {
-                    const d = (tempSettings.teamsCount || 4) - 1;
-                    const options = [];
-                    for (let i = 1; i <= 50; i++) {
-                      options.push(d * i);
-                    }
-                    return options.map(v => <option key={v} value={v}>{v}試合（各{v / d}戦）</option>);
+                    const tc = tempSettings.teamsCount || 4;
+                    const d = tc - 1; // 対戦チーム数
+                    const optionSet = new Set();
+                    // (チーム数-1)の倍数: 均等対戦
+                    for (let i = 1; i <= 50; i++) optionSet.add(d * i);
+                    // チーム数の倍数も追加
+                    for (let i = 1; i <= 50; i++) optionSet.add(tc * i);
+                    const options = [...optionSet].filter(v => v >= d && v <= d * 50).sort((a, b) => a - b);
+                    return options.map(v => {
+                      const isEven = v % d === 0;
+                      const label = isEven
+                        ? `${v}試合（各${v / d}戦）`
+                        : `${v}試合`;
+                      return <option key={v} value={v}>{label}</option>;
+                    });
                   })()}
                 </select>
               </div>
