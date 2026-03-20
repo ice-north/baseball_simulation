@@ -243,22 +243,70 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return 'text-gray-500';
   };
 
+  // ユーザーチームの成績取得
+  const userStanding = standings.find(s => s.team === userTeamName);
+  const userWins = userStanding?.wins || 0;
+  const userLosses = userStanding?.losses || 0;
+  const userDraws = userStanding?.draws || 0;
+  const userRank = standings.findIndex(s => s.team === userTeamName) + 1;
+
   return (
     <div className="p-3 min-h-screen">
       {/* ヘッダー */}
-      <div className="flex items-center gap-3 mb-3 bg-gradient-to-r from-gray-800 via-gray-800 to-gray-900 rounded-xl p-3 shadow-lg border border-gray-700/50">
-        <button
-          onClick={() => handleProgressDate(1)}
-          disabled={isSimulating}
-          className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-lg transition-all shadow-lg shadow-green-900/30 disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95"
-        >
-          <span className="text-xl">▶</span>
-          {isSimulating ? '処理中...' : '1日進める'}
-        </button>
-        <div className="flex items-center gap-3 flex-1 justify-center">
-          <span className="text-3xl font-bold bg-gradient-to-r from-yellow-300 to-amber-400 bg-clip-text text-transparent">{seasonData.year}年目</span>
-          <span className="text-gray-300 text-lg font-medium">{formatDate(seasonData.currentDate)} ({getDayOfWeek(seasonData.currentDate)})</span>
-          <span className={`px-3 py-1 rounded-full text-sm font-bold ${phaseInfo.color} text-gray-900 shadow-sm`}>{phaseInfo.name}</span>
+      <div className="mb-3 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 overflow-hidden">
+        {/* トップバー：フェーズ表示 */}
+        <div className={`px-4 py-1 ${
+          currentPhase === SEASON_PHASES.PLAYOFFS ? 'bg-gradient-to-r from-yellow-600/80 via-amber-500/60 to-yellow-600/80' :
+          currentPhase === SEASON_PHASES.REGULAR_SEASON ? 'bg-gradient-to-r from-blue-700/60 via-blue-600/40 to-blue-700/60' :
+          currentPhase === SEASON_PHASES.SPRING_CAMP ? 'bg-gradient-to-r from-green-700/60 via-green-600/40 to-green-700/60' :
+          'bg-gradient-to-r from-gray-700/60 via-gray-600/40 to-gray-700/60'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-bold tracking-wider uppercase ${
+              currentPhase === SEASON_PHASES.PLAYOFFS ? 'text-yellow-200' : 'text-gray-300'
+            }`}>{phaseInfo.name}</span>
+            <span className="text-xs text-gray-400">{seasonData.year}年目シーズン</span>
+          </div>
+        </div>
+        {/* メインヘッダー */}
+        <div className="flex items-center gap-4 p-4">
+          <button
+            onClick={() => handleProgressDate(1)}
+            disabled={isSimulating}
+            className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white px-7 py-3.5 rounded-xl font-bold text-lg transition-all shadow-lg shadow-green-900/40 disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95 ring-1 ring-green-400/20"
+          >
+            <span className="text-xl">▶</span>
+            {isSimulating ? '処理中...' : '1日進める'}
+          </button>
+          <div className="flex-1 flex items-center justify-center gap-4">
+            <div className="text-center">
+              <div className="text-3xl font-black bg-gradient-to-b from-white to-gray-300 bg-clip-text text-transparent leading-tight">
+                {formatDate(seasonData.currentDate)}
+              </div>
+              <div className="text-sm text-gray-400 font-medium">{getDayOfWeek(seasonData.currentDate)}</div>
+            </div>
+          </div>
+          {/* チーム成績サマリー */}
+          <div className="shrink-0 bg-gray-800/80 rounded-xl px-4 py-2 border border-gray-700/50">
+            <div className="text-xs text-gray-400 mb-0.5 text-center">{userTeamName}</div>
+            <div className="flex items-center gap-3">
+              <div className="text-center">
+                <div className="text-lg font-bold text-green-400">{userWins}</div>
+                <div className="text-[10px] text-gray-500">勝</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-red-400">{userLosses}</div>
+                <div className="text-[10px] text-gray-500">敗</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-gray-400">{userDraws}</div>
+                <div className="text-[10px] text-gray-500">分</div>
+              </div>
+              <div className="border-l border-gray-600 pl-3">
+                <div className={`text-lg font-bold ${userRank <= 2 ? 'text-yellow-400' : 'text-white'}`}>{userRank}位</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -266,20 +314,24 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
         <div className="flex-1 min-w-0">
-          <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mb-3">
+          <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mb-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-bold text-white flex items-center gap-1.5">
-                <span className="text-blue-400">📅</span> {selectedMonth}月
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600/30 flex items-center justify-center">
+                  <span className="text-blue-400 text-sm">📅</span>
+                </div>
+                <span>{selectedMonth}月</span>
+                <span className="text-sm font-normal text-gray-500">スケジュール</span>
               </h2>
               <div className="flex gap-1">
-                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700 hover:bg-gray-600 text-white w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors active:scale-95">◀</button>
-                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700 hover:bg-gray-600 text-white w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors active:scale-95">▶</button>
+                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700/80 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-95 border border-gray-600/30">◀</button>
+                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700/80 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-95 border border-gray-600/30">▶</button>
               </div>
             </div>
 
-            <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
               {dayNames.map((name, i) => (
-                <div key={i} className={`text-center text-xs font-bold py-1 rounded ${i === 0 ? 'text-red-400 bg-red-900/20' : i === 6 ? 'text-blue-400 bg-blue-900/20' : 'text-white'}`}>{name}</div>
+                <div key={i} className={`text-center text-[11px] font-bold py-1.5 rounded-md ${i === 0 ? 'text-red-400 bg-red-900/15' : i === 6 ? 'text-blue-400 bg-blue-900/15' : 'text-gray-400 bg-gray-800/50'}`}>{name}</div>
               ))}
             </div>
 
@@ -287,31 +339,41 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               {calendarCells.map((cell, i) => {
                 const showAsScheduled = cell.isToday;
                 const colIdx = i % 7;
+                const hasUserGame = cell.games?.some(g => g.home === userTeamName || g.away === userTeamName);
                 return (
-                  <div key={i} className={`min-h-[60px] p-1 rounded-lg text-sm transition-all ${
+                  <div key={i} className={`min-h-[62px] p-1 rounded-lg text-sm transition-all ${
                     cell.day === null ? 'bg-transparent' :
-                    cell.isToday ? 'bg-gradient-to-br from-green-900/90 to-emerald-900/70 border border-green-400 shadow-md shadow-green-900/40 ring-1 ring-green-400/30' :
-                    colIdx === 0 ? 'bg-gray-700/50 hover:bg-gray-700/80' :
-                    colIdx === 6 ? 'bg-gray-700/50 hover:bg-gray-700/80' :
-                    'bg-gray-700/70 hover:bg-gray-700/90'
+                    cell.isToday ? 'bg-gradient-to-br from-green-800/90 to-emerald-900/80 border-2 border-green-400/80 shadow-lg shadow-green-900/50 ring-1 ring-green-400/20' :
+                    hasUserGame && cell.games.some(g => g.result) ? 'bg-gray-700/60 border border-gray-600/20' :
+                    colIdx === 0 ? 'bg-gray-800/60 hover:bg-gray-700/60' :
+                    colIdx === 6 ? 'bg-gray-800/60 hover:bg-gray-700/60' :
+                    'bg-gray-800/40 hover:bg-gray-700/50'
                   }`}>
                     {cell.day && (
                       <>
-                        <div className={`font-bold mb-0.5 text-xs ${cell.isToday ? 'text-green-300' : colIdx === 0 ? 'text-red-400' : colIdx === 6 ? 'text-blue-400' : 'text-gray-300'}`}>{cell.day}</div>
+                        <div className={`font-bold mb-0.5 text-xs leading-none ${cell.isToday ? 'text-green-300' : colIdx === 0 ? 'text-red-400' : colIdx === 6 ? 'text-blue-400' : 'text-gray-400'}`}>{cell.day}</div>
                         {cell.games.length > 0 ? (
                           <div className="space-y-0">
                             {cell.games.map((game, gIdx) => {
                               const awayShort = getTeamAbbreviation(game.away);
                               const homeShort = getTeamAbbreviation(game.home);
+                              const isUserInGame = game.home === userTeamName || game.away === userTeamName;
                               if (showAsScheduled || !game.result) {
-                                return <div key={gIdx} className="text-[11px] text-yellow-300 leading-tight text-center">{awayShort}-{homeShort}</div>;
+                                return <div key={gIdx} className={`text-[11px] leading-tight text-center font-medium ${isUserInGame ? 'text-yellow-300' : 'text-gray-400'}`}>{awayShort}-{homeShort}</div>;
                               }
+                              if (game.result?.cancelled) return null;
                               const awayWin = game.result.awayScore > game.result.homeScore;
                               const homeWin = game.result.homeScore > game.result.awayScore;
+                              // ユーザーチームの勝敗を視覚的に
+                              let userWon = null;
+                              if (isUserInGame) {
+                                if (game.home === userTeamName) userWon = homeWin;
+                                else userWon = awayWin;
+                              }
                               // プレーオフの通算成績を計算
                               let seriesInfo = null;
                               if (game.seriesId && game.phase === SEASON_PHASES.PLAYOFFS) {
-                                const seriesGames = (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && g.result && !g.cancelled);
+                                const seriesGames = (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && g.result && !g.result?.cancelled);
                                 const upToThis = seriesGames.filter(g => g.seriesGame <= game.seriesGame);
                                 const homeTeamInSeries = (seasonData.schedule || []).find(g => g.seriesId === game.seriesId && g.seriesGame === 1)?.home || game.home;
                                 let homeWins = 0, awayWins = 0;
@@ -321,26 +383,27 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                   if ((hWon && isSeriesHome) || (!hWon && !isSeriesHome)) homeWins++;
                                   else awayWins++;
                                 });
-                                const totalPlayed = upToThis.length;
-                                const maxGames = seriesGames.length + (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && !g.result && !g.cancelled).length;
-                                seriesInfo = `${maxGames}戦中${homeWins}勝${awayWins}敗`;
+                                seriesInfo = `${homeWins}-${awayWins}`;
                               }
                               return (
                                 <div key={gIdx} className="leading-tight text-center">
                                   <div className="text-[11px]">
-                                    <span className={awayWin ? 'text-green-400 font-bold' : 'text-white'}>{awayShort}</span>
-                                    <span className="text-white mx-px">{game.result.awayScore}-{game.result.homeScore}</span>
-                                    <span className={homeWin ? 'text-green-400 font-bold' : 'text-white'}>{homeShort}</span>
+                                    <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-300'}>{awayShort}</span>
+                                    <span className="text-white mx-px font-mono text-[10px]">{game.result.awayScore}-{game.result.homeScore}</span>
+                                    <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-300'}>{homeShort}</span>
                                   </div>
-                                  {seriesInfo && <div className="text-[9px] text-yellow-300">{seriesInfo}</div>}
+                                  {isUserInGame && userWon !== null && (
+                                    <div className={`text-[9px] font-bold ${userWon ? 'text-green-400' : 'text-red-400'}`}>{userWon ? '○' : '●'}</div>
+                                  )}
+                                  {seriesInfo && <div className="text-[9px] text-yellow-300 font-mono">{seriesInfo}</div>}
                                 </div>
                               );
                             })}
                           </div>
                         ) : cell.eventLabel ? (
-                          <div className={`text-[11px] font-bold leading-tight ${getEventColor(cell.eventLabel)}`}>{cell.eventLabel}</div>
+                          <div className={`text-[10px] font-bold leading-tight mt-0.5 ${getEventColor(cell.eventLabel)}`}>{cell.eventLabel}</div>
                         ) : (
-                          <div className="text-[10px] text-gray-600">-</div>
+                          <div className="text-[10px] text-gray-700">-</div>
                         )}
                       </>
                     )}
@@ -351,22 +414,30 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           </div>
 
           {/* 本日の対戦 */}
-          <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40">
-            <h2 className="text-base font-bold text-white mb-2 flex items-center gap-1.5">
-              <span className="text-orange-400">⚾</span> {formatDate(seasonData.currentDate)} の対戦
+          <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
+            <h2 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-orange-600/30 flex items-center justify-center">
+                <span className="text-orange-400 text-sm">⚾</span>
+              </div>
+              <span>{formatDate(seasonData.currentDate)} の対戦</span>
+              <span className="text-xs font-normal text-gray-500 ml-1">{todaysGames.length}試合</span>
             </h2>
             {todaysGames.length === 0 ? (
-              <div className="text-center py-3"><span className="text-gray-500 text-base">本日は試合がありません</span></div>
+              <div className="text-center py-6 bg-gray-800/50 rounded-xl">
+                <div className="text-gray-600 text-2xl mb-1">⚾</div>
+                <span className="text-gray-500 text-sm">本日は試合がありません（休養日）</span>
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {todaysGames.map(game => {
                   const awayPitcher = getStartingPitcher(game.away);
                   const homePitcher = getStartingPitcher(game.home);
                   const hasResult = !!game.result;
+                  const isUserGame = game.home === userTeamName || game.away === userTeamName;
                   // プレーオフ通算成績
                   let todaySeriesInfo = null;
                   if (game.seriesId && game.phase === SEASON_PHASES.PLAYOFFS) {
-                    const seriesAll = (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && !g.cancelled);
+                    const seriesAll = (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && !g.result?.cancelled);
                     const played = seriesAll.filter(g => g.result);
                     const homeTeamInSeries = seriesAll.find(g => g.seriesGame === 1)?.home || game.home;
                     let hWins = 0, aWins = 0;
@@ -377,29 +448,44 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       else aWins++;
                     });
                     const roundLabel = game.playoffRound === 'semi' ? '準決勝' : '決勝';
-                    todaySeriesInfo = `${roundLabel} 第${game.seriesGame}戦 (${seriesAll.length}戦中${hWins}勝${aWins}敗)`;
+                    todaySeriesInfo = `${roundLabel} 第${game.seriesGame}戦 (${hWins}-${aWins})`;
                   }
                   return (
-                    <div key={game.id} className={`rounded-xl p-2.5 transition-all ${hasResult ? 'bg-gray-700/50' : 'bg-gradient-to-r from-gray-700/80 to-gray-700/60 border border-gray-600/30'}`}>
-                      {todaySeriesInfo && <div className="text-center text-[11px] text-yellow-300 font-bold mb-1">{todaySeriesInfo}</div>}
-                      <div className="flex items-center justify-between">
-                        <div className="text-center flex-1">
-                          <div className="text-white font-bold text-base">{getTeamAbbreviation(game.away)}</div>
-                          <div className="text-xs text-yellow-400/80 mt-0.5">{awayPitcher ? `${awayPitcher.name}` : '未定'}</div>
-                        </div>
-                        <div className="px-2 text-gray-500 text-sm font-bold">vs</div>
-                        <div className="text-center flex-1">
-                          <div className="text-white font-bold text-base">{getTeamAbbreviation(game.home)}</div>
-                          <div className="text-xs text-yellow-400/80 mt-0.5">{homePitcher ? `${homePitcher.name}` : '未定'}</div>
-                        </div>
-                      </div>
-                      {hasResult && (
-                        <div className="text-center mt-1 text-sm font-bold">
-                          <span className={game.result.awayScore > game.result.homeScore ? 'text-green-400' : 'text-white'}>{game.result.awayScore}</span>
-                          <span className="text-gray-400 mx-1">-</span>
-                          <span className={game.result.homeScore > game.result.awayScore ? 'text-green-400' : 'text-white'}>{game.result.homeScore}</span>
+                    <div key={game.id} className={`rounded-xl p-3 transition-all relative overflow-hidden ${
+                      isUserGame && !hasResult ? 'bg-gradient-to-br from-blue-900/50 to-blue-800/30 border border-blue-500/30 shadow-md shadow-blue-900/20' :
+                      hasResult ? 'bg-gray-800/60 border border-gray-700/20' :
+                      'bg-gradient-to-br from-gray-800/80 to-gray-800/50 border border-gray-700/20'
+                    }`}>
+                      {isUserGame && !hasResult && <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-400 via-blue-500 to-blue-400"></div>}
+                      {todaySeriesInfo && (
+                        <div className="text-center mb-1.5">
+                          <span className="text-[10px] bg-yellow-600/30 text-yellow-300 font-bold px-2 py-0.5 rounded-full">{todaySeriesInfo}</span>
                         </div>
                       )}
+                      <div className="flex items-center justify-between">
+                        <div className="text-center flex-1">
+                          <div className={`font-bold text-base ${game.away === userTeamName ? 'text-yellow-300' : 'text-white'}`}>{getTeamAbbreviation(game.away)}</div>
+                          <div className="text-[11px] text-gray-400 mt-0.5 truncate">{awayPitcher ? awayPitcher.name : '先発未定'}</div>
+                        </div>
+                        {hasResult ? (
+                          <div className="px-3 text-center">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-xl font-black font-mono ${game.result.awayScore > game.result.homeScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.awayScore}</span>
+                              <span className="text-gray-600 text-sm">-</span>
+                              <span className={`text-xl font-black font-mono ${game.result.homeScore > game.result.awayScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.homeScore}</span>
+                            </div>
+                            <div className="text-[9px] text-gray-500 mt-0.5">試合終了</div>
+                          </div>
+                        ) : (
+                          <div className="px-3 text-center">
+                            <div className="text-gray-500 text-xs font-bold tracking-wider">VS</div>
+                          </div>
+                        )}
+                        <div className="text-center flex-1">
+                          <div className={`font-bold text-base ${game.home === userTeamName ? 'text-yellow-300' : 'text-white'}`}>{getTeamAbbreviation(game.home)}</div>
+                          <div className="text-[11px] text-gray-400 mt-0.5 truncate">{homePitcher ? homePitcher.name : '先発未定'}</div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -469,24 +555,31 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             if (!hasAnyData) return null;
 
             return (
-              <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
-                <h2 className="text-base font-bold text-white mb-2 flex items-center gap-1.5">
-                  <span className="text-yellow-400">📊</span> 個人成績ランキング
-                  <span className="text-[10px] text-gray-500 font-normal ml-1">（規定打席{qualifiedAB} / 規定投球{qualifiedInnings}回）</span>
+              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
+                <h2 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-yellow-600/30 flex items-center justify-center">
+                    <span className="text-yellow-400 text-sm">📊</span>
+                  </div>
+                  <span>個人成績ランキング</span>
+                  <span className="text-[10px] text-gray-500 font-normal ml-1">規定打席{qualifiedAB} / 規定投球{qualifiedInnings}回</span>
                 </h2>
                 <div className="grid grid-cols-3 gap-2">
                   {rankings.map(r => (
-                    <div key={r.title} className="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/30">
-                      <div className={`text-xs font-bold ${r.color} mb-1.5 pb-1 border-b border-gray-700/50`}>{r.icon} {r.title}</div>
+                    <div key={r.title} className="bg-gray-900/80 rounded-xl p-2.5 border border-gray-700/20">
+                      <div className={`text-xs font-bold ${r.color} mb-2 pb-1.5 border-b border-gray-700/40 flex items-center gap-1`}>
+                        <span>{r.icon}</span> {r.title}
+                      </div>
                       {r.data.length === 0 ? (
-                        <div className="text-xs text-gray-600">該当者なし</div>
+                        <div className="text-xs text-gray-600 py-1">該当者なし</div>
                       ) : (
                         r.data.map((p, i) => {
                           const isUser = p.teamName === userTeamName;
                           return (
-                            <div key={p.id} className={`flex items-center text-xs leading-relaxed py-0.5 ${isUser ? 'text-yellow-300' : 'text-gray-300'}`}>
-                              <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-600' : 'text-gray-600'}`}>{i + 1}</span>
-                              <span className="flex-1 truncate ml-1 text-sm">{p.name}<span className="text-gray-500 text-[10px]">　({getTeamAbbreviation(p.teamName)})</span></span>
+                            <div key={p.id} className={`flex items-center text-xs py-0.5 rounded-md px-1 ${isUser ? 'text-yellow-300 bg-yellow-900/15' : 'text-gray-300'}`}>
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                i === 0 ? 'bg-yellow-500/90 text-black' : i === 1 ? 'bg-gray-400/80 text-black' : i === 2 ? 'bg-orange-600/80 text-white' : 'text-gray-600'
+                              }`}>{i + 1}</span>
+                              <span className="flex-1 truncate ml-1.5 text-sm">{p.name}<span className="text-gray-500 text-[10px] ml-0.5">({getTeamAbbreviation(p.teamName)})</span></span>
                               <span className={`font-mono font-bold text-xs ${r.color}`}>{r.format(p.value)}</span>
                             </div>
                           );
@@ -522,24 +615,25 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               })();
 
               return (
-                <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40">
-                  <h2 className={`text-base font-bold mb-2 ${titleColor || 'text-white'} flex items-center gap-1.5`}>
-                    <span>📊</span> {title}
+                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
+                  <h2 className={`text-base font-bold mb-2.5 ${titleColor || 'text-white'} flex items-center gap-2`}>
+                    <div className="w-7 h-7 rounded-lg bg-gray-700/60 flex items-center justify-center text-sm">📊</div>
+                    {title}
                   </h2>
                   <table className="w-full text-white text-sm">
                     <thead>
-                      <tr className="border-b border-gray-600 text-white text-xs">
-                        <th className="py-1 px-0.5 text-center w-6">#</th>
-                        <th className="py-1 px-1 text-left">チーム</th>
-                        <th className="py-1 px-0.5 text-center">試</th>
-                        <th className="py-1 px-0.5 text-center">勝</th>
-                        <th className="py-1 px-0.5 text-center">負</th>
-                        <th className="py-1 px-0.5 text-center">分</th>
-                        <th className="py-1 px-0.5 text-center">率</th>
-                        <th className="py-1 px-0.5 text-center">差</th>
-                        <th className="py-1 px-0.5 text-center">打率</th>
-                        <th className="py-1 px-0.5 text-center">防</th>
-                        <th className="py-1 px-0.5 text-center">M</th>
+                      <tr className="border-b-2 border-gray-600/50 text-gray-400 text-[11px]">
+                        <th className="py-1.5 px-0.5 text-center w-6">#</th>
+                        <th className="py-1.5 px-1 text-left">チーム</th>
+                        <th className="py-1.5 px-0.5 text-center">試</th>
+                        <th className="py-1.5 px-0.5 text-center">勝</th>
+                        <th className="py-1.5 px-0.5 text-center">負</th>
+                        <th className="py-1.5 px-0.5 text-center">分</th>
+                        <th className="py-1.5 px-0.5 text-center">率</th>
+                        <th className="py-1.5 px-0.5 text-center">差</th>
+                        <th className="py-1.5 px-0.5 text-center">打率</th>
+                        <th className="py-1.5 px-0.5 text-center">防</th>
+                        <th className="py-1.5 px-0.5 text-center">M</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -572,20 +666,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           else if (isLChampionDecided) mg = '-';
                         }
                         return (
-                          <tr key={team.team} className={`border-b border-gray-700/50 ${isUser ? 'bg-blue-900/40' : ''} ${index === 0 && isLChampionDecided ? 'bg-yellow-900/20' : ''}`}>
+                          <tr key={team.team} className={`border-b border-gray-700/30 transition-colors hover:bg-gray-700/20 ${isUser ? 'bg-blue-900/30 hover:bg-blue-900/40' : ''} ${index === 0 && isLChampionDecided ? 'bg-yellow-900/15' : ''}`}>
                             <td className="py-1.5 px-0.5 text-center">
-                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mx-auto ${index === 0 ? 'bg-yellow-500 text-black' : index === 1 ? 'bg-gray-400 text-black' : index === 2 ? 'bg-orange-600 text-white' : 'bg-gray-600 text-white'}`}>{index + 1}</span>
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mx-auto ${index === 0 ? 'bg-yellow-500/90 text-black' : index === 1 ? 'bg-gray-400/80 text-black' : index === 2 ? 'bg-orange-600/80 text-white' : 'bg-gray-700 text-gray-400'}`}>{index + 1}</span>
                             </td>
-                            <td className={`py-1.5 px-1 font-bold text-sm ${isUser ? 'text-yellow-300' : ''}`}>{team.team}</td>
-                            <td className="py-1.5 px-0.5 text-center text-gray-400">{team.gamesPlayed || 0}</td>
+                            <td className={`py-1.5 px-1 font-bold text-sm ${isUser ? 'text-yellow-300' : ''}`}>
+                              {team.team}
+                              {isUser && <span className="ml-1 text-[9px] text-blue-400">YOU</span>}
+                            </td>
+                            <td className="py-1.5 px-0.5 text-center text-gray-500 text-xs">{team.gamesPlayed || 0}</td>
                             <td className="py-1.5 px-0.5 text-center text-green-400 font-bold">{team.wins || 0}</td>
                             <td className="py-1.5 px-0.5 text-center text-red-400 font-bold">{team.losses || 0}</td>
                             <td className="py-1.5 px-0.5 text-center text-gray-500">{team.draws || 0}</td>
-                            <td className="py-1.5 px-0.5 text-center font-mono">{wr}</td>
-                            <td className={`py-1.5 px-0.5 text-center font-bold ${index === 0 && isLChampionDecided ? 'text-yellow-400 text-[10px]' : 'text-gray-400'}`}>{gb}</td>
-                            <td className="py-1.5 px-0.5 text-center font-mono text-blue-300">{tAvg}</td>
-                            <td className="py-1.5 px-0.5 text-center font-mono text-orange-300">{tEra}</td>
-                            <td className="py-1.5 px-0.5 text-center text-red-400 font-bold">{mg}</td>
+                            <td className="py-1.5 px-0.5 text-center font-mono text-xs">{wr}</td>
+                            <td className={`py-1.5 px-0.5 text-center font-bold text-xs ${index === 0 && isLChampionDecided ? 'text-yellow-400' : 'text-gray-500'}`}>{gb}</td>
+                            <td className="py-1.5 px-0.5 text-center font-mono text-blue-300 text-xs">{tAvg}</td>
+                            <td className="py-1.5 px-0.5 text-center font-mono text-orange-300 text-xs">{tEra}</td>
+                            <td className="py-1.5 px-0.5 text-center text-red-400 font-bold text-xs">{mg}</td>
                           </tr>
                         );
                       })}
@@ -603,7 +700,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
               // シリーズごとの集計
               const getSeriesData = (seriesId) => {
-                const games = playoffGames.filter(g => g.seriesId === seriesId && !g.cancelled);
+                const games = playoffGames.filter(g => g.seriesId === seriesId && !g.result?.cancelled);
                 if (games.length === 0) return null;
                 const firstGame = games.find(g => g.seriesGame === 1);
                 if (!firstGame || firstGame.home === 'TBD') return null;
@@ -628,121 +725,143 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               };
 
               // シリーズ表示（5戦3勝 or 1戦）
-              const renderSeries = (seriesData, title) => {
+              const renderSeries = (seriesData, title, isFinal = false) => {
                 if (!seriesData) return (
-                  <div className="bg-gray-700/40 rounded-lg p-2 text-center text-gray-500 text-xs">{title}: 未確定</div>
+                  <div className={`rounded-xl p-2.5 text-center border border-dashed ${isFinal ? 'bg-gray-800/40 border-yellow-700/30' : 'bg-gray-800/40 border-gray-600/30'}`}>
+                    <div className={`text-xs font-bold mb-1 ${isFinal ? 'text-yellow-500' : 'text-gray-500'}`}>{title}</div>
+                    <div className="text-gray-600 text-xs">準決勝結果待ち</div>
+                  </div>
                 );
                 const { team1, team2, team1Wins, team2Wins, gameResults, isComplete, winner } = seriesData;
                 const t1Abbr = getTeamAbbreviation(team1);
                 const t2Abbr = getTeamAbbreviation(team2);
                 return (
-                  <div className="bg-gray-700/40 rounded-lg p-2.5">
-                    <div className="text-xs font-bold text-yellow-400 mb-1.5 text-center">{title}</div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className={`text-sm font-bold flex-1 text-center ${winner === team1 ? 'text-yellow-300' : winner === team2 ? 'text-gray-500' : 'text-white'}`}>
-                        {t1Abbr}
-                      </div>
-                      <div className="px-2 text-xs text-gray-400">
-                        <span className={`font-bold text-lg ${winner === team1 ? 'text-yellow-300' : 'text-white'}`}>{team1Wins}</span>
-                        <span className="mx-1 text-gray-600">-</span>
-                        <span className={`font-bold text-lg ${winner === team2 ? 'text-yellow-300' : 'text-white'}`}>{team2Wins}</span>
-                      </div>
-                      <div className={`text-sm font-bold flex-1 text-center ${winner === team2 ? 'text-yellow-300' : winner === team1 ? 'text-gray-500' : 'text-white'}`}>
-                        {t2Abbr}
-                      </div>
+                  <div className={`rounded-xl overflow-hidden ${
+                    isFinal ? 'bg-gradient-to-b from-yellow-900/30 to-gray-800/80 border border-yellow-600/30 shadow-lg shadow-yellow-900/10' :
+                    isComplete ? 'bg-gray-800/60 border border-gray-700/30' :
+                    'bg-gradient-to-b from-gray-700/50 to-gray-800/60 border border-gray-600/30'
+                  }`}>
+                    {/* タイトルバー */}
+                    <div className={`px-2.5 py-1 ${
+                      isFinal ? 'bg-gradient-to-r from-yellow-700/40 via-yellow-600/30 to-yellow-700/40' :
+                      'bg-gradient-to-r from-gray-700/40 via-gray-600/30 to-gray-700/40'
+                    }`}>
+                      <div className={`text-[11px] font-bold text-center tracking-wide ${isFinal ? 'text-yellow-400' : 'text-gray-400'}`}>{title}</div>
                     </div>
-                    {gameResults.length > 0 && (
-                      <div className="space-y-0.5">
-                        {gameResults.map(g => (
-                          <div key={g.game} className="flex items-center text-[11px] text-gray-300">
-                            <span className="w-10 text-gray-500">第{g.game}戦</span>
-                            {g.status === 'done' ? (
-                              <>
-                                <span className={`flex-1 text-right font-mono ${g.t1Won ? 'text-green-400 font-bold' : ''}`}>{g.t1Score}</span>
-                                <span className="mx-1 text-gray-600">-</span>
-                                <span className={`flex-1 text-left font-mono ${!g.t1Won ? 'text-green-400 font-bold' : ''}`}>{g.t2Score}</span>
-                              </>
-                            ) : (
-                              <span className="flex-1 text-center text-gray-600">- 未 -</span>
-                            )}
+                    <div className="p-2.5">
+                      {/* チーム名と勝敗 */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className={`text-sm font-bold flex-1 text-center ${winner === team1 ? 'text-yellow-300' : winner === team2 ? 'text-gray-600 line-through' : 'text-white'}`}>
+                          {winner === team1 && <span className="text-[10px] mr-0.5">👑</span>}{t1Abbr}
+                        </div>
+                        <div className="px-2.5">
+                          <div className="flex items-center gap-1">
+                            <span className={`font-black text-xl font-mono ${winner === team1 ? 'text-yellow-300' : 'text-white'}`}>{team1Wins}</span>
+                            <span className="text-gray-600 text-sm">-</span>
+                            <span className={`font-black text-xl font-mono ${winner === team2 ? 'text-yellow-300' : 'text-white'}`}>{team2Wins}</span>
                           </div>
-                        ))}
+                        </div>
+                        <div className={`text-sm font-bold flex-1 text-center ${winner === team2 ? 'text-yellow-300' : winner === team1 ? 'text-gray-600 line-through' : 'text-white'}`}>
+                          {winner === team2 && <span className="text-[10px] mr-0.5">👑</span>}{t2Abbr}
+                        </div>
                       </div>
-                    )}
-                    {isComplete && winner && (
-                      <div className="mt-1.5 text-center text-[11px] font-bold text-yellow-400">
-                        🏆 {winner} 勝利
-                      </div>
-                    )}
+                      {/* 各試合スコア */}
+                      {gameResults.length > 0 && (
+                        <div className="space-y-0.5 bg-gray-900/40 rounded-lg p-1.5">
+                          {gameResults.map(g => (
+                            <div key={g.game} className={`flex items-center text-[11px] rounded-md px-1.5 py-0.5 ${g.status === 'done' ? 'bg-gray-800/40' : ''}`}>
+                              <span className="w-10 text-gray-500 text-[10px]">第{g.game}戦</span>
+                              {g.status === 'done' ? (
+                                <>
+                                  <span className={`flex-1 text-right font-mono ${g.t1Won ? 'text-green-400 font-bold' : 'text-gray-400'}`}>{g.t1Score}</span>
+                                  <span className="mx-1.5 text-gray-700">-</span>
+                                  <span className={`flex-1 text-left font-mono ${!g.t1Won ? 'text-green-400 font-bold' : 'text-gray-400'}`}>{g.t2Score}</span>
+                                </>
+                              ) : (
+                                <span className="flex-1 text-center text-gray-700 text-[10px]">--- 未消化 ---</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {isComplete && winner && isFinal && (
+                        <div className="mt-2 text-center py-1.5 bg-yellow-600/20 rounded-lg border border-yellow-600/20">
+                          <div className="text-xs font-bold text-yellow-400">🏆 {winner} 優勝!</div>
+                        </div>
+                      )}
+                      {isComplete && winner && !isFinal && (
+                        <div className="mt-1.5 text-center text-[11px] font-bold text-gray-400">
+                          {winner} → 決勝進出
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               };
 
+              const renderBracketContainer = (title, content) => (
+                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
+                  <h2 className="text-base font-bold mb-3 text-white flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-yellow-600/30 flex items-center justify-center">
+                      <span className="text-yellow-400 text-sm">🏆</span>
+                    </div>
+                    <span>{title}</span>
+                  </h2>
+                  {content}
+                </div>
+              );
+
               if (playoffFormat === 'tournament') {
-                // トーナメント表（1戦勝負の準決勝 → 決勝）
                 const semi1 = getSeriesData('semi1');
                 const semi2 = getSeriesData('semi2');
                 const final_ = getSeriesData('final');
-                return (
-                  <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
-                    <h2 className="text-base font-bold mb-2 text-white flex items-center gap-1.5">
-                      <span>🏆</span> プレーオフ トーナメント
-                    </h2>
-                    <div className="flex items-stretch gap-2">
-                      {/* 準決勝 */}
-                      <div className="flex-1 space-y-2">
-                        {renderSeries(semi1, '準決勝①')}
-                        {renderSeries(semi2, '準決勝②')}
-                      </div>
-                      {/* 接続線 */}
-                      <div className="flex items-center">
-                        <div className="w-3 border-t border-b border-r border-gray-600 h-[60%] rounded-r"></div>
-                      </div>
-                      {/* 決勝 */}
-                      <div className="flex-1 flex items-center">
-                        {renderSeries(final_, '決勝')}
-                      </div>
+                return renderBracketContainer('プレーオフ トーナメント', (
+                  <div className="flex items-stretch gap-2">
+                    <div className="flex-1 space-y-2">
+                      {renderSeries(semi1, '準決勝①')}
+                      {renderSeries(semi2, '準決勝②')}
+                    </div>
+                    <div className="flex items-center">
+                      <svg width="24" height="100" className="text-gray-600">
+                        <line x1="0" y1="25" x2="12" y2="25" stroke="currentColor" strokeWidth="1.5"/>
+                        <line x1="12" y1="25" x2="12" y2="75" stroke="currentColor" strokeWidth="1.5"/>
+                        <line x1="0" y1="75" x2="12" y2="75" stroke="currentColor" strokeWidth="1.5"/>
+                        <line x1="12" y1="50" x2="24" y2="50" stroke="currentColor" strokeWidth="1.5"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 flex items-center">
+                      {renderSeries(final_, '決勝', true)}
                     </div>
                   </div>
-                );
+                ));
               } else if (playoffFormat === 'double') {
-                // 4チームトーナメント（5戦3勝 準決勝×2 + 決勝）
                 const semi1 = getSeriesData('semi1');
                 const semi2 = getSeriesData('semi2');
                 const final_ = getSeriesData('final');
-                return (
-                  <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
-                    <h2 className="text-base font-bold mb-2 text-white flex items-center gap-1.5">
-                      <span>🏆</span> プレーオフ
-                    </h2>
-                    <div className="flex items-stretch gap-2">
-                      {/* 準決勝 */}
-                      <div className="flex-1 space-y-2">
-                        {renderSeries(semi1, '準決勝① (5戦3勝)')}
-                        {renderSeries(semi2, '準決勝② (5戦3勝)')}
-                      </div>
-                      {/* 接続線 */}
-                      <div className="flex items-center">
-                        <div className="w-3 border-t border-b border-r border-gray-600 h-[60%] rounded-r"></div>
-                      </div>
-                      {/* 決勝 */}
-                      <div className="flex-1 flex items-center">
-                        {renderSeries(final_, '決勝 (5戦3勝)')}
-                      </div>
+                return renderBracketContainer('プレーオフ', (
+                  <div className="flex items-stretch gap-2">
+                    <div className="flex-1 space-y-2">
+                      {renderSeries(semi1, '準決勝① (5戦3勝)')}
+                      {renderSeries(semi2, '準決勝② (5戦3勝)')}
+                    </div>
+                    <div className="flex items-center">
+                      <svg width="24" height="100" className="text-gray-600">
+                        <line x1="0" y1="25" x2="12" y2="25" stroke="currentColor" strokeWidth="1.5"/>
+                        <line x1="12" y1="25" x2="12" y2="75" stroke="currentColor" strokeWidth="1.5"/>
+                        <line x1="0" y1="75" x2="12" y2="75" stroke="currentColor" strokeWidth="1.5"/>
+                        <line x1="12" y1="50" x2="24" y2="50" stroke="currentColor" strokeWidth="1.5"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 flex items-center">
+                      {renderSeries(final_, '決勝 (5戦3勝)', true)}
                     </div>
                   </div>
-                );
+                ));
               } else {
-                // single, top2, split, championship: 2チームの5戦3勝制
                 const final_ = getSeriesData('final');
                 if (!final_) return null;
-                return (
-                  <div className="bg-gradient-to-b from-gray-800 to-gray-850 rounded-xl p-3 shadow-lg border border-gray-700/40 mt-3">
-                    <h2 className="text-base font-bold mb-2 text-white flex items-center gap-1.5">
-                      <span>🏆</span> プレーオフ (5戦3勝制)
-                    </h2>
-                    {renderSeries(final_, '決勝')}
-                  </div>
+                return renderBracketContainer('プレーオフ (5戦3勝制)',
+                  renderSeries(final_, '決勝', true)
                 );
               }
             };

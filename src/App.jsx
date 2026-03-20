@@ -4181,40 +4181,48 @@ if (newOuts === 3) {
     let updatedSeasonData = { ...seasonData };
     const currentPhase = seasonData.phase;
 
-    // 現在フェーズの全試合を取得
-    const phaseGames = seasonData.schedule.filter(game => {
-      // フェーズが一致し、まだ結果がない試合
-      const gamePhase = getCurrentPhase(game.date.month, game.date.day);
-      return gamePhase === currentPhase && !game.result;
-    });
-
-    // プレーオフは1試合ずつシミュレーション（シリーズ決着を管理するため）
-    const isPlayoff = currentPhase === 'playoffs';
+    // プレーオフは1試合ずつシミュレーション（シリーズ決着・TBD確定を管理するため）
+    const isPlayoff = currentPhase === SEASON_PHASES.PLAYOFFS;
     if (isPlayoff) {
-      // 日付順にソートして1試合ずつ処理
-      const sortedGames = [...phaseGames].sort((a, b) => {
-        if (a.date.month !== b.date.month) return a.date.month - b.date.month;
-        return a.date.day - b.date.day;
-      });
-      for (const game of sortedGames) {
-        if (game.result) continue;
-        if (game.home === 'TBD' || game.away === 'TBD') {
-          updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
-          continue;
-        }
+      // 毎回最新のスケジュールから未消化試合を取得し直す（TBD確定後に決勝が現れるため）
+      let maxIterations = 50; // 無限ループ防止
+      while (maxIterations-- > 0) {
+        // 最新スケジュールからプレーオフ未消化試合を取得
+        const remainingGames = updatedSeasonData.schedule.filter(game => {
+          if (game.phase !== SEASON_PHASES.PLAYOFFS) return false;
+          if (game.result) return false;
+          if (game.home === 'TBD' || game.away === 'TBD') return false;
+          return true;
+        }).sort((a, b) => {
+          if (a.date.month !== b.date.month) return a.date.month - b.date.month;
+          return a.date.day - b.date.day;
+        });
+
+        if (remainingGames.length === 0) break;
+
+        const game = remainingGames[0];
         const homeTeam = TEAMS_DATA?.[game.home];
         const awayTeam = TEAMS_DATA?.[game.away];
-        if (!homeTeam || !awayTeam) continue;
+        if (!homeTeam || !awayTeam) break;
+
         const gameResult = autoSimulateGame?.(game.home, game.away);
         if (gameResult) {
           updatedSeasonData = recordGameResult(updatedSeasonData, {
             date: game.date, home: game.home, away: game.away,
             homeScore: gameResult.homeScore, awayScore: gameResult.awayScore
           });
+          // シリーズ決着チェック＆TBD確定（決勝チームが確定する）
           updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
+        } else {
+          break;
         }
       }
     } else {
+      // 現在フェーズの全試合を取得
+      const phaseGames = seasonData.schedule.filter(game => {
+        const gamePhase = getCurrentPhase(game.date.month, game.date.day);
+        return gamePhase === currentPhase && !game.result;
+      });
       phaseGames.forEach(game => {
         if (game.result) return;
         const homeTeam = TEAMS_DATA?.[game.home];
