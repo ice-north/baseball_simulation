@@ -427,8 +427,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <span>{formatDate(seasonData.currentDate)} の対戦</span>
               <span className="text-xs font-normal text-gray-500 ml-1">{todaysGames.length}試合</span>
             </h2>
+            <div className="h-[220px] overflow-y-auto">
             {todaysGames.length === 0 ? (
-              <div className="text-center py-6 bg-gray-800/50 rounded-xl">
+              <div className="text-center py-6 bg-gray-800/50 rounded-xl h-full flex flex-col items-center justify-center">
                 <div className="text-gray-600 text-2xl mb-1">⚾</div>
                 <span className="text-gray-500 text-sm">本日は試合がありません（休養日）</span>
               </div>
@@ -496,6 +497,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 })}
               </div>
             )}
+            </div>
           </div>
 
           {/* 個人成績ランキング */}
