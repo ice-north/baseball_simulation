@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
-import { progressDate, handlePhaseTransition } from '../season/dateProgression.js';
+import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 
@@ -94,7 +94,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     });
     updatedStandings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-    return { data: { ...sData, schedule: updatedSchedule, standings: updatedStandings, results: updatedResults }, results: gameResults };
+    let updatedData = { ...sData, schedule: updatedSchedule, standings: updatedStandings, results: updatedResults };
+    // プレーオフ進行を更新（シリーズ決着・TBD確定）
+    if (sData.phase === SEASON_PHASES.PLAYOFFS) {
+      updatedData = updatePlayoffProgress(updatedData);
+    }
+    return { data: updatedData, results: gameResults };
   };
 
   const checkAndTriggerEvents = (oldData, newData) => {
