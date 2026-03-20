@@ -350,9 +350,25 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     return Math.max(40, Math.min(150, base + variance));
   };
 
+  // 全生成選手の平均能力を-3する調整関数
+  const applyGlobalOffset = (abilities) => {
+    const offset = -3;
+    const result = {};
+    for (const [key, value] of Object.entries(abilities)) {
+      if (key === 'velocity') {
+        result[key] = Math.max(100, value + offset);
+      } else if (key === 'stamina') {
+        result[key] = Math.max(30, value + offset);
+      } else {
+        result[key] = Math.max(1, Math.min(99, value + offset));
+      }
+    }
+    return result;
+  };
+
   // 二刀流選手の場合は投打両方に能力を持つ
   if (isTwoWay) {
-    return {
+    return applyGlobalOffset({
       // 野手能力（平均的）
       meet: randRangeWithVariance(40, 65),
       power: randRangeWithVariance(32, 57),
@@ -365,7 +381,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       velocity: Math.min(randVelocity(121, 139) + velocityAdjust, 149),
       control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
       stamina: randStamina(67, 100)
-    };
+    });
   }
 
   // 通常の能力値範囲（投手用 or 野手アーキタイプ別）
@@ -417,7 +433,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   }
 
   if (!isSpecialist || playerTraits.length === 0) {
-    return normalAbilities;
+    return applyGlobalOffset(normalAbilities);
   }
 
   // 複数特性の能力調整（各特性のボーナスを累積適用）
@@ -505,7 +521,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     });
   });
 
-  return abilities;
+  return applyGlobalOffset(abilities);
 }
 
 /**
