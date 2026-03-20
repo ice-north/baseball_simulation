@@ -1518,7 +1518,14 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const statPath = getStatPath(targetStat);
     if (statPath) {
       const currentValue = getNestedValue(updatedPlayer, statPath) || 50;
-      const newValue = currentValue + totalGrowth; // 上限なし
+      // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）
+      let adjustedGrowth = totalGrowth;
+      if (targetStat === 'velocity' && currentValue >= 155) {
+        const overAmount = currentValue - 155;
+        const dampFactor = Math.max(0.1, 1.0 - overAmount * 0.2);
+        adjustedGrowth = Math.max(0, Math.round(totalGrowth * dampFactor));
+      }
+      const newValue = currentValue + adjustedGrowth;
       updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
       growthReport.push({
         stat: targetStat,
@@ -1718,7 +1725,7 @@ export function executeDispatchTraining(player, destKey) {
 
       const velGrowth = Math.floor(Math.random() * 3) + 1; // +1~3
       const vBefore = player.pitching.velocity;
-      player.pitching.velocity = Math.min(155, vBefore + velGrowth);
+      player.pitching.velocity = Math.max(vBefore, Math.min(155, vBefore + velGrowth));
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
 
       // 変化球レベルUP
@@ -1739,7 +1746,7 @@ export function executeDispatchTraining(player, destKey) {
       // プロ研修: 球速が劇的UP、スタミナも
       const velGrowth = Math.floor(Math.random() * 5) + 4; // +4~8
       const vBefore = player.pitching.velocity;
-      player.pitching.velocity = Math.min(158, vBefore + velGrowth);
+      player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
 
       const staGrowth = Math.floor(Math.random() * 15) + 10;
