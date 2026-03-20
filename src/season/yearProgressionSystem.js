@@ -1641,18 +1641,18 @@ export const DISPATCH_DESTINATIONS = {
   university: {
     name: '大学野球留学',
     icon: '🎓',
-    desc: 'キャンプ期間に大学で集中特訓。技術系が大きく伸びる',
+    desc: 'キャンプ期間に大学で集中特訓。フィジカルが大きく伸びる',
     maxAge: 22,         // 22歳以下
     maxOverall: 55,     // 総合力55以下
-    growthProfile: 'technical', // 技術系メイン
+    growthProfile: 'physical', // フィジカル系メイン
   },
   proCamp: {
     name: 'プロ研修',
     icon: '🏟️',
-    desc: 'キャンプ期間にプロ球団で特訓。フィジカルが劇的に伸びる',
+    desc: 'キャンプ期間にプロ球団で特訓。技術系が大きく伸びる',
     maxAge: 24,         // 24歳以下
     maxOverall: 50,     // 総合力50以下
-    growthProfile: 'physical', // フィジカル系メイン
+    growthProfile: 'technical', // 技術系メイン
   },
 };
 
