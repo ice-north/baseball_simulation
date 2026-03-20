@@ -1093,6 +1093,12 @@ export const SUB_TRAINING_MENUS = {
     description: '指定ポジションの守備練習（適正大幅UP）',
     targets: ['subposition'],
   },
+  clead_study: {
+    name: 'Cリード学習',
+    icon: '🧠',
+    description: 'キャッチャーリード向上（リード+1~3）',
+    targets: ['clead'],
+  },
 };
 
 /**
@@ -1266,6 +1272,14 @@ export function executeSubTraining(player, subType, options = {}) {
           growthReport.push({ statName: '新球種', before: '-', after: '習得失敗', growth: 0 });
         }
       }
+      break;
+    }
+    case 'clead_study': {
+      if (!player.catching) player.catching = {};
+      const gain = Math.floor(Math.random() * 3) + 1; // 1~3
+      const old = player.catching.lead || 40;
+      player.catching.lead = Math.min(100, old + gain);
+      growthReport.push({ statName: 'Cリード', before: old, after: player.catching.lead, growth: gain });
       break;
     }
     case 'subposition': {

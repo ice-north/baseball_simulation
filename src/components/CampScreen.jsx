@@ -562,6 +562,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-1 text-center w-7">走</th>
                     <th className="py-1.5 px-1 text-center w-7">肩</th>
                     <th className="py-1.5 px-1 text-center w-7">守</th>
+                    <th className="py-1.5 px-1 text-center w-7">Cリ</th>
                     <th className="py-1.5 px-1 text-center w-7">眼</th>
                     <th className="py-1.5 px-1 text-center w-9">速</th>
                     <th className="py-1.5 px-1 text-center w-7">制</th>
@@ -608,6 +609,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.speed||0} label="走力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.arm||0} label="肩力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={f.defense||0} label="守備" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={player.catching?.lead||0} label="Cリード" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.eye||0} label="選球眼" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
