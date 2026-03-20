@@ -1513,19 +1513,30 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const isAwakening = Math.random() * 100 < awakeningChance;
     const awakeningGrowth = isAwakening ? Math.round((Math.floor(Math.random() * 10) + 5) * 0.167) : 0;
 
-    const totalGrowth = Math.max(0, baseGrowth + awakeningGrowth);
-
     const statPath = getStatPath(targetStat);
     if (statPath) {
       const currentValue = getNestedValue(updatedPlayer, statPath) || 50;
-      // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）
-      let adjustedGrowth = totalGrowth;
-      if (targetStat === 'velocity' && currentValue >= 155) {
-        const overAmount = currentValue - 155;
-        const dampFactor = Math.max(0.1, 1.0 - overAmount * 0.2);
-        adjustedGrowth = Math.max(0, Math.round(totalGrowth * dampFactor));
+
+      // 高能力値の成長減衰（覚醒分は減衰しない）
+      let adjustedBaseGrowth = baseGrowth;
+      if (targetStat === 'velocity') {
+        // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）
+        if (currentValue >= 155) {
+          const overAmount = currentValue - 155;
+          const dampFactor = Math.max(0.1, 1.0 - overAmount * 0.2);
+          adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
+        }
+      } else {
+        // 球速以外: 能力値80以上で伸びにくくなる（超過1ごとに成長量3%減衰）
+        if (currentValue >= 80) {
+          const overAmount = currentValue - 80;
+          const dampFactor = Math.max(0.1, 1.0 - overAmount * 0.03);
+          adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
+        }
       }
-      const newValue = currentValue + adjustedGrowth;
+
+      const totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
+      const newValue = currentValue + totalGrowth;
       updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
       growthReport.push({
         stat: targetStat,
