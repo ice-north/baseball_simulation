@@ -340,8 +340,27 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
         seriesId: 'final'
       });
     }
-  } else if (format === 'top2' || format === 'split' || format === 'championship') {
-    // 上位2チーム / 前後期 / 両リーグ：5戦3勝制
+  } else if (format === 'split' || format === 'championship') {
+    // 前後期 / 両リーグ：3戦2勝制
+    const team1 = teams[0];
+    const team2 = teams[1];
+    for (let game = 1; game <= 3; game++) {
+      const date = advanceDate(startDate, game - 1);
+      const isHomeTeam1 = game <= 1 || game === 3; // 第1,3戦がホーム
+      schedule.push({
+        id: playoffId++,
+        date,
+        home: isHomeTeam1 ? team1 : team2,
+        away: isHomeTeam1 ? team2 : team1,
+        homePitcher: null, awayPitcher: null, result: null,
+        phase: SEASON_PHASES.PLAYOFFS,
+        playoffRound: 'final',
+        seriesGame: game,
+        seriesId: 'final'
+      });
+    }
+  } else if (format === 'top2') {
+    // 上位2チーム：5戦3勝制
     const team1 = teams[0];
     const team2 = teams[1];
     for (let game = 1; game <= 5; game++) {
@@ -426,8 +445,9 @@ export const updatePlayoffProgress = (seasonData) => {
       else if (g.result.awayScore > g.result.homeScore) wins[g.away] = (wins[g.away] || 0) + 1;
     });
 
-    // 3勝でシリーズ決着 → 残り試合をキャンセル
-    const winsNeeded = series.games.length === 1 ? 1 : 3;
+    // シリーズ決着判定: 最大試合数から必要勝数を計算（5試合→3勝、3試合→2勝、1試合→1勝）
+    const maxGames = series.games.length;
+    const winsNeeded = maxGames === 1 ? 1 : Math.ceil(maxGames / 2);
     const winner = teams.find(t => (wins[t] || 0) >= winsNeeded);
     if (winner) {
       series.games.forEach(g => {
