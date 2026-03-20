@@ -267,6 +267,7 @@ export const generateRegularSeasonSchedule = (teams, gamesPerOpponent = 20, star
 export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) => {
   const schedule = [];
   const startDate = { year, month: 10, day: 10 };
+  let playoffId = 90001; // レギュラーシーズンのidと重複しない番号帯
 
   if (format === 'single') {
     // 1位 vs 2位の3戦先取制（最大5試合）
@@ -278,6 +279,7 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
       const isHomeTeam1 = game <= 2 || game === 5;
 
       schedule.push({
+        id: playoffId++,
         date,
         home: isHomeTeam1 ? team1 : team2,
         away: isHomeTeam1 ? team2 : team1,
@@ -297,6 +299,7 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
       const date = advanceDate(startDate, game - 1);
       const isHome1 = game <= 2 || game === 5;
       schedule.push({
+        id: playoffId++,
         date,
         home: isHome1 ? teams[0] : teams[3],
         away: isHome1 ? teams[3] : teams[0],
@@ -312,6 +315,7 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
       const date = advanceDate(startDate, game - 1);
       const isHome1 = game <= 2 || game === 5;
       schedule.push({
+        id: playoffId++,
         date,
         home: isHome1 ? teams[1] : teams[2],
         away: isHome1 ? teams[2] : teams[1],
@@ -326,6 +330,7 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
     for (let game = 1; game <= 5; game++) {
       const date = advanceDate(startDate, 6 + game - 1); // 準決勝後1日空けて
       schedule.push({
+        id: playoffId++,
         date,
         home: 'TBD', away: 'TBD',
         homePitcher: null, awayPitcher: null, result: null,
@@ -343,6 +348,7 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
       const date = advanceDate(startDate, game - 1);
       const isHomeTeam1 = game <= 2 || game === 5;
       schedule.push({
+        id: playoffId++,
         date,
         home: isHomeTeam1 ? team1 : team2,
         away: isHomeTeam1 ? team2 : team1,
@@ -356,6 +362,7 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
   } else if (format === 'tournament') {
     // トーナメント: 上位4チーム、1戦勝負の準決勝→決勝
     schedule.push({
+      id: playoffId++,
       date: { ...startDate },
       home: teams[0], away: teams[3],
       homePitcher: null, awayPitcher: null, result: null,
@@ -363,6 +370,7 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
       playoffRound: 'semi', seriesGame: 1, seriesId: 'semi1'
     });
     schedule.push({
+      id: playoffId++,
       date: advanceDate(startDate, 1),
       home: teams[1], away: teams[2],
       homePitcher: null, awayPitcher: null, result: null,
@@ -370,6 +378,7 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
       playoffRound: 'semi', seriesGame: 1, seriesId: 'semi2'
     });
     schedule.push({
+      id: playoffId++,
       date: advanceDate(startDate, 3),
       home: 'TBD', away: 'TBD',
       homePitcher: null, awayPitcher: null, result: null,
