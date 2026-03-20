@@ -121,8 +121,6 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const [batsSelections, setBatsSelections] = useState({});
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
-  const [settingMode, setSettingMode] = useState('preset'); // 'preset' or 'individual'
-  const [campTab, setCampTab] = useState('training'); // 'training' or 'dispatch'
   const [dispatchConfirm, setDispatchConfirm] = useState(null); // { playerId, destKey }
   const [dispatchResults, setDispatchResults] = useState([]); // 派遣結果の累積表示
   const [updateKey, setUpdateKey] = useState(0); // 再レンダリング用
@@ -325,21 +323,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-white">春季キャンプ - {userTeamName}</h1>
-            {currentYear > 1 && (
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setCampTab('training')}
-                  className={`px-3 py-1 text-xs rounded-md font-bold transition ${campTab === 'training' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
-                >
-                  練習
-                </button>
-                <button
-                  onClick={() => setCampTab('dispatch')}
-                  className={`px-3 py-1 text-xs rounded-md font-bold transition ${campTab === 'dispatch' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
-                >
-                  派遣 {dispatchedPlayers.length > 0 && `(${dispatchedPlayers.length})`}
-                </button>
-              </div>
+            {dispatchedPlayers.length > 0 && (
+              <span className="text-orange-400 text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -354,197 +339,59 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
           </div>
         </div>
 
-        {/* 派遣タブ */}
-        {campTab === 'dispatch' && (
-          <div className="mb-3">
-            {/* 派遣先の説明 */}
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              {Object.entries(DISPATCH_DESTINATIONS).map(([key, dest]) => (
-                <div key={key} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg">{dest.icon}</span>
-                    <span className="text-white font-bold text-sm">{dest.name}</span>
-                  </div>
-                  <div className="text-gray-400 text-xs mb-1">{dest.desc}</div>
-                  <div className="text-[10px] text-gray-500 space-y-0.5">
-                    <div>対象: {dest.maxAge}歳以下 / 総合力{dest.maxOverall}以下</div>
-                    <div>キャンプ中に集中特訓（通常練習の代わり）</div>
-                  </div>
-                </div>
+        {viewMode === 'select' && (
+          <>
+            {/* プリセット一括設定 */}
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+              <span className="text-gray-500 text-xs font-bold">プリセット:</span>
+              {Object.entries(CAMP_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  onClick={() => applyPreset(key)}
+                  title={`${preset.desc}\n効果: ${preset.effect}`}
+                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded px-2 py-0.5 text-[11px] text-gray-300 hover:text-blue-300 transition"
+                >
+                  {preset.icon} {preset.name}
+                </button>
+              ))}
+              <span className="text-gray-600 mx-1">|</span>
+              <span className="text-gray-500 text-xs font-bold">一括:</span>
+              {Object.entries(TRAINING_MENUS).filter(([k]) => !['newpitch'].includes(k)).map(([key, menu]) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    const updated = {};
+                    userTeam?.players?.forEach(p => {
+                      updated[p.id] = TRAINING_MENUS[key] ? key : (assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting'));
+                    });
+                    setAssignments(updated);
+                  }}
+                  className="px-2 py-0.5 text-[11px] rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition"
+                >
+                  {menu.icon} {menu.name}
+                </button>
               ))}
             </div>
 
-            {/* 派遣済みの選手と結果 */}
+            {/* 派遣結果 */}
             {dispatchResults.length > 0 && (
-              <div className="bg-gray-800 rounded-lg p-3 mb-3">
-                <h3 className="text-sm font-bold text-green-400 mb-2">派遣結果</h3>
-                <div className="space-y-2">
+              <div className="bg-gray-800 rounded-lg p-2 mb-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-orange-400 text-xs font-bold">派遣結果:</span>
                   {dispatchResults.map((result, idx) => (
-                    <div key={idx} className="bg-gray-700/50 rounded px-3 py-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-bold text-xs ${result.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{result.player.name}</span>
-                        <span className="text-gray-500 text-[10px]">{result.destination}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {result.growthReport.map((g, gIdx) => (
-                          <span key={gIdx} className={`px-1.5 py-0 rounded text-[10px] font-bold ${
-                            g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
-                          }`}>
-                            {g.statName}: {g.before}→{g.after} (+{g.growth})
-                            {g.isAwakening && ' 覚醒!'}
-                          </span>
-                        ))}
-                      </div>
+                    <div key={idx} className="flex items-center gap-1 bg-gray-700/50 rounded px-2 py-0.5">
+                      <span className={`font-bold text-[10px] ${result.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{result.player.name}</span>
+                      <span className="text-gray-500 text-[10px]">{result.destination}</span>
+                      {result.growthReport.map((g, gIdx) => (
+                        <span key={gIdx} className={`px-1 rounded text-[10px] font-bold ${
+                          g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
+                        }`}>
+                          {g.statName}+{g.growth}{g.isAwakening && '覚醒!'}
+                        </span>
+                      ))}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* 派遣可能な選手リスト */}
-            <div className="bg-gray-800 rounded-lg overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
-                    <th className="py-1.5 px-2 text-left w-20">選手</th>
-                    <th className="py-1.5 px-1 text-center w-7">位</th>
-                    <th className="py-1.5 px-1 text-center w-6">齢</th>
-                    <th className="py-1.5 px-1 text-center w-9">総合</th>
-                    <th className="py-1.5 px-1 text-center w-7">ミ</th>
-                    <th className="py-1.5 px-1 text-center w-7">パ</th>
-                    <th className="py-1.5 px-1 text-center w-7">走</th>
-                    <th className="py-1.5 px-1 text-center w-7">守</th>
-                    <th className="py-1.5 px-1 text-center w-9">速</th>
-                    <th className="py-1.5 px-1 text-center w-7">制</th>
-                    <th className="py-1.5 px-1 text-center w-9">ス</th>
-                    <th className="py-1.5 px-2 text-center">派遣</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activePlayers.map(player => {
-                    const b = player.batting || {};
-                    const p = player.pitching || {};
-                    const ph = player.physical || {};
-                    const f = player.fielding || {};
-                    const overall = calcPlayerOverall(player);
-
-                    return (
-                      <tr key={player.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                        <td className="py-1 px-2">
-                          <span className={`font-bold text-xs ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>{player.name}</span>
-                        </td>
-                        <td className="py-1 px-1 text-center text-[10px] text-gray-500">{POSITION_NAMES[player.position]}</td>
-                        <td className="py-1 px-1 text-center text-gray-500 text-[10px]">{player.age || 20}</td>
-                        <td className="py-1 px-1 text-center">
-                          <span className={`text-[10px] font-bold ${overall <= 40 ? 'text-gray-400' : overall <= 50 ? 'text-blue-400' : overall <= 55 ? 'text-green-400' : 'text-yellow-400'}`}>{overall}</span>
-                        </td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.speed||0} label="走力" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={f.defense||0} label="守備" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
-                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
-                        <td className="py-1 px-2 text-center">
-                          <div className="flex gap-1 justify-center">
-                            {Object.entries(DISPATCH_DESTINATIONS).map(([destKey, dest]) => {
-                              const { eligible, reason } = checkDispatchEligibility(player, destKey);
-                              return (
-                                <button
-                                  key={destKey}
-                                  onClick={() => eligible && setDispatchConfirm({ playerId: player.id, destKey })}
-                                  disabled={!eligible}
-                                  title={eligible ? `${dest.name}に派遣` : reason}
-                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
-                                    eligible
-                                      ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
-                                      : 'bg-gray-700 text-gray-600 cursor-not-allowed'
-                                  }`}
-                                >
-                                  {dest.icon}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="text-center mt-3">
-              <button
-                onClick={() => setCampTab('training')}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-lg font-bold text-sm transition"
-              >
-                練習に戻る
-              </button>
-            </div>
-          </div>
-        )}
-
-        {campTab === 'training' && viewMode === 'select' && (
-          <>
-            {/* プリセット / 個別切替 */}
-            <div className="flex items-center gap-2 mb-2">
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setSettingMode('preset')}
-                  className={`px-3 py-1 text-xs rounded-md font-bold transition ${settingMode === 'preset' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
-                >
-                  プリセット
-                </button>
-                <button
-                  onClick={() => setSettingMode('individual')}
-                  className={`px-3 py-1 text-xs rounded-md font-bold transition ${settingMode === 'individual' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
-                >
-                  個別設定
-                </button>
-              </div>
-            </div>
-
-            {/* プリセット選択UI */}
-            {settingMode === 'preset' && (
-              <div className="grid grid-cols-4 gap-1.5 mb-2">
-                {Object.entries(CAMP_PRESETS).map(([key, preset]) => (
-                  <button
-                    key={key}
-                    onClick={() => applyPreset(key)}
-                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-lg p-2 text-left transition group"
-                  >
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <span className="text-sm">{preset.icon}</span>
-                      <span className="text-xs font-bold text-white group-hover:text-blue-300">{preset.name}</span>
-                    </div>
-                    <div className="text-[10px] text-gray-500 mb-0.5">{preset.desc}</div>
-                    <div className="text-[10px] text-green-400/70">効果: {preset.effect}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* 個別設定時の一括ボタン */}
-            {settingMode === 'individual' && (
-              <div className="bg-gray-800 rounded-lg p-2 mb-2 flex items-center flex-wrap gap-1">
-                <span className="text-gray-500 text-xs mr-1">一括:</span>
-                {Object.entries(TRAINING_MENUS).filter(([k]) => !['newpitch'].includes(k)).map(([key, menu]) => (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      const updated = {};
-                      userTeam?.players?.forEach(p => {
-                        const menus = TRAINING_MENUS;
-                        updated[p.id] = menus[key] ? key : (assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting'));
-                      });
-                      setAssignments(updated);
-                    }}
-                    className="px-2 py-0.5 text-[11px] rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition"
-                  >
-                    {menu.icon} {menu.name}
-                  </button>
-                ))}
               </div>
             )}
 
@@ -575,6 +422,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     ))}
                     <th className="py-1.5 px-2 text-left w-28">メイン</th>
                     <th className="py-1.5 px-2 text-left w-28">サブ</th>
+                    {currentYear > 1 && <th className="py-1.5 px-1 text-center w-16">派遣</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -714,6 +562,30 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             )}
                           </div>
                         </td>
+                        {currentYear > 1 && (
+                          <td className="py-1 px-1 text-center">
+                            <div className="flex gap-0.5 justify-center">
+                              {Object.entries(DISPATCH_DESTINATIONS).map(([destKey, dest]) => {
+                                const { eligible, reason } = checkDispatchEligibility(player, destKey);
+                                return (
+                                  <button
+                                    key={destKey}
+                                    onClick={() => eligible && setDispatchConfirm({ playerId: player.id, destKey })}
+                                    disabled={!eligible}
+                                    title={eligible ? `${dest.name}に派遣\n${dest.desc}` : reason}
+                                    className={`px-1 py-0.5 rounded text-[10px] font-bold transition ${
+                                      eligible
+                                        ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
+                                        : 'bg-gray-700 text-gray-600 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    {dest.icon}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -732,7 +604,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
           </>
         )}
 
-        {campTab === 'training' && viewMode === 'results' && (
+        {viewMode === 'results' && (
           <>
             {/* 練習結果 */}
             <div className="bg-gray-800 rounded-lg overflow-hidden mb-3">
