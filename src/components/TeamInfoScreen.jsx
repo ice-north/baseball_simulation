@@ -12,6 +12,7 @@ const TeamInfoScreen = () => {
   const [fielderSortKey, setFielderSortKey] = useState(null);
   const [fielderSortDir, setFielderSortDir] = useState('desc');
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [detailTab, setDetailTab] = useState('ability');
 
   const allTeamsData = TEAMS_DATA || {};
   const team = allTeamsData[selectedTeam];
@@ -124,7 +125,7 @@ const TeamInfoScreen = () => {
 
     return (
       <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setSelectedPlayer(null)}>
-        <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="bg-gray-800 rounded-lg p-6 max-w-3xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-white">{player.name}</h2>
             <button onClick={() => setSelectedPlayer(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
@@ -137,6 +138,19 @@ const TeamInfoScreen = () => {
             <div>打: <span className="text-white">{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</span></div>
           </div>
 
+          {/* タブ切り替え */}
+          <div className="flex gap-1 mb-4 border-b border-gray-600">
+            {['ability', 'stats'].map(tab => (
+              <button key={tab}
+                className={`px-4 py-2 text-sm font-bold rounded-t transition ${detailTab === tab ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                onClick={() => setDetailTab(tab)}
+              >
+                {tab === 'ability' ? '能力' : '年度別成績'}
+              </button>
+            ))}
+          </div>
+
+          {detailTab === 'ability' ? (<>
           <div className="grid grid-cols-2 gap-4 mb-4">
             {/* 野手能力 */}
             <div className="bg-gray-700 rounded p-3">
@@ -199,58 +213,166 @@ const TeamInfoScreen = () => {
               ))}
             </div>
           </div>
-
-          {/* シーズン成績 */}
-          <div className="bg-gray-700 rounded p-3 mb-4">
-            <h3 className="text-sm font-bold text-white mb-2">シーズン成績</h3>
-            {isPitcher ? (
-              <div className="grid grid-cols-4 gap-2 text-xs text-gray-300">
-                <div>試合: <span className="text-white">{pitching.games || 0}</span></div>
-                <div>勝敗: <span className="text-white">{pitching.wins || 0}-{pitching.losses || 0}</span></div>
-                <div>回: <span className="text-white">{pitching.inningsPitched > 0 ? formatInnings(pitching.inningsPitched) : '0'}</span></div>
-                <div>防御率: <span className="text-yellow-400">{pitching.inningsPitched > 0 ? ((pitching.earnedRuns * 27) / pitching.inningsPitched).toFixed(2) : '-.--'}</span></div>
-                <div>奪三振: <span className="text-white">{pitching.strikeouts || 0}</span></div>
-                <div>与四球: <span className="text-white">{pitching.walks || 0}</span></div>
-                <div>失点: <span className="text-white">{pitching.runsAllowed || 0}</span></div>
-                <div>投球数: <span className="text-white">{pitching.pitches || 0}</span></div>
+          </>) : (<>
+          {/* 年度別成績タブ */}
+          {(() => {
+            const history = player.statsHistory || [];
+            if (history.length === 0 && (!batting.games && !pitching.games)) {
+              return <div className="text-gray-400 text-sm text-center py-8">まだシーズン成績がありません</div>;
+            }
+            return isPitcher ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-gray-300">
+                  <thead>
+                    <tr className="border-b border-gray-600 text-gray-400">
+                      <th className="px-2 py-1 text-left">年</th>
+                      <th className="px-2 py-1 text-center">試</th>
+                      <th className="px-2 py-1 text-center">勝</th>
+                      <th className="px-2 py-1 text-center">敗</th>
+                      <th className="px-2 py-1 text-center">S</th>
+                      <th className="px-2 py-1 text-center">H</th>
+                      <th className="px-2 py-1 text-center">回</th>
+                      <th className="px-2 py-1 text-center">防御率</th>
+                      <th className="px-2 py-1 text-center">奪三振</th>
+                      <th className="px-2 py-1 text-center">与四球</th>
+                      <th className="px-2 py-1 text-center">失点</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((h, i) => {
+                      const p = h.pitching || {};
+                      const era = p.inningsPitched > 0 ? ((p.earnedRuns * 27) / p.inningsPitched).toFixed(2) : '-.--';
+                      return (
+                        <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
+                          <td className="px-2 py-1 text-white font-bold">{h.year}年目</td>
+                          <td className="px-2 py-1 text-center">{p.games || 0}</td>
+                          <td className="px-2 py-1 text-center">{p.wins || 0}</td>
+                          <td className="px-2 py-1 text-center">{p.losses || 0}</td>
+                          <td className="px-2 py-1 text-center">{p.saves || 0}</td>
+                          <td className="px-2 py-1 text-center">{p.holds || 0}</td>
+                          <td className="px-2 py-1 text-center">{p.inningsPitched > 0 ? formatInnings(p.inningsPitched) : '0'}</td>
+                          <td className="px-2 py-1 text-center text-yellow-400">{era}</td>
+                          <td className="px-2 py-1 text-center">{p.strikeouts || 0}</td>
+                          <td className="px-2 py-1 text-center">{p.walks || 0}</td>
+                          <td className="px-2 py-1 text-center">{p.runsAllowed || 0}</td>
+                        </tr>
+                      );
+                    })}
+                    {/* 今シーズン */}
+                    {(pitching.games > 0) && (
+                      <tr className="border-b border-gray-700 bg-gray-750 hover:bg-gray-700">
+                        <td className="px-2 py-1 text-cyan-400 font-bold">今季</td>
+                        <td className="px-2 py-1 text-center">{pitching.games || 0}</td>
+                        <td className="px-2 py-1 text-center">{pitching.wins || 0}</td>
+                        <td className="px-2 py-1 text-center">{pitching.losses || 0}</td>
+                        <td className="px-2 py-1 text-center">{pitching.saves || 0}</td>
+                        <td className="px-2 py-1 text-center">{pitching.holds || 0}</td>
+                        <td className="px-2 py-1 text-center">{pitching.inningsPitched > 0 ? formatInnings(pitching.inningsPitched) : '0'}</td>
+                        <td className="px-2 py-1 text-center text-yellow-400">{pitching.inningsPitched > 0 ? ((pitching.earnedRuns * 27) / pitching.inningsPitched).toFixed(2) : '-.--'}</td>
+                        <td className="px-2 py-1 text-center">{pitching.strikeouts || 0}</td>
+                        <td className="px-2 py-1 text-center">{pitching.walks || 0}</td>
+                        <td className="px-2 py-1 text-center">{pitching.runsAllowed || 0}</td>
+                      </tr>
+                    )}
+                    {/* 通算 */}
+                    {career && (
+                      <tr className="border-t-2 border-gray-500 font-bold text-white">
+                        <td className="px-2 py-1">通算</td>
+                        <td className="px-2 py-1 text-center">{career.games || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.wins || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.losses || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.saves || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.holds || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.inningsPitched > 0 ? formatInnings(career.inningsPitched) : '0'}</td>
+                        <td className="px-2 py-1 text-center text-yellow-400">{career.inningsPitched > 0 ? ((career.earnedRuns * 27) / career.inningsPitched).toFixed(2) : '-.--'}</td>
+                        <td className="px-2 py-1 text-center">{career.strikeouts || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.walks || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.runsAllowed || 0}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             ) : (
-              <div className="grid grid-cols-4 gap-2 text-xs text-gray-300">
-                <div>試合: <span className="text-white">{batting.games || 0}</span></div>
-                <div>打率: <span className="text-yellow-400">{batting.atBats > 0 ? (batting.hits / batting.atBats).toFixed(3) : '.000'}</span></div>
-                <div>HR: <span className="text-white">{batting.homeruns || 0}</span></div>
-                <div>打点: <span className="text-white">{batting.rbis || 0}</span></div>
-                <div>安打: <span className="text-white">{batting.hits || 0}</span></div>
-                <div>打席: <span className="text-white">{batting.atBats || 0}</span></div>
-                <div>盗塁: <span className="text-white">{batting.stolenBases || 0}</span></div>
-                <div>四球: <span className="text-white">{batting.walks || 0}</span></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-gray-300">
+                  <thead>
+                    <tr className="border-b border-gray-600 text-gray-400">
+                      <th className="px-2 py-1 text-left">年</th>
+                      <th className="px-2 py-1 text-center">試</th>
+                      <th className="px-2 py-1 text-center">打率</th>
+                      <th className="px-2 py-1 text-center">打席</th>
+                      <th className="px-2 py-1 text-center">安打</th>
+                      <th className="px-2 py-1 text-center">二塁打</th>
+                      <th className="px-2 py-1 text-center">三塁打</th>
+                      <th className="px-2 py-1 text-center">HR</th>
+                      <th className="px-2 py-1 text-center">打点</th>
+                      <th className="px-2 py-1 text-center">盗塁</th>
+                      <th className="px-2 py-1 text-center">四球</th>
+                      <th className="px-2 py-1 text-center">三振</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((h, i) => {
+                      const b = h.batting || {};
+                      const avg = b.atBats > 0 ? (b.hits / b.atBats).toFixed(3) : '.000';
+                      return (
+                        <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
+                          <td className="px-2 py-1 text-white font-bold">{h.year}年目</td>
+                          <td className="px-2 py-1 text-center">{b.games || 0}</td>
+                          <td className="px-2 py-1 text-center text-yellow-400">{avg}</td>
+                          <td className="px-2 py-1 text-center">{b.atBats || 0}</td>
+                          <td className="px-2 py-1 text-center">{b.hits || 0}</td>
+                          <td className="px-2 py-1 text-center">{b.doubles || 0}</td>
+                          <td className="px-2 py-1 text-center">{b.triples || 0}</td>
+                          <td className="px-2 py-1 text-center">{b.homeruns || 0}</td>
+                          <td className="px-2 py-1 text-center">{b.rbis || 0}</td>
+                          <td className="px-2 py-1 text-center">{b.stolenBases || 0}</td>
+                          <td className="px-2 py-1 text-center">{b.walks || 0}</td>
+                          <td className="px-2 py-1 text-center">{b.strikeouts || 0}</td>
+                        </tr>
+                      );
+                    })}
+                    {/* 今シーズン */}
+                    {(batting.games > 0) && (
+                      <tr className="border-b border-gray-700 hover:bg-gray-700">
+                        <td className="px-2 py-1 text-cyan-400 font-bold">今季</td>
+                        <td className="px-2 py-1 text-center">{batting.games || 0}</td>
+                        <td className="px-2 py-1 text-center text-yellow-400">{batting.atBats > 0 ? (batting.hits / batting.atBats).toFixed(3) : '.000'}</td>
+                        <td className="px-2 py-1 text-center">{batting.atBats || 0}</td>
+                        <td className="px-2 py-1 text-center">{batting.hits || 0}</td>
+                        <td className="px-2 py-1 text-center">{batting.doubles || 0}</td>
+                        <td className="px-2 py-1 text-center">{batting.triples || 0}</td>
+                        <td className="px-2 py-1 text-center">{batting.homeruns || 0}</td>
+                        <td className="px-2 py-1 text-center">{batting.rbis || 0}</td>
+                        <td className="px-2 py-1 text-center">{batting.stolenBases || 0}</td>
+                        <td className="px-2 py-1 text-center">{batting.walks || 0}</td>
+                        <td className="px-2 py-1 text-center">{batting.strikeouts || 0}</td>
+                      </tr>
+                    )}
+                    {/* 通算 */}
+                    {career && (
+                      <tr className="border-t-2 border-gray-500 font-bold text-white">
+                        <td className="px-2 py-1">通算</td>
+                        <td className="px-2 py-1 text-center">{career.games || 0}</td>
+                        <td className="px-2 py-1 text-center text-yellow-400">{career.atBats > 0 ? (career.hits / career.atBats).toFixed(3) : '.000'}</td>
+                        <td className="px-2 py-1 text-center">{career.atBats || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.hits || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.doubles || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.triples || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.homeruns || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.rbis || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.stolenBases || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.walks || 0}</td>
+                        <td className="px-2 py-1 text-center">{career.strikeouts || 0}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </div>
-
-          {/* 通算成績 */}
-          {career && (
-            <div className="bg-gray-700 rounded p-3">
-              <h3 className="text-sm font-bold text-white mb-2">通算成績</h3>
-              {isPitcher ? (
-                <div className="grid grid-cols-4 gap-2 text-xs text-gray-300">
-                  <div>試合: <span className="text-white">{career.games || 0}</span></div>
-                  <div>勝敗: <span className="text-white">{career.wins || 0}-{career.losses || 0}</span></div>
-                  <div>回: <span className="text-white">{career.inningsPitched > 0 ? formatInnings(career.inningsPitched) : '0'}</span></div>
-                  <div>防御率: <span className="text-yellow-400">{career.inningsPitched > 0 ? ((career.earnedRuns * 27) / career.inningsPitched).toFixed(2) : '-.--'}</span></div>
-                  <div>奪三振: <span className="text-white">{career.strikeouts || 0}</span></div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-4 gap-2 text-xs text-gray-300">
-                  <div>試合: <span className="text-white">{career.games || 0}</span></div>
-                  <div>打率: <span className="text-yellow-400">{career.atBats > 0 ? (career.hits / career.atBats).toFixed(3) : '.000'}</span></div>
-                  <div>HR: <span className="text-white">{career.homeruns || 0}</span></div>
-                  <div>打点: <span className="text-white">{career.rbis || 0}</span></div>
-                  <div>安打: <span className="text-white">{career.hits || 0}</span></div>
-                </div>
-              )}
-            </div>
-          )}
+            );
+          })()}
+          </>)}
         </div>
       </div>
     );
@@ -312,7 +434,7 @@ const TeamInfoScreen = () => {
                     const stats = player.seasonStats?.pitching;
                     return (
                       <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-750'}`}
-                        onClick={() => setSelectedPlayer(player)}>
+                        onClick={() => { setSelectedPlayer(player); setDetailTab('ability'); }}>
                         <td className="px-2 py-1 text-white font-medium">{player.name}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.age}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}</td>
@@ -376,7 +498,7 @@ const TeamInfoScreen = () => {
                     const stats = player.seasonStats?.batting;
                     return (
                       <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-750'}`}
-                        onClick={() => setSelectedPlayer(player)}>
+                        onClick={() => { setSelectedPlayer(player); setDetailTab('ability'); }}>
                         <td className="px-2 py-1 text-white font-medium">{player.name}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{POSITION_NAMES[player.position]}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.age}</td>

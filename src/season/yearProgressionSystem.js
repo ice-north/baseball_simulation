@@ -688,7 +688,7 @@ export function releasePlayer(team, playerId) {
  * @param {Object} allTeams - 全チームデータ
  * @returns {Object} - 更新されたチームデータ
  */
-export function resetSeasonStats(allTeams) {
+export function resetSeasonStats(allTeams, year) {
   const updatedTeams = {};
 
   Object.entries(allTeams).forEach(([teamName, team]) => {
@@ -734,8 +734,15 @@ export function resetSeasonStats(allTeams) {
         };
 
         // 前年成績を保存してからシーズン成績をリセット
+        const statsHistoryEntry = {
+          year: year || '?',
+          batting: JSON.parse(JSON.stringify(player.seasonStats.batting)),
+          pitching: JSON.parse(JSON.stringify(player.seasonStats.pitching))
+        };
+        const existingHistory = player.statsHistory || [];
         return {
           ...player,
+          statsHistory: [...existingHistory, statsHistoryEntry],
           previousSeasonStats: JSON.parse(JSON.stringify(player.seasonStats)),
           careerStats: {
             batting: updatedCareerBatting,
@@ -824,7 +831,7 @@ export function advanceToNextYear(seasonData, allTeams) {
   let updatedTeams = recordAwardsToPlayers(allTeams, awards);
 
   // 3. シーズン統計を通算に加算してリセット
-  updatedTeams = resetSeasonStats(updatedTeams);
+  updatedTeams = resetSeasonStats(updatedTeams, seasonData.year);
 
   // 4. 選手の年齢を更新
   updatedTeams = updateAllPlayerAges(updatedTeams);
