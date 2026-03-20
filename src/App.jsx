@@ -4632,7 +4632,9 @@ if (newOuts === 3) {
                     batting: p.batting ? { meet: p.batting.meet, power: p.batting.power, eye: p.batting.eye, steal: p.batting.steal } : null,
                     physical: p.physical ? { speed: p.physical.speed, arm: p.physical.arm } : null,
                     fielding: p.fielding ? { defense: p.fielding.defense } : null,
-                    pitching: p.pitching ? { velocity: p.pitching.velocity, control: p.pitching.control, stamina: p.pitching.stamina } : null
+                    pitching: p.pitching ? { velocity: p.pitching.velocity, control: p.pitching.control, stamina: p.pitching.stamina, arsenal: p.pitching.arsenal ? JSON.parse(JSON.stringify(p.pitching.arsenal)) : null } : null,
+                    positionFitness: p.positionFitness ? JSON.parse(JSON.stringify(p.positionFitness)) : null,
+                    traits: p.traits ? [...p.traits] : null
                   } : null;
                   return {
                     name: d.name,

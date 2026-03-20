@@ -1,4 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { getPitchTypeName } from '../season/yearProgressionSystem.js';
+
+const FULL_POSITION_NAMES = {
+  pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手',
+  third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手'
+};
 
 const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) => {
   const [activeTab, setActiveTab] = useState('draft');
@@ -219,6 +225,31 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, onClose }) =>
                                         </>
                                       )}
                                     </div>
+                                    {ds.pitching?.arsenal && ds.pitching.arsenal.length > 0 && (
+                                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                        <span className="text-gray-500">球種:</span>
+                                        {ds.pitching.arsenal.map((pitch, pi) => (
+                                          <span key={pi} className={`${pitch.type === 'straight' ? 'text-red-400' : 'text-cyan-400'}`}>
+                                            {getPitchTypeName(pitch.type)} <span className="text-gray-500 text-[9px]">Lv{pitch.level}</span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {ds.positionFitness && (() => {
+                                      const subPositions = Object.entries(ds.positionFitness)
+                                        .filter(([pos, fit]) => pos !== player.position && fit >= 30)
+                                        .sort((a, b) => b[1] - a[1]);
+                                      return subPositions.length > 0 ? (
+                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                          <span className="text-gray-500">サブポジ:</span>
+                                          {subPositions.map(([pos, fit], si) => (
+                                            <span key={si} className={`${fit >= 70 ? 'text-green-400' : fit >= 50 ? 'text-yellow-400' : 'text-gray-400'}`}>
+                                              {FULL_POSITION_NAMES[pos] || pos} <span className="text-gray-500 text-[9px]">{fit}</span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : null;
+                                    })()}
                                   </div>
                                 ) : (
                                   <div className="text-gray-600 text-[10px]">能力値データなし（過去のセーブデータの選手）</div>
