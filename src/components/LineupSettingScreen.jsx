@@ -324,6 +324,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       case 'speed': return player.physical?.speed || 0;
       case 'arm': return player.physical?.arm || 0;
       case 'defense': return player.fielding?.defense || 0;
+      case 'bodyStamina': return player.physical?.bodyStamina || 50;
+      case 'recovery': return player.physical?.recovery || 50;
+      case 'fatigue': return player.fatigue || 0;
       case 'velocity': return player.pitching?.velocity || 0;
       case 'control': return player.pitching?.control || 0;
       case 'stamina': return player.pitching?.stamina || 0;
@@ -405,6 +408,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         <StatCell value={player.physical?.speed || 0} />
         <StatCell value={player.physical?.arm || 0} />
         <StatCell value={player.fielding?.defense || 0} />
+        <StatCell value={player.physical?.bodyStamina || 50} />
+        <StatCell value={player.physical?.recovery || 50} />
+        <td className="py-1 px-1 text-[10px] text-center">
+          {(() => {
+            const f = player.fatigue || 0;
+            const color = f >= 80 ? 'text-red-400' : f >= 50 ? 'text-orange-400' : f >= 20 ? 'text-yellow-400' : 'text-green-400';
+            return <span className={color}>{f}</span>;
+          })()}
+        </td>
         {/* 投手能力: 球速、制球、スタミナ（全選手表示） */}
         <StatCell value={player.pitching?.velocity || 0} isVelocity />
         <StatCell value={player.pitching?.control || 0} />
@@ -515,10 +527,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               </div>
                             </div>
                             <div className="text-xs mt-1 flex gap-2">
-                              {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0}].map(stat => {
+                              {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0},{label:'体',value:player.physical?.bodyStamina||50},{label:'回',value:player.physical?.recovery||50}].map(stat => {
                                 const rank = getAbilityRank(stat.value);
                                 return <span key={stat.label} className={getRankColor(rank)}>{stat.label}{stat.value}</span>;
                               })}
+                              {(() => {
+                                const f = player.fatigue || 0;
+                                if (f === 0) return null;
+                                const color = f >= 80 ? 'text-red-400' : f >= 50 ? 'text-orange-400' : f >= 20 ? 'text-yellow-400' : 'text-green-400';
+                                return <span className={color}>疲{f}</span>;
+                              })()}
                             </div>
                             {(() => {
                               const bs = player.seasonStats?.batting;
@@ -564,6 +582,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                       <SortHeader label="走" sortKey="speed" className="text-center" />
                       <SortHeader label="肩" sortKey="arm" className="text-center" />
                       <SortHeader label="守" sortKey="defense" className="text-center" />
+                      <SortHeader label="体" sortKey="bodyStamina" className="text-center" />
+                      <SortHeader label="回" sortKey="recovery" className="text-center" />
+                      <SortHeader label="疲" sortKey="fatigue" className="text-center" />
                       <SortHeader label="球速" sortKey="velocity" className="text-center" />
                       <SortHeader label="制球" sortKey="control" className="text-center" />
                       <SortHeader label="スタ" sortKey="stamina" className="text-center" />

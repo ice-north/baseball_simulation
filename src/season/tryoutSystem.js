@@ -203,7 +203,9 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       physical: {
         speed: abilities.speed,
         arm: abilities.arm,
-        throws: throws
+        throws: throws,
+        bodyStamina: abilities.bodyStamina || 50,
+        recovery: abilities.recovery || 50
       },
       fielding: {
         defense: abilities.defense
@@ -377,6 +379,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       speed: randRangeWithVariance(40, 70),
       arm: randRangeWithVariance(50, 80),
       defense: randRangeWithVariance(40, 65),
+      bodyStamina: randRangeWithVariance(40, 70),
+      recovery: randRangeWithVariance(40, 70),
       // 投手能力（平均的だが投げられる、球速-6km、スタミナ2/3調整済み）
       velocity: Math.min(randVelocity(121, 139) + velocityAdjust, 149),
       control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
@@ -395,6 +399,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       speed: randRangeWithVariance(30, 55, Math.max(0, Math.floor(ageBonus * 0.5))),
       arm: randRangeWithVariance(40, 65),
       defense: randRangeWithVariance(40, 65),
+      bodyStamina: randRangeWithVariance(40, 70),
+      recovery: randRangeWithVariance(40, 70),
       velocity: Math.min(randVelocity(116, 139, ageBonus) + velocityAdjust, 152),
       control: Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85),
       stamina: randStamina(73, 113, ageBonus)
@@ -426,6 +432,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       speed: randRangeWithVariance(arch.speed[0], arch.speed[1], Math.max(0, Math.floor(ageBonus * 0.7))),
       arm: randRangeWithVariance(arch.arm[0], arch.arm[1]),
       defense: randRangeWithVariance(arch.defense[0], arch.defense[1]),
+      bodyStamina: randRangeWithVariance(40, 75),
+      recovery: randRangeWithVariance(40, 75),
       velocity: randRange(106, 121),
       control: randRange(30, 55),
       stamina: randRange(40, 67)

@@ -187,10 +187,14 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
   Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
     if (!team || !team.players) return;
 
-    // 選手個人の疲労回復
+    // 選手個人の疲労回復（回復能力が高いほど多く回復）
     team.players.forEach(player => {
       if (player.fatigue && player.fatigue > 0) {
-        player.fatigue = Math.max(0, player.fatigue - recoveryAmount);
+        const recoveryAbility = player.physical?.recovery || 50;
+        // 回復量 = ベース回復 × (0.7〜1.3)（回復能力50で1.0倍）
+        const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
+        const actualRecovery = Math.round(recoveryAmount * recoveryMult);
+        player.fatigue = Math.max(0, player.fatigue - actualRecovery);
       }
     });
 
@@ -422,11 +426,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const batterCondMod = CONDITION_BATTING_MODIFIER[batterCondition] || 0;
     const pitcherCondMod = CONDITION_PITCHING_MODIFIER[pitcherCondition] || 0;
 
+    // 疲労による能力低下（疲労0→0%, 疲労50→-5%, 疲労100→-15%）
+    const batterFatigue = batterPlayer.fatigue || 0;
+    const fatiguePenalty = batterFatigue > 0 ? Math.round(batterFatigue * batterFatigue / 670) : 0;
+
     const batter = {
-      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod,
-      power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod,
-      eye: (batterPlayer.batting?.eye || 50) + stratEyeMod,
-      speed: batterPlayer.physical?.speed || 50,
+      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod - fatiguePenalty,
+      power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod - fatiguePenalty,
+      eye: (batterPlayer.batting?.eye || 50) + stratEyeMod - Math.floor(fatiguePenalty * 0.5),
+      speed: (batterPlayer.physical?.speed || 50) - fatiguePenalty,
       bats: batterPlayer.batting?.bats || 'right'
     };
 
@@ -1695,6 +1703,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         if (bo >= 1 && bo <= 9) {
           playerData.battingOrderExperience[bo] = (playerData.battingOrderExperience[bo] || 0) + 1;
         }
+
+        // 野手疲労蓄積: 体力が低いほど疲労が溜まりやすい
+        const bodyStamina = playerData.physical?.bodyStamina || 50;
+        // 基礎疲労 5〜10（体力100→5, 体力1→10）
+        const baseFatigue = Math.round(10 - (bodyStamina / 100) * 5);
+        playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
       }
 
       // 投手成績の集計

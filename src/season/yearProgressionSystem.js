@@ -877,7 +877,7 @@ export function advanceToNextYear(seasonData, allTeams) {
 // ============================================================
 
 // フィジカル系能力（若いほど伸びやすい）
-const PHYSICAL_STATS = ['speed', 'arm', 'stamina', 'velocity'];
+const PHYSICAL_STATS = ['speed', 'arm', 'stamina', 'velocity', 'bodyStamina', 'recovery'];
 // 技術系能力（24歳前後でピーク成長）
 const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 'steal'];
 
@@ -1061,8 +1061,8 @@ export const SUB_TRAINING_MENUS = {
   running: {
     name: 'ランニング',
     icon: '🏃',
-    description: '基礎体力UP（走力+スタミナ微増）',
-    targets: ['speed', 'stamina_sub'],
+    description: '基礎体力UP（走力+体力+スタミナ微増）',
+    targets: ['speed', 'stamina_sub', 'bodyStamina_sub'],
   },
   muscle: {
     name: '筋トレ',
@@ -1073,8 +1073,8 @@ export const SUB_TRAINING_MENUS = {
   stretch: {
     name: 'ストレッチ',
     icon: '🧘',
-    description: '怪我予防・全能力微増',
-    targets: ['all_minor'],
+    description: '怪我予防・回復力UP・全能力微増',
+    targets: ['all_minor', 'recovery_sub'],
   },
   defense_sub: {
     name: '守備補強',
@@ -1138,6 +1138,12 @@ export function executeSubTraining(player, subType, options = {}) {
         player.pitching.stamina = Math.min(200, player.pitching.stamina + 1);
         growthReport.push({ statName: 'スタミナ', before: player.pitching.stamina - 1, after: player.pitching.stamina, growth: 1 });
       }
+      // 体力も微増
+      if (player.physical && Math.random() < 0.3) {
+        const bsBefore = player.physical.bodyStamina || 50;
+        player.physical.bodyStamina = Math.min(99, bsBefore + 1);
+        growthReport.push({ statName: '体力', before: bsBefore, after: player.physical.bodyStamina, growth: 1 });
+      }
       break;
     }
     case 'muscle': {
@@ -1172,6 +1178,12 @@ export function executeSubTraining(player, subType, options = {}) {
           }
         }
       });
+      // 回復力UP（30%の確率で+1）
+      if (player.physical && Math.random() < 0.3) {
+        const recBefore = player.physical.recovery || 50;
+        player.physical.recovery = Math.min(99, recBefore + 1);
+        growthReport.push({ statName: '回復', before: recBefore, after: player.physical.recovery, growth: 1 });
+      }
       break;
     }
     case 'defense_sub': {
@@ -1624,7 +1636,9 @@ function getStatPath(statKey) {
     defense: 'fielding.defense',
     velocity: 'pitching.velocity',
     control: 'pitching.control',
-    stamina: 'pitching.stamina'
+    stamina: 'pitching.stamina',
+    bodyStamina: 'physical.bodyStamina',
+    recovery: 'physical.recovery'
   };
   return pathMap[statKey];
 }
@@ -1640,7 +1654,9 @@ function getStatName(statKey) {
     defense: '守備',
     velocity: '球速',
     control: '制球',
-    stamina: 'スタミナ'
+    stamina: 'スタミナ',
+    bodyStamina: '体力',
+    recovery: '回復'
   };
   return nameMap[statKey] || statKey;
 }
