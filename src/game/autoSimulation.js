@@ -31,7 +31,17 @@ export const generateAILineup = (teamData, teamName) => {
   // 投手を除いた野手を取得（投手能力でも判定）
   const fieldPlayers = players.filter(p => !isPitcherPlayer(p));
 
-  // ポジションごとに最適な選手を選ぶ（守備適性+打撃力の総合判断）
+  // コンディション・疲労による実効打撃力の計算
+  const getEffectiveBatting = (p) => {
+    const condMod = { 4: 5, 3: 2, 2: 0, 1: -2, 0: -5 }[p.condition ?? 2] || 0;
+    const fatigue = p.fatigue || 0;
+    const fatiguePenalty = fatigue > 0 ? Math.round(fatigue * fatigue / 670) : 0;
+    const meet = (p.batting?.meet || 50) + condMod - fatiguePenalty;
+    const power = (p.batting?.power || 50) + condMod - fatiguePenalty;
+    return { meet, power, condMod, fatiguePenalty };
+  };
+
+  // ポジションごとに最適な選手を選ぶ（守備適性+打撃力+調子+疲労の総合判断）
   const lineup = [];
   const usedPlayers = new Set();
 
@@ -44,8 +54,10 @@ export const generateAILineup = (teamData, teamName) => {
     available.sort((a, b) => {
       const aFit = a.positionFitness?.[pos] || 50;
       const bFit = b.positionFitness?.[pos] || 50;
-      const aBat = (a.batting?.meet || 50) + (a.batting?.power || 50);
-      const bBat = (b.batting?.meet || 50) + (b.batting?.power || 50);
+      const aEff = getEffectiveBatting(a);
+      const bEff = getEffectiveBatting(b);
+      const aBat = aEff.meet + aEff.power;
+      const bBat = bEff.meet + bEff.power;
       return (bFit * 0.6 + bBat * 0.4) - (aFit * 0.6 + aBat * 0.4);
     });
 
@@ -58,43 +70,47 @@ export const generateAILineup = (teamData, teamName) => {
   const battingOrder = [];
   const remaining = [...lineup];
 
-  // 1番: 出塁率重視（ミート+選球眼+足）
+  // 1番: 出塁率重視（ミート+選球眼+足）※調子・疲労込み
   remaining.sort((a, b) => {
-    const aVal = (a.player.batting?.meet || 50) * 0.4 + (a.player.batting?.eye || 50) * 0.3 + (a.player.physical?.speed || 50) * 0.3;
-    const bVal = (b.player.batting?.meet || 50) * 0.4 + (b.player.batting?.eye || 50) * 0.3 + (b.player.physical?.speed || 50) * 0.3;
+    const aEff = getEffectiveBatting(a.player);
+    const bEff = getEffectiveBatting(b.player);
+    const aVal = aEff.meet * 0.4 + (a.player.batting?.eye || 50) * 0.3 + (a.player.physical?.speed || 50) * 0.3;
+    const bVal = bEff.meet * 0.4 + (b.player.batting?.eye || 50) * 0.3 + (b.player.physical?.speed || 50) * 0.3;
     return bVal - aVal;
   });
   if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 1 });
 
   // 2番: ミート重視
   remaining.sort((a, b) => {
-    const aVal = (a.player.batting?.meet || 50) * 0.5 + (a.player.batting?.eye || 50) * 0.3 + (a.player.physical?.speed || 50) * 0.2;
-    const bVal = (b.player.batting?.meet || 50) * 0.5 + (b.player.batting?.eye || 50) * 0.3 + (b.player.physical?.speed || 50) * 0.2;
+    const aEff = getEffectiveBatting(a.player);
+    const bEff = getEffectiveBatting(b.player);
+    const aVal = aEff.meet * 0.5 + (a.player.batting?.eye || 50) * 0.3 + (a.player.physical?.speed || 50) * 0.2;
+    const bVal = bEff.meet * 0.5 + (b.player.batting?.eye || 50) * 0.3 + (b.player.physical?.speed || 50) * 0.2;
     return bVal - aVal;
   });
   if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 2 });
 
   // 3番: 総合力
   remaining.sort((a, b) => {
-    const aVal = (a.player.batting?.meet || 50) * 0.5 + (a.player.batting?.power || 50) * 0.5;
-    const bVal = (b.player.batting?.meet || 50) * 0.5 + (b.player.batting?.power || 50) * 0.5;
-    return bVal - aVal;
+    const aEff = getEffectiveBatting(a.player);
+    const bEff = getEffectiveBatting(b.player);
+    return (bEff.meet * 0.5 + bEff.power * 0.5) - (aEff.meet * 0.5 + aEff.power * 0.5);
   });
   if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 3 });
 
   // 4番: パワー最重視
-  remaining.sort((a, b) => (b.player.batting?.power || 50) - (a.player.batting?.power || 50));
+  remaining.sort((a, b) => getEffectiveBatting(b.player).power - getEffectiveBatting(a.player).power);
   if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 4 });
 
   // 5番: パワー2番手
-  remaining.sort((a, b) => (b.player.batting?.power || 50) - (a.player.batting?.power || 50));
+  remaining.sort((a, b) => getEffectiveBatting(b.player).power - getEffectiveBatting(a.player).power);
   if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 5 });
 
   // 6-8番: 残りを総合打力順
   remaining.sort((a, b) => {
-    const aVal = (a.player.batting?.meet || 50) + (a.player.batting?.power || 50);
-    const bVal = (b.player.batting?.meet || 50) + (b.player.batting?.power || 50);
-    return bVal - aVal;
+    const aEff = getEffectiveBatting(a.player);
+    const bEff = getEffectiveBatting(b.player);
+    return (bEff.meet + bEff.power) - (aEff.meet + aEff.power);
   });
   let nextOrder = 6;
   while (remaining.length > 0 && nextOrder <= 8) {

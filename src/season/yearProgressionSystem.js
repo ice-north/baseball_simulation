@@ -1138,11 +1138,12 @@ export function executeSubTraining(player, subType, options = {}) {
         player.pitching.stamina = Math.min(200, player.pitching.stamina + 1);
         growthReport.push({ statName: 'スタミナ', before: player.pitching.stamina - 1, after: player.pitching.stamina, growth: 1 });
       }
-      // 体力も微増
-      if (player.physical && Math.random() < 0.3) {
+      // 体力UP（100%で+1〜4）
+      if (player.physical) {
         const bsBefore = player.physical.bodyStamina || 50;
-        player.physical.bodyStamina = Math.min(99, bsBefore + 1);
-        growthReport.push({ statName: '体力', before: bsBefore, after: player.physical.bodyStamina, growth: 1 });
+        const bsGrowth = Math.floor(Math.random() * 4) + 1; // 1〜4
+        player.physical.bodyStamina = Math.min(99, bsBefore + bsGrowth);
+        growthReport.push({ statName: '体力', before: bsBefore, after: player.physical.bodyStamina, growth: bsGrowth });
       }
       break;
     }
