@@ -1720,11 +1720,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           playerData.battingOrderExperience[bo] = (playerData.battingOrderExperience[bo] || 0) + 1;
         }
 
-        // 野手疲労蓄積: 体力が低いほど疲労が溜まりやすい
-        const bodyStamina = playerData.physical?.bodyStamina || 50;
-        // 基礎疲労 5〜10（体力100→5, 体力1→10）
-        const baseFatigue = Math.round(10 - (bodyStamina / 100) * 5);
-        playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
+        // 野手疲労蓄積: スタメン出場(3打席以上)のみ疲労が溜まる
+        // 代打(1-2打席)や守備固めは疲労なし
+        if (b.atBats >= 3) {
+          const bodyStamina = playerData.physical?.bodyStamina || 50;
+          // 基礎疲労 5〜10（体力100→5, 体力1→10）
+          const baseFatigue = Math.round(10 - (bodyStamina / 100) * 5);
+          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
+        }
       }
 
       // 投手成績の集計
