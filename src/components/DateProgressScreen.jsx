@@ -480,7 +480,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               <span className="text-gray-600 text-sm">-</span>
                               <span className={`text-xl font-black font-mono ${game.result.homeScore > game.result.awayScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.homeScore}</span>
                             </div>
-                            <div className="text-[9px] text-gray-500 mt-0.5">試合終了</div>
+                            {/* 勝敗投手・セーブ表示 */}
+                            {(() => {
+                              const dec = determinePitcherDecisions(game.result,
+                                TEAMS_DATA[game.home], TEAMS_DATA[game.away]);
+                              const parts = [];
+                              if (dec.winningPitcher) parts.push(<span key="w" className="text-green-400">○{dec.winningPitcher.name}</span>);
+                              if (dec.losingPitcher) parts.push(<span key="l" className="text-red-400">●{dec.losingPitcher.name}</span>);
+                              if (dec.savePitcher) parts.push(<span key="s" className="text-indigo-400">S{dec.savePitcher.name}</span>);
+                              if (parts.length === 0) return <div className="text-[9px] text-gray-500 mt-0.5">試合終了</div>;
+                              return <div className="text-[9px] mt-0.5 flex flex-wrap justify-center gap-x-1.5">{parts}</div>;
+                            })()}
                           </div>
                         ) : (
                           <div className="px-3 text-center">
@@ -525,41 +535,111 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               .map(p => ({ ...p, value: p.seasonStats.batting.hits / p.seasonStats.batting.atBats }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const hrRanking = [...battingQualified]
+            const hrRanking = [...allPlayers]
               .filter(p => (p.seasonStats?.batting?.homeruns || 0) > 0)
               .map(p => ({ ...p, value: p.seasonStats.batting.homeruns }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const rbiRanking = [...battingQualified]
+            const rbiRanking = [...allPlayers]
               .filter(p => (p.seasonStats?.batting?.rbis || 0) > 0)
               .map(p => ({ ...p, value: p.seasonStats.batting.rbis }))
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            // 出塁率（規定打席以上）
+            const obpRanking = [...battingQualified]
+              .map(p => {
+                const b = p.seasonStats.batting;
+                const obp = (b.hits + b.walks) / (b.atBats + b.walks);
+                return { ...p, value: obp };
+              })
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            // 盗塁（規定打席不要）
+            const sbRanking = [...allPlayers]
+              .filter(p => (p.seasonStats?.batting?.stolenBases || 0) > 0)
+              .map(p => ({ ...p, value: p.seasonStats.batting.stolenBases }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
             const eraRanking = [...pitchingQualified]
               .map(p => ({ ...p, value: (p.seasonStats.pitching.earnedRuns / (p.seasonStats.pitching.inningsPitched / 3)) * 9 }))
               .sort((a, b) => a.value - b.value).slice(0, 5);
 
-            const winRanking = [...pitchingQualified]
+            const winRanking = [...allPlayers]
               .filter(p => (p.seasonStats?.pitching?.wins || 0) > 0)
               .map(p => ({ ...p, value: p.seasonStats.pitching.wins }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const soRanking = [...pitchingQualified]
+            const soRanking = [...allPlayers]
               .filter(p => (p.seasonStats?.pitching?.strikeouts || 0) > 0)
               .map(p => ({ ...p, value: p.seasonStats.pitching.strikeouts }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const rankings = [
+            // WHIP（規定投球回以上）
+            const whipRanking = [...pitchingQualified]
+              .map(p => {
+                const pt = p.seasonStats.pitching;
+                const innings = pt.inningsPitched / 3;
+                const whip = ((pt.hits || 0) + (pt.walks || 0)) / innings;
+                return { ...p, value: whip };
+              })
+              .sort((a, b) => a.value - b.value).slice(0, 5);
+
+            // セーブ（規定不要）
+            const saveRanking = [...allPlayers]
+              .filter(p => (p.seasonStats?.pitching?.saves || 0) > 0)
+              .map(p => ({ ...p, value: p.seasonStats.pitching.saves }))
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            // ホールド（規定不要）
+            const holdRanking = [...allPlayers]
+              .filter(p => (p.seasonStats?.pitching?.holds || 0) > 0)
+              .map(p => ({ ...p, value: p.seasonStats.pitching.holds }))
+              .sort((a, b) => b.value - a.value).slice(0, 5);
+
+            const battingRankings = [
               { title: '打率', data: avgRanking, format: v => v.toFixed(3), color: 'text-blue-400', icon: '🏏' },
               { title: '本塁打', data: hrRanking, format: v => v, color: 'text-pink-400', icon: '💥' },
               { title: '打点', data: rbiRanking, format: v => v, color: 'text-green-400', icon: '🔋' },
+              { title: '出塁率', data: obpRanking, format: v => v.toFixed(3), color: 'text-cyan-400', icon: '👁' },
+              { title: '盗塁', data: sbRanking, format: v => v, color: 'text-emerald-400', icon: '🏃' },
+            ];
+
+            const pitchingRankings = [
               { title: '防御率', data: eraRanking, format: v => v.toFixed(2), color: 'text-orange-400', icon: '🛡' },
               { title: '勝利', data: winRanking, format: v => v, color: 'text-yellow-400', icon: '🏆' },
               { title: '奪三振', data: soRanking, format: v => v, color: 'text-purple-400', icon: '🔥' },
+              { title: 'WHIP', data: whipRanking, format: v => v.toFixed(2), color: 'text-red-400', icon: '📉' },
+              { title: 'S', data: saveRanking, format: v => v, color: 'text-indigo-400', icon: '💾' },
+              { title: 'H', data: holdRanking, format: v => v, color: 'text-teal-400', icon: '🤝' },
             ];
 
-            const hasAnyData = rankings.some(r => r.data.length > 0);
+            const allRankings = [...battingRankings, ...pitchingRankings];
+            const hasAnyData = allRankings.some(r => r.data.length > 0);
             if (!hasAnyData) return null;
+
+            const renderRankingCard = (r) => (
+              <div key={r.title} className="bg-gray-900/80 rounded-xl p-2.5 border border-gray-700/20">
+                <div className={`text-xs font-bold ${r.color} mb-2 pb-1.5 border-b border-gray-700/40 flex items-center gap-1`}>
+                  <span>{r.icon}</span> {r.title}
+                </div>
+                {r.data.length === 0 ? (
+                  <div className="text-xs text-gray-600 py-1">該当者なし</div>
+                ) : (
+                  r.data.map((p, i) => {
+                    const isUser = p.teamName === userTeamName;
+                    return (
+                      <div key={p.id} className={`flex items-center text-xs py-0.5 rounded-md px-1 ${isUser ? 'text-yellow-300 bg-yellow-900/15' : 'text-gray-300'}`}>
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                          i === 0 ? 'bg-yellow-500/90 text-black' : i === 1 ? 'bg-gray-400/80 text-black' : i === 2 ? 'bg-orange-600/80 text-white' : 'text-gray-600'
+                        }`}>{i + 1}</span>
+                        <span className="flex-1 truncate ml-1.5 text-sm">{p.name} <span className="text-gray-300 text-[10px]">({getTeamAbbreviation(p.teamName)})</span></span>
+                        <span className={`font-mono font-bold text-xs ${r.color}`}>{r.format(p.value)}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            );
 
             return (
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
@@ -570,30 +650,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span>個人成績ランキング</span>
                   <span className="text-[10px] text-gray-300 font-normal ml-1">規定打席{qualifiedAB} / 規定投球{qualifiedInnings}回</span>
                 </h2>
+                {/* 打撃部門 */}
+                <div className="text-[10px] text-blue-300 font-bold mb-1 mt-1">打撃部門</div>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {battingRankings.map(r => renderRankingCard(r))}
+                </div>
+                {/* 投手部門 */}
+                <div className="text-[10px] text-orange-300 font-bold mb-1">投手部門</div>
                 <div className="grid grid-cols-3 gap-2">
-                  {rankings.map(r => (
-                    <div key={r.title} className="bg-gray-900/80 rounded-xl p-2.5 border border-gray-700/20">
-                      <div className={`text-xs font-bold ${r.color} mb-2 pb-1.5 border-b border-gray-700/40 flex items-center gap-1`}>
-                        <span>{r.icon}</span> {r.title}
-                      </div>
-                      {r.data.length === 0 ? (
-                        <div className="text-xs text-gray-600 py-1">該当者なし</div>
-                      ) : (
-                        r.data.map((p, i) => {
-                          const isUser = p.teamName === userTeamName;
-                          return (
-                            <div key={p.id} className={`flex items-center text-xs py-0.5 rounded-md px-1 ${isUser ? 'text-yellow-300 bg-yellow-900/15' : 'text-gray-300'}`}>
-                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                                i === 0 ? 'bg-yellow-500/90 text-black' : i === 1 ? 'bg-gray-400/80 text-black' : i === 2 ? 'bg-orange-600/80 text-white' : 'text-gray-600'
-                              }`}>{i + 1}</span>
-                              <span className="flex-1 truncate ml-1.5 text-sm">{p.name} <span className="text-gray-300 text-[10px]">({getTeamAbbreviation(p.teamName)})</span></span>
-                              <span className={`font-mono font-bold text-xs ${r.color}`}>{r.format(p.value)}</span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  ))}
+                  {pitchingRankings.map(r => renderRankingCard(r))}
                 </div>
               </div>
             );

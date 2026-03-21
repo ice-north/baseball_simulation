@@ -346,7 +346,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         relieverOutsPitched: 0,
         relieverBattersFaced: 0
       }
-    }
+    },
+    // 投手登板記録（セーブ・ホールド判定用）
+    pitcherAppearances: { home: [], away: [] }
   };
 
   // 現在の打者を取得
@@ -434,10 +436,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       throws: pitcherPlayer.physical?.throws || 'right'
     };
 
-    // スタミナによる能力低下
-    const staminaRatio = pitcherStamina / 100;
-    const effectiveControl = pitcher.control * (0.7 + 0.3 * staminaRatio);
-    const effectiveVelocity = pitcher.velocity * (0.9 + 0.1 * staminaRatio);
+    // スタミナによる能力低下（2次曲線: スタミナ50%以下で急激に低下）
+    const staminaRatio = Math.max(0, Math.min(pitcherStamina / 100, 1));
+    const staminaCurve = staminaRatio * staminaRatio; // 0→0, 0.5→0.25, 0.7→0.49, 1.0→1.0
+    const effectiveControl = pitcher.control * (0.6 + 0.4 * staminaCurve);
+    const effectiveVelocity = pitcher.velocity * (0.88 + 0.12 * staminaCurve);
 
     // 左右相性
     const sameHand = pitcher.throws === batter.bats;
@@ -576,7 +579,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   };
 
   // 走者進塁処理（外野手の肩で進塁を抑制）
-  const advanceRunners = (hitType, bases, defense) => {
+  // bases配列にはプレイヤーオブジェクト or false が格納される
+  const advanceRunners = (hitType, bases, defense, batter) => {
     const newBases = [false, false, false];
     let runsScored = 0;
 
@@ -608,13 +612,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         if (newBase >= 3) {
           runsScored++;
         } else {
-          newBases[newBase] = true;
+          newBases[newBase] = bases[i]; // プレイヤー参照を維持
         }
       }
     }
 
+    // 打者自身を塁に配置
     if (advancement < 3) {
-      newBases[advancement - 1] = true;
+      newBases[advancement - 1] = batter || true;
     } else {
       runsScored++;
     }
@@ -627,17 +632,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const pitcher = getCurrentPitcher(defenseTeam);
     const catcher = defenseTeam.players.find(p => p.position === 'catcher');
 
-    // 走塁中の走者を追跡（簡易: 直前の出塁者の走力を使用）
     for (let base = 0; base < 2; base++) {
       if (gameState.bases[base] && !gameState.bases[base + 1]) {
-        // 走者の走力を取得（打順を遡って最近出塁した選手を推定）
-        // 簡易実装: チームの打順から走力の高い走者を想定
-        const runnersOnBase = offenseTeam.players.filter(p =>
-          p.battingOrder > 0 && p.battingOrder <= 9
-        );
-        // 走力の平均的な値を使用（出塁した選手の特定は困難なため、チーム平均+ランダム）
-        const avgSpeed = runnersOnBase.reduce((sum, p) => sum + (p.physical?.speed || 50), 0) / (runnersOnBase.length || 1);
-        const runnerSpeed = avgSpeed + (Math.random() * 20 - 10); // ある程度のバラつき
+        // 塁上の走者オブジェクトから直接走力を取得
+        const runner = gameState.bases[base];
+        const runnerSpeed = (typeof runner === 'object' && runner?.physical?.speed)
+          ? runner.physical.speed
+          : offenseTeam.players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9)
+              .reduce((sum, p) => sum + (p.physical?.speed || 50), 0) / 9;
 
         const catcherArm = catcher?.physical?.arm || 50;
         const pitcherQuick = pitcher?.pitching?.control || 50;
@@ -661,19 +663,21 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         if (shouldAttempt && aggressiveness) {
           const rand = Math.random() * 100;
           if (rand < successChance) {
+            const stolenRunner = gameState.bases[base];
             gameState.bases[base] = false;
-            gameState.bases[base + 1] = true;
-            // 盗塁成功を打者の成績に記録（簡易: 現在の打者の成績に加算）
-            const currentBatter = getCurrentBatter(offenseTeam);
-            if (currentBatter?.gameStats?.batting) {
-              currentBatter.gameStats.batting.stolenBases = (currentBatter.gameStats.batting.stolenBases || 0) + 1;
+            gameState.bases[base + 1] = stolenRunner;
+            // 盗塁成功を実際の走者の成績に記録
+            if (typeof stolenRunner === 'object' && stolenRunner?.gameStats?.batting) {
+              stolenRunner.gameStats.batting.stolenBases = (stolenRunner.gameStats.batting.stolenBases || 0) + 1;
             }
-            console.log(`   🏃 盗塁成功: ${base + 1}塁 → ${base + 2}塁 (走力${Math.round(runnerSpeed)})`);
+            const runnerName = typeof stolenRunner === 'object' ? stolenRunner.name : '走者';
+            console.log(`   🏃 盗塁成功: ${runnerName} ${base + 1}塁 → ${base + 2}塁 (走力${Math.round(runnerSpeed)})`);
             return { success: true, base };
           } else {
             gameState.bases[base] = false;
             gameState.outs++;
-            console.log(`   🚫 盗塁失敗: ${base + 1}塁走者アウト (走力${Math.round(runnerSpeed)})`);
+            const runnerName = typeof runner === 'object' ? runner.name : '走者';
+            console.log(`   🚫 盗塁失敗: ${runnerName} ${base + 1}塁走者アウト (走力${Math.round(runnerSpeed)})`);
             return { success: false, base };
           }
         }
@@ -1021,6 +1025,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         reliefTrack.starterLeftInning = gs.inning;
       }
 
+      // 登板記録を追加（セーブ・ホールド判定用）
+      const appearances = gs.pitcherAppearances[teamKey];
+      appearances.push({
+        id: reliever.id,
+        entryInning: gs.inning,
+        entryIsTop: gs.isTopInning,
+        entryScore: { ...gs.score },
+        isStarter: false
+      });
+
       pitcherData.battingOrder = 0;
       pitcherData.position = 'pitcher';
 
@@ -1114,13 +1128,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             batter.gameStats.batting.walks++;
             pitcher.gameStats.pitching.walks++;
             if (gameState.bases[0] && gameState.bases[1] && gameState.bases[2]) {
+              // 満塁押し出し: 3塁走者が生還
               if (gameState.isTopInning) gameState.score.away++;
               else gameState.score.home++;
               pitcher.gameStats.pitching.runsAllowed++;
+              gameState.bases[2] = gameState.bases[1];
+              gameState.bases[1] = gameState.bases[0];
+              gameState.bases[0] = batter;
             } else {
-              if (gameState.bases[1] && gameState.bases[0]) gameState.bases[2] = true;
-              if (gameState.bases[0]) gameState.bases[1] = true;
-              gameState.bases[0] = true;
+              if (gameState.bases[1] && gameState.bases[0]) gameState.bases[2] = gameState.bases[1];
+              if (gameState.bases[0]) gameState.bases[1] = gameState.bases[0];
+              gameState.bases[0] = batter;
             }
             atBatOver = true;
           }
@@ -1185,8 +1203,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             if (gameState.bases[1] && !gameState.bases[2] && gameState.outs < 3) {
               const advanceChance = 0.4 - (result.tagupThrowbackChance || 0) * 0.5;
               if (Math.random() < advanceChance) {
+                gameState.bases[2] = gameState.bases[1]; // 走者参照を維持
                 gameState.bases[1] = false;
-                gameState.bases[2] = true;
                 console.log(`   🏃 タッグアップ 2塁→3塁`);
               }
             }
@@ -1208,7 +1226,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         case 'double':
         case 'triple':
         case 'homerun':
-          const { bases: newBases, runsScored } = advanceRunners(result.type, gameState.bases, defense);
+          const { bases: newBases, runsScored } = advanceRunners(result.type, gameState.bases, defense, batter);
           batter.gameStats.batting.atBats++;
           batter.gameStats.batting.hits++;
           batter.gameStats.batting.rbis += runsScored;
@@ -1553,6 +1571,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 console.log(`   📊 先発${pitcher.name}が${gameState.inning}回で降板`);
               }
 
+              // 登板記録を追加（セーブ・ホールド判定用）
+              const teamKey = team === gameState.homeTeam ? 'home' : 'away';
+              const appearances = gameState.pitcherAppearances[teamKey];
+              appearances.push({
+                id: reliever.id,
+                entryInning: gameState.inning,
+                entryIsTop: gameState.isTopInning,
+                entryScore: { ...gameState.score },
+                isStarter: false
+              });
+
               pitcherData.battingOrder = 0;
               pitcherData.position = 'pitcher';
 
@@ -1563,7 +1592,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
               reliefTrack.currentRelieverId = reliever.id;
               reliefTrack.relieverOutsPitched = 0;
-      reliefTrack.relieverBattersFaced = 0;
+              reliefTrack.relieverBattersFaced = 0;
 
               if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
                 TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =

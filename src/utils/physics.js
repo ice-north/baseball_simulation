@@ -82,28 +82,18 @@ export const getBestFitPosition = (player) => {
  * @returns {Object} { velocityPenalty, controlPenalty }
  */
 export const getStaminaPenalty = (currentStamina, maxStamina) => {
-  const staminaRate = currentStamina / maxStamina;
+  const staminaRate = Math.max(0, Math.min(currentStamina / maxStamina, 1));
 
+  // 2次曲線: 50%以上はほぼ影響なし、50%未満で急激に悪化
+  // staminaRate=1.0→0, 0.5→-8, 0.3→-18, 0.1→-27, 0→-30
   let velocityPenalty = 0;
   let controlPenalty = 0;
 
-  if (staminaRate < 0.50) {  // 50%未満
-    if (staminaRate >= 0.40) {  // 49-40%
-      velocityPenalty = -5;
-      controlPenalty = -5;
-    } else if (staminaRate >= 0.30) {  // 39-30%
-      velocityPenalty = -10;
-      controlPenalty = -10;
-    } else if (staminaRate >= 0.20) {  // 29-20%
-      velocityPenalty = -15;
-      controlPenalty = -15;
-    } else if (staminaRate >= 0.10) {  // 19-10%
-      velocityPenalty = -20;
-      controlPenalty = -20;
-    } else {  // 9-0%
-      velocityPenalty = -25;
-      controlPenalty = -25;
-    }
+  if (staminaRate < 0.50) {
+    // (1 - 2*rate)^2 * maxPenalty: rate=0.5→0, rate=0→maxPenalty
+    const deficit = 1 - staminaRate * 2; // 0→1 when rate goes 0.5→0
+    controlPenalty = -Math.round(deficit * deficit * 30);
+    velocityPenalty = -Math.round(deficit * deficit * 20);
   }
 
   return { velocityPenalty, controlPenalty };
