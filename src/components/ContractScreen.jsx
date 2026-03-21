@@ -4,9 +4,8 @@ import { POSITION_NAMES } from '../utils/constants.js';
 
 /**
  * AI自動解雇ロジック
- * - 試合に出られない選手(出場0)
- * - 年齢が高い選手(35歳以上)
- * - 成績が悪い選手(打率.150以下/ERA6.00以上)
+ * - 年齢が高い選手(26歳以降ペナルティ増加)
+ * - 能力値が低い選手
  * を優先的に解雇。最低18人は残す。
  */
 const getAIReleaseCandidates = (players) => {
@@ -14,40 +13,19 @@ const getAIReleaseCandidates = (players) => {
 
   const scored = players.map(p => {
     let score = 0; // 高いほど解雇候補
-    const batting = p.seasonStats?.batting || {};
-    const pitching = p.seasonStats?.pitching || {};
-    const isPitcher = p.position === 'pitcher';
-    const games = isPitcher ? (pitching.games || 0) : (batting.games || 0);
-
-    // 出場なし → 高スコア
-    if (games === 0) score += 50;
-    else if (games < 5) score += 30;
-    else if (games < 15) score += 15;
-
-    // 年齢（より細かく、よりシビアに）
     const age = p.age || 20;
-    if (age >= 38) score += 50;
-    else if (age >= 36) score += 35;
-    else if (age >= 34) score += 25;
-    else if (age >= 32) score += 15;
-    else if (age >= 30) score += 5;
+    const isPitcher = p.position === 'pitcher';
 
-    // 成績（より厳しく評価）
-    if (isPitcher) {
-      const ip = (pitching.inningsPitched || 0) / 3;
-      const era = ip > 0 ? ((pitching.earnedRuns || 0) / ip * 9) : 99;
-      if (era > 6.0) score += 25;
-      else if (era > 5.0) score += 15;
-      else if (era > 4.5) score += 5;
-      if ((pitching.wins || 0) === 0 && games > 5) score += 15;
-    } else {
-      const avg = batting.atBats > 0 ? batting.hits / batting.atBats : 0;
-      if (avg < 0.150 && batting.atBats > 20) score += 25;
-      else if (avg < 0.200 && batting.atBats > 20) score += 15;
-      else if (avg < 0.230 && batting.atBats > 20) score += 5;
-    }
+    // 年齢（26歳以降ペナルティ、加齢で急増）
+    if (age >= 38) score += 60;
+    else if (age >= 36) score += 45;
+    else if (age >= 34) score += 30;
+    else if (age >= 32) score += 20;
+    else if (age >= 30) score += 15;
+    else if (age >= 28) score += 10;
+    else if (age >= 26) score += 5;
 
-    // 能力値が低い（閾値を引き上げ）
+    // 能力値が低い
     if (isPitcher) {
       const overall = ((p.pitching?.velocity || 130) - 115) * 2.5 + (p.pitching?.control || 50) + ((p.pitching?.stamina || 100) / 2);
       if (overall / 3 < 35) score += 25;
