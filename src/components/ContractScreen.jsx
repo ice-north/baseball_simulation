@@ -22,33 +22,40 @@ const getAIReleaseCandidates = (players) => {
     // 出場なし → 高スコア
     if (games === 0) score += 50;
     else if (games < 5) score += 30;
+    else if (games < 15) score += 15;
 
-    // 年齢
+    // 年齢（より細かく、よりシビアに）
     const age = p.age || 20;
-    if (age >= 38) score += 40;
-    else if (age >= 35) score += 25;
-    else if (age >= 32) score += 10;
+    if (age >= 38) score += 50;
+    else if (age >= 36) score += 35;
+    else if (age >= 34) score += 25;
+    else if (age >= 32) score += 15;
+    else if (age >= 30) score += 5;
 
-    // 成績
+    // 成績（より厳しく評価）
     if (isPitcher) {
       const ip = (pitching.inningsPitched || 0) / 3;
       const era = ip > 0 ? ((pitching.earnedRuns || 0) / ip * 9) : 99;
-      if (era > 6.0) score += 20;
-      else if (era > 5.0) score += 10;
+      if (era > 6.0) score += 25;
+      else if (era > 5.0) score += 15;
+      else if (era > 4.5) score += 5;
       if ((pitching.wins || 0) === 0 && games > 5) score += 15;
     } else {
       const avg = batting.atBats > 0 ? batting.hits / batting.atBats : 0;
-      if (avg < 0.150 && batting.atBats > 20) score += 20;
-      else if (avg < 0.200 && batting.atBats > 20) score += 10;
+      if (avg < 0.150 && batting.atBats > 20) score += 25;
+      else if (avg < 0.200 && batting.atBats > 20) score += 15;
+      else if (avg < 0.230 && batting.atBats > 20) score += 5;
     }
 
-    // 能力値が低い
+    // 能力値が低い（閾値を引き上げ）
     if (isPitcher) {
       const overall = ((p.pitching?.velocity || 130) - 115) * 2.5 + (p.pitching?.control || 50) + ((p.pitching?.stamina || 100) / 2);
-      if (overall / 3 < 40) score += 15;
+      if (overall / 3 < 35) score += 25;
+      else if (overall / 3 < 45) score += 15;
     } else {
       const overall = ((p.batting?.meet||0) + (p.batting?.power||0) + (p.physical?.speed||0) + (p.physical?.arm||0) + (p.fielding?.defense||0)) / 5;
-      if (overall < 40) score += 15;
+      if (overall < 35) score += 25;
+      else if (overall < 45) score += 15;
     }
 
     return { player: p, score };
@@ -56,8 +63,8 @@ const getAIReleaseCandidates = (players) => {
 
   // スコア降順でソート、上位をリリース（最低18人残す）
   scored.sort((a, b) => b.score - a.score);
-  const maxRelease = Math.max(0, players.length - 20); // 20人程度残す
-  const candidates = scored.filter(s => s.score >= 30).slice(0, maxRelease);
+  const maxRelease = Math.max(0, players.length - 18); // 18人まで減らせる
+  const candidates = scored.filter(s => s.score >= 20).slice(0, maxRelease);
   return candidates.map(c => c.player.id);
 };
 

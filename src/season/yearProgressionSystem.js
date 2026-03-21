@@ -245,9 +245,15 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
   const reasons = [];
   const age = player.age || 20;
 
+  // 30歳以上はドラフト指名対象外
+  if (age >= 30) {
+    return { isDraftEligible: false, reasons: [], totalScore: 0 };
+  }
+
   // 能力ベースのドラフト評価（年齢が若いほど低い能力でも指名される）
-  // 年齢ボーナス: 若い選手ほど将来性で高評価
-  const ageBonus = age <= 20 ? 15 : age <= 22 ? 10 : age <= 24 ? 5 : age <= 26 ? 0 : -5;
+  // 年齢ボーナス: 若い選手ほど将来性で高評価、大卒年齢(22歳)が基準(±0)
+  const ageBonusMap = { 19: 20, 20: 15, 21: 10, 22: 0, 23: -5, 24: -10, 25: -15, 26: -20, 27: -30, 28: -40, 29: -50 };
+  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 19 ? 20 : -50);
 
   let baseScore = 0;
 
