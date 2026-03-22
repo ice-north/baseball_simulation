@@ -545,20 +545,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               .map(p => ({ ...p, value: p.seasonStats.batting.rbis }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            // 出塁率（規定打席以上）
-            const obpRanking = [...battingQualified]
-              .map(p => {
-                const b = p.seasonStats.batting;
-                const obp = (b.hits + b.walks) / (b.atBats + b.walks);
-                return { ...p, value: obp };
-              })
-              .sort((a, b) => b.value - a.value).slice(0, 5);
-
-            // 盗塁（規定打席不要）
-            const sbRanking = [...allPlayers]
-              .filter(p => (p.seasonStats?.batting?.stolenBases || 0) > 0)
-              .map(p => ({ ...p, value: p.seasonStats.batting.stolenBases }))
-              .sort((a, b) => b.value - a.value).slice(0, 5);
 
             const eraRanking = [...pitchingQualified]
               .map(p => ({ ...p, value: (p.seasonStats.pitching.earnedRuns / (p.seasonStats.pitching.inningsPitched / 3)) * 9 }))
@@ -574,43 +560,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               .map(p => ({ ...p, value: p.seasonStats.pitching.strikeouts }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            // WHIP（規定投球回以上）
-            const whipRanking = [...pitchingQualified]
-              .map(p => {
-                const pt = p.seasonStats.pitching;
-                const innings = pt.inningsPitched / 3;
-                const whip = ((pt.hits || 0) + (pt.walks || 0)) / innings;
-                return { ...p, value: whip };
-              })
-              .sort((a, b) => a.value - b.value).slice(0, 5);
-
-            // セーブ（規定不要）
-            const saveRanking = [...allPlayers]
-              .filter(p => (p.seasonStats?.pitching?.saves || 0) > 0)
-              .map(p => ({ ...p, value: p.seasonStats.pitching.saves }))
-              .sort((a, b) => b.value - a.value).slice(0, 5);
-
-            // ホールド（規定不要）
-            const holdRanking = [...allPlayers]
-              .filter(p => (p.seasonStats?.pitching?.holds || 0) > 0)
-              .map(p => ({ ...p, value: p.seasonStats.pitching.holds }))
-              .sort((a, b) => b.value - a.value).slice(0, 5);
 
             const battingRankings = [
               { title: '打率', data: avgRanking, format: v => v.toFixed(3), color: 'text-blue-400', icon: '🏏' },
               { title: '本塁打', data: hrRanking, format: v => v, color: 'text-pink-400', icon: '💥' },
               { title: '打点', data: rbiRanking, format: v => v, color: 'text-green-400', icon: '🔋' },
-              { title: '出塁率', data: obpRanking, format: v => v.toFixed(3), color: 'text-cyan-400', icon: '👁' },
-              { title: '盗塁', data: sbRanking, format: v => v, color: 'text-emerald-400', icon: '🏃' },
             ];
 
             const pitchingRankings = [
               { title: '防御率', data: eraRanking, format: v => v.toFixed(2), color: 'text-orange-400', icon: '🛡' },
               { title: '勝利', data: winRanking, format: v => v, color: 'text-yellow-400', icon: '🏆' },
               { title: '奪三振', data: soRanking, format: v => v, color: 'text-purple-400', icon: '🔥' },
-              { title: 'WHIP', data: whipRanking, format: v => v.toFixed(2), color: 'text-red-400', icon: '📉' },
-              { title: 'S', data: saveRanking, format: v => v, color: 'text-indigo-400', icon: '💾' },
-              { title: 'H', data: holdRanking, format: v => v, color: 'text-teal-400', icon: '🤝' },
             ];
 
             const allRankings = [...battingRankings, ...pitchingRankings];
