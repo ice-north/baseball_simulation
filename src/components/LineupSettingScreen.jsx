@@ -1032,7 +1032,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                       const fitness = player ? getFitness(player, pos) : 0;
                       const grad = getFitnessGradient(fitness);
                       return (
-                        <radialGradient key={`grad-${pos}`} id={`rangeGrad-${pos}`}>
+                        <radialGradient key={`grad-${pos}-${player?.id || 'none'}`} id={`rangeGrad-${pos}`}>
                           <stop offset="0%" stopColor={grad.main} stopOpacity="0.35" />
                           <stop offset="60%" stopColor={grad.main} stopOpacity="0.12" />
                           <stop offset="100%" stopColor={grad.main} stopOpacity="0.02" />
@@ -1082,23 +1082,20 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   {/* マウンド */}
                   <ellipse cx="250" cy="275" rx="12" ry="8" fill="#8B6914" opacity="0.4" />
 
-                  {/* 守備範囲の円（走力+守備力でサイズ、適正で色） */}
+                  {/* 守備範囲の円（getDefenseRangeでサイズ、適正で色） */}
                   {Object.entries(posCoords).map(([pos, coord]) => {
                     const player = positionPlayers[pos];
                     if (!player) return null;
-                    const def = player.fielding?.defense || 50;
-                    const spd = player.physical?.speed || 50;
                     const range = getDefenseRange(player, pos);
                     const isOutfield = ['left', 'center', 'right'].includes(pos);
                     const baseRadius = isOutfield ? 55 : 35;
-                    // 円のサイズ: 走力と守備力で決定
-                    const sizeRatio = (spd * 0.55 + def * 0.45) / 100;
-                    const radius = baseRadius * (0.4 + sizeRatio * 0.9);
+                    // 円のサイズ: getDefenseRange（守備力+走力+肩+適正補正）で決定
+                    const radius = baseRadius * (0.4 + range * 0.9);
                     const fitness = getFitness(player, pos);
                     const grad = getFitnessGradient(fitness);
                     const rangeDelay = `${Object.keys(posCoords).indexOf(pos) * 0.06}s`;
                     return (
-                      <g key={`range-${pos}`}>
+                      <g key={`range-${pos}-${player.id}`}>
                         {/* 外側のぼかし円 */}
                         <circle cx={coord.x} cy={coord.y}
                           fill={grad.bg} stroke="none" opacity="0">
