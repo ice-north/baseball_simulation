@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
@@ -6,7 +6,7 @@ import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../s
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 
-const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame }) => {
+const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
   const [lastGameResults, setLastGameResults] = useState([]);
@@ -197,6 +197,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
   };
 
+  useEffect(() => {
+    if (onRegisterAdvance) onRegisterAdvance(() => handleProgressDate(1));
+  });
+
   const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
   const getFirstDayOfWeek = (year, month) => new Date(year, month - 1, 1).getDay();
 
@@ -257,62 +261,24 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   return (
     <div className="p-3 min-h-screen">
-      {/* ヘッダー */}
-      <div className="mb-3 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 overflow-hidden">
-        {/* トップバー：フェーズ表示 */}
-        <div className={`px-4 py-1 ${
-          currentPhase === SEASON_PHASES.PLAYOFFS ? 'bg-gradient-to-r from-yellow-600/80 via-amber-500/60 to-yellow-600/80' :
-          currentPhase === SEASON_PHASES.REGULAR_SEASON ? 'bg-gradient-to-r from-blue-700/60 via-blue-600/40 to-blue-700/60' :
-          currentPhase === SEASON_PHASES.SPRING_CAMP ? 'bg-gradient-to-r from-green-700/60 via-green-600/40 to-green-700/60' :
-          'bg-gradient-to-r from-gray-700/60 via-gray-600/40 to-gray-700/60'
-        }`}>
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold tracking-wider uppercase ${
-              currentPhase === SEASON_PHASES.PLAYOFFS ? 'text-yellow-200' : 'text-gray-300'
-            }`}>{phaseInfo.name}</span>
-            <span className="text-xs text-gray-400">{seasonData.year}年目シーズン</span>
-          </div>
+      {/* コンパクトヘッダー */}
+      <div className="mb-2 flex items-center gap-3 bg-gray-900/80 rounded-xl px-3 py-1.5 border border-gray-700/30">
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+          currentPhase === SEASON_PHASES.PLAYOFFS ? 'bg-yellow-600/40 text-yellow-200' :
+          currentPhase === SEASON_PHASES.REGULAR_SEASON ? 'bg-blue-600/40 text-blue-200' :
+          currentPhase === SEASON_PHASES.SPRING_CAMP ? 'bg-green-600/40 text-green-200' :
+          'bg-gray-600/40 text-gray-300'
+        }`}>{phaseInfo.name}</span>
+        <span className="text-base font-bold text-white">{formatDate(seasonData.currentDate)}</span>
+        <span className="text-xs text-gray-400">{getDayOfWeek(seasonData.currentDate)}</span>
+        <span className="text-xs text-gray-500">{seasonData.year}年目</span>
+        <div className="ml-auto flex items-center gap-2 text-sm">
+          <span className="text-green-400 font-bold">{userWins}<span className="text-[10px] text-gray-500 ml-0.5">勝</span></span>
+          <span className="text-red-400 font-bold">{userLosses}<span className="text-[10px] text-gray-500 ml-0.5">敗</span></span>
+          <span className="text-gray-400 font-bold">{userDraws}<span className="text-[10px] text-gray-500 ml-0.5">分</span></span>
+          <span className={`font-bold ${userRank <= 2 ? 'text-yellow-400' : 'text-white'}`}>{userRank}位</span>
         </div>
-        {/* メインヘッダー */}
-        <div className="flex items-center gap-4 p-4">
-          <button
-            onClick={() => handleProgressDate(1)}
-            disabled={isSimulating}
-            className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white px-7 py-3.5 rounded-xl font-bold text-lg transition-all shadow-lg shadow-green-900/40 disabled:opacity-50 flex items-center gap-2 shrink-0 active:scale-95 ring-1 ring-green-400/20"
-          >
-            <span className="text-xl">▶</span>
-            {isSimulating ? '処理中...' : '1日進める'}
-          </button>
-          <div className="flex-1 flex items-center justify-center gap-4">
-            <div className="text-center">
-              <div className="text-3xl font-black bg-gradient-to-b from-white to-gray-300 bg-clip-text text-transparent leading-tight">
-                {formatDate(seasonData.currentDate)}
-              </div>
-              <div className="text-sm text-gray-400 font-medium">{getDayOfWeek(seasonData.currentDate)}</div>
-            </div>
-          </div>
-          {/* チーム成績サマリー */}
-          <div className="shrink-0 bg-gray-800/80 rounded-xl px-4 py-2 border border-gray-700/50">
-            <div className="text-xs text-gray-400 mb-0.5 text-center">{userTeamName}</div>
-            <div className="flex items-center gap-3">
-              <div className="text-center">
-                <div className="text-lg font-bold text-green-400">{userWins}</div>
-                <div className="text-[10px] text-gray-500">勝</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-red-400">{userLosses}</div>
-                <div className="text-[10px] text-gray-500">敗</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-gray-400">{userDraws}</div>
-                <div className="text-[10px] text-gray-500">分</div>
-              </div>
-              <div className="border-l border-gray-600 pl-3">
-                <div className={`text-lg font-bold ${userRank <= 2 ? 'text-yellow-400' : 'text-white'}`}>{userRank}位</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {isSimulating && <span className="text-xs text-yellow-400 animate-pulse">処理中...</span>}
       </div>
 
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}

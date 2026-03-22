@@ -386,6 +386,7 @@ import TradeScreen from './components/TradeScreen.jsx';
       // 采配モード（日程進行から起動した試合）
       const [managedGameInfo, setManagedGameInfo] = useState(null);  // { gameId, home, away, otherGames }
       const managedGameInfoRef = useRef(null);
+      const advanceDayRef = useRef(null);
       // イニングごとの得点（9回まで）
       const [inningScores, setInningScores] = useState({
         away: [null, null, null, null, null, null, null, null, null],
@@ -3239,12 +3240,15 @@ if (newOuts === 3) {
       );
 
       // サイドバーコンポーネント
-      const SidebarButton = ({ view, icon, label, color = 'green' }) => {
+      const SidebarButton = ({ view, icon, label, color = 'green', onActiveClick }) => {
         const isActive = screenMode === 'management' && managementView === view;
         const activeColors = { green: 'bg-green-600/90 text-white', yellow: 'bg-yellow-600/90 text-white', blue: 'bg-blue-600/90 text-white' };
         return (
           <button
-            onClick={() => { setScreenMode('management'); setManagementView(view); }}
+            onClick={() => {
+              if (isActive && onActiveClick) { onActiveClick(); return; }
+              setScreenMode('management'); setManagementView(view);
+            }}
             className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-all ${
               isActive ? `${activeColors[color] || activeColors.green} shadow-sm` : 'text-gray-300 hover:bg-gray-800/80 hover:text-white'
             }`}
@@ -3262,7 +3266,7 @@ if (newOuts === 3) {
 
           <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
             <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-2 pb-1">進行</div>
-            <SidebarButton view="dateprogress" icon="📅" label="日程進行" />
+            <SidebarButton view="dateprogress" icon="▶" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} />
             <SidebarButton view="roster" icon="📋" label="ロスター管理" />
             <SidebarButton view="stats" icon="📊" label="選手成績" />
 
@@ -4617,6 +4621,7 @@ if (newOuts === 3) {
           seasonData={seasonData}
           setSeasonData={setSeasonData}
           onSetupManagedGame={setupManagedGame}
+          onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
           onForceEvent={(eventType) => {
             if (eventType === 'contract') setManagementView('contract');
             else if (eventType === 'tryout') setManagementView('tryout');
