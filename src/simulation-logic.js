@@ -99,11 +99,13 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // ミート品質と打者パワーで決定
   let exitVelocity = 0;
   if (isContact) {
-    // 基本初速: パワーに強く依存（80-110km/h）
-    const baseVelocity = 80 + (batter.power * 0.30);
+    // 基本初速: パワー依存を縮小（85-100km/h、旧: 80-110km/h）
+    // パワーだけでは打球が飛ばない設計
+    const baseVelocity = 85 + (batter.power * 0.15);
 
-    // ミート品質ボーナス: 最大+50km/h（芯を捉えた時）
-    const qualityBonus = meetQuality * 50;
+    // ミート品質ボーナス: パワーとの相乗効果（旧: meetQuality * 50 固定）
+    // 芯を捉えた時にパワーが活きる設計
+    const qualityBonus = meetQuality * (35 + batter.power * 0.25);
 
     // 投球速度の反発ボーナス: 最大+15km/h
     const pitchBonus = (pitchVelocity - 130) * 0.25;
@@ -329,7 +331,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const defenseBonus = (fielder.defense - 70) / 100 * 0.04 * weight;  // 重要ポジションほど守備力が効く
       const speedBonus = (fielder.speed - 60) / 100 * 0.05 * weight;     // 足で守備範囲拡大（走力強化）
       const batterSpeedPenalty = (batter.speed - 60) / 100 * 0.04;
-      const catchProb = Math.min(0.995, Math.max(0.90, baseOutRate + defenseBonus + speedBonus - batterSpeedPenalty));
+      // ミートが高い打者は打球方向の制御が良く、野手の間を抜きやすい
+      const meetPlacementBonus = ((batter.meet || 50) - 50) / 100 * 0.03;
+      const catchProb = Math.min(0.995, Math.max(0.90, baseOutRate + defenseBonus + speedBonus - batterSpeedPenalty - meetPlacementBonus));
 
       if (Math.random() < catchProb) {
         // エラー判定
@@ -357,7 +361,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const baseOutRate = 0.88;
       const defenseBonus = (fielder.defense - 70) / 100 * 0.08 * weight;
       const speedBonus = (fielder.speed - 60) / 100 * 0.06 * weight; // 走力強化
-      const catchProb = Math.min(0.96, baseOutRate + defenseBonus + speedBonus);
+      // ミートが高い打者は鋭いライナーで野手の正面を避けやすい
+      const meetPlacementBonus = ((batter.meet || 50) - 50) / 100 * 0.04;
+      const catchProb = Math.min(0.96, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
 
       if (Math.random() < catchProb) {
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: false, fieldingPosition: position };
