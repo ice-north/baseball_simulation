@@ -419,22 +419,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           </div>
 
           {/* 本日の対戦 */}
-          <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
-            <h2 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-orange-600/30 flex items-center justify-center">
-                <span className="text-orange-400 text-sm">⚾</span>
-              </div>
+          <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-2 shadow-xl border border-gray-700/30">
+            <h2 className="text-sm font-bold text-white mb-1.5 flex items-center gap-1.5">
+              <span className="text-orange-400 text-sm">⚾</span>
               <span>{formatDate(seasonData.currentDate)} の対戦</span>
               <span className="text-xs font-normal text-gray-500 ml-1">{todaysGames.length}試合</span>
             </h2>
-            <div className="h-[220px] overflow-y-auto">
+            <div className="h-[160px] overflow-y-auto">
             {todaysGames.length === 0 ? (
-              <div className="text-center py-6 bg-gray-800/50 rounded-xl h-full flex flex-col items-center justify-center">
-                <div className="text-gray-600 text-2xl mb-1">⚾</div>
-                <span className="text-gray-500 text-sm">本日は試合がありません（休養日）</span>
+              <div className="text-center py-3 bg-gray-800/50 rounded-xl h-full flex flex-col items-center justify-center">
+                <div className="text-gray-600 text-xl mb-1">⚾</div>
+                <span className="text-gray-500 text-xs">本日は試合がありません（休養日）</span>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 {todaysGames.map(game => {
                   const awayPitcher = getStartingPitcher(game.away);
                   const homePitcher = getStartingPitcher(game.home);
@@ -457,7 +455,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     todaySeriesInfo = `${roundLabel} 第${game.seriesGame}戦 (${hWins}-${aWins})`;
                   }
                   return (
-                    <div key={game.id} className={`rounded-xl p-3 transition-all relative overflow-hidden ${
+                    <div key={game.id} className={`rounded-lg p-2 transition-all relative overflow-hidden ${
                       isUserGame && !hasResult ? 'bg-gradient-to-br from-blue-900/50 to-blue-800/30 border border-blue-500/30 shadow-md shadow-blue-900/20' :
                       hasResult ? 'bg-gray-800/60 border border-gray-700/20' :
                       'bg-gradient-to-br from-gray-800/80 to-gray-800/50 border border-gray-700/20'
@@ -470,15 +468,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       )}
                       <div className="flex items-center justify-between">
                         <div className="text-center flex-1">
-                          <div className={`font-bold text-base ${game.away === userTeamName ? 'text-yellow-300' : 'text-white'}`}>{getTeamAbbreviation(game.away)}</div>
-                          <div className="text-[11px] text-gray-400 mt-0.5 truncate">{awayPitcher ? awayPitcher.name : '先発未定'}</div>
+                          <div className={`font-bold text-sm ${game.away === userTeamName ? 'text-yellow-300' : 'text-white'}`}>{getTeamAbbreviation(game.away)}</div>
+                          <div className="text-[10px] text-gray-400 truncate">{awayPitcher ? awayPitcher.name : '先発未定'}</div>
                         </div>
                         {hasResult ? (
                           <div className="px-3 text-center">
                             <div className="flex items-center gap-1.5">
-                              <span className={`text-xl font-black font-mono ${game.result.awayScore > game.result.homeScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.awayScore}</span>
-                              <span className="text-gray-600 text-sm">-</span>
-                              <span className={`text-xl font-black font-mono ${game.result.homeScore > game.result.awayScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.homeScore}</span>
+                              <span className={`text-base font-black font-mono ${game.result.awayScore > game.result.homeScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.awayScore}</span>
+                              <span className="text-gray-600 text-xs">-</span>
+                              <span className={`text-base font-black font-mono ${game.result.homeScore > game.result.awayScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.homeScore}</span>
                             </div>
                             {/* 勝敗投手・セーブ表示 */}
                             {(() => {
@@ -498,8 +496,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           </div>
                         )}
                         <div className="text-center flex-1">
-                          <div className={`font-bold text-base ${game.home === userTeamName ? 'text-yellow-300' : 'text-white'}`}>{getTeamAbbreviation(game.home)}</div>
-                          <div className="text-[11px] text-gray-400 mt-0.5 truncate">{homePitcher ? homePitcher.name : '先発未定'}</div>
+                          <div className={`font-bold text-sm ${game.home === userTeamName ? 'text-yellow-300' : 'text-white'}`}>{getTeamAbbreviation(game.home)}</div>
+                          <div className="text-[10px] text-gray-400 truncate">{homePitcher ? homePitcher.name : '先発未定'}</div>
                         </div>
                       </div>
                     </div>
