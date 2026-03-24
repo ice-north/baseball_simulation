@@ -39,7 +39,6 @@ export const initializeTeamsForCount = (teamCount, customNames = null, customAbb
       players: [],
       pitchingRotation: null
     };
-    console.log(`📋 ${teamName}（${abbr}）を作成しました`);
   });
 
   return teamNames;
@@ -199,7 +198,6 @@ export const initializePitchingRotation = (teamName) => {
     team.pitchingRotation.reliefFatigue[p.id] = 0;
   });
 
-  console.log(`✅ ${teamName}のローテーション: 先発${starters.length}人, クローザー${closer ? 1 : 0}人, セットアップ${setupMen.length}人, 中継ぎ${middleRelievers.length}人`);
 };
 
 /**

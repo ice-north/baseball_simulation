@@ -71,7 +71,6 @@ export const getBestFitPosition = (player) => {
     }
   });
 
-  console.log(`getBestFitPosition for ${player.name}: ${bestPosition} (fitness: ${maxFitness})`);
   return bestPosition;
 };
 

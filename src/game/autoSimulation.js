@@ -19,11 +19,9 @@ export const isPitcherPlayer = (player) => {
 export const generateAILineup = (teamData, teamName) => {
   const players = teamData.players || [];
   if (players.length === 0) {
-    console.log(`  ⚠️ ${teamName}には選手がいません`);
     return;
   }
 
-  console.log(`  🤖 ${teamName}: AI監督がスタメンを生成`);
 
   // 全員の打順をリセット
   players.forEach(p => { p.battingOrder = 0; });
@@ -168,10 +166,8 @@ export const generateAILineup = (teamData, teamName) => {
   if (starter) {
     starter.battingOrder = 9;
     starter.position = 'pitcher';
-    console.log(`    先発投手: ${starter.name} (${starter.pitching?.velocity || 0}km/h, 疲労:${starter.fatigue || 0})`);
   }
 
-  console.log(`    スタメン: ${battingOrder.map(e => `${e.battingOrder}番${e.position}:${e.player.name}`).join(', ')}`);
 };
 
 // ユーザーチームに推奨スタメンを設定
@@ -195,7 +191,6 @@ export const setRecommendedLineup = (teamData, teamName) => {
     position: p.position
   }));
 
-  console.log(`  📋 ${teamName}: 推奨スタメンを設定 (${starters.length}人)`);
 };
 
 // 全チームの投手疲労を回復（日次処理）
@@ -223,11 +218,9 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
       });
     }
   });
-  console.log(`💤 全投手の疲労を${recoveryAmount}回復`);
 };
 
 export const autoSimulateGame = (homeTeamName, awayTeamName) => {
-  console.log(`🏟️ 試合開始: ${awayTeamName} @ ${homeTeamName}`);
 
   // TEAMS_DATAからチームデータを取得
   if (!TEAMS_DATA || !TEAMS_DATA[homeTeamName] || !TEAMS_DATA[awayTeamName]) {
@@ -238,8 +231,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   const homeTeamData = JSON.parse(JSON.stringify(TEAMS_DATA[homeTeamName]));
   const awayTeamData = JSON.parse(JSON.stringify(TEAMS_DATA[awayTeamName]));
 
-  console.log(`  ${homeTeamName}: ${homeTeamData.players.length}人`);
-  console.log(`  ${awayTeamName}: ${awayTeamData.players.length}人`);
 
   // スタメン設定を適用（なければAI生成）
   // AI監督は毎試合新しくスタメンを決める
@@ -253,7 +244,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       return;
     }
 
-    console.log(`  ✅ ${teamName}のスタメン設定を適用`);
 
     // まず全員の打順を0にリセット
     teamData.players.forEach(p => { p.battingOrder = 0; });
@@ -264,7 +254,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       if (player) {
         player.battingOrder = entry.battingOrder;
         player.position = entry.position;
-        console.log(`    ${entry.battingOrder}番 ${entry.position}: ${player.name}`);
       }
     });
   };
@@ -276,7 +265,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   const selectStarterFromRotation = (teamData, teamName) => {
     const rotation = teamData.pitchingRotation;
     if (!rotation || !rotation.starters || rotation.starters.length === 0) {
-      console.log(`  ⚠️ ${teamName}は投手ローテーション未設定、打順9の投手を使用`);
       return teamData.players.find(p => p.battingOrder === 9);
     }
 
@@ -286,7 +274,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const starter = teamData.players.find(p => p.id === starterId);
 
     if (starter) {
-      console.log(`  🎯 ${teamName}先発: ${starter.name} (ローテ${index + 1}/${rotation.starters.length}番手)`);
 
       // 次回のローテーションインデックスを更新
       TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
@@ -305,7 +292,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       return starter;
     }
 
-    console.log(`  ⚠️ ${teamName}のローテーション投手が見つかりません、打順9を使用`);
     return teamData.players.find(p => p.battingOrder === 9);
   };
 
@@ -315,8 +301,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   // 先発投手を確認
   const homePitchers = homeTeamData.players.filter(p => p.battingOrder === 9);
   const awayPitchers = awayTeamData.players.filter(p => p.battingOrder === 9);
-  console.log(`  ${homeTeamName}投手(打順9):`, homePitchers.map(p => p.name).join(', '));
-  console.log(`  ${awayTeamName}投手(打順9):`, awayPitchers.map(p => p.name).join(', '));
 
   // 試合状態の初期化
   let gameState = {
@@ -631,7 +615,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           const holdChance = (avgArm - 50) / 100 * 0.4; // 肩90→16%の確率で進塁を阻止
           if (Math.random() < holdChance) {
             newBase = Math.max(i + 1, newBase - 1); // 1つ手前で止める
-            console.log(`   💪 強肩で走者を止める（肩力平均${Math.round(avgArm)}）`);
           }
         }
 
@@ -697,13 +680,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               stolenRunner.gameStats.batting.stolenBases = (stolenRunner.gameStats.batting.stolenBases || 0) + 1;
             }
             const runnerName = typeof stolenRunner === 'object' ? stolenRunner.name : '走者';
-            console.log(`   🏃 盗塁成功: ${runnerName} ${base + 1}塁 → ${base + 2}塁 (走力${Math.round(runnerSpeed)})`);
             return { success: true, base };
           } else {
             gameState.bases[base] = false;
             gameState.outs++;
             const runnerName = typeof runner === 'object' ? runner.name : '走者';
-            console.log(`   🚫 盗塁失敗: ${runnerName} ${base + 1}塁走者アウト (走力${Math.round(runnerSpeed)})`);
             return { success: false, base };
           }
         }
@@ -734,7 +715,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         phData.battingOrder = batterData.battingOrder;
         phData.position = batterData.position;
         batterData.battingOrder = 0;
-        console.log(`   🔄 代打: ${batter.name} → ${pinchHitter.name}【${reason}】`);
         return pinchHitter;
       }
       return batter;
@@ -808,7 +788,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               (p.fielding?.defense || 0) > starterDef + 8
             );
             if (replacement) {
-              console.log(`   🔄 守備固め: ${starter.name} → ${replacement.name} (${starter.position})`);
               replacement.battingOrder = starter.battingOrder;
               replacement.position = starter.position;
               starter.battingOrder = 0;
@@ -830,7 +809,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               (p.physical?.speed || 0) > runnerSpeed + 15
             );
             if (fastRunner) {
-              console.log(`   🔄 代走: ${runner.name} → ${fastRunner.name} (${base + 1}塁)`);
               const runnerData = defenseTeam.players.find(p => p.id === runner.id);
               if (runnerData) {
                 fastRunner.battingOrder = runnerData.battingOrder;
@@ -864,7 +842,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             return pBat < wBat ? p : w;
           }, starters[0]);
 
-          console.log(`   🔄 選手交代(大量リード): ${weakest.name} → ${leastUsed.name}`);
           leastUsed.battingOrder = weakest.battingOrder;
           leastUsed.position = weakest.position;
           weakest.battingOrder = 0;
@@ -1045,7 +1022,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     }
 
     if (reliever) {
-      console.log(`   🔄 ピンチ投手交代: ${teamName} ${currentPitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${selectedRoleLabel})【${changeReason}】`);
 
       // 投手交代記録を保存
       gs.pitcherChanges.push({
@@ -1228,9 +1204,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 else gameState.score.home++;
                 batter.gameStats.batting.rbis++;
                 pitcher.gameStats.pitching.runsAllowed++;
-                console.log(`   ✈️ 犠牲フライ（タッグアップ得点）`);
               } else {
-                console.log(`   💪 好返球！3塁走者タッチアウト`);
                 gameState.bases[2] = false;
                 gameState.outs++;
                 pitcher.gameStats.pitching.outs++;
@@ -1242,7 +1216,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               if (Math.random() < advanceChance) {
                 gameState.bases[2] = gameState.bases[1]; // 走者参照を維持
                 gameState.bases[1] = false;
-                console.log(`   🏃 タッグアップ 2塁→3塁`);
               }
             }
           }
@@ -1378,7 +1351,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               // ワンポイント: 1打者限定（イニング終了時に残っていた場合のフォールバック）
               if (reliefTrack.relieverBattersFaced >= 1) {
                 changeReason = `ワンポイント${pitcher.name}が1打者対戦済み、交代`;
-                console.log(`   ⏱️ ${changeReason}`);
                 shouldChange = true;
                 situation = 'middle';
               }
@@ -1399,7 +1371,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             if (!shouldChange && reliefTrack.relieverOutsPitched >= maxOuts) {
               const inningsStr = Math.floor(reliefTrack.relieverOutsPitched / 3);
               changeReason = `${pitcher.name}が登板制限(${inningsStr}回)に到達`;
-              console.log(`   ⏱️ ${changeReason}`);
               shouldChange = true;
               situation = 'middle';
             }
@@ -1601,7 +1572,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             }
 
             if (reliever) {
-              console.log(`   🔄 投手交代: ${teamName} ${pitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${selectedRoleLabel})【${changeReason}】`);
 
               // 投手交代記録を保存
               gameState.pitcherChanges.push({
@@ -1616,7 +1586,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
               if (!reliefTrack.starterLeftInning) {
                 reliefTrack.starterLeftInning = gameState.inning;
-                console.log(`   📊 先発${pitcher.name}が${gameState.inning}回で降板`);
               }
 
               // 登板記録を追加（セーブ・ホールド判定用）
@@ -1686,8 +1655,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     winner = null;
   }
 
-  console.log(`✅ 試合終了: ${awayTeamName} ${awayScore} - ${homeScore} ${homeTeamName} (${gameState.inning}回)`);
-  console.log(`   スコア詳細: away=${gameState.score.away}, home=${gameState.score.home}`);
 
   // 試合終了後、選手のシーズン成績と通算成績を更新
   const updatePlayerSeasonStats = (team, isWinner) => {
@@ -1789,7 +1756,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const inningsPitched = Math.floor(p.outs / 3);
         const expGained = 1 + inningsPitched;
         playerData.experience = (playerData.experience || 0) + expGained;
-        console.log(`   疲労蓄積: ${playerData.name} +${p.pitches}球 → 疲労${playerData.fatigue}, 経験+${expGained}`);
 
         // QS/HQS判定（先発投手のみ: 打順9番で最初から投げた投手）
         if (player.battingOrder === 9) {
@@ -1807,16 +1773,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           }
         }
 
-        // 勝敗の判定（簡易版：先発投手のみ）
-        if (player.battingOrder === 9 && p.outs >= 15) { // 5イニング以上投げた先発
-          if (isWinner) {
-            season.wins++;
-            career.wins++;
-          } else if (isWinner === false) { // 引き分けではない
-            season.losses++;
-            career.losses++;
-          }
-        }
+        // 勝敗はDateProgressScreen.determinePitcherDecisionsで正式判定・記録する
+        // ここでは二重計上を防ぐため記録しない
       }
 
       // 守備成績の集計
@@ -1855,11 +1813,9 @@ export const autoSimulateDailyGames = (currentDate, allGames, setAllGames, setCa
   const todaysGames = allGames[currentDateStr];
 
   if (!todaysGames || todaysGames.length === 0) {
-    console.log(`📅 ${currentDateStr}: 試合なし`);
     return; // 試合がない日
   }
 
-  console.log(`📅 ${currentDateStr}: ${todaysGames.length}試合を物理シミュレーションで実行`);
 
   // 各試合をシミュレート
   const updatedGames = todaysGames.map(game => {

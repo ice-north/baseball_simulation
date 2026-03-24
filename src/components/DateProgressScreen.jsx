@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
@@ -35,19 +35,58 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const winningTeam = isHomeWin ? gameResult.homeTeam : gameResult.awayTeam;
     const losingTeam = isHomeWin ? gameResult.awayTeam : gameResult.homeTeam;
     if (!winningTeam || !losingTeam) return decisions;
-    const winningPitchers = winningTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-    const losingPitchers = losingTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-    const winningStarter = winningPitchers.find(p => p.gameStats.pitching.outs >= 15);
-    if (winningStarter) decisions.winningPitcher = winningStarter;
-    else { const reliever = winningPitchers.sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs)[0]; if (reliever) decisions.winningPitcher = reliever; }
-    const losingPitcher = losingPitchers.sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed)[0];
-    if (losingPitcher) decisions.losingPitcher = losingPitcher;
-    const scoreDiff = Math.abs(gameResult.homeScore - gameResult.awayScore);
-    if (scoreDiff <= 3 && winningPitchers.length > 1) {
-      const lastPitcher = winningPitchers[winningPitchers.length - 1];
-      if (lastPitcher && lastPitcher !== decisions.winningPitcher && lastPitcher.gameStats.pitching.outs >= 3) decisions.savePitcher = lastPitcher;
+
+    const winPitchers = winningTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
+    const losePitchers = losingTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
+    if (winPitchers.length === 0 || losePitchers.length === 0) return decisions;
+
+    // 勝ち投手: 先発が5回以上投げてチームが最後までリードを守れば先発の勝ち
+    // そうでなければ、リードを奪った時点で投げていたリリーフ（最多投球回の中継ぎ）
+    const winStarter = winPitchers.find(p => p.battingOrder === 9);
+    if (winStarter && winStarter.gameStats.pitching.outs >= 15) {
+      decisions.winningPitcher = winStarter;
+    } else {
+      // 先発が条件を満たさない場合、最も長く投げたリリーフに勝ち
+      const relievers = winPitchers.filter(p => p.battingOrder !== 9 || (winStarter && winStarter.gameStats.pitching.outs < 15));
+      if (relievers.length > 0) {
+        relievers.sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs);
+        decisions.winningPitcher = relievers[0];
+      } else if (winPitchers.length > 0) {
+        decisions.winningPitcher = winPitchers[0];
+      }
     }
-    winningPitchers.forEach(p => { if (p !== decisions.winningPitcher && p !== decisions.savePitcher && p.gameStats.pitching.outs >= 3) decisions.holdPitchers.push(p); });
+
+    // 負け投手: 決勝点を与えた投手（最も失点が多い投手）
+    // NPB/MLB公式: リードを許した時にマウンドにいた投手
+    losePitchers.sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed);
+    decisions.losingPitcher = losePitchers[0];
+
+    // セーブ: 以下の条件をすべて満たすリリーフ
+    // 1) 勝ちチームの最後の投手 2) 勝ち投手ではない 3) 以下のいずれか:
+    //    a) 3点差以内でリード時に登板し1回以上投げた
+    //    b) 同点の走者を出塁させた状態で登板
+    //    c) 3イニング以上投げた
+    const scoreDiff = Math.abs(gameResult.homeScore - gameResult.awayScore);
+    if (winPitchers.length > 1) {
+      const lastPitcher = winPitchers[winPitchers.length - 1];
+      if (lastPitcher && lastPitcher !== decisions.winningPitcher) {
+        const outs = lastPitcher.gameStats.pitching.outs;
+        if ((scoreDiff <= 3 && outs >= 3) || outs >= 9) {
+          decisions.savePitcher = lastPitcher;
+        }
+      }
+    }
+
+    // ホールド: 勝ちチームのリリーフで、勝ち投手でもセーブ投手でもなく、
+    // リードを保って次の投手に繋いだ投手（1アウト以上取得）
+    winPitchers.forEach(p => {
+      if (p !== decisions.winningPitcher && p !== decisions.savePitcher && p.gameStats.pitching.outs >= 1) {
+        // 先発投手はホールド対象外
+        if (p.battingOrder === 9 && winStarter === p) return;
+        decisions.holdPitchers.push(p);
+      }
+    });
+
     return decisions;
   };
 
@@ -210,27 +249,53 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const daysInMonth = getDaysInMonth(year, selectedMonth);
   const firstDay = getFirstDayOfWeek(year, selectedMonth);
 
-  const calendarCells = [];
   const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
 
-  for (let i = 0; i < firstDay; i++) calendarCells.push({ day: null, games: [], eventLabel: null });
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateObj = { year, month: selectedMonth, day };
-    const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
-    const isToday = seasonData.currentDate.year === year && seasonData.currentDate.month === selectedMonth && seasonData.currentDate.day === day;
-    const phase = getCurrentPhase(selectedMonth, day);
-    let eventLabel = null;
-    if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
-    else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
-    else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
-    else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
-    else if (phase === SEASON_PHASES.CONTRACT) eventLabel = '契約更改';
-    else if (phase === SEASON_PHASES.TRYOUT) eventLabel = 'トライアウト';
-    else if (phase === SEASON_PHASES.OFF_SEASON) eventLabel = 'オフシーズン';
-    calendarCells.push({ day, games: gamesOnDay, isToday, eventLabel });
-  }
+  const calendarCells = useMemo(() => {
+    const cells = [];
+    for (let i = 0; i < firstDay; i++) cells.push({ day: null, games: [], eventLabel: null });
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateObj = { year, month: selectedMonth, day };
+      const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
+      const isToday = seasonData.currentDate.year === year && seasonData.currentDate.month === selectedMonth && seasonData.currentDate.day === day;
+      const phase = getCurrentPhase(selectedMonth, day);
+      let eventLabel = null;
+      if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
+      else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
+      else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
+      else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
+      else if (phase === SEASON_PHASES.CONTRACT) eventLabel = '契約更改';
+      else if (phase === SEASON_PHASES.TRYOUT) eventLabel = 'トライアウト';
+      else if (phase === SEASON_PHASES.OFF_SEASON) eventLabel = 'オフシーズン';
+      cells.push({ day, games: gamesOnDay, isToday, eventLabel });
+    }
+    return cells;
+  }, [seasonData.schedule, seasonData.currentDate, year, selectedMonth, daysInMonth, firstDay]);
 
   const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+
+  // 月間戦績を1回だけ計算（ヘッダーとサマリーの両方で使用）
+  const monthlyStats = useMemo(() => {
+    const monthGames = calendarCells
+      .filter(c => c.day !== null)
+      .flatMap(c => c.games)
+      .filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
+    if (monthGames.length === 0) return null;
+    let wins = 0, losses = 0, draws = 0;
+    const results = [];
+    monthGames.forEach(g => {
+      const isHome = g.home === userTeamName;
+      const hw = g.result.homeScore > g.result.awayScore;
+      const aw = g.result.awayScore > g.result.homeScore;
+      const won = isHome ? hw : aw;
+      const lost = isHome ? aw : hw;
+      if (won) { wins++; results.push('win'); }
+      else if (lost) { losses++; results.push('loss'); }
+      else { draws++; results.push('draw'); }
+    });
+    const winRate = (wins + losses) > 0 ? (wins / (wins + losses)).toFixed(3).slice(2) : '---';
+    return { wins, losses, draws, results, winRate };
+  }, [calendarCells, userTeamName]);
 
   const totalGames = seasonData?.settings?.gamesPerSeason || 60;
   const standings = seasonData.standings || [];
@@ -294,34 +359,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span className="text-blue-400 text-sm">📅</span>
                 </div>
                 <span>{selectedMonth}月</span>
-                {(() => {
-                  const monthGames = calendarCells
-                    .filter(c => c.day !== null)
-                    .flatMap(c => c.games)
-                    .filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
-                  if (monthGames.length === 0) return null;
-                  let mWins = 0, mLosses = 0, mDraws = 0;
-                  monthGames.forEach(g => {
-                    const isHome = g.home === userTeamName;
-                    const hw = g.result.homeScore > g.result.awayScore;
-                    const aw = g.result.awayScore > g.result.homeScore;
-                    const won = isHome ? hw : aw;
-                    const lost = isHome ? aw : hw;
-                    if (won) mWins++;
-                    else if (lost) mLosses++;
-                    else mDraws++;
-                  });
-                  return (
-                    <span className="text-sm font-bold ml-1">
-                      <span className="text-green-400">{mWins}勝</span>
-                      <span className="text-red-400 ml-1">{mLosses}敗</span>
-                      {mDraws > 0 && <span className="text-gray-400 ml-1">{mDraws}分</span>}
-                      <span className="text-gray-300 ml-1.5 font-normal text-xs">
-                        (.{((mWins + mLosses) > 0 ? (mWins / (mWins + mLosses)).toFixed(3).slice(2) : '---')})
-                      </span>
+                {monthlyStats && (
+                  <span className="text-sm font-bold ml-1">
+                    <span className="text-green-400">{monthlyStats.wins}勝</span>
+                    <span className="text-red-400 ml-1">{monthlyStats.losses}敗</span>
+                    {monthlyStats.draws > 0 && <span className="text-gray-400 ml-1">{monthlyStats.draws}分</span>}
+                    <span className="text-gray-300 ml-1.5 font-normal text-xs">
+                      (.{monthlyStats.winRate})
                     </span>
-                  );
-                })()}
+                  </span>
+                )}
               </h2>
               <div className="flex gap-1">
                 <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700/80 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-95 border border-gray-600/30">◀</button>
@@ -336,51 +383,32 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             </div>
 
             {/* 月間成績サマリー（カレンダー上部に表示） */}
-            {(() => {
-              const monthGames = calendarCells
-                .filter(c => c.day !== null)
-                .flatMap(c => c.games)
-                .filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
-              if (monthGames.length === 0) return null;
-              let mWins = 0, mLosses = 0, mDraws = 0;
-              const results = [];
-              monthGames.forEach(g => {
-                const isHome = g.home === userTeamName;
-                const hw = g.result.homeScore > g.result.awayScore;
-                const aw = g.result.awayScore > g.result.homeScore;
-                const won = isHome ? hw : aw;
-                const lost = isHome ? aw : hw;
-                if (won) { mWins++; results.push('win'); }
-                else if (lost) { mLosses++; results.push('loss'); }
-                else { mDraws++; results.push('draw'); }
-              });
-              return (
-                <div className="mb-2 bg-gray-800/60 rounded-lg px-3 py-2">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-gray-300">{selectedMonth}月 戦績</span>
-                    <span className="text-xs font-bold">
-                      <span className="text-green-400">{mWins}勝</span>
-                      <span className="text-red-400 ml-1">{mLosses}敗</span>
-                      {mDraws > 0 && <span className="text-gray-400 ml-1">{mDraws}分</span>}
-                      <span className="text-white ml-1.5">
-                        (勝率.{((mWins + mLosses) > 0 ? (mWins / (mWins + mLosses)).toFixed(3).slice(2) : '---')})
-                      </span>
+            {monthlyStats && (
+              <div className="mb-2 bg-gray-800/60 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-gray-300">{selectedMonth}月 戦績</span>
+                  <span className="text-xs font-bold">
+                    <span className="text-green-400">{monthlyStats.wins}勝</span>
+                    <span className="text-red-400 ml-1">{monthlyStats.losses}敗</span>
+                    {monthlyStats.draws > 0 && <span className="text-gray-400 ml-1">{monthlyStats.draws}分</span>}
+                    <span className="text-white ml-1.5">
+                      (勝率.{monthlyStats.winRate})
                     </span>
-                  </div>
-                  <div className="flex gap-0.5 flex-wrap">
-                    {results.map((r, i) => (
-                      <div key={i} className={`w-5 h-5 rounded-sm flex items-center justify-center text-[10px] font-bold ${
-                        r === 'win' ? 'bg-green-600/40 text-green-300' :
-                        r === 'loss' ? 'bg-red-600/40 text-red-300' :
-                        'bg-gray-600/40 text-gray-400'
-                      }`}>
-                        {r === 'win' ? '○' : r === 'loss' ? '●' : '△'}
-                      </div>
-                    ))}
-                  </div>
+                  </span>
                 </div>
-              );
-            })()}
+                <div className="flex gap-0.5 flex-wrap">
+                  {monthlyStats.results.map((r, i) => (
+                    <div key={i} className={`w-5 h-5 rounded-sm flex items-center justify-center text-[10px] font-bold ${
+                      r === 'win' ? 'bg-green-600/40 text-green-300' :
+                      r === 'loss' ? 'bg-red-600/40 text-red-300' :
+                      'bg-gray-600/40 text-gray-400'
+                    }`}>
+                      {r === 'win' ? '○' : r === 'loss' ? '●' : '△'}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-7 gap-0.5">
               {calendarCells.map((cell, i) => {

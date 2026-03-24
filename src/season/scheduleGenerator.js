@@ -122,8 +122,6 @@ export const generateFullSeasonSchedule = (config) => {
     const intraLeagueGames = Math.floor(gamesPerSeason * 0.7);
     const interLeagueGames = Math.floor(gamesPerSeason * 0.3 / league2.length);
 
-    console.log(`🏟️ 2リーグ制スケジュール: ${leagueNames?.[0] || 'リーグ1'}(${league1.length}チーム) vs ${leagueNames?.[1] || 'リーグ2'}(${league2.length}チーム)`);
-    console.log(`   リーグ内対戦: 約${intraLeagueGames}試合, リーグ間対戦: 約${interLeagueGames * league2.length}試合`);
 
     allMatchups = generateTwoLeagueMatchups(league1, league2, intraLeagueGames, interLeagueGames);
 
@@ -308,7 +306,6 @@ export const generateFullSeasonSchedule = (config) => {
     matchupIndex += gamesThisDay;
   }
 
-  console.log(`📅 スケジュール生成完了: ${schedule.length}試合 / 目標${totalGamesNeeded}試合, ${selectedDays.length}日間`);
 
   return schedule;
 };

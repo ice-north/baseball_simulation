@@ -84,25 +84,22 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     };
   }
 
-  const fielders = team.players.filter(p => p.position !== 'pitcher');
-  const pitchers = team.players.filter(p => p.position === 'pitcher');
   const lineup = team.lineupSettings.battingOrder;
 
-  // スタメン入りしている選手IDのセット
-  const lineupPlayerIds = new Set(lineup.map(e => e.playerId));
-
-  // 控え選手（1-8番スタメン野手を除く全選手。投手枠は別管理なので除外しない）
-  const fieldLineupIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= 8).map(e => e.playerId));
-  // 重複安全対策: player.id で重複除去
-  const benchPlayers = (() => {
+  const { fielders, pitchers, lineupPlayerIds, benchPlayers } = useMemo(() => {
+    const f = team.players.filter(p => p.position !== 'pitcher');
+    const p = team.players.filter(p => p.position === 'pitcher');
+    const lpIds = new Set(lineup.map(e => e.playerId));
+    const fieldIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= 8).map(e => e.playerId));
     const seen = new Set();
-    return team.players.filter(p => {
-      if (fieldLineupIds.has(p.id)) return false;
-      if (seen.has(p.id)) return false;
-      seen.add(p.id);
+    const bench = team.players.filter(pl => {
+      if (fieldIds.has(pl.id)) return false;
+      if (seen.has(pl.id)) return false;
+      seen.add(pl.id);
       return true;
     });
-  })();
+    return { fielders: f, pitchers: p, lineupPlayerIds: lpIds, benchPlayers: bench };
+  }, [team.players, lineup, updateTrigger]);
 
   // 初期化：投手枠がなければ9番に投手を自動設定
   useEffect(() => {

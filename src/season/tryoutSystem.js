@@ -985,14 +985,7 @@ export function selectPlayerForAI(candidates, currentRoster = []) {
 
   // デバッグログ（トップ5を表示）
   if (scoredCandidates.length > 0) {
-    console.log('🤖 AI選択 - トップ5候補:');
-    scoredCandidates.slice(0, 5).forEach((c, i) => {
-      const posName = {
-        pitcher: '投手', catcher: '捕手', first: '一', second: '二',
-        third: '三', short: '遊', left: '左', center: '中', right: '右'
-      }[c.position];
-      console.log(`  ${i+1}. ${c.name} (${posName}) - スコア:${c.valueScore.toFixed(1)}`);
-    });
+    // (debug logging removed)
   }
 
   return scoredCandidates[0];

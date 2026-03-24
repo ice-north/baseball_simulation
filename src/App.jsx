@@ -99,8 +99,6 @@ import TradeScreen from './components/TradeScreen.jsx';
 
       // シーズンデータの初期化（NEW GAMEフローから呼ばれる）
       const initializeNewGame = (regulations) => {
-        console.log('🎮 NEW GAME開始: レギュレーション', regulations);
-
         const newSeasonData = createSeasonData(1);
 
         // レギュレーション設定を適用
@@ -113,8 +111,6 @@ import TradeScreen from './components/TradeScreen.jsx';
 
         // 動的にチームを作成（カスタム名・略称対応）
         const teamNames = initializeTeamsForCount(teamCount, customNames, customAbbreviations);
-        console.log(`👥 ${teamCount}チームを初期化: ${teamNames.join(', ')}`);
-
         // チーム名・略称をレギュレーションにも保存（成績表等で使用）
         newSeasonData.settings.teamNames = teamNames;
         newSeasonData.settings.teamAbbreviations = customAbbreviations || teamNames.map((_, i) => String.fromCharCode(0xFF21 + i));
@@ -139,7 +135,6 @@ import TradeScreen from './components/TradeScreen.jsx';
         newSeasonData.standings = initializeStandings(teamNames);
 
         setSeasonData(newSeasonData);
-        console.log(`✅ NEW GAME初期化完了 - ${schedule.length}試合生成`);
       };
 
       // セーブスロット管理（3スロット対応）
@@ -184,10 +179,6 @@ import TradeScreen from './components/TradeScreen.jsx';
       // ゲームデータを保存（スロット指定、圧縮対応）
       const saveGame = (slotIndex = 0) => {
         try {
-          // 保存前にストレージ使用状況をログ
-          const beforeUsage = getLocalStorageUsage();
-          console.log(`📊 保存前ストレージ: ${(beforeUsage.used / 1024).toFixed(1)}KB / ${(beforeUsage.total / 1024).toFixed(1)}KB (${beforeUsage.percentage}%)`);
-
           const saveData = {
             version: '2.10.0', // 殿堂入り対応バージョン
             timestamp: new Date().toISOString(),
@@ -209,12 +200,6 @@ import TradeScreen from './components/TradeScreen.jsx';
           const ratio = ((1 - compressedSize / uncompressedSize) * 100).toFixed(1);
 
           localStorage.setItem(SAVE_SLOT_KEYS[slotIndex], compressed);
-          console.log(`💾 スロット${slotIndex + 1}にセーブしました (圧縮率: ${ratio}%, ${(uncompressedSize/1024).toFixed(1)}KB → ${(compressedSize/1024).toFixed(1)}KB)`);
-
-          // 保存後のストレージ使用状況
-          const afterUsage = getLocalStorageUsage();
-          console.log(`📊 保存後ストレージ: ${(afterUsage.used / 1024).toFixed(1)}KB / ${(afterUsage.total / 1024).toFixed(1)}KB (${afterUsage.percentage}%)`);
-
           refreshSaveSlots();
           return true;
         } catch (error) {
@@ -245,8 +230,6 @@ import TradeScreen from './components/TradeScreen.jsx';
             return false;
           }
 
-          console.log(`📂 スロット${slotIndex + 1}からロード開始 (version: ${saveData.version || 'unknown'})`);
-
           // TEAMS_DATAを復元
           if (saveData.teamsData) {
             // 既存のキーをクリア
@@ -268,7 +251,6 @@ import TradeScreen from './components/TradeScreen.jsx';
           setManagementView('dateprogress');
           setGameFlowState('season');
 
-          console.log('✅ ロード完了');
           return true;
         } catch (error) {
           console.error('ロード失敗:', error);
@@ -281,7 +263,6 @@ import TradeScreen from './components/TradeScreen.jsx';
         try {
           localStorage.removeItem(SAVE_SLOT_KEYS[slotIndex]);
           refreshSaveSlots();
-          console.log(`🗑️ スロット${slotIndex + 1}を削除しました`);
           return true;
         } catch (error) {
           console.error('削除失敗:', error);
@@ -306,7 +287,6 @@ import TradeScreen from './components/TradeScreen.jsx';
         a.download = `team_${teamName.replace(/[^a-zA-Z0-9\u3040-\u9FFF]/g, '_')}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        console.log(`📤 ${teamName}をエクスポートしました`);
       };
 
       // チームインポート（JSONファイルから読み込み、指定チームに上書き）
@@ -338,7 +318,6 @@ import TradeScreen from './components/TradeScreen.jsx';
               };
               setUpdateTrigger(prev => prev + 1);
               alert(`${data.teamName || 'チーム'}のデータを${targetTeamName}にインポートしました（選手${data.team.players.length}名）`);
-              console.log(`📥 ${targetTeamName}にインポート完了: ${data.team.players.length}人`);
             } catch (err) {
               alert('ファイルの読み込みに失敗しました: ' + err.message);
             }
@@ -3304,8 +3283,6 @@ if (newOuts === 3) {
         }
 
         const team = TEAMS_DATA[teamName];
-        console.log(`🤖 ${teamName}のAIオーダー編成を開始`);
-
         // 野手と投手を分ける
         const fielders = team.players.filter(p => !p.position || p.position !== 'pitcher');
         const pitchers = team.players.filter(p => p.position === 'pitcher');
@@ -3418,11 +3395,6 @@ if (newOuts === 3) {
           }
         });
 
-        console.log(`✅ ${teamName}のオーダー編成完了`);
-        console.log('打順:', lineupOrder.map((p, i) => {
-          const pos = Object.entries(positionAssignments).find(([_, pl]) => pl.id === p.id);
-          return `${i + 1}. ${p.name} (${pos ? pos[0] : p.position})`;
-        }).join(', '));
       };
 
       // 投手ローテーション生成関数（AI監督用）
@@ -3471,11 +3443,6 @@ if (newOuts === 3) {
         team.pitchingRotation.currentStarterIndex = 0;
         team.pitchingRotation.reliefFatigue = {};
 
-        console.log(`✅ ${teamName}の投手ローテーション設定完了`);
-        console.log('先発:', starters.map(p => `${p.name}(スタ${p.pitching.stamina})`).join(', '));
-        console.log('守護神:', closer ? `${closer.name}(球${closer.pitching.velocity})` : 'なし');
-        console.log('セットアップ:', setupMen.map(p => p.name).join(', '));
-        console.log('中継ぎ:', middleRelievers.map(p => p.name).join(', '));
       };
 
       // 全チームのAIオーダー編成を実行
@@ -3712,23 +3679,33 @@ if (newOuts === 3) {
           const winTeamName = isHomeWin ? htn : atn;
           const loseTeamName = isHomeWin ? atn : htn;
 
-          // 勝利投手判定
+          // 勝利投手判定: 先発が5回以上→先発、それ以外→最多投球回リリーフ
           const winPitchers = winTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
             .sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
           const winStarter = winPitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9);
-          const winPitcher = winStarter && (winStarter.stats?.pitching?.outs || 0) >= 15 ? winStarter : winPitchers[0];
+          const winPitcher = winStarter && (winStarter.stats?.pitching?.outs || 0) >= 15
+            ? winStarter
+            : (winPitchers.filter(p => p !== winStarter)[0] || winPitchers[0]);
 
-          // 敗戦投手判定
+          // 敗戦投手判定: 最も多く失点した投手
           const losePitchers = loseTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
-            .sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
+            .sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0));
           const losePitcher = losePitchers[0];
 
-          // セーブ投手判定
+          // セーブ投手判定: 最後に投げた投手で、3点差以内1イニング以上 or 3イニング以上
+          const scoreDiff = Math.abs(finalScore.home - finalScore.away);
           const lastPitcher = winPitchers.length > 1
             ? winPitchers.find(p => p !== winPitcher && p.position === 'pitcher') || winPitchers.find(p => p !== winPitcher)
             : null;
-          const scoreDiff = Math.abs(finalScore.home - finalScore.away);
-          const savePitcher = lastPitcher && lastPitcher !== winPitcher && (lastPitcher.stats?.pitching?.outs || 0) >= 3 && scoreDiff <= 3 ? lastPitcher : null;
+          const savePitcher = lastPitcher && lastPitcher !== winPitcher &&
+            ((scoreDiff <= 3 && (lastPitcher.stats?.pitching?.outs || 0) >= 3) || (lastPitcher.stats?.pitching?.outs || 0) >= 9)
+            ? lastPitcher : null;
+
+          // ホールド: 勝ちチームのリリーフで、勝ち投手でもセーブでもなく、1アウト以上
+          const holdPitchers = winPitchers.filter(p =>
+            p !== winPitcher && p !== savePitcher && p !== winStarter &&
+            (p.stats?.pitching?.outs || 0) >= 1
+          );
 
           // TEAMS_DATAに反映
           const updatePitcherDecision = (playerState, teamName, stat) => {
@@ -3747,6 +3724,7 @@ if (newOuts === 3) {
           if (winPitcher) updatePitcherDecision(winPitcher, winTeamName, 'wins');
           if (losePitcher) updatePitcherDecision(losePitcher, loseTeamName, 'losses');
           if (savePitcher) updatePitcherDecision(savePitcher, winTeamName, 'saves');
+          holdPitchers.forEach(hp => updatePitcherDecision(hp, winTeamName, 'holds'));
         }
 
         if (info.otherGames && info.otherGames.length > 0) {
@@ -3757,6 +3735,49 @@ if (newOuts === 3) {
 
             const otherResult = autoSimulateGame(otherGame.home, otherGame.away);
             if (otherResult) {
+              // 投手勝敗・セーブ・ホールドの記録
+              if (otherResult.homeScore !== otherResult.awayScore) {
+                const oIsHomeWin = otherResult.homeScore > otherResult.awayScore;
+                const oWinTeam = oIsHomeWin ? otherResult.homeTeam : otherResult.awayTeam;
+                const oLoseTeam = oIsHomeWin ? otherResult.awayTeam : otherResult.homeTeam;
+                const oWinName = oIsHomeWin ? otherGame.home : otherGame.away;
+                const oLoseName = oIsHomeWin ? otherGame.away : otherGame.home;
+                if (oWinTeam && oLoseTeam) {
+                  const oWinPs = oWinTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
+                  const oLosePs = oLoseTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
+                  // 勝ち投手
+                  const oStarter = oWinPs.find(p => p.battingOrder === 9);
+                  const oWinP = oStarter && oStarter.gameStats.pitching.outs >= 15
+                    ? oStarter : (oWinPs.filter(p => p !== oStarter).sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs)[0] || oWinPs[0]);
+                  // 負け投手
+                  const oLoseP = [...oLosePs].sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed)[0];
+                  // セーブ
+                  const oScoreDiff = Math.abs(otherResult.homeScore - otherResult.awayScore);
+                  const oLastP = oWinPs.length > 1 ? oWinPs[oWinPs.length - 1] : null;
+                  const oSaveP = oLastP && oLastP !== oWinP &&
+                    ((oScoreDiff <= 3 && oLastP.gameStats.pitching.outs >= 3) || oLastP.gameStats.pitching.outs >= 9)
+                    ? oLastP : null;
+                  const recordOther = (playerState, teamName, stat) => {
+                    const td = TEAMS_DATA[teamName];
+                    if (!td) return;
+                    const pd = td.players.find(pl => pl.id === playerState.id);
+                    if (!pd) return;
+                    if (!pd.seasonStats?.pitching) { if (!pd.seasonStats) pd.seasonStats = { batting: {}, pitching: {} }; if (!pd.seasonStats.pitching) pd.seasonStats.pitching = {}; }
+                    if (!pd.careerStats?.pitching) { if (!pd.careerStats) pd.careerStats = { batting: {}, pitching: {} }; if (!pd.careerStats.pitching) pd.careerStats.pitching = {}; }
+                    pd.seasonStats.pitching[stat] = (pd.seasonStats.pitching[stat] || 0) + 1;
+                    pd.careerStats.pitching[stat] = (pd.careerStats.pitching[stat] || 0) + 1;
+                  };
+                  if (oWinP) recordOther(oWinP, oWinName, 'wins');
+                  if (oLoseP) recordOther(oLoseP, oLoseName, 'losses');
+                  if (oSaveP) recordOther(oSaveP, oWinName, 'saves');
+                  // ホールド
+                  oWinPs.forEach(p => {
+                    if (p !== oWinP && p !== oSaveP && p !== oStarter && p.gameStats.pitching.outs >= 1) {
+                      recordOther(p, oWinName, 'holds');
+                    }
+                  });
+                }
+              }
               updatedSeasonData = recordGameResult(updatedSeasonData, {
                 date: seasonData.currentDate,
                 home: otherGame.home,
@@ -4696,7 +4717,6 @@ if (newOuts === 3) {
               leagueFormat: settings.leagueFormat || 'single',
               leagueNames: settings.leagueNames
             });
-            console.log(`📅 ${seasonData.year}年目スケジュール生成: ${schedule.length}試合 (暦年${calendarYear})`);
             setSeasonData(prev => ({
               ...prev,
               currentDate: { year: calendarYear, month: 1, day: 1 },
@@ -4780,13 +4800,11 @@ if (newOuts === 3) {
           onNewGame={() => setGameFlowState('newgame_regulations')}
           onContinue={(slotIndex) => {
             if (loadGame(slotIndex)) {
-              console.log('✅ ゲームをロードしました');
             }
           }}
           onEdit={(slotIndex) => {
             if (loadGame(slotIndex)) {
               setManagementView('edit');
-              console.log('✅ エディットモードでロードしました');
             }
           }}
           onManual={() => setGameFlowState('manual')}
@@ -4833,7 +4851,6 @@ if (newOuts === 3) {
             // 全選手のコンディション初期化
             initializeAllPlayersCondition();
             // キャンプ終了時に全チームのスタメンを自動生成
-            console.log('🏕️ キャンプ終了: 全チームのスタメンを生成');
             Object.keys(TEAMS_DATA).forEach(teamName => {
               const teamData = TEAMS_DATA[teamName];
               if (teamData && teamData.players && teamData.players.length > 0) {
@@ -4843,7 +4860,6 @@ if (newOuts === 3) {
                 } else {
                   generateAILineup(teamData, teamName);
                 }
-                console.log(`  ✅ ${teamName}のスタメンを生成完了`);
               }
             });
 
