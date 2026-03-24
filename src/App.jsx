@@ -3270,7 +3270,6 @@ if (newOuts === 3) {
             >
               <span className="mr-2">📥</span>インポート
             </button>
-            <SidebarButton view="edit" icon="🛠️" label="エディット" />
           </nav>
         </div>
       );

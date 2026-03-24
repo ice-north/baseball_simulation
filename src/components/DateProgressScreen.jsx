@@ -382,34 +382,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               ))}
             </div>
 
-            {/* 月間成績サマリー（カレンダー上部に表示） */}
-            {monthlyStats && (
-              <div className="mb-2 bg-gray-800/60 rounded-lg px-3 py-2">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-gray-300">{selectedMonth}月 戦績</span>
-                  <span className="text-xs font-bold">
-                    <span className="text-green-400">{monthlyStats.wins}勝</span>
-                    <span className="text-red-400 ml-1">{monthlyStats.losses}敗</span>
-                    {monthlyStats.draws > 0 && <span className="text-gray-400 ml-1">{monthlyStats.draws}分</span>}
-                    <span className="text-white ml-1.5">
-                      (勝率.{monthlyStats.winRate})
-                    </span>
-                  </span>
-                </div>
-                <div className="flex gap-0.5 flex-wrap">
-                  {monthlyStats.results.map((r, i) => (
-                    <div key={i} className={`w-5 h-5 rounded-sm flex items-center justify-center text-[10px] font-bold ${
-                      r === 'win' ? 'bg-green-600/40 text-green-300' :
-                      r === 'loss' ? 'bg-red-600/40 text-red-300' :
-                      'bg-gray-600/40 text-gray-400'
-                    }`}>
-                      {r === 'win' ? '○' : r === 'loss' ? '●' : '△'}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="grid grid-cols-7 gap-0.5">
               {calendarCells.map((cell, i) => {
                 const showAsScheduled = cell.isToday;
@@ -1028,6 +1000,119 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 {renderStandingsTable(standings, '順位表', 'text-white')}
                 {renderFirstHalfWinner()}
                 {renderPlayoffBracket()}
+              </div>
+            );
+          })()}
+
+          {/* 主なトピック */}
+          {(() => {
+            const topics = [];
+            const allTeamNames = Object.keys(TEAMS_DATA || {});
+            const allPlayers = [];
+            allTeamNames.forEach(tn => {
+              (TEAMS_DATA[tn]?.players || []).forEach(p => allPlayers.push({ ...p, teamName: tn }));
+            });
+
+            // 直前の試合結果からトピック生成
+            const recentResults = (seasonData.results || []).slice(-allTeamNames.length);
+            recentResults.forEach(r => {
+              if (!r.result || r.result.cancelled) return;
+              const hs = r.result.homeScore;
+              const as = r.result.awayScore;
+              const diff = Math.abs(hs - as);
+              // 大差試合
+              if (diff >= 8) {
+                const winner = hs > as ? r.home : r.away;
+                topics.push({ icon: '💥', text: `${getTeamAbbreviation(winner)}が${diff}点差の大勝`, color: 'text-red-400' });
+              }
+              // 完封試合
+              if (hs === 0 || as === 0) {
+                const winner = hs > as ? r.home : r.away;
+                topics.push({ icon: '🛡️', text: `${getTeamAbbreviation(winner)}投手陣が完封勝利`, color: 'text-blue-400' });
+              }
+              // サヨナラ(裏で1点差)
+              if (hs > as && diff === 1) {
+                topics.push({ icon: '🎉', text: `${getTeamAbbreviation(r.home)}がサヨナラ勝ち！`, color: 'text-yellow-400' });
+              }
+            });
+
+            // 個人成績のマイルストーン
+            allPlayers.forEach(p => {
+              const bs = p.seasonStats?.batting;
+              const ps = p.seasonStats?.pitching;
+              const abbr = getTeamAbbreviation(p.teamName);
+              // 打率3割到達（規定打席以上）
+              if (bs?.atBats >= 30 && bs.hits / bs.atBats >= 0.350) {
+                topics.push({ icon: '🔥', text: `${abbr}${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}と好調`, color: 'text-orange-400' });
+              }
+              // 本塁打の節目
+              const hr = bs?.homeruns || 0;
+              if (hr > 0 && (hr === 10 || hr === 20 || hr === 30 || hr === 40 || hr === 50)) {
+                topics.push({ icon: '💣', text: `${abbr}${p.name}が${hr}号到達`, color: 'text-pink-400' });
+              }
+              // 勝利数の節目
+              const w = ps?.wins || 0;
+              if (w > 0 && (w === 5 || w === 10 || w === 15 || w === 20)) {
+                topics.push({ icon: '🏆', text: `${abbr}${p.name}が${w}勝目`, color: 'text-yellow-400' });
+              }
+              // 奪三振の節目
+              const so = ps?.strikeouts || 0;
+              if (so > 0 && (so === 50 || so === 100 || so === 150 || so === 200)) {
+                topics.push({ icon: '🌀', text: `${abbr}${p.name}が${so}奪三振達成`, color: 'text-purple-400' });
+              }
+              // 連勝中チェック（若手の活躍風）
+              if (p.age <= 22 && bs?.atBats >= 20 && bs.hits / bs.atBats >= 0.300) {
+                topics.push({ icon: '⭐', text: `${p.age}歳${abbr}${p.name}にスカウトが熱視線`, color: 'text-cyan-400' });
+              }
+            });
+
+            // 順位変動トピック
+            const userStandingData = standings.find(s => s.team === userTeamName);
+            if (userStandingData) {
+              const ur = standings.indexOf(userStandingData) + 1;
+              if (ur === 1 && (userStandingData.wins || 0) >= 3) {
+                topics.push({ icon: '👑', text: `${userTeamName}が首位をキープ`, color: 'text-yellow-300' });
+              }
+              // ゲーム差0.5以内の接戦
+              if (ur <= 3 && standings.length >= 2) {
+                const first = standings[0];
+                const second = standings[1];
+                const gb = ((first.wins - second.wins) - (first.losses - second.losses)) / 2;
+                if (gb <= 1.0 && gb > 0) {
+                  topics.push({ icon: '⚡', text: `首位${getTeamAbbreviation(first.team)}と2位${getTeamAbbreviation(second.team)}が${gb}ゲーム差の接戦`, color: 'text-red-300' });
+                }
+              }
+            }
+
+            // 重複排除してシャッフル、最大5件表示
+            const seen = new Set();
+            const unique = topics.filter(t => {
+              if (seen.has(t.text)) return false;
+              seen.add(t.text);
+              return true;
+            });
+            // 日付ベースのシード値で安定シャッフル
+            const seed = (seasonData.currentDate?.day || 1) * 31 + (seasonData.currentDate?.month || 1) * 7;
+            const shuffled = unique.sort((a, b) => {
+              const ha = (a.text.length * 17 + seed) % 97;
+              const hb = (b.text.length * 17 + seed) % 97;
+              return ha - hb;
+            }).slice(0, 5);
+
+            if (shuffled.length === 0) return null;
+            return (
+              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
+                <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+                  <span className="text-yellow-400">📰</span> 主なトピック
+                </h2>
+                <div className="space-y-1">
+                  {shuffled.map((t, i) => (
+                    <div key={i} className="flex items-start gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1.5">
+                      <span className="text-sm shrink-0">{t.icon}</span>
+                      <span className={`text-xs ${t.color}`}>{t.text}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             );
           })()}
