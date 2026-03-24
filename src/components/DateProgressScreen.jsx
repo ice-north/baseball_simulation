@@ -1058,17 +1058,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               // 本塁打の節目
               const hr = bs?.homeruns || 0;
               if (hr > 0 && (hr === 10 || hr === 20 || hr === 30 || hr === 40 || hr === 50)) {
-                topics.push({ cat: 'bat_hr', icon: '💣', text: `${abbr}${p.name}が${hr}号到達`, color: 'text-pink-400' });
+                topics.push({ cat: 'bat_hr', icon: '💣', text: `${abbr}${p.name}が${hr}号到達`, color: 'text-pink-400', team: p.teamName });
               }
               // 勝利数の節目
               const w = ps?.wins || 0;
               if (w > 0 && (w === 5 || w === 10 || w === 15 || w === 20)) {
-                topics.push({ cat: 'pitch_wins', icon: '🏆', text: `${abbr}${p.name}が${w}勝目`, color: 'text-yellow-400' });
+                topics.push({ cat: 'pitch_wins', icon: '🏆', text: `${abbr}${p.name}が${w}勝目`, color: 'text-yellow-400', team: p.teamName });
               }
               // 奪三振の節目
               const so = ps?.strikeouts || 0;
               if (so > 0 && (so === 50 || so === 100 || so === 150 || so === 200)) {
-                topics.push({ cat: 'pitch_k', icon: '🌀', text: `${abbr}${p.name}が${so}奪三振達成`, color: 'text-purple-400' });
+                topics.push({ cat: 'pitch_k', icon: '🌀', text: `${abbr}${p.name}が${so}奪三振達成`, color: 'text-purple-400', team: p.teamName });
               }
               // 連勝中チェック（若手の活躍風）
               if (p.age <= 22 && bs?.atBats >= 20 && bs.hits / bs.atBats >= 0.300) {
@@ -1170,9 +1170,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               if (bs?.atBats >= 50 && bs.hits / bs.atBats < 0.200) {
                 topics.push({ cat: 'bat_slump', icon: '😰', text: `${abbr}${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}と深刻な不振`, color: 'text-gray-400' });
               }
-              // 二桁安打ペース（50安打到達）
+              // 安打数の節目（50安打到達）
               if ((bs?.hits || 0) > 0 && ((bs.hits) === 50 || (bs.hits) === 100 || (bs.hits) === 150)) {
-                topics.push({ cat: 'bat_hits', icon: '📊', text: `${abbr}${p.name}がシーズン${bs.hits}安打到達`, color: 'text-blue-300' });
+                topics.push({ cat: 'bat_hits', icon: '📊', text: `${abbr}${p.name}がシーズン${bs.hits}安打到達`, color: 'text-blue-300', team: p.teamName });
               }
               // 高出塁率（OBP .420以上）
               if (bs?.atBats >= 30) {
@@ -1201,7 +1201,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               // セーブ数（5, 10, 15, 20, 25, 30の節目）
               const sv = ps?.saves || 0;
               if (sv > 0 && (sv === 5 || sv === 10 || sv === 15 || sv === 20 || sv === 25 || sv === 30)) {
-                topics.push({ cat: 'pitch_save', icon: '🔒', text: `${abbr}${p.name}が${sv}セーブ到達、守護神の仕事`, color: 'text-indigo-400' });
+                topics.push({ cat: 'pitch_save', icon: '🔒', text: `${abbr}${p.name}が${sv}セーブ到達、守護神の仕事`, color: 'text-indigo-400', team: p.teamName });
               }
               // QS率が高い先発（QS 5回以上）
               if ((ps?.qualityStarts || 0) >= 5) {
@@ -1212,9 +1212,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               if (p.age >= 35 && bs?.atBats >= 20 && bs.hits / bs.atBats >= 0.280) {
                 topics.push({ cat: 'veteran', icon: '🫡', text: `${p.age}歳${abbr}${p.name}、衰え知らずの活躍`, color: 'text-amber-400' });
               }
-              // 二塁打量産（10本以上）
-              if ((bs?.doubles || 0) >= 10) {
-                topics.push({ cat: 'bat_2b', icon: '↗️', text: `${abbr}${p.name}が${bs.doubles}二塁打、広角打法が冴える`, color: 'text-lime-400' });
+              // 二塁打の節目（10, 20, 30, 40, 50本）
+              const dbl = bs?.doubles || 0;
+              if (dbl > 0 && (dbl === 10 || dbl === 20 || dbl === 30 || dbl === 40 || dbl === 50)) {
+                topics.push({ cat: 'bat_2b', icon: '↗️', text: `${abbr}${p.name}が${dbl}二塁打到達、広角打法が冴える`, color: 'text-lime-400', team: p.teamName });
               }
             });
 
@@ -1257,15 +1258,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               }
             });
 
-            // 重複排除 + 同一カテゴリ最大2件に制限してシャッフル
+            // 重複排除 + 同一カテゴリ最大2件に制限 + マイルストーン系は同チーム1件に制限してシャッフル
             const seen = new Set();
             const catCount = {};
+            const catTeamSeen = {};  // マイルストーン系カテゴリのチーム重複防止
+            const milestoneCats = new Set(['pitch_wins', 'pitch_save', 'bat_hr', 'bat_hits', 'bat_2b', 'pitch_k']);
             const unique = topics.filter(t => {
               if (seen.has(t.text)) return false;
               seen.add(t.text);
               if (t.cat) {
                 catCount[t.cat] = (catCount[t.cat] || 0) + 1;
                 if (catCount[t.cat] > 2) return false;
+                // マイルストーン系は同チームから1件のみ（同チーム2人の5勝目など防止）
+                if (milestoneCats.has(t.cat) && t.team) {
+                  const teamKey = `${t.cat}_${t.team}`;
+                  if (catTeamSeen[teamKey]) return false;
+                  catTeamSeen[teamKey] = true;
+                }
               }
               return true;
             });
@@ -1323,25 +1332,32 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
   const userTeam = TEAMS_DATA[userTeamName];
   const opponentTeam = TEAMS_DATA[opponentName];
 
-  // スタメン取得
-  const getStarters = (team) => {
+  // スタメン取得（投手はローテーションから反映）
+  const getStarters = (team, teamName) => {
     if (!team?.players) return [];
     const settings = team.lineupSettings;
     if (settings?.battingOrder?.length > 0) {
-      return settings.battingOrder
+      // ローテーションから先発投手を取得
+      const rotationStarter = getStartingPitcher(teamName);
+      const starters = settings.battingOrder
         .sort((a, b) => a.battingOrder - b.battingOrder)
         .map(entry => {
+          // 投手枠（battingOrder 9, position pitcher）はローテ投手で上書き
+          if (entry.position === 'pitcher' && rotationStarter) {
+            return { ...rotationStarter, _position: 'pitcher', _battingOrder: entry.battingOrder };
+          }
           const player = team.players.find(p => p.id === entry.playerId);
           return player ? { ...player, _position: entry.position, _battingOrder: entry.battingOrder } : null;
         })
         .filter(Boolean);
+      return starters;
     }
     return team.players
       .filter(p => p.battingOrder > 0 && p.battingOrder <= 9)
       .sort((a, b) => a.battingOrder - b.battingOrder);
   };
 
-  const userStarters = getStarters(userTeam);
+  const userStarters = getStarters(userTeam, userTeamName);
   const lineup = userTeam?.lineupSettings?.battingOrder || [];
 
   // 控え野手（スタメンに入っていない野手）
