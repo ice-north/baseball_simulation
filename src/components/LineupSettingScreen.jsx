@@ -931,9 +931,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             second:   { x: 320, y: 170 },
             short:    { x: 180, y: 170 },
             third:    { x: 115, y: 240 },
-            left:     { x: 70,  y: 75 },
-            center:   { x: 250, y: 30 },
-            right:    { x: 430, y: 75 },
+            left:     { x: 70,  y: 110 },
+            center:   { x: 250, y: 65 },
+            right:    { x: 430, y: 110 },
           };
 
           // 守備位置適正の取得（0-100）
@@ -1072,7 +1072,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     </div>
                   )}
                 </div>
-                <svg viewBox="0 -20 500 490" className="w-full max-w-2xl mx-auto">
+                <svg viewBox="0 -20 500 560" className="w-full max-w-2xl mx-auto">
                   <defs>
                     {/* 各ポジションの守備範囲グラデーション（適正で色変化） */}
                     {Object.entries(posCoords).map(([pos]) => {
@@ -1268,7 +1268,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   })}
 
                   {/* 凡例 */}
-                  <g transform="translate(10, 440)">
+                  <g transform="translate(10, 510)">
                     <text x="0" y="0" fill="white" fontSize="10" fontWeight="bold" filter="url(#textShadow)">適正:</text>
                     {[
                       { label: '100', color: '#ff1493' }, { label: '90', color: '#ec4899' }, { label: '80', color: '#f87171' },

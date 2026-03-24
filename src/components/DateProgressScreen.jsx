@@ -308,6 +308,53 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               ))}
             </div>
 
+            {/* 月間成績サマリー（カレンダー上部に表示） */}
+            {(() => {
+              const monthGames = calendarCells
+                .filter(c => c.day !== null)
+                .flatMap(c => c.games)
+                .filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
+              if (monthGames.length === 0) return null;
+              let mWins = 0, mLosses = 0, mDraws = 0;
+              const results = [];
+              monthGames.forEach(g => {
+                const isHome = g.home === userTeamName;
+                const hw = g.result.homeScore > g.result.awayScore;
+                const aw = g.result.awayScore > g.result.homeScore;
+                const won = isHome ? hw : aw;
+                const lost = isHome ? aw : hw;
+                if (won) { mWins++; results.push('win'); }
+                else if (lost) { mLosses++; results.push('loss'); }
+                else { mDraws++; results.push('draw'); }
+              });
+              return (
+                <div className="mb-2 bg-gray-800/60 rounded-lg px-3 py-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-gray-300">{selectedMonth}月 戦績</span>
+                    <span className="text-xs font-bold">
+                      <span className="text-green-400">{mWins}勝</span>
+                      <span className="text-red-400 ml-1">{mLosses}敗</span>
+                      {mDraws > 0 && <span className="text-gray-400 ml-1">{mDraws}分</span>}
+                      <span className="text-white ml-1.5">
+                        (勝率.{((mWins + mLosses) > 0 ? (mWins / (mWins + mLosses)).toFixed(3).slice(2) : '---')})
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex gap-0.5 flex-wrap">
+                    {results.map((r, i) => (
+                      <div key={i} className={`w-5 h-5 rounded-sm flex items-center justify-center text-[10px] font-bold ${
+                        r === 'win' ? 'bg-green-600/40 text-green-300' :
+                        r === 'loss' ? 'bg-red-600/40 text-red-300' :
+                        'bg-gray-600/40 text-gray-400'
+                      }`}>
+                        {r === 'win' ? '○' : r === 'loss' ? '●' : '△'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="grid grid-cols-7 gap-0.5">
               {calendarCells.map((cell, i) => {
                 const showAsScheduled = cell.isToday;
@@ -383,52 +430,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   </div>
                 );
               })}
-            {/* 月間成績サマリー */}
-            {(() => {
-              const monthGames = calendarCells
-                .filter(c => c.day !== null)
-                .flatMap(c => c.games)
-                .filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
-              if (monthGames.length === 0) return null;
-              let mWins = 0, mLosses = 0, mDraws = 0;
-              const results = [];
-              monthGames.forEach(g => {
-                const isHome = g.home === userTeamName;
-                const hw = g.result.homeScore > g.result.awayScore;
-                const aw = g.result.awayScore > g.result.homeScore;
-                const won = isHome ? hw : aw;
-                const lost = isHome ? aw : hw;
-                if (won) { mWins++; results.push('win'); }
-                else if (lost) { mLosses++; results.push('loss'); }
-                else { mDraws++; results.push('draw'); }
-              });
-              return (
-                <div className="mt-2 bg-gray-800/60 rounded-lg px-3 py-2">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-gray-300">{selectedMonth}月 戦績</span>
-                    <span className="text-xs font-bold">
-                      <span className="text-green-400">{mWins}勝</span>
-                      <span className="text-red-400 ml-1">{mLosses}敗</span>
-                      {mDraws > 0 && <span className="text-gray-400 ml-1">{mDraws}分</span>}
-                      <span className="text-white ml-1.5">
-                        (勝率.{((mWins + mLosses) > 0 ? (mWins / (mWins + mLosses)).toFixed(3).slice(2) : '---')})
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex gap-0.5 flex-wrap">
-                    {results.map((r, i) => (
-                      <div key={i} className={`w-5 h-5 rounded-sm flex items-center justify-center text-[10px] font-bold ${
-                        r === 'win' ? 'bg-green-600/40 text-green-300' :
-                        r === 'loss' ? 'bg-red-600/40 text-red-300' :
-                        'bg-gray-600/40 text-gray-400'
-                      }`}>
-                        {r === 'win' ? '○' : r === 'loss' ? '●' : '△'}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
             </div>
           </div>
 
