@@ -570,7 +570,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                     if (subs.length === 0) return null;
                                     return <span className="font-bold">{POSITION_NAMES[entry.position]}{subs.map((s, i) => <span key={i} className={s.color}>{s.label}</span>)}</span>;
                                   })()}
-                                  <span>| {player.age}歳 回復{player.physical?.recovery || 50}</span>
+                                  <span>| {player.age}歳 | 回復{player.physical?.recovery || 50}</span>
                                 </div>
                               </div>
                               <div className="flex gap-2">

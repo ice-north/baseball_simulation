@@ -1098,7 +1098,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
               <span className="text-green-400">●</span>40↑
             </div>
           </div>
-          <div className="space-y-0.5 text-xs">
+          <div className="space-y-0.5 text-sm">
             {userStarters.map((player, i) => {
               const order = player._battingOrder || (i + 1);
               const pos = player._position || player.position;
@@ -1112,33 +1112,33 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                 <div
                   key={player.id}
                   onClick={() => pos !== 'pitcher' && handleSwap(order)}
-                  className={`flex items-center gap-1 rounded px-2 py-1 transition-all ${
+                  className={`flex items-center gap-1.5 rounded px-2 py-1.5 transition-all ${
                     pos === 'pitcher' ? 'bg-gray-800/50 cursor-default' :
                     isSelected ? 'bg-blue-900 ring-1 ring-blue-400 cursor-pointer' :
                     'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                   }`}
                 >
-                  <span className="text-gray-500 w-4 text-center font-mono">{order}</span>
-                  <span className={`text-[10px] px-1 rounded ${
+                  <span className="text-gray-500 w-5 text-center font-mono shrink-0">{order}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 w-7 text-center ${
                     pos === 'pitcher' ? 'bg-red-800 text-red-200' :
                     ['catcher'].includes(pos) ? 'bg-blue-800 text-blue-200' :
                     ['left','center','right'].includes(pos) ? 'bg-green-800 text-green-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[pos] || pos}</span>
-                  <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
+                  <span className={`font-bold ${getFatigueColor(player)} w-20 truncate shrink-0`}>{player.name}</span>
                   <span className={`shrink-0 ${CONDITION_COLORS[cond]}`} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
-                  <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
+                  <span className={`text-xs ${batsColor} shrink-0`}>{batsLabel}</span>
                   {pos !== 'pitcher' && (() => {
                     const subs = getSubPositions(player, pos);
-                    return subs.length > 0 ? <span className="text-[9px]">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
+                    return subs.length > 0 ? <span className="text-xs shrink-0">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
                   })()}
                   <span className="flex-1" />
                   {(() => {
                     const bs = player.seasonStats?.batting;
-                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px]">-</span>;
+                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-xs">-</span>;
                     const avg = (bs.hits / bs.atBats).toFixed(3);
                     return (
-                      <span className="text-[10px] text-gray-400 flex gap-1.5 shrink-0">
+                      <span className="text-xs text-gray-400 flex gap-1.5 shrink-0">
                         <span className="text-blue-300">{avg}</span>
                         <span>{bs.homeruns || 0}本</span>
                         <span>{bs.rbis || 0}点</span>
