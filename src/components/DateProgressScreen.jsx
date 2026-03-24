@@ -977,10 +977,16 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
     return 'text-white';
   };
 
-  // 打順入れ替え
+  // 打順入れ替え（スタメン同士）/ 控え交代のソース選択
   const handleSwap = (order) => {
+    if (showBench && swapTarget !== null) {
+      // 控え交代モード中にスタメンをタップ → ソース変更
+      setSwapTarget(order);
+      return;
+    }
     if (swapTarget === null) {
       setSwapTarget(order);
+      setShowBench(true); // 控え選手との交代も可能にする
     } else {
       if (swapTarget !== order) {
         const entry1 = lineup.find(e => e.battingOrder === swapTarget);
@@ -992,6 +998,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         }
       }
       setSwapTarget(null);
+      setShowBench(false);
       setTick(t => t + 1);
     }
   };
@@ -1083,8 +1090,11 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
               const order = player._battingOrder || (i + 1);
               const pos = player._position || player.position;
               const cond = player.condition ?? CONDITION_LEVELS.NORMAL;
-              const isSelected = swapTarget === order;
+              const isSelected = swapTarget === order && !showBench;
               const f = player.fatigue || 0;
+              const bats = player.batting?.bats || 'right';
+              const batsLabel = bats === 'left' ? '左' : bats === 'switch' ? '両' : '右';
+              const batsColor = bats === 'left' ? 'text-blue-400' : bats === 'switch' ? 'text-purple-400' : 'text-gray-500';
               return (
                 <div
                   key={player.id}
@@ -1102,79 +1112,88 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     ['left','center','right'].includes(pos) ? 'bg-green-800 text-green-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[pos] || pos}</span>
-                  <span className={`truncate font-bold ${getFatigueColor(player)}`} style={{minWidth:'3em',maxWidth:'5em'}}>{player.name}</span>
+                  <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
+                  <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
+                  <span className="flex-1" />
                   {(() => {
                     const bs = player.seasonStats?.batting;
-                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px] flex-1">-</span>;
+                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px]">-</span>;
                     const avg = (bs.hits / bs.atBats).toFixed(3);
                     return (
-                      <span className="text-[10px] text-gray-400 flex-1 flex gap-1.5">
+                      <span className="text-[10px] text-gray-400 flex gap-1.5 shrink-0">
                         <span className="text-blue-300">{avg}</span>
                         <span>{bs.homeruns || 0}本</span>
                         <span>{bs.rbis || 0}点</span>
                       </span>
                     );
                   })()}
-                  <span className="text-gray-600 text-[10px] w-5 text-right">{f > 0 ? f : ''}</span>
-                  <span className={CONDITION_COLORS[cond]} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
-                  {pos !== 'pitcher' && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSwapTarget(order); setShowBench(true); }}
-                      className="text-gray-600 hover:text-blue-400 text-[10px] ml-0.5"
-                      title="控え選手と交代"
-                    >↔</button>
-                  )}
+                  <span className="text-gray-600 text-[10px] w-5 text-right shrink-0">{f > 0 ? f : ''}</span>
+                  <span className={`shrink-0 ${CONDITION_COLORS[cond]}`} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* 控え選手パネル */}
-        {showBench && swapTarget !== null && (
-          <div className="bg-gray-900 rounded-lg p-3 mb-3 border border-blue-800">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-bold text-blue-400">{swapTarget}番と交代する選手を選択</h3>
+        {/* 控え野手一覧 */}
+        <div className="bg-gray-900 rounded-lg p-3 mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold text-gray-400">
+              控え野手
+              {showBench && swapTarget !== null
+                ? <span className="text-blue-400 ml-1">→ {swapTarget}番と交代する選手をタップ</span>
+                : <span className="text-gray-600 font-normal ml-1">スタメンをタップ後、控えをタップで交代</span>
+              }
+            </h3>
+            {showBench && swapTarget !== null && (
               <button onClick={() => { setShowBench(false); setSwapTarget(null); }} className="text-gray-500 hover:text-white text-xs">✕</button>
-            </div>
-            <div className="space-y-0.5 text-xs max-h-40 overflow-y-auto">
-              {benchFielders.length === 0 && <div className="text-gray-600 text-center py-2">控え野手なし</div>}
-              {benchFielders.map(player => {
-                const f = player.fatigue || 0;
-                return (
-                  <div
-                    key={player.id}
-                    onClick={() => handleSubstitute(player.id, swapTarget)}
-                    className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 rounded px-2 py-1 cursor-pointer"
-                  >
-                    <span className={`text-[10px] px-1 rounded ${
-                      ['left','center','right'].includes(player.position) ? 'bg-green-800 text-green-200' :
-                      player.position === 'catcher' ? 'bg-blue-800 text-blue-200' :
-                      'bg-yellow-800 text-yellow-200'
-                    }`}>{POSITION_NAMES[player.position] || player.position}</span>
-                    <span className={`truncate font-bold ${getFatigueColor(player)}`} style={{minWidth:'3em',maxWidth:'5em'}}>{player.name}</span>
-                    {(() => {
-                      const bs = player.seasonStats?.batting;
-                      if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px] flex-1">-</span>;
-                      const avg = (bs.hits / bs.atBats).toFixed(3);
-                      return (
-                        <span className="text-[10px] text-gray-400 flex-1 flex gap-1.5">
-                          <span className="text-blue-300">{avg}</span>
-                          <span>{bs.homeruns || 0}本</span>
-                          <span>{bs.rbis || 0}点</span>
-                        </span>
-                      );
-                    })()}
-                    <span className="text-gray-600 text-[10px]">{f > 0 ? `疲${f}` : ''}</span>
-                    <span className={CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}>
-                      {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            )}
           </div>
-        )}
+          <div className="space-y-0.5 text-xs max-h-44 overflow-y-auto">
+            {benchFielders.length === 0 && <div className="text-gray-600 text-center py-1">控え野手なし</div>}
+            {benchFielders.map(player => {
+              const f = player.fatigue || 0;
+              const bats = player.batting?.bats || 'right';
+              const batsLabel = bats === 'left' ? '左' : bats === 'switch' ? '両' : '右';
+              const batsColor = bats === 'left' ? 'text-blue-400' : bats === 'switch' ? 'text-purple-400' : 'text-gray-500';
+              const canSwap = showBench && swapTarget !== null;
+              return (
+                <div
+                  key={player.id}
+                  onClick={() => canSwap && handleSubstitute(player.id, swapTarget)}
+                  className={`flex items-center gap-1 rounded px-2 py-1 transition-all ${
+                    canSwap ? 'bg-gray-800 hover:bg-blue-900 ring-1 ring-blue-800/50 cursor-pointer' : 'bg-gray-800/60'
+                  }`}
+                >
+                  <span className={`text-[10px] px-1 rounded ${
+                    ['left','center','right'].includes(player.position) ? 'bg-green-800 text-green-200' :
+                    player.position === 'catcher' ? 'bg-blue-800 text-blue-200' :
+                    'bg-yellow-800 text-yellow-200'
+                  }`}>{POSITION_NAMES[player.position] || player.position}</span>
+                  <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
+                  <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
+                  <span className="flex-1" />
+                  {(() => {
+                    const bs = player.seasonStats?.batting;
+                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px]">-</span>;
+                    const avg = (bs.hits / bs.atBats).toFixed(3);
+                    return (
+                      <span className="text-[10px] text-gray-400 flex gap-1.5 shrink-0">
+                        <span className="text-blue-300">{avg}</span>
+                        <span>{bs.homeruns || 0}本</span>
+                        <span>{bs.rbis || 0}点</span>
+                      </span>
+                    );
+                  })()}
+                  <span className="text-gray-600 text-[10px] shrink-0">{f > 0 ? `疲${f}` : ''}</span>
+                  <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
+                    {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="flex gap-3 justify-center">
           <button
