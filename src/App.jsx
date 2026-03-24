@@ -43,6 +43,7 @@ import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlaye
 
 // Component imports
 import StartScreen from './components/StartScreen.jsx';
+import ManualScreen from './components/ManualScreen.jsx';
 import SaveLoadScreen from './components/SaveLoadScreen.jsx';
 import NewGameRegulationsScreen from './components/NewGameRegulationsScreen.jsx';
 import CampScreen from './components/CampScreen.jsx';
@@ -4788,9 +4789,15 @@ if (newOuts === 3) {
               console.log('✅ エディットモードでロードしました');
             }
           }}
+          onManual={() => setGameFlowState('manual')}
           hasSaveData={hasSaveData}
           saveSlots={saveSlots}
         />;
+      }
+
+      // MANUAL: ゲーム辞典
+      if (screenMode === 'start' && gameFlowState === 'manual') {
+        return <ManualScreen onBack={() => setGameFlowState('title')} />;
       }
 
       // NEW GAME: レギュレーション設定

@@ -9,7 +9,7 @@ const PHASE_NAMES = {
   tryout: 'トライアウト',
 };
 
-const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData, saveSlots = [] }) => {
+const StartScreen = ({ onNewGame, onContinue, onEdit, onManual, hasSaveData, saveSlots = [] }) => {
   const [showSlotSelect, setShowSlotSelect] = useState(false);
   const [showEditSlotSelect, setShowEditSlotSelect] = useState(false);
 
@@ -145,6 +145,13 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, hasSaveData, saveSlots = [
               }`}
             >
               EDIT
+            </button>
+
+            <button
+              onClick={onManual}
+              className="w-80 bg-yellow-700 hover:bg-yellow-600 text-white px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg"
+            >
+              MANUAL
             </button>
           </div>
         )}
