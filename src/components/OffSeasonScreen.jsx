@@ -3,7 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear } from '../season/yearProgressionSystem.js';
 
-const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, saveSlots }) => {
+const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots }) => {
   const [processing, setProcessing] = useState(false);
   const [seasonResults, setSeasonResults] = useState(null);
   const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
@@ -25,6 +25,71 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     setProcessing(true);
     try {
       const allTeams = TEAMS_DATA || {};
+
+      // チーム成績履歴を記録（年度進行前に現在のstandingsと主力を保存）
+      if (onRecordTeamHistory && seasonData.standings) {
+        const sortedStandings = [...seasonData.standings].sort((a, b) => b.winRate - a.winRate);
+        const teamRecords = sortedStandings.map((s, idx) => {
+          // 各チームの主力選手を取得
+          const team = allTeams[s.team];
+          let mvpBatter = null;
+          let mvpPitcher = null;
+          if (team?.players) {
+            const batters = team.players.filter(p => p.position !== 'pitcher' && p.seasonStats?.batting?.atBats >= 50);
+            if (batters.length > 0) {
+              mvpBatter = batters.reduce((best, p) => {
+                const ops = (p.seasonStats.batting.atBats > 0 ? p.seasonStats.batting.hits / p.seasonStats.batting.atBats : 0) + (p.seasonStats.batting.homeruns || 0) * 0.01;
+                const bestOps = (best.seasonStats.batting.atBats > 0 ? best.seasonStats.batting.hits / best.seasonStats.batting.atBats : 0) + (best.seasonStats.batting.homeruns || 0) * 0.01;
+                return ops > bestOps ? p : best;
+              });
+              if (mvpBatter) {
+                const ab = mvpBatter.seasonStats.batting.atBats;
+                mvpBatter = {
+                  name: mvpBatter.name,
+                  avg: ab > 0 ? (mvpBatter.seasonStats.batting.hits / ab).toFixed(3) : '.000',
+                  hr: mvpBatter.seasonStats.batting.homeruns || 0,
+                  rbi: mvpBatter.seasonStats.batting.rbis || 0,
+                  hits: mvpBatter.seasonStats.batting.hits || 0
+                };
+              }
+            }
+            const pitchers = team.players.filter(p => p.position === 'pitcher' && p.seasonStats?.pitching?.inningsPitched >= 10);
+            if (pitchers.length > 0) {
+              mvpPitcher = pitchers.reduce((best, p) => {
+                const score = (p.seasonStats.pitching.wins || 0) * 3 + (p.seasonStats.pitching.saves || 0) * 2 + (p.seasonStats.pitching.strikeouts || 0) * 0.1;
+                const bestScore = (best.seasonStats.pitching.wins || 0) * 3 + (best.seasonStats.pitching.saves || 0) * 2 + (best.seasonStats.pitching.strikeouts || 0) * 0.1;
+                return score > bestScore ? p : best;
+              });
+              if (mvpPitcher) {
+                const ip = mvpPitcher.seasonStats.pitching.inningsPitched || 0;
+                mvpPitcher = {
+                  name: mvpPitcher.name,
+                  wins: mvpPitcher.seasonStats.pitching.wins || 0,
+                  losses: mvpPitcher.seasonStats.pitching.losses || 0,
+                  saves: mvpPitcher.seasonStats.pitching.saves || 0,
+                  era: ip > 0 ? ((mvpPitcher.seasonStats.pitching.earnedRuns || 0) * 27 / ip).toFixed(2) : '-.--',
+                  strikeouts: mvpPitcher.seasonStats.pitching.strikeouts || 0
+                };
+              }
+            }
+          }
+          return {
+            team: s.team,
+            rank: idx + 1,
+            wins: s.wins,
+            losses: s.losses,
+            draws: s.draws || 0,
+            winRate: s.winRate,
+            mvpBatter,
+            mvpPitcher
+          };
+        });
+        onRecordTeamHistory({
+          year: seasonData.year,
+          standings: teamRecords
+        });
+      }
+
       const result = advanceToNextYear(seasonData, allTeams);
       setSeasonData(result.newSeasonData);
       Object.keys(result.updatedTeams).forEach(teamName => {

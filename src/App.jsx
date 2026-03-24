@@ -142,6 +142,7 @@ import TradeScreen from './components/TradeScreen.jsx';
       const [saveSlots, setSaveSlots] = useState([null, null, null]);
       const [hasSaveData, setHasSaveData] = useState(false);
       const [hallOfFamePlayers, setHallOfFamePlayers] = useState([]);
+      const [teamHistory, setTeamHistory] = useState([]); // 年度別チーム成績履歴
       const [draftResults, setDraftResults] = useState(null); // { draftedPlayers, nearMissPlayers }
 
       const refreshSaveSlots = () => {
@@ -190,7 +191,8 @@ import TradeScreen from './components/TradeScreen.jsx';
             managementView,
             gameFlowState,
             selectedMonth,
-            hallOfFamePlayers: hallOfFamePlayers
+            hallOfFamePlayers: hallOfFamePlayers,
+            teamHistory: teamHistory
           };
 
           // 圧縮してから保存
@@ -243,6 +245,7 @@ import TradeScreen from './components/TradeScreen.jsx';
           if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
           if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
           if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
+          if (saveData.teamHistory) setTeamHistory(saveData.teamHistory);
 
           // コンディション初期化（古いセーブデータ対応）
           initializeAllPlayersCondition();
@@ -3253,7 +3256,7 @@ if (newOuts === 3) {
             <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-3 pb-1">チーム</div>
             <SidebarButton view="teaminfo" icon="👥" label="チーム情報" />
             <SidebarButton view="trade" icon="🔄" label="トレード" />
-            <SidebarButton view="halloffame" icon="🏆" label="選手記録" color="yellow" />
+            <SidebarButton view="halloffame" icon="🏆" label="資料室" color="yellow" />
 
             <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-3 pb-1">システム</div>
             <SidebarButton view="save" icon="💾" label="セーブ＆ロード" />
@@ -4699,6 +4702,9 @@ if (newOuts === 3) {
           onAddHallOfFamePlayers={(newPlayers) => {
             setHallOfFamePlayers(prev => [...prev, ...newPlayers]);
           }}
+          onRecordTeamHistory={(historyEntry) => {
+            setTeamHistory(prev => [...prev, historyEntry]);
+          }}
         />;
         if (managementView === 'regulations_next') return <RegulationsScreen
           seasonData={seasonData}
@@ -4766,6 +4772,8 @@ if (newOuts === 3) {
         if (managementView === 'halloffame') return <HallOfFameScreen
           hallOfFamePlayers={hallOfFamePlayers}
           allTeams={TEAMS_DATA}
+          teamHistory={teamHistory}
+          seasonData={seasonData}
           onClose={() => setManagementView('dateprogress')}
         />;
         if (managementView === 'save') return <SaveLoadScreen
@@ -5270,11 +5278,11 @@ if (newOuts === 3) {
               <div className="mt-2 pt-2 border-t border-gray-700">
                 {gameStarted ? (
                   <>
-                    <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
+                    <div className="text-sm text-gray-400 mb-1">📊 試合スタッツ</div>
                     {/* 投手成績 */}
-                    <div className="bg-gray-800 rounded p-1.5 mb-1">
-                      <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
-                      <div className="text-xs">
+                    <div className="bg-gray-800 rounded p-2 mb-1">
+                      <div className="text-xs text-blue-400 mb-0.5">投手</div>
+                      <div className="text-sm">
                         {(() => {
                           const pitchers = awayTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
                           const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
@@ -5289,14 +5297,14 @@ if (newOuts === 3) {
                                 return (
                                   <div key={p.id} className="flex justify-between text-gray-300 gap-1">
                                     <span className="truncate">{p.name}</span>
-                                    <span className="text-gray-400 whitespace-nowrap text-[10px]">
+                                    <span className="text-gray-400 whitespace-nowrap text-xs">
                                       {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
                                     </span>
                                   </div>
                                 );
                               })}
                               {pitchers.length > 1 && (
-                                <div className="flex justify-between text-yellow-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
+                                <div className="flex justify-between text-yellow-400 text-xs mt-1 pt-1 border-t border-gray-700">
                                   <span>合計イニング</span>
                                   <span>{totalIP}</span>
                                 </div>
@@ -5309,7 +5317,7 @@ if (newOuts === 3) {
                   </>
                 ) : (
                   <>
-                    <div className="text-xs text-gray-400 mb-1">⚾ 先発投手</div>
+                    <div className="text-sm font-bold text-gray-300 mb-1">⚾ 予告先発</div>
                     {(() => {
                       const pitcher = awayTeam.players.find(p => p.position === 'pitcher' && p.battingOrder === 9);
                       if (!pitcher) return null;
@@ -6399,11 +6407,11 @@ if (newOuts === 3) {
               <div className="mt-2 pt-2 border-t border-gray-700">
                 {gameStarted ? (
                   <>
-                    <div className="text-xs text-gray-400 mb-1">📊 試合スタッツ</div>
+                    <div className="text-sm text-gray-400 mb-1">📊 試合スタッツ</div>
                     {/* 投手成績 */}
-                    <div className="bg-gray-800 rounded p-1.5 mb-1">
-                      <div className="text-[10px] text-blue-400 mb-0.5">投手</div>
-                      <div className="text-xs">
+                    <div className="bg-gray-800 rounded p-2 mb-1">
+                      <div className="text-xs text-blue-400 mb-0.5">投手</div>
+                      <div className="text-sm">
                         {(() => {
                           const pitchers = homeTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
                           const totalOuts = pitchers.reduce((sum, p) => sum + (p.stats?.pitching?.outs || 0), 0);
@@ -6418,14 +6426,14 @@ if (newOuts === 3) {
                                 return (
                                   <div key={p.id} className="flex justify-between text-gray-300 gap-1">
                                     <span className="truncate">{p.name}</span>
-                                    <span className="text-gray-400 whitespace-nowrap text-[10px]">
+                                    <span className="text-gray-400 whitespace-nowrap text-xs">
                                       {ip} {s.strikeouts || 0}K {s.walks || 0}BB 防{era}
                                     </span>
                                   </div>
                                 );
                               })}
                               {pitchers.length > 1 && (
-                                <div className="flex justify-between text-yellow-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
+                                <div className="flex justify-between text-yellow-400 text-xs mt-1 pt-1 border-t border-gray-700">
                                   <span>合計イニング</span>
                                   <span>{totalIP}</span>
                                 </div>
@@ -6438,7 +6446,7 @@ if (newOuts === 3) {
                   </>
                 ) : (
                   <>
-                    <div className="text-xs text-gray-400 mb-1">⚾ 先発投手</div>
+                    <div className="text-sm font-bold text-gray-300 mb-1">⚾ 予告先発</div>
                     {(() => {
                       const pitcher = homeTeam.players.find(p => p.position === 'pitcher' && p.battingOrder === 9);
                       if (!pitcher) return null;
