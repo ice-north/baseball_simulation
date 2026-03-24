@@ -16,6 +16,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
 
+  // 体力バーの色を値に応じて変える
+  const getStaminaBarColor = (value) => {
+    if (value >= 60) return 'bg-green-500';
+    if (value >= 50) return 'bg-lime-500';
+    if (value >= 40) return 'bg-yellow-400';
+    if (value >= 30) return 'bg-orange-400';
+    return 'bg-red-500';
+  };
+
   const getAbilityRank = (value) => {
     if (value >= 90) return 'S';
     if (value >= 80) return 'A';
@@ -535,17 +544,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                   <span className="text-white font-bold whitespace-nowrap">{player.name}</span>
                                   <span className="text-[10px] text-gray-300 whitespace-nowrap">{player.physical?.throws === 'left' ? '左投' : '右投'}{player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打'}</span>
                                   {/* 体力・疲労バー */}
-                                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                  <div className="flex flex-col gap-0.5 flex-1 min-w-[80px]">
                                     <div className="flex items-center gap-1">
                                       <span className="text-[8px] text-gray-400 shrink-0">体</span>
-                                      <div className="flex-1 h-1.5 bg-gray-600 rounded-full overflow-hidden min-w-0">
-                                        <div className="h-full bg-green-500 rounded-full" style={{width:`${player.physical?.bodyStamina || 50}%`}} />
+                                      <div className="flex-1 h-1.5 bg-gray-600 rounded-full overflow-hidden min-w-[30px]">
+                                        <div className={`h-full ${getStaminaBarColor(player.physical?.bodyStamina || 50)} rounded-full`} style={{width:`${player.physical?.bodyStamina || 50}%`}} />
                                       </div>
                                       <span className="text-[8px] text-gray-300 shrink-0">{player.physical?.bodyStamina || 50}</span>
                                     </div>
                                     <div className="flex items-center gap-1">
                                       <span className="text-[8px] text-gray-400 shrink-0">疲</span>
-                                      <div className="flex-1 h-1.5 bg-gray-600 rounded-full overflow-hidden min-w-0">
+                                      <div className="flex-1 h-1.5 bg-gray-600 rounded-full overflow-hidden min-w-[30px]">
                                         <div className="h-full bg-red-500 rounded-full" style={{width:`${Math.min(player.fatigue || 0, 100)}%`}} />
                                       </div>
                                       <span className="text-[8px] text-gray-300 shrink-0">{player.fatigue || 0}</span>

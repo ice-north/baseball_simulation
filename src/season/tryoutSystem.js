@@ -376,7 +376,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       power: randRangeWithVariance(32, 57),
       eye: randRangeWithVariance(35, 65),
       steal: randRangeWithVariance(30, 60),
-      speed: randRangeWithVariance(40, 70),
+      speed: randRangeWithVariance(43, 73),
       arm: randRangeWithVariance(50, 80),
       defense: randRangeWithVariance(40, 65),
       bodyStamina: randRangeWithVariance(40, 70),
@@ -396,7 +396,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       power: randRangeWithVariance(5, 29),
       eye: randRangeWithVariance(25, 50),
       steal: randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
-      speed: randRangeWithVariance(30, 55, Math.max(0, Math.floor(ageBonus * 0.5))),
+      speed: randRangeWithVariance(33, 58, Math.max(0, Math.floor(ageBonus * 0.5))),
       arm: randRangeWithVariance(40, 65),
       defense: randRangeWithVariance(40, 65),
       bodyStamina: randRangeWithVariance(40, 70),
@@ -409,19 +409,19 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     // 野手アーキタイプ: 特性なしの選手にも個性を持たせる
     const archetypes = [
       // 巧打タイプ: ミート高、パワー低
-      { meet: [50, 75], power: [12, 37], eye: [45, 75], steal: [25, 55], speed: [30, 60], arm: [25, 55], defense: [30, 60] },
+      { meet: [50, 75], power: [12, 37], eye: [45, 75], steal: [25, 55], speed: [33, 63], arm: [25, 55], defense: [30, 60] },
       // 強打タイプ: パワー高、走力低
-      { meet: [30, 55], power: [42, 67], eye: [25, 55], steal: [15, 40], speed: [20, 50], arm: [35, 65], defense: [25, 55] },
+      { meet: [30, 55], power: [42, 67], eye: [25, 55], steal: [15, 40], speed: [23, 53], arm: [35, 65], defense: [25, 55] },
       // 俊足タイプ: 走力高、パワー低
-      { meet: [35, 60], power: [12, 37], eye: [30, 60], steal: [55, 80], speed: [55, 80], arm: [25, 55], defense: [35, 65] },
+      { meet: [35, 60], power: [12, 37], eye: [30, 60], steal: [55, 80], speed: [58, 83], arm: [25, 55], defense: [35, 65] },
       // 守備タイプ: 守備高、打撃低
-      { meet: [25, 50], power: [12, 37], eye: [30, 55], steal: [25, 55], speed: [35, 65], arm: [50, 75], defense: [55, 80] },
+      { meet: [25, 50], power: [12, 37], eye: [30, 55], steal: [25, 55], speed: [38, 68], arm: [50, 75], defense: [55, 80] },
       // バランスタイプ: 平均的
-      { meet: [35, 65], power: [22, 52], eye: [30, 65], steal: [25, 60], speed: [30, 65], arm: [30, 65], defense: [30, 65] },
+      { meet: [35, 65], power: [22, 52], eye: [30, 65], steal: [25, 60], speed: [33, 68], arm: [30, 65], defense: [30, 65] },
       // 打撃特化タイプ: 打撃全般高、守備走力低
-      { meet: [45, 70], power: [37, 62], eye: [40, 70], steal: [15, 40], speed: [20, 45], arm: [25, 50], defense: [20, 45] },
+      { meet: [45, 70], power: [37, 62], eye: [40, 70], steal: [15, 40], speed: [23, 48], arm: [25, 50], defense: [20, 45] },
       // 肩力タイプ: 肩力高、ミート低
-      { meet: [25, 50], power: [27, 52], eye: [25, 55], steal: [20, 50], speed: [30, 60], arm: [60, 85], defense: [40, 70] },
+      { meet: [25, 50], power: [27, 52], eye: [25, 55], steal: [20, 50], speed: [33, 63], arm: [60, 85], defense: [40, 70] },
     ];
     const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
     normalAbilities = {
@@ -598,22 +598,26 @@ export const generatePositionFitness = (mainPosition) => {
   // メインポジションは100
   fitness[mainPosition] = 100;
 
-  // 隣接ポジションに適性を付与
+  // 隣接ポジションに適性を付与（primary=関連性高い, secondary=やや関連）
   const positionGroups = {
-    pitcher: [],
-    catcher: ['first'],
-    first: ['catcher', 'third'],
-    second: ['short', 'third'],
-    third: ['first', 'second', 'short'],
-    short: ['second', 'third'],
-    left: ['center', 'right'],
-    center: ['left', 'right'],
-    right: ['left', 'center']
+    pitcher: { primary: [], secondary: [] },
+    catcher: { primary: ['first'], secondary: [] },
+    first: { primary: ['third'], secondary: ['catcher'] },
+    second: { primary: ['short'], secondary: ['third'] },
+    third: { primary: ['first', 'short'], secondary: ['second'] },
+    short: { primary: ['second', 'third'], secondary: [] },
+    left: { primary: ['center', 'right'], secondary: [] },
+    center: { primary: ['left', 'right'], secondary: [] },
+    right: { primary: ['left', 'center'], secondary: [] }
   };
 
-  if (positionGroups[mainPosition]) {
-    positionGroups[mainPosition].forEach(adj => {
-      fitness[adj] = Math.floor(Math.random() * 30) + 60; // 60-90
+  const group = positionGroups[mainPosition];
+  if (group) {
+    group.primary.forEach(adj => {
+      fitness[adj] = Math.floor(Math.random() * 25) + 65; // 65-90
+    });
+    group.secondary.forEach(adj => {
+      fitness[adj] = Math.floor(Math.random() * 25) + 50; // 50-75
     });
   }
 
