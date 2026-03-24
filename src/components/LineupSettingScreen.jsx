@@ -11,6 +11,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [benchSortKey, setBenchSortKey] = useState(null);
   const [benchSortAsc, setBenchSortAsc] = useState(false);
   const [selectedDefensePos, setSelectedDefensePos] = useState(null);
+  const [swapSource, setSwapSource] = useState(null); // クリックで打順入れ替え用
 
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
@@ -474,16 +475,43 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             <div className="bg-gray-800 rounded-lg p-4 col-span-1">
               <h2 className="text-xl font-bold text-white mb-4">スタメン設定 ({lineup.length}/9人)</h2>
               <p className="text-sm text-gray-400 mb-2">1-8番: 野手を配置 / 9番: 投手（試合時に先発投手が入る）</p>
+              {swapSource !== null && (
+                <div className="bg-blue-900/50 border border-blue-500 rounded px-3 py-1.5 mb-2 flex items-center justify-between">
+                  <span className="text-blue-300 text-sm font-bold">{swapSource}番の入れ替え先を選択してください</span>
+                  <button onClick={() => setSwapSource(null)} className="text-gray-400 hover:text-white text-xs">キャンセル</button>
+                </div>
+              )}
               <div className="space-y-2">
                 {[1,2,3,4,5,6,7,8,9].map(order => {
                   const entry = lineup.find(e => e.battingOrder === order);
                   const player = entry ? team.players.find(p => p.id === entry.playerId) : null;
                   const isSelected = selectedBattingOrder === order;
                   const isPitcherSlot = entry?.position === 'pitcher';
+                  const isSwapSource = swapSource === order;
+                  const isSwapTarget = swapSource !== null && swapSource !== order;
+
+                  const handleSlotClick = () => {
+                    if (swapSource !== null) {
+                      // 入れ替え実行
+                      if (swapSource !== order) {
+                        handleSwapBattingOrder(swapSource, order);
+                      }
+                      setSwapSource(null);
+                    } else if (!isPitcherSlot) {
+                      setSelectedBattingOrder(order);
+                    }
+                  };
+
                   return (
-                    <div key={order} onClick={() => !isPitcherSlot && setSelectedBattingOrder(order)} className={`rounded p-3 cursor-pointer transition ${isSelected ? 'bg-blue-700 ring-2 ring-blue-400' : player ? (isPitcherSlot ? 'bg-indigo-800 hover:bg-indigo-700' : 'bg-gray-700 hover:bg-gray-600') : 'bg-gray-900 hover:bg-gray-800 border border-dashed border-gray-600'}`}>
+                    <div key={order} onClick={handleSlotClick} className={`rounded p-3 cursor-pointer transition ${
+                      isSwapSource ? 'bg-blue-700 ring-2 ring-blue-400' :
+                      isSwapTarget ? 'bg-gray-700 ring-1 ring-blue-400/50 hover:bg-blue-800' :
+                      isSelected ? 'bg-blue-700 ring-2 ring-blue-400' :
+                      player ? (isPitcherSlot ? 'bg-indigo-800 hover:bg-indigo-700' : 'bg-gray-700 hover:bg-gray-600') :
+                      'bg-gray-900 hover:bg-gray-800 border border-dashed border-gray-600'
+                    }`}>
                       <div className="flex items-center gap-3">
-                        <div className={`font-bold text-lg w-6 ${isSelected ? 'text-blue-300' : 'text-white'}`}>{order}</div>
+                        <div className={`font-bold text-lg w-6 ${isSwapSource ? 'text-blue-300' : isSelected ? 'text-blue-300' : 'text-white'}`}>{order}</div>
                         {isPitcherSlot ? (
                           <div className="flex-1 flex items-center justify-between">
                             <div>
@@ -491,12 +519,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               <span className="text-xs text-gray-500 ml-2">（試合時に先発投手が打席に立つ）</span>
                             </div>
                             <div className="flex gap-2">
-                              {order > 1 && (
-                                <button onClick={(e) => { e.stopPropagation(); handleSwapBattingOrder(order, order - 1); }} className="bg-gray-500 hover:bg-gray-400 text-white px-2 py-1 rounded text-xs">↑</button>
-                              )}
-                              {order < 9 && (
-                                <button onClick={(e) => { e.stopPropagation(); handleSwapBattingOrder(order, order + 1); }} className="bg-gray-500 hover:bg-gray-400 text-white px-2 py-1 rounded text-xs">↓</button>
-                              )}
+                              <button onClick={(e) => { e.stopPropagation(); setSwapSource(swapSource === order ? null : order); }} className={`${swapSource === order ? 'bg-blue-500' : 'bg-gray-500 hover:bg-gray-400'} text-white px-2 py-1 rounded text-xs`}>⇄</button>
                             </div>
                           </div>
                         ) : player ? (
@@ -517,12 +540,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 </div>
                               </div>
                               <div className="flex gap-2">
-                                {order > 1 && (
-                                  <button onClick={(e) => { e.stopPropagation(); handleSwapBattingOrder(order, order - 1); }} className="bg-gray-500 hover:bg-gray-400 text-white px-2 py-1 rounded text-xs">↑</button>
-                                )}
-                                {order < 9 && (
-                                  <button onClick={(e) => { e.stopPropagation(); handleSwapBattingOrder(order, order + 1); }} className="bg-gray-500 hover:bg-gray-400 text-white px-2 py-1 rounded text-xs">↓</button>
-                                )}
+                                <button onClick={(e) => { e.stopPropagation(); setSwapSource(swapSource === order ? null : order); }} className={`${swapSource === order ? 'bg-blue-500' : 'bg-gray-500 hover:bg-gray-400'} text-white px-2 py-1 rounded text-xs`} title="クリックで打順入れ替え">⇄</button>
                                 <button onClick={(e) => { e.stopPropagation(); handleRemoveFromLineup(player.id); }} className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">外す</button>
                               </div>
                             </div>

@@ -1036,35 +1036,37 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         </div>
 
         {/* 相手先発投手情報 */}
-        {opponentStarter && (
-          <div className="bg-gray-900 rounded-lg p-3 mb-3 border border-gray-700">
-            <h3 className="text-xs font-bold text-gray-400 mb-2">相手先発投手</h3>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
+        {opponentStarter && (() => {
+          const FORM_LABELS = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+          const ps = opponentStarter.seasonStats?.pitching;
+          const era = ps?.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : '-';
+          return (
+            <div className="bg-gray-900 rounded-lg p-3 mb-3 border border-gray-700">
+              <h3 className="text-xs font-bold text-gray-400 mb-2">相手先発投手</h3>
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${opponentStarter.physical?.throws === 'left' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'}`}>
                   {opponentStarter.physical?.throws === 'left' ? '左投' : '右投'}
                 </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
+                  {FORM_LABELS[opponentStarter.pitching?.form] || 'スリークォーター'}
+                </span>
                 <span className="text-white font-bold text-sm">{opponentStarter.name}</span>
+                <div className="flex gap-2 text-xs text-gray-400 ml-auto">
+                  <span>球速<span className="text-orange-300 font-bold ml-0.5">{opponentStarter.pitching?.velocity || 0}</span></span>
+                  <span>制球<span className="text-blue-300 font-bold ml-0.5">{opponentStarter.pitching?.control || 0}</span></span>
+                  <span>スタ<span className="text-green-300 font-bold ml-0.5">{opponentStarter.pitching?.stamina || 0}</span></span>
+                </div>
               </div>
-              <div className="flex gap-2 text-xs text-gray-400 ml-auto">
-                <span>球速<span className="text-orange-300 font-bold ml-0.5">{opponentStarter.pitching?.velocity || 0}</span></span>
-                <span>制球<span className="text-blue-300 font-bold ml-0.5">{opponentStarter.pitching?.control || 0}</span></span>
-                <span>スタ<span className="text-green-300 font-bold ml-0.5">{opponentStarter.pitching?.stamina || 0}</span></span>
+              <div className="text-xs text-gray-400 mt-1.5 flex gap-2 flex-wrap">
+                <span>防御率<span className="text-orange-300 font-bold ml-0.5">{era}</span></span>
+                <span><span className="text-white font-bold">{ps?.wins || 0}</span>勝</span>
+                <span><span className="text-white font-bold">{ps?.losses || 0}</span>敗</span>
+                <span><span className="text-white font-bold">{ps?.saves || 0}</span>S</span>
+                <span>{ps?.strikeouts || 0}奪三振</span>
               </div>
             </div>
-            {/* 投手シーズン成績 */}
-            {opponentStarter.seasonStats?.pitching?.games > 0 && (() => {
-              const ps = opponentStarter.seasonStats.pitching;
-              const ip = ps.inningsPitched ? (ps.inningsPitched / 3).toFixed(1) : '0.0';
-              const era = ps.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : '-';
-              return (
-                <div className="text-xs text-gray-500 mt-1.5">
-                  {ps.wins || 0}勝{ps.losses || 0}敗 防御率<span className="text-orange-300">{era}</span> {ip}回 {ps.strikeouts || 0}奪三振
-                </div>
-              );
-            })()}
-          </div>
-        )}
+          );
+        })()}
 
         {/* スタメン一覧（疲労色+簡易変更） */}
         <div className="bg-gray-900 rounded-lg p-3 mb-3">
@@ -1100,13 +1102,25 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     ['left','center','right'].includes(pos) ? 'bg-green-800 text-green-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[pos] || pos}</span>
-                  <span className={`truncate flex-1 font-bold ${getFatigueColor(player)}`}>{player.name}</span>
-                  <span className="text-gray-600 text-[10px] w-6 text-right">{f > 0 ? f : ''}</span>
+                  <span className={`truncate font-bold ${getFatigueColor(player)}`} style={{minWidth:'3em',maxWidth:'5em'}}>{player.name}</span>
+                  {(() => {
+                    const bs = player.seasonStats?.batting;
+                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px] flex-1">-</span>;
+                    const avg = (bs.hits / bs.atBats).toFixed(3);
+                    return (
+                      <span className="text-[10px] text-gray-400 flex-1 flex gap-1.5">
+                        <span className="text-blue-300">{avg}</span>
+                        <span>{bs.homeruns || 0}本</span>
+                        <span>{bs.rbis || 0}点</span>
+                      </span>
+                    );
+                  })()}
+                  <span className="text-gray-600 text-[10px] w-5 text-right">{f > 0 ? f : ''}</span>
                   <span className={CONDITION_COLORS[cond]} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
                   {pos !== 'pitcher' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setSwapTarget(order); setShowBench(true); }}
-                      className="text-gray-600 hover:text-blue-400 text-[10px] ml-1"
+                      className="text-gray-600 hover:text-blue-400 text-[10px] ml-0.5"
                       title="控え選手と交代"
                     >↔</button>
                   )}
@@ -1138,7 +1152,19 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                       player.position === 'catcher' ? 'bg-blue-800 text-blue-200' :
                       'bg-yellow-800 text-yellow-200'
                     }`}>{POSITION_NAMES[player.position] || player.position}</span>
-                    <span className={`truncate flex-1 font-bold ${getFatigueColor(player)}`}>{player.name}</span>
+                    <span className={`truncate font-bold ${getFatigueColor(player)}`} style={{minWidth:'3em',maxWidth:'5em'}}>{player.name}</span>
+                    {(() => {
+                      const bs = player.seasonStats?.batting;
+                      if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px] flex-1">-</span>;
+                      const avg = (bs.hits / bs.atBats).toFixed(3);
+                      return (
+                        <span className="text-[10px] text-gray-400 flex-1 flex gap-1.5">
+                          <span className="text-blue-300">{avg}</span>
+                          <span>{bs.homeruns || 0}本</span>
+                          <span>{bs.rbis || 0}点</span>
+                        </span>
+                      );
+                    })()}
                     <span className="text-gray-600 text-[10px]">{f > 0 ? `疲${f}` : ''}</span>
                     <span className={CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}>
                       {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
