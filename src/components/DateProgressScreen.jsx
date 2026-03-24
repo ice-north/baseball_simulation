@@ -1125,12 +1125,13 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     ['left','center','right'].includes(pos) ? 'bg-green-800 text-green-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[pos] || pos}</span>
+                  <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
+                  <span className={`shrink-0 ${CONDITION_COLORS[cond]}`} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
+                  <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
                   {pos !== 'pitcher' && (() => {
                     const subs = getSubPositions(player, pos);
                     return subs.length > 0 ? <span className="text-[9px]">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
                   })()}
-                  <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
-                  <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
                   <span className="flex-1" />
                   {(() => {
                     const bs = player.seasonStats?.batting;
@@ -1144,8 +1145,6 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                       </span>
                     );
                   })()}
-                  <span className="text-gray-600 text-[10px] w-5 text-right shrink-0">{f > 0 ? f : ''}</span>
-                  <span className={`shrink-0 ${CONDITION_COLORS[cond]}`} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
                 </div>
               );
             })}
@@ -1187,12 +1186,15 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     player.position === 'catcher' ? 'bg-blue-800 text-blue-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[player.position] || player.position}</span>
+                  <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
+                  <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
+                    {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
+                  </span>
+                  <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
                   {(() => {
                     const subs = getSubPositions(player, player.position);
                     return subs.length > 0 ? <span className="text-[9px]">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
                   })()}
-                  <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
-                  <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
                   <span className="flex-1" />
                   {(() => {
                     const bs = player.seasonStats?.batting;
@@ -1206,10 +1208,6 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                       </span>
                     );
                   })()}
-                  <span className="text-gray-600 text-[10px] shrink-0">{f > 0 ? `疲${f}` : ''}</span>
-                  <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
-                    {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
-                  </span>
                 </div>
               );
             })}
