@@ -484,7 +484,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             {/* 左側: スタメン (1/3) */}
             <div className="bg-gray-800 rounded-lg p-4 col-span-1">
               <h2 className="text-xl font-bold text-white mb-4">スタメン設定 ({lineup.length}/9人)</h2>
-              <p className="text-sm text-gray-400 mb-2">1-8番: 野手を配置 / 9番: 投手 / タップ2回で打順入替</p>
+              <p className="text-sm text-gray-300 mb-2">1-8番: 野手を配置 / 9番: 投手 / タップ2回で打順入替</p>
               <div className="space-y-2">
                 {[1,2,3,4,5,6,7,8,9].map(order => {
                   const entry = lineup.find(e => e.battingOrder === order);
@@ -524,7 +524,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           <div className="flex-1 flex items-center justify-between">
                             <div>
                               <span className="text-indigo-300 font-bold">投手</span>
-                              <span className="text-xs text-gray-500 ml-2">（試合時に先発投手が打席に立つ）</span>
+                              <span className="text-xs text-gray-400 ml-2">（試合時に先発投手が打席に立つ）</span>
                             </div>
                           </div>
                         ) : player ? (
@@ -533,26 +533,28 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               <div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-white font-bold">{player.name}</span>
-                                  <span className="text-[10px] text-gray-500">{player.physical?.throws === 'left' ? '左投' : '右投'}{player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打'}</span>
+                                  <span className="text-[10px] text-gray-300">{player.physical?.throws === 'left' ? '左投' : '右投'}{player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打'}</span>
                                   {/* 体力・疲労バー */}
-                                  <div className="flex flex-col gap-0.5 w-16">
+                                  <div className="flex flex-col gap-0.5 w-28">
                                     <div className="flex items-center gap-1">
-                                      <span className="text-[8px] text-gray-500 w-3">体</span>
-                                      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                      <span className="text-[8px] text-gray-400 w-3">体</span>
+                                      <div className="flex-1 h-1.5 bg-gray-600 rounded-full overflow-hidden">
                                         <div className="h-full bg-green-500 rounded-full" style={{width:`${player.physical?.bodyStamina || 50}%`}} />
                                       </div>
-                                      <span className="text-[8px] text-gray-500 w-5 text-right">{player.physical?.bodyStamina || 50}</span>
+                                      <span className="text-[8px] text-gray-300 w-5 text-right">{player.physical?.bodyStamina || 50}</span>
+                                      <span className="text-[8px] text-gray-400 w-3 text-center">回</span>
+                                      <span className="text-[8px] text-gray-300 w-4 text-right">{player.physical?.recovery || 50}</span>
                                     </div>
                                     <div className="flex items-center gap-1">
-                                      <span className="text-[8px] text-gray-500 w-3">疲</span>
-                                      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                      <span className="text-[8px] text-gray-400 w-3">疲</span>
+                                      <div className="flex-1 h-1.5 bg-gray-600 rounded-full overflow-hidden">
                                         <div className="h-full bg-red-500 rounded-full" style={{width:`${Math.min(player.fatigue || 0, 100)}%`}} />
                                       </div>
-                                      <span className="text-[8px] text-gray-500 w-5 text-right">{player.fatigue || 0}</span>
+                                      <span className="text-[8px] text-gray-300 w-5 text-right">{player.fatigue || 0}</span>
                                     </div>
                                   </div>
                                 </div>
-                                <div className="text-xs text-gray-400 flex items-center gap-2">
+                                <div className="text-xs text-gray-300 flex items-center gap-2">
                                   <select value={entry.position} onChange={(e) => { e.stopPropagation(); handleChangePosition(order, e.target.value); }} className="bg-gray-600 text-white rounded px-2 py-0.5 text-xs" onClick={(e) => e.stopPropagation()}>
                                     <option value="pitcher">投手</option><option value="catcher">捕手</option><option value="first">一塁</option><option value="second">二塁</option><option value="third">三塁</option><option value="short">遊撃</option><option value="left">左翼</option><option value="center">中堅</option><option value="right">右翼</option>
                                   </select>
@@ -569,7 +571,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               </div>
                             </div>
                             <div className="text-xs mt-1 flex gap-2">
-                              {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0},{label:'回',value:player.physical?.recovery||50}].map(stat => {
+                              {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0}].map(stat => {
                                 const rank = getAbilityRank(stat.value);
                                 return <span key={stat.label} className={getRankColor(rank)}>{stat.label}{stat.value}</span>;
                               })}
@@ -579,7 +581,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               if (!bs || !bs.atBats) return null;
                               const avg = bs.atBats > 0 ? (bs.hits / bs.atBats).toFixed(3) : '.000';
                               return (
-                                <div className="text-[10px] mt-0.5 text-gray-300">
+                                <div className="text-[10px] mt-0.5 text-gray-200">
                                   打率<span className="text-blue-300 font-bold ml-0.5">{avg}</span>
                                   <span className="ml-1.5">{bs.homeruns || 0}本</span>
                                   <span className="ml-1.5">{bs.rbis || 0}打点</span>
@@ -589,7 +591,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                             })()}
                           </div>
                         ) : (
-                          <div className="text-gray-500 italic">未設定（クリックして選手を追加）</div>
+                          <div className="text-gray-400 italic">未設定（クリックして選手を追加）</div>
                         )}
                       </div>
                     </div>
