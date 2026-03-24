@@ -968,6 +968,19 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
   const starterIds = new Set(lineup.map(e => e.playerId));
   const benchFielders = (userTeam?.players || []).filter(p => !starterIds.has(p.id) && p.position !== 'pitcher');
 
+  // サブポジション取得（適性80以上）
+  const getSubPositions = (player, mainPosition) => {
+    if (!player?.positionFitness || mainPosition === 'pitcher') return [];
+    const allPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
+    return allPositions
+      .filter(pos => pos !== mainPosition && (player.positionFitness[pos] ?? 0) >= 80)
+      .map(pos => {
+        const fitness = player.positionFitness[pos] ?? 0;
+        const color = fitness >= 100 ? 'text-white' : fitness >= 90 ? 'text-yellow-400' : 'text-orange-400';
+        return { label: POSITION_NAMES[pos], color };
+      });
+  };
+
   // 疲労色
   const getFatigueColor = (player) => {
     const f = player.fatigue || 0;
@@ -1112,6 +1125,10 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     ['left','center','right'].includes(pos) ? 'bg-green-800 text-green-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[pos] || pos}</span>
+                  {pos !== 'pitcher' && (() => {
+                    const subs = getSubPositions(player, pos);
+                    return subs.length > 0 ? <span className="text-[9px]">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
+                  })()}
                   <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
                   <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
                   <span className="flex-1" />
@@ -1170,6 +1187,10 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     player.position === 'catcher' ? 'bg-blue-800 text-blue-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[player.position] || player.position}</span>
+                  {(() => {
+                    const subs = getSubPositions(player, player.position);
+                    return subs.length > 0 ? <span className="text-[9px]">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
+                  })()}
                   <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
                   <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
                   <span className="flex-1" />

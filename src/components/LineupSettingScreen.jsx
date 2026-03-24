@@ -373,9 +373,19 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
     return (
       <tr
-        className={`border-b border-gray-700 cursor-pointer transition ${isInLineup ? 'opacity-40' : 'hover:bg-gray-600'}`}
+        className={`border-b border-gray-700 cursor-pointer transition ${isInLineup ? 'opacity-40' : swapSource !== null ? 'hover:bg-blue-900' : 'hover:bg-gray-600'}`}
         onClick={() => {
           if (isInLineup) return;
+          // swapSource が設定されている場合 → スタメンと控えを入れ替え
+          if (swapSource !== null) {
+            const entry = lineup.find(e => e.battingOrder === swapSource);
+            if (entry && entry.position !== 'pitcher') {
+              entry.playerId = player.id;
+              setSwapSource(null);
+              setUpdateTrigger(prev => prev + 1);
+            }
+            return;
+          }
           // 1-8番が選択されている場合は、投手でも野手としてスタメンに追加
           if (selectedBattingOrder && selectedBattingOrder >= 1 && selectedBattingOrder <= 8) {
             handleAddToLineup(player.id);
@@ -581,7 +591,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             <div className="bg-gray-800 rounded-lg p-4 col-span-2">
               <h2 className="text-lg font-bold text-white mb-2">
                 控え選手 ({benchPlayers.length}人)
-                {selectedBattingOrder && <span className="text-blue-400 text-sm ml-2">→ {selectedBattingOrder}番に追加</span>}
+                {swapSource !== null
+                  ? <span className="text-blue-400 text-sm ml-2">→ {swapSource}番と入れ替え</span>
+                  : selectedBattingOrder && <span className="text-blue-400 text-sm ml-2">→ {selectedBattingOrder}番に追加</span>
+                }
               </h2>
               <p className="text-xs text-gray-400 mb-2">クリックでスタメンに追加（投手は投手枠を交換）/ ヘッダークリックでソート</p>
               <div className="overflow-y-auto max-h-[700px]">
