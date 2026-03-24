@@ -475,12 +475,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             <div className="bg-gray-800 rounded-lg p-4 col-span-1">
               <h2 className="text-xl font-bold text-white mb-4">スタメン設定 ({lineup.length}/9人)</h2>
               <p className="text-sm text-gray-400 mb-2">1-8番: 野手を配置 / 9番: 投手 / タップ2回で打順入替</p>
-              {swapSource !== null && (
-                <div className="bg-blue-900/50 border border-blue-500 rounded px-3 py-1.5 mb-2 flex items-center justify-between">
-                  <span className="text-blue-300 text-sm font-bold">{swapSource}番の入れ替え先をタップ</span>
-                  <button onClick={() => setSwapSource(null)} className="text-gray-400 hover:text-white text-xs">キャンセル</button>
-                </div>
-              )}
               <div className="space-y-2">
                 {[1,2,3,4,5,6,7,8,9].map(order => {
                   const entry = lineup.find(e => e.battingOrder === order);
@@ -527,7 +521,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
                               <div>
-                                <div className="text-white font-bold">{player.name}</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-bold">{player.name}</span>
+                                  <span className="text-[10px] text-gray-500">{player.physical?.throws === 'left' ? '左投' : '右投'}{player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打'}</span>
+                                </div>
                                 <div className="text-xs text-gray-400 flex items-center gap-2">
                                   <select value={entry.position} onChange={(e) => { e.stopPropagation(); handleChangePosition(order, e.target.value); }} className="bg-gray-600 text-white rounded px-2 py-0.5 text-xs" onClick={(e) => e.stopPropagation()}>
                                     <option value="pitcher">投手</option><option value="catcher">捕手</option><option value="first">一塁</option><option value="second">二塁</option><option value="third">三塁</option><option value="short">遊撃</option><option value="left">左翼</option><option value="center">中堅</option><option value="right">右翼</option>
