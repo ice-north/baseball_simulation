@@ -4879,9 +4879,9 @@ if (newOuts === 3) {
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
-          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next'].includes(managementView) && <Sidebar />}
+          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'edit'].includes(managementView) && <Sidebar />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next'].includes(managementView) ? 'ml-56' : ''}>
+          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'edit'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
               <div className="p-2">
           {/* 管理画面へボタン（采配モード中は非表示） */}
