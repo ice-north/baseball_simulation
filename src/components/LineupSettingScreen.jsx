@@ -534,6 +534,23 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 <div className="flex items-center gap-2">
                                   <span className="text-white font-bold">{player.name}</span>
                                   <span className="text-[10px] text-gray-500">{player.physical?.throws === 'left' ? '左投' : '右投'}{player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打'}</span>
+                                  {/* 体力・疲労バー */}
+                                  <div className="flex flex-col gap-0.5 w-16">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[8px] text-gray-500 w-3">体</span>
+                                      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-green-500 rounded-full" style={{width:`${player.physical?.bodyStamina || 50}%`}} />
+                                      </div>
+                                      <span className="text-[8px] text-gray-500 w-5 text-right">{player.physical?.bodyStamina || 50}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[8px] text-gray-500 w-3">疲</span>
+                                      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-red-500 rounded-full" style={{width:`${Math.min(player.fatigue || 0, 100)}%`}} />
+                                      </div>
+                                      <span className="text-[8px] text-gray-500 w-5 text-right">{player.fatigue || 0}</span>
+                                    </div>
+                                  </div>
                                 </div>
                                 <div className="text-xs text-gray-400 flex items-center gap-2">
                                   <select value={entry.position} onChange={(e) => { e.stopPropagation(); handleChangePosition(order, e.target.value); }} className="bg-gray-600 text-white rounded px-2 py-0.5 text-xs" onClick={(e) => e.stopPropagation()}>
@@ -552,16 +569,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               </div>
                             </div>
                             <div className="text-xs mt-1 flex gap-2">
-                              {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0},{label:'体',value:player.physical?.bodyStamina||50},{label:'回',value:player.physical?.recovery||50}].map(stat => {
+                              {[{label:'ミ',value:player.batting?.meet||0},{label:'パ',value:player.batting?.power||0},{label:'走',value:player.physical?.speed||0},{label:'肩',value:player.physical?.arm||0},{label:'守',value:player.fielding?.defense||0},{label:'回',value:player.physical?.recovery||50}].map(stat => {
                                 const rank = getAbilityRank(stat.value);
                                 return <span key={stat.label} className={getRankColor(rank)}>{stat.label}{stat.value}</span>;
                               })}
-                              {(() => {
-                                const f = player.fatigue || 0;
-                                if (f === 0) return null;
-                                const color = f >= 80 ? 'text-red-400' : f >= 50 ? 'text-orange-400' : f >= 20 ? 'text-yellow-400' : 'text-green-400';
-                                return <span className={color}>疲{f}</span>;
-                              })()}
                             </div>
                             {(() => {
                               const bs = player.seasonStats?.batting;
