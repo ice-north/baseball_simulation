@@ -294,7 +294,34 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span className="text-blue-400 text-sm">📅</span>
                 </div>
                 <span>{selectedMonth}月</span>
-                <span className="text-sm font-normal text-gray-500">スケジュール</span>
+                {(() => {
+                  const monthGames = calendarCells
+                    .filter(c => c.day !== null)
+                    .flatMap(c => c.games)
+                    .filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
+                  if (monthGames.length === 0) return null;
+                  let mWins = 0, mLosses = 0, mDraws = 0;
+                  monthGames.forEach(g => {
+                    const isHome = g.home === userTeamName;
+                    const hw = g.result.homeScore > g.result.awayScore;
+                    const aw = g.result.awayScore > g.result.homeScore;
+                    const won = isHome ? hw : aw;
+                    const lost = isHome ? aw : hw;
+                    if (won) mWins++;
+                    else if (lost) mLosses++;
+                    else mDraws++;
+                  });
+                  return (
+                    <span className="text-sm font-bold ml-1">
+                      <span className="text-green-400">{mWins}勝</span>
+                      <span className="text-red-400 ml-1">{mLosses}敗</span>
+                      {mDraws > 0 && <span className="text-gray-400 ml-1">{mDraws}分</span>}
+                      <span className="text-gray-300 ml-1.5 font-normal text-xs">
+                        (.{((mWins + mLosses) > 0 ? (mWins / (mWins + mLosses)).toFixed(3).slice(2) : '---')})
+                      </span>
+                    </span>
+                  );
+                })()}
               </h2>
               <div className="flex gap-1">
                 <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700/80 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-95 border border-gray-600/30">◀</button>
