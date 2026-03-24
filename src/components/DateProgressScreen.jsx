@@ -1084,6 +1084,169 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               }
             }
 
+            // === 追加トピック ===
+
+            // 試合結果からの追加トピック
+            recentResults.forEach(r => {
+              if (!r.result || r.result.cancelled) return;
+              const hs = r.result.homeScore;
+              const as = r.result.awayScore;
+              const total = hs + as;
+              const diff = Math.abs(hs - as);
+              // 乱打戦（両チーム合計15点以上）
+              if (total >= 15) {
+                topics.push({ icon: '🎆', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は合計${total}点の乱打戦`, color: 'text-orange-300' });
+              }
+              // 投手戦（両チーム合計2点以下）
+              if (total <= 2 && total > 0) {
+                topics.push({ icon: '🧊', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は${hs}-${as}の緊迫した投手戦`, color: 'text-blue-300' });
+              }
+              // 逆転勝ち風（ホームが僅差で勝利、3点差以内）
+              if (hs > as && diff >= 2 && diff <= 3 && hs >= 5) {
+                topics.push({ icon: '🔄', text: `${getTeamAbbreviation(r.home)}が終盤の粘りで逆転勝利`, color: 'text-green-400' });
+              }
+              // 引き分け
+              if (hs === as) {
+                topics.push({ icon: '🤝', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は${hs}-${as}の引き分け`, color: 'text-gray-300' });
+              }
+            });
+
+            // チーム連勝・連敗（直近の試合結果から算出）
+            allTeamNames.forEach(tn => {
+              const abbr = getTeamAbbreviation(tn);
+              const teamResults = (seasonData.results || []).filter(g => g.result && !g.result.cancelled && (g.home === tn || g.away === tn));
+              if (teamResults.length >= 5) {
+                let streak = 0;
+                let streakType = null;
+                for (let i = teamResults.length - 1; i >= 0; i--) {
+                  const g = teamResults[i];
+                  const isHome = g.home === tn;
+                  const won = isHome ? g.result.homeScore > g.result.awayScore : g.result.awayScore > g.result.homeScore;
+                  const lost = isHome ? g.result.homeScore < g.result.awayScore : g.result.awayScore < g.result.homeScore;
+                  if (streakType === null) {
+                    streakType = won ? 'win' : lost ? 'loss' : null;
+                    if (!streakType) break;
+                    streak = 1;
+                  } else if ((streakType === 'win' && won) || (streakType === 'loss' && lost)) {
+                    streak++;
+                  } else {
+                    break;
+                  }
+                }
+                if (streakType === 'win' && streak >= 5) {
+                  topics.push({ icon: '🔥', text: `${abbr}が破竹の${streak}連勝中！`, color: 'text-red-400' });
+                }
+                if (streakType === 'loss' && streak >= 5) {
+                  topics.push({ icon: '📉', text: `${abbr}が${streak}連敗と苦しい展開`, color: 'text-gray-400' });
+                }
+              }
+            });
+
+            // 個人成績の追加トピック
+            allPlayers.forEach(p => {
+              const bs = p.seasonStats?.batting;
+              const ps = p.seasonStats?.pitching;
+              const abbr = getTeamAbbreviation(p.teamName);
+
+              // 打点王争い（RBI 30以上）
+              if ((bs?.rbis || 0) >= 30) {
+                topics.push({ icon: '💪', text: `${abbr}${p.name}が${bs.rbis}打点と打点を量産`, color: 'text-orange-400' });
+              }
+              // 盗塁王争い（盗塁15以上）
+              if ((bs?.stolenBases || 0) >= 15) {
+                topics.push({ icon: '💨', text: `${abbr}${p.name}が${bs.stolenBases}盗塁、俊足が光る`, color: 'text-green-300' });
+              }
+              // 低打率の主力（規定打席到達で.200未満）
+              if (bs?.atBats >= 50 && bs.hits / bs.atBats < 0.200) {
+                topics.push({ icon: '😰', text: `${abbr}${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}と深刻な不振`, color: 'text-gray-400' });
+              }
+              // 二桁安打ペース（50安打到達）
+              if ((bs?.hits || 0) > 0 && ((bs.hits) === 50 || (bs.hits) === 100 || (bs.hits) === 150)) {
+                topics.push({ icon: '📊', text: `${abbr}${p.name}がシーズン${bs.hits}安打到達`, color: 'text-blue-300' });
+              }
+              // 高出塁率（OBP .420以上）
+              if (bs?.atBats >= 30) {
+                const pa = bs.atBats + (bs.walks || 0);
+                const obp = (bs.hits + (bs.walks || 0)) / pa;
+                if (obp >= 0.420) {
+                  topics.push({ icon: '👁️', text: `${abbr}${p.name}の出塁率${obp.toFixed(3)}は驚異的`, color: 'text-teal-400' });
+                }
+              }
+              // 三振が多い打者（50三振以上）
+              if ((bs?.strikeouts || 0) >= 50) {
+                topics.push({ icon: '🌬️', text: `${abbr}${p.name}が${bs.strikeouts}三振、粗さが目立つ`, color: 'text-gray-400' });
+              }
+
+              // 投手: 防御率1点台（規定投球回以上）
+              if (ps && (ps.inningsPitched || 0) >= 30) {
+                const era = ((ps.earnedRuns || 0) * 27) / ps.inningsPitched;
+                if (era <= 1.99 && era >= 0) {
+                  topics.push({ icon: '🎯', text: `${abbr}${p.name}が防御率${era.toFixed(2)}と圧巻`, color: 'text-emerald-400' });
+                }
+                // 防御率5点台以上で炎上中
+                if (era >= 5.00 && ps.games >= 5) {
+                  topics.push({ icon: '🚒', text: `${abbr}${p.name}が防御率${era.toFixed(2)}と炎上中`, color: 'text-red-300' });
+                }
+              }
+              // セーブ数（5, 10, 15, 20, 25, 30の節目）
+              const sv = ps?.saves || 0;
+              if (sv > 0 && (sv === 5 || sv === 10 || sv === 15 || sv === 20 || sv === 25 || sv === 30)) {
+                topics.push({ icon: '🔒', text: `${abbr}${p.name}が${sv}セーブ到達、守護神の仕事`, color: 'text-indigo-400' });
+              }
+              // QS率が高い先発（QS 5回以上）
+              if ((ps?.qualityStarts || 0) >= 5) {
+                topics.push({ icon: '📐', text: `${abbr}${p.name}がQS${ps.qualityStarts}回、安定感抜群`, color: 'text-sky-400' });
+              }
+
+              // ベテランの活躍（35歳以上で打率.280+）
+              if (p.age >= 35 && bs?.atBats >= 20 && bs.hits / bs.atBats >= 0.280) {
+                topics.push({ icon: '🫡', text: `${p.age}歳${abbr}${p.name}、衰え知らずの活躍`, color: 'text-amber-400' });
+              }
+              // 二塁打量産（10本以上）
+              if ((bs?.doubles || 0) >= 10) {
+                topics.push({ icon: '↗️', text: `${abbr}${p.name}が${bs.doubles}二塁打、広角打法が冴える`, color: 'text-lime-400' });
+              }
+            });
+
+            // 順位争い追加トピック
+            if (standings.length >= 3) {
+              const last = standings[standings.length - 1];
+              const secondLast = standings[standings.length - 2];
+              const lastGb = ((secondLast.wins - last.wins) - (secondLast.losses - last.losses)) / 2;
+              if (lastGb <= 1.0 && lastGb >= 0 && (last.gamesPlayed || 0) >= 10) {
+                topics.push({ icon: '🏳️', text: `${getTeamAbbreviation(last.team)}と${getTeamAbbreviation(secondLast.team)}が最下位争い`, color: 'text-gray-400' });
+              }
+              // Aクラス/Bクラスの境界（3位と4位の差が僅差）
+              if (standings.length >= 4) {
+                const third = standings[2];
+                const fourth = standings[3];
+                const csGb = ((third.wins - fourth.wins) - (third.losses - fourth.losses)) / 2;
+                if (csGb <= 1.5 && csGb >= 0 && (third.gamesPlayed || 0) >= 10) {
+                  topics.push({ icon: '🏁', text: `${getTeamAbbreviation(third.team)}と${getTeamAbbreviation(fourth.team)}がAクラス争い`, color: 'text-yellow-300' });
+                }
+              }
+              // 首位独走（2位に5ゲーム差以上）
+              if (standings.length >= 2) {
+                const first = standings[0];
+                const second = standings[1];
+                const topGb = ((first.wins - second.wins) - (first.losses - second.losses)) / 2;
+                if (topGb >= 5 && (first.gamesPlayed || 0) >= 15) {
+                  topics.push({ icon: '🏇', text: `${getTeamAbbreviation(first.team)}が${topGb}ゲーム差で首位独走`, color: 'text-yellow-400' });
+                }
+              }
+            }
+
+            // チーム勝率トピック
+            standings.forEach(s => {
+              const abbr = getTeamAbbreviation(s.team);
+              if ((s.gamesPlayed || 0) >= 20 && (s.winRate || 0) >= 0.700) {
+                topics.push({ icon: '🏆', text: `${abbr}が勝率${s.winRate.toFixed(3)}の驚異的ペース`, color: 'text-yellow-400' });
+              }
+              if ((s.gamesPlayed || 0) >= 20 && (s.winRate || 0) <= 0.300) {
+                topics.push({ icon: '⛈️', text: `${abbr}が勝率${s.winRate.toFixed(3)}と苦しいシーズン`, color: 'text-gray-400' });
+              }
+            });
+
             // 重複排除してシャッフル、最大5件表示
             const seen = new Set();
             const unique = topics.filter(t => {
@@ -1097,7 +1260,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               const ha = (a.text.length * 17 + seed) % 97;
               const hb = (b.text.length * 17 + seed) % 97;
               return ha - hb;
-            }).slice(0, 5);
+            }).slice(0, 6);
 
             if (shuffled.length === 0) return null;
             return (
