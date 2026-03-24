@@ -5,6 +5,7 @@ import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
+import { POSITION_NAMES } from '../utils/constants.js';
 
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
@@ -917,93 +918,259 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       </div>
 
       {/* 試合選択モーダル */}
-      {showGameChoiceModal && (() => {
-        const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
-        const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
-        const opponentName = userGame ? (userGame.home === userTeamName ? userGame.away : userGame.home) : '';
-        const isHome = userGame ? userGame.home === userTeamName : true;
-        const userTeam = TEAMS_DATA[userTeamName];
-        const opponentTeam = TEAMS_DATA[opponentName];
+      {showGameChoiceModal && <PreGameModal
+        seasonData={seasonData}
+        userTeamName={userTeamName}
+        formatDate={formatDate}
+        getStartingPitcher={getStartingPitcher}
+        handleGameChoice={handleGameChoice}
+        setShowGameChoiceModal={setShowGameChoiceModal}
+      />}
+    </div>
+  );
+};
 
-        // スタメン選手のコンディション取得
-        const getStarters = (team) => {
-          if (!team?.players) return [];
-          const settings = team.lineupSettings;
-          if (settings?.battingOrder?.length > 0) {
-            return settings.battingOrder
-              .sort((a, b) => a.battingOrder - b.battingOrder)
-              .map(entry => team.players.find(p => p.id === entry.playerId))
-              .filter(Boolean);
-          }
-          return team.players
-            .filter(p => p.battingOrder > 0 && p.battingOrder <= 9)
-            .sort((a, b) => a.battingOrder - b.battingOrder);
-        };
+/** 試合前モーダル：スタメン簡易変更・疲労色・相手投手情報 */
+const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher, handleGameChoice, setShowGameChoiceModal }) => {
+  const [swapTarget, setSwapTarget] = useState(null); // 打順入れ替え用
+  const [, setTick] = useState(0); // 再レンダリング用
+  const [showBench, setShowBench] = useState(false); // 控え選手表示
 
-        const userStarters = getStarters(userTeam);
+  const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+  const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
+  const opponentName = userGame ? (userGame.home === userTeamName ? userGame.away : userGame.home) : '';
+  const isHome = userGame ? userGame.home === userTeamName : true;
+  const userTeam = TEAMS_DATA[userTeamName];
+  const opponentTeam = TEAMS_DATA[opponentName];
 
-        return (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-xl w-full mx-4 shadow-2xl border border-gray-600/50">
-              <h2 className="text-xl font-bold text-white text-center mb-4">
-                {formatDate(seasonData.currentDate)} の試合
-              </h2>
+  // スタメン取得
+  const getStarters = (team) => {
+    if (!team?.players) return [];
+    const settings = team.lineupSettings;
+    if (settings?.battingOrder?.length > 0) {
+      return settings.battingOrder
+        .sort((a, b) => a.battingOrder - b.battingOrder)
+        .map(entry => {
+          const player = team.players.find(p => p.id === entry.playerId);
+          return player ? { ...player, _position: entry.position, _battingOrder: entry.battingOrder } : null;
+        })
+        .filter(Boolean);
+    }
+    return team.players
+      .filter(p => p.battingOrder > 0 && p.battingOrder <= 9)
+      .sort((a, b) => a.battingOrder - b.battingOrder);
+  };
 
-              <div className="flex items-center justify-center gap-6 mb-5">
-                <div className="text-center">
-                  <div className={`font-bold text-lg ${isHome ? 'text-blue-400' : 'text-red-400'}`}>
-                    {isHome ? '🏠' : '✈️'} {userTeamName}
-                  </div>
-                </div>
-                <div className="text-2xl text-gray-500 font-bold">VS</div>
-                <div className="text-center">
-                  <div className={`font-bold text-lg ${!isHome ? 'text-blue-400' : 'text-red-400'}`}>
-                    {!isHome ? '🏠' : '✈️'} {opponentName}
-                  </div>
-                </div>
-              </div>
+  const userStarters = getStarters(userTeam);
+  const lineup = userTeam?.lineupSettings?.battingOrder || [];
 
-              {/* スタメンコンディション一覧 */}
-              <div className="bg-gray-900 rounded-lg p-3 mb-5">
-                <h3 className="text-sm font-bold text-gray-400 mb-2">スタメン コンディション</h3>
-                <div className="grid grid-cols-3 gap-1 text-xs">
-                  {userStarters.map((player, i) => {
-                    const cond = player.condition ?? CONDITION_LEVELS.NORMAL;
-                    return (
-                      <div key={player.id} className="flex items-center gap-1 bg-gray-800 rounded px-2 py-1">
-                        <span className="text-gray-500 w-4">{i + 1}</span>
-                        <span className="text-white truncate flex-1">{player.name}</span>
-                        <span className={CONDITION_COLORS[cond]}>{CONDITION_ICONS[cond]}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+  // 控え野手（スタメンに入っていない野手）
+  const starterIds = new Set(lineup.map(e => e.playerId));
+  const benchFielders = (userTeam?.players || []).filter(p => !starterIds.has(p.id) && p.position !== 'pitcher');
 
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => handleGameChoice('manage')}
-                  className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg shadow-lg shadow-green-900/30 active:scale-95"
-                >
-                  試合采配
-                </button>
-                <button
-                  onClick={() => handleGameChoice('skip')}
-                  className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg active:scale-95"
-                >
-                  試合スキップ
-                </button>
-              </div>
-              <button
-                onClick={() => setShowGameChoiceModal(false)}
-                className="mt-3 w-full text-center text-gray-500 hover:text-gray-300 text-sm transition"
-              >
-                キャンセル
-              </button>
+  // 疲労色
+  const getFatigueColor = (player) => {
+    const f = player.fatigue || 0;
+    if (f >= 80) return 'text-red-400';
+    if (f >= 60) return 'text-yellow-400';
+    if (f >= 40) return 'text-green-400';
+    return 'text-white';
+  };
+
+  // 打順入れ替え
+  const handleSwap = (order) => {
+    if (swapTarget === null) {
+      setSwapTarget(order);
+    } else {
+      if (swapTarget !== order) {
+        const entry1 = lineup.find(e => e.battingOrder === swapTarget);
+        const entry2 = lineup.find(e => e.battingOrder === order);
+        if (entry1 && entry2) {
+          entry1.battingOrder = order;
+          entry2.battingOrder = swapTarget;
+          lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+        }
+      }
+      setSwapTarget(null);
+      setTick(t => t + 1);
+    }
+  };
+
+  // 控え選手とスタメン選手を入れ替え
+  const handleSubstitute = (benchPlayerId, starterOrder) => {
+    const starterEntry = lineup.find(e => e.battingOrder === starterOrder);
+    if (starterEntry && starterEntry.position !== 'pitcher') {
+      const benchPlayer = userTeam.players.find(p => p.id === benchPlayerId);
+      if (benchPlayer) {
+        starterEntry.playerId = benchPlayerId;
+        // ポジションはそのまま維持
+        setSwapTarget(null);
+        setShowBench(false);
+        setTick(t => t + 1);
+      }
+    }
+  };
+
+  // 相手先発投手情報
+  const opponentStarter = getStartingPitcher(opponentName);
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto">
+      <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-5 max-w-lg w-full mx-4 shadow-2xl border border-gray-600/50 my-4">
+        <h2 className="text-xl font-bold text-white text-center mb-3">
+          {formatDate(seasonData.currentDate)} の試合
+        </h2>
+
+        <div className="flex items-center justify-center gap-6 mb-4">
+          <div className="text-center">
+            <div className={`font-bold text-lg ${isHome ? 'text-blue-400' : 'text-red-400'}`}>
+              {isHome ? '🏠' : '✈️'} {userTeamName}
             </div>
           </div>
-        );
-      })()}
+          <div className="text-2xl text-gray-500 font-bold">VS</div>
+          <div className="text-center">
+            <div className={`font-bold text-lg ${!isHome ? 'text-blue-400' : 'text-red-400'}`}>
+              {!isHome ? '🏠' : '✈️'} {opponentName}
+            </div>
+          </div>
+        </div>
+
+        {/* 相手先発投手情報 */}
+        {opponentStarter && (
+          <div className="bg-gray-900 rounded-lg p-3 mb-3 border border-gray-700">
+            <h3 className="text-xs font-bold text-gray-400 mb-2">相手先発投手</h3>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${opponentStarter.physical?.throws === 'left' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'}`}>
+                  {opponentStarter.physical?.throws === 'left' ? '左投' : '右投'}
+                </span>
+                <span className="text-white font-bold text-sm">{opponentStarter.name}</span>
+              </div>
+              <div className="flex gap-2 text-xs text-gray-400 ml-auto">
+                <span>球速<span className="text-orange-300 font-bold ml-0.5">{opponentStarter.pitching?.velocity || 0}</span></span>
+                <span>制球<span className="text-blue-300 font-bold ml-0.5">{opponentStarter.pitching?.control || 0}</span></span>
+                <span>スタ<span className="text-green-300 font-bold ml-0.5">{opponentStarter.pitching?.stamina || 0}</span></span>
+              </div>
+            </div>
+            {/* 投手シーズン成績 */}
+            {opponentStarter.seasonStats?.pitching?.games > 0 && (() => {
+              const ps = opponentStarter.seasonStats.pitching;
+              const ip = ps.inningsPitched ? (ps.inningsPitched / 3).toFixed(1) : '0.0';
+              const era = ps.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : '-';
+              return (
+                <div className="text-xs text-gray-500 mt-1.5">
+                  {ps.wins || 0}勝{ps.losses || 0}敗 防御率<span className="text-orange-300">{era}</span> {ip}回 {ps.strikeouts || 0}奪三振
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* スタメン一覧（疲労色+簡易変更） */}
+        <div className="bg-gray-900 rounded-lg p-3 mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold text-gray-400">スタメン <span className="text-gray-600 font-normal">（タップで打順入替）</span></h3>
+            <div className="flex items-center gap-2 text-[9px] text-gray-500">
+              <span className="text-red-400">●</span>疲労80↑
+              <span className="text-yellow-400">●</span>60↑
+              <span className="text-green-400">●</span>40↑
+            </div>
+          </div>
+          <div className="space-y-0.5 text-xs">
+            {userStarters.map((player, i) => {
+              const order = player._battingOrder || (i + 1);
+              const pos = player._position || player.position;
+              const cond = player.condition ?? CONDITION_LEVELS.NORMAL;
+              const isSelected = swapTarget === order;
+              const f = player.fatigue || 0;
+              return (
+                <div
+                  key={player.id}
+                  onClick={() => pos !== 'pitcher' && handleSwap(order)}
+                  className={`flex items-center gap-1 rounded px-2 py-1 transition-all ${
+                    pos === 'pitcher' ? 'bg-gray-800/50 cursor-default' :
+                    isSelected ? 'bg-blue-900 ring-1 ring-blue-400 cursor-pointer' :
+                    'bg-gray-800 hover:bg-gray-700 cursor-pointer'
+                  }`}
+                >
+                  <span className="text-gray-500 w-4 text-center font-mono">{order}</span>
+                  <span className={`text-[10px] px-1 rounded ${
+                    pos === 'pitcher' ? 'bg-red-800 text-red-200' :
+                    ['catcher'].includes(pos) ? 'bg-blue-800 text-blue-200' :
+                    ['left','center','right'].includes(pos) ? 'bg-green-800 text-green-200' :
+                    'bg-yellow-800 text-yellow-200'
+                  }`}>{POSITION_NAMES[pos] || pos}</span>
+                  <span className={`truncate flex-1 font-bold ${getFatigueColor(player)}`}>{player.name}</span>
+                  <span className="text-gray-600 text-[10px] w-6 text-right">{f > 0 ? f : ''}</span>
+                  <span className={CONDITION_COLORS[cond]} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
+                  {pos !== 'pitcher' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSwapTarget(order); setShowBench(true); }}
+                      className="text-gray-600 hover:text-blue-400 text-[10px] ml-1"
+                      title="控え選手と交代"
+                    >↔</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 控え選手パネル */}
+        {showBench && swapTarget !== null && (
+          <div className="bg-gray-900 rounded-lg p-3 mb-3 border border-blue-800">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-bold text-blue-400">{swapTarget}番と交代する選手を選択</h3>
+              <button onClick={() => { setShowBench(false); setSwapTarget(null); }} className="text-gray-500 hover:text-white text-xs">✕</button>
+            </div>
+            <div className="space-y-0.5 text-xs max-h-40 overflow-y-auto">
+              {benchFielders.length === 0 && <div className="text-gray-600 text-center py-2">控え野手なし</div>}
+              {benchFielders.map(player => {
+                const f = player.fatigue || 0;
+                return (
+                  <div
+                    key={player.id}
+                    onClick={() => handleSubstitute(player.id, swapTarget)}
+                    className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 rounded px-2 py-1 cursor-pointer"
+                  >
+                    <span className={`text-[10px] px-1 rounded ${
+                      ['left','center','right'].includes(player.position) ? 'bg-green-800 text-green-200' :
+                      player.position === 'catcher' ? 'bg-blue-800 text-blue-200' :
+                      'bg-yellow-800 text-yellow-200'
+                    }`}>{POSITION_NAMES[player.position] || player.position}</span>
+                    <span className={`truncate flex-1 font-bold ${getFatigueColor(player)}`}>{player.name}</span>
+                    <span className="text-gray-600 text-[10px]">{f > 0 ? `疲${f}` : ''}</span>
+                    <span className={CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}>
+                      {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={() => handleGameChoice('manage')}
+            className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg shadow-lg shadow-green-900/30 active:scale-95"
+          >
+            試合采配
+          </button>
+          <button
+            onClick={() => handleGameChoice('skip')}
+            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg active:scale-95"
+          >
+            試合スキップ
+          </button>
+        </div>
+        <button
+          onClick={() => setShowGameChoiceModal(false)}
+          className="mt-3 w-full text-center text-gray-500 hover:text-gray-300 text-sm transition"
+        >
+          キャンセル
+        </button>
+      </div>
     </div>
   );
 };
