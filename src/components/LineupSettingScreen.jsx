@@ -923,17 +923,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             }
           });
 
-          // ダイヤモンド上の各ポジション座標（SVG 500x420）
+          // ダイヤモンド上の各ポジション座標（SVG 500x470）
           const posCoords = {
-            pitcher:  { x: 250, y: 255 },
-            catcher:  { x: 250, y: 370 },
-            first:    { x: 370, y: 230 },
-            second:   { x: 310, y: 175 },
-            short:    { x: 190, y: 175 },
-            third:    { x: 130, y: 230 },
-            left:     { x: 80,  y: 90 },
-            center:   { x: 250, y: 45 },
-            right:    { x: 420, y: 90 },
+            pitcher:  { x: 250, y: 270 },
+            catcher:  { x: 250, y: 395 },
+            first:    { x: 385, y: 240 },
+            second:   { x: 320, y: 170 },
+            short:    { x: 180, y: 170 },
+            third:    { x: 115, y: 240 },
+            left:     { x: 70,  y: 75 },
+            center:   { x: 250, y: 30 },
+            right:    { x: 430, y: 75 },
           };
 
           // 守備位置適正の取得（0-100）
@@ -1072,7 +1072,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     </div>
                   )}
                 </div>
-                <svg viewBox="0 0 500 440" className="w-full max-w-2xl mx-auto">
+                <svg viewBox="0 -20 500 490" className="w-full max-w-2xl mx-auto">
                   <defs>
                     {/* 各ポジションの守備範囲グラデーション（適正で色変化） */}
                     {Object.entries(posCoords).map(([pos]) => {
@@ -1102,6 +1102,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <feMergeNode in="SourceGraphic" />
                       </feMerge>
                     </filter>
+                    {/* テキスト影フィルター */}
+                    <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#000" floodOpacity="0.8" />
+                    </filter>
+                    <filter id="textShadowStrong" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="1" stdDeviation="3" floodColor="#000" floodOpacity="0.9" />
+                    </filter>
                     {/* 芝のパターン */}
                     <pattern id="grassPattern" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
                       <rect width="8" height="8" fill="#1f5c33" />
@@ -1110,25 +1117,25 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   </defs>
 
                   {/* グラウンド背景（リッチ版） */}
-                  <rect x="0" y="0" width="500" height="440" fill="#142e1e" rx="12" />
-                  <ellipse cx="250" cy="210" rx="230" ry="190" fill="url(#grassPattern)" />
+                  <rect x="0" y="-20" width="500" height="490" fill="#142e1e" rx="12" />
+                  <ellipse cx="250" cy="230" rx="230" ry="210" fill="url(#grassPattern)" />
                   {/* 外野の芝模様（同心弧） */}
                   {[140, 170, 200].map(r => (
-                    <ellipse key={r} cx="250" cy="370" rx={r} ry={r} fill="none" stroke="#1a4a2c" strokeWidth="16" opacity="0.25" />
+                    <ellipse key={r} cx="250" cy="395" rx={r} ry={r} fill="none" stroke="#1a4a2c" strokeWidth="16" opacity="0.25" />
                   ))}
                   {/* 内野ダイヤモンド */}
-                  <polygon points="250,190 340,260 250,330 160,260" fill="#8B6914" opacity="0.3" />
-                  <polygon points="250,145 370,260 250,375 130,260" fill="none" stroke="#c4a35a" strokeWidth="1.5" strokeDasharray="6,3" opacity="0.45" />
+                  <polygon points="250,200 350,275 250,350 150,275" fill="#8B6914" opacity="0.3" />
+                  <polygon points="250,155 385,275 250,395 115,275" fill="none" stroke="#c4a35a" strokeWidth="1.5" strokeDasharray="6,3" opacity="0.45" />
                   {/* ファウルライン */}
-                  <line x1="250" y1="370" x2="60" y2="200" stroke="#fff" strokeWidth="1.2" opacity="0.3" />
-                  <line x1="250" y1="370" x2="440" y2="200" stroke="#fff" strokeWidth="1.2" opacity="0.3" />
+                  <line x1="250" y1="395" x2="50" y2="210" stroke="#fff" strokeWidth="1.2" opacity="0.3" />
+                  <line x1="250" y1="395" x2="450" y2="210" stroke="#fff" strokeWidth="1.2" opacity="0.3" />
                   {/* ベース */}
-                  <rect x="244" y="364" width="12" height="12" fill="#fff" transform="rotate(45,250,370)" opacity="0.9" />
-                  <rect x="364" y="254" width="10" height="10" fill="#fff" transform="rotate(45,369,259)" opacity="0.8" />
-                  <rect x="245" y="179" width="10" height="10" fill="#fff" transform="rotate(45,250,184)" opacity="0.8" />
-                  <rect x="125" y="254" width="10" height="10" fill="#fff" transform="rotate(45,130,259)" opacity="0.8" />
+                  <rect x="244" y="389" width="12" height="12" fill="#fff" transform="rotate(45,250,395)" opacity="0.9" />
+                  <rect x="379" y="269" width="10" height="10" fill="#fff" transform="rotate(45,384,274)" opacity="0.8" />
+                  <rect x="245" y="189" width="10" height="10" fill="#fff" transform="rotate(45,250,194)" opacity="0.8" />
+                  <rect x="110" y="269" width="10" height="10" fill="#fff" transform="rotate(45,115,274)" opacity="0.8" />
                   {/* マウンド */}
-                  <ellipse cx="250" cy="275" rx="12" ry="8" fill="#8B6914" opacity="0.4" />
+                  <ellipse cx="250" cy="290" rx="12" ry="8" fill="#8B6914" opacity="0.4" />
 
                   {/* 守備範囲の円（getDefenseRangeでサイズ、適正で色） */}
                   {Object.entries(posCoords).map(([pos, coord]) => {
@@ -1218,62 +1225,60 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
                         {/* ポジションラベル */}
                         <text x={coord.x} y={coord.y + 1} textAnchor="middle" dominantBaseline="middle"
-                          fill="white" fontSize={markerSize > 17 ? '13' : '11'} fontWeight="bold">{posLabels[pos]}</text>
+                          fill="white" fontSize={markerSize > 17 ? '15' : '13'} fontWeight="bold">{posLabels[pos]}</text>
 
                         {player && (
                           <>
                             {/* 選手名（影付き） */}
-                            <text x={coord.x} y={coord.y - markerSize - 14} textAnchor="middle"
-                              fill="#000" fontSize="11" fontWeight="bold" opacity="0.4">{player.name}</text>
-                            <text x={coord.x} y={coord.y - markerSize - 15} textAnchor="middle"
-                              fill="white" fontSize="11" fontWeight="bold">{player.name}</text>
+                            <text x={coord.x} y={coord.y - markerSize - 16} textAnchor="middle"
+                              fill="white" fontSize="13" fontWeight="bold" filter="url(#textShadowStrong)">{player.name}</text>
 
                             {/* グレードバッジ */}
-                            <circle cx={coord.x + markerSize + 2} cy={coord.y - markerSize + 2}
-                              r="8" fill="#111827" stroke={grade.color === 'text-pink-400' ? '#ec4899' : grade.color === 'text-red-400' ? '#f87171' : grade.color === 'text-orange-400' ? '#fb923c' : grade.color === 'text-yellow-400' ? '#facc15' : grade.color === 'text-green-400' ? '#4ade80' : '#60a5fa'}
+                            <circle cx={coord.x + markerSize + 3} cy={coord.y - markerSize + 1}
+                              r="9" fill="#111827" stroke={grade.color === 'text-pink-400' ? '#ec4899' : grade.color === 'text-red-400' ? '#f87171' : grade.color === 'text-orange-400' ? '#fb923c' : grade.color === 'text-yellow-400' ? '#facc15' : grade.color === 'text-green-400' ? '#4ade80' : '#60a5fa'}
                               strokeWidth="1.5" />
-                            <text x={coord.x + markerSize + 2} y={coord.y - markerSize + 3}
+                            <text x={coord.x + markerSize + 3} y={coord.y - markerSize + 2}
                               textAnchor="middle" dominantBaseline="middle"
                               fill={grade.color === 'text-pink-400' ? '#ec4899' : grade.color === 'text-red-400' ? '#f87171' : grade.color === 'text-orange-400' ? '#fb923c' : grade.color === 'text-yellow-400' ? '#facc15' : grade.color === 'text-green-400' ? '#4ade80' : '#60a5fa'}
-                              fontSize="9" fontWeight="bold">{grade.label}</text>
+                              fontSize="11" fontWeight="bold">{grade.label}</text>
 
                             {/* 適正バー（強化版） */}
-                            <rect x={coord.x - 20} y={coord.y + markerSize + 6} width="40" height="5" rx="2.5" fill="#1f2937" stroke="#374151" strokeWidth="0.5" />
-                            <rect x={coord.x - 20} y={coord.y + markerSize + 6} width={40 * fitness / 100} height="5" rx="2.5" fill={grad.main} opacity="0.85">
-                              <animate attributeName="width" from="0" to={40 * fitness / 100} dur="0.6s" begin={animDelay} fill="freeze"
+                            <rect x={coord.x - 22} y={coord.y + markerSize + 8} width="44" height="6" rx="3" fill="#1f2937" stroke="#374151" strokeWidth="0.5" />
+                            <rect x={coord.x - 22} y={coord.y + markerSize + 8} width={44 * fitness / 100} height="6" rx="3" fill={grad.main} opacity="0.85">
+                              <animate attributeName="width" from="0" to={44 * fitness / 100} dur="0.6s" begin={animDelay} fill="freeze"
                                 calcMode="spline" keySplines="0.25 0.46 0.45 0.94" />
                             </rect>
-                            <text x={coord.x} y={coord.y + markerSize + 20} textAnchor="middle"
-                              fill={grad.main} fontSize="8" fontWeight="bold" opacity="0.9">
+                            <text x={coord.x} y={coord.y + markerSize + 25} textAnchor="middle"
+                              fill={grad.main} fontSize="10" fontWeight="bold" filter="url(#textShadow)">
                               適正{fitness}%
                             </text>
 
                             {/* 守力・走力の小アイコン */}
-                            <text x={coord.x - 14} y={coord.y + markerSize + 29} textAnchor="middle"
-                              fill="#9ca3af" fontSize="7">守{def}</text>
-                            <text x={coord.x + 14} y={coord.y + markerSize + 29} textAnchor="middle"
-                              fill="#9ca3af" fontSize="7">走{spd}</text>
+                            <text x={coord.x - 16} y={coord.y + markerSize + 37} textAnchor="middle"
+                              fill="white" fontSize="9" fontWeight="bold" filter="url(#textShadow)">守{def}</text>
+                            <text x={coord.x + 16} y={coord.y + markerSize + 37} textAnchor="middle"
+                              fill="white" fontSize="9" fontWeight="bold" filter="url(#textShadow)">走{spd}</text>
                           </>
                         )}
                         {!player && (
-                          <text x={coord.x} y={coord.y - 22} textAnchor="middle" fill="#4a5568" fontSize="10">未配置</text>
+                          <text x={coord.x} y={coord.y - 22} textAnchor="middle" fill="#6b7280" fontSize="12" filter="url(#textShadow)">未配置</text>
                         )}
                       </g>
                     );
                   })}
 
                   {/* 凡例 */}
-                  <g transform="translate(10, 405)">
-                    <text x="0" y="0" fill="#9ca3af" fontSize="8">適正:</text>
+                  <g transform="translate(10, 440)">
+                    <text x="0" y="0" fill="white" fontSize="10" fontWeight="bold" filter="url(#textShadow)">適正:</text>
                     {[
                       { label: '100', color: '#ff1493' }, { label: '90', color: '#ec4899' }, { label: '80', color: '#f87171' },
                       { label: '70', color: '#f97316' }, { label: '60', color: '#fbbf24' }, { label: '50', color: '#eab308' },
                       { label: '40', color: '#84cc16' }, { label: '30', color: '#22c55e' }, { label: '20', color: '#06b6d4' },
                       { label: '10', color: '#3b82f6' }, { label: '0', color: '#6366f1' }
                     ].map((item, i) => (
-                      <g key={i} transform={`translate(${30 + i * 38}, 0)`}>
-                        <circle cx="0" cy="-3" r="4" fill={item.color} opacity="0.7" />
-                        <text x="7" y="0" fill="#9ca3af" fontSize="6">{item.label}</text>
+                      <g key={i} transform={`translate(${35 + i * 40}, 0)`}>
+                        <circle cx="0" cy="-3" r="5" fill={item.color} opacity="0.8" />
+                        <text x="8" y="0" fill="white" fontSize="8" filter="url(#textShadow)">{item.label}</text>
                       </g>
                     ))}
                   </g>
@@ -1302,23 +1307,23 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         className={`rounded p-2 transition cursor-pointer ${isSelected ? 'bg-yellow-900 ring-1 ring-yellow-400' : 'bg-gray-700 hover:bg-gray-600'} ${isPitcherPos ? 'cursor-default opacity-60' : ''}`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-blue-400 font-bold w-6 text-center text-sm">{posLabels[pos]}</span>
-                            <span className="text-white text-sm font-bold">{player?.name || '-'}</span>
+                            <span className="text-blue-400 font-bold w-7 text-center text-base">{posLabels[pos]}</span>
+                            <span className="text-white text-base font-bold">{player?.name || '-'}</span>
                           </div>
-                          {player && <span className={`font-bold text-lg ${grade.color}`}>{grade.label}</span>}
+                          {player && <span className={`font-bold text-xl ${grade.color}`}>{grade.label}</span>}
                         </div>
                         {player && (
                           <div className="flex items-center justify-between mt-1">
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-gray-400">守<span className={getRankColor(getAbilityRank(player.fielding?.defense || 0))}>{player.fielding?.defense || 0}</span></span>
-                              <span className="text-gray-400">走<span className={getRankColor(getAbilityRank(player.physical?.speed || 0))}>{player.physical?.speed || 0}</span></span>
-                              <span className="text-gray-400">肩<span className={getRankColor(getAbilityRank(player.physical?.arm || 0))}>{player.physical?.arm || 0}</span></span>
+                            <div className="flex items-center gap-2.5 text-sm">
+                              <span className="text-white">守<span className={getRankColor(getAbilityRank(player.fielding?.defense || 0))}>{player.fielding?.defense || 0}</span></span>
+                              <span className="text-white">走<span className={getRankColor(getAbilityRank(player.physical?.speed || 0))}>{player.physical?.speed || 0}</span></span>
+                              <span className="text-white">肩<span className={getRankColor(getAbilityRank(player.physical?.arm || 0))}>{player.physical?.arm || 0}</span></span>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <div className="w-12 h-2 bg-gray-600 rounded-full overflow-hidden">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-14 h-2.5 bg-gray-600 rounded-full overflow-hidden">
                                 <div className="h-full rounded-full" style={{ width: `${fitness}%`, backgroundColor: getFitnessColor(fitness) }} />
                               </div>
-                              <span className={`text-xs font-bold ${fitColor}`}>{fitness}%</span>
+                              <span className={`text-sm font-bold ${fitColor}`}>{fitness}%</span>
                             </div>
                           </div>
                         )}
@@ -1330,7 +1335,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 {/* 選択中ポジションの交換候補 */}
                 {selectedDefensePos && selectedPosSwapCandidates.length > 0 && (
                   <div className="mt-3 bg-gray-900 rounded p-3">
-                    <div className="text-yellow-400 text-xs font-bold mb-2">{posFullLabels[selectedDefensePos]}と交換:</div>
+                    <div className="text-yellow-400 text-sm font-bold mb-2">{posFullLabels[selectedDefensePos]}と交換:</div>
                     <div className="space-y-1">
                       {selectedPosSwapCandidates.map(({ player, entry }) => {
                         const targetFitness = getFitness(player, selectedDefensePos);
@@ -1338,9 +1343,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         const diff = targetFitness - currentFitness;
                         return (
                           <div key={player.id} onClick={() => handleDefenseClick(entry.position)}
-                            className="bg-gray-700 hover:bg-gray-600 rounded px-2 py-1 cursor-pointer flex items-center justify-between text-xs">
-                            <span className="text-white">{posLabels[entry.position]} {player.name}</span>
-                            <span className={diff >= 0 ? 'text-green-400' : 'text-red-400'}>
+                            className="bg-gray-700 hover:bg-gray-600 rounded px-2 py-1.5 cursor-pointer flex items-center justify-between text-sm">
+                            <span className="text-white font-bold">{posLabels[entry.position]} {player.name}</span>
+                            <span className={`font-bold ${diff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                               適正{targetFitness}% ({diff >= 0 ? '+' : ''}{diff})
                             </span>
                           </div>
@@ -1357,9 +1362,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   const teamGrade = getRangeGrade(avgRange);
                   return (
                     <div className="mt-3 bg-gray-900 rounded p-3 text-center">
-                      <div className="text-gray-400 text-sm mb-1">チーム守備総合</div>
-                      <div className={`text-3xl font-bold ${teamGrade.color}`}>{teamGrade.label}</div>
-                      <div className="text-gray-500 text-xs mt-1">平均実効守備力: {Math.round(avgRange * 100)}</div>
+                      <div className="text-white text-base font-bold mb-1">チーム守備総合</div>
+                      <div className={`text-4xl font-bold ${teamGrade.color}`}>{teamGrade.label}</div>
+                      <div className="text-gray-300 text-sm mt-1">平均実効守備力: {Math.round(avgRange * 100)}</div>
                     </div>
                   );
                 })()}

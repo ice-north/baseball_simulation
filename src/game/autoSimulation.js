@@ -368,7 +368,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       }
     },
     // 投手登板記録（セーブ・ホールド判定用）
-    pitcherAppearances: { home: [], away: [] }
+    pitcherAppearances: { home: [], away: [] },
+    // 投手交代記録（理由表示用）
+    pitcherChanges: []
   };
 
   // 現在の打者を取得
@@ -1045,6 +1047,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     if (reliever) {
       console.log(`   🔄 ピンチ投手交代: ${teamName} ${currentPitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${selectedRoleLabel})【${changeReason}】`);
 
+      // 投手交代記録を保存
+      gs.pitcherChanges.push({
+        inning: gs.inning,
+        isTop: gs.isTopInning,
+        team: teamName,
+        out: currentPitcher.name,
+        in: reliever.name,
+        role: selectedRoleLabel,
+        reason: changeReason
+      });
+
       if (!reliefTrack.starterLeftInning) {
         reliefTrack.starterLeftInning = gs.inning;
       }
@@ -1590,6 +1603,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             if (reliever) {
               console.log(`   🔄 投手交代: ${teamName} ${pitcher.name}(${Math.round(staminaRate * 100)}%) → ${reliever.name}(${selectedRoleLabel})【${changeReason}】`);
 
+              // 投手交代記録を保存
+              gameState.pitcherChanges.push({
+                inning: gameState.inning,
+                isTop: gameState.isTopInning,
+                team: teamName,
+                out: pitcher.name,
+                in: reliever.name,
+                role: selectedRoleLabel,
+                reason: changeReason
+              });
+
               if (!reliefTrack.starterLeftInning) {
                 reliefTrack.starterLeftInning = gameState.inning;
                 console.log(`   📊 先発${pitcher.name}が${gameState.inning}回で降板`);
@@ -1820,7 +1844,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     result,
     winner,
     homeTeam: gameState.homeTeam,
-    awayTeam: gameState.awayTeam
+    awayTeam: gameState.awayTeam,
+    pitcherChanges: gameState.pitcherChanges
   };
 };
 

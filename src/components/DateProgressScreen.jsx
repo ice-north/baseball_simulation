@@ -80,9 +80,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       if (decisions.savePitcher) recordPitcherDecision(decisions.savePitcher, 'saves', game.home, game.away, isHomeWin);
       decisions.holdPitchers.forEach(hp => recordPitcherDecision(hp, 'holds', game.home, game.away, isHomeWin));
       const scheduleIndex = updatedSchedule.findIndex(g => g.id === game.id);
-      if (scheduleIndex !== -1) updatedSchedule[scheduleIndex] = { ...game, result };
-      gameResults.push({ gameId: game.id, home: game.home, away: game.away, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.winner, decisions });
-      updatedResults.push({ gameId: game.id, date: { ...sData.currentDate }, home: game.home, away: game.away, result });
+      const resultWithChanges = { ...result, pitcherChanges: result.pitcherChanges || [] };
+      if (scheduleIndex !== -1) updatedSchedule[scheduleIndex] = { ...game, result: resultWithChanges };
+      gameResults.push({ gameId: game.id, home: game.home, away: game.away, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.winner, decisions, pitcherChanges: result.pitcherChanges || [] });
+      updatedResults.push({ gameId: game.id, date: { ...sData.currentDate }, home: game.home, away: game.away, result: resultWithChanges });
       const standingHome = updatedStandings.find(s => s.team === game.home);
       const standingAway = updatedStandings.find(s => s.team === game.away);
       if (standingHome && standingAway) {
@@ -382,6 +383,52 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   </div>
                 );
               })}
+            {/* 月間成績サマリー */}
+            {(() => {
+              const monthGames = calendarCells
+                .filter(c => c.day !== null)
+                .flatMap(c => c.games)
+                .filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
+              if (monthGames.length === 0) return null;
+              let mWins = 0, mLosses = 0, mDraws = 0;
+              const results = [];
+              monthGames.forEach(g => {
+                const isHome = g.home === userTeamName;
+                const hw = g.result.homeScore > g.result.awayScore;
+                const aw = g.result.awayScore > g.result.homeScore;
+                const won = isHome ? hw : aw;
+                const lost = isHome ? aw : hw;
+                if (won) { mWins++; results.push('win'); }
+                else if (lost) { mLosses++; results.push('loss'); }
+                else { mDraws++; results.push('draw'); }
+              });
+              return (
+                <div className="mt-2 bg-gray-800/60 rounded-lg px-3 py-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-gray-300">{selectedMonth}月 戦績</span>
+                    <span className="text-xs font-bold">
+                      <span className="text-green-400">{mWins}勝</span>
+                      <span className="text-red-400 ml-1">{mLosses}敗</span>
+                      {mDraws > 0 && <span className="text-gray-400 ml-1">{mDraws}分</span>}
+                      <span className="text-white ml-1.5">
+                        (勝率.{((mWins + mLosses) > 0 ? (mWins / (mWins + mLosses)).toFixed(3).slice(2) : '---')})
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex gap-0.5 flex-wrap">
+                    {results.map((r, i) => (
+                      <div key={i} className={`w-5 h-5 rounded-sm flex items-center justify-center text-[10px] font-bold ${
+                        r === 'win' ? 'bg-green-600/40 text-green-300' :
+                        r === 'loss' ? 'bg-red-600/40 text-red-300' :
+                        'bg-gray-600/40 text-gray-400'
+                      }`}>
+                        {r === 'win' ? '○' : r === 'loss' ? '●' : '△'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             </div>
           </div>
 
@@ -456,6 +503,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               if (parts.length === 0) return <div className="text-[9px] text-gray-500 mt-0.5">試合終了</div>;
                               return <div className="text-[9px] mt-0.5 flex flex-wrap justify-center gap-x-1.5">{parts}</div>;
                             })()}
+                            {/* 投手交代理由（ユーザーチームのみ） */}
+                            {isUserGame && game.result.pitcherChanges?.length > 0 && (
+                              <div className="mt-1 border-t border-gray-700/50 pt-1">
+                                {game.result.pitcherChanges
+                                  .filter(c => c.team === userTeamName)
+                                  .slice(0, 3)
+                                  .map((c, ci) => (
+                                  <div key={ci} className="text-[8px] text-gray-400 leading-tight">
+                                    <span className="text-yellow-400">{c.inning}回</span> {c.out}→<span className="text-cyan-300">{c.in}</span>
+                                    <span className="text-gray-500 ml-0.5">({c.role})</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="px-3 text-center">
