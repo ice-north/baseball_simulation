@@ -3426,12 +3426,74 @@ if (newOuts === 3) {
                        (p.pitching?.stamina || 80) * 0.2
         })).sort((a, b) => b.reliefScore - a.reliefScore);
 
-        // クローザー（最高能力、1人）
+        // 特性に基づいて適材適所で配置
+        const pitcherRoles = team.pitchingRotation?.pitcherRoles || {};
+        const assigned = new Set();
+
+        // 1. 守護神: 最高能力（1人）
         const closer = scoredRelievers[0] || null;
-        // セットアッパー（2-3番手）
-        const setupMen = scoredRelievers.slice(1, 3);
-        // 中継ぎ（残り）
-        const middleRelievers = scoredRelievers.slice(3);
+        if (closer) {
+          pitcherRoles[closer.id] = 'closer';
+          assigned.add(closer.id);
+        }
+
+        // 2. セットアッパー: 2番手（1人）
+        const setupMen = [];
+        if (scoredRelievers[1]) {
+          setupMen.push(scoredRelievers[1]);
+          pitcherRoles[scoredRelievers[1].id] = 'setup';
+          assigned.add(scoredRelievers[1].id);
+        }
+
+        // 残りの未割り当てリリーフ
+        const unassigned = scoredRelievers.filter(p => !assigned.has(p.id));
+
+        // 3. 中継ぎエース: 残りで最も能力が高い（1人）
+        if (unassigned[0]) {
+          pitcherRoles[unassigned[0].id] = 'ace_relief';
+          assigned.add(unassigned[0].id);
+        }
+
+        // 4. ワンポイント: 左投げ＆スタミナ低め（1人まで）
+        const unassigned2 = scoredRelievers.filter(p => !assigned.has(p.id));
+        const onepointCandidate = unassigned2.find(p =>
+          p.physical?.throws === 'left' && (p.pitching?.stamina || 0) < 110
+        );
+        if (onepointCandidate) {
+          pitcherRoles[onepointCandidate.id] = 'onepoint';
+          assigned.add(onepointCandidate.id);
+        }
+
+        // 5. ロングリリーフ: スタミナが高い投手（1人）
+        const unassigned3 = scoredRelievers.filter(p => !assigned.has(p.id));
+        const longCandidate = [...unassigned3].sort((a, b) =>
+          (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0)
+        )[0];
+        if (longCandidate) {
+          pitcherRoles[longCandidate.id] = 'long';
+          assigned.add(longCandidate.id);
+        }
+
+        // 6. 残りを能力順にビハインド→敗戦処理
+        const unassigned4 = scoredRelievers.filter(p => !assigned.has(p.id));
+        unassigned4.forEach((p, i) => {
+          if (i === 0) {
+            pitcherRoles[p.id] = 'behind';
+          } else {
+            pitcherRoles[p.id] = 'mopup';
+          }
+          assigned.add(p.id);
+        });
+
+        // レガシー配列を構築
+        const middleRelievers = scoredRelievers.filter(p =>
+          p.id !== closer?.id && !setupMen.some(s => s.id === p.id)
+        );
+
+        // 先発にもロールを設定
+        starters.forEach(p => {
+          if (!pitcherRoles[p.id]) pitcherRoles[p.id] = 'auto_s';
+        });
 
         // ローテーション情報を新形式で保存
         if (!team.pitchingRotation) {
@@ -3444,6 +3506,7 @@ if (newOuts === 3) {
         team.pitchingRotation.middleRelievers = middleRelievers.map(p => p.id);
         team.pitchingRotation.currentStarterIndex = 0;
         team.pitchingRotation.reliefFatigue = {};
+        team.pitchingRotation.pitcherRoles = pitcherRoles;
 
       };
 

@@ -167,16 +167,71 @@ export const initializePitchingRotation = (teamName) => {
                  (p.pitching?.stamina || 80) * 0.2
   })).sort((a, b) => b.reliefScore - a.reliefScore);
 
-  // クローザー（最高能力、1人）
+  // 特性に基づいて適材適所で配置
+  const pitcherRoles = {};
+  const assigned = new Set();
+
+  // 1. 守護神: 最高能力の投手（球速・制球重視）
   const closer = scoredRelievers[0] || null;
+  if (closer) {
+    pitcherRoles[closer.id] = 'closer';
+    assigned.add(closer.id);
+  }
 
-  // セットアッパー（2番目に高い能力、1-2人）
-  const setupMen = scoredRelievers.slice(1, 3);
+  // 2. セットアッパー: 2番手（1人）
+  const setupMen = [];
+  if (scoredRelievers[1]) {
+    setupMen.push(scoredRelievers[1]);
+    pitcherRoles[scoredRelievers[1].id] = 'setup';
+    assigned.add(scoredRelievers[1].id);
+  }
 
-  // 中継ぎ（残り）
-  const middleRelievers = scoredRelievers.slice(3);
+  // 残りの未割り当てリリーフ
+  const unassigned = scoredRelievers.filter(p => !assigned.has(p.id));
 
-  // 左のワンポイント候補を特定
+  // 3. 中継ぎエース: 残りの中で最も能力が高い投手（1人）
+  const aceCandidate = unassigned[0];
+  if (aceCandidate) {
+    pitcherRoles[aceCandidate.id] = 'ace_relief';
+    assigned.add(aceCandidate.id);
+  }
+
+  // 4. ワンポイント: 左投げ＆スタミナ低めの投手（1人まで）
+  const unassigned2 = scoredRelievers.filter(p => !assigned.has(p.id));
+  const onepointCandidate = unassigned2.find(p =>
+    p.physical?.throws === 'left' && (p.pitching?.stamina || 0) < 110
+  );
+  if (onepointCandidate) {
+    pitcherRoles[onepointCandidate.id] = 'onepoint';
+    assigned.add(onepointCandidate.id);
+  }
+
+  // 5. ロングリリーフ: スタミナが高い投手（1人）
+  const unassigned3 = scoredRelievers.filter(p => !assigned.has(p.id));
+  const longCandidate = [...unassigned3].sort((a, b) =>
+    (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0)
+  )[0];
+  if (longCandidate) {
+    pitcherRoles[longCandidate.id] = 'long';
+    assigned.add(longCandidate.id);
+  }
+
+  // 6. 残りを能力順にビハインド→敗戦処理
+  const unassigned4 = scoredRelievers.filter(p => !assigned.has(p.id));
+  unassigned4.forEach((p, i) => {
+    if (i === 0) {
+      pitcherRoles[p.id] = 'behind';
+    } else {
+      pitcherRoles[p.id] = 'mopup';
+    }
+    assigned.add(p.id);
+  });
+
+  // レガシー配列を構築
+  const middleRelievers = scoredRelievers.filter(p =>
+    p.id !== closer?.id && !setupMen.some(s => s.id === p.id)
+  );
+
   const leftSpecialists = relievers.filter(p =>
     p.physical?.throws === 'left' && (p.pitching?.stamina || 0) < 100
   );
@@ -189,6 +244,7 @@ export const initializePitchingRotation = (teamName) => {
     middleRelievers: middleRelievers.map(p => p.id),
     leftSpecialists: leftSpecialists.map(p => p.id),
     currentStarterIndex: 0,
+    pitcherRoles,
     // リリーフ疲労管理
     reliefFatigue: {}
   };
