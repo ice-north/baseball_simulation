@@ -743,12 +743,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               { key: 'quality', label: '勝ち権利', desc: '6回まで投げて降板', color: 'from-blue-600 to-blue-700' },
             ];
             const reliefRoles = [
-              { key: 'auto_r', label: 'おまかせ', desc: '自動で登板場面を判断', color: 'from-gray-600 to-gray-700' },
-              { key: 'long', label: 'ロングリリーフ', desc: '先発降板後をカバー', color: 'from-green-800 to-green-900' },
-              { key: 'ace_relief', label: '中継ぎエース', desc: '僅差の重要場面で登板', color: 'from-green-600 to-green-700' },
               { key: 'mopup', label: '敗戦処理', desc: '大差で登板しスタミナ温存', color: 'from-gray-700 to-gray-800' },
               { key: 'behind', label: 'ビハインド', desc: 'ビハインド時にイニングを繋ぐ', color: 'from-yellow-800 to-yellow-900' },
+              { key: 'auto_r', label: 'おまかせ', desc: '自動で登板場面を判断', color: 'from-gray-600 to-gray-700' },
+              { key: 'long', label: 'ロングリリーフ', desc: '先発降板後をカバー', color: 'from-green-800 to-green-900' },
               { key: 'onepoint', label: 'ワンポイント', desc: '特定打者に対して登板', color: 'from-green-700 to-green-800' },
+              { key: 'ace_relief', label: '中継ぎエース', desc: '僅差の重要場面で登板', color: 'from-green-600 to-green-700' },
               { key: 'setup', label: 'セットアッパー', desc: '7-8回の僅差で守護神に繋ぐ', color: 'from-orange-700 to-orange-800' },
               { key: 'closer', label: '守護神', desc: '9回・リード時に試合を締める', color: 'from-purple-700 to-purple-800' },
             ];
