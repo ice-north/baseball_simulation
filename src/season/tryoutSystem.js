@@ -179,8 +179,25 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
     // ランダムな名前生成
     const name = generateRandomPlayerName();
 
-    // 年齢を先に決定（18-25歳）
-    const age = Math.floor(Math.random() * 8) + 18;
+    // 年齢を重み付きランダムで決定（18-25歳、高卒・大卒が多い分布）
+    const ageWeights = [
+      { age: 18, weight: 20 }, // 高卒
+      { age: 19, weight: 10 },
+      { age: 20, weight: 10 },
+      { age: 21, weight: 10 },
+      { age: 22, weight: 30 }, // 大卒
+      { age: 23, weight: 10 },
+      { age: 24, weight: 5 },
+      { age: 25, weight: 5 },
+    ];
+    const totalWeight = ageWeights.reduce((sum, w) => sum + w.weight, 0);
+    const roll = Math.random() * totalWeight;
+    let cumulative = 0;
+    let age = 18;
+    for (const entry of ageWeights) {
+      cumulative += entry.weight;
+      if (roll < cumulative) { age = entry.age; break; }
+    }
 
     // 能力値生成（特性選手の場合は特殊な分布、年齢補正あり、二刀流対応）
     const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay, playerTraits);
