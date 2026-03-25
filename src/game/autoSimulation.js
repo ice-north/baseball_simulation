@@ -1378,7 +1378,22 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
           // 先発ロール別の交代判定
           if (!shouldChange && !isReliever) {
-            if (currentRole === 'complete') {
+            if (currentRole === 'ace') {
+              // エース: 7-8回を責任投球、スタミナ30%以下で交代
+              if (gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
+                shouldChange = true;
+                situation = 'save';
+                changeReason = `エース${pitcher.name}が8回を投げ切り、守護神へリレー`;
+              } else if (gameState.inning >= 9 && staminaRate < 0.35) {
+                shouldChange = true;
+                situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
+                changeReason = `エース${pitcher.name}が8回投球後スタミナ低下(${Math.round(staminaRate * 100)}%)`;
+              } else if (staminaRate < 0.30) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `エース${pitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
+              }
+            } else if (currentRole === 'complete') {
               // 完投型: スタミナ25%以下で交代、得点圏ピンチなら35%
               if (staminaRate < 0.25) {
                 shouldChange = true;

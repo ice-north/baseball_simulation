@@ -262,7 +262,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     if (!rotation.pitcherRoles) rotation.pitcherRoles = {};
 
     const wasStarter = (rotation.starters || []).includes(playerId);
-    const isNewStarter = ['complete', 'short', 'quality', 'auto_s'].includes(newRole);
+    const isNewStarter = ['complete', 'short', 'quality', 'ace', 'auto_s'].includes(newRole);
 
     // 先発→先発の変更時はstarters配列を触らない（順番維持）
     if (!(wasStarter && isNewStarter)) {
@@ -308,6 +308,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const PITCHER_ROLES = {
     none:       { label: '未設定', color: 'bg-gray-600', textColor: 'text-gray-400', group: 'none' },
     auto_s:     { label: 'おまかせ', color: 'bg-gray-500', textColor: 'text-gray-200', group: 'starter' },
+    ace:        { label: 'エース', color: 'bg-red-600', textColor: 'text-red-200', group: 'starter' },
     complete:   { label: '完投型', color: 'bg-blue-700', textColor: 'text-blue-300', group: 'starter' },
     short:      { label: 'ショート', color: 'bg-blue-600', textColor: 'text-blue-300', group: 'starter' },
     quality:    { label: '勝ち権利', color: 'bg-blue-500', textColor: 'text-blue-200', group: 'starter' },
@@ -651,7 +652,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         {tab === 'rotation' && (() => {
           // 全選手をロール別にグループ分け
           const allPlayers = team.players || [];
-          const starterPitchers = allPlayers.filter(p => ['complete', 'short', 'quality', 'auto_s'].includes(getPitcherRole(p.id)));
+          const starterPitchers = allPlayers.filter(p => ['ace', 'complete', 'short', 'quality', 'auto_s'].includes(getPitcherRole(p.id)));
           const starterOrder = team.pitchingRotation.starters || [];
           starterPitchers.sort((a, b) => {
             const ia = starterOrder.indexOf(a.id);
@@ -711,9 +712,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
           // ロール説明テキスト
           const ROLE_DESC = {
+            ace: '7-8回を責任投球、勝ちパターンへ繋ぐ',
             complete: '完投を目指して長いイニングを投げる',
             short: '3-4回で降板し中継ぎに繋ぐ',
-            quality: '6回・勝ち権利まで投げて降板',
+            quality: '5-6回・勝ち権利まで投げて降板',
             auto_s: '能力に応じて自動で投球回数を調整',
             long: '先発降板後に長いイニングをカバー',
             mopup: '大差ビハインド時に登板',
@@ -727,7 +729,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
           // ロールアイコン
           const ROLE_ICON = {
-            complete: '🏔', short: '⚡', quality: '✓', auto_s: '🤖',
+            ace: '👑', complete: '🏔', short: '⚡', quality: '✓', auto_s: '🤖',
             long: '🔄', mopup: '🧹', behind: '🛡', onepoint: '🎯',
             ace_relief: '🔥', setup: '⬆', closer: '🔒', auto_r: '🤖', none: '—',
           };
@@ -738,9 +740,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             const currentRole = getPitcherRole(player.id);
             const starterRoles = [
               { key: 'auto_s', label: 'おまかせ', desc: '能力に応じて自動調整', color: 'from-gray-600 to-gray-700' },
-              { key: 'complete', label: '完投型', desc: '長いイニングを投げる', color: 'from-blue-800 to-blue-900' },
+              { key: 'ace', label: 'エース', desc: '7-8回を責任投球、勝ちパターンへ繋ぐ', color: 'from-red-700 to-red-800' },
+              { key: 'complete', label: '完投型', desc: 'スタミナ限界まで投げ抜く', color: 'from-blue-800 to-blue-900' },
               { key: 'short', label: 'ショート', desc: '3-4回で中継ぎに繋ぐ', color: 'from-blue-700 to-blue-800' },
-              { key: 'quality', label: '勝ち権利', desc: '6回まで投げて降板', color: 'from-blue-600 to-blue-700' },
+              { key: 'quality', label: '勝ち権利', desc: '5-6回を投げて降板', color: 'from-blue-600 to-blue-700' },
             ];
             const reliefRoles = [
               { key: 'mopup', label: '敗戦処理', desc: '大差で登板しスタミナ温存', color: 'from-gray-700 to-gray-800' },
@@ -831,7 +834,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
             // ロールごとの左ボーダー色
             const borderColors = {
-              complete: 'border-l-blue-500', short: 'border-l-blue-400', quality: 'border-l-blue-300',
+              ace: 'border-l-red-500', complete: 'border-l-blue-500', short: 'border-l-blue-400', quality: 'border-l-blue-300',
               auto_s: 'border-l-gray-400',
               long: 'border-l-green-600', ace_relief: 'border-l-green-400', mopup: 'border-l-gray-500',
               behind: 'border-l-yellow-600', onepoint: 'border-l-green-500',

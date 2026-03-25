@@ -185,6 +185,9 @@ const ManualContent = ({ category }) => {
       return (
         <div className="space-y-4">
           <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1">先発ロール</h3>
+          <Entry title="エース（ace）">
+            チームの柱。7〜8回を責任投球し、セットアッパー・守護神へ繋ぐ。自動配置では最も総合力が高い先発に設定される。
+          </Entry>
           <Entry title="完投型（complete）">
             スタミナが続く限り最後まで投げる。スタミナの高い投手向け。交代の判断が遅くなる。
           </Entry>
@@ -192,7 +195,7 @@ const ManualContent = ({ category }) => {
             序盤3〜4回を目処に交代。スタミナが低い先発や、中継ぎ陣が厚い場合に有効。
           </Entry>
           <Entry title="勝ち権利交代（quality）">
-            5回を投げ切ることを目標に投球。勝ち投手の権利取得後、状態を見て交代する標準的な運用。
+            5〜6回を投げ切ることを目標に投球。勝ち投手の権利取得後、状態を見て交代する標準的な運用。
           </Entry>
 
           <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">リリーフロール</h3>

@@ -171,6 +171,32 @@ export const initializePitchingRotation = (teamName) => {
   const pitcherRoles = {};
   const assigned = new Set();
 
+  // 先発ロールを特性に基づいて振り分け
+  // 総合スコア = 球速×0.3 + 制球×0.3 + スタミナ×0.4
+  const scoredStarters = starters.map(p => ({
+    ...p,
+    starterScore: (p.pitching?.velocity || 130) * 0.3 +
+                  (p.pitching?.control || 50) * 0.3 +
+                  (p.pitching?.stamina || 80) * 0.4
+  })).sort((a, b) => b.starterScore - a.starterScore);
+
+  scoredStarters.forEach((p, i) => {
+    const stamina = p.pitching?.stamina || 80;
+    if (i === 0) {
+      // 1番手: エース
+      pitcherRoles[p.id] = 'ace';
+    } else if (stamina >= 170) {
+      // 高スタミナ: 完投型
+      pitcherRoles[p.id] = 'complete';
+    } else if (stamina < 110) {
+      // 低スタミナ: ショートスターター
+      pitcherRoles[p.id] = 'short';
+    } else {
+      // 通常: 勝ち権利
+      pitcherRoles[p.id] = 'quality';
+    }
+  });
+
   // 1. 守護神: 最高能力の投手（球速・制球重視）
   const closer = scoredRelievers[0] || null;
   if (closer) {

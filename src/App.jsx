@@ -750,12 +750,24 @@ import TradeScreen from './components/TradeScreen.jsx';
         const isScoringSituation = bases[1] || bases[2];
 
         // 先発ロール別のイニング上限・スタミナ閾値
-        const isStarter = ['complete', 'short', 'quality', 'auto_s'].includes(currentRole);
+        const isStarter = ['ace', 'complete', 'short', 'quality', 'auto_s'].includes(currentRole);
         let shouldSubstitute = false;
         let reason = '';
 
         if (isStarter) {
-          if (currentRole === 'complete') {
+          if (currentRole === 'ace') {
+            // エース: 7-8回を責任投球、9回はリリーフへ
+            if (inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
+              shouldSubstitute = true;
+              reason = `エース${currentPitcher.name}が8回を投げ切り、守護神へリレー`;
+            } else if (inning >= 9 && staminaRate < 0.35) {
+              shouldSubstitute = true;
+              reason = `エース${currentPitcher.name}が8回投球後スタミナ低下(${Math.round(staminaRate * 100)}%)`;
+            } else if (staminaRate <= 0.30) {
+              shouldSubstitute = true;
+              reason = `エース${currentPitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
+            }
+          } else if (currentRole === 'complete') {
             // 完投型: スタミナ25%以下 or 得点圏ピンチでスタミナ35%以下
             if (staminaRate <= 0.25) {
               shouldSubstitute = true;
@@ -3430,6 +3442,27 @@ if (newOuts === 3) {
         const pitcherRoles = team.pitchingRotation?.pitcherRoles || {};
         const assigned = new Set();
 
+        // 先発ロールを特性に基づいて振り分け
+        const scoredStarters = starters.map(p => ({
+          ...p,
+          starterScore: (p.pitching?.velocity || 130) * 0.3 +
+                        (p.pitching?.control || 50) * 0.3 +
+                        (p.pitching?.stamina || 80) * 0.4
+        })).sort((a, b) => b.starterScore - a.starterScore);
+
+        scoredStarters.forEach((p, i) => {
+          const stamina = p.pitching?.stamina || 80;
+          if (i === 0) {
+            pitcherRoles[p.id] = 'ace';
+          } else if (stamina >= 170) {
+            pitcherRoles[p.id] = 'complete';
+          } else if (stamina < 110) {
+            pitcherRoles[p.id] = 'short';
+          } else {
+            pitcherRoles[p.id] = 'quality';
+          }
+        });
+
         // 1. 守護神: 最高能力（1人）
         const closer = scoredRelievers[0] || null;
         if (closer) {
@@ -3490,10 +3523,6 @@ if (newOuts === 3) {
           p.id !== closer?.id && !setupMen.some(s => s.id === p.id)
         );
 
-        // 先発にもロールを設定
-        starters.forEach(p => {
-          if (!pitcherRoles[p.id]) pitcherRoles[p.id] = 'auto_s';
-        });
 
         // ローテーション情報を新形式で保存
         if (!team.pitchingRotation) {
