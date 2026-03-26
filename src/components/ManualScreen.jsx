@@ -8,6 +8,7 @@ const CATEGORIES = [
   { id: 'condition', label: 'コンディション' },
   { id: 'fitness', label: '守備位置適性' },
   { id: 'pitchRoles', label: '投手起用ロール' },
+  { id: 'pitchSubstitution', label: '降板ルール' },
   { id: 'traits', label: '選手特性' },
   { id: 'gameflow', label: 'ゲームフロー' },
 ];
@@ -185,40 +186,127 @@ const ManualContent = ({ category }) => {
       return (
         <div className="space-y-4">
           <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1">先発ロール</h3>
-          <Entry title="エース（ace）">
-            チームの柱。7〜8回を責任投球し、セットアッパー・守護神へ繋ぐ。自動配置では最も総合力が高い先発に設定される。
+          <Entry title="エース（ace）" range="球数上限: 110球">
+            チームの柱。セットアッパー・守護神へ繋ぐ。自動配置では最も総合力が高い先発に設定される。
           </Entry>
-          <Entry title="完投型（complete）">
-            スタミナが続く限り最後まで投げる。スタミナの高い投手向け。交代の判断が遅くなる。
+          <Entry title="完投型（complete）" range="球数上限: 120球">
+            スタミナが続く限り最後まで投げる。球数上限が最も多く、スタミナの高い投手向け。
           </Entry>
-          <Entry title="ショートスターター（short）">
+          <Entry title="ショートスターター（short）" range="球数上限: 65球">
             序盤3〜4回を目処に交代。スタミナが低い先発や、中継ぎ陣が厚い場合に有効。
           </Entry>
-          <Entry title="勝ち権利交代（quality）">
+          <Entry title="勝ち権利交代（quality）" range="球数上限: 100球">
             5〜6回を投げ切ることを目標に投球。勝ち投手の権利取得後、状態を見て交代する標準的な運用。
           </Entry>
 
           <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">リリーフロール</h3>
-          <Entry title="ロングリリーフ（long）">
+          <Entry title="ロングリリーフ（long）" range="球数上限: 60球">
             複数イニングを投げるリリーフ。先発が早期降板した際のロング救援要員。
           </Entry>
-          <Entry title="中継ぎエース（ace_relief）">
+          <Entry title="中継ぎエース（ace_relief）" range="球数上限: 40球">
             勝ちパターンの中核を担うリリーフ。重要な場面で登板する。
           </Entry>
-          <Entry title="ワンポイント（onepoint）">
+          <Entry title="ワンポイント（onepoint）" range="球数上限: 15球">
             1打者限定で起用されるリリーフ。主に左投手が左打者を抑えるために登板する。
           </Entry>
-          <Entry title="セットアッパー（setup）">
+          <Entry title="セットアッパー（setup）" range="球数上限: 35球">
             8回を任されるリリーフ。守護神へ繋ぐ重要な役割。僅差で優勢の場面で登板する。
           </Entry>
-          <Entry title="守護神（closer）">
+          <Entry title="守護神（closer）" range="球数上限: 40球">
             9回を締めくくるクローザー。3点差以内のリードで登板し、セーブを記録する。
           </Entry>
-          <Entry title="敗戦処理（mopup）">
+          <Entry title="敗戦処理（mopup）" range="球数上限: 50球">
             大差で負けている場面で登板。主力リリーフを温存する役割。
           </Entry>
-          <Entry title="ビハインド（behind）">
+          <Entry title="ビハインド（behind）" range="球数上限: 50球">
             僅差でビハインドの場面で登板するリリーフ。逆転を許さず試合を作る。
+          </Entry>
+        </div>
+      );
+
+    case 'pitchSubstitution':
+      return (
+        <div className="space-y-4">
+          <Entry title="降板判定の概要">
+            投手の降板は以下の3条件のいずれか1つでも満たした時点で、現在の対戦（打席）が終わり次第降板となる。
+          </Entry>
+
+          <h3 className="text-red-300 font-bold text-sm border-b border-red-800 pb-1 mt-4">条件1: 球数制限</h3>
+          <Entry title="ロール別の球数上限">
+            各ロールに設定された球数上限に到達した時点で降板。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">ロール</th><th className="text-right py-1 px-2">球数上限</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-blue-300">完投型</td><td className="text-right px-2">120球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">エース</td><td className="text-right px-2">110球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">勝ち権利交代</td><td className="text-right px-2">100球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">ショートスターター</td><td className="text-right px-2">65球</td></tr>
+                  <tr className="border-t border-gray-600"><td className="py-0.5 px-2 text-green-300">ロングリリーフ</td><td className="text-right px-2">60球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">敗戦処理 / ビハインド</td><td className="text-right px-2">50球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">守護神 / 中継ぎエース</td><td className="text-right px-2">40球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">セットアッパー</td><td className="text-right px-2">35球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">ワンポイント</td><td className="text-right px-2">15球</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+
+          <h3 className="text-yellow-300 font-bold text-sm border-b border-yellow-800 pb-1 mt-4">条件2: スタミナ限界</h3>
+          <Entry title="スタミナ25%以下で降板">
+            先発・リリーフ問わず、残りスタミナが最大値の25%を切った時点で降板。
+            スタミナは投球ごとに消費され、イニング間でわずかに回復する。
+          </Entry>
+
+          <h3 className="text-orange-300 font-bold text-sm border-b border-orange-800 pb-1 mt-4">条件3: ダメージポイント制（先発のみ）</h3>
+          <Entry title="ダメージポイント（DP）とは">
+            先発投手が打たれた内容に応じてダメージポイント（DP）が積算される。
+            イニングごとに設定された閾値を超えると降板となる。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li><b>単打・四球</b>: +4ポイント</li>
+              <li><b>長打</b>（二塁打・三塁打・本塁打）: +6ポイント</li>
+              <li><b>失点</b>: +10ポイント（1点につき）</li>
+            </ul>
+          </Entry>
+          <Entry title="イニング別の閾値">
+            イニングが進むほど閾値が下がり、終盤では少しのダメージでも降板しやすくなる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">イニング</th>
+                  <th className="text-right py-1 px-2">1回</th><th className="text-right py-1 px-2">2回</th>
+                  <th className="text-right py-1 px-2">3回</th><th className="text-right py-1 px-2">4回</th>
+                  <th className="text-right py-1 px-2">5回</th><th className="text-right py-1 px-2">6回</th>
+                  <th className="text-right py-1 px-2">7回</th><th className="text-right py-1 px-2">8回</th>
+                  <th className="text-right py-1 px-2">9回</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr>
+                    <td className="py-0.5 px-2 text-orange-300">閾値</td>
+                    <td className="text-right px-2">45</td><td className="text-right px-2">40</td>
+                    <td className="text-right px-2">35</td><td className="text-right px-2">30</td>
+                    <td className="text-right px-2">25</td><td className="text-right px-2">20</td>
+                    <td className="text-right px-2">15</td><td className="text-right px-2">10</td>
+                    <td className="text-right px-2">5</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="イニングまたぎの回復">
+            イニングが変わるごとにDPが10ポイント回復する（最低0）。
+            これにより、1イニング抑えればダメージが緩和され、好投すれば長く投げられる。
+          </Entry>
+          <Entry title="DP計算の例">
+            <div className="text-sm space-y-1 mt-1">
+              <p>例: 3回表に単打(+4)→四球(+4)→二塁打(+6)→失点(+10) = DP24</p>
+              <p>→ 3回の閾値35なので続投。4回へまたぎで-10 → DP14</p>
+              <p>→ 4回に単打(+4)→失点(+10) = DP28。4回の閾値30なので続投。</p>
+              <p>→ 5回へまたぎで-10 → DP18。もう1本単打(+4) = DP22。</p>
+              <p>→ 5回の閾値25なので続投。さらに失点(+10) = DP32 {'>'} 25で降板。</p>
+            </div>
           </Entry>
         </div>
       );

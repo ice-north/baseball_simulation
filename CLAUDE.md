@@ -28,6 +28,12 @@ NEW GAME → レギュレーション設定 → トライアウト(24人ドラ�
 ```
 
 ## 投手起用ロール
-- 先発: complete(完投型), short(ショートスターター), quality(勝ち権利交代)
-- リリーフ: long(ロング), onepoint(ワンポイント), setup(セットアッパー), closer(守護神)
+- 先発: complete(完投型), short(ショートスターター), quality(勝ち権利交代), ace(エース)
+- リリーフ: long(ロング), onepoint(ワンポイント), setup(セットアッパー), closer(守護神), ace_relief(中継ぎエース), behind(ビハインド), mopup(敗戦処理)
 - `pitchingRotation.pitcherRoles` マップ + レガシー配列の両方を更新すること
+
+## 降板ルール（3条件のいずれかで降板）
+1. **球数制限**: ロール別上限（complete:120, ace:110, quality:100, short:65, closer:40, setup:35, ace_relief:40, long:60, onepoint:15, behind/mopup:50）
+2. **スタミナ25%以下**: 先発・リリーフ共通。残りスタミナが最大の25%を切ったら降板
+3. **ダメージポイント制（先発のみ）**: 単打/四球=4pt, 長打=6pt, 失点=10pt。閾値は1回=45→9回=5（5刻みで減少）。イニングまたぎで-10pt回復（最低0）
+- `gameState.starterDamagePoints` で積算を追跡
