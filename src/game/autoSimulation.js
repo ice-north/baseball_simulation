@@ -342,15 +342,21 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         starterLeftInning: null,  // 先発が降板したイニング
         currentRelieverId: null,  // 現在のリリーフ投手ID
         relieverOutsPitched: 0,   // 現在のリリーフの投球アウト数
-        relieverBattersFaced: 0   // 現在のリリーフの対戦打者数
+        relieverBattersFaced: 0,  // 現在のリリーフの対戦打者数
+        relieverInningRuns: 0     // 現在のリリーフの今イニング失点
       },
       away: {
         starterLeftInning: null,
         currentRelieverId: null,
         relieverOutsPitched: 0,
-        relieverBattersFaced: 0
+        relieverBattersFaced: 0,
+        relieverInningRuns: 0     // 現在のリリーフの今イニング失点
       }
     },
+    // 好投貯金（投手パフォーマンスバンク）
+    performanceBank: { home: 0, away: 0 },
+    // イニング開始時の失点記録（好投貯金計算用）
+    inningStartRuns: { home: 0, away: 0 },
     // 投手登板記録（セーブ・ホールド判定用）
     pitcherAppearances: { home: [], away: [] },
     // 投手交代記録（理由表示用）
@@ -887,6 +893,20 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       }
     }
 
+    // セットアッパー/中継ぎエース: 失点したら即交代（イニング途中でも）
+    if (!shouldChange && reliefTrack.currentRelieverId === currentPitcher.id) {
+      if (currentPitcherRole === 'setup' || currentPitcherRole === 'ace_relief') {
+        const currentRuns = pitcherData.gameStats?.pitching?.runsAllowed || 0;
+        const inningStartRuns = gs.inningStartRuns?.[teamKey] || 0;
+        const inningRuns = currentRuns - inningStartRuns;
+        if (inningRuns > 0) {
+          shouldChange = true;
+          situation = 'middle';
+          changeReason = `${currentPitcherRole === 'setup' ? 'セットアッパー' : '中継ぎエース'}${currentPitcher.name}が失点、緊急交代`;
+        }
+      }
+    }
+
     // 9回リード時→クローザー必須
     if (gs.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
       const isCloser = rotation.closer && currentPitcher.id === rotation.closer;
@@ -1059,6 +1079,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       reliefTrack.currentRelieverId = reliever.id;
       reliefTrack.relieverOutsPitched = 0;
       reliefTrack.relieverBattersFaced = 0;
+      reliefTrack.relieverInningRuns = 0;
 
       if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
         TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
@@ -1288,6 +1309,18 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const inningLabel = `${gameState.inning}回${gameState.isTopInning ? '表' : '裏'}`;
     const offenseTeam = gameState.isTopInning ? gameState.awayTeam.name : gameState.homeTeam.name;
 
+    // イニング開始時の失点を記録（好投貯金計算用）
+    // 守備チーム = 攻撃チームの反対
+    const defenseKey = gameState.isTopInning ? 'home' : 'away';
+    const defenseTeamForInning = gameState.isTopInning ? gameState.homeTeam : gameState.awayTeam;
+    const defPitcher = getCurrentPitcher(defenseTeamForInning);
+    if (defPitcher) {
+      const defPitcherData = defenseTeamForInning.players.find(p => p.id === defPitcher.id);
+      gameState.inningStartRuns[defenseKey] = defPitcherData?.gameStats?.pitching?.runsAllowed || 0;
+    }
+    // リリーフのイニング失点をリセット
+    gameState.reliefTracking[defenseKey].relieverInningRuns = 0;
+
     let atBats = 0;
     while (gameState.outs < 3 && atBats < 50) {  // 無限ループ防止（打席数制限）
       simulateAtBat();
@@ -1330,6 +1363,37 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             reliefTrack.relieverOutsPitched += 3; // 1イニング = 3アウト
           }
 
+          // 好投貯金の更新（このイニングで守備をしたチームのみ）
+          // 守備チーム = 表なら home、裏なら away
+          const wasDefending = (gameState.isTopInning && teamKey === 'away') ||
+                               (!gameState.isTopInning && teamKey === 'home');
+          // ※ isTopInning は既に反転済みの場合があるので、イニング終了後の状態で判定
+          // イニング終了時処理では表→裏に切り替え済み or 裏→次の回に進む
+          // 表終了後: isTopInning = false → home が守備していた
+          // 裏終了後: isTopInning = true, inning++ → away が守備していた
+          const defendedThisInning = (!gameState.isTopInning && teamKey === 'home') ||
+                                     (gameState.isTopInning && teamKey === 'away');
+          if (defendedThisInning) {
+            const inningRuns = (pitcherData.gameStats?.pitching?.runsAllowed || 0) - (gameState.inningStartRuns[teamKey] || 0);
+            if (inningRuns === 0) {
+              // 好投: +5（無失点イニング）
+              gameState.performanceBank[teamKey] = Math.min(
+                (gameState.performanceBank[teamKey] || 0) + 5,
+                20  // 上限20
+              );
+            } else {
+              // 失点: -10（最低0）
+              gameState.performanceBank[teamKey] = Math.max(
+                (gameState.performanceBank[teamKey] || 0) - 10,
+                0
+              );
+            }
+            // リリーフのイニング失点を記録
+            if (reliefTrack.currentRelieverId === pitcher.id) {
+              reliefTrack.relieverInningRuns = inningRuns;
+            }
+          }
+
           // AI監督: ロール別の投手交代判定（pitcherRoles対応）
           const staminaRate = pitcherData.currentStamina / pitcher.pitching.stamina;
           const rotation = TEAMS_DATA[teamName]?.pitchingRotation;
@@ -1339,48 +1403,107 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           let situation = 'middle';
           let changeReason = '';
 
-          // リリーフ投手の登板制限チェック
+          // 球数制限チェック（先発投手用）
+          const totalPitches = pitcherData.gameStats?.pitching?.pitches || 0;
           const isReliever = reliefTrack.currentRelieverId === pitcher.id;
-          if (isReliever) {
+
+          // リリーフ投手の役割完了チェック（登板制限を役割ベースに変更）
+          if (isReliever && defendedThisInning) {
             const relieverRole = pitcherRoles[pitcher.id] || 'auto_r';
-            // ロール別のイニング制限
-            let maxOuts;
-            if (relieverRole === 'long') {
-              maxOuts = 9; // ロングリリーフ: 3回
-            } else if (relieverRole === 'onepoint') {
-              // ワンポイント: 1打者限定（イニング終了時に残っていた場合のフォールバック）
-              if (reliefTrack.relieverBattersFaced >= 1) {
-                changeReason = `ワンポイント${pitcher.name}が1打者対戦済み、交代`;
+            const inningRuns = (pitcherData.gameStats?.pitching?.runsAllowed || 0) - (gameState.inningStartRuns[teamKey] || 0);
+
+            if (relieverRole === 'onepoint') {
+              // ワンポイント: 打っても抑えても必ず交代（イニング終了時のフォールバック）
+              shouldChange = true;
+              changeReason = `ワンポイント${pitcher.name}の仕事完了、交代`;
+              situation = 'middle';
+            } else if (relieverRole === 'setup' || relieverRole === 'ace_relief') {
+              // セットアッパー/中継ぎエース: イニングを抑えたら交代、失点でも交代
+              if (inningRuns > 0) {
+                shouldChange = true;
+                changeReason = `${relieverRole === 'setup' ? 'セットアッパー' : '中継ぎエース'}${pitcher.name}が失点、交代`;
+                situation = 'middle';
+              } else if (reliefTrack.relieverOutsPitched >= 3) {
+                // 1イニング完了で交代（好投でも役割完了）
+                shouldChange = true;
+                changeReason = `${relieverRole === 'setup' ? 'セットアッパー' : '中継ぎエース'}${pitcher.name}が1イニング完了、交代`;
+                situation = 'middle';
+              }
+            } else if (relieverRole === 'closer') {
+              // クローザー: イニングを抑えたら交代、最大2イニング
+              if (reliefTrack.relieverOutsPitched >= 6) {
+                shouldChange = true;
+                changeReason = `守護神${pitcher.name}が2イニング投球、交代`;
+                situation = 'middle';
+              }
+            } else if (relieverRole === 'long' || relieverRole === 'mopup' || relieverRole === 'behind') {
+              // ロング/敗戦処理/ビハインド: イニングイーター、多少の失点はOK
+              const maxOuts = relieverRole === 'long' ? 9 : // ロング: 3イニング
+                (reliefTrack.starterLeftInning || 9) <= 3 ? 12 : 6; // 早期降板なら4回、通常2回
+              if (reliefTrack.relieverOutsPitched >= maxOuts) {
+                const inningsStr = Math.floor(reliefTrack.relieverOutsPitched / 3);
+                changeReason = `${pitcher.name}が登板制限(${inningsStr}回)に到達`;
+                shouldChange = true;
+                situation = 'middle';
+              } else if (inningRuns >= 3) {
+                // さすがに3失点以上は交代
+                changeReason = `${pitcher.name}が${inningRuns}失点、交代`;
                 shouldChange = true;
                 situation = 'middle';
               }
-              maxOuts = 3; // フォールバック（通常はbattersFacedで先に交代する）
-            } else if (relieverRole === 'ace_relief') {
-              maxOuts = 6; // 中継ぎエース: 2回
-            } else if (relieverRole === 'setup') {
-              maxOuts = 6; // セットアップ: 2回
-            } else if (relieverRole === 'closer') {
-              maxOuts = 6; // クローザー: 2回
-            } else if (relieverRole === 'mopup' || relieverRole === 'behind') {
-              const starterLeft = reliefTrack.starterLeftInning || 9;
-              maxOuts = starterLeft <= 3 ? 12 : 6; // 早期降板なら4回、通常2回
             } else {
+              // auto_r / 未設定: 従来どおりのアウト数制限
               const starterLeft = reliefTrack.starterLeftInning || 9;
-              maxOuts = starterLeft <= 3 ? 12 : 6;
+              const maxOuts = starterLeft <= 3 ? 12 : 6;
+              if (reliefTrack.relieverOutsPitched >= maxOuts) {
+                const inningsStr = Math.floor(reliefTrack.relieverOutsPitched / 3);
+                changeReason = `${pitcher.name}が登板制限(${inningsStr}回)に到達`;
+                shouldChange = true;
+                situation = 'middle';
+              }
             }
-            if (!shouldChange && reliefTrack.relieverOutsPitched >= maxOuts) {
-              const inningsStr = Math.floor(reliefTrack.relieverOutsPitched / 3);
-              changeReason = `${pitcher.name}が登板制限(${inningsStr}回)に到達`;
+          } else if (isReliever && !defendedThisInning) {
+            // 守備していないイニングでもワンポイントのフォールバックチェック
+            const relieverRole = pitcherRoles[pitcher.id] || 'auto_r';
+            if (relieverRole === 'onepoint' && reliefTrack.relieverBattersFaced >= 1) {
+              changeReason = `ワンポイント${pitcher.name}が1打者対戦済み、交代`;
               shouldChange = true;
               situation = 'middle';
             }
           }
 
-          // 先発ロール別の交代判定
+          // 先発ロール別の交代判定（好投貯金＋球数制限を併用）
           if (!shouldChange && !isReliever) {
+            // 球数上限（ロール別）
+            let pitchLimit;
+            if (currentRole === 'complete') pitchLimit = 130;      // 完投型: 130球
+            else if (currentRole === 'ace') pitchLimit = 115;      // エース: 115球
+            else if (currentRole === 'short') pitchLimit = 70;     // ショート: 70球
+            else if (currentRole === 'quality') pitchLimit = 100;  // 勝ち権利: 100球
+            else pitchLimit = 100;                                  // auto_s: 100球
+
+            // 好投貯金の状態
+            const perfBank = gameState.performanceBank[teamKey] || 0;
+            const inningRunsStarter = defendedThisInning
+              ? (pitcherData.gameStats?.pitching?.runsAllowed || 0) - (gameState.inningStartRuns[teamKey] || 0)
+              : 0;
+            // 好投貯金が0で失点 → 即降板トリガー（1回耐えたが2回目で捕まったパターン）
+            const caughtWithNoBank = defendedThisInning && perfBank === 0 && inningRunsStarter > 0;
+
+            // 球数制限到達チェック（完投型・エースは好投中なら続投可能）
+            const overPitchLimit = totalPitches >= pitchLimit;
+            const canOverride = (currentRole === 'complete' || currentRole === 'ace') && perfBank >= 10 && staminaRate >= 0.30;
+
             if (currentRole === 'ace') {
-              // エース: 7-8回を責任投球、スタミナ30%以下で交代
-              if (gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
+              if (overPitchLimit && !canOverride) {
+                shouldChange = true;
+                situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
+                changeReason = `エース${pitcher.name}が球数制限到達(${totalPitches}球)`;
+              } else if (caughtWithNoBank && gameState.inning >= 3) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `エース${pitcher.name}が捕まった(好投貯金なし・${inningRunsStarter}失点)`;
+              } else if (gameState.inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
                 shouldChange = true;
                 situation = 'save';
                 changeReason = `エース${pitcher.name}が8回を投げ切り、守護神へリレー`;
@@ -1394,8 +1517,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 changeReason = `エース${pitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
               }
             } else if (currentRole === 'complete') {
-              // 完投型: スタミナ25%以下で交代、得点圏ピンチなら35%
-              if (staminaRate < 0.25) {
+              if (overPitchLimit && !canOverride) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `完投型${pitcher.name}が球数制限到達(${totalPitches}球)`;
+              } else if (caughtWithNoBank && gameState.inning >= 3) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `完投型${pitcher.name}が捕まった(好投貯金なし・${inningRunsStarter}失点)`;
+              } else if (staminaRate < 0.25) {
                 shouldChange = true;
                 situation = 'middle';
                 changeReason = `完投型${pitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
@@ -1405,8 +1535,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 changeReason = `9回セーブ場面、完投型だがスタミナ不足で守護神へ`;
               }
             } else if (currentRole === 'short') {
-              // ショートスターター: 3回以降スタミナ50%以下で交代、4回終了で必ず交代
-              if (gameState.inning >= 5) {
+              if (overPitchLimit) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `ショートスターター${pitcher.name}が球数制限到達(${totalPitches}球)`;
+              } else if (gameState.inning >= 5) {
                 shouldChange = true;
                 situation = 'middle';
                 changeReason = `ショートスターター${pitcher.name}の予定投球回終了`;
@@ -1416,8 +1549,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 changeReason = `ショートスターター${pitcher.name}のスタミナ低下(${Math.round(staminaRate * 100)}%)`;
               }
             } else if (currentRole === 'quality') {
-              // 勝ち権利交代型: 5回以降スタミナ40%以下、または6回終了で交代
-              if (gameState.inning >= 7) {
+              if (overPitchLimit) {
+                shouldChange = true;
+                situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
+                changeReason = `${pitcher.name}が球数制限到達(${totalPitches}球)`;
+              } else if (caughtWithNoBank && gameState.inning >= 3) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `勝ち権利型${pitcher.name}が捕まった(好投貯金なし・${inningRunsStarter}失点)`;
+              } else if (gameState.inning >= 7) {
                 shouldChange = true;
                 situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
                 changeReason = `${pitcher.name}が勝ち権利達成、温存のため交代`;
@@ -1427,8 +1567,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 changeReason = `勝ち権利型${pitcher.name}のスタミナ低下(${Math.round(staminaRate * 100)}%)`;
               }
             } else {
-              // auto_s / 未設定: 従来ロジック（改良版）
-              if (gameState.inning >= 8) {
+              // auto_s / 未設定: 従来ロジック＋球数制限＋好投貯金
+              if (overPitchLimit) {
+                shouldChange = true;
+                situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
+                changeReason = `${pitcher.name}が球数制限到達(${totalPitches}球)`;
+              } else if (caughtWithNoBank && gameState.inning >= 3) {
+                shouldChange = true;
+                situation = 'middle';
+                changeReason = `先発${pitcher.name}が捕まった(好投貯金なし・${inningRunsStarter}失点)`;
+              } else if (gameState.inning >= 8) {
                 shouldChange = true;
                 situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
                 changeReason = `${pitcher.name}が7回を投げ切り継投へ`;
@@ -1625,6 +1773,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               reliefTrack.currentRelieverId = reliever.id;
               reliefTrack.relieverOutsPitched = 0;
               reliefTrack.relieverBattersFaced = 0;
+      reliefTrack.relieverInningRuns = 0;
 
               if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
                 TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
