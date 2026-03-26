@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
@@ -122,19 +122,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
   const [dispatchConfirm, setDispatchConfirm] = useState(null); // { playerId, destKey }
-  const [dispatchResults, setDispatchResults] = useState([]); // 派遣結果の累積表示
+  const [dispatchResults, setDispatchResults] = useState([]); // キャンプ終了時の派遣結果表示
   const [updateKey, setUpdateKey] = useState(0); // 再レンダリング用
 
   const handleDispatch = (playerId, destKey) => {
     const player = userTeam?.players?.find(p => p.id === playerId);
     if (!player) return;
-    const { growthReport } = executeDispatchTraining(player, destKey);
-    const dest = DISPATCH_DESTINATIONS[destKey];
-    setDispatchResults(prev => [...prev, {
-      player,
-      destination: dest?.name || '不明',
-      growthReport,
-    }]);
+    executeDispatchTraining(player, destKey);
     setDispatchConfirm(null);
     setUpdateKey(prev => prev + 1); // 再レンダリング
   };
@@ -373,24 +367,21 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
               ))}
             </div>
 
-            {/* 派遣結果 */}
-            {dispatchResults.length > 0 && (
+            {/* 派遣中の選手 */}
+            {dispatchedPlayers.length > 0 && (
               <div className="bg-gray-800 rounded-lg p-2 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-orange-400 text-xs font-bold">派遣結果:</span>
-                  {dispatchResults.map((result, idx) => (
-                    <div key={idx} className="flex items-center gap-1 bg-gray-700/50 rounded px-2 py-0.5">
-                      <span className={`font-bold text-[10px] ${result.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{result.player.name}</span>
-                      <span className="text-gray-500 text-[10px]">{result.destination}</span>
-                      {result.growthReport.map((g, gIdx) => (
-                        <span key={gIdx} className={`px-1 rounded text-[10px] font-bold ${
-                          g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
-                        }`}>
-                          {g.statName}+{g.growth}{g.isAwakening && '覚醒!'}
-                        </span>
-                      ))}
-                    </div>
-                  ))}
+                  <span className="text-orange-400 text-xs font-bold">派遣中:</span>
+                  {dispatchedPlayers.map((p, idx) => {
+                    const dest = DISPATCH_DESTINATIONS[p.dispatchedThisCamp];
+                    return (
+                      <div key={idx} className="flex items-center gap-1 bg-gray-700/50 rounded px-2 py-0.5">
+                        <span className={`font-bold text-[10px] ${p.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
+                        <span className="text-gray-500 text-[10px]">{dest?.icon} {dest?.name}</span>
+                        <span className="text-orange-400 text-[10px]">（結果はキャンプ終了時）</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -697,17 +688,80 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
               ) : (
                 <button
                   onClick={() => {
-                    // キャンプ終了時に派遣フラグをクリア
+                    // キャンプ終了時に派遣結果を確定・適用
+                    const results = [];
                     Object.values(TEAMS_DATA).forEach(team => {
-                      team.players?.forEach(p => { delete p.dispatchedThisCamp; });
+                      team.players?.forEach(p => {
+                        if (p.dispatchedThisCamp) {
+                          const { growthReport, outcome } = resolveDispatchTraining(p);
+                          // ユーザーチームの結果のみ表示用に収集
+                          if (team === userTeam) {
+                            const dest = DISPATCH_DESTINATIONS[p.dispatchedThisCamp];
+                            results.push({ player: p, destination: dest?.name || '不明', growthReport, outcome });
+                          }
+                          delete p.dispatchOutcome;
+                          delete p.dispatchedThisCamp;
+                        }
+                      });
                     });
-                    onComplete();
+                    if (results.length > 0) {
+                      setDispatchResults(results);
+                      setViewMode('dispatchResults');
+                    } else {
+                      onComplete();
+                    }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
                 >
                   キャンプ終了 → シーズン開始
                 </button>
               )}
+            </div>
+          </>
+        )}
+
+        {viewMode === 'dispatchResults' && (
+          <>
+            <div className="bg-gray-800 rounded-lg overflow-hidden mb-3">
+              <div className="px-3 py-2 bg-orange-700/80 border-b border-orange-600">
+                <h2 className="text-sm font-bold text-white">派遣結果報告</h2>
+              </div>
+              <div className="p-3 space-y-3">
+                {dispatchResults.map((result, idx) => {
+                  const outcomeLabel = result.outcome === 'great_success' ? '大成功' : result.outcome === 'success' ? '成功' : '失敗';
+                  const outcomeColor = result.outcome === 'great_success' ? 'bg-yellow-500 text-black' : result.outcome === 'success' ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300';
+                  return (
+                    <div key={idx} className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`font-bold text-sm ${result.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{result.player.name}</span>
+                        <span className="text-gray-400 text-xs">{result.destination}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${outcomeColor}`}>{outcomeLabel}</span>
+                      </div>
+                      {result.growthReport.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {result.growthReport.map((g, gIdx) => (
+                            <span key={gIdx} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
+                            }`}>
+                              {g.statName}: {g.before}→{g.after} +{g.growth}{g.isAwakening && ' 覚醒!'}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-500 text-xs">成長なし... 派遣の成果は得られませんでした</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="text-center">
+              <button
+                onClick={onComplete}
+                className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+              >
+                シーズン開始
+              </button>
             </div>
           </>
         )}
