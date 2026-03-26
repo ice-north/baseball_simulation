@@ -369,6 +369,22 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     return Math.max(40, Math.min(150, base + variance));
   };
 
+  // 球速から肩力を導出（投手・二刀流用）
+  // velocity 110→arm ~30, 130→arm ~55, 150→arm ~80
+  const armFromVelocity = (velocity) => {
+    const base = Math.round((velocity - 110) / 45 * 55 + 28);
+    const variance = Math.floor(Math.random() * 17) - 8; // -8 ~ +8
+    return Math.max(10, Math.min(99, base + variance));
+  };
+
+  // 肩力から球速を導出（野手用）
+  // arm 20→velocity ~106, 50→velocity ~116, 80→velocity ~127, 99→velocity ~133
+  const velocityFromArm = (arm) => {
+    const base = Math.round((arm - 10) / 90 * 30 + 103);
+    const variance = Math.floor(Math.random() * 7) - 3; // -3 ~ +3
+    return Math.max(100, Math.min(145, base + variance));
+  };
+
   // 全生成選手の平均能力を-3する調整関数
   const applyGlobalOffset = (abilities) => {
     const offset = -3;
@@ -387,6 +403,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
 
   // 二刀流選手の場合は投打両方に能力を持つ
   if (isTwoWay) {
+    const twoWayVelocity = Math.min(randVelocity(121, 139) + velocityAdjust, 149);
     return applyGlobalOffset({
       // 野手能力（平均的）
       meet: randRangeWithVariance(40, 65),
@@ -394,12 +411,12 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       eye: randRangeWithVariance(35, 65),
       steal: randRangeWithVariance(30, 60),
       speed: randRangeWithVariance(43, 73),
-      arm: randRangeWithVariance(50, 80),
+      arm: armFromVelocity(twoWayVelocity),
       defense: randRangeWithVariance(40, 65),
       bodyStamina: randRangeWithVariance(40, 70),
       recovery: randRangeWithVariance(40, 70),
       // 投手能力（平均的だが投げられる、球速-6km、スタミナ2/3調整済み）
-      velocity: Math.min(randVelocity(121, 139) + velocityAdjust, 149),
+      velocity: twoWayVelocity,
       control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
       stamina: randStamina(67, 100)
     });
@@ -408,17 +425,18 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 通常の能力値範囲（投手用 or 野手アーキタイプ別）
   let normalAbilities;
   if (isPitcher) {
+    const pitcherVelocity = Math.min(randVelocity(116, 139, ageBonus) + velocityAdjust, 152);
     normalAbilities = {
       meet: randRangeWithVariance(15, 40),
       power: randRangeWithVariance(5, 29),
       eye: randRangeWithVariance(25, 50),
       steal: randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
       speed: randRangeWithVariance(33, 58, Math.max(0, Math.floor(ageBonus * 0.5))),
-      arm: randRangeWithVariance(40, 65),
+      arm: armFromVelocity(pitcherVelocity),
       defense: randRangeWithVariance(40, 65),
       bodyStamina: randRangeWithVariance(40, 70),
       recovery: randRangeWithVariance(40, 70),
-      velocity: Math.min(randVelocity(116, 139, ageBonus) + velocityAdjust, 152),
+      velocity: pitcherVelocity,
       control: Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85),
       stamina: randStamina(73, 113, ageBonus)
     };
@@ -441,17 +459,18 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       { meet: [25, 50], power: [27, 52], eye: [25, 55], steal: [20, 50], speed: [33, 63], arm: [60, 85], defense: [40, 70] },
     ];
     const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
+    const fielderArm = randRangeWithVariance(arch.arm[0], arch.arm[1]);
     normalAbilities = {
       meet: randRangeWithVariance(arch.meet[0], arch.meet[1]),
       power: randRangeWithVariance(arch.power[0], arch.power[1]),
       eye: randRangeWithVariance(arch.eye[0], arch.eye[1]),
       steal: randRangeWithVariance(arch.steal[0], arch.steal[1], Math.max(0, Math.floor(ageBonus * 0.7))),
       speed: randRangeWithVariance(arch.speed[0], arch.speed[1], Math.max(0, Math.floor(ageBonus * 0.7))),
-      arm: randRangeWithVariance(arch.arm[0], arch.arm[1]),
+      arm: fielderArm,
       defense: randRangeWithVariance(arch.defense[0], arch.defense[1]),
       bodyStamina: randRangeWithVariance(40, 75),
       recovery: randRangeWithVariance(40, 75),
-      velocity: randRange(106, 121),
+      velocity: velocityFromArm(fielderArm),
       control: randRange(30, 55),
       stamina: randRange(40, 67)
     };
@@ -534,6 +553,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   };
 
   // 各特性を順に適用（複数特性は良い方の値を採用）
+  let velocityChanged = false;
+  let armChanged = false;
   playerTraits.forEach(trait => {
     const bonuses = traitBonuses[trait];
     if (!bonuses) return;
@@ -542,9 +563,24 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       // 複数特性がある場合は、より高い値を採用（強化方向で合成）
       if (traitValue > abilities[stat]) {
         abilities[stat] = traitValue;
+        if (stat === 'velocity') velocityChanged = true;
+        if (stat === 'arm') armChanged = true;
       }
     });
   });
+
+  // 特性で球速or肩が変わった場合、もう片方を連動させる
+  if (isPitcher && velocityChanged) {
+    // 投手: 球速から肩を再導出（特性のarm指定がなければ）
+    if (!armChanged) {
+      abilities.arm = armFromVelocity(abilities.velocity);
+    }
+  } else if (!isPitcher && armChanged) {
+    // 野手: 肩から球速を再導出（特性のvelocity指定がなければ）
+    if (!velocityChanged) {
+      abilities.velocity = velocityFromArm(abilities.arm);
+    }
+  }
 
   return applyGlobalOffset(abilities);
 }
