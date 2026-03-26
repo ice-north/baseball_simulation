@@ -961,14 +961,21 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     if (!shouldChange) return;
 
-    // リリーフ投手選択（ロールベース）
+    // リリーフ投手選択（ロールベース、再登板防止）
     let reliever = null;
     let selectedRoleLabel = '';
+
+    // 今試合で既に登板した投手のIDセット（再登板防止）
+    const alreadyPitchedIds = new Set(
+      gs.pitcherAppearances[teamKey].map(a => a.id)
+    );
+    alreadyPitchedIds.add(currentPitcher.id);
+    const isAvailableMid = (id) => !alreadyPitchedIds.has(id) && (fatigue[id] || 0) < 50;
 
     // 左打者対策: ワンポイント左投手を優先選択
     if (situation === 'lefty') {
       const onepointIds = (rotation.middleRelievers || []).filter(id =>
-        pitcherRoles[id] === 'onepoint' && (fatigue[id] || 0) < 50 && id !== currentPitcher.id
+        pitcherRoles[id] === 'onepoint' && isAvailableMid(id)
       );
       for (const opId of onepointIds) {
         const opPlayer = defenseTeam.players.find(p => p.id === opId);
@@ -981,8 +988,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     }
 
     if (situation === 'save' && rotation.closer) {
-      const closerData = defenseTeam.players.find(p => p.id === rotation.closer && p.id !== currentPitcher.id);
-      if (closerData && (fatigue[rotation.closer] || 0) < 50) {
+      const closerData = defenseTeam.players.find(p => p.id === rotation.closer);
+      if (closerData && isAvailableMid(rotation.closer)) {
         reliever = closerData;
         selectedRoleLabel = '守護神';
       }
@@ -990,8 +997,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     if (!reliever && (situation === 'hold' || situation === 'save')) {
       for (const setupId of (rotation.setupMen || [])) {
-        const setupData = defenseTeam.players.find(p => p.id === setupId && p.id !== currentPitcher.id);
-        if (setupData && (fatigue[setupId] || 0) < 50) {
+        const setupData = defenseTeam.players.find(p => p.id === setupId);
+        if (setupData && isAvailableMid(setupId)) {
           reliever = setupData;
           selectedRoleLabel = 'セットアッパー';
           break;
@@ -1002,8 +1009,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     // 接戦ピンチ: 中継ぎエースを優先
     if (!reliever && Math.abs(scoreDiff) <= 3) {
       const aceRelievers = (rotation.middleRelievers || [])
-        .filter(id => pitcherRoles[id] === 'ace_relief' && (fatigue[id] || 0) < 50)
-        .map(id => defenseTeam.players.find(p => p.id === id && p.id !== currentPitcher.id))
+        .filter(id => pitcherRoles[id] === 'ace_relief' && isAvailableMid(id))
+        .map(id => defenseTeam.players.find(p => p.id === id))
         .filter(Boolean);
       if (aceRelievers.length > 0) {
         reliever = aceRelievers[0];
@@ -1014,9 +1021,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     if (!reliever) {
       const sortedMiddle = (rotation.middleRelievers || [])
         .filter(id => {
-          const p = defenseTeam.players.find(pl => pl.id === id && pl.id !== currentPitcher.id);
-          // ワンポイント投手は左打者対策専用なので一般選択から除外
-          return p && (fatigue[id] || 0) < 50 && pitcherRoles[id] !== 'onepoint';
+          const p = defenseTeam.players.find(pl => pl.id === id);
+          return p && isAvailableMid(id) && pitcherRoles[id] !== 'onepoint';
         })
         .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
       if (sortedMiddle.length > 0) {
@@ -1032,7 +1038,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       reliever = defenseTeam.players.find(p =>
         isPitcher(p) &&
         p.battingOrder === 0 &&
-        p.id !== currentPitcher.id &&
+        !alreadyPitchedIds.has(p.id) &&
         !starterIds.has(p.id) &&
         (p.currentStamina || 80) > 40
       );
@@ -1599,13 +1605,22 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             const fatigue = rotation?.reliefFatigue || {};
             let selectedRoleLabel = '';
 
+            // 今試合で既に登板した投手のIDセット（再登板防止）
+            const alreadyPitchedIds = new Set(
+              gameState.pitcherAppearances[teamKey].map(a => a.id)
+            );
+            // 現在の投手も除外対象に追加
+            alreadyPitchedIds.add(pitcher.id);
+            // 選手が起用可能かチェック（未登板 & 疲労OK & 現在の投手でない）
+            const isAvailable = (id) => !alreadyPitchedIds.has(id) && (fatigue[id] || 0) < 50;
+
             // セーブ場面: クローザー最優先（既にマウンドにいる場合は交代不要）
             if (situation === 'save' && rotation?.closer) {
               if (pitcher.id === rotation.closer) {
                 shouldChange = false;
               } else {
                 const closerData = team.players.find(p => p.id === rotation.closer && p.id !== pitcher.id);
-                if (closerData && (fatigue[rotation.closer] || 0) < 50) {
+                if (closerData && isAvailable(rotation.closer)) {
                   reliever = closerData;
                   selectedRoleLabel = '守護神';
                 }
@@ -1615,8 +1630,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             // ホールド場面: セットアッパー優先
             if (shouldChange && !reliever && (situation === 'hold' || situation === 'save')) {
               for (const setupId of (rotation?.setupMen || [])) {
-                const setupData = team.players.find(p => p.id === setupId && p.id !== pitcher.id);
-                if (setupData && (fatigue[setupId] || 0) < 50) {
+                const setupData = team.players.find(p => p.id === setupId);
+                if (setupData && isAvailable(setupId)) {
                   reliever = setupData;
                   selectedRoleLabel = 'セットアッパー';
                   break;
@@ -1627,8 +1642,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             // ビハインド場面: ビハインドロール優先
             if (shouldChange && !reliever && situation === 'behind') {
               const behindPitchers = (rotation?.middleRelievers || [])
-                .filter(id => pitcherRoles[id] === 'behind' && (fatigue[id] || 0) < 50)
-                .map(id => team.players.find(p => p.id === id && p.id !== pitcher.id))
+                .filter(id => pitcherRoles[id] === 'behind' && isAvailable(id))
+                .map(id => team.players.find(p => p.id === id))
                 .filter(Boolean);
               if (behindPitchers.length > 0) {
                 reliever = behindPitchers[0];
@@ -1639,8 +1654,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             // 大量リード: 敗戦処理ロール優先
             if (shouldChange && !reliever && scoreDiff >= 5) {
               const mopupPitchers = (rotation?.middleRelievers || [])
-                .filter(id => pitcherRoles[id] === 'mopup' && (fatigue[id] || 0) < 50)
-                .map(id => team.players.find(p => p.id === id && p.id !== pitcher.id))
+                .filter(id => pitcherRoles[id] === 'mopup' && isAvailable(id))
+                .map(id => team.players.find(p => p.id === id))
                 .filter(Boolean);
               if (mopupPitchers.length > 0) {
                 reliever = mopupPitchers[0];
@@ -1651,8 +1666,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             // ショートスターター後: ロングリリーフ優先
             if (shouldChange && !reliever && currentRole === 'short') {
               const longRelievers = (rotation?.middleRelievers || [])
-                .filter(id => pitcherRoles[id] === 'long' && (fatigue[id] || 0) < 50)
-                .map(id => team.players.find(p => p.id === id && p.id !== pitcher.id))
+                .filter(id => pitcherRoles[id] === 'long' && isAvailable(id))
+                .map(id => team.players.find(p => p.id === id))
                 .filter(Boolean);
               if (longRelievers.length > 0) {
                 reliever = longRelievers[0];
@@ -1665,8 +1680,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             if (shouldChange && !reliever) {
               const sortedMiddle = (rotation?.middleRelievers || [])
                 .filter(id => {
-                  const p = team.players.find(pl => pl.id === id && pl.id !== pitcher.id);
-                  return p && (fatigue[id] || 0) < 50 && pitcherRoles[id] !== 'onepoint';
+                  const p = team.players.find(pl => pl.id === id);
+                  return p && isAvailable(id) && pitcherRoles[id] !== 'onepoint';
                 })
                 .sort((a, b) => {
                   // 中継ぎエースを接戦時に優先
@@ -1686,18 +1701,19 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               }
             }
 
-            // フォールバック（先発ローテーション投手は除外）
+            // フォールバック（先発ローテーション投手・登板済み投手は除外）
             if (shouldChange && !reliever) {
               const starterIds = new Set(rotation?.starters || []);
               reliever = team.players.find(p =>
                 isPitcher(p) &&
                 p.battingOrder === 0 &&
-                p.id !== pitcher.id &&
+                !alreadyPitchedIds.has(p.id) &&
                 !starterIds.has(p.id) &&
                 (p.currentStamina || 80) > 40
               );
               if (reliever) selectedRoleLabel = '緊急中継ぎ';
               if (!reliever) {
+                // 最終手段: 登板済みでも使う（ただし現在の投手は除外）
                 reliever = team.players.find(p =>
                   isPitcher(p) &&
                   p.battingOrder === 0 &&
