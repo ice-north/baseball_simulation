@@ -1038,13 +1038,6 @@ export const TRAINING_MENUS = {
     targets: ['eye'],
     category: 'batting'
   },
-  breaking: {
-    name: '変化球練習',
-    icon: '🌀',
-    description: '変化球レベルを強化',
-    targets: ['breaking'],
-    category: 'pitching'
-  },
   newpitch: {
     name: '新球種習得',
     icon: '✨',
@@ -1093,6 +1086,12 @@ export const SUB_TRAINING_MENUS = {
     icon: '↔️',
     description: '打席変更に挑戦（失敗でミート低下リスク）',
     targets: ['switch_bats'],
+  },
+  breaking: {
+    name: '変化球練習',
+    icon: '🌀',
+    description: '変化球レベルを強化（投手のみ）',
+    targets: ['breaking'],
   },
   newpitch: {
     name: '新球種習得',
@@ -1276,6 +1275,26 @@ export function executeSubTraining(player, subType, options = {}) {
           const oldMeet = player.batting.meet;
           player.batting.meet = Math.max(20, oldMeet - penalty);
           growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: player.batting.meet - oldMeet });
+        }
+      }
+      break;
+    }
+    case 'breaking': {
+      // 変化球練習（サブ練習版）
+      if (player.position === 'pitcher' && player.pitching) {
+        const arsenal = player.pitching?.arsenal || [];
+        const nonStraight = arsenal.filter(p => p.type !== 'straight');
+        if (nonStraight.length > 0) {
+          nonStraight.forEach(pitch => {
+            const age = player.age || 20;
+            const ageBase = getAgeGrowthBase(age, false);
+            const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
+            const rawGrowth = (Math.floor(Math.random() * 3) + 1 + Math.floor(Math.random() * 4) + 1) * ageMultiplier;
+            const growth = Math.max(1, Math.round(rawGrowth * 0.167));
+            const before = pitch.level;
+            pitch.level = before + growth;
+            growthReport.push({ statName: `${getPitchTypeName(pitch.type)}`, before, after: pitch.level, growth: pitch.level - before });
+          });
         }
       }
       break;
@@ -1472,44 +1491,35 @@ export function executeCampTraining(player, trainingType, newPitchType) {
   const growthReport = [];
   let updatedPlayer = JSON.parse(JSON.stringify(player));
 
-  // 変化球練習の場合
-  if (trainingType === 'breaking') {
-    const arsenal = updatedPlayer.pitching?.arsenal || [];
-    const nonStraight = arsenal.filter(p => p.type !== 'straight');
-    if (nonStraight.length > 0) {
-      nonStraight.forEach(pitch => {
-        const ageBase = getAgeGrowthBase(age, false);
-        const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
-        // 成長量1/6: 元(1-3 + 1-4) → 1/6（元1/4の2/3）
-        const rawGrowth = (Math.floor(Math.random() * 3) + 1 + Math.floor(Math.random() * 4) + 1) * ageMultiplier;
-        const growth = Math.max(1, Math.round(rawGrowth * 0.167));
-        const before = pitch.level;
-        pitch.level = before + growth; // 上限なし
-        growthReport.push({
-          stat: 'breaking',
-          statName: `${getPitchTypeName(pitch.type)}`,
-          before, after: pitch.level, growth: pitch.level - before, isAwakening: false
-        });
-      });
-    }
-    return { player: updatedPlayer, growthReport };
-  }
-
-  // 新球種習得の場合
+  // 新球種習得の場合（大成功25%/成功50%/失敗25%）
   if (trainingType === 'newpitch') {
     const arsenal = updatedPlayer.pitching?.arsenal || [];
     const existingTypes = arsenal.map(p => p.type);
     const targetType = newPitchType || ALL_PITCH_TYPES.find(t => !existingTypes.includes(t));
     if (targetType && !existingTypes.includes(targetType)) {
-      const newId = arsenal.length > 0 ? Math.max(...arsenal.map(a => a.id)) + 1 : 1;
-      const startLevel = Math.floor(Math.random() * 10) + 10; // 10-19
-      arsenal.push({ id: newId, type: targetType, level: startLevel });
-      updatedPlayer.pitching.arsenal = arsenal;
-      growthReport.push({
-        stat: 'newpitch',
-        statName: `${getPitchTypeName(targetType)}習得`,
-        before: 0, after: startLevel, growth: startLevel, isAwakening: false
-      });
+      // 大成功25%, 成功50%, 失敗25%
+      const roll = Math.random();
+      const outcome = roll < 0.25 ? 'great_success' : roll < 0.75 ? 'success' : 'failure';
+      if (outcome === 'failure') {
+        growthReport.push({
+          stat: 'newpitch',
+          statName: `${getPitchTypeName(targetType)}習得失敗`,
+          before: 0, after: 0, growth: 0, isAwakening: false
+        });
+      } else {
+        const isGreat = outcome === 'great_success';
+        const newId = arsenal.length > 0 ? Math.max(...arsenal.map(a => a.id)) + 1 : 1;
+        const startLevel = isGreat
+          ? Math.floor(Math.random() * 11) + 65 // 大成功: 65-75
+          : Math.floor(Math.random() * 10) + 10; // 成功: 10-19
+        arsenal.push({ id: newId, type: targetType, level: startLevel });
+        updatedPlayer.pitching.arsenal = arsenal;
+        growthReport.push({
+          stat: 'newpitch',
+          statName: `${getPitchTypeName(targetType)}習得${isGreat ? '(大成功!)' : ''}`,
+          before: 0, after: startLevel, growth: startLevel, isAwakening: isGreat
+        });
+      }
     } else {
       growthReport.push({
         stat: 'newpitch',

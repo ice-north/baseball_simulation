@@ -236,7 +236,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       }
 
       const aiAssign = {};
-      const pitcherMenus = ['stamina', 'control', 'velocity', 'breaking'];
+      const pitcherMenus = ['stamina', 'control', 'velocity', 'newpitch'];
       const batterMenus = ['batting', 'baserunning', 'fielding', 'eye'];
       aiTeam.players.forEach(p => {
         if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
