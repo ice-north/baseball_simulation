@@ -2,6 +2,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
+import { getPositionFitness } from '../utils/physics.js';
 
 // 選手が投手かどうかを判定（positionだけでなく能力値も確認）
 export const isPitcherPlayer = (player) => {
@@ -50,8 +51,8 @@ export const generateAILineup = (teamData, teamName) => {
     if (available.length === 0) return;
 
     available.sort((a, b) => {
-      const aFit = a.positionFitness?.[pos] || 50;
-      const bFit = b.positionFitness?.[pos] || 50;
+      const aFit = getPositionFitness(a, pos);
+      const bFit = getPositionFitness(b, pos);
       const aEff = getEffectiveBatting(a);
       const bEff = getEffectiveBatting(b);
       const aBat = aEff.meet + aEff.power;
@@ -406,7 +407,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const infieldPositions = ['first', 'second', 'short', 'third', 'catcher', 'pitcher'];
 
     team.players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9).forEach(player => {
-      const fitness = player.positionFitness?.[player.position] ?? 50;
+      const fitness = getPositionFitness(player, player.position);
       const fitnessMult = 0.5 + (fitness / 100) * 0.5;
       const posBonus = infieldPositions.includes(player.position) ? infieldBonus : outfieldBonus;
       defense[player.position] = {
@@ -664,7 +665,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const baseChance = (runnerSpeed - 25) * 1.8;
         const catcherPenalty = catcherArm * 0.3;
         const pitcherPenalty = pitcherQuick * 0.1;
-        const successChance = baseChance - catcherPenalty - pitcherPenalty + (Math.random() * 20 - 10);
+        const successChance = Math.max(0, Math.min(100, baseChance - catcherPenalty - pitcherPenalty + (Math.random() * 20 - 10)));
 
         // 走塁方針の効果
         const baseRunStrat = offenseTeam.strategy?.baseRunning || 'normal';
@@ -1389,6 +1390,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     if (atBats >= 50) {
       console.error(`${inningLabel}: 異常な打席数（${atBats}打席）。強制終了します。`);
+      // ゲーム状態を正常化: アウトを3にしてベースをクリア
+      gameState.outs = 3;
+      gameState.bases = [false, false, false];
     }
 
     // イニング終了処理

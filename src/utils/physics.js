@@ -75,6 +75,18 @@ export const getBestFitPosition = (player) => {
 };
 
 /**
+ * 選手の指定ポジションの適正値を取得（統一アクセス）
+ * @param {Object} player - 選手オブジェクト
+ * @param {string} pos - ポジション名
+ * @param {number} defaultValue - デフォルト値（省略時50）
+ * @returns {number} 適正値（0-100）
+ */
+export const getPositionFitness = (player, pos, defaultValue = 50) => {
+  if (!player?.positionFitness) return defaultValue;
+  return player.positionFitness[pos] ?? defaultValue;
+};
+
+/**
  * スタミナによる能力補正を計算
  * @param {number} currentStamina - 現在のスタミナ
  * @param {number} maxStamina - 最大スタミナ

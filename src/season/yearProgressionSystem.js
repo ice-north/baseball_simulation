@@ -1572,7 +1572,9 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       }
 
       const totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
-      const newValue = currentValue + totalGrowth;
+      // 球速は上限なし、その他の能力値は100が上限
+      const maxValue = targetStat === 'velocity' ? 175 : 100;
+      const newValue = Math.min(maxValue, currentValue + totalGrowth);
       updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
       growthReport.push({
         stat: targetStat,
