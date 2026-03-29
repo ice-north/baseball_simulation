@@ -128,8 +128,25 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
   const [dispatchConfirm, setDispatchConfirm] = useState(null); // { playerId, destKey }
-  const [dispatchResults, setDispatchResults] = useState([]); // キャンプ終了時の派遣結果表示
-  const [updateKey, setUpdateKey] = useState(0); // 再レンダリング用
+  const [dispatchResults, setDispatchResults] = useState([]); // キャンプ終了時の派遣��果表示
+  const [updateKey, setUpdateKey] = useState(0); // 再レ��ダリング用
+  // キャンプ開始時のステータスを保存（成長合計計算用）
+  const [preCampStats] = useState(() => {
+    const stats = {};
+    userTeam?.players?.forEach(p => {
+      stats[p.id] = {
+        name: p.name,
+        position: p.position,
+        batting: { ...(p.batting || {}) },
+        pitching: { ...(p.pitching || {}), arsenal: (p.pitching?.arsenal || []).map(a => ({ ...a })) },
+        physical: { ...(p.physical || {}) },
+        fielding: { ...(p.fielding || {}) },
+        catching: { ...(p.catching || {}) },
+        positionFitness: { ...(p.positionFitness || {}) },
+      };
+    });
+    return stats;
+  });
 
   const handleDispatch = (playerId, destKey) => {
     const player = userTeam?.players?.find(p => p.id === playerId);
@@ -423,7 +440,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {activePlayers.map((player, playerIdx) => {
+                  {activePlayers.map(player => {
                     const b = player.batting || {};
                     const p = player.pitching || {};
                     const ph = player.physical || {};
@@ -432,15 +449,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     const currentTraining = assignments[player.id] || (isPitcher(player) ? 'stamina' : 'batting');
                     const showNewPitchSelect = currentTraining === 'newpitch';
                     const availableNewPitches = getAvailableNewPitches(player);
-                    const prevPlayer = playerIdx > 0 ? activePlayers[playerIdx - 1] : null;
-                    const showSeparator = prevPlayer && isPitcher(prevPlayer) && !isPitcher(player);
 
                     return (
-                      <React.Fragment key={player.id}>
-                      {showSeparator && (
-                        <tr><td colSpan={99} className="py-0.5 bg-gray-600/30"><div className="border-t border-gray-500/50"></div></td></tr>
-                      )}
-                      <tr className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                      <tr key={player.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
                         <td className="py-1 px-2">
                           <span className={`font-bold text-xs ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>
                             {player.name}
@@ -498,10 +509,6 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                               className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
                             >
                               {Object.entries(TRAINING_MENUS)
-                                .filter(([key, menu]) => {
-                                  if (isPitcher(player)) return menu.category === 'pitching' || key === 'fielding';
-                                  return menu.category !== 'pitching';
-                                })
                                 .map(([key, menu]) => (
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
@@ -527,13 +534,6 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                               className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
                             >
                               {Object.entries(SUB_TRAINING_MENUS)
-                                .filter(([key]) => {
-                                  if (key === 'breaking' || key === 'form_change') return isPitcher(player);
-                                  if (key === 'newpitch') return isPitcher(player);
-                                  if (key === 'clead_study') return player.position === 'catcher';
-                                  if (key === 'switch_hit') return !isPitcher(player);
-                                  return true;
-                                })
                                 .map(([key, menu]) => (
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
@@ -601,7 +601,6 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           </td>
                         )}
                       </tr>
-                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -724,7 +723,6 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                       team.players?.forEach(p => {
                         if (p.dispatchedThisCamp) {
                           const { growthReport, outcome } = resolveDispatchTraining(p);
-                          // ユーザーチームの結果のみ表示用に収集
                           if (team === userTeam) {
                             const dest = DISPATCH_DESTINATIONS[p.dispatchedThisCamp];
                             results.push({ player: p, destination: dest?.name || '不明', growthReport, outcome });
@@ -738,12 +736,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                       setDispatchResults(results);
                       setViewMode('dispatchResults');
                     } else {
-                      onComplete();
+                      setViewMode('summary');
                     }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
                 >
-                  キャンプ終了 → シーズン開始
+                  キャンプ終了 → 成長確認
                 </button>
               )}
             </div>
@@ -787,14 +785,121 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
             </div>
             <div className="text-center">
               <button
-                onClick={onComplete}
+                onClick={() => setViewMode('summary')}
                 className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
               >
-                シーズン開始
+                成長確認へ
               </button>
             </div>
           </>
         )}
+
+        {viewMode === 'summary' && (() => {
+          const currentPlayers = userTeam?.players || [];
+          const STAT_DEFS = [
+            { key: 'batting.meet', name: 'ミート', get: (s) => s.batting?.meet || 0 },
+            { key: 'batting.power', name: 'パワー', get: (s) => s.batting?.power || 0 },
+            { key: 'batting.eye', name: '選球眼', get: (s) => s.batting?.eye || 0 },
+            { key: 'physical.speed', name: '走力', get: (s) => s.physical?.speed || 0 },
+            { key: 'physical.arm', name: '肩力', get: (s) => s.physical?.arm || 0 },
+            { key: 'fielding.defense', name: '守備', get: (s) => s.fielding?.defense || 0 },
+            { key: 'catching.lead', name: 'Cリード', get: (s) => s.catching?.lead || 0 },
+            { key: 'pitching.velocity', name: '球速', get: (s) => s.pitching?.velocity || 0, isVelocity: true },
+            { key: 'pitching.control', name: '制球', get: (s) => s.pitching?.control || 0 },
+            { key: 'pitching.stamina', name: 'スタミナ', get: (s) => s.pitching?.stamina || 0, isStamina: true },
+          ];
+          return (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <h1 className="text-xl font-bold text-white">春季キャンプ成長レポート - {userTeamName}</h1>
+              </div>
+              <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto mb-3">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+                      <th className="py-1.5 px-2 text-left w-20">選手</th>
+                      <th className="py-1.5 px-1 text-center w-7">位</th>
+                      {STAT_DEFS.map(sd => (
+                        <th key={sd.key} className="py-1.5 px-1 text-center w-16">{sd.name}</th>
+                      ))}
+                      <th className="py-1.5 px-2 text-left">新球種</th>
+                      <th className="py-1.5 px-1 text-center w-12">合計</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentPlayers.map(player => {
+                      const pre = preCampStats[player.id];
+                      if (!pre) return null;
+                      let totalGrowth = 0;
+                      const diffs = STAT_DEFS.map(sd => {
+                        const before = sd.get(pre);
+                        const after = sd.get(player);
+                        const diff = after - before;
+                        if (diff > 0) totalGrowth += diff;
+                        return { ...sd, before, after, diff };
+                      });
+                      // 新球種チェック
+                      const preArsenal = (pre.pitching?.arsenal || []).map(a => a.type);
+                      const curArsenal = (player.pitching?.arsenal || []).map(a => a.type);
+                      const newPitches = curArsenal.filter(t => !preArsenal.includes(t));
+
+                      return (
+                        <tr key={player.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                          <td className="py-1 px-2">
+                            <span className={`font-bold text-xs ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>
+                              {player.name}
+                            </span>
+                          </td>
+                          <td className="py-1 px-1 text-center">
+                            <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
+                          </td>
+                          {diffs.map(d => (
+                            <td key={d.key} className="py-1 px-1 text-center font-mono text-[10px]">
+                              {d.diff !== 0 ? (
+                                <span>
+                                  <span className="text-gray-500">{d.before}</span>
+                                  <span className="text-gray-600 mx-0.5">{'\u2192'}</span>
+                                  <span className={d.diff > 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{d.after}</span>
+                                  <span className={`ml-0.5 ${d.diff > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {d.diff > 0 ? `+${d.diff}` : d.diff}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-gray-600">-</span>
+                              )}
+                            </td>
+                          ))}
+                          <td className="py-1 px-2 text-[10px]">
+                            {newPitches.length > 0 ? (
+                              <span className="text-yellow-400 font-bold">
+                                {newPitches.map(t => getPitchTypeName(t)).join(', ')}
+                              </span>
+                            ) : (
+                              <span className="text-gray-600">-</span>
+                            )}
+                          </td>
+                          <td className="py-1 px-1 text-center">
+                            <span className={`font-bold text-xs ${totalGrowth >= 10 ? 'text-yellow-400' : totalGrowth >= 5 ? 'text-green-400' : totalGrowth > 0 ? 'text-blue-300' : 'text-gray-600'}`}>
+                              {totalGrowth > 0 ? `+${totalGrowth}` : '-'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-center">
+                <button
+                  onClick={onComplete}
+                  className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                >
+                  シーズン開始
+                </button>
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
