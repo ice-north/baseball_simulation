@@ -455,7 +455,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     };
 
     // スタミナによる能力低下（2次曲線: スタミナ50%以下で急激に低下）
-    const staminaRatio = Math.max(0, Math.min(pitcherStamina / 100, 1));
+    const pitcherMaxStamina = pitcherPlayer.pitching?.stamina || 100;
+    const staminaRatio = Math.max(0, Math.min(pitcherStamina / pitcherMaxStamina, 1));
     const staminaCurve = staminaRatio * staminaRatio; // 0→0, 0.5→0.25, 0.7→0.49, 1.0→1.0
     const effectiveControl = pitcher.control * (0.6 + 0.4 * staminaCurve);
     const effectiveVelocity = pitcher.velocity * (0.88 + 0.12 * staminaCurve);
