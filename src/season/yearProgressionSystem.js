@@ -1031,13 +1031,6 @@ export const TRAINING_MENUS = {
     targets: ['velocity'],
     category: 'pitching'
   },
-  eye: {
-    name: '選球眼練習',
-    icon: '👁️',
-    description: '選球眼を強化',
-    targets: ['eye'],
-    category: 'batting'
-  },
   newpitch: {
     name: '新球種習得',
     icon: '✨',
@@ -1104,6 +1097,18 @@ export const SUB_TRAINING_MENUS = {
     icon: '🧠',
     description: 'キャッチャーリード向上（リード+1~3）',
     targets: ['clead'],
+  },
+  eye: {
+    name: '選球眼練習',
+    icon: '👁️',
+    description: '選球眼を強化（+0〜2）',
+    targets: ['eye'],
+  },
+  newpitch: {
+    name: '新球種習得',
+    icon: '✨',
+    description: '新球種習得に挑戦（成功率12%、ランダム球種）',
+    targets: ['newpitch'],
   },
 };
 
@@ -1319,6 +1324,15 @@ export function executeSubTraining(player, subType, options = {}) {
       const old = player.catching.lead || 40;
       player.catching.lead = Math.min(100, old + gain);
       growthReport.push({ statName: 'Cリード', before: old, after: player.catching.lead, growth: gain });
+      break;
+    }
+    case 'eye': {
+      const eyeGain = growthAmount();
+      if (eyeGain > 0 && player.batting) {
+        const old = player.batting.eye || 50;
+        player.batting.eye = Math.min(100, old + eyeGain);
+        growthReport.push({ statName: '選球眼', before: old, after: player.batting.eye, growth: eyeGain });
+      }
       break;
     }
     case 'subposition': {

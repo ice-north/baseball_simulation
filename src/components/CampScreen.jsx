@@ -32,18 +32,20 @@ const CAMP_PRESETS = {
       }
       const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
       const lowest = Object.entries(stats).sort((a,b) => a[1]-b[1])[0][0];
-      if (lowest === 'meet' || lowest === 'power') return 'batting';
+      if (lowest === 'meet' || lowest === 'power' || lowest === 'eye') return 'batting';
       if (lowest === 'speed') return 'baserunning';
       if (lowest === 'defense') return 'fielding';
-      return 'eye';
+      return 'batting';
     },
     getSub: (p) => {
       if (p.position === 'pitcher') return 'running';
-      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0 };
+      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
       const sorted = Object.entries(stats).sort((a,b) => a[1]-b[1]);
+      const lowest = sorted[0][0];
+      if (lowest === 'eye') return 'eye';
       const secondLowest = sorted[1][0];
       if (secondLowest === 'speed') return 'running';
-      return 'mental';
+      return 'eye';
     },
     effect: '最低能力+2〜5',
   },
@@ -58,20 +60,24 @@ const CAMP_PRESETS = {
       }
       const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
       const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
-      if (highest === 'meet' || highest === 'power') return 'batting';
+      if (highest === 'meet' || highest === 'power' || highest === 'eye') return 'batting';
       if (highest === 'speed') return 'baserunning';
       if (highest === 'defense') return 'fielding';
-      return 'eye';
+      return 'batting';
     },
-    getSub: () => 'mental',
-    effect: '最高能力+2〜5, 精神+1〜3',
+    getSub: (p) => {
+      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
+      const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
+      return highest === 'eye' ? 'eye' : 'stretch';
+    },
+    effect: '最高能力+2〜5',
   },
   batting_focus: {
     name: '打撃特化', icon: '🏏',
     desc: 'ミート・パワー・選球眼を集中強化',
     getMain: () => 'batting',
-    getSub: () => 'mental',
-    effect: 'ミート/パワー+2〜5, 精神+1〜3',
+    getSub: () => 'eye',
+    effect: 'ミート/パワー+2〜5, 選球眼+0〜2',
   },
   pitching_velocity: {
     name: '球速強化', icon: '🔥',
@@ -237,7 +243,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
 
       const aiAssign = {};
       const pitcherMenus = ['stamina', 'control', 'velocity', 'newpitch'];
-      const batterMenus = ['batting', 'baserunning', 'fielding', 'eye'];
+      const batterMenus = ['batting', 'baserunning', 'fielding'];
       aiTeam.players.forEach(p => {
         if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
         if (p.position === 'pitcher') {
@@ -417,7 +423,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {activePlayers.map(player => {
+                  {activePlayers.map((player, playerIdx) => {
                     const b = player.batting || {};
                     const p = player.pitching || {};
                     const ph = player.physical || {};
@@ -426,9 +432,15 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     const currentTraining = assignments[player.id] || (isPitcher(player) ? 'stamina' : 'batting');
                     const showNewPitchSelect = currentTraining === 'newpitch';
                     const availableNewPitches = getAvailableNewPitches(player);
+                    const prevPlayer = playerIdx > 0 ? activePlayers[playerIdx - 1] : null;
+                    const showSeparator = prevPlayer && isPitcher(prevPlayer) && !isPitcher(player);
 
                     return (
-                      <tr key={player.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                      <React.Fragment key={player.id}>
+                      {showSeparator && (
+                        <tr><td colSpan={99} className="py-0.5 bg-gray-600/30"><div className="border-t border-gray-500/50"></div></td></tr>
+                      )}
+                      <tr className="border-b border-gray-700/50 hover:bg-gray-700/30">
                         <td className="py-1 px-2">
                           <span className={`font-bold text-xs ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>
                             {player.name}
@@ -486,22 +498,24 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                               className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
                             >
                               {Object.entries(TRAINING_MENUS)
-                                .filter(([key]) => key !== 'newpitch' || isPitcher(player))
+                                .filter(([key, menu]) => {
+                                  if (isPitcher(player)) return menu.category === 'pitching' || key === 'fielding';
+                                  return menu.category !== 'pitching';
+                                })
                                 .map(([key, menu]) => (
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
                             </select>
                             {showNewPitchSelect && availableNewPitches.length > 0 && (
-                              <div className="flex flex-wrap gap-0.5">
-                                {availableNewPitches.map(pt => {
-                                  const selected = (newPitchSelections[player.id] || availableNewPitches[0]) === pt;
-                                  return (
-                                    <button key={pt} onClick={() => setNewPitchSelections(prev => ({ ...prev, [player.id]: pt }))}
-                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${selected ? 'bg-blue-500 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}
-                                    >{getPitchTypeName(pt)}</button>
-                                  );
-                                })}
-                              </div>
+                              <select
+                                value={newPitchSelections[player.id] || availableNewPitches[0]}
+                                onChange={(e) => setNewPitchSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-24"
+                              >
+                                {availableNewPitches.map(pt => (
+                                  <option key={pt} value={pt}>{getPitchTypeName(pt)}</option>
+                                ))}
+                              </select>
                             )}
                           </div>
                         </td>
@@ -512,7 +526,15 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                               onChange={(e) => setSubAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
                               className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
                             >
-                              {Object.entries(SUB_TRAINING_MENUS).map(([key, menu]) => (
+                              {Object.entries(SUB_TRAINING_MENUS)
+                                .filter(([key]) => {
+                                  if (key === 'breaking' || key === 'form_change') return isPitcher(player);
+                                  if (key === 'newpitch') return isPitcher(player);
+                                  if (key === 'clead_study') return player.position === 'catcher';
+                                  if (key === 'switch_hit') return !isPitcher(player);
+                                  return true;
+                                })
+                                .map(([key, menu]) => (
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
                             </select>
@@ -579,6 +601,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           </td>
                         )}
                       </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -607,8 +630,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                 <thead>
                   <tr className="bg-gray-700/50 text-gray-400 text-[10px]">
                     <th className="py-1 px-2 text-left w-20">選手</th>
-                    <th className="py-1 px-2 text-left w-24">メイン</th>
+                    <th className="py-1 px-2 text-left w-20">メイン</th>
                     <th className="py-1 px-2 text-left">メイン結果</th>
+                    <th className="py-1 px-2 text-left w-20">サブ</th>
                     <th className="py-1 px-2 text-left">サブ結果</th>
                   </tr>
                 </thead>
@@ -645,6 +669,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             <span className="text-gray-600 text-[10px]">変化なし</span>
                           )}
                         </div>
+                      </td>
+                      <td className="py-1 px-2 text-gray-500 text-[10px]">
+                        {result.subTrainingType && SUB_TRAINING_MENUS[result.subTrainingType] && (
+                          <>{SUB_TRAINING_MENUS[result.subTrainingType].icon} {SUB_TRAINING_MENUS[result.subTrainingType].name}</>
+                        )}
                       </td>
                       <td className="py-1 px-2">
                         <div className="flex flex-wrap gap-0.5">
