@@ -1093,12 +1093,6 @@ export const SUB_TRAINING_MENUS = {
     description: '変化球レベルを強化（投手のみ）',
     targets: ['breaking'],
   },
-  newpitch: {
-    name: '新球種習得',
-    icon: '✨',
-    description: '新しい変化球を覚える（投手のみ）',
-    targets: ['newpitch'],
-  },
   subposition: {
     name: 'サブポジ練習',
     icon: '🔀',

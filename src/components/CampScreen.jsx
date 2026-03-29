@@ -483,7 +483,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             <select
                               value={currentTraining}
                               onChange={(e) => setAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
-                              className="bg-gray-700 text-white text-[11px] px-1.5 py-0.5 rounded w-24"
+                              className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
                             >
                               {Object.entries(TRAINING_MENUS)
                                 .filter(([key]) => key !== 'newpitch' || isPitcher(player))
@@ -510,57 +510,47 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             <select
                               value={subAssignments[player.id] || 'running'}
                               onChange={(e) => setSubAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
-                              className="bg-gray-700 text-white text-[11px] px-1.5 py-0.5 rounded w-24"
+                              className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
                             >
                               {Object.entries(SUB_TRAINING_MENUS).map(([key, menu]) => (
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
                             </select>
                             {(subAssignments[player.id] || 'running') === 'subposition' && (
-                              <div className="flex flex-wrap gap-0.5">
-                                {[['', '自動'], ...['catcher','first','second','third','short','left','center','right']
+                              <select
+                                value={subPositionSelections[player.id] || ''}
+                                onChange={(e) => setSubPositionSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-16"
+                              >
+                                <option value="">自動</option>
+                                {['catcher','first','second','third','short','left','center','right']
                                   .filter(pos => pos !== player.position)
-                                  .map(pos => [pos, POSITION_NAMES[pos]])
-                                ].map(([posKey, label]) => {
-                                  const selected = (subPositionSelections[player.id] || '') === posKey;
-                                  const fitness = posKey && player.positionFitness?.[posKey];
-                                  const fitnessColor = !posKey ? '' : fitness >= 80 ? 'ring-green-400' : fitness >= 60 ? 'ring-yellow-400' : fitness >= 40 ? 'ring-orange-400' : 'ring-red-400';
-                                  return (
-                                    <button key={posKey || '_auto'} onClick={() => setSubPositionSelections(prev => ({ ...prev, [player.id]: posKey }))}
-                                      title={posKey ? `適性: ${fitness ?? 0}` : '自動選択'}
-                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${selected ? 'bg-blue-500 text-white' : `bg-gray-600 text-gray-300 hover:bg-gray-500 ${posKey ? `ring-1 ${fitnessColor}` : ''}`}`}
-                                    >{label}</button>
-                                  );
-                                })}
-                              </div>
+                                  .map(pos => <option key={pos} value={pos}>{POSITION_NAMES[pos]}</option>)}
+                              </select>
                             )}
                             {(subAssignments[player.id] || 'running') === 'form_change' && player.position === 'pitcher' && (
-                              <div className="flex flex-wrap gap-0.5">
-                                {[['', '自動'], ...[['overhand','オーバー'],['threeQuarter','スリクォ'],['sidearm','サイド'],['submarine','アンダー']]
+                              <select
+                                value={formSelections[player.id] || ''}
+                                onChange={(e) => setFormSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-20"
+                              >
+                                <option value="">自動</option>
+                                {[['overhand','オーバー'],['threeQuarter','スリクォ'],['sidearm','サイド'],['submarine','アンダー']]
                                   .filter(([k]) => k !== player.pitching?.form)
-                                ].map(([k, v]) => {
-                                  const selected = (formSelections[player.id] || '') === k;
-                                  return (
-                                    <button key={k || '_auto'} onClick={() => setFormSelections(prev => ({ ...prev, [player.id]: k }))}
-                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${selected ? 'bg-blue-500 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}
-                                    >{v}</button>
-                                  );
-                                })}
-                              </div>
+                                  .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                              </select>
                             )}
                             {(subAssignments[player.id] || 'running') === 'switch_hit' && (
-                              <div className="flex flex-wrap gap-0.5">
-                                {[['', '自動'], ...[['right','右打'],['left','左打'],['switch','両打']]
+                              <select
+                                value={batsSelections[player.id] || ''}
+                                onChange={(e) => setBatsSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-16"
+                              >
+                                <option value="">自動</option>
+                                {[['right','右打'],['left','左打'],['switch','両打']]
                                   .filter(([k]) => k !== (player.batting?.bats || player.physical?.bats))
-                                ].map(([k, v]) => {
-                                  const selected = (batsSelections[player.id] || '') === k;
-                                  return (
-                                    <button key={k || '_auto'} onClick={() => setBatsSelections(prev => ({ ...prev, [player.id]: k }))}
-                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${selected ? 'bg-blue-500 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}
-                                    >{v}</button>
-                                  );
-                                })}
-                              </div>
+                                  .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                              </select>
                             )}
                           </div>
                         </td>
