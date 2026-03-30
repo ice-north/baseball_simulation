@@ -39,7 +39,7 @@ import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
 import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
-import { processSeasonEnd, advanceToNextYear, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining, processNPBDraft } from './season/yearProgressionSystem.js';
+import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining, processNPBDraft } from './season/yearProgressionSystem.js';
 
 // Component imports
 import StartScreen from './components/StartScreen.jsx';
@@ -60,6 +60,7 @@ import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
 import HallOfFameScreen from './components/HallOfFameScreen.jsx';
 import DraftResultScreen from './components/DraftResultScreen.jsx';
 import TradeScreen from './components/TradeScreen.jsx';
+import SandboxSetupScreen from './components/SandboxSetupScreen.jsx';
 
     const App = () => {
       // チームデータの初期化
@@ -71,7 +72,8 @@ import TradeScreen from './components/TradeScreen.jsx';
 
       // 画面モード管理
       const [screenMode, setScreenMode] = useState('start'); // 'start', 'game', 'management'
-      const [gameFlowState, setGameFlowState] = useState('title'); // 'title', 'newgame_regulations', 'newgame_tryout', 'newgame_camp', 'season'
+      const [gameFlowState, setGameFlowState] = useState('title'); // 'title', 'newgame_regulations', 'newgame_tryout', 'newgame_camp', 'sandbox_regulations', 'sandbox_setup', 'season'
+      const [gameMode, setGameMode] = useState('normal'); // 'normal', 'sandbox'
       const [managementView, setManagementView] = useState('schedule'); // 'edit', 'schedule', 'team', 'stats', 'save', 'regulations'
       const [scheduleTab, setScheduleTab] = useState('league'); // 'league', 'batting', 'pitching'
 
@@ -181,7 +183,7 @@ import TradeScreen from './components/TradeScreen.jsx';
       const saveGame = (slotIndex = 0) => {
         try {
           const saveData = {
-            version: '2.10.0', // 殿堂入り対応バージョン
+            version: '2.11.0', // 箱庭モード対応バージョン
             timestamp: new Date().toISOString(),
             slotIndex,
             seasonData: seasonData,
@@ -190,6 +192,7 @@ import TradeScreen from './components/TradeScreen.jsx';
             screenMode,
             managementView,
             gameFlowState,
+            gameMode,
             selectedMonth,
             hallOfFamePlayers: hallOfFamePlayers,
             teamHistory: teamHistory
@@ -246,6 +249,7 @@ import TradeScreen from './components/TradeScreen.jsx';
           if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
           if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
           if (saveData.teamHistory) setTeamHistory(saveData.teamHistory);
+          setGameMode(saveData.gameMode || 'normal');
 
           // コンディション初期化（古いセーブデータ対応）
           initializeAllPlayersCondition();
@@ -3255,8 +3259,11 @@ if (newOuts === 3) {
       const Sidebar = () => (
         <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-800">
           <div className="px-4 py-3 border-b border-gray-800">
-            <h2 className="text-lg font-bold text-green-400">⚾ {userTeamName}</h2>
-            <div className="text-xs text-gray-500 mt-0.5">{seasonData?.year || 1}年目 {seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}</div>
+            <h2 className={`text-lg font-bold ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
+            <div className="text-xs text-gray-500 mt-0.5">
+              {gameMode === 'sandbox' && <span className="text-orange-400/70">[箱庭] </span>}
+              {seasonData?.year || 1}年目 {seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}
+            </div>
           </div>
 
           <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
@@ -4739,6 +4746,11 @@ if (newOuts === 3) {
           onSetupManagedGame={setupManagedGame}
           onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
           onForceEvent={(eventType) => {
+            // 箱庭モード: ドラフト・トライアウト・契約をスキップしてオフシーズンへ直行
+            if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft')) {
+              setManagementView('offseason');
+              return;
+            }
             if (eventType === 'contract') setManagementView('contract');
             else if (eventType === 'tryout') setManagementView('tryout');
             else if (eventType === 'draft') {
@@ -4785,17 +4797,82 @@ if (newOuts === 3) {
         if (managementView === 'offseason') return <OffSeasonScreen
           seasonData={seasonData}
           setSeasonData={setSeasonData}
+          gameMode={gameMode}
           onSave={(slotIndex) => { saveGame(slotIndex); refreshSaveSlots(); }}
           saveSlots={saveSlots}
           onStartNextSeason={() => {
-            // レギュレーション設定画面へ
-            setManagementView('regulations_next');
+            if (gameMode === 'sandbox') {
+              // 箱庭モード: トライアウト・キャンプをスキップし、レギュレーション設定→即シーズン開始
+              setManagementView('sandbox_next_regulations');
+            } else {
+              // レギュレーション設定画面へ
+              setManagementView('regulations_next');
+            }
           }}
           onAddHallOfFamePlayers={(newPlayers) => {
             setHallOfFamePlayers(prev => [...prev, ...newPlayers]);
           }}
           onRecordTeamHistory={(historyEntry) => {
             setTeamHistory(prev => [...prev, historyEntry]);
+          }}
+        />;
+        // 箱庭モード: 次シーズンのレギュレーション設定→チーム設定→シーズン開始
+        if (managementView === 'sandbox_next_regulations') return <RegulationsScreen
+          seasonData={seasonData}
+          setSeasonData={setSeasonData}
+          onConfirm={() => {
+            const teams = Object.keys(TEAMS_DATA);
+            const settings = seasonData.settings || {};
+            const calendarYear = 2024 + seasonData.year - 1;
+            const schedule = generateFullSeasonSchedule({
+              teams,
+              gamesPerSeason: settings.gamesPerSeason || 60,
+              startDate: { year: calendarYear, month: 3, day: 1 },
+              endDate: { year: calendarYear, month: 9, day: 30 },
+              leagueFormat: settings.leagueFormat || 'single',
+              leagueNames: settings.leagueNames
+            });
+            setSeasonData(prev => ({
+              ...prev,
+              currentDate: { year: calendarYear, month: 1, day: 1 },
+              schedule,
+              standings: teams.map(t => ({
+                team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
+              }))
+            }));
+            // 箱庭モード: チーム設定画面へ（キャンプ・トライアウト不要）
+            setManagementView('sandbox_setup');
+          }}
+        />;
+        if (managementView === 'sandbox_setup') return <SandboxSetupScreen
+          allTeams={allTeams}
+          generateOptimalLineup={generateOptimalLineup}
+          generatePitchingRotation={generatePitchingRotation}
+          generateAllTeamsLineup={generateAllTeamsLineup}
+          onComplete={() => {
+            initializeAllPlayersCondition();
+            Object.keys(TEAMS_DATA).forEach(teamName => {
+              const teamData = TEAMS_DATA[teamName];
+              if (teamData && teamData.players && teamData.players.length > 0) {
+                if (teamName === userTeamName) {
+                  if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
+                    setRecommendedLineup(teamData, teamName);
+                  }
+                } else {
+                  generateAILineup(teamData, teamName);
+                }
+              }
+            });
+            setSeasonData(prev => {
+              const calYear = 2024 + prev.year - 1;
+              return {
+                ...prev,
+                currentDate: { year: calYear, month: 4, day: 1 },
+                phase: SEASON_PHASES.REGULAR_SEASON
+              };
+            });
+            setSelectedMonth(4);
+            setManagementView('dateprogress');
           }}
         />;
         if (managementView === 'regulations_next') return <RegulationsScreen
@@ -4896,7 +4973,8 @@ if (newOuts === 3) {
       // ゲームフロー統合ロジック: スタート画面
       if (screenMode === 'start' && gameFlowState === 'title') {
         return <StartScreen
-          onNewGame={() => setGameFlowState('newgame_regulations')}
+          onNewGame={() => { setGameMode('normal'); setGameFlowState('newgame_regulations'); }}
+          onSandbox={() => { setGameMode('sandbox'); setGameFlowState('sandbox_regulations'); }}
           onContinue={(slotIndex) => {
             if (loadGame(slotIndex)) {
             }
@@ -4977,11 +5055,58 @@ if (newOuts === 3) {
         />;
       }
 
+      // SANDBOX: レギュレーション設定
+      if (screenMode === 'start' && gameFlowState === 'sandbox_regulations') {
+        return <NewGameRegulationsScreen
+          onComplete={(regulations) => {
+            initializeNewGame(regulations);
+            setGameFlowState('sandbox_setup');
+          }}
+        />;
+      }
+
+      // SANDBOX: チーム設定画面
+      if (screenMode === 'start' && gameFlowState === 'sandbox_setup') {
+        return <SandboxSetupScreen
+          allTeams={allTeams}
+          generateOptimalLineup={generateOptimalLineup}
+          generatePitchingRotation={generatePitchingRotation}
+          generateAllTeamsLineup={generateAllTeamsLineup}
+          onComplete={() => {
+            // 全選手のコンディション初期化
+            initializeAllPlayersCondition();
+            // 全チームのスタメン/ローテーションを自動生成
+            Object.keys(TEAMS_DATA).forEach(teamName => {
+              const teamData = TEAMS_DATA[teamName];
+              if (teamData && teamData.players && teamData.players.length > 0) {
+                if (teamName === userTeamName) {
+                  setRecommendedLineup(teamData, teamName);
+                } else {
+                  generateAILineup(teamData, teamName);
+                }
+              }
+            });
+
+            // 日付を4/1に設定し、レギュラーシーズンに移行
+            const calYear = 2024 + (seasonData?.year || 1) - 1;
+            setSeasonData(prev => ({
+              ...prev,
+              currentDate: { year: calYear, month: 4, day: 1 },
+              phase: SEASON_PHASES.REGULAR_SEASON
+            }));
+            setSelectedMonth(4);
+            setManagementView('dateprogress');
+            setScreenMode('management');
+            setGameFlowState('season');
+          }}
+        />;
+      }
+
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
-          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'edit'].includes(managementView) && <Sidebar />}
+          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit'].includes(managementView) && <Sidebar />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'edit'].includes(managementView) ? 'ml-56' : ''}>
+          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
               <div className="p-2">
           {/* 管理画面へボタン（采配モード中は非表示） */}

@@ -9,7 +9,7 @@ const PHASE_NAMES = {
   tryout: 'トライアウト',
 };
 
-const StartScreen = ({ onNewGame, onContinue, onEdit, onManual, hasSaveData, saveSlots = [] }) => {
+const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onManual, hasSaveData, saveSlots = [] }) => {
   const [showSlotSelect, setShowSlotSelect] = useState(false);
   const [showEditSlotSelect, setShowEditSlotSelect] = useState(false);
 
@@ -124,6 +124,13 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, onManual, hasSaveData, sav
             </button>
 
             <button
+              onClick={onSandbox}
+              className="w-80 bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg"
+            >
+              SANDBOX
+            </button>
+
+            <button
               onClick={handleContinue}
               disabled={!hasSaveData}
               className={`w-80 px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg ${
@@ -156,7 +163,10 @@ const StartScreen = ({ onNewGame, onContinue, onEdit, onManual, hasSaveData, sav
           </div>
         )}
 
-        <p className="text-sm text-gray-500 mt-8">{hasSaveData ? 'セーブデータあり' : ''}</p>
+        <div className="text-xs text-gray-500 mt-8 space-y-0.5">
+          <p>{hasSaveData ? 'セーブデータあり' : ''}</p>
+          <p className="text-gray-600">SANDBOX: 成長・ドラフト・引退なし。自由にチームを編集してシーズンを戦うモード</p>
+        </div>
       </div>
     </div>
   );

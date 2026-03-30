@@ -869,6 +869,43 @@ export function advanceToNextYear(seasonData, allTeams) {
   };
 };
 
+/**
+ * 箱庭モード用の次年度移行
+ * 成長・加齢・引退をスキップし、表彰とスタッツリセットのみ行う
+ * @param {Object} seasonData - 現在のシーズンデータ
+ * @param {Object} allTeams - 全チームデータ
+ * @returns {Object} - { newSeasonData, updatedTeams, awards, retirements: [] }
+ */
+export function advanceToNextYearSandbox(seasonData, allTeams) {
+  // 1. シーズン終了処理（表彰）
+  const awards = processSeasonEnd(seasonData, allTeams);
+
+  // 2. タイトルを選手に記録
+  let updatedTeams = recordAwardsToPlayers(allTeams, awards);
+
+  // 3. シーズン統計を通算に加算してリセット
+  updatedTeams = resetSeasonStats(updatedTeams, seasonData.year);
+
+  // 箱庭モード: 加齢・成長・引退はスキップ
+
+  // 4. 新シーズンデータ作成
+  const newYear = seasonData.year + 1;
+  const newSeasonData = createSeasonData(newYear);
+  newSeasonData.settings = { ...seasonData.settings };
+
+  const teams = Object.keys(updatedTeams);
+  newSeasonData.schedule = [];
+  newSeasonData.standings = initializeStandings(teams);
+
+  return {
+    newSeasonData,
+    updatedTeams,
+    awards,
+    retirements: [],
+    ageReports: {}
+  };
+};
+
 // ============================================================
 // 年齢カーブによる成長・衰退システム
 // 若い: フィジカル成長しやすい、24歳前後: 技術が伸びやすい

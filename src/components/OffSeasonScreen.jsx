@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
-import { advanceToNextYear } from '../season/yearProgressionSystem.js';
+import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
 
-const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots }) => {
+const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots, gameMode }) => {
   const [processing, setProcessing] = useState(false);
   const [seasonResults, setSeasonResults] = useState(null);
   const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
@@ -90,7 +90,9 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         });
       }
 
-      const result = advanceToNextYear(seasonData, allTeams);
+      const result = gameMode === 'sandbox'
+        ? advanceToNextYearSandbox(seasonData, allTeams)
+        : advanceToNextYear(seasonData, allTeams);
       setSeasonData(result.newSeasonData);
       Object.keys(result.updatedTeams).forEach(teamName => {
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];
@@ -155,12 +157,23 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           <div className="bg-gray-800 rounded-lg p-5">
             <h2 className="text-lg font-bold text-white mb-3 text-center">
               {seasonData.year}年目のシーズンを終了しますか？
+              {gameMode === 'sandbox' && <span className="ml-2 text-orange-400 text-sm">[箱庭モード]</span>}
             </h2>
             <div className="text-gray-400 text-sm mb-4 text-center space-y-0.5">
               <p>1. 表彰（首位打者・本塁打王など）</p>
-              <p>2. 選手の年齢+1 / 引退処理</p>
-              <p>3. シーズン成績を通算成績に加算</p>
-              <p>4. 次年度（{seasonData.year + 1}年目）へ移行</p>
+              {gameMode === 'sandbox' ? (
+                <>
+                  <p>2. シーズン成績を通算成績に加算</p>
+                  <p>3. 次年度（{seasonData.year + 1}年目）へ移行</p>
+                  <p className="text-orange-400/70 text-xs mt-1">※ 箱庭モード: 加齢・成長・引退はありません</p>
+                </>
+              ) : (
+                <>
+                  <p>2. 選手の年齢+1 / 引退処理</p>
+                  <p>3. シーズン成績を通算成績に加算</p>
+                  <p>4. 次年度（{seasonData.year + 1}年目）へ移行</p>
+                </>
+              )}
             </div>
             <SaveSlotSelector />
             <div className="text-center">
