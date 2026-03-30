@@ -13,7 +13,7 @@ export const DEFAULT_REGULATIONS = {
   gamesPerSeason: 60,     // 年間試合数（チームあたり）
   teamsCount: 4,          // チーム数
   leagueFormat: 'single', // リーグ形式: 'single'=1リーグ, 'two'=2リーグ制
-  playoffFormat: 'single', // プレーオフ形式
+  playoffFormat: 'short', // プレーオフ形式: 'short'=3戦2勝, 'full'=5戦3勝, 'tournament'=4チームトーナメント
   maxExtraInnings: 12,    // 延長最大回数
   roster: {
     starters: 9,          // スタメン人数
@@ -83,20 +83,20 @@ export const canModifyRegulations = (phase) => {
  * @returns {string} 説明文
  */
 export const getPlayoffFormatDescription = (format, leagueFormat) => {
-  const descriptions = {
-    'single': '1位 vs 2位の対戦（5戦3勝制、最大5試合）',
-    'double': '4チームトーナメント（1位vs4位、2位vs3位 → 決勝）',
-    'tournament': 'トーナメント制（3位vs4位 → 勝者vs2位 → 勝者vs1位）',
-    'top2': '上位2チーム対決（5戦3勝制、最大5試合）',
-    'split': '前期・後期優勝チーム対決（3戦2勝制）',
-    'championship': '両リーグ優勝チーム対決（3戦2勝制）',
-    'none': 'プレーオフなし（レギュラーシーズンの優勝チームが年間王者）'
-  };
-  let desc = descriptions[format] || '';
   if (leagueFormat === 'two') {
-    desc = '【2リーグ制】' + desc;
+    const descriptions = {
+      'short': '両リーグ1位同士の対決（3戦2勝制）',
+      'full': '両リーグ1位同士の対決（5戦3勝制）',
+      'tournament': '両リーグの1位と2位による4チームトーナメント（準決勝+決勝、各5戦3勝制）'
+    };
+    return '【2リーグ制】' + (descriptions[format] || '');
   }
-  return desc;
+  const descriptions = {
+    'short': '1位 vs 2位の対決（3戦2勝制）',
+    'full': '1位 vs 2位の対決（5戦3勝制）',
+    'tournament': '上位4チームトーナメント（1位vs4位、2位vs3位 → 決勝、各5戦3勝制）'
+  };
+  return descriptions[format] || '';
 };
 
 /**
@@ -105,12 +105,12 @@ export const getPlayoffFormatDescription = (format, leagueFormat) => {
 export const REGULATION_PRESETS = {
   shikoku: {
     name: '四国アイランドリーグplus',
-    description: '前期38試合＋後期38試合、前後期優勝者による決戦',
+    description: '年間75試合、1位vs2位の3戦2勝制プレーオフ',
     regulations: {
       useDH: false,
-      gamesPerSeason: 75,  // 3の倍数（各チーム25戦）
+      gamesPerSeason: 75,
       teamsCount: 4,
-      playoffFormat: 'split',  // 前期・後期優勝チーム対決
+      playoffFormat: 'short',
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
@@ -120,35 +120,35 @@ export const REGULATION_PRESETS = {
     description: '2リーグ制（4チーム×2）、両リーグ優勝チームによる決戦',
     regulations: {
       useDH: false,
-      gamesPerSeason: 56,  // 7の倍数（各チーム8戦）
-      teamsCount: 8,  // 2リーグ×4チーム
-      leagueFormat: 'two',  // 2リーグ制
-      leagueNames: ['ルートインBC信越', 'ルートインBC北陸'],  // リーグ名
-      playoffFormat: 'championship',  // 両リーグ優勝チーム対決（3戦2勝制）
+      gamesPerSeason: 56,
+      teamsCount: 8,
+      leagueFormat: 'two',
+      leagueNames: ['ルートインBC信越', 'ルートインBC北陸'],
+      playoffFormat: 'short',
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   },
   kyushu: {
     name: '九州アジアリーグ',
-    description: '年間75試合、トーナメント制プレーオフ',
+    description: '年間75試合、4チームトーナメント制プレーオフ',
     regulations: {
       useDH: false,
-      gamesPerSeason: 75,  // 3の倍数（各チーム25戦）
+      gamesPerSeason: 75,
       teamsCount: 4,
-      playoffFormat: 'tournament',  // 3位vs4位→勝者vs2位→勝者vs1位
+      playoffFormat: 'tournament',
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   },
   hokkaido: {
     name: '北海道フロンティアリーグ',
-    description: '年間54試合、上位2チームによる決戦',
+    description: '年間54試合、1位vs2位の5戦3勝制プレーオフ',
     regulations: {
       useDH: false,
       gamesPerSeason: 54,
       teamsCount: 4,
-      playoffFormat: 'top2',  // 上位2チーム、5戦3勝制
+      playoffFormat: 'full',
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
