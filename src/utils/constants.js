@@ -48,10 +48,10 @@ export const BALL_EFFECTS = {
   },
   changeup: {
     name: 'チェンジアップ',
-    whiffBonus: 0.04,
-    groundballBonus: 0.1,
-    weakBonus: 0.01,
-    velocityMinus: 19
+    whiffBonus: 0.03,
+    groundballBonus: 0.14,
+    weakBonus: 0.02,
+    velocityMinus: 21
   },
   sinker: {
     name: 'シンカー',
@@ -76,9 +76,9 @@ export const BALL_EFFECTS = {
   },
   splitter: {
     name: 'スプリッター',
-    whiffBonus: 0.07,
-    groundballBonus: 0.04,
-    weakBonus: 0.01,
+    whiffBonus: 0.09,
+    groundballBonus: 0.05,
+    weakBonus: 0.05,
     velocityMinus: 7
   },
   palm: {
