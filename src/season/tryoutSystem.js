@@ -630,7 +630,12 @@ export const generateRandomArsenal = (extraPitches = 0) => {
     // 独立リーグレベル: 変化球レベルを抑える（S/Aランクは稀に）
     const levelMin = (i > baseSize) ? 40 : 25;
     const levelMax = (i > baseSize) ? 80 : 70;
-    const level = Math.floor(Math.random() * (levelMax - levelMin + 1)) + levelMin;
+    let level = Math.floor(Math.random() * (levelMax - levelMin + 1)) + levelMin;
+    // スライダー・スプリッターは底上げ（最低40、上限も+10）
+    if (selectedType === 'slider' || selectedType === 'splitter') {
+      level = Math.max(level, 40);
+      level = Math.min(level + 10, 90);
+    }
     arsenal.push({ id: i, type: selectedType, level });
     usedTypes.add(selectedType);
   }
