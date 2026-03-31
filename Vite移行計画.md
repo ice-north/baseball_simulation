@@ -131,7 +131,7 @@ baseball_simulation/
 export const ballEffects = {
   straight: { name: 'ストレート', whiffBonus: 0, groundballBonus: 0, weakBonus: -0.04, velocityMinus: 0 },
   twoSeam: { name: 'ツーシーム', whiffBonus: -0.05, groundballBonus: 0.12, weakBonus: 0.12, velocityMinus: 5 },
-  slider: { name: 'スライダー', whiffBonus: 0.07, groundballBonus: 0, weakBonus: -0.02, velocityMinus: 12 },
+  slider: { name: 'スライダー', whiffBonus: 0.09, groundballBonus: 0.05, weakBonus: -0.02, velocityMinus: 12 },
   // ... 残り9種類
 };
 ```

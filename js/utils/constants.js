@@ -27,8 +27,8 @@ const BALL_EFFECTS = {
   },
   slider: {
     name: 'スライダー',
-    whiffBonus: 0.07,
-    groundballBonus: 0,
+    whiffBonus: 0.09,
+    groundballBonus: 0.05,
     weakBonus: -0.02,
     velocityMinus: 12
   },
