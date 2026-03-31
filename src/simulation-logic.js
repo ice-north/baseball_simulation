@@ -136,8 +136,10 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
 export const getTunnelingEffect = (lastPitch, currentPitch, catcherLead) => {
   if (!lastPitch) return 0;
 
-  // 球速差による錯覚効果
+  // 球速差による錯覚効果（比率ベース: 遅い投手ほど体感の緩急が大きい）
   const veloDiff = Math.abs(lastPitch.velocity - currentPitch.velocity);
+  const baseVelocity = Math.max(lastPitch.velocity, currentPitch.velocity);
+  const veloDiffRatio = baseVelocity > 0 ? veloDiff / baseVelocity : 0;
 
   // 球種の軌道近似性（ストレートから変化球への切り替えが効果的）
   const orbitCloseness = (lastPitch.type === 'straight' && currentPitch.type !== 'straight') ? 0.8 :
@@ -146,7 +148,7 @@ export const getTunnelingEffect = (lastPitch, currentPitch, catcherLead) => {
   // 捕手のリードが高いほど効果増大
   const leadMultiplier = 1 + (catcherLead / 100);
 
-  return Math.min(0.25, (veloDiff * 0.003 + orbitCloseness * 0.025) * leadMultiplier);
+  return Math.min(0.25, (veloDiffRatio * 0.45 + orbitCloseness * 0.025) * leadMultiplier);
 };
 
 /**

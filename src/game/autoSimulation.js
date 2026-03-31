@@ -484,11 +484,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       pitchVelocityFinal = effectiveVelocity - speedReduction;
     }
 
-    // 緩急ペナルティ: 前球と球種が違うと打者のタイミングが狂う
+    // 緩急ペナルティ: 前球と球種が違うと打者のタイミングが狂う（比率ベース）
+    // 遅い投手ほど同じ球速差でも体感の緩急が大きくなる
     let speedDiffPenalty = 0;
     if (lastPitch && selectedPitch.type !== lastPitch.type) {
       const veloDiff = Math.abs(effectiveVelocity - pitchVelocityFinal);
-      speedDiffPenalty = veloDiff * 0.15;
+      const speedDiffRatio = effectiveVelocity > 0 ? veloDiff / effectiveVelocity : 0;
+      speedDiffPenalty = speedDiffRatio * 22;
     }
 
     // 投球結果を決定
