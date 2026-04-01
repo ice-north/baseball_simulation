@@ -967,8 +967,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 主なトピック */}
+          {/* 主なトピック（試合がある日のみ表示） */}
           {(() => {
+            if (todaysGames.length === 0) return null;
             const topics = [];
             const allTeamNames = Object.keys(TEAMS_DATA || {});
             const allPlayers = [];
@@ -1239,7 +1240,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
               // === 新トピック: 無失点記録 ===
               if (ps && (ps.inningsPitched || 0) >= 20 && (ps.earnedRuns || 0) === 0) {
-                topics.push({ cat: 'pitch_scoreless', icon: '✨', text: `${abbr} ${p.name}が${ps.inningsPitched}イニング無失点の快投`, color: 'text-gold-400' });
+                topics.push({ cat: 'pitch_scoreless', icon: '✨', text: `${abbr} ${p.name}が${ps.inningsPitched}イニング無失点の快投`, color: 'text-amber-300' });
               }
             });
 
