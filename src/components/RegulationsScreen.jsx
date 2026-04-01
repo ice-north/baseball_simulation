@@ -150,13 +150,9 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
           </SettingRow>
           <SettingRow label="プレーオフ形式">
             <select value={tempSettings.playoffFormat} onChange={(e) => setTempSettings({ ...tempSettings, playoffFormat: e.target.value })} disabled={!canModify} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm">
-              <option value="split">前後期制（3戦2勝）</option>
-              <option value="single">1位 vs 2位（3戦2勝）</option>
-              <option value="top2">上位2チーム（5戦3勝）</option>
-              <option value="tournament">トーナメント</option>
-              <option value="double">4チームトーナメント</option>
-              <option value="championship">リーグ優勝決定戦</option>
-              <option value="none">プレーオフなし</option>
+              <option value="short">3回戦制（2勝先取）</option>
+              <option value="full">5回戦制（3勝先取）</option>
+              <option value="tournament">4チームトーナメント</option>
             </select>
           </SettingRow>
           <div className="text-[10px] text-gray-500 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>

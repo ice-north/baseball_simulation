@@ -177,16 +177,7 @@ export const recordGameResult = (seasonData, gameResult) => {
     results: updatedResults
   };
 
-  // 前後期制: シーズン中間地点で前期順位を記録
-  if (seasonData.settings.playoffFormat === 'split' && !seasonData.firstHalfStandings) {
-    const regularGames = updatedSchedule.filter(g => g.phase === SEASON_PHASES.REGULAR_SEASON);
-    const totalRegularGames = regularGames.length;
-    const completedGames = regularGames.filter(g => g.result).length;
-    const midpoint = Math.floor(totalRegularGames / 2);
-    if (completedGames >= midpoint && midpoint > 0) {
-      result.firstHalfStandings = updatedStandings.map(s => ({ ...s }));
-    }
-  }
+  // 前後期制は廃止（split処理を削除）
 
   return result;
 };
@@ -205,70 +196,38 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
       // プレーオフ開始時：上位チームを取得してプレーオフスケジュールを生成
       let topTeams;
       const playoffFormat = seasonData.settings.playoffFormat;
+      const leagueFormat = seasonData.settings.leagueFormat || 'single';
+      const teamsNeeded = playoffFormat === 'tournament' ? 4 : 2;
 
-      if (playoffFormat === 'split') {
-        // 前後期制: 前期優勝チーム vs 後期優勝チーム
-        const firstHalf = seasonData.firstHalfStandings;
-        const secondHalf = [...seasonData.standings].sort((a, b) => b.winRate - a.winRate);
+      if (leagueFormat === 'two') {
+        // 2リーグ制: リーグ別に上位チームを取得
+        const allTeamNames = Object.keys(seasonData.standings.reduce((acc, s) => { acc[s.team] = true; return acc; }, {}));
+        const halfTeams = Math.floor(allTeamNames.length / 2);
+        const league1Teams = allTeamNames.slice(0, halfTeams);
+        const league2Teams = allTeamNames.slice(halfTeams);
 
-        if (firstHalf && firstHalf.length > 0) {
-          const firstHalfSorted = [...firstHalf].sort((a, b) => b.winRate - a.winRate);
-          // 後期順位: 後期の試合だけで計算
-          const regularGames = (seasonData.schedule || []).filter(g => g.phase === SEASON_PHASES.REGULAR_SEASON);
-          const totalRegular = regularGames.length;
-          const midpoint = Math.floor(totalRegular / 2);
-          const completedRegular = regularGames.filter(g => g.result);
-          // 後期の試合結果だけ集計
-          const secondHalfResults = completedRegular.slice(midpoint);
-          const secondHalfRecord = {};
-          secondHalf.forEach(s => { secondHalfRecord[s.team] = { wins: 0, losses: 0, draws: 0 }; });
-          secondHalfResults.forEach(g => {
-            if (!g.result) return;
-            const { home, away } = g;
-            const hs = g.result.homeScore, as = g.result.awayScore;
-            if (secondHalfRecord[home] && secondHalfRecord[away]) {
-              if (hs > as) { secondHalfRecord[home].wins++; secondHalfRecord[away].losses++; }
-              else if (as > hs) { secondHalfRecord[away].wins++; secondHalfRecord[home].losses++; }
-              else { secondHalfRecord[home].draws++; secondHalfRecord[away].draws++; }
-            }
-          });
-          const secondHalfSorted = Object.entries(secondHalfRecord)
-            .map(([team, r]) => ({ team, winRate: (r.wins + r.losses) > 0 ? r.wins / (r.wins + r.losses) : 0, ...r }))
-            .sort((a, b) => b.winRate - a.winRate);
+        const sorted = [...seasonData.standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+        const l1Sorted = sorted.filter(s => league1Teams.includes(s.team));
+        const l2Sorted = sorted.filter(s => league2Teams.includes(s.team));
 
-          const firstHalfWinner = firstHalfSorted[0].team;
-          const secondHalfWinner = secondHalfSorted[0].team;
-
-          if (firstHalfWinner === secondHalfWinner) {
-            // 同一チームが両期優勝: 年間1位 vs 年間2位
-            topTeams = secondHalf.slice(0, 2).map(t => t.team);
-            updatedSeasonData.playoffNote = `${firstHalfWinner}が前期・後期とも優勝のため、年間1位 vs 2位で対決`;
-          } else {
-            // 前期1位を先に（ホームアドバンテージ: 年間勝率が高い方）
-            const firstWinRate = secondHalf.find(s => s.team === firstHalfWinner)?.winRate || 0;
-            const secondWinRate = secondHalf.find(s => s.team === secondHalfWinner)?.winRate || 0;
-            topTeams = firstWinRate >= secondWinRate
-              ? [firstHalfWinner, secondHalfWinner]
-              : [secondHalfWinner, firstHalfWinner];
-            updatedSeasonData.playoffNote = `前期優勝: ${firstHalfWinner} vs 後期優勝: ${secondHalfWinner}`;
-          }
-          updatedSeasonData.firstHalfWinner = firstHalfWinner;
-          updatedSeasonData.secondHalfWinner = secondHalfWinner;
+        if (teamsNeeded === 4) {
+          // トーナメント: 各リーグ1位2位（L1-1位 vs L2-2位、L2-1位 vs L1-2位）
+          topTeams = [l1Sorted[0]?.team, l2Sorted[0]?.team, l1Sorted[1]?.team, l2Sorted[1]?.team].filter(Boolean);
         } else {
-          // 前期データがない場合はフォールバック: 年間1位 vs 2位
-          topTeams = secondHalf.slice(0, 2).map(t => t.team);
-          updatedSeasonData.playoffNote = '前期データなし: 年間1位 vs 2位で対決';
+          // 3回戦/5回戦: 両リーグ1位同士
+          topTeams = [l1Sorted[0]?.team, l2Sorted[0]?.team].filter(Boolean);
         }
       } else {
+        // 1リーグ制: 年間順位から上位チームを取得
         topTeams = [...seasonData.standings]
-          .sort((a, b) => b.winRate - a.winRate)
-          .slice(0, playoffFormat === 'single' ? 2 : 4)
+          .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)
+          .slice(0, teamsNeeded)
           .map(t => t.team);
       }
 
       const playoffSchedule = generatePlayoffSchedule(
         topTeams,
-        seasonData.settings.playoffFormat,
+        playoffFormat,
         seasonData.currentDate.year
       );
 

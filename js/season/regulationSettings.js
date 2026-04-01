@@ -10,7 +10,7 @@ const DEFAULT_REGULATIONS = {
   useDH: false,           // DH制
   gamesPerSeason: 60,     // 年間試合数（チームあたり）
   teamsCount: 4,          // チーム数
-  playoffFormat: 'single', // プレーオフ形式
+  playoffFormat: 'short', // プレーオフ形式: 'short'=3戦2勝, 'full'=5戦3勝, 'tournament'=4チームトーナメント
   maxExtraInnings: 12,    // 延長最大回数
   roster: {
     starters: 9,          // スタメン人数
@@ -80,9 +80,9 @@ const canModifyRegulations = (phase) => {
  */
 const getPlayoffFormatDescription = (format) => {
   const descriptions = {
-    'single': '1位 vs 2位の対戦（3戦先取制、最大5試合）',
-    'double': '4チームトーナメント（1位vs4位、2位vs3位 → 決勝）',
-    'none': 'プレーオフなし（レギュラーシーズンの優勝チームが年間王者）'
+    'short': '1位 vs 2位の対決（3戦2勝制）',
+    'full': '1位 vs 2位の対決（5戦3勝制）',
+    'tournament': '上位4チームトーナメント（1位vs4位、2位vs3位 → 決勝、各5戦3勝制）'
   };
   return descriptions[format] || '';
 };
@@ -91,48 +91,53 @@ const getPlayoffFormatDescription = (format) => {
  * レギュレーション設定のプリセット
  */
 const REGULATION_PRESETS = {
-  independent: {
-    name: '独立リーグ',
+  shikoku: {
+    name: '四国アイランドリーグplus',
+    description: '年間75試合、1位vs2位の3戦2勝制プレーオフ',
     regulations: {
       useDH: false,
-      gamesPerSeason: 60,
+      gamesPerSeason: 75,
       teamsCount: 4,
-      playoffFormat: 'single',
+      playoffFormat: 'short',
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   },
-  professional: {
-    name: 'プロ野球',
-    regulations: {
-      useDH: true,
-      gamesPerSeason: 143,
-      teamsCount: 6,
-      playoffFormat: 'double',
-      maxExtraInnings: 12,
-      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
-    }
-  },
-  highSchool: {
-    name: '高校野球',
+  bc: {
+    name: 'BCリーグ',
+    description: '2リーグ制（4チーム×2）、両リーグ優勝チームによる決戦',
     regulations: {
       useDH: false,
-      gamesPerSeason: 40,
+      gamesPerSeason: 56,
       teamsCount: 8,
-      playoffFormat: 'none',
-      maxExtraInnings: 15,
-      roster: { starters: 9, benchFielders: 2, benchPitchers: 9 }
+      leagueFormat: 'two',
+      playoffFormat: 'short',
+      maxExtraInnings: 12,
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   },
-  college: {
-    name: '大学野球',
+  kyushu: {
+    name: '九州アジアリーグ',
+    description: '年間75試合、4チームトーナメント制プレーオフ',
     regulations: {
-      useDH: true,
-      gamesPerSeason: 52,
-      teamsCount: 6,
-      playoffFormat: 'single',
+      useDH: false,
+      gamesPerSeason: 75,
+      teamsCount: 4,
+      playoffFormat: 'tournament',
       maxExtraInnings: 12,
-      roster: { starters: 9, benchFielders: 6, benchPitchers: 8 }
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
+    }
+  },
+  hokkaido: {
+    name: '北海道フロンティアリーグ',
+    description: '年間54試合、1位vs2位の5戦3勝制プレーオフ',
+    regulations: {
+      useDH: false,
+      gamesPerSeason: 54,
+      teamsCount: 4,
+      playoffFormat: 'full',
+      maxExtraInnings: 12,
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
   }
 };

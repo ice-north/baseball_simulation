@@ -174,9 +174,11 @@ const handlePhaseTransition = (seasonData, newPhase) => {
   switch (newPhase) {
     case SEASON_PHASES.PLAYOFFS:
       // プレーオフ開始時：上位チームを取得してプレーオフスケジュールを生成
+      const playoffFormat = seasonData.settings.playoffFormat;
+      const teamsNeeded = playoffFormat === 'tournament' ? 4 : 2;
       const topTeams = [...seasonData.standings]
-        .sort((a, b) => b.winRate - a.winRate)
-        .slice(0, seasonData.settings.playoffFormat === 'single' ? 2 : 4)
+        .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)
+        .slice(0, teamsNeeded)
         .map(t => t.team);
 
       const playoffSchedule = generatePlayoffSchedule(

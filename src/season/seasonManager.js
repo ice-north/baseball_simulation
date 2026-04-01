@@ -125,7 +125,7 @@ export const createSeasonData = (year = 1) => {
       useDH: false,                 // DH制
       gamesPerSeason: 60,           // 年間試合数（チームあたり）
       teamsCount: 4,                // チーム数
-      playoffFormat: 'single'       // プレーオフ形式（'single': 1位vs2位, 'double': 4チームトーナメント）
+      playoffFormat: 'short'        // プレーオフ形式（'short': 3回戦, 'full': 5回戦, 'tournament': 4チームトーナメント）
     }
   };
 };
@@ -260,75 +260,52 @@ export const generateRegularSeasonSchedule = (teams, gamesPerOpponent = 20, star
 /**
  * プレーオフスケジュールを生成
  * @param {Array} teams - 上位チーム配列（順位順）
- * @param {string} format - 'single'（1位vs2位の1シリーズ）or 'double'（4チームトーナメント）
+ * @param {string} format - 'short'（3回戦2勝先取）/ 'full'（5回戦3勝先取）/ 'tournament'（4チームトーナメント）
  * @param {number} year - 年
  * @returns {Array} プレーオフスケジュール
  */
-export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) => {
+export const generatePlayoffSchedule = (teams, format = 'short', year = 2024) => {
   const schedule = [];
   const startDate = { year, month: 10, day: 10 };
   let playoffId = 90001; // レギュラーシーズンのidと重複しない番号帯
 
-  if (format === 'single') {
-    // 1位 vs 2位の3戦先取制（最大5試合）
-    const team1 = teams[0];
-    const team2 = teams[1];
-
-    for (let game = 1; game <= 5; game++) {
-      const date = advanceDate(startDate, game - 1); // 毎日開催
-      const isHomeTeam1 = game <= 2 || game === 5;
-
+  // シリーズ試合を生成するヘルパー
+  const addSeries = (team1, team2, maxGames, round, seriesId, dayOffset = 0) => {
+    for (let game = 1; game <= maxGames; game++) {
+      const date = advanceDate(startDate, dayOffset + game - 1);
+      // 上位チームにホームアドバンテージ（3戦: 第1,3戦、5戦: 第1,2,5戦）
+      const isHomeTeam1 = maxGames === 3
+        ? (game <= 1 || game === 3)
+        : (game <= 2 || game === 5);
       schedule.push({
         id: playoffId++,
         date,
         home: isHomeTeam1 ? team1 : team2,
         away: isHomeTeam1 ? team2 : team1,
-        homePitcher: null,
-        awayPitcher: null,
-        result: null,
+        homePitcher: null, awayPitcher: null, result: null,
         phase: SEASON_PHASES.PLAYOFFS,
-        playoffRound: 'final',
+        playoffRound: round,
         seriesGame: game,
-        seriesId: 'final'
+        seriesId
       });
     }
-  } else if (format === 'double' && teams.length >= 4) {
-    // 4チームトーナメント: 準決勝3戦先取(最大5試合)×2 + 決勝3戦先取(最大5試合)
+  };
+
+  if (format === 'short') {
+    // 1位 vs 2位：3回戦2勝先取制
+    addSeries(teams[0], teams[1], 3, 'final', 'final');
+  } else if (format === 'full') {
+    // 1位 vs 2位：5回戦3勝先取制
+    addSeries(teams[0], teams[1], 5, 'final', 'final');
+  } else if (format === 'tournament' && teams.length >= 4) {
+    // 4チームトーナメント: 準決勝5回戦×2 + 決勝5回戦
     // 準決勝1: 1位 vs 4位
-    for (let game = 1; game <= 5; game++) {
-      const date = advanceDate(startDate, game - 1);
-      const isHome1 = game <= 2 || game === 5;
-      schedule.push({
-        id: playoffId++,
-        date,
-        home: isHome1 ? teams[0] : teams[3],
-        away: isHome1 ? teams[3] : teams[0],
-        homePitcher: null, awayPitcher: null, result: null,
-        phase: SEASON_PHASES.PLAYOFFS,
-        playoffRound: 'semi',
-        seriesGame: game,
-        seriesId: 'semi1'
-      });
-    }
+    addSeries(teams[0], teams[3], 5, 'semi', 'semi1', 0);
     // 準決勝2: 2位 vs 3位
-    for (let game = 1; game <= 5; game++) {
-      const date = advanceDate(startDate, game - 1);
-      const isHome1 = game <= 2 || game === 5;
-      schedule.push({
-        id: playoffId++,
-        date,
-        home: isHome1 ? teams[1] : teams[2],
-        away: isHome1 ? teams[2] : teams[1],
-        homePitcher: null, awayPitcher: null, result: null,
-        phase: SEASON_PHASES.PLAYOFFS,
-        playoffRound: 'semi',
-        seriesGame: game,
-        seriesId: 'semi2'
-      });
-    }
+    addSeries(teams[1], teams[2], 5, 'semi', 'semi2', 0);
     // 決勝（TBD - 準決勝結果で埋まる）
     for (let game = 1; game <= 5; game++) {
-      const date = advanceDate(startDate, 6 + game - 1); // 準決勝後1日空けて
+      const date = advanceDate(startDate, 6 + game - 1);
       schedule.push({
         id: playoffId++,
         date,
@@ -340,70 +317,6 @@ export const generatePlayoffSchedule = (teams, format = 'single', year = 2024) =
         seriesId: 'final'
       });
     }
-  } else if (format === 'split' || format === 'championship') {
-    // 前後期 / 両リーグ：3戦2勝制
-    const team1 = teams[0];
-    const team2 = teams[1];
-    for (let game = 1; game <= 3; game++) {
-      const date = advanceDate(startDate, game - 1);
-      const isHomeTeam1 = game <= 1 || game === 3; // 第1,3戦がホーム
-      schedule.push({
-        id: playoffId++,
-        date,
-        home: isHomeTeam1 ? team1 : team2,
-        away: isHomeTeam1 ? team2 : team1,
-        homePitcher: null, awayPitcher: null, result: null,
-        phase: SEASON_PHASES.PLAYOFFS,
-        playoffRound: 'final',
-        seriesGame: game,
-        seriesId: 'final'
-      });
-    }
-  } else if (format === 'top2') {
-    // 上位2チーム：5戦3勝制
-    const team1 = teams[0];
-    const team2 = teams[1];
-    for (let game = 1; game <= 5; game++) {
-      const date = advanceDate(startDate, game - 1);
-      const isHomeTeam1 = game <= 2 || game === 5;
-      schedule.push({
-        id: playoffId++,
-        date,
-        home: isHomeTeam1 ? team1 : team2,
-        away: isHomeTeam1 ? team2 : team1,
-        homePitcher: null, awayPitcher: null, result: null,
-        phase: SEASON_PHASES.PLAYOFFS,
-        playoffRound: 'final',
-        seriesGame: game,
-        seriesId: 'final'
-      });
-    }
-  } else if (format === 'tournament') {
-    // トーナメント: 上位4チーム、1戦勝負の準決勝→決勝
-    schedule.push({
-      id: playoffId++,
-      date: { ...startDate },
-      home: teams[0], away: teams[3],
-      homePitcher: null, awayPitcher: null, result: null,
-      phase: SEASON_PHASES.PLAYOFFS,
-      playoffRound: 'semi', seriesGame: 1, seriesId: 'semi1'
-    });
-    schedule.push({
-      id: playoffId++,
-      date: advanceDate(startDate, 1),
-      home: teams[1], away: teams[2],
-      homePitcher: null, awayPitcher: null, result: null,
-      phase: SEASON_PHASES.PLAYOFFS,
-      playoffRound: 'semi', seriesGame: 1, seriesId: 'semi2'
-    });
-    schedule.push({
-      id: playoffId++,
-      date: advanceDate(startDate, 3),
-      home: 'TBD', away: 'TBD',
-      homePitcher: null, awayPitcher: null, result: null,
-      phase: SEASON_PHASES.PLAYOFFS,
-      playoffRound: 'final', seriesGame: 1, seriesId: 'final'
-    });
   }
 
   return schedule;

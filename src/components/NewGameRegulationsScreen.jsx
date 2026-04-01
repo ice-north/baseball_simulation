@@ -8,7 +8,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     teamsCount: 4,
     leagueFormat: 'single',
     leagueNames: null,
-    playoffFormat: 'split',
+    playoffFormat: 'short',
     maxExtraInnings: 12,
     teamNames: ['チームA', 'チームB', 'チームC', 'チームD'],
     teamAbbreviations: ['Ａ', 'Ｂ', 'Ｃ', 'Ｄ']
@@ -193,13 +193,9 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
             <div className="flex items-center justify-between">
               <label className="font-medium">プレーオフ形式</label>
               <select value={tempSettings.playoffFormat} onChange={(e) => setTempSettings({...tempSettings, playoffFormat: e.target.value})} className="bg-gray-700 rounded px-3 py-2">
-                <option value="split">前後期制（3戦2勝）</option>
-                <option value="single">1位vs2位（3戦2勝）</option>
-                <option value="top2">上位2チーム（5戦3勝）</option>
-                <option value="tournament">トーナメント</option>
-                <option value="double">4チーム</option>
-                <option value="championship">リーグ優勝決定戦（3戦2勝）</option>
-                <option value="none">なし</option>
+                <option value="short">3回戦制（2勝先取）</option>
+                <option value="full">5回戦制（3勝先取）</option>
+                <option value="tournament">4チームトーナメント</option>
               </select>
             </div>
             <div className="flex items-center justify-between">

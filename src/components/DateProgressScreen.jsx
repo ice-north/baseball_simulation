@@ -792,7 +792,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const renderPlayoffBracket = () => {
               const playoffGames = (seasonData.schedule || []).filter(g => g.phase === SEASON_PHASES.PLAYOFFS);
               if (playoffGames.length === 0) return null;
-              const playoffFormat = seasonData?.settings?.playoffFormat || 'single';
+              const playoffFormat = seasonData?.settings?.playoffFormat || 'short';
 
               // シリーズごとの集計
               const getSeriesData = (seriesId) => {
@@ -912,7 +912,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 const semi1 = getSeriesData('semi1');
                 const semi2 = getSeriesData('semi2');
                 const final_ = getSeriesData('final');
-                return renderBracketContainer('プレーオフ トーナメント', (
+                return renderBracketContainer('プレーオフ トーナメント (5戦3勝制)', (
                   <div className="flex items-stretch gap-2">
                     <div className="flex-1 space-y-2">
                       {renderSeries(semi1, '準決勝①')}
@@ -931,46 +931,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     </div>
                   </div>
                 ));
-              } else if (playoffFormat === 'double') {
-                const semi1 = getSeriesData('semi1');
-                const semi2 = getSeriesData('semi2');
-                const final_ = getSeriesData('final');
-                return renderBracketContainer('プレーオフ', (
-                  <div className="flex items-stretch gap-2">
-                    <div className="flex-1 space-y-2">
-                      {renderSeries(semi1, '準決勝① (5戦3勝)')}
-                      {renderSeries(semi2, '準決勝② (5戦3勝)')}
-                    </div>
-                    <div className="flex items-center">
-                      <svg width="24" height="100" className="text-gray-600">
-                        <line x1="0" y1="25" x2="12" y2="25" stroke="currentColor" strokeWidth="1.5"/>
-                        <line x1="12" y1="25" x2="12" y2="75" stroke="currentColor" strokeWidth="1.5"/>
-                        <line x1="0" y1="75" x2="12" y2="75" stroke="currentColor" strokeWidth="1.5"/>
-                        <line x1="12" y1="50" x2="24" y2="50" stroke="currentColor" strokeWidth="1.5"/>
-                      </svg>
-                    </div>
-                    <div className="flex-1 flex items-center">
-                      {renderSeries(final_, '決勝 (5戦3勝)', true)}
-                    </div>
-                  </div>
-                ));
-              } else if (playoffFormat === 'split') {
+              } else if (playoffFormat === 'short') {
                 const final_ = getSeriesData('final');
                 if (!final_) return null;
-                return renderBracketContainer('前後期優勝対決 (3戦2勝制)', (
-                  <div>
-                    {seasonData.playoffNote && (
-                      <div className="text-center mb-2 px-2 py-1 bg-orange-900/30 rounded-lg border border-orange-600/20">
-                        <span className="text-[11px] text-orange-300">{seasonData.playoffNote}</span>
-                      </div>
-                    )}
-                    {renderSeries(final_, '決勝', true)}
-                  </div>
-                ));
+                return renderBracketContainer('プレーオフ (3回戦2勝先取)',
+                  renderSeries(final_, '決勝', true)
+                );
               } else {
+                // 'full' or fallback
                 const final_ = getSeriesData('final');
                 if (!final_) return null;
-                return renderBracketContainer('プレーオフ (5戦3勝制)',
+                return renderBracketContainer('プレーオフ (5回戦3勝先取)',
                   renderSeries(final_, '決勝', true)
                 );
               }
@@ -987,28 +958,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 </div>
               );
             }
-            // 前後期制の前期優勝チーム表示
-            const renderFirstHalfWinner = () => {
-              if (seasonData?.settings?.playoffFormat !== 'split') return null;
-              const firstHalf = seasonData.firstHalfStandings;
-              if (!firstHalf || firstHalf.length === 0) return null;
-              const sorted = [...firstHalf].sort((a, b) => b.winRate - a.winRate);
-              const winner = sorted[0];
-              return (
-                <div className="bg-gradient-to-r from-orange-900/30 to-gray-800/80 rounded-xl p-2.5 mt-2 border border-orange-600/20">
-                  <div className="flex items-center gap-2">
-                    <span className="text-orange-400 text-xs font-bold">前期優勝</span>
-                    <span className="text-white text-sm font-bold">{winner.team}</span>
-                    <span className="text-gray-400 text-xs ml-auto">{winner.wins}勝{winner.losses}敗{winner.draws > 0 ? `${winner.draws}分` : ''} ({winner.winRate.toFixed(3)})</span>
-                  </div>
-                </div>
-              );
-            };
 
             return (
               <div className="space-y-0">
                 {renderStandingsTable(standings, '順位表', 'text-white')}
-                {renderFirstHalfWinner()}
                 {renderPlayoffBracket()}
               </div>
             );
