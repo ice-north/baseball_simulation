@@ -967,9 +967,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 主なトピック（試合がある日のみ表示） */}
+          {/* 主なトピック */}
           {(() => {
-            if (todaysGames.length === 0) return null;
+            const isRestDay = todaysGames.length === 0;
             const topics = [];
             const allTeamNames = Object.keys(TEAMS_DATA || {});
             const allPlayers = [];
@@ -1315,7 +1315,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             return (
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
                 <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-                  <span className="text-yellow-400">📰</span> 主なトピック
+                  <span className="text-yellow-400">📰</span> {isRestDay ? '直近のトピック' : '主なトピック'}
                 </h2>
                 <div className="space-y-1">
                   {shuffled.map((t, i) => (
