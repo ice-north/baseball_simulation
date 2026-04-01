@@ -743,7 +743,22 @@ export function resetSeasonStats(allTeams, year) {
         const statsHistoryEntry = {
           year: year || '?',
           batting: JSON.parse(JSON.stringify(player.seasonStats.batting)),
-          pitching: JSON.parse(JSON.stringify(player.seasonStats.pitching))
+          pitching: JSON.parse(JSON.stringify(player.seasonStats.pitching)),
+          abilities: {
+            meet: player.batting?.meet || 0,
+            power: player.batting?.power || 0,
+            speed: player.physical?.speed || 0,
+            arm: player.physical?.arm || 0,
+            defense: player.fielding?.defense || 0,
+            eye: player.batting?.eye || 0,
+            steal: player.batting?.steal || 0,
+            velocity: player.pitching?.velocity || 0,
+            control: player.pitching?.control || 0,
+            stamina: player.pitching?.stamina || 0,
+            catcherLead: player.catching?.lead,
+            arsenal: player.pitching?.arsenal ? JSON.parse(JSON.stringify(player.pitching.arsenal)) : [],
+            age: player.age || 0
+          }
         };
         const existingHistory = player.statsHistory || [];
         return {

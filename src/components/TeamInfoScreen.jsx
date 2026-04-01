@@ -140,17 +140,17 @@ const TeamInfoScreen = () => {
 
           {/* タブ切り替え */}
           <div className="flex gap-1 mb-4 border-b border-gray-600">
-            {['ability', 'stats'].map(tab => (
+            {['ability', 'stats', 'abilityHistory'].map(tab => (
               <button key={tab}
                 className={`px-4 py-2 text-sm font-bold rounded-t transition ${detailTab === tab ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}
                 onClick={() => setDetailTab(tab)}
               >
-                {tab === 'ability' ? '能力' : '年度別成績'}
+                {tab === 'ability' ? '能力' : tab === 'stats' ? '年度別成績' : '年度別能力値'}
               </button>
             ))}
           </div>
 
-          {detailTab === 'ability' ? (<>
+          {detailTab === 'ability' && (<>
           <div className="grid grid-cols-2 gap-4 mb-4">
             {/* 野手能力 */}
             <div className="bg-gray-700 rounded p-3">
@@ -213,9 +213,9 @@ const TeamInfoScreen = () => {
               ))}
             </div>
           </div>
-          </>) : (<>
+          </>)}
           {/* 年度別成績タブ */}
-          {(() => {
+          {detailTab === 'stats' && (() => {
             const history = player.statsHistory || [];
             if (history.length === 0 && (!batting.games && !pitching.games)) {
               return <div className="text-gray-400 text-sm text-center py-8">まだシーズン成績がありません</div>;
@@ -372,7 +372,139 @@ const TeamInfoScreen = () => {
               </div>
             );
           })()}
-          </>)}
+
+          {/* 年度別能力値タブ */}
+          {detailTab === 'abilityHistory' && (() => {
+            const history = player.statsHistory || [];
+            const hasAbilityData = history.some(h => h.abilities);
+            if (!hasAbilityData) {
+              return <div className="text-gray-400 text-sm text-center py-8">まだ能力値の履歴がありません（Year2以降に記録されます）</div>;
+            }
+            const entriesWithAbilities = history.filter(h => h.abilities);
+            return isPitcher ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-gray-300">
+                  <thead>
+                    <tr className="border-b border-gray-600 text-gray-400">
+                      <th className="px-2 py-1 text-left">年</th>
+                      <th className="px-2 py-1 text-center">年齢</th>
+                      <th className="px-2 py-1 text-center">球速</th>
+                      <th className="px-2 py-1 text-center">制球</th>
+                      <th className="px-2 py-1 text-center">スタミナ</th>
+                      <th className="px-2 py-1 text-center">ミート</th>
+                      <th className="px-2 py-1 text-center">パワー</th>
+                      <th className="px-2 py-1 text-center">走力</th>
+                      <th className="px-2 py-1 text-center">守備</th>
+                      <th className="px-2 py-1 text-left pl-4">変化球</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entriesWithAbilities.map((h, i) => {
+                      const a = h.abilities;
+                      const prevA = i > 0 ? entriesWithAbilities[i - 1].abilities : null;
+                      const diff = (cur, prev, key) => {
+                        if (!prev) return '';
+                        const d = cur[key] - prev[key];
+                        if (d > 0) return <span className="text-green-400 text-[10px] ml-0.5">+{d}</span>;
+                        if (d < 0) return <span className="text-red-400 text-[10px] ml-0.5">{d}</span>;
+                        return '';
+                      };
+                      const arsenalStr = (a.arsenal || []).filter(p => p.type !== 'straight').map(p => {
+                        const name = BALL_EFFECTS[p.type]?.name || p.type;
+                        return `${name}${p.level}`;
+                      }).join(', ');
+                      return (
+                        <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
+                          <td className="px-2 py-1 text-white font-bold">{h.year}年目</td>
+                          <td className="px-2 py-1 text-center">{a.age}歳</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.velocity)}>{a.velocity}</span>{diff(a, prevA, 'velocity')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.control)}>{a.control}</span>{diff(a, prevA, 'control')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.stamina)}>{a.stamina}</span>{diff(a, prevA, 'stamina')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.meet)}>{a.meet}</span>{diff(a, prevA, 'meet')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{diff(a, prevA, 'power')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{diff(a, prevA, 'speed')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.defense)}>{a.defense}</span>{diff(a, prevA, 'defense')}</td>
+                          <td className="px-2 py-1 text-left pl-4 text-[10px]">{arsenalStr || '-'}</td>
+                        </tr>
+                      );
+                    })}
+                    {/* 現在 */}
+                    <tr className="border-t-2 border-gray-500 font-bold">
+                      <td className="px-2 py-1 text-cyan-400">現在</td>
+                      <td className="px-2 py-1 text-center text-white">{player.age}歳</td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.pitching?.velocity || 0)}>{player.pitching?.velocity || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.pitching?.control || 0)}>{player.pitching?.control || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.pitching?.stamina || 0)}>{player.pitching?.stamina || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.meet || 0)}>{player.batting?.meet || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.power || 0)}>{player.batting?.power || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.physical?.speed || 0)}>{player.physical?.speed || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.fielding?.defense || 0)}>{player.fielding?.defense || 0}</span></td>
+                      <td className="px-2 py-1 text-left pl-4 text-[10px]">{(player.pitching?.arsenal || []).filter(p => p.type !== 'straight').map(p => `${BALL_EFFECTS[p.type]?.name || p.type}${p.level}`).join(', ') || '-'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-gray-300">
+                  <thead>
+                    <tr className="border-b border-gray-600 text-gray-400">
+                      <th className="px-2 py-1 text-left">年</th>
+                      <th className="px-2 py-1 text-center">年齢</th>
+                      <th className="px-2 py-1 text-center">ミート</th>
+                      <th className="px-2 py-1 text-center">パワー</th>
+                      <th className="px-2 py-1 text-center">走力</th>
+                      <th className="px-2 py-1 text-center">肩力</th>
+                      <th className="px-2 py-1 text-center">守備</th>
+                      <th className="px-2 py-1 text-center">選球眼</th>
+                      <th className="px-2 py-1 text-center">盗塁</th>
+                      {player.catching?.lead !== undefined && <th className="px-2 py-1 text-center">リード</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entriesWithAbilities.map((h, i) => {
+                      const a = h.abilities;
+                      const prevA = i > 0 ? entriesWithAbilities[i - 1].abilities : null;
+                      const diff = (cur, prev, key) => {
+                        if (!prev) return '';
+                        const d = cur[key] - prev[key];
+                        if (d > 0) return <span className="text-green-400 text-[10px] ml-0.5">+{d}</span>;
+                        if (d < 0) return <span className="text-red-400 text-[10px] ml-0.5">{d}</span>;
+                        return '';
+                      };
+                      return (
+                        <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
+                          <td className="px-2 py-1 text-white font-bold">{h.year}年目</td>
+                          <td className="px-2 py-1 text-center">{a.age}歳</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.meet)}>{a.meet}</span>{diff(a, prevA, 'meet')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{diff(a, prevA, 'power')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{diff(a, prevA, 'speed')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.arm)}>{a.arm}</span>{diff(a, prevA, 'arm')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.defense)}>{a.defense}</span>{diff(a, prevA, 'defense')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.eye)}>{a.eye}</span>{diff(a, prevA, 'eye')}</td>
+                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.steal)}>{a.steal}</span>{diff(a, prevA, 'steal')}</td>
+                          {a.catcherLead !== undefined && <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.catcherLead)}>{a.catcherLead}</span>{diff(a, prevA, 'catcherLead')}</td>}
+                        </tr>
+                      );
+                    })}
+                    {/* 現在 */}
+                    <tr className="border-t-2 border-gray-500 font-bold">
+                      <td className="px-2 py-1 text-cyan-400">現在</td>
+                      <td className="px-2 py-1 text-center text-white">{player.age}歳</td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.meet || 0)}>{player.batting?.meet || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.power || 0)}>{player.batting?.power || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.physical?.speed || 0)}>{player.physical?.speed || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.physical?.arm || 0)}>{player.physical?.arm || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.fielding?.defense || 0)}>{player.fielding?.defense || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.eye || 0)}>{player.batting?.eye || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.steal || 0)}>{player.batting?.steal || 0}</span></td>
+                      {player.catching?.lead !== undefined && <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.catching?.lead || 0)}>{player.catching?.lead || 0}</span></td>}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       </div>
     );
