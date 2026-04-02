@@ -308,6 +308,316 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return leaderWins > (second.wins || 0) + secondRemaining;
   })();
 
+  // トピック生成（試合結果が増えた時だけ再計算 = 試合のある日のみ更新）
+  const cachedTopics = useMemo(() => {
+    const topics = [];
+    const allTeamNames = Object.keys(TEAMS_DATA || {});
+    const allPlayers = [];
+    allTeamNames.forEach(tn => {
+      (TEAMS_DATA[tn]?.players || []).forEach(p => allPlayers.push({ ...p, teamName: tn }));
+    });
+
+    // 直前の試合結果からトピック生成
+    const recentResults = (seasonData.results || []).slice(-allTeamNames.length);
+    recentResults.forEach(r => {
+      if (!r.result || r.result.cancelled) return;
+      const hs = r.result.homeScore;
+      const as = r.result.awayScore;
+      const diff = Math.abs(hs - as);
+      if (diff >= 8) {
+        const winner = hs > as ? r.home : r.away;
+        topics.push({ cat: 'game_blowout', icon: '💥', text: `${getTeamAbbreviation(winner)}が${diff}点差の大勝`, color: 'text-red-400' });
+      }
+      if (hs === 0 || as === 0) {
+        const winner = hs > as ? r.home : r.away;
+        topics.push({ cat: 'game_shutout', icon: '🛡️', text: `${getTeamAbbreviation(winner)}投手陣が完封勝利`, color: 'text-blue-400' });
+      }
+      if (hs > as && diff === 1) {
+        topics.push({ cat: 'game_walkoff', icon: '🎉', text: `${getTeamAbbreviation(r.home)}がサヨナラ勝ち！`, color: 'text-yellow-400' });
+      }
+    });
+
+    // 個人成績のマイルストーン
+    allPlayers.forEach(p => {
+      const bs = p.seasonStats?.batting;
+      const ps = p.seasonStats?.pitching;
+      const abbr = getTeamAbbreviation(p.teamName);
+      if (bs?.atBats >= 30 && bs.hits / bs.atBats >= 0.350) {
+        topics.push({ cat: 'bat_avg', icon: '🔥', text: `${abbr} ${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}と好調`, color: 'text-orange-400' });
+      }
+      const hr = bs?.homeruns || 0;
+      if (hr > 0 && (hr === 10 || hr === 20 || hr === 30 || hr === 40 || hr === 50)) {
+        topics.push({ cat: 'bat_hr', icon: '💣', text: `${abbr} ${p.name}が${hr}号到達`, color: 'text-pink-400', team: p.teamName });
+      }
+      const w = ps?.wins || 0;
+      if (w > 0 && (w === 5 || w === 10 || w === 15 || w === 20)) {
+        topics.push({ cat: 'pitch_wins', icon: '🏆', text: `${abbr} ${p.name}が${w}勝目`, color: 'text-yellow-400', team: p.teamName });
+      }
+      const so = ps?.strikeouts || 0;
+      if (so > 0 && (so === 50 || so === 100 || so === 150 || so === 200)) {
+        topics.push({ cat: 'pitch_k', icon: '🌀', text: `${abbr} ${p.name}が${so}奪三振達成`, color: 'text-purple-400', team: p.teamName });
+      }
+      if (p.age <= 22 && bs?.atBats >= 20 && bs.hits / bs.atBats >= 0.300) {
+        topics.push({ cat: 'young', icon: '⭐', text: `${abbr} ${p.name}(${p.age}歳)にスカウトが熱視線`, color: 'text-cyan-400' });
+      }
+    });
+
+    // 順位変動トピック
+    const _standings = seasonData.standings || [];
+    const userStandingData = _standings.find(s => s.team === userTeamName);
+    if (userStandingData) {
+      const ur = _standings.indexOf(userStandingData) + 1;
+      if (ur === 1 && (userStandingData.wins || 0) >= 3) {
+        topics.push({ cat: 'standings', icon: '👑', text: `${userTeamName}が首位をキープ`, color: 'text-yellow-300' });
+      }
+      if (ur <= 3 && _standings.length >= 2) {
+        const first = _standings[0];
+        const second = _standings[1];
+        const gb = ((first.wins - second.wins) - (first.losses - second.losses)) / 2;
+        if (gb <= 1.0 && gb > 0) {
+          topics.push({ cat: 'standings', icon: '⚡', text: `首位${getTeamAbbreviation(first.team)}と2位${getTeamAbbreviation(second.team)}が${gb}ゲーム差の接戦`, color: 'text-red-300' });
+        }
+      }
+    }
+
+    // 試合結果からの追加トピック
+    recentResults.forEach(r => {
+      if (!r.result || r.result.cancelled) return;
+      const hs = r.result.homeScore;
+      const as = r.result.awayScore;
+      const total = hs + as;
+      const diff = Math.abs(hs - as);
+      if (total >= 15) {
+        topics.push({ cat: 'game_slugfest', icon: '🎆', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は合計${total}点の乱打戦`, color: 'text-orange-300' });
+      }
+      if (total <= 2 && total > 0) {
+        topics.push({ cat: 'game_pitching', icon: '🧊', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は${hs}-${as}の緊迫した投手戦`, color: 'text-blue-300' });
+      }
+      if (hs > as && diff >= 2 && diff <= 3 && hs >= 5) {
+        topics.push({ cat: 'game_comeback', icon: '🔄', text: `${getTeamAbbreviation(r.home)}が終盤の粘りで逆転勝利`, color: 'text-green-400' });
+      }
+      if (hs === as) {
+        topics.push({ cat: 'game_draw', icon: '🤝', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は${hs}-${as}の引き分け`, color: 'text-gray-300' });
+      }
+    });
+
+    // チーム連勝・連敗
+    allTeamNames.forEach(tn => {
+      const abbr = getTeamAbbreviation(tn);
+      const teamResults = (seasonData.results || []).filter(g => g.result && !g.result.cancelled && (g.home === tn || g.away === tn));
+      if (teamResults.length >= 5) {
+        let streak = 0;
+        let streakType = null;
+        for (let i = teamResults.length - 1; i >= 0; i--) {
+          const g = teamResults[i];
+          const isHome = g.home === tn;
+          const won = isHome ? g.result.homeScore > g.result.awayScore : g.result.awayScore > g.result.homeScore;
+          const lost = isHome ? g.result.homeScore < g.result.awayScore : g.result.awayScore < g.result.homeScore;
+          if (streakType === null) {
+            streakType = won ? 'win' : lost ? 'loss' : null;
+            if (!streakType) break;
+            streak = 1;
+          } else if ((streakType === 'win' && won) || (streakType === 'loss' && lost)) {
+            streak++;
+          } else {
+            break;
+          }
+        }
+        if (streakType === 'win' && streak >= 5) {
+          topics.push({ cat: 'team_streak', icon: '🔥', text: `${abbr}が破竹の${streak}連勝中！`, color: 'text-red-400' });
+        }
+        if (streakType === 'loss' && streak >= 5) {
+          topics.push({ cat: 'team_streak', icon: '📉', text: `${abbr}が${streak}連敗と苦しい展開`, color: 'text-gray-400' });
+        }
+      }
+    });
+
+    // 個人成績の追加トピック
+    allPlayers.forEach(p => {
+      const bs = p.seasonStats?.batting;
+      const ps = p.seasonStats?.pitching;
+      const abbr = getTeamAbbreviation(p.teamName);
+
+      const rbi = bs?.rbis || 0;
+      if (rbi > 0 && (rbi === 20 || rbi === 30 || rbi === 40 || rbi === 50 || rbi === 60 || rbi === 70 || rbi === 80)) {
+        topics.push({ cat: 'bat_rbi', icon: '💪', text: `${abbr} ${p.name}が${rbi}打点到達`, color: 'text-orange-400', team: p.teamName });
+      }
+      const sb = bs?.stolenBases || 0;
+      if (sb > 0 && (sb === 10 || sb === 20 || sb === 30 || sb === 40 || sb === 50)) {
+        topics.push({ cat: 'bat_sb', icon: '💨', text: `${abbr} ${p.name}が${sb}盗塁到達、俊足が光る`, color: 'text-green-300', team: p.teamName });
+      }
+      if (bs?.atBats >= 50 && bs.hits / bs.atBats < 0.200) {
+        topics.push({ cat: 'bat_slump', icon: '😰', text: `${abbr} ${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}と深刻な不振`, color: 'text-gray-400' });
+      }
+      if ((bs?.hits || 0) > 0 && ((bs.hits) === 50 || (bs.hits) === 100 || (bs.hits) === 150)) {
+        topics.push({ cat: 'bat_hits', icon: '📊', text: `${abbr} ${p.name}がシーズン${bs.hits}安打到達`, color: 'text-blue-300', team: p.teamName });
+      }
+      if (bs?.atBats >= 30) {
+        const pa = bs.atBats + (bs.walks || 0);
+        const obp = (bs.hits + (bs.walks || 0)) / pa;
+        if (obp >= 0.420) {
+          topics.push({ cat: 'bat_obp', icon: '👁️', text: `${abbr} ${p.name}の出塁率${obp.toFixed(3)}は驚異的`, color: 'text-teal-400' });
+        }
+      }
+      const bk = bs?.strikeouts || 0;
+      if (bk > 0 && (bk === 50 || bk === 100 || bk === 150)) {
+        topics.push({ cat: 'bat_k', icon: '🌬️', text: `${abbr} ${p.name}が${bk}三振到達、粗さが目立つ`, color: 'text-gray-400' });
+      }
+
+      if (ps && (ps.inningsPitched || 0) >= 30) {
+        const era = ((ps.earnedRuns || 0) * 27) / ps.inningsPitched;
+        if (era <= 1.99 && era >= 0) {
+          topics.push({ cat: 'pitch_era', icon: '🎯', text: `${abbr} ${p.name}が防御率${era.toFixed(2)}と圧巻`, color: 'text-emerald-400' });
+        }
+        if (era >= 5.00 && ps.games >= 5) {
+          topics.push({ cat: 'pitch_era', icon: '🚒', text: `${abbr} ${p.name}が防御率${era.toFixed(2)}と炎上中`, color: 'text-red-300' });
+        }
+      }
+      const sv = ps?.saves || 0;
+      if (sv > 0 && (sv === 5 || sv === 10 || sv === 15 || sv === 20 || sv === 25 || sv === 30)) {
+        topics.push({ cat: 'pitch_save', icon: '🔒', text: `${abbr} ${p.name}が${sv}セーブ到達、守護神の仕事`, color: 'text-indigo-400', team: p.teamName });
+      }
+      const qs = ps?.qualityStarts || 0;
+      if (qs > 0 && (qs === 5 || qs === 10 || qs === 15 || qs === 20)) {
+        topics.push({ cat: 'pitch_qs', icon: '📐', text: `${abbr} ${p.name}がQS${qs}回到達、安定感抜群`, color: 'text-sky-400' });
+      }
+
+      if (p.age >= 35 && bs?.atBats >= 20 && bs.hits / bs.atBats >= 0.280) {
+        topics.push({ cat: 'veteran', icon: '🫡', text: `${abbr} ${p.name}(${p.age}歳)、衰え知らずの活躍`, color: 'text-amber-400' });
+      }
+      const dbl = bs?.doubles || 0;
+      if (dbl > 0 && (dbl === 10 || dbl === 20 || dbl === 30 || dbl === 40 || dbl === 50)) {
+        topics.push({ cat: 'bat_2b', icon: '↗️', text: `${abbr} ${p.name}が${dbl}二塁打到達、広角打法が冴える`, color: 'text-lime-400', team: p.teamName });
+      }
+
+      if (bs?.atBats >= 10) {
+        const recentGames = (seasonData.results || []).slice(-10);
+        let recentHits = 0, recentAB = 0, recentHR = 0;
+        recentGames.forEach(g => {
+          if (!g.result || g.result.cancelled) return;
+          const isHome = g.home === p.teamName;
+          const lineup = isHome ? g.result.homeLineup : g.result.awayLineup;
+          if (!lineup) return;
+          const pStats = lineup?.find(l => l.name === p.name);
+          if (pStats) {
+            recentHits += pStats.hits || 0;
+            recentAB += pStats.atBats || 0;
+            recentHR += pStats.homeruns || 0;
+          }
+        });
+        if (recentAB >= 10) {
+          const recentAvg = recentHits / recentAB;
+          if (recentAvg >= 0.400) {
+            topics.push({ cat: 'bat_hot', icon: '🔥', text: `${abbr} ${p.name}が直近${recentAB}打数${recentHits}安打と絶好調！`, color: 'text-red-400' });
+          }
+          if (recentAB >= 12 && recentAvg < 0.100) {
+            topics.push({ cat: 'bat_cold', icon: '❄️', text: `${abbr} ${p.name}が直近${recentAB}打数${recentHits}安打と当たりが止まらない`, color: 'text-blue-300' });
+          }
+          if (recentHR >= 3) {
+            topics.push({ cat: 'bat_hr_streak', icon: '💥', text: `${abbr} ${p.name}が直近で${recentHR}本塁打の量産体制`, color: 'text-pink-400' });
+          }
+        }
+      }
+
+      if (p.abilities?.pitching?.velocity >= 150) {
+        topics.push({ cat: 'pitch_velo', icon: '🚀', text: `${abbr} ${p.name}の剛速球${p.abilities.pitching.velocity}km/hにスタンドがどよめく`, color: 'text-red-300' });
+      }
+      if (p.abilities?.pitching?.velocity >= 140 && p.abilities?.pitching?.velocity < 150 && p.age <= 22) {
+        topics.push({ cat: 'pitch_velo_young', icon: '⚡', text: `${abbr} ${p.name}(${p.age}歳)が最速${p.abilities.pitching.velocity}km/h、将来が楽しみ`, color: 'text-cyan-300' });
+      }
+
+      if (p.abilities?.fielding?.defense >= 85 && p.position !== 'pitcher') {
+        const posNames = { catcher: '捕手', first: '一塁手', second: '二塁手', third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手' };
+        const posName = posNames[p.position] || p.position;
+        topics.push({ cat: 'defense_scout', icon: '🧤', text: `${abbr} ${p.name}の${posName}守備にスカウトも高評価`, color: 'text-emerald-300' });
+      }
+
+      if (ps && (ps.games || 0) >= 25) {
+        topics.push({ cat: 'pitch_ironman', icon: '💪', text: `${abbr} ${p.name}が${ps.games}試合登板、フル回転の活躍`, color: 'text-orange-300' });
+      }
+
+      const walks = bs?.walks || 0;
+      if (walks > 0 && (walks === 20 || walks === 30 || walks === 40 || walks === 50)) {
+        topics.push({ cat: 'bat_bb', icon: '👀', text: `${abbr} ${p.name}が${walks}四球到達、優れた選球眼`, color: 'text-teal-300', team: p.teamName });
+      }
+
+      if ((bs?.stolenBases || 0) >= 8 && bs?.atBats >= 30 && bs.hits / bs.atBats >= 0.300) {
+        topics.push({ cat: 'bat_allround', icon: '🌟', text: `${abbr} ${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}・${bs.stolenBases}盗塁の万能ぶり`, color: 'text-yellow-300' });
+      }
+
+      if (ps && (ps.inningsPitched || 0) >= 20 && (ps.earnedRuns || 0) === 0) {
+        topics.push({ cat: 'pitch_scoreless', icon: '✨', text: `${abbr} ${p.name}が${ps.inningsPitched}イニング無失点の快投`, color: 'text-amber-300' });
+      }
+    });
+
+    // 順位争い追加トピック
+    if (_standings.length >= 3) {
+      const last = _standings[_standings.length - 1];
+      const secondLast = _standings[_standings.length - 2];
+      const lastGb = ((secondLast.wins - last.wins) - (secondLast.losses - last.losses)) / 2;
+      if (lastGb <= 1.0 && lastGb >= 0 && (last.gamesPlayed || 0) >= 10) {
+        topics.push({ cat: 'standings', icon: '🏳️', text: `${getTeamAbbreviation(last.team)}と${getTeamAbbreviation(secondLast.team)}が最下位争い`, color: 'text-gray-400' });
+      }
+      if (_standings.length >= 4) {
+        const third = _standings[2];
+        const fourth = _standings[3];
+        const csGb = ((third.wins - fourth.wins) - (third.losses - fourth.losses)) / 2;
+        if (csGb <= 1.5 && csGb >= 0 && (third.gamesPlayed || 0) >= 10) {
+          topics.push({ cat: 'standings', icon: '🏁', text: `${getTeamAbbreviation(third.team)}と${getTeamAbbreviation(fourth.team)}がAクラス争い`, color: 'text-yellow-300' });
+        }
+      }
+      if (_standings.length >= 2) {
+        const first = _standings[0];
+        const second = _standings[1];
+        const topGb = ((first.wins - second.wins) - (first.losses - second.losses)) / 2;
+        if (topGb >= 5 && (first.gamesPlayed || 0) >= 15) {
+          topics.push({ cat: 'standings', icon: '🏇', text: `${getTeamAbbreviation(first.team)}が${topGb}ゲーム差で首位独走`, color: 'text-yellow-400' });
+        }
+      }
+    }
+
+    // チーム勝率トピック
+    _standings.forEach(s => {
+      const abbr = getTeamAbbreviation(s.team);
+      if ((s.gamesPlayed || 0) >= 20 && (s.winRate || 0) >= 0.700) {
+        topics.push({ cat: 'team_wr', icon: '🏆', text: `${abbr}が勝率${s.winRate.toFixed(3)}の驚異的ペース`, color: 'text-yellow-400' });
+      }
+      if ((s.gamesPlayed || 0) >= 20 && (s.winRate || 0) <= 0.300) {
+        topics.push({ cat: 'team_wr', icon: '⛈️', text: `${abbr}が勝率${s.winRate.toFixed(3)}と苦しいシーズン`, color: 'text-gray-400' });
+      }
+    });
+
+    // 重複排除 + 同一カテゴリ最大2件に制限
+    const seen = new Set();
+    const catCount = {};
+    const catTeamSeen = {};
+    const milestoneCats = new Set(['pitch_wins', 'pitch_save', 'bat_hr', 'bat_hits', 'bat_2b', 'pitch_k', 'bat_rbi', 'bat_sb', 'bat_bb']);
+    const unique = topics.filter(t => {
+      if (seen.has(t.text)) return false;
+      seen.add(t.text);
+      if (t.cat) {
+        catCount[t.cat] = (catCount[t.cat] || 0) + 1;
+        if (catCount[t.cat] > 2) return false;
+        if (milestoneCats.has(t.cat) && t.team) {
+          const teamKey = `${t.cat}_${t.team}`;
+          if (catTeamSeen[teamKey]) return false;
+          catTeamSeen[teamKey] = true;
+        }
+      }
+      return true;
+    });
+    // シード値で安定シャッフル（結果数ベースでゲーム日ごとに変わる）
+    const seed = (seasonData.results?.length || 0) * 31 + 7;
+    const shuffled = unique.sort((a, b) => {
+      const ha = (a.text.length * 17 + seed) % 97;
+      const hb = (b.text.length * 17 + seed) % 97;
+      return ha - hb;
+    }).slice(0, 6);
+
+    return shuffled;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seasonData.results?.length]);
+
   const getEventColor = (label) => {
     if (label === 'シーズン終了') return 'text-red-400';
     if (label === 'プレーオフ') return 'text-yellow-400';
@@ -967,367 +1277,22 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 主なトピック */}
-          {(() => {
-            const isRestDay = todaysGames.length === 0;
-            const topics = [];
-            const allTeamNames = Object.keys(TEAMS_DATA || {});
-            const allPlayers = [];
-            allTeamNames.forEach(tn => {
-              (TEAMS_DATA[tn]?.players || []).forEach(p => allPlayers.push({ ...p, teamName: tn }));
-            });
-
-            // 直前の試合結果からトピック生成
-            const recentResults = (seasonData.results || []).slice(-allTeamNames.length);
-            recentResults.forEach(r => {
-              if (!r.result || r.result.cancelled) return;
-              const hs = r.result.homeScore;
-              const as = r.result.awayScore;
-              const diff = Math.abs(hs - as);
-              // 大差試合
-              if (diff >= 8) {
-                const winner = hs > as ? r.home : r.away;
-                topics.push({ cat: 'game_blowout', icon: '💥', text: `${getTeamAbbreviation(winner)}が${diff}点差の大勝`, color: 'text-red-400' });
-              }
-              // 完封試合
-              if (hs === 0 || as === 0) {
-                const winner = hs > as ? r.home : r.away;
-                topics.push({ cat: 'game_shutout', icon: '🛡️', text: `${getTeamAbbreviation(winner)}投手陣が完封勝利`, color: 'text-blue-400' });
-              }
-              // サヨナラ(裏で1点差)
-              if (hs > as && diff === 1) {
-                topics.push({ cat: 'game_walkoff', icon: '🎉', text: `${getTeamAbbreviation(r.home)}がサヨナラ勝ち！`, color: 'text-yellow-400' });
-              }
-            });
-
-            // 個人成績のマイルストーン
-            allPlayers.forEach(p => {
-              const bs = p.seasonStats?.batting;
-              const ps = p.seasonStats?.pitching;
-              const abbr = getTeamAbbreviation(p.teamName);
-              // 打率3割到達（規定打席以上）
-              if (bs?.atBats >= 30 && bs.hits / bs.atBats >= 0.350) {
-                topics.push({ cat: 'bat_avg', icon: '🔥', text: `${abbr} ${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}と好調`, color: 'text-orange-400' });
-              }
-              // 本塁打の節目
-              const hr = bs?.homeruns || 0;
-              if (hr > 0 && (hr === 10 || hr === 20 || hr === 30 || hr === 40 || hr === 50)) {
-                topics.push({ cat: 'bat_hr', icon: '💣', text: `${abbr} ${p.name}が${hr}号到達`, color: 'text-pink-400', team: p.teamName });
-              }
-              // 勝利数の節目
-              const w = ps?.wins || 0;
-              if (w > 0 && (w === 5 || w === 10 || w === 15 || w === 20)) {
-                topics.push({ cat: 'pitch_wins', icon: '🏆', text: `${abbr} ${p.name}が${w}勝目`, color: 'text-yellow-400', team: p.teamName });
-              }
-              // 奪三振の節目
-              const so = ps?.strikeouts || 0;
-              if (so > 0 && (so === 50 || so === 100 || so === 150 || so === 200)) {
-                topics.push({ cat: 'pitch_k', icon: '🌀', text: `${abbr} ${p.name}が${so}奪三振達成`, color: 'text-purple-400', team: p.teamName });
-              }
-              // 連勝中チェック（若手の活躍風）
-              if (p.age <= 22 && bs?.atBats >= 20 && bs.hits / bs.atBats >= 0.300) {
-                topics.push({ cat: 'young', icon: '⭐', text: `${abbr} ${p.name}(${p.age}歳)にスカウトが熱視線`, color: 'text-cyan-400' });
-              }
-            });
-
-            // 順位変動トピック
-            const userStandingData = standings.find(s => s.team === userTeamName);
-            if (userStandingData) {
-              const ur = standings.indexOf(userStandingData) + 1;
-              if (ur === 1 && (userStandingData.wins || 0) >= 3) {
-                topics.push({ cat: 'standings', icon: '👑', text: `${userTeamName}が首位をキープ`, color: 'text-yellow-300' });
-              }
-              // ゲーム差0.5以内の接戦
-              if (ur <= 3 && standings.length >= 2) {
-                const first = standings[0];
-                const second = standings[1];
-                const gb = ((first.wins - second.wins) - (first.losses - second.losses)) / 2;
-                if (gb <= 1.0 && gb > 0) {
-                  topics.push({ cat: 'standings', icon: '⚡', text: `首位${getTeamAbbreviation(first.team)}と2位${getTeamAbbreviation(second.team)}が${gb}ゲーム差の接戦`, color: 'text-red-300' });
-                }
-              }
-            }
-
-            // === 追加トピック ===
-
-            // 試合結果からの追加トピック
-            recentResults.forEach(r => {
-              if (!r.result || r.result.cancelled) return;
-              const hs = r.result.homeScore;
-              const as = r.result.awayScore;
-              const total = hs + as;
-              const diff = Math.abs(hs - as);
-              // 乱打戦（両チーム合計15点以上）
-              if (total >= 15) {
-                topics.push({ cat: 'game_slugfest', icon: '🎆', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は合計${total}点の乱打戦`, color: 'text-orange-300' });
-              }
-              // 投手戦（両チーム合計2点以下）
-              if (total <= 2 && total > 0) {
-                topics.push({ cat: 'game_pitching', icon: '🧊', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は${hs}-${as}の緊迫した投手戦`, color: 'text-blue-300' });
-              }
-              // 逆転勝ち風（ホームが僅差で勝利、3点差以内）
-              if (hs > as && diff >= 2 && diff <= 3 && hs >= 5) {
-                topics.push({ cat: 'game_comeback', icon: '🔄', text: `${getTeamAbbreviation(r.home)}が終盤の粘りで逆転勝利`, color: 'text-green-400' });
-              }
-              // 引き分け
-              if (hs === as) {
-                topics.push({ cat: 'game_draw', icon: '🤝', text: `${getTeamAbbreviation(r.home)}vs${getTeamAbbreviation(r.away)}は${hs}-${as}の引き分け`, color: 'text-gray-300' });
-              }
-            });
-
-            // チーム連勝・連敗（直近の試合結果から算出）
-            allTeamNames.forEach(tn => {
-              const abbr = getTeamAbbreviation(tn);
-              const teamResults = (seasonData.results || []).filter(g => g.result && !g.result.cancelled && (g.home === tn || g.away === tn));
-              if (teamResults.length >= 5) {
-                let streak = 0;
-                let streakType = null;
-                for (let i = teamResults.length - 1; i >= 0; i--) {
-                  const g = teamResults[i];
-                  const isHome = g.home === tn;
-                  const won = isHome ? g.result.homeScore > g.result.awayScore : g.result.awayScore > g.result.homeScore;
-                  const lost = isHome ? g.result.homeScore < g.result.awayScore : g.result.awayScore < g.result.homeScore;
-                  if (streakType === null) {
-                    streakType = won ? 'win' : lost ? 'loss' : null;
-                    if (!streakType) break;
-                    streak = 1;
-                  } else if ((streakType === 'win' && won) || (streakType === 'loss' && lost)) {
-                    streak++;
-                  } else {
-                    break;
-                  }
-                }
-                if (streakType === 'win' && streak >= 5) {
-                  topics.push({ cat: 'team_streak', icon: '🔥', text: `${abbr}が破竹の${streak}連勝中！`, color: 'text-red-400' });
-                }
-                if (streakType === 'loss' && streak >= 5) {
-                  topics.push({ cat: 'team_streak', icon: '📉', text: `${abbr}が${streak}連敗と苦しい展開`, color: 'text-gray-400' });
-                }
-              }
-            });
-
-            // 個人成績の追加トピック
-            allPlayers.forEach(p => {
-              const bs = p.seasonStats?.batting;
-              const ps = p.seasonStats?.pitching;
-              const abbr = getTeamAbbreviation(p.teamName);
-
-              // 打点の節目（20, 30, 40, 50, 60, 70, 80）
-              const rbi = bs?.rbis || 0;
-              if (rbi > 0 && (rbi === 20 || rbi === 30 || rbi === 40 || rbi === 50 || rbi === 60 || rbi === 70 || rbi === 80)) {
-                topics.push({ cat: 'bat_rbi', icon: '💪', text: `${abbr} ${p.name}が${rbi}打点到達`, color: 'text-orange-400', team: p.teamName });
-              }
-              // 盗塁の節目（10, 20, 30, 40, 50）
-              const sb = bs?.stolenBases || 0;
-              if (sb > 0 && (sb === 10 || sb === 20 || sb === 30 || sb === 40 || sb === 50)) {
-                topics.push({ cat: 'bat_sb', icon: '💨', text: `${abbr} ${p.name}が${sb}盗塁到達、俊足が光る`, color: 'text-green-300', team: p.teamName });
-              }
-              // 低打率の主力（規定打席到達で.200未満）
-              if (bs?.atBats >= 50 && bs.hits / bs.atBats < 0.200) {
-                topics.push({ cat: 'bat_slump', icon: '😰', text: `${abbr} ${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}と深刻な不振`, color: 'text-gray-400' });
-              }
-              // 安打数の節目（50安打到達）
-              if ((bs?.hits || 0) > 0 && ((bs.hits) === 50 || (bs.hits) === 100 || (bs.hits) === 150)) {
-                topics.push({ cat: 'bat_hits', icon: '📊', text: `${abbr} ${p.name}がシーズン${bs.hits}安打到達`, color: 'text-blue-300', team: p.teamName });
-              }
-              // 高出塁率（OBP .420以上）
-              if (bs?.atBats >= 30) {
-                const pa = bs.atBats + (bs.walks || 0);
-                const obp = (bs.hits + (bs.walks || 0)) / pa;
-                if (obp >= 0.420) {
-                  topics.push({ cat: 'bat_obp', icon: '👁️', text: `${abbr} ${p.name}の出塁率${obp.toFixed(3)}は驚異的`, color: 'text-teal-400' });
-                }
-              }
-              // 三振の節目（50, 100, 150）
-              const bk = bs?.strikeouts || 0;
-              if (bk > 0 && (bk === 50 || bk === 100 || bk === 150)) {
-                topics.push({ cat: 'bat_k', icon: '🌬️', text: `${abbr} ${p.name}が${bk}三振到達、粗さが目立つ`, color: 'text-gray-400' });
-              }
-
-              // 投手: 防御率1点台（規定投球回以上）
-              if (ps && (ps.inningsPitched || 0) >= 30) {
-                const era = ((ps.earnedRuns || 0) * 27) / ps.inningsPitched;
-                if (era <= 1.99 && era >= 0) {
-                  topics.push({ cat: 'pitch_era', icon: '🎯', text: `${abbr} ${p.name}が防御率${era.toFixed(2)}と圧巻`, color: 'text-emerald-400' });
-                }
-                // 防御率5点台以上で炎上中
-                if (era >= 5.00 && ps.games >= 5) {
-                  topics.push({ cat: 'pitch_era', icon: '🚒', text: `${abbr} ${p.name}が防御率${era.toFixed(2)}と炎上中`, color: 'text-red-300' });
-                }
-              }
-              // セーブ数（5, 10, 15, 20, 25, 30の節目）
-              const sv = ps?.saves || 0;
-              if (sv > 0 && (sv === 5 || sv === 10 || sv === 15 || sv === 20 || sv === 25 || sv === 30)) {
-                topics.push({ cat: 'pitch_save', icon: '🔒', text: `${abbr} ${p.name}が${sv}セーブ到達、守護神の仕事`, color: 'text-indigo-400', team: p.teamName });
-              }
-              // QSの節目（5, 10, 15, 20）
-              const qs = ps?.qualityStarts || 0;
-              if (qs > 0 && (qs === 5 || qs === 10 || qs === 15 || qs === 20)) {
-                topics.push({ cat: 'pitch_qs', icon: '📐', text: `${abbr} ${p.name}がQS${qs}回到達、安定感抜群`, color: 'text-sky-400' });
-              }
-
-              // ベテランの活躍（35歳以上で打率.280+）
-              if (p.age >= 35 && bs?.atBats >= 20 && bs.hits / bs.atBats >= 0.280) {
-                topics.push({ cat: 'veteran', icon: '🫡', text: `${abbr} ${p.name}(${p.age}歳)、衰え知らずの活躍`, color: 'text-amber-400' });
-              }
-              // 二塁打の節目（10, 20, 30, 40, 50本）
-              const dbl = bs?.doubles || 0;
-              if (dbl > 0 && (dbl === 10 || dbl === 20 || dbl === 30 || dbl === 40 || dbl === 50)) {
-                topics.push({ cat: 'bat_2b', icon: '↗️', text: `${abbr} ${p.name}が${dbl}二塁打到達、広角打法が冴える`, color: 'text-lime-400', team: p.teamName });
-              }
-
-              // === 新トピック: 最近の調子 ===
-              // 直近5試合の打撃成績から好不調を判定
-              if (bs?.atBats >= 10) {
-                const recentGames = (seasonData.results || []).slice(-10);
-                let recentHits = 0, recentAB = 0, recentHR = 0;
-                recentGames.forEach(g => {
-                  if (!g.result || g.result.cancelled) return;
-                  const isHome = g.home === p.teamName;
-                  const lineup = isHome ? g.result.homeLineup : g.result.awayLineup;
-                  if (!lineup) return;
-                  const pStats = lineup?.find(l => l.name === p.name);
-                  if (pStats) {
-                    recentHits += pStats.hits || 0;
-                    recentAB += pStats.atBats || 0;
-                    recentHR += pStats.homeruns || 0;
-                  }
-                });
-                if (recentAB >= 10) {
-                  const recentAvg = recentHits / recentAB;
-                  if (recentAvg >= 0.400) {
-                    topics.push({ cat: 'bat_hot', icon: '🔥', text: `${abbr} ${p.name}が直近${recentAB}打数${recentHits}安打と絶好調！`, color: 'text-red-400' });
-                  }
-                  if (recentAB >= 12 && recentAvg < 0.100) {
-                    topics.push({ cat: 'bat_cold', icon: '❄️', text: `${abbr} ${p.name}が直近${recentAB}打数${recentHits}安打と当たりが止まらない`, color: 'text-blue-300' });
-                  }
-                  if (recentHR >= 3) {
-                    topics.push({ cat: 'bat_hr_streak', icon: '💥', text: `${abbr} ${p.name}が直近で${recentHR}本塁打の量産体制`, color: 'text-pink-400' });
-                  }
-                }
-              }
-
-              // === 新トピック: 球速でどよめく ===
-              if (p.abilities?.pitching?.velocity >= 150) {
-                topics.push({ cat: 'pitch_velo', icon: '🚀', text: `${abbr} ${p.name}の剛速球${p.abilities.pitching.velocity}km/hにスタンドがどよめく`, color: 'text-red-300' });
-              }
-              if (p.abilities?.pitching?.velocity >= 140 && p.abilities?.pitching?.velocity < 150 && p.age <= 22) {
-                topics.push({ cat: 'pitch_velo_young', icon: '⚡', text: `${abbr} ${p.name}(${p.age}歳)が最速${p.abilities.pitching.velocity}km/h、将来が楽しみ`, color: 'text-cyan-300' });
-              }
-
-              // === 新トピック: スカウト高評価の守備 ===
-              if (p.abilities?.fielding?.defense >= 85 && p.position !== 'pitcher') {
-                const posNames = { catcher: '捕手', first: '一塁手', second: '二塁手', third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手' };
-                const posName = posNames[p.position] || p.position;
-                topics.push({ cat: 'defense_scout', icon: '🧤', text: `${abbr} ${p.name}の${posName}守備にスカウトも高評価`, color: 'text-emerald-300' });
-              }
-
-              // === 新トピック: 鉄腕投手 ===
-              if (ps && (ps.games || 0) >= 25) {
-                topics.push({ cat: 'pitch_ironman', icon: '💪', text: `${abbr} ${p.name}が${ps.games}試合登板、フル回転の活躍`, color: 'text-orange-300' });
-              }
-
-              // === 新トピック: 四球を選ぶ選球眼 ===
-              const walks = bs?.walks || 0;
-              if (walks > 0 && (walks === 20 || walks === 30 || walks === 40 || walks === 50)) {
-                topics.push({ cat: 'bat_bb', icon: '👀', text: `${abbr} ${p.name}が${walks}四球到達、優れた選球眼`, color: 'text-teal-300', team: p.teamName });
-              }
-
-              // === 新トピック: 俊足+高打率の万能型 ===
-              if ((bs?.stolenBases || 0) >= 8 && bs?.atBats >= 30 && bs.hits / bs.atBats >= 0.300) {
-                topics.push({ cat: 'bat_allround', icon: '🌟', text: `${abbr} ${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}・${bs.stolenBases}盗塁の万能ぶり`, color: 'text-yellow-300' });
-              }
-
-              // === 新トピック: 無失点記録 ===
-              if (ps && (ps.inningsPitched || 0) >= 20 && (ps.earnedRuns || 0) === 0) {
-                topics.push({ cat: 'pitch_scoreless', icon: '✨', text: `${abbr} ${p.name}が${ps.inningsPitched}イニング無失点の快投`, color: 'text-amber-300' });
-              }
-            });
-
-            // 順位争い追加トピック
-            if (standings.length >= 3) {
-              const last = standings[standings.length - 1];
-              const secondLast = standings[standings.length - 2];
-              const lastGb = ((secondLast.wins - last.wins) - (secondLast.losses - last.losses)) / 2;
-              if (lastGb <= 1.0 && lastGb >= 0 && (last.gamesPlayed || 0) >= 10) {
-                topics.push({ cat: 'standings', icon: '🏳️', text: `${getTeamAbbreviation(last.team)}と${getTeamAbbreviation(secondLast.team)}が最下位争い`, color: 'text-gray-400' });
-              }
-              // Aクラス/Bクラスの境界（3位と4位の差が僅差）
-              if (standings.length >= 4) {
-                const third = standings[2];
-                const fourth = standings[3];
-                const csGb = ((third.wins - fourth.wins) - (third.losses - fourth.losses)) / 2;
-                if (csGb <= 1.5 && csGb >= 0 && (third.gamesPlayed || 0) >= 10) {
-                  topics.push({ cat: 'standings', icon: '🏁', text: `${getTeamAbbreviation(third.team)}と${getTeamAbbreviation(fourth.team)}がAクラス争い`, color: 'text-yellow-300' });
-                }
-              }
-              // 首位独走（2位に5ゲーム差以上）
-              if (standings.length >= 2) {
-                const first = standings[0];
-                const second = standings[1];
-                const topGb = ((first.wins - second.wins) - (first.losses - second.losses)) / 2;
-                if (topGb >= 5 && (first.gamesPlayed || 0) >= 15) {
-                  topics.push({ cat: 'standings', icon: '🏇', text: `${getTeamAbbreviation(first.team)}が${topGb}ゲーム差で首位独走`, color: 'text-yellow-400' });
-                }
-              }
-            }
-
-            // チーム勝率トピック
-            standings.forEach(s => {
-              const abbr = getTeamAbbreviation(s.team);
-              if ((s.gamesPlayed || 0) >= 20 && (s.winRate || 0) >= 0.700) {
-                topics.push({ cat: 'team_wr', icon: '🏆', text: `${abbr}が勝率${s.winRate.toFixed(3)}の驚異的ペース`, color: 'text-yellow-400' });
-              }
-              if ((s.gamesPlayed || 0) >= 20 && (s.winRate || 0) <= 0.300) {
-                topics.push({ cat: 'team_wr', icon: '⛈️', text: `${abbr}が勝率${s.winRate.toFixed(3)}と苦しいシーズン`, color: 'text-gray-400' });
-              }
-            });
-
-            // 重複排除 + 同一カテゴリ最大2件に制限 + マイルストーン系は同チーム1件に制限してシャッフル
-            const seen = new Set();
-            const catCount = {};
-            const catTeamSeen = {};  // マイルストーン系カテゴリのチーム重複防止
-            const milestoneCats = new Set(['pitch_wins', 'pitch_save', 'bat_hr', 'bat_hits', 'bat_2b', 'pitch_k', 'bat_rbi', 'bat_sb', 'bat_bb']);
-            const unique = topics.filter(t => {
-              if (seen.has(t.text)) return false;
-              seen.add(t.text);
-              if (t.cat) {
-                catCount[t.cat] = (catCount[t.cat] || 0) + 1;
-                if (catCount[t.cat] > 2) return false;
-                // マイルストーン系は同チームから1件のみ（同チーム2人の5勝目など防止）
-                if (milestoneCats.has(t.cat) && t.team) {
-                  const teamKey = `${t.cat}_${t.team}`;
-                  if (catTeamSeen[teamKey]) return false;
-                  catTeamSeen[teamKey] = true;
-                }
-              }
-              return true;
-            });
-            // 日付ベースのシード値で安定シャッフル
-            const seed = (seasonData.currentDate?.day || 1) * 31 + (seasonData.currentDate?.month || 1) * 7;
-            const shuffled = unique.sort((a, b) => {
-              const ha = (a.text.length * 17 + seed) % 97;
-              const hb = (b.text.length * 17 + seed) % 97;
-              return ha - hb;
-            }).slice(0, 6);
-
-            if (shuffled.length === 0) return null;
-            return (
-              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
-                <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-                  <span className="text-yellow-400">📰</span> {isRestDay ? '直近のトピック' : '主なトピック'}
-                </h2>
-                <div className="space-y-1">
-                  {shuffled.map((t, i) => (
-                    <div key={i} className="flex items-start gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                      <span className="text-sm shrink-0">{t.icon}</span>
-                      <span className={`text-xs ${t.color}`}>{t.text}</span>
-                    </div>
-                  ))}
-                </div>
+          {/* 主なトピック（試合のある日のみ更新、休日は前日のトピックを表示） */}
+          {cachedTopics.length > 0 && (
+            <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
+              <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+                <span className="text-yellow-400">📰</span> {todaysGames.length === 0 ? '直近のトピック' : '主なトピック'}
+              </h2>
+              <div className="space-y-1">
+                {cachedTopics.map((t, i) => (
+                  <div key={i} className="flex items-start gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1.5">
+                    <span className="text-sm shrink-0">{t.icon}</span>
+                    <span className={`text-xs ${t.color}`}>{t.text}</span>
+                  </div>
+                ))}
               </div>
-            );
-          })()}
+            </div>
+          )}
         </div>
       </div>
 

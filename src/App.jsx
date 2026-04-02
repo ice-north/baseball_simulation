@@ -666,9 +666,11 @@ import SandboxSetupScreen from './components/SandboxSetupScreen.jsx';
                     // 守備チームの交代で、投手が交代した場合
                     const newPitcher = tempStarter ? player2 : player1; // スタメンになった選手
                     if (newPitcher.position === 'pitcher') {
-                      // 新しい投手のスタミナにリセット（setTeamの後に実行される）
+                      // 新しい投手のスタミナにリセット（疲労考慮、setTeamの後に実行される）
                       setTimeout(() => {
-                        setCurrentStamina(newPitcher.pitching.stamina);
+                        const maxSt = newPitcher.pitching.stamina;
+                        const fat = newPitcher.fatigue || 0;
+                        setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
                       }, 0);
                     }
                   }
@@ -928,7 +930,9 @@ import SandboxSetupScreen from './components/SandboxSetupScreen.jsx';
             newPitcher.position = 'pitcher';
 
             setTimeout(() => {
-              setCurrentStamina(newPitcher.pitching.stamina);
+              const maxSt = newPitcher.pitching.stamina;
+              const fat = newPitcher.fatigue || 0;
+              setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
             }, 0);
 
             setGameLog(prev => {
@@ -1250,8 +1254,12 @@ import SandboxSetupScreen from './components/SandboxSetupScreen.jsx';
                 newPitcher.battingOrder = currentPitcher.battingOrder;
                 newPitcher.position = 'pitcher';
 
-                // 新投手のスタミナをセット
-                setCurrentStamina(newPitcher.pitching.stamina);
+                // 新投手のスタミナをセット（疲労考慮）
+                {
+                  const maxSt = newPitcher.pitching.stamina;
+                  const fat = newPitcher.fatigue || 0;
+                  setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
+                }
 
                 // 試合ログに交代を記録
                 setGameLog(prev => {
@@ -1304,7 +1312,11 @@ import SandboxSetupScreen from './components/SandboxSetupScreen.jsx';
                 newPitcher.battingOrder = currentPitcher.battingOrder;
                 newPitcher.position = 'pitcher';
 
-                setCurrentStamina(newPitcher.pitching.stamina);
+                {
+                  const maxSt = newPitcher.pitching.stamina;
+                  const fat = newPitcher.fatigue || 0;
+                  setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
+                }
 
                 // 試合ログに交代を記録
                 setGameLog(prev => {
@@ -3663,7 +3675,11 @@ if (newOuts === 3) {
 
         const startingPitcher = homePlayers.find(p => p.battingOrder === 9);
         if (startingPitcher) {
-          setCurrentStamina(startingPitcher.pitching?.stamina || 100);
+          const maxStamina = startingPitcher.pitching?.stamina || 100;
+          const fatigue = startingPitcher.fatigue || 0;
+          // 疲労によりスタミナ上限が低下（最低50%まで）
+          const startStamina = Math.max(Math.floor(maxStamina * 0.5), maxStamina - fatigue);
+          setCurrentStamina(startStamina);
         }
 
         setManagedGameInfo(gameInfo);

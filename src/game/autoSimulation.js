@@ -314,28 +314,37 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     homeTeam: {
       ...homeTeamData,
       currentBatterOrder: 1,
-      players: homeTeamData.players.map(p => ({
+      players: homeTeamData.players.map(p => {
+        const maxStamina = p.pitching?.stamina || 100;
+        const fatigue = p.fatigue || 0;
+        // 疲労によりスタミナ上限が低下（最低50%まで）
+        const startStamina = Math.max(Math.floor(maxStamina * 0.5), maxStamina - fatigue);
+        return {
         ...p,
-        currentStamina: p.pitching?.stamina || 100,
+        currentStamina: startStamina,
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
           pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 },
           fielding: { chances: 0, errors: 0 }
         }
-      }))
+      };})
     },
     awayTeam: {
       ...awayTeamData,
       currentBatterOrder: 1,
-      players: awayTeamData.players.map(p => ({
+      players: awayTeamData.players.map(p => {
+        const maxStamina = p.pitching?.stamina || 100;
+        const fatigue = p.fatigue || 0;
+        const startStamina = Math.max(Math.floor(maxStamina * 0.5), maxStamina - fatigue);
+        return {
         ...p,
-        currentStamina: p.pitching?.stamina || 100,
+        currentStamina: startStamina,
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
           pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 },
           fielding: { chances: 0, errors: 0 }
         }
-      }))
+      };})
     },
     // リリーフ投手追跡（登板制限用）
     reliefTracking: {
@@ -448,9 +457,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       bats: batterPlayer.batting?.bats || 'right'
     };
 
+    // 投手の疲労ペナルティ（打者と同じ二次曲線: 疲労0→0, 50→-4, 100→-15）
+    const pitcherFatigue = pitcherPlayer.fatigue || 0;
+    const pitcherFatiguePenalty = pitcherFatigue > 0 ? Math.round(pitcherFatigue * pitcherFatigue / 670) : 0;
+
     const pitcher = {
-      velocity: pitcherPlayer.pitching?.velocity || 140,
-      control: (pitcherPlayer.pitching?.control || 50) + pitcherCondMod,
+      velocity: (pitcherPlayer.pitching?.velocity || 140) - pitcherFatiguePenalty,
+      control: (pitcherPlayer.pitching?.control || 50) + pitcherCondMod - pitcherFatiguePenalty,
       throws: pitcherPlayer.physical?.throws || 'right'
     };
 
