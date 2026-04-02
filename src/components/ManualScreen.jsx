@@ -538,6 +538,322 @@ const ManualContent = ({ category }) => {
         </div>
       );
 
+    case 'campMain':
+      return (
+        <div className="space-y-4">
+          <Entry title="キャンプの概要">
+            キャンプは4クール。毎クール、メイン練習1つ＋サブ練習1つを選択して実行する。
+            成長量は選手の年齢・経験値・ポジション補正により変動し、能力値80以上では成長が減衰する。
+          </Entry>
+          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1">メイン練習一覧</h3>
+          <Entry title="打撃練習 🏏" range="野手向け">
+            ミートとパワーを強化する。1クールあたり各+0〜2程度。
+          </Entry>
+          <Entry title="走塁練習 🏃" range="野手向け">
+            走力と盗塁を強化する。1クールあたり各+0〜2程度。
+          </Entry>
+          <Entry title="守備練習 🧤" range="共通">
+            守備力と肩力を強化する。投手・野手共通で選択可能。1クールあたり各+0〜2程度。
+          </Entry>
+          <Entry title="選球眼練習 👁️" range="野手向け">
+            選球眼を集中的に強化する。1クールあたり+0〜2程度。
+          </Entry>
+          <Entry title="スタミナ練習 💪" range="投手向け">
+            投手のスタミナを強化する。1クールあたり+0〜2程度。
+          </Entry>
+          <Entry title="制球練習 🎯" range="投手向け">
+            制球力を強化する。1クールあたり+0〜2程度。
+          </Entry>
+          <Entry title="球速練習 ⚡" range="投手のみ">
+            球速を強化する。1クールあたり+0〜2km程度。155km/h以上では1kmごとに成長が20%減衰する。
+          </Entry>
+          <Entry title="新球種習得 ✨" range="投手のみ">
+            新しい変化球の習得に挑戦する。習得する球種を選択可能。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">結果</th>
+                  <th className="text-right py-1 px-2">確率</th>
+                  <th className="text-right py-1 px-2">初期レベル</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-yellow-300">大成功</td><td className="text-right px-2">25%</td><td className="text-right px-2 text-green-400">Lv65〜75</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">成功</td><td className="text-right px-2">50%</td><td className="text-right px-2">Lv10〜19</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-400">失敗</td><td className="text-right px-2">25%</td><td className="text-right px-2 text-gray-500">習得不可</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="習得可能な球種">
+            スライダー、カーブ、フォーク、チェンジアップ、シンカー、シュート、カッター、スプリット、ツーシーム、パーム、ナックル（最大8球種まで）
+          </Entry>
+        </div>
+      );
+
+    case 'campSub':
+      return (
+        <div className="space-y-4">
+          <Entry title="サブ練習の基本">
+            メイン練習より効果は小さい。基本的に40%の確率で+1、そのうち30%で+2（=全体で12%が+2、28%が+1、60%が成長なし）。
+          </Entry>
+          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1">サブ練習一覧</h3>
+          <Entry title="ランニング 🏃" range="安定枠">
+            走力+0〜2、体力+1〜4（確定）、投手のみスタミナ+1（20%）。体力が確実に伸びる安定したメニュー。
+          </Entry>
+          <Entry title="筋トレ 💪">
+            パワー+0〜2、肩力+1（25%）。パワー系の強化に。
+          </Entry>
+          <Entry title="ストレッチ 🧘" range="広く薄く">
+            ミート・パワー・走力・肩力・守備が各10%で+1、回復力+1（30%）。広く薄い効果。
+          </Entry>
+          <Entry title="守備補強 🧤">
+            守備+0〜2、低適性のポジション適性+3（30%）。守備力の底上げに。
+          </Entry>
+          <Entry title="選球眼練習 👁️">
+            選球眼+0〜2。選球眼を手軽に鍛えたいときに。
+          </Entry>
+          <Entry title="変化球練習 🌀" range="投手のみ">
+            保有する全変化球のレベルが+1/クール程度。年齢補正あり。
+          </Entry>
+          <Entry title="サブポジ練習 🔀" range="ポジション選択可">
+            指定したポジションの守備適性が+9〜15。コンバートやユーティリティ育成に最適。
+          </Entry>
+          <Entry title="Cリード学習 🧠" range="捕手向け">
+            キャッチャーリード+1〜3（確定）。捕手の配球力を高める。
+          </Entry>
+          <h3 className="text-red-300 font-bold text-sm border-b border-red-800 pb-1 mt-6">ハイリスクメニュー</h3>
+          <Entry title="新球種習得 ✨" range="投手のみ">
+            成功率12%でランダムな球種を習得（成功時Lv20〜39）。メイン練習版より低確率だが、サブ枠で挑戦可能。
+          </Entry>
+          <Entry title="フォーム改造 🔄" range="投手のみ">
+            投球フォームの変更に挑戦する。失敗リスクあり。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>成功（20%）</b>: フォーム変更＋制球+3〜5</li>
+              <li><b>失敗（80%）</b>: 制球-1〜3のペナルティ</li>
+            </ul>
+          </Entry>
+          <Entry title="打席変更 ↔️" range="ハイリスク">
+            打席の左右やスイッチヒッターへの変更に挑戦する。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">変更パターン</th>
+                  <th className="text-right py-1 px-2">成功率</th>
+                  <th className="text-right py-1 px-2">失敗時ペナルティ</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">片打→両打（スイッチ化）</td><td className="text-right px-2">15%</td><td className="text-right px-2 text-red-400">ミート-1〜2</td></tr>
+                  <tr><td className="py-0.5 px-2">片打→反対の打席</td><td className="text-right px-2">20%</td><td className="text-right px-2 text-red-400">ミート-1〜2</td></tr>
+                  <tr><td className="py-0.5 px-2">両打→片打</td><td className="text-right px-2">30%</td><td className="text-right px-2 text-red-400">ミート-1〜2</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+        </div>
+      );
+
+    case 'campGrowth':
+      return (
+        <div className="space-y-4">
+          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1">年齢による成長カーブ</h3>
+          <Entry title="フィジカル系（走力・肩力・スタミナ・球速・体力・回復）">
+            若いほど大きく成長し、20歳以下がピーク。28歳以降は衰えが始まる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">年齢</th>
+                  <th className="text-right py-1 px-2">〜20</th><th className="text-right py-1 px-2">〜22</th>
+                  <th className="text-right py-1 px-2">〜25</th><th className="text-right py-1 px-2">〜28</th>
+                  <th className="text-right py-1 px-2">〜31</th><th className="text-right py-1 px-2">〜34</th>
+                  <th className="text-right py-1 px-2">35+</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr>
+                    <td className="py-0.5 px-2 text-green-300">成長補正</td>
+                    <td className="text-right px-2 text-green-400">+2.5</td>
+                    <td className="text-right px-2 text-green-400">+1.8</td>
+                    <td className="text-right px-2 text-green-400">+0.8</td>
+                    <td className="text-right px-2 text-yellow-300">+0.1</td>
+                    <td className="text-right px-2 text-red-400">-0.5</td>
+                    <td className="text-right px-2 text-red-400">-1.2</td>
+                    <td className="text-right px-2 text-red-400">-2.0</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="技術系（ミート・パワー・選球眼・制球・守備・盗塁）">
+            22〜24歳が成長のピーク。フィジカル系より遅咲きで、30歳前後まで伸びやすい。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">年齢</th>
+                  <th className="text-right py-1 px-2">〜21</th><th className="text-right py-1 px-2">〜24</th>
+                  <th className="text-right py-1 px-2">〜27</th><th className="text-right py-1 px-2">〜30</th>
+                  <th className="text-right py-1 px-2">〜33</th><th className="text-right py-1 px-2">〜36</th>
+                  <th className="text-right py-1 px-2">37+</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr>
+                    <td className="py-0.5 px-2 text-green-300">成長補正</td>
+                    <td className="text-right px-2 text-green-400">+1.0</td>
+                    <td className="text-right px-2 text-green-400">+2.2</td>
+                    <td className="text-right px-2 text-green-400">+1.5</td>
+                    <td className="text-right px-2 text-yellow-300">+0.3</td>
+                    <td className="text-right px-2 text-red-400">-0.3</td>
+                    <td className="text-right px-2 text-red-400">-1.0</td>
+                    <td className="text-right px-2 text-red-400">-2.0</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">成長減衰</h3>
+          <Entry title="能力値80以上の減衰">
+            能力値が80を超えると、超過1ポイントごとに成長量が3%減衰する。
+            例えば能力値90なら成長量が70%に、能力値99なら43%まで減少する。
+          </Entry>
+          <Entry title="球速155km/h以上の減衰">
+            球速は155km/hを超えると超過1kmごとに成長量が20%減衰する。
+            156km/hで80%、157km/hで60%…と急激に伸びにくくなる。上限は175km/h。
+          </Entry>
+          <h3 className="text-yellow-300 font-bold text-sm border-b border-yellow-800 pb-1 mt-6">覚醒システム</h3>
+          <Entry title="覚醒とは">
+            メイン練習中に一定確率で発生する大幅な追加成長。覚醒分は成長減衰の影響を受けない。
+          </Entry>
+          <Entry title="覚醒の発生条件">
+            覚醒率は経験値に依存する。
+            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              覚醒率 = 経験値 ÷ 10（%）
+            </code>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>経験値100の選手 → 覚醒率10%</li>
+              <li>経験値250の選手 → 覚醒率25%</li>
+            </ul>
+          </Entry>
+          <Entry title="経験値の稼ぎ方">
+            シーズン中の出場実績に応じて経験値が蓄積される。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>投手</b>: 登板数 + 投球回数</li>
+              <li><b>野手</b>: 出場試合数 + 打席数÷3</li>
+            </ul>
+            フル出場なら1シーズンで約250ポイント。キャンプ練習後に経験値は30%に減少する。
+          </Entry>
+          <Entry title="ポジション・打順による成長ボーナス">
+            シーズン中の守備位置や打順に応じて、関連するステータスの成長にボーナスがかかる。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>例: 遊撃手 → 走力・守備の成長1.4倍</li>
+              <li>例: 4番打者 → パワーの成長1.5倍</li>
+              <li>例: 1番打者 → 走力・盗塁の成長1.4倍</li>
+            </ul>
+          </Entry>
+        </div>
+      );
+
+    case 'campDispatch':
+      return (
+        <div className="space-y-4">
+          <Entry title="派遣とは">
+            Year2以降のキャンプで利用可能。選手をキャンプ全期間、外部機関に派遣して育成する。
+            派遣した選手は通常のキャンプ練習には参加できない。結果はキャンプ終了時に判明する。
+          </Entry>
+          <Entry title="派遣の制限">
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>各チーム、各派遣先に1人ずつ派遣可能</li>
+              <li>リーグ全体で合計8人まで</li>
+            </ul>
+          </Entry>
+          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1 mt-4">派遣先</h3>
+          <Entry title="🎓 大学野球留学" range="22歳以下 / 総合力55以下">
+            技術系の能力が大幅に伸びる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">対象</th>
+                  <th className="text-left py-1 px-2">主な成長能力</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-blue-300">投手</td><td className="px-2">制球+8〜17、球速+1〜3、変化球+5〜12、スタミナ+5〜14</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">野手</td><td className="px-2">ミート+8〜17、選球眼+6〜13、守備+5〜10、パワー+2〜5</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="🏟️ プロ研修" range="24歳以下 / 総合力50以下">
+            フィジカル系の能力が大幅に伸びる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">対象</th>
+                  <th className="text-left py-1 px-2">主な成長能力</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-blue-300">投手</td><td className="px-2">球速+4〜8、スタミナ+10〜24、制球+2〜5</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-300">野手</td><td className="px-2">パワー+8〜17、走力+6〜13、肩力+4〜9、ミート+2〜5</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-6">成長と飛躍</h3>
+          <Entry title="結果判定">
+            派遣の結果は「成長」と「飛躍」の2段階。失敗はない。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">結果</th>
+                  <th className="text-right py-1 px-2">基本確率</th>
+                  <th className="text-right py-1 px-2">成長倍率</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">成長</td><td className="text-right px-2">60%</td><td className="text-right px-2">×1.0</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300">飛躍</td><td className="text-right px-2">40%</td><td className="text-right px-2 text-green-400">×1.5</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="経験値による飛躍率ボーナス">
+            選手の経験値が高いほど飛躍の確率が上がる。
+            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              飛躍率 = 40% + min(25%, 経験値÷200)
+            </code>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>経験値0 → 飛躍率40%</li>
+              <li>経験値100 → 飛躍率52.5%（+12.5%）</li>
+              <li>経験値200以上 → 飛躍率65%（上限）</li>
+            </ul>
+          </Entry>
+          <h3 className="text-yellow-300 font-bold text-sm border-b border-yellow-800 pb-1 mt-6">覚醒チャンス</h3>
+          <Entry title="派遣中の覚醒">
+            派遣でも覚醒が発生する可能性がある。覚醒時はランダムな能力に+5〜12の追加ボーナス（倍率適用後）。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">派遣結果</th>
+                  <th className="text-right py-1 px-2">覚醒発生率</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2 text-green-300">成長時</td><td className="text-right px-2">20%</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300">飛躍時</td><td className="text-right px-2">30%</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="覚醒の対象能力">
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>投手</b>: 球速または制球のいずれかがランダムで大幅UP</li>
+              <li><b>野手</b>: ミート・パワー・走力のいずれかがランダムで大幅UP</li>
+            </ul>
+          </Entry>
+          <Entry title="総合力の計算">
+            派遣条件の「総合力」は以下の式で算出される。
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>投手</b>: ((球速-115)×1.5 + 制球 + スタミナ÷3) ÷ 3</li>
+              <li><b>野手</b>: (ミート + パワー + 走力 + 守備) ÷ 4</li>
+            </ul>
+          </Entry>
+        </div>
+      );
+
     case 'gameflow':
       return (
         <div className="space-y-4">
