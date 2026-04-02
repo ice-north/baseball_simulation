@@ -11,6 +11,10 @@ const CATEGORIES = [
   { id: 'pitchRoles', label: '投手起用ロール' },
   { id: 'pitchSubstitution', label: '降板ルール' },
   { id: 'traits', label: '選手特性' },
+  { id: 'campMain', label: 'キャンプ：メイン練習' },
+  { id: 'campSub', label: 'キャンプ：サブ練習' },
+  { id: 'campGrowth', label: 'キャンプ：成長システム' },
+  { id: 'campDispatch', label: 'キャンプ：派遣' },
   { id: 'gameflow', label: 'ゲームフロー' },
 ];
 
