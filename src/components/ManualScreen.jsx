@@ -6,6 +6,7 @@ const CATEGORIES = [
   { id: 'fielding', label: '守備能力' },
   { id: 'pitching', label: '投手能力' },
   { id: 'condition', label: 'コンディション' },
+  { id: 'fatigue', label: '体力・スタミナ・疲労' },
   { id: 'fitness', label: '守備位置適性' },
   { id: 'pitchRoles', label: '投手起用ロール' },
   { id: 'pitchSubstitution', label: '降板ルール' },
@@ -145,6 +146,182 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="推移ルール">
             コンディションは1日ごとに変化。現状維持が最も多く、1段階変動は自然に起こるが、2段階以上の急変は稀。
+          </Entry>
+        </div>
+      );
+
+    case 'fatigue':
+      return (
+        <div className="space-y-4">
+          <Entry title="3つのパラメータの関係">
+            選手のスタミナ管理には「体力」「スタミナ」「疲労」の3つのパラメータが関わる。
+            それぞれ役割が異なり、相互に影響し合う。
+            <div className="bg-gray-700/50 rounded-lg p-3 mt-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-600 text-gray-400">
+                    <th className="text-left py-1 px-2">パラメータ</th>
+                    <th className="text-left py-1 px-2">対象</th>
+                    <th className="text-left py-1 px-2">概要</th>
+                  </tr>
+                </thead>
+                <tbody className="text-gray-300">
+                  <tr className="border-b border-gray-700"><td className="py-1.5 px-2 text-green-300 font-bold">体力</td><td className="px-2">全選手</td><td className="px-2">試合で溜まる疲労の量を抑える</td></tr>
+                  <tr className="border-b border-gray-700"><td className="py-1.5 px-2 text-blue-300 font-bold">スタミナ</td><td className="px-2">投手</td><td className="px-2">1試合内で投げ続けられる球数の目安</td></tr>
+                  <tr><td className="py-1.5 px-2 text-red-300 font-bold">疲労</td><td className="px-2">全選手</td><td className="px-2">試合ごとに蓄積し、能力を低下させる</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+
+          <h3 className="text-green-300 font-bold text-sm border-b border-green-800 pb-1 mt-4">体力（bodyStamina）</h3>
+          <Entry title="体力とは" range="1〜99">
+            シーズンを通した体の丈夫さを表す身体能力。値が高いほど1試合で溜まる疲労が少ない。
+            体力自体は試合ごとに変動しない固定パラメータで、キャンプ練習（ランニング）などで成長する。
+          </Entry>
+          <Entry title="体力と1試合あたりの疲労量（野手）">
+            スタメン出場（3打席以上）した野手は、体力に応じた疲労が蓄積する。代打や守備固めでは疲労は溜まらない。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">体力</th>
+                  <th className="text-right py-1 px-2">100</th><th className="text-right py-1 px-2">80</th>
+                  <th className="text-right py-1 px-2">60</th><th className="text-right py-1 px-2">40</th>
+                  <th className="text-right py-1 px-2">20</th><th className="text-right py-1 px-2">1</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr>
+                    <td className="py-0.5 px-2 text-green-300">1試合の疲労</td>
+                    <td className="text-right px-2">5</td><td className="text-right px-2">6</td>
+                    <td className="text-right px-2">7</td><td className="text-right px-2">8</td>
+                    <td className="text-right px-2">9</td><td className="text-right px-2">10</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+
+          <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1 mt-4">スタミナ（stamina）</h3>
+          <Entry title="スタミナとは" range="30〜150">
+            投手専用の能力。1試合内で投げ続けられる体力を表す。投球するたびに1ずつ減少し、イニング間に3回復する。
+          </Entry>
+          <Entry title="疲労によるスタミナ低下">
+            試合開始時のスタミナは、蓄積した疲労の分だけ最大値から差し引かれる（最低でも最大値の50%は確保）。
+            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              開始スタミナ = max(最大スタミナ × 0.5, 最大スタミナ - 疲労値)
+            </code>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">例: スタミナ120の投手</th>
+                  <th className="text-right py-1 px-2">開始スタミナ</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">疲労 0（完全回復）</td><td className="text-right px-2 text-green-400">120</td></tr>
+                  <tr><td className="py-0.5 px-2">疲労 20</td><td className="text-right px-2 text-yellow-300">100</td></tr>
+                  <tr><td className="py-0.5 px-2">疲労 50</td><td className="text-right px-2 text-orange-300">70</td></tr>
+                  <tr><td className="py-0.5 px-2">疲労 80以上</td><td className="text-right px-2 text-red-400">60（下限）</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="スタミナ低下によるパフォーマンス悪化">
+            試合中にスタミナが50%を切ると、球速と制球が急激に低下する（二次曲線）。
+            残りスタミナが25%を切ると降板となる。
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">残スタミナ率</th>
+                  <th className="text-right py-1 px-2">球速低下</th><th className="text-right py-1 px-2">制球低下</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr><td className="py-0.5 px-2">50%以上</td><td className="text-right px-2 text-green-400">なし</td><td className="text-right px-2 text-green-400">なし</td></tr>
+                  <tr><td className="py-0.5 px-2">40%</td><td className="text-right px-2 text-yellow-300">-1</td><td className="text-right px-2 text-yellow-300">-1</td></tr>
+                  <tr><td className="py-0.5 px-2">30%</td><td className="text-right px-2 text-orange-300">-3</td><td className="text-right px-2 text-orange-300">-5</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-400">25%（降板）</td><td className="text-right px-2 text-red-400">-5</td><td className="text-right px-2 text-red-400">-8</td></tr>
+                  <tr><td className="py-0.5 px-2">10%</td><td className="text-right px-2 text-red-400">-13</td><td className="text-right px-2 text-red-400">-19</td></tr>
+                  <tr><td className="py-0.5 px-2">0%</td><td className="text-right px-2 text-red-400">-20</td><td className="text-right px-2 text-red-400">-30</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+
+          <h3 className="text-red-300 font-bold text-sm border-b border-red-800 pb-1 mt-4">疲労（fatigue）</h3>
+          <Entry title="疲労とは">
+            試合に出場するたびに蓄積し、能力を低下させる値。休養日に回復する。
+            疲労が高い状態で出場し続けると、打撃・投球ともにパフォーマンスが大きく落ちる。
+          </Entry>
+          <Entry title="疲労の蓄積">
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li><b>野手</b>: スタメン出場（3打席以上）で体力に応じた疲労が蓄積（5〜10）</li>
+              <li><b>先発投手</b>: 球数 ÷ 2 の疲労が蓄積（100球なら疲労+50）</li>
+              <li><b>リリーフ投手</b>: 球数 ÷ 3 の疲労が蓄積（30球なら疲労+10）</li>
+              <li>代打（1〜2打席）や守備固めでは疲労は蓄積しない</li>
+            </ul>
+          </Entry>
+          <Entry title="疲労による能力低下">
+            疲労は打者・投手の両方に影響する。ペナルティは二次曲線で増加し、疲労が高いほど加速度的に悪化する。
+            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              能力低下 = 疲労² ÷ 670（小数点以下四捨五入）
+            </code>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">疲労値</th>
+                  <th className="text-right py-1 px-2">0</th><th className="text-right py-1 px-2">20</th>
+                  <th className="text-right py-1 px-2">40</th><th className="text-right py-1 px-2">60</th>
+                  <th className="text-right py-1 px-2">80</th><th className="text-right py-1 px-2">100</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr>
+                    <td className="py-0.5 px-2 text-red-300">能力低下</td>
+                    <td className="text-right px-2 text-green-400">0</td>
+                    <td className="text-right px-2 text-yellow-300">-1</td>
+                    <td className="text-right px-2 text-yellow-300">-2</td>
+                    <td className="text-right px-2 text-orange-300">-5</td>
+                    <td className="text-right px-2 text-red-400">-10</td>
+                    <td className="text-right px-2 text-red-400">-15</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li><b>打者</b>: ミート・パワー・走力に上記ペナルティ、選球眼はその半分</li>
+              <li><b>投手</b>: 球速・制球に上記ペナルティ（スタミナ低下とは別に適用）</li>
+            </ul>
+          </Entry>
+          <Entry title="疲労の回復">
+            日付が進むたびに全選手の疲労が回復する。回復量は「回復力」に依存する。
+            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+              1日の回復量 = 20 × (0.7 + 回復力 / 100 × 0.6)
+            </code>
+            <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
+              <table className="w-full text-sm">
+                <thead><tr className="text-gray-400 border-b border-gray-600">
+                  <th className="text-left py-1 px-2">回復力</th>
+                  <th className="text-right py-1 px-2">20</th><th className="text-right py-1 px-2">40</th>
+                  <th className="text-right py-1 px-2">50</th><th className="text-right py-1 px-2">70</th>
+                  <th className="text-right py-1 px-2">90</th>
+                </tr></thead>
+                <tbody className="text-gray-300">
+                  <tr>
+                    <td className="py-0.5 px-2 text-green-300">1日の回復</td>
+                    <td className="text-right px-2">16</td><td className="text-right px-2">19</td>
+                    <td className="text-right px-2">20</td><td className="text-right px-2">22</td>
+                    <td className="text-right px-2">25</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Entry>
+          <Entry title="運用のポイント">
+            <ul className="list-disc list-inside text-sm space-y-1 mt-1">
+              <li>先発投手は100球で疲労+50。回復力50なら完全回復に約3日必要</li>
+              <li>連戦が続くと野手も疲労が蓄積し、打撃力が低下する</li>
+              <li>疲労が高い投手はスタミナも減った状態で登板するため、早期降板のリスクが高まる</li>
+              <li>リリーフ投手は球数が少ないため疲労が軽いが、連投には注意</li>
+              <li>AI監督は疲労80以上の投手を先発起用しない</li>
+            </ul>
           </Entry>
         </div>
       );
@@ -390,6 +567,7 @@ const ManualContent = ({ category }) => {
           <Entry title="疲労システム">
             試合に出場すると疲労が蓄積。疲労が高いと能力が低下する。
             回復力が高い選手ほど疲労の回復が早い。連戦時はローテーション管理が重要。
+            詳細は「体力・スタミナ・疲労」ページを参照。
           </Entry>
         </div>
       );
