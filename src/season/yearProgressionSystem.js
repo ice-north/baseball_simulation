@@ -1854,15 +1854,19 @@ export function executeDispatchTraining(player, destKey) {
   const dest = DISPATCH_DESTINATIONS[destKey];
   if (!dest) return;
 
-  // 結果判定: 大成功25%, 成功50%, 失敗25%
+  // 結果判定: 経験値が高いほど飛躍(1.5倍)の確率UP
+  // 基本: 成長(1.0倍)60% / 飛躍(1.5倍)40%
+  // 経験値ボーナス: experience/200 (最大+25%) → 飛躍率は40%〜65%
+  const experience = player.experience || 0;
+  const baseLeapChance = 0.4;
+  const expBonus = Math.min(0.25, experience / 200);
+  const leapChance = baseLeapChance + expBonus;
   const roll = Math.random();
   let outcome;
-  if (roll < 0.25) {
-    outcome = 'great_success'; // 大成功: 1.5倍
-  } else if (roll < 0.75) {
-    outcome = 'success';       // 成功: 1.0倍
+  if (roll < leapChance) {
+    outcome = 'great_success'; // 飛躍: 1.5倍
   } else {
-    outcome = 'failure';       // 失敗: 成長なし
+    outcome = 'success';       // 成長: 1.0倍
   }
 
   // 派遣済みフラグ＋結果を保存（成長はまだ適用しない）
@@ -1883,12 +1887,7 @@ export function resolveDispatchTraining(player) {
 
   const growthReport = [];
 
-  // 失敗の場合は成長なし
-  if (outcome === 'failure') {
-    return { growthReport: [], outcome };
-  }
-
-  // 大成功: 1.5倍、成功: 1.0倍
+  // 飛躍: 1.5倍、成長: 1.0倍（失敗なし）
   const multiplier = outcome === 'great_success' ? 1.5 : 1.0;
 
   const applyGrowth = (base) => Math.floor(base * multiplier);
@@ -1986,7 +1985,7 @@ export function resolveDispatchTraining(player) {
     }
   }
 
-  // 覚醒チャンス: 20%の確率でランダムな能力が大幅UP（大成功時は30%に上昇）
+  // 覚醒チャンス: 成長時20%、飛躍時30%でランダムな能力が大幅UP
   const awakeChance = outcome === 'great_success' ? 0.3 : 0.2;
   if (Math.random() < awakeChance) {
     if (player.position === 'pitcher') {

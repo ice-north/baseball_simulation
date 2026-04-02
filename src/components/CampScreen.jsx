@@ -756,8 +756,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
               </div>
               <div className="p-3 space-y-3">
                 {dispatchResults.map((result, idx) => {
-                  const outcomeLabel = result.outcome === 'great_success' ? '大成功' : result.outcome === 'success' ? '成功' : '成長しませんでした';
-                  const outcomeColor = result.outcome === 'great_success' ? 'bg-yellow-500 text-black' : result.outcome === 'success' ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300';
+                  const outcomeLabel = result.outcome === 'great_success' ? '飛躍' : '成長';
+                  const outcomeColor = result.outcome === 'great_success' ? 'bg-yellow-500 text-black' : 'bg-green-600 text-white';
                   return (
                     <div key={idx} className="bg-gray-700/50 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
