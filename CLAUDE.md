@@ -10,15 +10,45 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - 守備位置適正: `fitnessMult = 0.5 + (fitness / 100) * 0.5`（適正100=100%, 適正0=50%）
 
 ## 主要ファイル
-- `src/App.jsx` (6364行) - メインアプリ、試合シミュレーション、画面遷移
-- `src/game/autoSimulation.js` (1410行) - 自動シミュレーション・buildDefense
-- `src/simulation-logic.js` (517行) - 物理演算（打球・投球）
-- `src/components/LineupSettingScreen.jsx` (959行) - スタメン/投手起用/守備分析の3タブ
+- `src/App.jsx` (~6800行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
+- `src/game/autoSimulation.js` (~2000行) - 自動シミュレーション・buildDefense
+- `src/game/lineupGenerator.js` (~250行) - AIオーダー編成・投手ローテーション生成
+- `src/simulation-logic.js` (~520行) - 物理演算（打球・投球）
+- `src/components/ScheduleScreen.jsx` (~500行) - 日程/順位表/成績ランキング
+- `src/components/LineupSettingScreen.jsx` (~1620行) - スタメン/投手起用/守備分析の3タブ
+- `src/components/DateProgressScreen.jsx` (~1620行) - 日程進行画面
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
 - `src/data/playerNames.js` (210KB) - 姓3000件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
+
+## App.jsx セクション構成（トークン節約のため必要なセクションだけ読むこと）
+
+App.jsxは大きいファイルなので、作業に関連するセクションだけを `offset` + `limit` で読むこと。
+
+| セクション | 行範囲 | 内容 |
+|---|---|---|
+| IMPORTS | L1-83 | import文 |
+| APP_STATE | L84-475 | アプリ全体のstate定義（試合状態、チーム状態、セーブ等） |
+| GAME_HANDLERS | L476-747 | 成績更新・打順変更・選手交代ハンドラー |
+| AI_MANAGER | L748-1210 | 監督AI自動投手交代・盗塁判定ロジック |
+| THROW_PITCH | L1211-2790 | throwPitch（投球シミュレーション本体、最大セクション） |
+| GAME_CONTROLS | L2791-2965 | resetGame・multiPitch・simMode・自動投球useEffect |
+| UI_COMPONENTS | L2966-3328 | PositionControl・AccordionSection・Sidebar |
+| GAME_SETUP | L3329-3687 | setupManagedGame・handleManagedGameEnd |
+| SEASON_PROGRESS | L3688-3945 | 日程進行ハンドラー（フェーズ遷移・試合シミュ・カレンダー） |
+| MANAGEMENT | L3946-4230 | ManagementScreen画面ルーター |
+| GAME_FLOW | L4231-4362 | ゲームフロースタート画面分岐 |
+| RENDER | L4363-END | メインreturn（試合画面UI） |
+
+### 編集作業ガイド
+- **試合ロジック修正**: THROW_PITCH (L1201-2780) + AI_MANAGER (L731-1200)
+- **画面遷移修正**: MANAGEMENT (L3931-4220) + GAME_FLOW (L4221-4360)
+- **UI修正**: RENDER (L4361-END) + UI_COMPONENTS (L2961-3310)
+- **日程進行修正**: SEASON_PROGRESS (L3671-3930)
+- **選手交代修正**: GAME_HANDLERS (L476-730)
+- **試合セットアップ**: GAME_SETUP (L3311-3670)
 
 ## ゲームフロー
 ```

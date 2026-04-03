@@ -30,6 +30,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 // Game logic imports
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate, generateAILineup, setRecommendedLineup } from './game/autoSimulation.js';
+import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from './game/lineupGenerator.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Season management imports
@@ -61,7 +62,24 @@ import HallOfFameScreen from './components/HallOfFameScreen.jsx';
 import DraftResultScreen from './components/DraftResultScreen.jsx';
 import TradeScreen from './components/TradeScreen.jsx';
 import SandboxSetupScreen from './components/SandboxSetupScreen.jsx';
+import ScheduleScreen from './components/ScheduleScreen.jsx';
 
+    // ========================================================================
+    // App.jsx セクション構成 (行番号はおおよその目安)
+    // ========================================================================
+    // [SECTION: IMPORTS]         L1-83    : import文
+    // [SECTION: APP_STATE]       L84-475  : アプリ全体のstate定義
+    // [SECTION: GAME_HANDLERS]   L476-747 : 成績更新・選手交代ハンドラー
+    // [SECTION: AI_MANAGER]      L748-1210: 監督AI（自動投手交代・盗塁判定）
+    // [SECTION: THROW_PITCH]     L1211-2790: throwPitch（投球シミュレーション本体）
+    // [SECTION: GAME_CONTROLS]   L2791-2965: resetGame・multiPitch・simMode
+    // [SECTION: UI_COMPONENTS]   L2966-3328: PositionControl・AccordionSection・Sidebar
+    // [SECTION: GAME_SETUP]      L3329-3687: setupManagedGame・handleManagedGameEnd
+    // [SECTION: SEASON_PROGRESS] L3688-3945: 日程進行ハンドラー
+    // [SECTION: MANAGEMENT]      L3946-4230: ManagementScreen（画面ルーター）
+    // [SECTION: GAME_FLOW]       L4231-4362: ゲームフロー（スタート画面分岐）
+    // [SECTION: RENDER]          L4363-END : メインreturn（試合画面UI）
+    // ========================================================================
     const App = () => {
       // チームデータの初期化
       useEffect(() => {
@@ -3308,267 +3326,6 @@ if (newOuts === 3) {
         </div>
       );
 
-      // AIオーダー編成関数
-      const generateOptimalLineup = (teamName) => {
-        if (!TEAMS_DATA || !TEAMS_DATA[teamName]) {
-          console.error('チームデータが見つかりません:', teamName);
-          return;
-        }
-
-        const team = TEAMS_DATA[teamName];
-        // 野手と投手を分ける
-        const fielders = team.players.filter(p => !p.position || p.position !== 'pitcher');
-        const pitchers = team.players.filter(p => p.position === 'pitcher');
-
-        // 野手を総合力でソート（打撃+走力+守備）
-        const rankedFielders = fielders.map(p => {
-          const battingPower = (p.batting.meet + p.batting.power + p.batting.eye) / 3;
-          const fieldingPower = (p.fielding.defense + p.physical.speed + p.physical.arm) / 3;
-          const totalPower = battingPower * 0.6 + fieldingPower * 0.4;
-          return { ...p, totalPower, battingPower };
-        }).sort((a, b) => b.totalPower - a.totalPower);
-
-        // 守備位置を決定（positionFitnessを考慮）
-        const positions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
-        const assigned = new Set();
-        const positionAssignments = {};
-
-        // 各ポジションに最適な選手を割り当て
-        positions.forEach(pos => {
-          let bestPlayer = null;
-          let bestScore = -1;
-
-          rankedFielders.forEach(player => {
-            if (assigned.has(player.id)) return;
-
-            const fitness = player.positionFitness?.[pos] || 50;
-            const fieldingAbility = pos === 'catcher' ? player.catching?.lead || 0 : player.fielding.defense;
-            const score = fitness * 0.7 + fieldingAbility * 0.3;
-
-            if (score > bestScore) {
-              bestScore = score;
-              bestPlayer = player;
-            }
-          });
-
-          if (bestPlayer) {
-            positionAssignments[pos] = bestPlayer;
-            assigned.add(bestPlayer.id);
-          }
-        });
-
-        // 打順を決定（一般的なセオリーに従う）
-        const lineupOrder = [];
-
-        // 1番: 足が速い選手（走力重視）
-        const leadoffCandidates = Object.values(positionAssignments)
-          .sort((a, b) => b.physical.speed - a.physical.speed);
-        if (leadoffCandidates[0]) lineupOrder.push(leadoffCandidates[0]);
-
-        // 2番: ミートが高い選手（コンタクト重視）
-        const secondCandidates = Object.values(positionAssignments)
-          .filter(p => !lineupOrder.includes(p))
-          .sort((a, b) => b.batting.meet - a.batting.meet);
-        if (secondCandidates[0]) lineupOrder.push(secondCandidates[0]);
-
-        // 3番: バランス型（ミート+パワー）
-        const thirdCandidates = Object.values(positionAssignments)
-          .filter(p => !lineupOrder.includes(p))
-          .sort((a, b) => (b.batting.meet + b.batting.power) - (a.batting.meet + a.batting.power));
-        if (thirdCandidates[0]) lineupOrder.push(thirdCandidates[0]);
-
-        // 4番: パワーが最も高い選手（長距離砲）
-        const cleanupCandidates = Object.values(positionAssignments)
-          .filter(p => !lineupOrder.includes(p))
-          .sort((a, b) => b.batting.power - a.batting.power);
-        if (cleanupCandidates[0]) lineupOrder.push(cleanupCandidates[0]);
-
-        // 5番: 2番目にパワーが高い選手
-        if (cleanupCandidates[1]) lineupOrder.push(cleanupCandidates[1]);
-
-        // 6-8番: 残りの選手（総合力順）
-        const remainingFielders = Object.values(positionAssignments)
-          .filter(p => !lineupOrder.includes(p))
-          .sort((a, b) => b.totalPower - a.totalPower);
-        remainingFielders.forEach(p => lineupOrder.push(p));
-
-        // 9番: 投手（スタメンには入れない）
-
-        // lineupSettingsに保存（新形式）
-        if (!team.lineupSettings) {
-          team.lineupSettings = {
-            battingOrder: [],
-            benchPlayers: [],
-            substitutionRules: { pinchHitter: [], pinchRunner: [] }
-          };
-        }
-
-        team.lineupSettings.battingOrder = lineupOrder.map((player, index) => {
-          const assignedPos = Object.entries(positionAssignments).find(([_, p]) => p.id === player.id);
-          return {
-            playerId: player.id,
-            battingOrder: index + 1,
-            position: assignedPos ? assignedPos[0] : player.position
-          };
-        });
-
-        // 旧形式の打順も維持（互換性のため）
-        team.players.forEach(p => {
-          p.battingOrder = 0; // リセット
-        });
-
-        lineupOrder.forEach((player, index) => {
-          const teamPlayer = team.players.find(p => p.id === player.id);
-          if (teamPlayer) {
-            teamPlayer.battingOrder = index + 1;
-            const assignedPos = Object.entries(positionAssignments).find(([_, p]) => p.id === player.id);
-            if (assignedPos) {
-              teamPlayer.position = assignedPos[0];
-            }
-          }
-        });
-
-      };
-
-      // 投手ローテーション生成関数（AI監督用）
-      const generatePitchingRotation = (teamName) => {
-        if (!TEAMS_DATA || !TEAMS_DATA[teamName]) {
-          console.error('チームデータが見つかりません:', teamName);
-          return;
-        }
-
-        const team = TEAMS_DATA[teamName];
-        const pitchers = team.players.filter(p => p.position === 'pitcher' || p.pitching?.stamina > 0);
-
-        // スタミナでソート
-        const sortedPitchers = pitchers.sort((a, b) => (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0));
-
-        // 先発ローテーション（スタミナ140以上、最大5人）
-        const starters = sortedPitchers.filter(p => p.pitching?.stamina >= 130).slice(0, 5);
-
-        // 残りの投手（リリーフ候補）
-        const relievers = sortedPitchers.filter(p => !starters.includes(p));
-
-        // 能力スコアでソート
-        const scoredRelievers = relievers.map(p => ({
-          ...p,
-          reliefScore: (p.pitching?.velocity || 130) * 0.4 +
-                       (p.pitching?.control || 50) * 0.4 +
-                       (p.pitching?.stamina || 80) * 0.2
-        })).sort((a, b) => b.reliefScore - a.reliefScore);
-
-        // 特性に基づいて適材適所で配置
-        const pitcherRoles = team.pitchingRotation?.pitcherRoles || {};
-        const assigned = new Set();
-
-        // 先発ロールを特性に基づいて振り分け
-        const scoredStarters = starters.map(p => ({
-          ...p,
-          starterScore: (p.pitching?.velocity || 130) * 0.3 +
-                        (p.pitching?.control || 50) * 0.3 +
-                        (p.pitching?.stamina || 80) * 0.4
-        })).sort((a, b) => b.starterScore - a.starterScore);
-
-        scoredStarters.forEach((p, i) => {
-          const stamina = p.pitching?.stamina || 80;
-          if (i === 0) {
-            pitcherRoles[p.id] = 'ace';
-          } else if (stamina >= 170) {
-            pitcherRoles[p.id] = 'complete';
-          } else if (stamina < 110) {
-            pitcherRoles[p.id] = 'short';
-          } else {
-            pitcherRoles[p.id] = 'quality';
-          }
-        });
-
-        // 1. 守護神: 最高能力（1人）
-        const closer = scoredRelievers[0] || null;
-        if (closer) {
-          pitcherRoles[closer.id] = 'closer';
-          assigned.add(closer.id);
-        }
-
-        // 2. セットアッパー: 2番手（1人）
-        const setupMen = [];
-        if (scoredRelievers[1]) {
-          setupMen.push(scoredRelievers[1]);
-          pitcherRoles[scoredRelievers[1].id] = 'setup';
-          assigned.add(scoredRelievers[1].id);
-        }
-
-        // 残りの未割り当てリリーフ
-        const unassigned = scoredRelievers.filter(p => !assigned.has(p.id));
-
-        // 3. 中継ぎエース: 残りで最も能力が高い（1人）
-        if (unassigned[0]) {
-          pitcherRoles[unassigned[0].id] = 'ace_relief';
-          assigned.add(unassigned[0].id);
-        }
-
-        // 4. ワンポイント: 左投げ＆スタミナ低め（1人まで）
-        const unassigned2 = scoredRelievers.filter(p => !assigned.has(p.id));
-        const onepointCandidate = unassigned2.find(p =>
-          p.physical?.throws === 'left' && (p.pitching?.stamina || 0) < 110
-        );
-        if (onepointCandidate) {
-          pitcherRoles[onepointCandidate.id] = 'onepoint';
-          assigned.add(onepointCandidate.id);
-        }
-
-        // 5. ロングリリーフ: スタミナが高い投手（1人）
-        const unassigned3 = scoredRelievers.filter(p => !assigned.has(p.id));
-        const longCandidate = [...unassigned3].sort((a, b) =>
-          (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0)
-        )[0];
-        if (longCandidate) {
-          pitcherRoles[longCandidate.id] = 'long';
-          assigned.add(longCandidate.id);
-        }
-
-        // 6. 残りを能力順にビハインド→敗戦処理
-        const unassigned4 = scoredRelievers.filter(p => !assigned.has(p.id));
-        unassigned4.forEach((p, i) => {
-          if (i === 0) {
-            pitcherRoles[p.id] = 'behind';
-          } else {
-            pitcherRoles[p.id] = 'mopup';
-          }
-          assigned.add(p.id);
-        });
-
-        // レガシー配列を構築
-        const middleRelievers = scoredRelievers.filter(p =>
-          p.id !== closer?.id && !setupMen.some(s => s.id === p.id)
-        );
-
-
-        // ローテーション情報を新形式で保存
-        if (!team.pitchingRotation) {
-          team.pitchingRotation = {};
-        }
-
-        team.pitchingRotation.starters = starters.map(p => p.id);
-        team.pitchingRotation.closer = closer ? closer.id : null;
-        team.pitchingRotation.setupMen = setupMen.map(p => p.id);
-        team.pitchingRotation.middleRelievers = middleRelievers.map(p => p.id);
-        team.pitchingRotation.currentStarterIndex = 0;
-        team.pitchingRotation.reliefFatigue = {};
-        team.pitchingRotation.pitcherRoles = pitcherRoles;
-
-      };
-
-      // 全チームのAIオーダー編成を実行
-      const generateAllTeamsLineup = () => {
-        allTeams.forEach(teamName => {
-          generateOptimalLineup(teamName);
-          generatePitchingRotation(teamName);
-        });
-        alert('全チームのAIオーダー編成と投手ローテーションを設定しました！');
-      };
-
-
-
       // 采配モード: 試合セットアップ（DateProgressScreenから呼ばれる）
       const setupManagedGame = (gameInfo) => {
         // gameInfo: { gameId, home, away, otherGames: [{gameId, home, away}, ...] }
@@ -3928,205 +3685,6 @@ if (newOuts === 3) {
         setManagementView('dateprogress');
       };
 
-// 日程進行画面コンポーネント
-      const ScheduleScreen = ({ seasonData, setSeasonData, allTeams, selectedMonth, setSelectedMonth }) => {
-  // 全選手の成績を取得してランキング形式に変換
-  const getAllPlayersStats = () => {
-    const allPlayers = [];
-    Object.keys(TEAMS_DATA || {}).forEach(teamName => {
-      const team = TEAMS_DATA[teamName];
-      team.players.forEach(player => {
-        allPlayers.push({ ...player, teamName: team.name });
-      });
-    });
-    return allPlayers;
-  };
-
-  // 打率ランキング
-  const getBattingAverageRanking = () => {
-    const players = getAllPlayersStats()
-      .filter(p => p.seasonStats?.batting?.atBats > 0)
-      .map(p => {
-        const stats = p.seasonStats.batting;
-        const avg = stats.hits / stats.atBats;
-        return {
-          rank: 0,
-          name: p.name,
-          team: p.teamName,
-          value: avg.toFixed(3),
-          sortValue: avg
-        };
-      })
-      .sort((a, b) => b.sortValue - a.sortValue)
-      .slice(0, 10);
-
-    players.forEach((p, i) => p.rank = i + 1);
-    return players;
-  };
-
-  // 本塁打ランキング
-  const getHomeRunRanking = () => {
-    const players = getAllPlayersStats()
-      .filter(p => p.seasonStats?.batting?.homeruns > 0)
-      .map(p => ({
-        rank: 0,
-        name: p.name,
-        team: p.teamName,
-        value: p.seasonStats.batting.homeruns,
-        sortValue: p.seasonStats.batting.homeruns
-      }))
-      .sort((a, b) => b.sortValue - a.sortValue)
-      .slice(0, 10);
-
-    players.forEach((p, i) => p.rank = i + 1);
-    return players;
-  };
-
-  // 打点ランキング
-  const getRBIRanking = () => {
-    const players = getAllPlayersStats()
-      .filter(p => p.seasonStats?.batting?.rbis > 0)
-      .map(p => ({
-        rank: 0,
-        name: p.name,
-        team: p.teamName,
-        value: p.seasonStats.batting.rbis,
-        sortValue: p.seasonStats.batting.rbis
-      }))
-      .sort((a, b) => b.sortValue - a.sortValue)
-      .slice(0, 10);
-
-    players.forEach((p, i) => p.rank = i + 1);
-    return players;
-  };
-
-  // 盗塁ランキング
-  const getStolenBaseRanking = () => {
-    const players = getAllPlayersStats()
-      .filter(p => p.seasonStats?.batting?.stolenBases > 0)
-      .map(p => ({
-        rank: 0,
-        name: p.name,
-        team: p.teamName,
-        value: p.seasonStats.batting.stolenBases,
-        sortValue: p.seasonStats.batting.stolenBases
-      }))
-      .sort((a, b) => b.sortValue - a.sortValue)
-      .slice(0, 10);
-
-    players.forEach((p, i) => p.rank = i + 1);
-    return players;
-  };
-
-  // 防御率ランキング
-  const getERARanking = () => {
-    const players = getAllPlayersStats()
-      .filter(p => p.seasonStats?.pitching?.inningsPitched > 0)
-      .map(p => {
-        const stats = p.seasonStats.pitching;
-        const era = (stats.earnedRuns * 27) / stats.inningsPitched;
-        return {
-          rank: 0,
-          name: p.name,
-          team: p.teamName,
-          value: era.toFixed(2),
-          sortValue: era
-        };
-      })
-      .sort((a, b) => a.sortValue - b.sortValue)
-      .slice(0, 10);
-
-    players.forEach((p, i) => p.rank = i + 1);
-    return players;
-  };
-
-  // 勝利数ランキング
-  const getWinsRanking = () => {
-    const players = getAllPlayersStats()
-      .filter(p => p.seasonStats?.pitching?.wins > 0)
-      .map(p => ({
-        rank: 0,
-        name: p.name,
-        team: p.teamName,
-        value: p.seasonStats.pitching.wins,
-        sortValue: p.seasonStats.pitching.wins
-      }))
-      .sort((a, b) => b.sortValue - a.sortValue)
-      .slice(0, 10);
-
-    players.forEach((p, i) => p.rank = i + 1);
-    return players;
-  };
-
-  // ホールドランキング
-  const getHoldsRanking = () => {
-    const players = getAllPlayersStats()
-      .filter(p => p.seasonStats?.pitching?.holds > 0)
-      .map(p => ({
-        rank: 0,
-        name: p.name,
-        team: p.teamName,
-        value: p.seasonStats.pitching.holds,
-        sortValue: p.seasonStats.pitching.holds
-      }))
-      .sort((a, b) => b.sortValue - a.sortValue)
-      .slice(0, 10);
-
-    players.forEach((p, i) => p.rank = i + 1);
-    return players;
-  };
-
-  // セーブランキング
-  const getSavesRanking = () => {
-    const players = getAllPlayersStats()
-      .filter(p => p.seasonStats?.pitching?.saves > 0)
-      .map(p => ({
-        rank: 0,
-        name: p.name,
-        team: p.teamName,
-        value: p.seasonStats.pitching.saves,
-        sortValue: p.seasonStats.pitching.saves
-      }))
-      .sort((a, b) => b.sortValue - a.sortValue)
-      .slice(0, 10);
-
-    players.forEach((p, i) => p.rank = i + 1);
-    return players;
-  };
-
-  // ランキング表示用コンポーネント
-  const RankingTable = ({ title, data, valueLabel }) => (
-    <div className="bg-gray-800 rounded-lg p-4">
-      <h3 className="text-lg font-bold mb-3 text-white">{title}</h3>
-      <table className="w-full text-white text-sm">
-        <thead>
-          <tr className="border-b border-gray-700">
-            <th className="text-left py-1 w-12">順位</th>
-            <th className="text-left py-1">選手名</th>
-            <th className="text-left py-1 w-20">チーム</th>
-            <th className="text-right py-1 w-16">{valueLabel}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.length > 0 ? (
-            data.map((player, index) => (
-              <tr key={index} className="border-b border-gray-700">
-                <td className="py-1">{player.rank}</td>
-                <td className="py-1">{player.name}</td>
-                <td className="py-1 text-xs text-center">{getTeamAbbreviation(player.team)}</td>
-                <td className="text-right py-1">{player.value}</td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="4" className="py-4 text-center text-gray-500">データなし</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-
   // フェーズ遷移検出＆自動画面遷移
   const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData) => {
     const oldPhase = oldSeasonData.phase;
@@ -4384,341 +3942,25 @@ if (newOuts === 3) {
     return updatedSeasonData;
   };
 
-  // 当月のカレンダーデータを生成
-  const calendarData = seasonData && selectedMonth
-    ? generateTeamCalendar(seasonData.schedule, userTeamName, currentDate.year, selectedMonth)
-    : [];
-
-  // 当日の試合を取得
-  const todayGames = seasonData
-    ? getScheduleByDate(seasonData.schedule, currentDate)
-    : [];
-
-  // フェーズ情報を取得
-  const phaseInfo = currentPhase && PHASE_INFO[currentPhase]
-    ? PHASE_INFO[currentPhase]
-    : { name: '', color: 'bg-gray-100', description: '' };
-
-  return (
-    <div className="p-8 max-w-7xl mx-auto">
-      {/* ヘッダー */}
-      <div className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-4xl font-bold text-white">{seasonYear}年目</h1>
-          <div className="mt-2 flex items-center gap-3">
-            <div className="text-lg text-gray-300">
-              {currentDate.year}年{currentDate.month}月{currentDate.day}日
-            </div>
-            <span className={`px-3 py-1 rounded-full text-sm font-bold ${phaseInfo.color} text-gray-800`}>
-              {phaseInfo.name}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 日付進行ボタン */}
-      <div className="mb-4 flex gap-2 items-center">
-        <button
-          onClick={() => handleProgressDate(1)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold transition text-sm"
-        >
-          ➡️ 1日進める
-        </button>
-        <button
-          onClick={handleProgressToNextGame}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg font-bold transition text-sm"
-        >
-          ⏩ 次の試合日
-        </button>
-        <button
-          onClick={handleProgressToNextPhase}
-          className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg font-bold transition text-sm"
-        >
-          🔄 次フェーズ
-        </button>
-        <button
-          onClick={() => setScreenMode('game')}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold transition text-sm ml-auto"
-        >
-          🎮 試合開始
-        </button>
-      </div>
-
-      {/* カレンダー月選択 */}
-      <div className="mb-4 flex gap-1 flex-wrap">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => (
-          <button
-            key={month}
-            onClick={() => setSelectedMonth(month)}
-            className={`px-3 py-1.5 rounded font-bold transition text-sm ${
-              selectedMonth === month
-                ? 'bg-blue-600 text-white'
-                : month === currentDate.month
-                ? 'bg-gray-600 text-white border border-blue-400'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            {month}月
-          </button>
-        ))}
-      </div>
-
-      {/* カレンダー */}
-      <div className="bg-gray-800 rounded-lg p-4 mb-6">
-        <h2 className="text-xl font-bold mb-3 text-white">{selectedMonth}月の試合日程（{userTeamName}）</h2>
-        <div className="grid grid-cols-7 gap-1">
-          <div className="text-center text-gray-400 font-bold py-1 text-xs">日</div>
-          <div className="text-center text-gray-400 font-bold py-1 text-xs">月</div>
-          <div className="text-center text-gray-400 font-bold py-1 text-xs">火</div>
-          <div className="text-center text-gray-400 font-bold py-1 text-xs">水</div>
-          <div className="text-center text-gray-400 font-bold py-1 text-xs">木</div>
-          <div className="text-center text-gray-400 font-bold py-1 text-xs">金</div>
-          <div className="text-center text-gray-400 font-bold py-1 text-xs">土</div>
-          {calendarData.map((day, index) => {
-            if (!day.day) {
-              return <div key={index} className="p-2"></div>;
-            }
-            const isCurrentDate = day.date &&
-              day.date.year === currentDate.year &&
-              day.date.month === currentDate.month &&
-              day.date.day === currentDate.day;
-            return (
-              <div
-                key={index}
-                className={`p-2 rounded text-center transition ${
-                  isCurrentDate
-                    ? 'bg-orange-600 border-2 border-orange-400'
-                    : day.opponent
-                    ? 'bg-gray-700 hover:bg-gray-600 cursor-pointer'
-                    : 'bg-gray-900'
-                }`}
-              >
-                <div className={`text-xs mb-0.5 ${isCurrentDate ? 'text-white font-bold' : 'text-gray-400'}`}>
-                  {day.day}日
-                </div>
-                {day.opponent ? (
-                  <>
-                    <div className="text-xs text-white font-bold mb-0.5 text-center">{day.venue} {getTeamAbbreviation(day.opponent)}</div>
-                    {day.result ? (
-                      <div className={`text-sm font-bold ${
-                        day.result === '○' ? 'text-green-400' :
-                        day.result === '●' ? 'text-red-400' :
-                        'text-yellow-400'
-                      }`}>
-                        {day.result}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-500">未消化</div>
-                    )}
-                  </>
-                ) : day.eventLabel ? (
-                  <div className={`text-xs font-bold ${
-                    day.eventLabel === 'シーズン終了' ? 'text-red-400' :
-                    day.eventLabel === 'プレーオフ' ? 'text-yellow-400' :
-                    day.eventLabel === '契約更改' ? 'text-teal-400' :
-                    day.eventLabel === 'トライアウト' ? 'text-orange-400' :
-                    day.eventLabel === 'オフシーズン' ? 'text-gray-400' :
-                    day.eventLabel === 'キャンプ' ? 'text-green-400' :
-                    day.eventLabel === 'ドラフト' ? 'text-purple-400' :
-                    'text-gray-500'
-                  }`}>{day.eventLabel}</div>
-                ) : (
-                  <div className="text-xs text-gray-600">-</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 本日の対戦カード */}
-      <div className="bg-gray-800 rounded-lg p-6 mb-8">
-        <h2 className="text-2xl font-bold mb-4 text-white">
-          {currentDate.month}/{currentDate.day} の対戦カード
-        </h2>
-        <div className="grid grid-cols-2 gap-4">
-          {todayGames.length > 0 ? todayGames.map((game, index) => (
-            <div key={index} className="bg-gray-700 rounded-lg p-4">
-              <div className="flex items-center justify-center gap-4 mb-3">
-                <div className="text-white font-bold text-lg">{getTeamAbbreviation(game.away)}</div>
-                <div className="text-gray-400">vs</div>
-                <div className="text-white font-bold text-lg">{getTeamAbbreviation(game.home)}</div>
-              </div>
-              <div className="flex items-center justify-center gap-4 text-sm text-gray-300 mb-2">
-                <div className="text-right flex-1">
-                  <div className="text-xs text-gray-500">先発</div>
-                  <div className="text-yellow-400 font-bold">{game.awayPitcher || '未定'}</div>
-                </div>
-                <div className="text-gray-600">⚾</div>
-                <div className="text-left flex-1">
-                  <div className="text-xs text-gray-500">先発</div>
-                  <div className="text-yellow-400 font-bold">{game.homePitcher || '未定'}</div>
-                </div>
-              </div>
-              {game.result ? (
-                <div className="mt-2 text-sm text-center">
-                  <span className="text-gray-300">結果: </span>
-                  <span className="text-green-400 font-bold">
-                    {game.result.awayScore} - {game.result.homeScore}
-                  </span>
-                </div>
-              ) : (
-                <div className="mt-2 text-sm text-gray-500 text-center">未消化</div>
-              )}
-            </div>
-          )) : (
-            <div className="col-span-2 text-center text-gray-500 py-4">
-              本日は試合がありません（休養日）
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* タブ切り替えボタン */}
-      <div className="flex gap-4 mb-6">
-        <button
-          onClick={() => setScheduleTab('league')}
-          className={`px-6 py-3 rounded-lg font-bold transition ${
-            scheduleTab === 'league'
-              ? 'bg-green-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          📊 リーグ順位
-        </button>
-        <button
-          onClick={() => setScheduleTab('batting')}
-          className={`px-6 py-3 rounded-lg font-bold transition ${
-            scheduleTab === 'batting'
-              ? 'bg-green-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          ⚾ 打撃成績
-        </button>
-        <button
-          onClick={() => setScheduleTab('pitching')}
-          className={`px-6 py-3 rounded-lg font-bold transition ${
-            scheduleTab === 'pitching'
-              ? 'bg-green-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          🥎 投手成績
-        </button>
-      </div>
-
-      {/* タブコンテンツ */}
-      {scheduleTab === 'league' && (() => {
-        const totalGames = seasonData?.settings?.gamesPerSeason || 60;
-        const leader = leagueStandings[0];
-        const leaderWins = leader?.wins || 0;
-        const leaderLosses = leader?.losses || 0;
-        const leaderWinRate = leaderWins + leaderLosses > 0 ? leaderWins / (leaderWins + leaderLosses) : 0;
-        const leaderRemaining = totalGames - (leaderWins + leaderLosses + (leader?.draws || 0));
-        const isChampionDecided = leader && leagueStandings.length > 1 && (() => {
-          const second = leagueStandings[1];
-          const secondRemaining = totalGames - (second.wins + second.losses + (second.draws || 0));
-          return leaderWins > second.wins + secondRemaining;
-        })();
-
-        return (
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-2xl font-bold mb-4 text-white">リーグ順位表</h2>
-          <table className="w-full text-white">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="text-left py-3 text-lg">順位</th>
-                <th className="text-left py-3 text-lg">チーム</th>
-                <th className="text-center py-3 text-lg">勝</th>
-                <th className="text-center py-3 text-lg">敗</th>
-                <th className="text-center py-3 text-lg">分</th>
-                <th className="text-center py-3 text-lg">勝率</th>
-                <th className="text-center py-3 text-lg">差</th>
-                <th className="text-center py-3 text-lg">M</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leagueStandings.map((team, index) => {
-                const winRate = team.wins + team.losses > 0
-                  ? (team.wins / (team.wins + team.losses))
-                  : 0;
-                const teamPlayed = team.wins + team.losses + (team.draws || 0);
-                const teamRemaining = totalGames - teamPlayed;
-
-                // ゲーム差（首位との差）
-                let gameBehind = '';
-                if (index === 0) {
-                  gameBehind = isChampionDecided ? '優勝' : '-';
-                } else {
-                  const diff = ((leaderWins - team.wins) - (leaderLosses - team.losses)) / 2;
-                  gameBehind = diff === 0 ? '-' : diff.toFixed(1);
-                }
-
-                // マジック（首位チームのみ、2位チームの残り試合に基づく計算）
-                let magic = '';
-                if (index === 0 && leagueStandings.length > 1) {
-                  const second = leagueStandings[1];
-                  const secondMaxWins = second.wins + (totalGames - (second.wins + second.losses + (second.draws || 0)));
-                  const magicNum = secondMaxWins - leaderWins + 1;
-                  if (magicNum > 0 && !isChampionDecided) {
-                    magic = `M${magicNum}`;
-                  } else if (isChampionDecided) {
-                    magic = '-';
-                  }
-                }
-
-                return (
-                <tr key={index} className={`border-b border-gray-700 ${index === 0 && isChampionDecided ? 'bg-yellow-900/30' : ''}`}>
-                  <td className="py-3 text-lg font-bold">{index + 1}</td>
-                  <td className="py-3 text-lg font-bold">{team.team}</td>
-                  <td className="text-center py-3 text-lg">{team.wins}</td>
-                  <td className="text-center py-3 text-lg">{team.losses}</td>
-                  <td className="text-center py-3 text-lg">{team.draws}</td>
-                  <td className="text-center py-3 text-lg">{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
-                  <td className={`text-center py-3 text-lg font-bold ${index === 0 && isChampionDecided ? 'text-yellow-400' : 'text-gray-300'}`}>
-                    {gameBehind}
-                  </td>
-                  <td className="text-center py-3 text-lg text-red-400 font-bold">{magic}</td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        );
-      })()}
-
-      {scheduleTab === 'batting' && (
-        <div className="grid grid-cols-4 gap-4">
-          <RankingTable title="打率ランキング" data={getBattingAverageRanking()} valueLabel="打率" />
-          <RankingTable title="本塁打ランキング" data={getHomeRunRanking()} valueLabel="本塁打" />
-          <RankingTable title="打点ランキング" data={getRBIRanking()} valueLabel="打点" />
-          <RankingTable title="盗塁ランキング" data={getStolenBaseRanking()} valueLabel="盗塁" />
-        </div>
-      )}
-
-      {scheduleTab === 'pitching' && (
-        <div className="grid grid-cols-4 gap-4">
-          <RankingTable title="防御率ランキング" data={getERARanking()} valueLabel="防御率" />
-          <RankingTable title="勝利数ランキング" data={getWinsRanking()} valueLabel="勝利" />
-          <RankingTable title="ホールドランキング" data={getHoldsRanking()} valueLabel="ホールド" />
-          <RankingTable title="セーブランキング" data={getSavesRanking()} valueLabel="セーブ" />
-        </div>
-      )}
-    </div>
-  );
-};
 
 // 管理画面のルーター
       // エディット画面コンポーネント
       const ManagementScreen = () => {
         if (managementView === 'schedule') return <ScheduleScreen
           seasonData={seasonData}
-          setSeasonData={setSeasonData}
-          allTeams={allTeams}
           selectedMonth={selectedMonth}
           setSelectedMonth={setSelectedMonth}
+          scheduleTab={scheduleTab}
+          setScheduleTab={setScheduleTab}
+          seasonYear={seasonYear}
+          currentDate={currentDate}
+          currentPhase={currentPhase}
+          leagueStandings={leagueStandings}
+          userTeamName={userTeamName}
+          onProgressDate={handleProgressDate}
+          onProgressToNextGame={handleProgressToNextGame}
+          onProgressToNextPhase={handleProgressToNextPhase}
+          onStartGame={() => setScreenMode('game')}
         />;
         if (managementView === 'tryout') return <TryoutScreen
           seasonData={seasonData}
@@ -4864,7 +4106,7 @@ if (newOuts === 3) {
           allTeams={allTeams}
           generateOptimalLineup={generateOptimalLineup}
           generatePitchingRotation={generatePitchingRotation}
-          generateAllTeamsLineup={generateAllTeamsLineup}
+          generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
           onComplete={() => {
             initializeAllPlayersCondition();
             Object.keys(TEAMS_DATA).forEach(teamName => {
@@ -4979,7 +4221,7 @@ if (newOuts === 3) {
         if (managementView === 'edit') return <EditScreen
           generateOptimalLineup={generateOptimalLineup}
           generatePitchingRotation={generatePitchingRotation}
-          generateAllTeamsLineup={generateAllTeamsLineup}
+          generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
           allTeams={allTeams}
         />;
         // 他のビューは今後追加
@@ -5087,7 +4329,7 @@ if (newOuts === 3) {
           allTeams={allTeams}
           generateOptimalLineup={generateOptimalLineup}
           generatePitchingRotation={generatePitchingRotation}
-          generateAllTeamsLineup={generateAllTeamsLineup}
+          generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
           onComplete={() => {
             // 全選手のコンディション初期化
             initializeAllPlayersCondition();
