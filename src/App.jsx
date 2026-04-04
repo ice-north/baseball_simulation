@@ -20,65 +20,54 @@ import {
   getHandednessEffect
 } from './utils/physics.js';
 
-import { compressData, decompressData, getLocalStorageUsage } from './utils/compression.js';
-
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
-import { initializeTeamsData, TEAMS_DATA, initializeAllPitchingRotations, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue, getTeamAbbreviation } from './teams-data.js';
+import { initializeTeamsData, TEAMS_DATA, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue, getTeamAbbreviation } from './teams-data.js';
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
-import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate, generateAILineup, setRecommendedLineup } from './game/autoSimulation.js';
-import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from './game/lineupGenerator.js';
+import { autoSimulateGame, autoSimulateDailyGames, advanceDate as autoAdvanceDate, generateAILineup } from './game/autoSimulation.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
+
+// Save system imports
+import { readSaveSlots, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, exportTeam, importTeam } from './game/saveSystem.js';
+
+// Game controls imports
+import { executeResetGame, executeMultiPitch, executeStartSimMode } from './game/gameControls.js';
+import { executeSetupManagedGame, executeHandleManagedGameEnd } from './game/gameSetup.js';
+
+// Season progress imports
+import { handleProgressDate as progressDateHandler, handleProgressToNextGame as progressToNextGameHandler, handleProgressToNextPhase as progressToNextPhaseHandler } from './game/seasonProgress.js';
 
 // Season management imports
 import { createSeasonData, SEASON_PHASES, PHASE_INFO, formatDate, getDayOfWeek, isGameDay, getCurrentPhase, initializeStandings } from './season/seasonManager.js';
 import { generateFullSeasonSchedule, assignPitchersToSchedule, getScheduleByDate, getTeamSchedule } from './season/scheduleGenerator.js';
 import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './season/calendarUI.js';
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
-import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
+import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
 import { generateTryoutCandidates, calculatePlayerRank, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining, processNPBDraft } from './season/yearProgressionSystem.js';
 
 // Component imports
-import StartScreen from './components/StartScreen.jsx';
-import ManualScreen from './components/ManualScreen.jsx';
-import SaveLoadScreen from './components/SaveLoadScreen.jsx';
-import NewGameRegulationsScreen from './components/NewGameRegulationsScreen.jsx';
-import CampScreen from './components/CampScreen.jsx';
-import OffSeasonScreen from './components/OffSeasonScreen.jsx';
-import TeamInfoScreen from './components/TeamInfoScreen.jsx';
-import LineupSettingScreen from './components/LineupSettingScreen.jsx';
-import RosterScreen from './components/RosterScreen.jsx';
-import ContractScreen from './components/ContractScreen.jsx';
-import DateProgressScreen from './components/DateProgressScreen.jsx';
-import RegulationsScreen from './components/RegulationsScreen.jsx';
-import TryoutScreen from './components/TryoutScreen.jsx';
-import EditScreen from './components/EditScreen.jsx';
-import PlayerStatsScreen from './components/PlayerStatsScreen.jsx';
-import HallOfFameScreen from './components/HallOfFameScreen.jsx';
-import DraftResultScreen from './components/DraftResultScreen.jsx';
-import TradeScreen from './components/TradeScreen.jsx';
-import SandboxSetupScreen from './components/SandboxSetupScreen.jsx';
-import ScheduleScreen from './components/ScheduleScreen.jsx';
+import ManagementScreen from './components/ManagementScreen.jsx';
+import GameFlowScreens from './components/GameFlowScreens.jsx';
+import { Sidebar, RenderBases, AccordionSection } from './components/GameUIComponents.jsx';
 
     // ========================================================================
     // App.jsx セクション構成 (行番号はおおよその目安)
     // ========================================================================
-    // [SECTION: IMPORTS]         L1-83    : import文
-    // [SECTION: APP_STATE]       L84-475  : アプリ全体のstate定義
-    // [SECTION: GAME_HANDLERS]   L476-747 : 成績更新・選手交代ハンドラー
-    // [SECTION: AI_MANAGER]      L748-1210: 監督AI（自動投手交代・盗塁判定）
-    // [SECTION: THROW_PITCH]     L1211-2790: throwPitch（投球シミュレーション本体）
-    // [SECTION: GAME_CONTROLS]   L2791-2965: resetGame・multiPitch・simMode
-    // [SECTION: UI_COMPONENTS]   L2966-3328: PositionControl・AccordionSection・Sidebar
-    // [SECTION: GAME_SETUP]      L3329-3687: setupManagedGame・handleManagedGameEnd
-    // [SECTION: SEASON_PROGRESS] L3688-3945: 日程進行ハンドラー
-    // [SECTION: MANAGEMENT]      L3946-4230: ManagementScreen（画面ルーター）
-    // [SECTION: GAME_FLOW]       L4231-4362: ゲームフロー（スタート画面分岐）
-    // [SECTION: RENDER]          L4363-END : メインreturn（試合画面UI）
+    // [SECTION: IMPORTS]         L1-57    : import文
+    // [SECTION: APP_STATE]       L58-340  : アプリ全体のstate定義
+    // [SECTION: GAME_HANDLERS]   L341-595 : 成績更新・選手交代ハンドラー
+    // [SECTION: AI_MANAGER]      L596-1855: 監督AI（自動投手交代・盗塁判定）
+    // [SECTION: THROW_PITCH]     L1856-2638: throwPitch（投球シミュレーション本体）
+    // [SECTION: GAME_CONTROLS]   L2639-2696: → gameControls.js に抽出済み（ラッパーのみ）
+    // [SECTION: GAME_SETUP]      L2697-2715: → gameSetup.js に抽出済み（ラッパーのみ）
+    // [SECTION: SEASON_PROGRESS] L2716-2722: → seasonProgress.js に抽出済み（ラッパーのみ）
+    // [SECTION: MANAGEMENT]      L2723-2724: → ManagementScreen.jsx に抽出済み
+    // [SECTION: GAME_FLOW]       L2725-2746: → GameFlowScreens.jsx に抽出済み
+    // [SECTION: RENDER]          L2747-END : メインreturn（試合画面UI）
     // ========================================================================
     const App = () => {
       // チームデータの初期化
@@ -158,7 +147,6 @@ import ScheduleScreen from './components/ScheduleScreen.jsx';
       };
 
       // セーブスロット管理（3スロット対応）
-      const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
       const [saveSlots, setSaveSlots] = useState([null, null, null]);
       const [hasSaveData, setHasSaveData] = useState(false);
       const [hallOfFamePlayers, setHallOfFamePlayers] = useState([]);
@@ -166,190 +154,48 @@ import ScheduleScreen from './components/ScheduleScreen.jsx';
       const [draftResults, setDraftResults] = useState(null); // { draftedPlayers, nearMissPlayers }
 
       const refreshSaveSlots = () => {
-        const slots = SAVE_SLOT_KEYS.map(key => {
-          try {
-            const savedData = localStorage.getItem(key);
-            if (!savedData) return null;
-            // 圧縮データか非圧縮データかを判定して解凍
-            const data = decompressData(savedData);
-            if (!data) return null;
-            return {
-              timestamp: data.timestamp,
-              year: data.seasonData?.year || 1,
-              date: data.seasonData?.currentDate || { month: 4, day: 1 },
-              phase: data.seasonData?.phase || 'regular_season',
-              version: data.version || 'unknown'
-            };
-          } catch { return null; }
-        });
+        const slots = readSaveSlots();
         setSaveSlots(slots);
         setHasSaveData(slots.some(s => s !== null));
       };
 
       useEffect(() => {
         refreshSaveSlots();
-        // 旧データ移行: 旧単一スロットからスロット1へ
-        const oldData = localStorage.getItem('baseballSim_saveData');
-        if (oldData && !localStorage.getItem(SAVE_SLOT_KEYS[0])) {
-          localStorage.setItem(SAVE_SLOT_KEYS[0], oldData);
-          localStorage.removeItem('baseballSim_saveData');
-          refreshSaveSlots();
-        }
+        if (migrateOldSaveData()) refreshSaveSlots();
       }, []);
 
-      // ゲームデータを保存（スロット指定、圧縮対応）
       const saveGame = (slotIndex = 0) => {
-        try {
-          const saveData = {
-            version: '2.11.0', // 箱庭モード対応バージョン
-            timestamp: new Date().toISOString(),
-            slotIndex,
-            seasonData: seasonData,
-            leagueConfig: leagueConfig,
-            teamsData: JSON.parse(JSON.stringify(TEAMS_DATA)),
-            screenMode,
-            managementView,
-            gameFlowState,
-            gameMode,
-            selectedMonth,
-            hallOfFamePlayers: hallOfFamePlayers,
-            teamHistory: teamHistory
-          };
-
-          // 圧縮してから保存
-          const compressed = compressData(saveData);
-          const uncompressedSize = JSON.stringify(saveData).length;
-          const compressedSize = compressed.length;
-          const ratio = ((1 - compressedSize / uncompressedSize) * 100).toFixed(1);
-
-          localStorage.setItem(SAVE_SLOT_KEYS[slotIndex], compressed);
-          refreshSaveSlots();
-          return true;
-        } catch (error) {
-          console.error('セーブ失敗:', error);
-          // QuotaExceededError の場合、詳細をログ
-          if (error.name === 'QuotaExceededError') {
-            const usage = getLocalStorageUsage();
-            console.error(`💥 ストレージ容量超過: ${(usage.used / 1024).toFixed(1)}KB / ${(usage.total / 1024).toFixed(1)}KB`);
-            alert('セーブデータの容量が限界を超えました。古いセーブデータを削除してください。');
-          }
-          return false;
-        }
+        const result = saveGameToSlot(slotIndex, {
+          seasonData, leagueConfig, screenMode, managementView,
+          gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory
+        });
+        if (result) refreshSaveSlots();
+        return result;
       };
 
-      // ゲームデータを読み込み（スロット指定、圧縮対応）
       const loadGame = (slotIndex = 0) => {
-        try {
-          const savedData = localStorage.getItem(SAVE_SLOT_KEYS[slotIndex]);
-          if (!savedData) {
-            console.warn('セーブデータがありません');
-            return false;
-          }
+        const saveData = loadGameFromSlot(slotIndex);
+        if (!saveData) return false;
 
-          // 圧縮データか非圧縮データかを判定して解凍
-          const saveData = decompressData(savedData);
-          if (!saveData) {
-            console.error('セーブデータの解凍に失敗しました');
-            return false;
-          }
+        if (saveData.seasonData) setSeasonData(saveData.seasonData);
+        if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
+        if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
+        if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
+        if (saveData.teamHistory) setTeamHistory(saveData.teamHistory);
+        setGameMode(saveData.gameMode || 'normal');
 
-          // TEAMS_DATAを復元
-          if (saveData.teamsData) {
-            // 既存のキーをクリア
-            Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
-            Object.keys(saveData.teamsData).forEach(teamName => {
-              TEAMS_DATA[teamName] = saveData.teamsData[teamName];
-            });
-          }
+        initializeAllPlayersCondition();
 
-          if (saveData.seasonData) setSeasonData(saveData.seasonData);
-          if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
-          if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
-          if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
-          if (saveData.teamHistory) setTeamHistory(saveData.teamHistory);
-          setGameMode(saveData.gameMode || 'normal');
-
-          // コンディション初期化（古いセーブデータ対応）
-          initializeAllPlayersCondition();
-
-          setScreenMode('management');
-          setManagementView('dateprogress');
-          setGameFlowState('season');
-
-          return true;
-        } catch (error) {
-          console.error('ロード失敗:', error);
-          return false;
-        }
+        setScreenMode('management');
+        setManagementView('dateprogress');
+        setGameFlowState('season');
+        return true;
       };
 
-      // セーブデータを削除（スロット指定）
       const deleteSave = (slotIndex = 0) => {
-        try {
-          localStorage.removeItem(SAVE_SLOT_KEYS[slotIndex]);
-          refreshSaveSlots();
-          return true;
-        } catch (error) {
-          console.error('削除失敗:', error);
-          return false;
-        }
-      };
-
-      // チームエクスポート（JSON形式でダウンロード）
-      const exportTeam = (teamName) => {
-        const team = TEAMS_DATA[teamName];
-        if (!team) return;
-        const exportData = {
-          version: '2.0',
-          exportDate: new Date().toISOString(),
-          teamName: teamName,
-          team: JSON.parse(JSON.stringify(team))
-        };
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `team_${teamName.replace(/[^a-zA-Z0-9\u3040-\u9FFF]/g, '_')}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      };
-
-      // チームインポート（JSONファイルから読み込み、指定チームに上書き）
-      const importTeam = (targetTeamName) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            try {
-              const data = JSON.parse(ev.target.result);
-              if (!data.team || !data.team.players) {
-                alert('無効なチームデータです');
-                return;
-              }
-              // IDの重複を防ぐため、インポート時にIDを再生成
-              const maxId = Object.values(TEAMS_DATA).flatMap(t => t.players || []).reduce((max, p) => Math.max(max, p.id || 0), 0);
-              data.team.players.forEach((p, i) => { p.id = maxId + i + 1; });
-              // ターゲットチームに上書き
-              TEAMS_DATA[targetTeamName] = {
-                ...TEAMS_DATA[targetTeamName],
-                players: data.team.players,
-                lineupSettings: data.team.lineupSettings || null,
-                pitchingRotation: data.team.pitchingRotation || { starters: [], middleRelievers: [], setupMen: [], closer: null, currentStarterIndex: 0, pitcherRoles: {} },
-                strategy: data.team.strategy || null
-              };
-              setUpdateTrigger(prev => prev + 1);
-              alert(`${data.teamName || 'チーム'}のデータを${targetTeamName}にインポートしました（選手${data.team.players.length}名）`);
-            } catch (err) {
-              alert('ファイルの読み込みに失敗しました: ' + err.message);
-            }
-          };
-          reader.readAsText(file);
-        };
-        input.click();
+        const result = deleteSaveSlot(slotIndex);
+        if (result) refreshSaveSlots();
+        return result;
       };
 
       // 後方互換性のため、既存の変数名でもアクセス可能にする
@@ -2789,142 +2635,22 @@ if (newOuts === 3) {
         }, 100);
       };
 
-      const resetGame = () => {
-        // 交代処理中フラグをクリア
-        isSubstituting.current = false;
-
-        setCount({ balls: 0, strikes: 0 });
-        setBases([false, false, false]);
-        setOuts(0);
-        setInning(1);
-        setScore({ home: 0, away: 0 });
-        setGameOver(false);  // 試合終了フラグをリセット
-        setRemainingPitches(0);  // 残り投球数をリセット
-        setSimMode(null);
-        outOccurredRef.current = false;
-        setInningScores({
-          away: [null, null, null, null, null, null, null, null, null],
-          home: [null, null, null, null, null, null, null, null, null]
-        });
-        setExtraInningScores({ away: [], home: [] });  // 延長スコアリセット
-        setCurrentInningScore({ away: 0, home: 0 });
-        setTeamHits({ home: 0, away: 0 });
-        setTeamErrors({ home: 0, away: 0 });
-        setTeamRBIs({ home: 0, away: 0 });
-        setIsTopInning(true);
-        setGameLog([]);
-        setLastResult(null);
-        setStatistics(null);
-        setRecentVelocities([]);
-        // チームを完全に初期状態に戻す（選手の位置・打順・交代フラグなども全てリセット）
-        setHomeTeam({
-          name: "ホーム",
-          players: [...createDefaultPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createHomeBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
-          currentBatterOrder: 1
-        });
-        setAwayTeam({
-          name: "アウェイ",
-          players: [...createAwayPlayers().map(p => ({...p, isStarter: true, hasSubbedOut: false, originalPosition: p.position})), ...createAwayBench().map(p => ({...p, hasSubbedOut: false, originalPosition: p.position}))],
-          currentBatterOrder: 1
-        });
-        // スタミナリセット（新しい投手で）
-        setTimeout(() => {
-          const homePitcher = createDefaultPlayers().find(p => p.position === 'pitcher');
-          if (homePitcher) {
-            setCurrentStamina(homePitcher.pitching.stamina);
-          }
-        }, 100);
-        setBatterStats({
-          plateAppearances: 0,
-          atBats: 0,
-          hits: 0,
-          homeruns: 0,
-          walks: 0,
-          strikeouts: 0,
-          totalBases: 0,
-          stolenBases: 0,
-          caughtStealing: 0
-        });
-        setPitcherStats({
-          pitches: 0,
-          outs: 0,
-          strikeouts: 0,
-          walks: 0,
-          runsAllowed: 0,
-          errors: 0,
-          wildPitches: 0,
-          doublePlay: 0
-        });
-        setCatcherStats({
-          stolenBasesAllowed: 0,
-          caughtStealing: 0,
-          wildPitchesBlocked: 0
-        });
-        setBattedBallStats({
-          innerGrounder: { total: 0, hits: 0 },
-          innerLiner: { total: 0, hits: 0 },
-          innerFly: { total: 0, hits: 0 },
-          shallowOuter: { total: 0, hits: 0 },
-          outerLiner: { total: 0, hits: 0 },
-          shallowFly: { total: 0, hits: 0 },
-          mediumFly: { total: 0, hits: 0 },
-          deepFly: { total: 0, hits: 0 },
-          outerGrounder: { total: 0, hits: 0 },
-          homerun: { total: 0, hits: 0 }
-        });
-        setBattedBallTypeStats({
-          grounder: 0,
-          liner: 0,
-          fly: 0,
-          popup: 0
-        });
-        setBattedBallDirectionStats({
-          left: 0,
-          leftCenter: 0,
-          center: 0,
-          rightCenter: 0,
-          right: 0
-        });
-        setBattedBallAreaStats({
-          'left-homerun': { total: 0, outs: 0, hits: 0 },
-          'left-fly': { total: 0, outs: 0, hits: 0 },
-          'left-liner': { total: 0, outs: 0, hits: 0 },
-          'left-popup': { total: 0, outs: 0, hits: 0 },
-          'left-grounder': { total: 0, outs: 0, hits: 0 },
-          'leftCenter-homerun': { total: 0, outs: 0, hits: 0 },
-          'leftCenter-fly': { total: 0, outs: 0, hits: 0 },
-          'leftCenter-liner': { total: 0, outs: 0, hits: 0 },
-          'leftCenter-popup': { total: 0, outs: 0, hits: 0 },
-          'leftCenter-grounder': { total: 0, outs: 0, hits: 0 },
-          'center-homerun': { total: 0, outs: 0, hits: 0 },
-          'center-fly': { total: 0, outs: 0, hits: 0 },
-          'center-liner': { total: 0, outs: 0, hits: 0 },
-          'center-popup': { total: 0, outs: 0, hits: 0 },
-          'center-grounder': { total: 0, outs: 0, hits: 0 },
-          'rightCenter-homerun': { total: 0, outs: 0, hits: 0 },
-          'rightCenter-fly': { total: 0, outs: 0, hits: 0 },
-          'rightCenter-liner': { total: 0, outs: 0, hits: 0 },
-          'rightCenter-popup': { total: 0, outs: 0, hits: 0 },
-          'rightCenter-grounder': { total: 0, outs: 0, hits: 0 },
-          'right-homerun': { total: 0, outs: 0, hits: 0 },
-          'right-fly': { total: 0, outs: 0, hits: 0 },
-          'right-liner': { total: 0, outs: 0, hits: 0 },
-          'right-popup': { total: 0, outs: 0, hits: 0 },
-          'right-grounder': { total: 0, outs: 0, hits: 0 }
-        });
+      // ゲームコントロール関数（gameControls.jsからインポート済み、stateバインド用ラッパー）
+      const gameControlsCtx = {
+        isSubstituting, setCount, setBases, setOuts, setInning, setScore,
+        setGameOver, setRemainingPitches, setSimMode, outOccurredRef,
+        setInningScores, setExtraInningScores, setCurrentInningScore,
+        setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
+        setGameLog, setLastResult, setStatistics, setRecentVelocities,
+        setHomeTeam, setAwayTeam, setCurrentStamina,
+        setBatterStats, setPitcherStats, setCatcherStats,
+        setBattedBallStats, setBattedBallTypeStats,
+        setBattedBallDirectionStats, setBattedBallAreaStats,
+        setIsAutoSimulating
       };
-
-      // 指定回数投球を開始
-      const multiPitch = (pitchCount) => {
-        setRemainingPitches(pitchCount);
-        setIsAutoSimulating(true);
-      };
-
-      const startSimMode = (mode) => {
-        outOccurredRef.current = false;
-        setSimMode(mode);
-        setIsAutoSimulating(true);
-      };
+      const resetGame = () => executeResetGame(gameControlsCtx);
+      const multiPitch = (pitchCount) => executeMultiPitch(gameControlsCtx, pitchCount);
+      const startSimMode = (mode) => executeStartSimMode(gameControlsCtx, mode);
 
       // 残り投球数がある場合は自動的に投球を続ける
       React.useEffect(() => {
@@ -2962,1407 +2688,76 @@ if (newOuts === 3) {
         return () => clearTimeout(timer);
       });
 
-      // --- PositionControl コンポーネント (PitchByPitchSimulator 内部に配置) ---
-      const PositionControl = ({ position, label, defense, setDefense }) => {
-        const [show, setShow] = React.useState(false);
-        if (!defense || !defense[position]) return null;
+      // renderBases: GameUIComponentsのRenderBasesを使用
+      const renderBases = () => <RenderBases defense={defense} setDefense={setDefense} bases={bases} />;
 
-        return (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShow(!show)}
-              className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 shadow-lg border-2 border-white"
-            >
-              {label}
-            </button>
-            {show && (
-              <div className="absolute z-10 bg-white p-2 rounded shadow-xl border-2 border-blue-600 w-48 text-xs"
-                   style={{left: '50%', transform: 'translateX(-50%)', marginTop: '4px'}}>
-                <div className="mb-1 text-gray-800">
-                  <label className="block font-bold">守:{defense[position].defense}</label>
-                  <input type="range" min="0" max="100" value={defense[position].defense}
-                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], defense: Number(e.target.value)}})}
-                    className="w-full h-1 cursor-pointer" />
-                </div>
-                <div className="mb-1 text-gray-800">
-                  <label className="block font-bold">足:{defense[position].speed}</label>
-                  <input type="range" min="0" max="100" value={defense[position].speed}
-                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], speed: Number(e.target.value)}})}
-                    className="w-full h-1 cursor-pointer" />
-                </div>
-                <div className="text-gray-800">
-                  <label className="block font-bold">肩:{defense[position].arm}</label>
-                  <input type="range" min="0" max="100" value={defense[position].arm}
-                    onChange={(e) => setDefense({...defense, [position]: {...defense[position], arm: Number(e.target.value)}})}
-                    className="w-full h-1 cursor-pointer" />
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      };
-
-      const renderBases = () => (
-        <div className="relative w-full max-w-2xl mx-auto">
-          {/* 全ポジション一括設定 */}
-          <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-4 rounded-lg mb-4 shadow-md">
-            <h4 className="font-bold text-sm mb-3 text-purple-800">🌟 全ポジション一括設定</h4>
-            <div className="grid grid-cols-1 gap-3">
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  守備力: <span className="text-blue-600">{defense.first.defense}</span>
-                </label>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={defense.first.defense}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setDefense({
-                      pitcher: { ...defense.pitcher, defense: val },
-                      catcher: { ...defense.catcher, defense: val },
-                      first: { ...defense.first, defense: val },
-                      second: { ...defense.second, defense: val },
-                      short: { ...defense.short, defense: val },
-                      third: { ...defense.third, defense: val },
-                      left: { ...defense.left, defense: val },
-                      center: { ...defense.center, defense: val },
-                      right: { ...defense.right, defense: val }
-                    });
-                  }}
-                  className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  足: <span className="text-green-600">{defense.first.speed}</span>
-                </label>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={defense.first.speed}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setDefense({
-                      pitcher: { ...defense.pitcher, speed: val },
-                      catcher: { ...defense.catcher, speed: val },
-                      first: { ...defense.first, speed: val },
-                      second: { ...defense.second, speed: val },
-                      short: { ...defense.short, speed: val },
-                      third: { ...defense.third, speed: val },
-                      left: { ...defense.left, speed: val },
-                      center: { ...defense.center, speed: val },
-                      right: { ...defense.right, speed: val }
-                    });
-                  }}
-                  className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  肩: <span className="text-orange-600">{defense.first.arm}</span>
-                </label>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={defense.first.arm}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setDefense({
-                      pitcher: { ...defense.pitcher, arm: val },
-                      catcher: { ...defense.catcher, arm: val },
-                      first: { ...defense.first, arm: val },
-                      second: { ...defense.second, arm: val },
-                      short: { ...defense.short, arm: val },
-                      third: { ...defense.third, arm: val },
-                      left: { ...defense.left, arm: val },
-                      center: { ...defense.center, arm: val },
-                      right: { ...defense.right, arm: val }
-                    });
-                  }}
-                  className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-            </div>
-          </div>
-          
-          <svg viewBox="0 0 400 350" className="w-full h-full">
-            {/* スタジアム外周（グレー） */}
-            <ellipse cx="200" cy="280" rx="180" ry="140" fill="#9ca3af" />
-            
-            {/* 観客席 */}
-            <path d="M 50 200 Q 200 80 350 200 L 350 320 Q 200 360 50 320 Z" fill="#d1d5db" />
-            
-            {/* スコアボード（センター後方） */}
-            <rect x="160" y="10" width="80" height="35" fill="#1e40af" stroke="#1e3a8a" strokeWidth="2" rx="3" />
-            <rect x="165" y="15" width="70" height="10" fill="#16a34a" opacity="0.8" />
-            
-            {/* ファウルポール（黄色） */}
-            <rect x="30" y="200" width="8" height="80" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1" />
-            <rect x="362" y="200" width="8" height="80" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1" />
-            
-            {/* 外野フェンス（曲線） */}
-            <path d="M 40 260 Q 200 120 360 260" fill="none" stroke="#8b7355" strokeWidth="4" />
-            
-            {/* 外野芝（深緑、ストライプ） */}
-            <defs>
-              <linearGradient id="grassStripes" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#15803d" />
-                <stop offset="10%" stopColor="#16a34a" />
-                <stop offset="20%" stopColor="#15803d" />
-                <stop offset="30%" stopColor="#16a34a" />
-                <stop offset="40%" stopColor="#15803d" />
-                <stop offset="50%" stopColor="#16a34a" />
-                <stop offset="60%" stopColor="#15803d" />
-                <stop offset="70%" stopColor="#16a34a" />
-                <stop offset="80%" stopColor="#15803d" />
-                <stop offset="90%" stopColor="#16a34a" />
-                <stop offset="100%" stopColor="#15803d" />
-              </linearGradient>
-            </defs>
-            <path d="M 40 260 Q 200 120 360 260 L 270 300 L 200 265 L 130 300 Z" fill="url(#grassStripes)" />
-            
-            {/* 内野土（茶色、ダイヤモンド） */}
-            <path d="M 200 310 L 270 250 L 200 190 L 130 250 Z" fill="#d4a574" stroke="#b8956a" strokeWidth="2" />
-            
-            {/* 内野グラス（円弧） */}
-            <ellipse cx="200" cy="310" rx="80" ry="55" fill="#22c55e" opacity="0.6" />
-            
-            {/* ファウルライン（白線） */}
-            <line x1="200" y1="310" x2="40" y2="260" stroke="white" strokeWidth="2.5" />
-            <line x1="200" y1="310" x2="360" y2="260" stroke="white" strokeWidth="2.5" />
-            
-            {/* ベースパス */}
-            <line x1="200" y1="310" x2="270" y2="250" stroke="#b8956a" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" />
-            <line x1="270" y1="250" x2="200" y2="190" stroke="#b8956a" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" />
-            <line x1="200" y1="190" x2="130" y2="250" stroke="#b8956a" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" />
-            <line x1="130" y1="250" x2="200" y2="310" stroke="#b8956a" strokeWidth="1.5" strokeDasharray="4,4" opacity="0.6" />
-            
-            {/* 投手マウンド */}
-            <ellipse cx="200" cy="280" rx="12" ry="8" fill="#d4a574" stroke="#b8956a" strokeWidth="1.5" />
-            <ellipse cx="200" cy="280" rx="4" ry="3" fill="#b8956a" />
-            
-            {/* ホームベース */}
-            <path d="M 200 310 L 195 305 L 195 300 L 205 300 L 205 305 Z" 
-                  fill="white" stroke="#333" strokeWidth="1.5" />
-            
-            {/* 一塁ベース */}
-            <rect x="265" y="245" width="10" height="10" 
-                  fill={bases[0] ? '#fbbf24' : 'white'} 
-                  stroke="#333" strokeWidth="1.5"
-                  transform="rotate(45 270 250)" />
-            {bases[0] && <circle cx="270" cy="250" r="5" fill="#ef4444" />}
-            
-            {/* 二塁ベース */}
-            <rect x="195" y="185" width="10" height="10" 
-                  fill={bases[1] ? '#fbbf24' : 'white'} 
-                  stroke="#333" strokeWidth="1.5"
-                  transform="rotate(45 200 190)" />
-            {bases[1] && <circle cx="200" cy="190" r="5" fill="#ef4444" />}
-            
-            {/* 三塁ベース */}
-            <rect x="125" y="245" width="10" height="10" 
-                  fill={bases[2] ? '#fbbf24' : 'white'} 
-                  stroke="#333" strokeWidth="1.5"
-                  transform="rotate(45 130 250)" />
-            {bases[2] && <circle cx="130" cy="250" r="5" fill="#ef4444" />}
-            
-            {/* ポジション表示（小さい円） */}
-            {/* 投手 */}
-            <circle cx="200" cy="280" r="3" fill="#1e40af" opacity="0.7" />
-            
-            {/* 捕手 */}
-            <circle cx="200" cy="315" r="3" fill="#dc2626" opacity="0.7" />
-            
-            {/* 一塁手 */}
-            <circle cx="260" cy="260" r="3" fill="#7c3aed" opacity="0.7" />
-            
-            {/* 二塁手 */}
-            <circle cx="230" cy="230" r="3" fill="#7c3aed" opacity="0.7" />
-            
-            {/* 遊撃手 */}
-            <circle cx="170" cy="230" r="3" fill="#7c3aed" opacity="0.7" />
-            
-            {/* 三塁手 */}
-            <circle cx="140" cy="260" r="3" fill="#7c3aed" opacity="0.7" />
-            
-            {/* 左翼手 */}
-            <circle cx="120" cy="200" r="3" fill="#059669" opacity="0.7" />
-            
-            {/* 中堅手 */}
-            <circle cx="200" cy="160" r="3" fill="#059669" opacity="0.7" />
-            
-            {/* 右翼手 */}
-            <circle cx="280" cy="200" r="3" fill="#059669" opacity="0.7" />
-          </svg>
-          
-          {/* ポジション別パラメータ設定UI */}
-          <div className="absolute inset-0 pointer-events-none">
-            {/* 投手 */}
-            <div className="absolute pointer-events-auto" style={{left: '48%', top: '58%'}}>
-              <PositionControl position="pitcher" label="投" />
-            </div>
-            
-            {/* 捕手 */}
-            <div className="absolute pointer-events-auto" style={{left: '48%', top: '72%'}}>
-              <PositionControl position="catcher" label="捕" />
-            </div>
-            
-            {/* 一塁手 */}
-            <div className="absolute pointer-events-auto" style={{left: '68%', top: '52%'}}>
-              <PositionControl position="first" label="一" />
-            </div>
-            
-            {/* 二塁手 */}
-            <div className="absolute pointer-events-auto" style={{left: '60%', top: '38%'}}>
-              <PositionControl position="second" label="二" />
-            </div>
-            
-            {/* 遊撃手 */}
-            <div className="absolute pointer-events-auto" style={{left: '38%', top: '38%'}}>
-              <PositionControl position="short" label="遊" />
-            </div>
-            
-            {/* 三塁手 */}
-            <div className="absolute pointer-events-auto" style={{left: '30%', top: '52%'}}>
-              <PositionControl position="third" label="三" />
-            </div>
-            
-            {/* 左翼手 */}
-            <div className="absolute pointer-events-auto" style={{left: '25%', top: '28%'}}>
-              <PositionControl position="left" label="左" defense={defense} setDefense={setDefense} />
-            </div>
-            
-            {/* 中堅手 */}
-            <div className="absolute pointer-events-auto" style={{left: '48%', top: '15%'}}>
-              <PositionControl position="center" label="中" defense={defense} setDefense={setDefense} />
-            </div>
-            
-            {/* 右翼手 */}
-            <div className="absolute pointer-events-auto" style={{left: '71%', top: '28%'}}>
-              <PositionControl position="right" label="右" defense={defense} setDefense={setDefense} />
-            </div>
-          </div>
-        </div>
-      );
-      
-      // アコーディオンセクションのコンポーネント
-      const AccordionSection = ({ title, isExpanded, onToggle, children, bgColor = "bg-blue-50" }) => (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <button
-            onClick={onToggle}
-            className={`w-full px-4 py-3 flex justify-between items-center ${bgColor} hover:opacity-90 transition`}
-          >
-            <span className="font-bold text-gray-800">{title}</span>
-            <span className="text-xl">{isExpanded ? '▼' : '▶'}</span>
-          </button>
-          {isExpanded && (
-            <div className="p-4">
-              {children}
-            </div>
-          )}
-        </div>
-      );
-
-      // サイドバーコンポーネント
-      const SidebarButton = ({ view, icon, label, color = 'green', onActiveClick }) => {
-        const isActive = screenMode === 'management' && managementView === view;
-        const activeColors = { green: 'bg-green-600/90 text-white', yellow: 'bg-yellow-600/90 text-white', blue: 'bg-blue-600/90 text-white' };
-        return (
-          <button
-            onClick={() => {
-              if (isActive && onActiveClick) { onActiveClick(); return; }
-              setScreenMode('management'); setManagementView(view);
-            }}
-            className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-all ${
-              isActive ? `${activeColors[color] || activeColors.green} shadow-sm` : 'text-gray-300 hover:bg-gray-800/80 hover:text-white'
-            }`}
-          >
-            <span className="mr-2">{icon}</span>{label}
-          </button>
-        );
-      };
-      const Sidebar = () => (
-        <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-800">
-          <div className="px-4 py-3 border-b border-gray-800">
-            <h2 className={`text-lg font-bold ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
-            <div className="text-xs text-gray-500 mt-0.5">
-              {gameMode === 'sandbox' && <span className="text-orange-400/70">[箱庭] </span>}
-              {seasonData?.year || 1}年目 {seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}
-            </div>
-          </div>
-
-          <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-2 pb-1">進行</div>
-            <SidebarButton view="dateprogress" icon="▶" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} />
-            <SidebarButton view="roster" icon="📋" label="ロスター管理" />
-            <SidebarButton view="stats" icon="📊" label="選手成績" />
-
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-3 pb-1">チーム</div>
-            <SidebarButton view="teaminfo" icon="👥" label="チーム情報" />
-            <SidebarButton view="trade" icon="🔄" label="トレード" />
-            <SidebarButton view="halloffame" icon="🏆" label="資料室" color="yellow" />
-
-            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-3 pb-1">システム</div>
-            <SidebarButton view="save" icon="💾" label="セーブ＆ロード" />
-            <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" />
-            <button
-              onClick={() => exportTeam(userTeamName)}
-              className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-gray-800/80 hover:text-white transition-all"
-            >
-              <span className="mr-2">📤</span>エクスポート
-            </button>
-            <button
-              onClick={() => importTeam(userTeamName)}
-              className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-gray-800/80 hover:text-white transition-all"
-            >
-              <span className="mr-2">📥</span>インポート
-            </button>
-          </nav>
-        </div>
-      );
+      // AccordionSection, Sidebar: GameUIComponentsからimport済み
 
       // 采配モード: 試合セットアップ（DateProgressScreenから呼ばれる）
-      const setupManagedGame = (gameInfo) => {
-        // gameInfo: { gameId, home, away, otherGames: [{gameId, home, away}, ...] }
-        const htn = gameInfo.home;
-        const atn = gameInfo.away;
-        const htd = TEAMS_DATA[htn];
-        const atd = TEAMS_DATA[atn];
-
-        if (!htd || !atd) return;
-
-        // ユーザーチームがどちら側かに応じてスタメンを適用
-        const applyLineup = (teamData, teamName) => {
-          const players = JSON.parse(JSON.stringify(teamData.players));
-          const settings = teamData.lineupSettings;
-          const isUserTeam = settings?.battingOrder?.length > 0;
-
-          if (isUserTeam) {
-            players.forEach(p => { p.battingOrder = 0; });
-            settings.battingOrder.forEach(entry => {
-              const player = players.find(p => p.id === entry.playerId);
-              if (player) {
-                player.battingOrder = entry.battingOrder;
-                player.position = entry.position;
-              }
-            });
-          } else {
-            const tempTeamData = { ...teamData, players };
-            generateAILineup(tempTeamData, teamName);
-          }
-
-          // ユーザーチームのみローテーションから先発を設定
-          // （AIチームはgenerateAILineup内で先発選択＆index更新済み）
-          if (isUserTeam) {
-            const rotation = teamData.pitchingRotation;
-            if (rotation?.starters?.length > 0) {
-              const index = rotation.currentStarterIndex || 0;
-              const starterId = rotation.starters[index];
-              players.forEach(p => {
-                if (p.id === starterId) {
-                  p.battingOrder = 9;
-                  p.position = 'pitcher';
-                } else if (p.battingOrder === 9 && p.id !== starterId) {
-                  p.battingOrder = 0;
-                }
-              });
-            }
-          }
-
-          return players;
-        };
-
-        const homePlayers = applyLineup(htd, htn);
-        const awayPlayers = applyLineup(atd, atn);
-
-        // ゲーム状態をリセット
-        setCount({ balls: 0, strikes: 0 });
-        setBases([false, false, false]);
-        setOuts(0);
-        setInning(1);
-        setScore({ home: 0, away: 0 });
-        setGameOver(false);
-        setGameStarted(false);
-        setRemainingPitches(0);
-        setSimMode(null);
-        outOccurredRef.current = false;
-        setInningScores({
-          away: [null, null, null, null, null, null, null, null, null],
-          home: [null, null, null, null, null, null, null, null, null]
-        });
-        setExtraInningScores({ away: [], home: [] });
-        setCurrentInningScore({ away: 0, home: 0 });
-        setTeamHits({ home: 0, away: 0 });
-        setTeamErrors({ home: 0, away: 0 });
-        setTeamRBIs({ home: 0, away: 0 });
-        setIsTopInning(true);
-        setGameLog([]);
-        setLastResult(null);
-        setStatistics(null);
-        setRecentVelocities([]);
-
-        setHomeTeam({
-          name: htn,
-          players: homePlayers.map(p => ({
-            ...p,
-            isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
-            hasSubbedOut: false,
-            originalPosition: p.position,
-            gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
-          })),
-          currentBatterOrder: 1
-        });
-
-        setAwayTeam({
-          name: atn,
-          players: awayPlayers.map(p => ({
-            ...p,
-            isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
-            hasSubbedOut: false,
-            originalPosition: p.position,
-            gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
-          })),
-          currentBatterOrder: 1
-        });
-
-        const startingPitcher = homePlayers.find(p => p.battingOrder === 9);
-        if (startingPitcher) {
-          const maxStamina = startingPitcher.pitching?.stamina || 100;
-          const fatigue = startingPitcher.fatigue || 0;
-          // 疲労によりスタミナ上限が低下（最低50%まで）
-          const startStamina = Math.max(Math.floor(maxStamina * 0.5), maxStamina - fatigue);
-          setCurrentStamina(startStamina);
-        }
-
-        setManagedGameInfo(gameInfo);
-        managedGameInfoRef.current = gameInfo;
-        setScreenMode('game');
+      // 采配モード関数（gameSetup.jsからインポート済み、stateバインド用ラッパー）
+      const gameSetupCtx = {
+        setCount, setBases, setOuts, setInning, setScore, setGameOver,
+        setGameStarted, setRemainingPitches, setSimMode, outOccurredRef,
+        setInningScores, setExtraInningScores, setCurrentInningScore,
+        setTeamHits, setTeamErrors, setTeamRBIs, setIsTopInning,
+        setGameLog, setLastResult, setStatistics, setRecentVelocities,
+        setHomeTeam, setAwayTeam, setCurrentStamina,
+        setManagedGameInfo, managedGameInfoRef, setScreenMode
       };
-
-      // 采配モード: 試合終了後の処理
-      const handleManagedGameEnd = () => {
-        const info = managedGameInfoRef.current;
-        if (!info) return;
-
-        const finalScore = { ...score };
-        const htn = homeTeam.name;
-        const atn = awayTeam.name;
-
-        const gameResult = {
-          date: seasonData.currentDate,
-          home: htn,
-          away: atn,
-          homeScore: finalScore.home,
-          awayScore: finalScore.away
-        };
-
-        let updatedSeasonData = recordGameResult(seasonData, gameResult);
-
-        // ユーザーチームのみローテインデックスを進める
-        // （AIチームはgenerateAILineup内で既にインデックス更新済み）
-        [htn, atn].forEach(teamName => {
-          const teamData = TEAMS_DATA[teamName];
-          const isUserTeam = teamData?.lineupSettings?.battingOrder?.length > 0;
-          if (isUserTeam) {
-            const rotation = teamData?.pitchingRotation;
-            if (rotation?.starters?.length > 0) {
-              rotation.currentStarterIndex =
-                ((rotation.currentStarterIndex || 0) + 1) % rotation.starters.length;
-            }
-          }
-        });
-
-        const updateManagedGameStats = (teamState, teamName) => {
-          const teamData = TEAMS_DATA[teamName];
-          if (!teamData) return;
-
-          teamState.players.forEach(p => {
-            const playerData = teamData.players.find(pl => pl.id === p.id);
-            if (!playerData) return;
-
-            const gs = p.gameStats || {};
-            if (gs.atBats > 0 || gs.walks > 0) {
-              if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
-              if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
-              const season = playerData.seasonStats.batting;
-              season.games = (season.games || 0) + 1;
-              season.atBats = (season.atBats || 0) + (gs.atBats || 0);
-              season.hits = (season.hits || 0) + (gs.hits || 0);
-              season.homeruns = (season.homeruns || 0) + (gs.homeruns || 0);
-              season.rbis = (season.rbis || 0) + (gs.rbis || 0);
-              season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
-              season.walks = (season.walks || 0) + (gs.walks || 0);
-
-              if (!playerData.careerStats) playerData.careerStats = { batting: {}, pitching: {} };
-              if (!playerData.careerStats.batting) playerData.careerStats.batting = {};
-              const career = playerData.careerStats.batting;
-              career.games = (career.games || 0) + 1;
-              career.atBats = (career.atBats || 0) + (gs.atBats || 0);
-              career.hits = (career.hits || 0) + (gs.hits || 0);
-              career.homeruns = (career.homeruns || 0) + (gs.homeruns || 0);
-              career.rbis = (career.rbis || 0) + (gs.rbis || 0);
-              career.strikeouts = (career.strikeouts || 0) + (gs.strikeouts || 0);
-              career.walks = (career.walks || 0) + (gs.walks || 0);
-            }
-
-            const ps = p.stats?.pitching || {};
-            if (ps.outs > 0 || ps.pitches > 0) {
-              if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
-              const sp = playerData.seasonStats.pitching;
-              sp.games = (sp.games || 0) + 1;
-              sp.inningsPitched = (sp.inningsPitched || 0) + (ps.outs || 0);
-              sp.strikeouts = (sp.strikeouts || 0) + (ps.strikeouts || 0);
-              sp.walks = (sp.walks || 0) + (ps.walks || 0);
-              sp.runsAllowed = (sp.runsAllowed || 0) + (ps.runsAllowed || 0);
-              sp.earnedRuns = (sp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
-              sp.hits = (sp.hits || 0) + (ps.hits || 0);
-              sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
-              sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
-
-              if (!playerData.careerStats.pitching) playerData.careerStats.pitching = {};
-              const cp = playerData.careerStats.pitching;
-              cp.games = (cp.games || 0) + 1;
-              cp.inningsPitched = (cp.inningsPitched || 0) + (ps.outs || 0);
-              cp.strikeouts = (cp.strikeouts || 0) + (ps.strikeouts || 0);
-              cp.walks = (cp.walks || 0) + (ps.walks || 0);
-              cp.runsAllowed = (cp.runsAllowed || 0) + (ps.runsAllowed || 0);
-              cp.earnedRuns = (cp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
-              cp.hits = (cp.hits || 0) + (ps.hits || 0);
-              cp.homeruns = (cp.homeruns || 0) + (ps.homeruns || 0);
-              cp.pitches = (cp.pitches || 0) + (ps.pitches || 0);
-
-              const fatigue = Math.floor((ps.pitches || 0) / (p.battingOrder === 9 ? 2 : 3));
-              playerData.fatigue = (playerData.fatigue || 0) + fatigue;
-            }
-          });
-        };
-
-        updateManagedGameStats(homeTeam, htn);
-        updateManagedGameStats(awayTeam, atn);
-
-        // 勝敗セーブの記録
-        if (finalScore.home !== finalScore.away) {
-          const isHomeWin = finalScore.home > finalScore.away;
-          const winTeamState = isHomeWin ? homeTeam : awayTeam;
-          const loseTeamState = isHomeWin ? awayTeam : homeTeam;
-          const winTeamName = isHomeWin ? htn : atn;
-          const loseTeamName = isHomeWin ? atn : htn;
-
-          // 勝利投手判定: 先発が5回以上→先発、それ以外→最多投球回リリーフ
-          const winPitchers = winTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
-            .sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
-          const winStarter = winPitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9);
-          const winPitcher = winStarter && (winStarter.stats?.pitching?.outs || 0) >= 15
-            ? winStarter
-            : (winPitchers.filter(p => p !== winStarter)[0] || winPitchers[0]);
-
-          // 敗戦投手判定: 最も多く失点した投手
-          const losePitchers = loseTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
-            .sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0));
-          const losePitcher = losePitchers[0];
-
-          // セーブ投手判定: 最後に投げた投手で、3点差以内1イニング以上 or 3イニング以上
-          const scoreDiff = Math.abs(finalScore.home - finalScore.away);
-          const lastPitcher = winPitchers.length > 1
-            ? winPitchers.find(p => p !== winPitcher && p.position === 'pitcher') || winPitchers.find(p => p !== winPitcher)
-            : null;
-          const savePitcher = lastPitcher && lastPitcher !== winPitcher &&
-            ((scoreDiff <= 3 && (lastPitcher.stats?.pitching?.outs || 0) >= 3) || (lastPitcher.stats?.pitching?.outs || 0) >= 9)
-            ? lastPitcher : null;
-
-          // ホールド: 勝ちチームのリリーフで、勝ち投手でもセーブでもなく、1アウト以上
-          const holdPitchers = winPitchers.filter(p =>
-            p !== winPitcher && p !== savePitcher && p !== winStarter &&
-            (p.stats?.pitching?.outs || 0) >= 1
-          );
-
-          // TEAMS_DATAに反映
-          const updatePitcherDecision = (playerState, teamName, stat) => {
-            const teamData = TEAMS_DATA[teamName];
-            if (!teamData) return;
-            const playerData = teamData.players.find(pl => pl.id === playerState.id);
-            if (!playerData) return;
-            if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
-            if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
-            if (!playerData.careerStats) playerData.careerStats = { batting: {}, pitching: {} };
-            if (!playerData.careerStats.pitching) playerData.careerStats.pitching = {};
-            playerData.seasonStats.pitching[stat] = (playerData.seasonStats.pitching[stat] || 0) + 1;
-            playerData.careerStats.pitching[stat] = (playerData.careerStats.pitching[stat] || 0) + 1;
-          };
-
-          if (winPitcher) updatePitcherDecision(winPitcher, winTeamName, 'wins');
-          if (losePitcher) updatePitcherDecision(losePitcher, loseTeamName, 'losses');
-          if (savePitcher) updatePitcherDecision(savePitcher, winTeamName, 'saves');
-          holdPitchers.forEach(hp => updatePitcherDecision(hp, winTeamName, 'holds'));
-        }
-
-        if (info.otherGames && info.otherGames.length > 0) {
-          info.otherGames.forEach(otherGame => {
-            const oh = TEAMS_DATA[otherGame.home];
-            const oa = TEAMS_DATA[otherGame.away];
-            if (!oh || !oa) return;
-
-            const otherResult = autoSimulateGame(otherGame.home, otherGame.away);
-            if (otherResult) {
-              // 投手勝敗・セーブ・ホールドの記録
-              if (otherResult.homeScore !== otherResult.awayScore) {
-                const oIsHomeWin = otherResult.homeScore > otherResult.awayScore;
-                const oWinTeam = oIsHomeWin ? otherResult.homeTeam : otherResult.awayTeam;
-                const oLoseTeam = oIsHomeWin ? otherResult.awayTeam : otherResult.homeTeam;
-                const oWinName = oIsHomeWin ? otherGame.home : otherGame.away;
-                const oLoseName = oIsHomeWin ? otherGame.away : otherGame.home;
-                if (oWinTeam && oLoseTeam) {
-                  const oWinPs = oWinTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-                  const oLosePs = oLoseTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-                  // 勝ち投手
-                  const oStarter = oWinPs.find(p => p.battingOrder === 9);
-                  const oWinP = oStarter && oStarter.gameStats.pitching.outs >= 15
-                    ? oStarter : (oWinPs.filter(p => p !== oStarter).sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs)[0] || oWinPs[0]);
-                  // 負け投手
-                  const oLoseP = [...oLosePs].sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed)[0];
-                  // セーブ
-                  const oScoreDiff = Math.abs(otherResult.homeScore - otherResult.awayScore);
-                  const oLastP = oWinPs.length > 1 ? oWinPs[oWinPs.length - 1] : null;
-                  const oSaveP = oLastP && oLastP !== oWinP &&
-                    ((oScoreDiff <= 3 && oLastP.gameStats.pitching.outs >= 3) || oLastP.gameStats.pitching.outs >= 9)
-                    ? oLastP : null;
-                  const recordOther = (playerState, teamName, stat) => {
-                    const td = TEAMS_DATA[teamName];
-                    if (!td) return;
-                    const pd = td.players.find(pl => pl.id === playerState.id);
-                    if (!pd) return;
-                    if (!pd.seasonStats?.pitching) { if (!pd.seasonStats) pd.seasonStats = { batting: {}, pitching: {} }; if (!pd.seasonStats.pitching) pd.seasonStats.pitching = {}; }
-                    if (!pd.careerStats?.pitching) { if (!pd.careerStats) pd.careerStats = { batting: {}, pitching: {} }; if (!pd.careerStats.pitching) pd.careerStats.pitching = {}; }
-                    pd.seasonStats.pitching[stat] = (pd.seasonStats.pitching[stat] || 0) + 1;
-                    pd.careerStats.pitching[stat] = (pd.careerStats.pitching[stat] || 0) + 1;
-                  };
-                  if (oWinP) recordOther(oWinP, oWinName, 'wins');
-                  if (oLoseP) recordOther(oLoseP, oLoseName, 'losses');
-                  if (oSaveP) recordOther(oSaveP, oWinName, 'saves');
-                  // ホールド
-                  oWinPs.forEach(p => {
-                    if (p !== oWinP && p !== oSaveP && p !== oStarter && p.gameStats.pitching.outs >= 1) {
-                      recordOther(p, oWinName, 'holds');
-                    }
-                  });
-                }
-              }
-              updatedSeasonData = recordGameResult(updatedSeasonData, {
-                date: seasonData.currentDate,
-                home: otherGame.home,
-                away: otherGame.away,
-                homeScore: otherResult.homeScore,
-                awayScore: otherResult.awayScore
-              });
-            }
-          });
-        }
-
-        updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
-        updatedSeasonData = progressDate(updatedSeasonData, 1);
-
-        const oldPhase = seasonData.phase;
-        const newPhase = updatedSeasonData.phase;
-        if (oldPhase !== newPhase) {
-          updatedSeasonData = handlePhaseTransition(updatedSeasonData, newPhase);
-        }
-
-        // カレンダー月を追従
-        if (updatedSeasonData?.currentDate?.month && updatedSeasonData.currentDate.month !== selectedMonth) {
-          setSelectedMonth(updatedSeasonData.currentDate.month);
-        }
-
-        setSeasonData(updatedSeasonData);
-
-        setManagedGameInfo(null);
-        managedGameInfoRef.current = null;
-        setScreenMode('management');
-        setManagementView('dateprogress');
-      };
-
-  // フェーズ遷移検出＆自動画面遷移
-  const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData) => {
-    const oldPhase = oldSeasonData.phase;
-    const newPhase = newSeasonData.phase;
-
-    // フェーズが変わった場合の処理
-    if (oldPhase !== newPhase) {
-      newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
-    }
-
-    // 特定日付での強制イベント
-    const { month, day } = newSeasonData.currentDate;
-
-    // 10月10日以降でプレーオフフェーズ → プレーオフ試合がスケジュールに追加済み
-    // （handlePhaseTransitionで処理済み）
-
-    // 11月9日: 契約更改強制
-    if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
-      setSeasonData(newSeasonData);
-      setScreenMode('management');
-      setManagementView('contract');
-      return null;
-    }
-
-    // 11月10日〜29日: トライアウト強制
-    if (month === 11 && day >= 10 && day < 30 && (newPhase === SEASON_PHASES.TRYOUT || newPhase === SEASON_PHASES.CONTRACT)) {
-      newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.TRYOUT };
-      setSeasonData(newSeasonData);
-      setScreenMode('management');
-      setManagementView('tryout');
-      return null;
-    }
-
-    // 11月30日〜: オフシーズン強制
-    if (month >= 12 || (month === 11 && day >= 30)) {
-      newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.OFF_SEASON };
-      setSeasonData(newSeasonData);
-      setScreenMode('management');
-      setManagementView('offseason');
-      return null;
-    }
-
-    return newSeasonData;
-  };
-
-  // 日付進行ハンドラー
-  // カレンダー月を現在日付に自動追従
-  const autoFollowMonth = (newSeasonData) => {
-    if (newSeasonData?.currentDate?.month && newSeasonData.currentDate.month !== selectedMonth) {
-      setSelectedMonth(newSeasonData.currentDate.month);
-    }
-  };
-
-  // ユーザーチームのスタメンが完成しているか確認
-  // battingOrder内の選手が実際にロスターに存在するかも検証する
-  const checkUserLineupComplete = () => {
-    const team = TEAMS_DATA[userTeamName];
-    if (!team) return true;
-    const settings = team.lineupSettings;
-    if (!settings || !settings.battingOrder || settings.battingOrder.length === 0) return false;
-    // battingOrder 1-9の各エントリが存在し、かつその選手がチームに在籍しているか確認
-    const validStarters = settings.battingOrder.filter(e => {
-      if (e.battingOrder < 1 || e.battingOrder > 9) return false;
-      return team.players.some(p => p.id === e.playerId);
-    });
-    return validStarters.length >= 9;
-  };
-
-  const handleProgressDate = (days) => {
-    if (!seasonData) return;
-
-    // スタメンチェック（レギュラーシーズン/プレーオフ中のみ）
-    if ((seasonData.phase === SEASON_PHASES.REGULAR_SEASON || seasonData.phase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
-      alert('スタメンが9人揃っていません。スタメン設定画面で打順を設定してください。');
-      return;
-    }
-
-    let newSeasonData = progressDate(seasonData, days);
-
-    // フェーズ遷移チェック（プレーオフスケジュール生成等を先に処理）
-    const oldPhase = seasonData.phase;
-    const newPhase = newSeasonData.phase;
-    if (oldPhase !== newPhase) {
-      newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
-    }
-
-    // 新しい日付の試合を自動シミュレーション
-    newSeasonData = simulateGamesOnDate(newSeasonData);
-
-    autoFollowMonth(newSeasonData);
-    // 強制イベント処理
-    const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
-    if (result !== null) setSeasonData(result);
-  };
-
-  const handleProgressToNextGame = () => {
-    if (!seasonData) return;
-
-    if ((seasonData.phase === SEASON_PHASES.REGULAR_SEASON || seasonData.phase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
-      alert('スタメンが9人揃っていません。スタメン設定画面で打順を設定してください。');
-      return;
-    }
-
-    let newSeasonData = progressToNextGame(seasonData, userTeamName);
-
-    // フェーズ遷移チェック（プレーオフスケジュール生成等を先に処理）
-    const oldPhase = seasonData.phase;
-    const newPhase = newSeasonData.phase;
-    if (oldPhase !== newPhase) {
-      newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
-    }
-
-    // 試合日まで進んだら、その日の試合を自動シミュレーション
-    newSeasonData = simulateGamesOnDate(newSeasonData);
-
-    autoFollowMonth(newSeasonData);
-    const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
-    if (result !== null) setSeasonData(result);
-  };
-
-  const handleProgressToNextPhase = () => {
-    if (!seasonData) return;
-
-    if ((seasonData.phase === SEASON_PHASES.REGULAR_SEASON || seasonData.phase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
-      alert('スタメンが9人揃っていません。スタメン設定画面で打順を設定してください。');
-      return;
-    }
-
-    // まず現フェーズの残り試合をシミュレーション
-    let newSeasonData = simulateAllRemainingGames(seasonData);
-
-    // 次フェーズへ
-    newSeasonData = progressToNextPhase(newSeasonData);
-
-    // フェーズ遷移チェック（プレーオフスケジュール生成等を先に処理）
-    const oldPhase = seasonData.phase;
-    const newPhase = newSeasonData.phase;
-    if (oldPhase !== newPhase) {
-      newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
-    }
-
-    autoFollowMonth(newSeasonData);
-    // 強制イベント処理
-    const result = checkPhaseTransitionAndNavigate(seasonData, newSeasonData);
-    if (result !== null) setSeasonData(result);
-  };
-
-  // 指定日の試合を自動シミュレーション
-  const simulateGamesOnDate = (seasonData) => {
-    const currentDate = seasonData.currentDate;
-    const todayGames = getScheduleByDate(seasonData.schedule, currentDate);
-
-    if (todayGames.length === 0) return seasonData;
-
-    let updatedSeasonData = { ...seasonData };
-
-    todayGames.forEach(game => {
-      // 既に結果がある場合はスキップ
-      if (game.result) return;
-
-      // TBDチームやキャンセル済みはスキップ
-      if (game.home === 'TBD' || game.away === 'TBD') return;
-
-      // チームデータの存在確認
-      const homeTeam = TEAMS_DATA?.[game.home];
-      const awayTeam = TEAMS_DATA?.[game.away];
-
-      if (!homeTeam || !awayTeam) return;
-
-      // 試合をシミュレーション（チーム名を渡す）
-      const gameResult = autoSimulateGame?.(game.home, game.away);
-
-      if (gameResult) {
-        // 試合結果を記録
-        const result = {
-          date: currentDate,
-          home: game.home,
-          away: game.away,
-          homeScore: gameResult.homeScore,
-          awayScore: gameResult.awayScore
-        };
-
-        updatedSeasonData = recordGameResult(updatedSeasonData, result);
-      }
-    });
-
-    // プレーオフ進行を更新（シリーズ決着・TBD確定）
-    updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
-
-    return updatedSeasonData;
-  };
-
-  // フェーズ内の全未消化試合を自動シミュレーション
-  const simulateAllRemainingGames = (seasonData) => {
-    let updatedSeasonData = { ...seasonData };
-    const currentPhase = seasonData.phase;
-
-    // プレーオフは1試合ずつシミュレーション（シリーズ決着・TBD確定を管理するため）
-    const isPlayoff = currentPhase === SEASON_PHASES.PLAYOFFS;
-    if (isPlayoff) {
-      // 毎回最新のスケジュールから未消化試合を取得し直す（TBD確定後に決勝が現れるため）
-      let maxIterations = 50; // 無限ループ防止
-      while (maxIterations-- > 0) {
-        // 最新スケジュールからプレーオフ未消化試合を取得
-        const remainingGames = updatedSeasonData.schedule.filter(game => {
-          if (game.phase !== SEASON_PHASES.PLAYOFFS) return false;
-          if (game.result) return false;
-          if (game.home === 'TBD' || game.away === 'TBD') return false;
-          return true;
-        }).sort((a, b) => {
-          if (a.date.month !== b.date.month) return a.date.month - b.date.month;
-          return a.date.day - b.date.day;
-        });
-
-        if (remainingGames.length === 0) break;
-
-        const game = remainingGames[0];
-        const homeTeam = TEAMS_DATA?.[game.home];
-        const awayTeam = TEAMS_DATA?.[game.away];
-        if (!homeTeam || !awayTeam) break;
-
-        const gameResult = autoSimulateGame?.(game.home, game.away);
-        if (gameResult) {
-          updatedSeasonData = recordGameResult(updatedSeasonData, {
-            date: game.date, home: game.home, away: game.away,
-            homeScore: gameResult.homeScore, awayScore: gameResult.awayScore
-          });
-          // シリーズ決着チェック＆TBD確定（決勝チームが確定する）
-          updatedSeasonData = updatePlayoffProgress(updatedSeasonData);
-        } else {
-          break;
-        }
-      }
-    } else {
-      // 現在フェーズの全試合を取得
-      const phaseGames = seasonData.schedule.filter(game => {
-        const gamePhase = getCurrentPhase(game.date.month, game.date.day);
-        return gamePhase === currentPhase && !game.result;
+      const setupManagedGame = (gameInfo) => executeSetupManagedGame(gameSetupCtx, gameInfo);
+
+      const handleManagedGameEnd = () => executeHandleManagedGameEnd({
+        managedGameInfoRef, score, homeTeam, awayTeam,
+        seasonData, setSeasonData, selectedMonth, setSelectedMonth,
+        setManagedGameInfo, setScreenMode, setManagementView
       });
-      phaseGames.forEach(game => {
-        if (game.result) return;
-        const homeTeam = TEAMS_DATA?.[game.home];
-        const awayTeam = TEAMS_DATA?.[game.away];
-        if (!homeTeam || !awayTeam) return;
-        const gameResult = autoSimulateGame?.(game.home, game.away);
-        if (gameResult) {
-          updatedSeasonData = recordGameResult(updatedSeasonData, {
-            date: game.date, home: game.home, away: game.away,
-            homeScore: gameResult.homeScore, awayScore: gameResult.awayScore
-          });
-        }
-      });
-    }
 
-    return updatedSeasonData;
-  };
+  // 日程進行ハンドラー（seasonProgress.jsからインポート済み、stateバインド用ラッパー）
+  const seasonProgressCtx = { seasonData, setSeasonData, setSelectedMonth, selectedMonth, userTeamName, setScreenMode, setManagementView };
+  const handleProgressDate = (days) => progressDateHandler(days, seasonProgressCtx);
+  const handleProgressToNextGame = () => progressToNextGameHandler(seasonProgressCtx);
+  const handleProgressToNextPhase = () => progressToNextPhaseHandler(seasonProgressCtx);
 
 
-// 管理画面のルーター
-      // エディット画面コンポーネント
-      const ManagementScreen = () => {
-        if (managementView === 'schedule') return <ScheduleScreen
-          seasonData={seasonData}
-          selectedMonth={selectedMonth}
-          setSelectedMonth={setSelectedMonth}
-          scheduleTab={scheduleTab}
-          setScheduleTab={setScheduleTab}
-          seasonYear={seasonYear}
-          currentDate={currentDate}
-          currentPhase={currentPhase}
-          leagueStandings={leagueStandings}
-          userTeamName={userTeamName}
-          onProgressDate={handleProgressDate}
-          onProgressToNextGame={handleProgressToNextGame}
-          onProgressToNextPhase={handleProgressToNextPhase}
-          onStartGame={() => setScreenMode('game')}
-        />;
-        if (managementView === 'tryout') return <TryoutScreen
-          seasonData={seasonData}
-          allTeams={allTeams}
-          initializeAllPitchingRotations={initializeAllPitchingRotations}
-          onComplete={() => {
-            // トライアウト完了 → カレンダーに戻る（11/11へ進める）
-            const newData = { ...seasonData, currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
-            setSeasonData(newData);
-            setManagementView('dateprogress');
-          }}
-        />;
-        if (managementView === 'contract') return <ContractScreen
-          seasonData={seasonData}
-          allTeams={allTeams}
-          onComplete={() => {
-            // 契約完了 → トライアウトへ（11/10に進める）
-            const newData = progressDate(seasonData, 1);
-            setSeasonData({ ...newData, phase: 'tryout' });
-            setManagementView('tryout');
-          }}
-        />;
-        if (managementView === 'draft') return <DraftResultScreen
-          draftedPlayers={draftResults?.draftedPlayers || []}
-          nearMissPlayers={draftResults?.nearMissPlayers || []}
-          proBonus={draftResults?.proBonus || []}
-          onContinue={() => {
-            setDraftResults(null);
-            setManagementView('dateprogress');
-          }}
-        />;
-        if (managementView === 'roster') return <RosterScreen />;
-        if (managementView === 'teaminfo') return <TeamInfoScreen />;
-        if (managementView === 'trade') return <TradeScreen
-          userTeamName={userTeamName}
-          onBack={() => setManagementView('dateprogress')}
-        />;
-        if (managementView === 'dateprogress') return <DateProgressScreen
-          seasonData={seasonData}
-          setSeasonData={setSeasonData}
-          onSetupManagedGame={setupManagedGame}
-          onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
-          onForceEvent={(eventType) => {
-            // 箱庭モード: ドラフト・トライアウト・契約をスキップしてオフシーズンへ直行
-            if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft')) {
-              setManagementView('offseason');
-              return;
-            }
-            if (eventType === 'contract') setManagementView('contract');
-            else if (eventType === 'tryout') setManagementView('tryout');
-            else if (eventType === 'draft') {
-              // NPBドラフト処理を実行
-              const results = processNPBDraft(TEAMS_DATA);
-              setDraftResults(results);
-              // 全ドラフト指名選手を記録
-              if (results.draftedPlayers.length > 0) {
-                setHallOfFamePlayers(prev => [...prev, ...results.draftedPlayers.map(d => {
-                  const p = d.player;
-                  const draftStats = p ? {
-                    batting: p.batting ? { meet: p.batting.meet, power: p.batting.power, eye: p.batting.eye, steal: p.batting.steal } : null,
-                    physical: p.physical ? { speed: p.physical.speed, arm: p.physical.arm } : null,
-                    fielding: p.fielding ? { defense: p.fielding.defense } : null,
-                    pitching: p.pitching ? { velocity: p.pitching.velocity, control: p.pitching.control, stamina: p.pitching.stamina, arsenal: p.pitching.arsenal ? JSON.parse(JSON.stringify(p.pitching.arsenal)) : null } : null,
-                    positionFitness: p.positionFitness ? JSON.parse(JSON.stringify(p.positionFitness)) : null,
-                    traits: p.traits ? [...p.traits] : null
-                  } : null;
-                  return {
-                    name: d.name,
-                    position: d.position,
-                    teamName: d.teamName,
-                    departureType: 'npb_drafted',
-                    npbTeam: d.npbTeam,
-                    draftRound: d.draftRound,
-                    hallOfFame: d.hallOfFame || false,
-                    hofReason: d.hofReason,
-                    reason: `NPBドラフト指名 (${d.npbTeam})`,
-                    careerStats: d.careerStats,
-                    draftStats,
-                    throws: p?.physical?.throws || 'right',
-                    bats: p?.batting?.bats || 'right',
-                    age: d.age,
-                    yearsPlayed: d.yearsPlayed,
-                    year: seasonData?.year
-                  };
-                })]);
-              }
-              setManagementView('draft');
-            }
-            else if (eventType === 'offseason') setManagementView('offseason');
-          }}
-        />;
-        if (managementView === 'offseason') return <OffSeasonScreen
-          seasonData={seasonData}
-          setSeasonData={setSeasonData}
+// 管理画面のルーター（ManagementScreen.jsxからインポート済み）
+
+      // ゲームフロー（スタート画面群）: GameFlowScreens.jsxからインポート済み
+      if (screenMode === 'start') {
+        const flowScreen = <GameFlowScreens
+          gameFlowState={gameFlowState}
+          setGameFlowState={setGameFlowState}
           gameMode={gameMode}
-          onSave={(slotIndex) => { saveGame(slotIndex); refreshSaveSlots(); }}
-          saveSlots={saveSlots}
-          onStartNextSeason={() => {
-            if (gameMode === 'sandbox') {
-              // 箱庭モード: トライアウト・キャンプをスキップし、レギュレーション設定→即シーズン開始
-              setManagementView('sandbox_next_regulations');
-            } else {
-              // レギュレーション設定画面へ
-              setManagementView('regulations_next');
-            }
-          }}
-          onAddHallOfFamePlayers={(newPlayers) => {
-            setHallOfFamePlayers(prev => [...prev, ...newPlayers]);
-          }}
-          onRecordTeamHistory={(historyEntry) => {
-            setTeamHistory(prev => [...prev, historyEntry]);
-          }}
-        />;
-        // 箱庭モード: 次シーズンのレギュレーション設定→チーム設定→シーズン開始
-        if (managementView === 'sandbox_next_regulations') return <RegulationsScreen
+          setGameMode={setGameMode}
           seasonData={seasonData}
           setSeasonData={setSeasonData}
-          onConfirm={() => {
-            const teams = Object.keys(TEAMS_DATA);
-            const settings = seasonData.settings || {};
-            const calendarYear = 2024 + seasonData.year - 1;
-            const schedule = generateFullSeasonSchedule({
-              teams,
-              gamesPerSeason: settings.gamesPerSeason || 60,
-              startDate: { year: calendarYear, month: 3, day: 1 },
-              endDate: { year: calendarYear, month: 9, day: 30 },
-              leagueFormat: settings.leagueFormat || 'single',
-              leagueNames: settings.leagueNames
-            });
-            setSeasonData(prev => ({
-              ...prev,
-              currentDate: { year: calendarYear, month: 1, day: 1 },
-              schedule,
-              standings: teams.map(t => ({
-                team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
-              }))
-            }));
-            // 箱庭モード: チーム設定画面へ（キャンプ・トライアウト不要）
-            setManagementView('sandbox_setup');
-          }}
-        />;
-        if (managementView === 'sandbox_setup') return <SandboxSetupScreen
           allTeams={allTeams}
-          generateOptimalLineup={generateOptimalLineup}
-          generatePitchingRotation={generatePitchingRotation}
-          generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
-          onComplete={() => {
-            initializeAllPlayersCondition();
-            Object.keys(TEAMS_DATA).forEach(teamName => {
-              const teamData = TEAMS_DATA[teamName];
-              if (teamData && teamData.players && teamData.players.length > 0) {
-                if (teamName === userTeamName) {
-                  if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
-                    setRecommendedLineup(teamData, teamName);
-                  }
-                } else {
-                  generateAILineup(teamData, teamName);
-                }
-              }
-            });
-            setSeasonData(prev => {
-              const calYear = 2024 + prev.year - 1;
-              return {
-                ...prev,
-                currentDate: { year: calYear, month: 4, day: 1 },
-                phase: SEASON_PHASES.REGULAR_SEASON
-              };
-            });
-            setSelectedMonth(4);
-            setManagementView('dateprogress');
-          }}
-        />;
-        if (managementView === 'regulations_next') return <RegulationsScreen
-          seasonData={seasonData}
-          setSeasonData={setSeasonData}
-          onConfirm={() => {
-            // レギュレーション確定後、スケジュールを生成（2年目以降対応）
-            const teams = Object.keys(TEAMS_DATA);
-            const settings = seasonData.settings || {};
-            const calendarYear = 2024 + seasonData.year - 1; // 1年目=2024, 2年目=2025...
-            const schedule = generateFullSeasonSchedule({
-              teams,
-              gamesPerSeason: settings.gamesPerSeason || 60,
-              startDate: { year: calendarYear, month: 3, day: 1 },
-              endDate: { year: calendarYear, month: 9, day: 30 },
-              leagueFormat: settings.leagueFormat || 'single',
-              leagueNames: settings.leagueNames
-            });
-            setSeasonData(prev => ({
-              ...prev,
-              currentDate: { year: calendarYear, month: 1, day: 1 },
-              schedule,
-              standings: teams.map(t => ({
-                team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
-              }))
-            }));
-            // キャンプ画面へ
-            setManagementView('camp');
-          }}
-        />;
-        if (managementView === 'camp') return <CampScreen
-          seasonData={seasonData}
-          allTeams={allTeams}
-          onComplete={() => {
-            // キャンプ終了: 全チームのスタメンを自動生成し、3月へ
-            Object.keys(TEAMS_DATA).forEach(teamName => {
-              const teamData = TEAMS_DATA[teamName];
-              if (teamData && teamData.players && teamData.players.length > 0) {
-                if (teamName === userTeamName) {
-                  // ユーザーチーム: lineupSettings未設定 or 在籍選手が足りない場合のみ再設定
-                  if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
-                    setRecommendedLineup(teamData, teamName);
-                  }
-                  // 既に設定済みの場合はそのまま保持（ユーザーの設定を尊重）
-                } else {
-                  generateAILineup(teamData, teamName);
-                }
-              }
-            });
-            setSeasonData(prev => {
-              const calYear = 2024 + prev.year - 1;
-              return {
-                ...prev,
-                currentDate: { year: calYear, month: 4, day: 1 },
-                phase: SEASON_PHASES.REGULAR_SEASON
-              };
-            });
-            setSelectedMonth(4);
-            setManagementView('dateprogress');
-          }}
-        />;
-        if (managementView === 'stats') return <PlayerStatsScreen
-          seasonData={seasonData}
-          allTeams={allTeams}
-        />;
-        if (managementView === 'halloffame') return <HallOfFameScreen
-          hallOfFamePlayers={hallOfFamePlayers}
-          allTeams={TEAMS_DATA}
-          teamHistory={teamHistory}
-          seasonData={seasonData}
-          onClose={() => setManagementView('dateprogress')}
-        />;
-        if (managementView === 'save') return <SaveLoadScreen
-          onSave={saveGame}
-          onLoad={loadGame}
-          onDelete={deleteSave}
-          saveSlots={saveSlots}
-          seasonData={seasonData}
-          onReturnToTitle={() => {
-            setScreenMode('start');
-            setGameFlowState('title');
-          }}
-        />;
-        if (managementView === 'regulations') return <RegulationsScreen
-          seasonData={seasonData}
-          setSeasonData={setSeasonData}
-        />;
-        if (managementView === 'edit') return <EditScreen
-          generateOptimalLineup={generateOptimalLineup}
-          generatePitchingRotation={generatePitchingRotation}
-          generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
-          allTeams={allTeams}
-        />;
-        // 他のビューは今後追加
-        return <div className="p-8 text-white">準備中...</div>;
-      };
-
-      // ゲームフロー統合ロジック: スタート画面
-      if (screenMode === 'start' && gameFlowState === 'title') {
-        return <StartScreen
-          onNewGame={() => { setGameMode('normal'); setGameFlowState('newgame_regulations'); }}
-          onSandbox={() => { setGameMode('sandbox'); setGameFlowState('sandbox_regulations'); }}
-          onContinue={(slotIndex) => {
-            if (loadGame(slotIndex)) {
-            }
-          }}
-          onEdit={(slotIndex) => {
-            if (loadGame(slotIndex)) {
-              setManagementView('edit');
-            }
-          }}
-          onManual={() => setGameFlowState('manual')}
+          userTeamName={userTeamName}
           hasSaveData={hasSaveData}
           saveSlots={saveSlots}
+          loadGame={loadGame}
+          initializeNewGame={initializeNewGame}
+          setScreenMode={setScreenMode}
+          setManagementView={setManagementView}
+          setSelectedMonth={setSelectedMonth}
         />;
-      }
-
-      // MANUAL: ゲーム辞典
-      if (screenMode === 'start' && gameFlowState === 'manual') {
-        return <ManualScreen onBack={() => setGameFlowState('title')} />;
-      }
-
-      // NEW GAME: レギュレーション設定
-      if (screenMode === 'start' && gameFlowState === 'newgame_regulations') {
-        return <NewGameRegulationsScreen
-          onComplete={(regulations) => {
-            initializeNewGame(regulations);
-            setGameFlowState('newgame_tryout');
-          }}
-        />;
-      }
-
-      // NEW GAME: 初期トライアウト
-      if (screenMode === 'start' && gameFlowState === 'newgame_tryout') {
-        return <TryoutScreen
-          seasonData={seasonData}
-          allTeams={allTeams}
-          isInitialTryout={true}
-          initializeAllPitchingRotations={initializeAllPitchingRotations}
-          onComplete={() => {
-            // トライアウト完了後、キャンプへ遷移
-            setGameFlowState('newgame_camp');
-          }}
-        />;
-      }
-
-      // NEW GAME: キャンプ
-      if (screenMode === 'start' && gameFlowState === 'newgame_camp') {
-        return <CampScreen
-          seasonData={seasonData}
-          allTeams={allTeams}
-          onComplete={() => {
-            // 全選手のコンディション初期化
-            initializeAllPlayersCondition();
-            // キャンプ終了時に全チームのスタメンを自動生成
-            Object.keys(TEAMS_DATA).forEach(teamName => {
-              const teamData = TEAMS_DATA[teamName];
-              if (teamData && teamData.players && teamData.players.length > 0) {
-                if (teamName === userTeamName) {
-                  // ユーザーチームは推奨スタメンを設定（lineupSettingsに保存）
-                  setRecommendedLineup(teamData, teamName);
-                } else {
-                  generateAILineup(teamData, teamName);
-                }
-              }
-            });
-
-            // 日付を4/1に設定し、レギュラーシーズンに移行
-            const calYear = 2024 + (seasonData?.year || 1) - 1;
-            setSeasonData(prev => ({
-              ...prev,
-              currentDate: { year: calYear, month: 4, day: 1 },
-              phase: SEASON_PHASES.REGULAR_SEASON
-            }));
-            setSelectedMonth(4);
-            setManagementView('dateprogress');
-            setScreenMode('management');
-            setGameFlowState('season');
-          }}
-        />;
-      }
-
-      // SANDBOX: レギュレーション設定
-      if (screenMode === 'start' && gameFlowState === 'sandbox_regulations') {
-        return <NewGameRegulationsScreen
-          onComplete={(regulations) => {
-            initializeNewGame(regulations);
-            setGameFlowState('sandbox_setup');
-          }}
-        />;
-      }
-
-      // SANDBOX: チーム設定画面
-      if (screenMode === 'start' && gameFlowState === 'sandbox_setup') {
-        return <SandboxSetupScreen
-          allTeams={allTeams}
-          generateOptimalLineup={generateOptimalLineup}
-          generatePitchingRotation={generatePitchingRotation}
-          generateAllTeamsLineup={() => generateAllTeamsLineup(allTeams)}
-          onComplete={() => {
-            // 全選手のコンディション初期化
-            initializeAllPlayersCondition();
-            // 全チームのスタメン/ローテーションを自動生成
-            Object.keys(TEAMS_DATA).forEach(teamName => {
-              const teamData = TEAMS_DATA[teamName];
-              if (teamData && teamData.players && teamData.players.length > 0) {
-                if (teamName === userTeamName) {
-                  setRecommendedLineup(teamData, teamName);
-                } else {
-                  generateAILineup(teamData, teamName);
-                }
-              }
-            });
-
-            // 日付を4/1に設定し、レギュラーシーズンに移行
-            const calYear = 2024 + (seasonData?.year || 1) - 1;
-            setSeasonData(prev => ({
-              ...prev,
-              currentDate: { year: calYear, month: 4, day: 1 },
-              phase: SEASON_PHASES.REGULAR_SEASON
-            }));
-            setSelectedMonth(4);
-            setManagementView('dateprogress');
-            setScreenMode('management');
-            setGameFlowState('season');
-          }}
-        />;
+        if (flowScreen) return flowScreen;
       }
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
-          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit'].includes(managementView) && <Sidebar />}
+          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit'].includes(managementView) && <Sidebar
+            gameMode={gameMode}
+            userTeamName={userTeamName}
+            seasonData={seasonData}
+            formatDate={formatDate}
+            screenMode={screenMode}
+            managementView={managementView}
+            setScreenMode={setScreenMode}
+            setManagementView={setManagementView}
+            advanceDayRef={advanceDayRef}
+            exportTeam={exportTeam}
+            importTeam={(name) => importTeam(name)}
+          />}
 
           <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
@@ -6775,7 +5170,41 @@ if (newOuts === 3) {
           )}
               </div>
             ) : (
-              <ManagementScreen />
+              <ManagementScreen
+                managementView={managementView}
+                setManagementView={setManagementView}
+                seasonData={seasonData}
+                setSeasonData={setSeasonData}
+                selectedMonth={selectedMonth}
+                setSelectedMonth={setSelectedMonth}
+                scheduleTab={scheduleTab}
+                setScheduleTab={setScheduleTab}
+                seasonYear={seasonYear}
+                currentDate={currentDate}
+                currentPhase={currentPhase}
+                leagueStandings={leagueStandings}
+                userTeamName={userTeamName}
+                allTeams={allTeams}
+                gameMode={gameMode}
+                hallOfFamePlayers={hallOfFamePlayers}
+                setHallOfFamePlayers={setHallOfFamePlayers}
+                teamHistory={teamHistory}
+                setTeamHistory={setTeamHistory}
+                draftResults={draftResults}
+                setDraftResults={setDraftResults}
+                saveSlots={saveSlots}
+                saveGame={saveGame}
+                loadGame={loadGame}
+                deleteSave={deleteSave}
+                refreshSaveSlots={refreshSaveSlots}
+                setupManagedGame={setupManagedGame}
+                advanceDayRef={advanceDayRef}
+                setScreenMode={setScreenMode}
+                setGameFlowState={setGameFlowState}
+                handleProgressDate={handleProgressDate}
+                handleProgressToNextGame={handleProgressToNextGame}
+                handleProgressToNextPhase={handleProgressToNextPhase}
+              />
             )}
           </div>
         </div>
