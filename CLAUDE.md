@@ -10,11 +10,12 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - 守備位置適正: `fitnessMult = 0.5 + (fitness / 100) * 0.5`（適正100=100%, 適正0=50%）
 
 ## 主要ファイル
-- `src/App.jsx` (~5200行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
+- `src/App.jsx` (~4600行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
 - `src/game/autoSimulation.js` (~2000行) - 自動シミュレーション・buildDefense
+- `src/game/aiManager.js` (~600行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
 - `src/game/lineupGenerator.js` (~250行) - AIオーダー編成・投手ローテーション生成
 - `src/game/gameControls.js` (~180行) - resetGame・multiPitch・simMode
-- `src/game/gameSetup.js` (~330行) - setupManagedGame・handleManagedGameEnd
+- `src/game/gameSetup.js` (~400行) - setupManagedGame・handleManagedGameEnd
 - `src/game/saveSystem.js` (~160行) - セーブ/ロード/エクスポート/インポート
 - `src/game/seasonProgress.js` (~230行) - 日程進行ハンドラー
 - `src/simulation-logic.js` (~520行) - 物理演算（打球・投球）
@@ -33,28 +34,30 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 ## App.jsx セクション構成（トークン節約のため必要なセクションだけ読むこと）
 
 App.jsxは大きいファイルなので、作業に関連するセクションだけを `offset` + `limit` で読むこと。
+**※分割作業は完了しました。以降は通常の開発（機能追加・バグ修正）を行うこと。**
 
 | セクション | 行範囲 | 内容 |
 |---|---|---|
 | IMPORTS | L1-57 | import文 |
 | APP_STATE | L58-340 | アプリ全体のstate定義（試合状態、チーム状態、セーブ等） |
 | GAME_HANDLERS | L341-595 | 成績更新・打順変更・選手交代ハンドラー |
-| AI_MANAGER | L596-1855 | 監督AI自動投手交代・盗塁判定ロジック |
-| THROW_PITCH | L1856-2638 | throwPitch（投球シミュレーション本体、最大セクション） |
-| GAME_CONTROLS | L2639-2696 | → `gameControls.js` に抽出済み（ラッパーのみ） |
-| GAME_SETUP | L2697-2715 | → `gameSetup.js` に抽出済み（ラッパーのみ） |
-| SEASON_PROGRESS | L2716-2722 | → `seasonProgress.js` に抽出済み（ラッパーのみ） |
-| MANAGEMENT | L2723-2724 | → `ManagementScreen.jsx` に抽出済み |
-| GAME_FLOW | L2725-2746 | → `GameFlowScreens.jsx` に抽出済み |
-| RENDER | L2747-END | メインreturn（試合画面UI） |
+| AI_MANAGER | L596-610 | → `aiManager.js` に抽出済み（ラッパーのみ） |
+| THROW_PITCH | L611-2030 | throwPitch（投球シミュレーション本体、最大セクション） |
+| GAME_CONTROLS | L2031-2080 | → `gameControls.js` に抽出済み（ラッパーのみ） |
+| GAME_SETUP | L2081-2100 | → `gameSetup.js` に抽出済み（ラッパーのみ） |
+| SEASON_PROGRESS | L2101-2110 | → `seasonProgress.js` に抽出済み（ラッパーのみ） |
+| MANAGEMENT | L2111-2112 | → `ManagementScreen.jsx` に抽出済み |
+| GAME_FLOW | L2113-2130 | → `GameFlowScreens.jsx` に抽出済み |
+| RENDER | L2131-END | メインreturn（試合画面UI） |
 
 ### 編集作業ガイド
-- **試合ロジック修正**: THROW_PITCH (L1856-2638) + AI_MANAGER (L596-1855)
+- **試合ロジック修正**: `src/App.jsx` THROW_PITCH (L611-2030) + `src/game/aiManager.js`
 - **画面遷移修正**: `ManagementScreen.jsx` + `GameFlowScreens.jsx`
-- **UI修正**: RENDER (L2747-END) + `GameUIComponents.jsx`
+- **UI修正**: `src/App.jsx` RENDER (L2131-END) + `GameUIComponents.jsx`
 - **日程進行修正**: `src/game/seasonProgress.js`
-- **選手交代修正**: GAME_HANDLERS (L341-595)
+- **選手交代修正**: `src/App.jsx` GAME_HANDLERS (L341-595)
 - **試合セットアップ**: `src/game/gameSetup.js`
+- **監督AI修正**: `src/game/aiManager.js`
 
 ## ゲームフロー
 ```
