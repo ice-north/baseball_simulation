@@ -51,12 +51,19 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     timingWindow *= 1.3;  // ×1.3
   }
 
+  // ミート力による「緩急・変化球への耐性」
+  // ミートが高い打者はタイミングを外されにくい（最大50%軽減）
+  // 例: meet=100 → 緩急/変化球の影響が半減 / meet=0 → 影響フル
+  const meetDeceptionResistance = (batter.meet / 100) * 0.5;
+
   // トンネリング効果で窓が狭まる（錯覚で準備が遅れる）
-  timingWindow *= (1 - tunnelingEffect * 0.3);  // 30%
+  // ミート高打者は騙されにくい
+  timingWindow *= (1 - tunnelingEffect * 0.3 * (1 - meetDeceptionResistance));
 
   // 変化球はさらに窓を狭める（軌道予測が難しい、レベルが高いほど曲がる）
+  // ミート高打者は変化球にも対応しやすい
   if (pitch.type !== 'straight' && pitch.level) {
-    const breakingBallPenalty = (pitch.level / 100) * 0.18;  // 18%（強化: 旧10%）
+    const breakingBallPenalty = (pitch.level / 100) * 0.18 * (1 - meetDeceptionResistance);  // 最大18%
     timingWindow *= (1 - breakingBallPenalty);
   }
 
@@ -99,16 +106,22 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // ミート品質と打者パワーで決定
   let exitVelocity = 0;
   if (isContact) {
-    // 基本初速: パワー依存を縮小（85-100km/h、旧: 80-110km/h）
-    // パワーだけでは打球が飛ばない設計
-    const baseVelocity = 85 + (batter.power * 0.15);
+    // 【パワー伝達効率】タイミングを外されるとパワーが打球に乗らない
+    // 泳がされ・詰まり時はフルスイングできず、パワーが活きない
+    // meetQuality=1.0 → 100%, 0.5 → 66%, 0.2 → 38%, 0.02 → 11%
+    const powerTransferRate = Math.pow(meetQuality, 0.6);
 
-    // ミート品質ボーナス: パワーとの相乗効果（旧: meetQuality * 50 固定）
+    // 基本初速: パワー依存だがタイミング次第で大きく変動
+    // 芯を外すとパワー部分が効かない（最低でも85km/h）
+    const baseVelocity = 85 + (batter.power * 0.15 * powerTransferRate);
+
+    // ミート品質ボーナス: パワーとの相乗効果
     // 芯を捉えた時にパワーが活きる設計
     const qualityBonus = meetQuality * (35 + batter.power * 0.25);
 
     // 投球速度の反発ボーナス: 最大+15km/h
-    const pitchBonus = (pitchVelocity - 130) * 0.25;
+    // 詰まった打球には反発も乗らない
+    const pitchBonus = (pitchVelocity - 130) * 0.25 * powerTransferRate;
 
     exitVelocity = baseVelocity + qualityBonus + pitchBonus;
 
