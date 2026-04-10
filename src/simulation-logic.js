@@ -83,8 +83,8 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
 
   // 【3】スイングの誤差発生 (ミリ秒単位)
   // 打者のmeet値が高いほど、誤差のバラツキが抑えられる
-  // Meet 0 → ±10ms, Meet 100 → ±5ms
-  const maxError = 10 - (batter.meet * 0.055);  // ±10～4.5ms（ミート強化）
+  // Meet 0 → ±15ms (頻繁に芯を外す), Meet 100 → ±4ms (精密)
+  const maxError = 15 - (batter.meet * 0.11);  // ±15～4ms（ミート差を拡大）
 
   // 左右相性でミート精度調整
   const meetAdjust = (handEffect.meetBonus || handEffect.meetPenalty || 0) * 0.02;
@@ -97,8 +97,10 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   let meetQuality = Math.max(0, 1 - Math.abs(timingError) / timingWindow);
 
   // 【5】空振り判定
-  // meetQuality が 0.02 以下の時のみ空振り
-  const isContact = meetQuality > 0.02;  // 空振り閾値
+  // ミート力連動の動的閾値: ミート0→0.28(厳しい), ミート100→0.05(緩い)
+  // 低ミート打者は頻繁に空振り、高ミート打者はまず空振りしない
+  const contactThreshold = 0.28 - (batter.meet / 100) * 0.23;
+  const isContact = meetQuality > contactThreshold;
 
   // 【6】打球初速の計算 (物理衝突モデル - 修正版)
   // MLB平均Exit Velocity: 約140km/h (88mph)
@@ -111,13 +113,14 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     // meetQuality=1.0 → 100%, 0.5 → 66%, 0.2 → 38%, 0.02 → 11%
     const powerTransferRate = Math.pow(meetQuality, 0.6);
 
-    // 基本初速: パワー依存だがタイミング次第で大きく変動
-    // 芯を外すとパワー部分が効かない（最低でも85km/h）
-    const baseVelocity = 85 + (batter.power * 0.15 * powerTransferRate);
+    // 基本初速: パワーが主体、ミートは芯を捉えた時に大きく寄与
+    // sweetSpotBonus: ミート100で完璧な芯を捉えた時に最大+18km/h
+    // → ミート打者が長打圏EVに到達する唯一の経路
+    const sweetSpotBonus = (batter.meet / 100) * Math.pow(meetQuality, 1.5) * 18;
+    const baseVelocity = 90 + (batter.power * 0.17 * powerTransferRate) + sweetSpotBonus;
 
-    // ミート品質ボーナス: パワーとの相乗効果
-    // 芯を捉えた時にパワーが活きる設計
-    const qualityBonus = meetQuality * (35 + batter.power * 0.25);
+    // ミート品質ボーナス: パワー主体
+    const qualityBonus = meetQuality * (30 + batter.power * 0.17);
 
     // 投球速度の反発ボーナス: 最大+15km/h
     // 詰まった打球には反発も乗らない
@@ -128,8 +131,8 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     // ランダム要素（±5km/h）
     exitVelocity += (Math.random() * 10 - 5);
 
-    // 現実的な範囲に制限: 70-180km/h
-    exitVelocity = Math.max(70, Math.min(180, exitVelocity));
+    // 現実的な範囲に制限: 70-175km/h
+    exitVelocity = Math.max(70, Math.min(175, exitVelocity));
   }
 
   return {
@@ -211,16 +214,20 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   // 滞空時間（秒）
   const hangTime = Math.max(0.5, (2 * v * Math.sin(Math.max(0, rad))) / g);
 
-  // 飛距離（メートル）
+  // 飛距離（メートル）- MLB実測値ベース（空気抵抗込み）
+  // EV155→112m, EV145→102m, EV135→91m, EV125→80m, EV115→69m
   let distance;
   if (launchAngle <= 0) {
     // ゴロ: 内野を転がる距離
     distance = 15 + exitVelocity * 0.15 + Math.random() * 20;
   } else {
-    // フライ/ライナー
-    const optimalAngleFactor = 1 - Math.abs(launchAngle - 30) / 60;
-    distance = v * Math.cos(rad) * hangTime * (0.8 + optimalAngleFactor * 0.4);
-    distance *= (0.9 + batter.power / 500);
+    // フライ/ライナー: EV基準の標準飛距離
+    const carryBase = Math.max(0, (exitVelocity - 75) * 1.1 + 28);
+    // 打出し角度補正: 30度が最適
+    const angleFactor = Math.max(0.3, 1 - Math.abs(launchAngle - 30) / 60);
+    distance = carryBase * angleFactor;
+    // パワーボーナス（スイングの強さ分の微調整）
+    distance *= (0.95 + batter.power / 1000);
   }
 
   // 打球方向（-45〜45度）- 中央（遊撃・二塁・中堅方向）に偏る分布
@@ -250,14 +257,20 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   const { exitVelocity, launchAngle, distance, hangTime, direction } = battedBall || {};
 
   // 本塁打判定（バレルゾーン）
-  // MLB基準: 打球速度158km/h以上、角度26-30度で.500以上の打率
-  if (distance > 105 && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 155) {
-    return { result: 'homerun', bases: 4, description: 'ホームラン！' };
+  // MLB基準: EV154km/h以上かつフェンス越えの飛距離
+  if (distance > 109 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 154) {
+    // 確率的HR: EV高いほど確実、境界EVでは取られることもある
+    // EV154: 28%, EV164: 68%, EV174: 80%（上限）
+    const hr1Prob = Math.min(0.80, 0.28 + (exitVelocity - 154) / 25);
+    if (Math.random() < hr1Prob) {
+      return { result: 'homerun', bases: 4, description: 'ホームラン！' };
+    }
   }
 
-  // 長打圏フライ（98m以上の深いフライ、パワー依存確率）
-  if (distance > 98 && launchAngle >= 22 && launchAngle <= 42 && exitVelocity >= 143) {
-    const hrProb = 0.09 + Math.max(0, (batter.power || 50) - 40) * 0.004;
+  // 長打圏フライ（103m以上の深いフライ、速度とパワー依存確率）
+  if (distance > 103 && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 148) {
+    const velocityFactor = Math.max(0, (exitVelocity - 148) / 15);  // 0-1 at EV 148-163
+    const hrProb = velocityFactor * 0.07 + Math.max(0, (batter.power || 50) - 70) * 0.0012;
     if (Math.random() < hrProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス越え）' };
     }
@@ -346,9 +359,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const defenseBonus = (fielder.defense - 70) / 100 * 0.04 * weight;  // 重要ポジションほど守備力が効く
       const speedBonus = (fielder.speed - 60) / 100 * 0.05 * weight;     // 足で守備範囲拡大（走力強化）
       const batterSpeedPenalty = (batter.speed - 60) / 100 * 0.04;
-      // ミートが高い打者は打球方向の制御が良く、野手の間を抜きやすい
-      const meetPlacementBonus = ((batter.meet || 50) - 50) / 100 * 0.03;
-      const catchProb = Math.min(0.995, Math.max(0.90, baseOutRate + defenseBonus + speedBonus - batterSpeedPenalty - meetPlacementBonus));
+      // ミートが高い打者は打球方向の制御が良く、野手の間を抜きやすい（ミート30以上から段階的に効果）
+      const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.15;
+      const catchProb = Math.min(0.995, Math.max(0.85, baseOutRate + defenseBonus + speedBonus - batterSpeedPenalty - meetPlacementBonus));
 
       if (Math.random() < catchProb) {
         // エラー判定
@@ -376,8 +389,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const baseOutRate = 0.88;
       const defenseBonus = (fielder.defense - 70) / 100 * 0.08 * weight;
       const speedBonus = (fielder.speed - 60) / 100 * 0.06 * weight; // 走力強化
-      // ミートが高い打者は鋭いライナーで野手の正面を避けやすい
-      const meetPlacementBonus = ((batter.meet || 50) - 50) / 100 * 0.04;
+      // ミートが高い打者は鋭いライナーで野手の正面を避けやすい（ミート30以上から段階的に効果）
+      const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.18;
       const catchProb = Math.min(0.96, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
 
       if (Math.random() < catchProb) {
@@ -389,7 +402,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const baseOutRate = 0.78;
       const defenseBonus = (fielder.defense - 70) / 100 * 0.12 * weight;
       const speedBonus = (fielder.speed - 65) / 100 * 0.14 * weight; // 走力強化
-      const catchProb = Math.min(0.94, baseOutRate + defenseBonus + speedBonus);
+      // ミートが高い打者は野手の間を抜く鋭いライナーを打てる（ミート30以上から段階的に効果）
+      const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.20;
+      const catchProb = Math.min(0.94, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
 
       if (Math.random() < catchProb) {
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: true, tagupThrowbackChance: (fielder.arm / 100) * 0.5, fieldingPosition: position };
@@ -415,19 +430,23 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   // 外野フライ
   let baseOutRate;
   if (distance < 70) {
-    // 浅いフライ - 旧モデル: 99.5%アウト
-    baseOutRate = 0.995;
+    // 浅いフライ（ポテンヒットがたまに発生）
+    baseOutRate = 0.93;
   } else if (distance < 90) {
-    // 中堅フライ - 旧モデル: 95%アウト
-    baseOutRate = 0.95;
+    // 中堅フライ（ポテンヒット多め）
+    baseOutRate = 0.84;
   } else {
-    // 深いフライ - 旧モデル: 80%アウト
-    baseOutRate = 0.80;
+    // 深いフライ
+    baseOutRate = 0.71;
   }
 
   const defenseBonus = (fielder.defense - 70) / 100 * 0.06 * weight;
   const speedBonus = (fielder.speed - 65) / 100 * 0.14 * weight; // 走力強化
-  const catchProb = Math.min(0.995, baseOutRate + defenseBonus + speedBonus);
+  // ミート打者は野手の間を狙って打てる（ミート30以上から段階的に効果）
+  const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.14;
+  // 強い打球ほど野手の頭を越えやすい
+  const exitVeloBonus = Math.max(0, (exitVelocity - 130) / 100) * 0.18;
+  const catchProb = Math.min(0.995, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus - exitVeloBonus);
 
   if (Math.random() < catchProb) {
     const isDeepFly = distance > 70;
@@ -441,14 +460,27 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     };
   }
 
-  // 安打判定
-  if (distance > 80 && launchAngle >= 15 && launchAngle <= 35) {
-    if (exitVelocity >= 145 && distance > 90) {
+  // 安打判定: EV・飛距離・方向から単打/二塁打/三塁打を区別
+  const batterSpeed = batter.speed || 60;
+  const isCorner = Math.abs(direction) > 26;
+
+  // 三塁打: コーナー寄り + 速い打球 + 足の速い走者 のみ
+  if (isCorner && distance > 95 && exitVelocity >= 144 && batterSpeed >= 65) {
+    const tripleProb = 0.20 + (batterSpeed - 65) / 100 * 0.3;
+    if (Math.random() < tripleProb) {
       return { result: 'triple', bases: 3, description: '三塁打！' };
     }
-    return { result: 'double', bases: 2, description: '二塁打！' };
   }
 
+  // 二塁打: 深いフライ(95m+)かつ速い打球(EV 142+) または非常に速い打球(EV 148+)
+  // 打球が本当に強くないと二塁打にはならない
+  if (launchAngle >= 15 && launchAngle <= 40) {
+    if ((distance > 95 && exitVelocity >= 142) || exitVelocity >= 148) {
+      return { result: 'double', bases: 2, description: '二塁打！' };
+    }
+  }
+
+  // それ以外は単打（野手の前に落ちた or 弱い打球が抜けた）
   return { result: 'single', bases: 1, description: 'ヒット！' };
 };
 

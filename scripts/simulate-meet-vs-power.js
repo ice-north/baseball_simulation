@@ -162,7 +162,7 @@ console.log(`投手: 球速${PITCHER.velocity}km/h (スリークォーター), �
 console.log(`守備: 全員 守備70/走力60-75/肩70 の標準守備`);
 console.log(`※ 四球・死球・盗塁・読み・トンネリングは考慮しない`);
 
-// パワータイプ
+// パワータイプ（極端な長距離砲）
 const powerHitter = {
   name: 'パワーヒッター',
   meet: 10,
@@ -171,7 +171,7 @@ const powerHitter = {
   bats: 'right',
 };
 
-// ミートタイプ
+// ミートタイプ（極端な安打製造機）
 const contactHitter = {
   name: 'アベレージヒッター',
   meet: 100,
@@ -180,20 +180,44 @@ const contactHitter = {
   bats: 'right',
 };
 
+// バランス型（両方60）
+const balancedHitter = {
+  name: 'バランスヒッター',
+  meet: 60,
+  power: 60,
+  speed: 60,
+  bats: 'right',
+};
+
+// 中堅選手（両方40）
+const averageHitter = {
+  name: '中堅選手',
+  meet: 40,
+  power: 40,
+  speed: 60,
+  bats: 'right',
+};
+
 const result1 = runSimulation('パワー型 (Power 100 / Meet 10)', powerHitter, 1000);
 const result2 = runSimulation('ミート型 (Meet 100 / Power 10)', contactHitter, 1000);
+const result3 = runSimulation('バランス型 (両方 60)', balancedHitter, 1000);
+const result4 = runSimulation('中堅選手 (両方 40)', averageHitter, 1000);
 
 printResult(result1);
 printResult(result2);
+printResult(result3);
+printResult(result4);
 
 console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 console.log(`■ 比較サマリ`);
 console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-console.log(`               パワー型    ミート型`);
-console.log(`打率         :  ${rate(result1.avg)}      ${rate(result2.avg)}`);
-console.log(`長打率       :  ${rate(result1.slg)}      ${rate(result2.slg)}`);
-console.log(`OPS          :  ${rate(result1.ops)}      ${rate(result2.ops)}`);
-console.log(`本塁打       :  ${String(result1.stats.hr).padStart(4)}        ${String(result2.stats.hr).padStart(4)}`);
-console.log(`三振         :  ${String(result1.stats.strikeout).padStart(4)}        ${String(result2.stats.strikeout).padStart(4)}`);
-console.log(`安打数       :  ${String(result1.stats.hits).padStart(4)}        ${String(result2.stats.hits).padStart(4)}`);
+const pad = (v, w = 6) => String(v).padStart(w);
+console.log(`             パワー    ミート    バランス  中堅`);
+console.log(`打率       : ${pad(rate(result1.avg))}   ${pad(rate(result2.avg))}   ${pad(rate(result3.avg))}   ${pad(rate(result4.avg))}`);
+console.log(`長打率     : ${pad(rate(result1.slg))}   ${pad(rate(result2.slg))}   ${pad(rate(result3.slg))}   ${pad(rate(result4.slg))}`);
+console.log(`OPS(仮)    : ${pad(rate(result1.ops))}   ${pad(rate(result2.ops))}   ${pad(rate(result3.ops))}   ${pad(rate(result4.ops))}`);
+console.log(`本塁打     : ${pad(result1.stats.hr)}   ${pad(result2.stats.hr)}   ${pad(result3.stats.hr)}   ${pad(result4.stats.hr)}`);
+console.log(`二塁打     : ${pad(result1.stats.double)}   ${pad(result2.stats.double)}   ${pad(result3.stats.double)}   ${pad(result4.stats.double)}`);
+console.log(`三振       : ${pad(result1.stats.strikeout)}   ${pad(result2.stats.strikeout)}   ${pad(result3.stats.strikeout)}   ${pad(result4.stats.strikeout)}`);
+console.log(`安打数     : ${pad(result1.stats.hits)}   ${pad(result2.stats.hits)}   ${pad(result3.stats.hits)}   ${pad(result4.stats.hits)}`);
 console.log();
