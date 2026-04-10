@@ -1165,6 +1165,17 @@ export const SUB_TRAINING_MENUS = {
 };
 
 /**
+ * 技術系能力(meet/power/eye/defense等)の高能力値成長減衰を適用
+ * 60以上で超過1ごとに4%減衰（サブ練習用）
+ */
+function applyTechStatDecay(currentValue, growth) {
+  if (growth <= 0 || currentValue < 60) return growth;
+  const overAmount = currentValue - 60;
+  const dampFactor = Math.max(0.05, 1.0 - overAmount * 0.04);
+  return Math.max(0, Math.round(growth * dampFactor));
+}
+
+/**
  * サブ練習を実行（メイン練習の半分程度の効果）
  * @param {Object} player - 選手
  * @param {string} subType - サブ練習タイプ
@@ -1198,10 +1209,14 @@ export function executeSubTraining(player, subType, options = {}) {
       break;
     }
     case 'muscle': {
-      const pwr = growthAmount();
-      if (pwr > 0 && player.batting) {
-        player.batting.power = Math.min(100, (player.batting.power || 50) + pwr);
-        growthReport.push({ statName: 'パワー', before: player.batting.power - pwr, after: player.batting.power, growth: pwr });
+      const pwrRaw = growthAmount();
+      if (pwrRaw > 0 && player.batting) {
+        const oldPwr = player.batting.power || 50;
+        const pwr = applyTechStatDecay(oldPwr, pwrRaw);
+        if (pwr > 0) {
+          player.batting.power = Math.min(100, oldPwr + pwr);
+          growthReport.push({ statName: 'パワー', before: oldPwr, after: player.batting.power, growth: pwr });
+        }
       }
       const arm = Math.random() < 0.25 ? 1 : 0;
       if (arm > 0 && player.physical) {
@@ -1212,20 +1227,24 @@ export function executeSubTraining(player, subType, options = {}) {
     }
     case 'stretch': {
       // 全能力微増（10%の確率で各能力+1）
+      // 技術系(meet/power/defense)は60以上で減衰対象
       const stats = [
-        { key: 'batting.meet', name: 'ミート' },
-        { key: 'batting.power', name: 'パワー' },
-        { key: 'physical.speed', name: '走力' },
-        { key: 'physical.arm', name: '肩力' },
-        { key: 'fielding.defense', name: '守備' },
+        { key: 'batting.meet', name: 'ミート', isTech: true },
+        { key: 'batting.power', name: 'パワー', isTech: true },
+        { key: 'physical.speed', name: '走力', isTech: false },
+        { key: 'physical.arm', name: '肩力', isTech: false },
+        { key: 'fielding.defense', name: '守備', isTech: true },
       ];
-      stats.forEach(({ key, name }) => {
+      stats.forEach(({ key, name, isTech }) => {
         if (Math.random() < 0.1) {
           const [obj, prop] = key.split('.');
           if (player[obj]) {
             const old = player[obj][prop] || 50;
-            player[obj][prop] = Math.min(100, old + 1);
-            growthReport.push({ statName: name, before: old, after: old + 1, growth: 1 });
+            const gain = isTech ? applyTechStatDecay(old, 1) : 1;
+            if (gain > 0) {
+              player[obj][prop] = Math.min(100, old + gain);
+              growthReport.push({ statName: name, before: old, after: old + gain, growth: gain });
+            }
           }
         }
       });
@@ -1238,10 +1257,14 @@ export function executeSubTraining(player, subType, options = {}) {
       break;
     }
     case 'defense_sub': {
-      const def = growthAmount();
-      if (def > 0 && player.fielding) {
-        player.fielding.defense = Math.min(100, (player.fielding.defense || 50) + def);
-        growthReport.push({ statName: '守備', before: player.fielding.defense - def, after: player.fielding.defense, growth: def });
+      const defRaw = growthAmount();
+      if (defRaw > 0 && player.fielding) {
+        const oldDef = player.fielding.defense || 50;
+        const def = applyTechStatDecay(oldDef, defRaw);
+        if (def > 0) {
+          player.fielding.defense = Math.min(100, oldDef + def);
+          growthReport.push({ statName: '守備', before: oldDef, after: player.fielding.defense, growth: def });
+        }
       }
       // 守備適正も微増
       if (player.positionFitness && Math.random() < 0.3) {
@@ -1284,11 +1307,15 @@ export function executeSubTraining(player, subType, options = {}) {
           }
         }
       } else if (player.batting) {
-        // 野手のフォーム改造: ミート微増（従来通り）
-        const mt = growthAmount();
-        if (mt > 0) {
-          player.batting.meet = Math.min(100, (player.batting.meet || 50) + mt);
-          growthReport.push({ statName: 'ミート', before: player.batting.meet - mt, after: player.batting.meet, growth: mt });
+        // 野手のフォーム改造: ミート微増（60以上は減衰）
+        const mtRaw = growthAmount();
+        if (mtRaw > 0) {
+          const oldMeet = player.batting.meet || 50;
+          const mt = applyTechStatDecay(oldMeet, mtRaw);
+          if (mt > 0) {
+            player.batting.meet = Math.min(100, oldMeet + mt);
+            growthReport.push({ statName: 'ミート', before: oldMeet, after: player.batting.meet, growth: mt });
+          }
         }
       }
       break;
@@ -1379,11 +1406,14 @@ export function executeSubTraining(player, subType, options = {}) {
       break;
     }
     case 'eye': {
-      const eyeGain = growthAmount();
-      if (eyeGain > 0 && player.batting) {
+      const eyeRaw = growthAmount();
+      if (eyeRaw > 0 && player.batting) {
         const old = player.batting.eye || 50;
-        player.batting.eye = Math.min(100, old + eyeGain);
-        growthReport.push({ statName: '選球眼', before: old, after: player.batting.eye, growth: eyeGain });
+        const eyeGain = applyTechStatDecay(old, eyeRaw);
+        if (eyeGain > 0) {
+          player.batting.eye = Math.min(100, old + eyeGain);
+          growthReport.push({ statName: '選球眼', before: old, after: player.batting.eye, growth: eyeGain });
+        }
       }
       break;
     }
@@ -1590,7 +1620,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     return { player: updatedPlayer, growthReport };
   }
 
-  // 通常の能力練習（成長量1/6 = 元1/4の2/3）
+  // 通常の能力練習（成長量抑制: プロ級へ到達しにくくする）
   menu.targets.forEach(targetStat => {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
     const ageBase = getAgeGrowthBase(age, isPhysical);
@@ -1599,15 +1629,16 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const boBonus = getBattingOrderGrowthBonus(player, targetStat);
     const expBonus = posBonus * boBonus;
 
-    // 元の成長量を1/6に: (base + focus) * 0.167（元1/4の2/3）
+    // 成長量を約1/9に抑制: (base + focus) * 0.11
+    // クリーンナップ(expBonus最大2.25)でも年間成長が過剰にならないよう基礎値を下げる
     const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
     const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.167);
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.11);
 
-    // 覚醒判定
-    const awakeningChance = Math.floor(experience / 10);
+    // 覚醒判定（発生率を下げる: 従来の experience/10 → experience/15）
+    const awakeningChance = Math.floor(experience / 15);
     const isAwakening = Math.random() * 100 < awakeningChance;
-    const awakeningGrowth = isAwakening ? Math.round((Math.floor(Math.random() * 10) + 5) * 0.167) : 0;
+    const awakeningGrowth = isAwakening ? Math.round((Math.floor(Math.random() * 10) + 5) * 0.11) : 0;
 
     const statPath = getStatPath(targetStat);
     if (statPath) {
@@ -1622,11 +1653,19 @@ export function executeCampTraining(player, trainingType, newPitchType) {
           const dampFactor = Math.max(0.1, 1.0 - overAmount * 0.2);
           adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
         }
-      } else {
-        // 球速以外: 能力値80以上で伸びにくくなる（超過1ごとに成長量3%減衰）
+      } else if (isPhysical) {
+        // フィジカル系(speed/arm/stamina/bodyStamina/recovery): 能力値80以上で成長減衰（超過1ごとに3%減衰）
         if (currentValue >= 80) {
           const overAmount = currentValue - 80;
           const dampFactor = Math.max(0.1, 1.0 - overAmount * 0.03);
+          adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
+        }
+      } else {
+        // 技術系(meet/power/eye/control/defense/steal): 能力値60以上で成長減衰（超過1ごとに4%減衰）
+        // プロ級の技術能力への到達をキャンプだけでは困難にする
+        if (currentValue >= 60) {
+          const overAmount = currentValue - 60;
+          const dampFactor = Math.max(0.05, 1.0 - overAmount * 0.04);
           adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
         }
       }
