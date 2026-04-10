@@ -1166,12 +1166,12 @@ export const SUB_TRAINING_MENUS = {
 
 /**
  * 技術系能力(meet/power/eye/defense等)の高能力値成長減衰を適用
- * 70以上で超過1ごとに3%減衰、下限15%（サブ練習用）
+ * 70(プロ級)以上で超過1ごとに5%減衰、下限10%（サブ練習用）
  */
 function applyTechStatDecay(currentValue, growth) {
   if (growth <= 0 || currentValue < 70) return growth;
   const overAmount = currentValue - 70;
-  const dampFactor = Math.max(0.15, 1.0 - overAmount * 0.03);
+  const dampFactor = Math.max(0.10, 1.0 - overAmount * 0.05);
   return Math.max(0, Math.round(growth * dampFactor));
 }
 
@@ -1639,7 +1639,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     // 覚醒は減衰を受けず、"何かのきっかけで飛躍する選手"を再現する大幅ボーナス
     const awakeningChance = Math.floor(experience / 15);
     const isAwakening = Math.random() * 100 < awakeningChance;
-    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 10) + 5 : 0;
+    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 6) + 3 : 0;
 
     const statPath = getStatPath(targetStat);
     if (statPath) {
@@ -1662,11 +1662,11 @@ export function executeCampTraining(player, trainingType, newPitchType) {
           adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
         }
       } else {
-        // 技術系(meet/power/eye/control/defense/steal): 能力値70以上で成長減衰（超過1ごとに3%減衰、下限15%）
-        // 60前後で頭打ちにならないよう70までは減衰なし。プロ級(80+)到達は依然として困難だが覚醒で飛躍可能
+        // 技術系(meet/power/eye/control/defense/steal): 能力値70(プロ級)以上で成長減衰
+        // 超過1ごとに5%減衰、下限10%。70までは通常成長、70以降は練習だけでは伸びにくい
         if (currentValue >= 70) {
           const overAmount = currentValue - 70;
-          const dampFactor = Math.max(0.15, 1.0 - overAmount * 0.03);
+          const dampFactor = Math.max(0.10, 1.0 - overAmount * 0.05);
           adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
         }
       }
