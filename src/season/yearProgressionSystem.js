@@ -1166,12 +1166,12 @@ export const SUB_TRAINING_MENUS = {
 
 /**
  * 技術系能力(meet/power/eye/defense等)の高能力値成長減衰を適用
- * 60以上で超過1ごとに4%減衰（サブ練習用）
+ * 70以上で超過1ごとに3%減衰、下限15%（サブ練習用）
  */
 function applyTechStatDecay(currentValue, growth) {
-  if (growth <= 0 || currentValue < 60) return growth;
-  const overAmount = currentValue - 60;
-  const dampFactor = Math.max(0.05, 1.0 - overAmount * 0.04);
+  if (growth <= 0 || currentValue < 70) return growth;
+  const overAmount = currentValue - 70;
+  const dampFactor = Math.max(0.15, 1.0 - overAmount * 0.03);
   return Math.max(0, Math.round(growth * dampFactor));
 }
 
@@ -1227,7 +1227,7 @@ export function executeSubTraining(player, subType, options = {}) {
     }
     case 'stretch': {
       // 全能力微増（10%の確率で各能力+1）
-      // 技術系(meet/power/defense)は60以上で減衰対象
+      // 技術系(meet/power/defense)は70以上で減衰対象
       const stats = [
         { key: 'batting.meet', name: 'ミート', isTech: true },
         { key: 'batting.power', name: 'パワー', isTech: true },
@@ -1307,7 +1307,7 @@ export function executeSubTraining(player, subType, options = {}) {
           }
         }
       } else if (player.batting) {
-        // 野手のフォーム改造: ミート微増（60以上は減衰）
+        // 野手のフォーム改造: ミート微増（70以上は減衰）
         const mtRaw = growthAmount();
         if (mtRaw > 0) {
           const oldMeet = player.batting.meet || 50;
@@ -1636,9 +1636,10 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const baseGrowth = Math.round((rawBase + rawFocus) * 0.11);
 
     // 覚醒判定（発生率を下げる: 従来の experience/10 → experience/15）
+    // 覚醒は減衰を受けず、"何かのきっかけで飛躍する選手"を再現する大幅ボーナス
     const awakeningChance = Math.floor(experience / 15);
     const isAwakening = Math.random() * 100 < awakeningChance;
-    const awakeningGrowth = isAwakening ? Math.round((Math.floor(Math.random() * 10) + 5) * 0.11) : 0;
+    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 10) + 5 : 0;
 
     const statPath = getStatPath(targetStat);
     if (statPath) {
@@ -1661,11 +1662,11 @@ export function executeCampTraining(player, trainingType, newPitchType) {
           adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
         }
       } else {
-        // 技術系(meet/power/eye/control/defense/steal): 能力値60以上で成長減衰（超過1ごとに4%減衰）
-        // プロ級の技術能力への到達をキャンプだけでは困難にする
-        if (currentValue >= 60) {
-          const overAmount = currentValue - 60;
-          const dampFactor = Math.max(0.05, 1.0 - overAmount * 0.04);
+        // 技術系(meet/power/eye/control/defense/steal): 能力値70以上で成長減衰（超過1ごとに3%減衰、下限15%）
+        // 60前後で頭打ちにならないよう70までは減衰なし。プロ級(80+)到達は依然として困難だが覚醒で飛躍可能
+        if (currentValue >= 70) {
+          const overAmount = currentValue - 70;
+          const dampFactor = Math.max(0.15, 1.0 - overAmount * 0.03);
           adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
         }
       }
