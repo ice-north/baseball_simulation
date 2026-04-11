@@ -1934,7 +1934,7 @@ export function resolveDispatchTraining(player) {
 
   if (player.position === 'pitcher') {
     if (dest.growthProfile === 'technical') {
-      // 大学: 制球と変化球が大幅UP、球速も少し
+      // プロ研修(technical): 制球と変化球が大幅UP、球速も少し
       const ctrlGrowth = applyGrowth(Math.floor(Math.random() * 10) + 8);
       const before = player.pitching.control;
       player.pitching.control = Math.min(99, before + ctrlGrowth);
@@ -1960,7 +1960,7 @@ export function resolveDispatchTraining(player) {
       player.pitching.stamina = Math.min(200, staBefore + staGrowth);
       growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
     } else {
-      // プロ研修: 球速が劇的UP、スタミナも
+      // 大学野球留学(physical): 球速が劇的UP、スタミナも
       const velGrowth = applyGrowth(Math.floor(Math.random() * 5) + 4);
       const vBefore = player.pitching.velocity;
       player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
@@ -1979,7 +1979,7 @@ export function resolveDispatchTraining(player) {
   } else {
     // 野手
     if (dest.growthProfile === 'technical') {
-      // 大学: ミート・選球眼・守備が大幅UP
+      // プロ研修(technical): ミート・選球眼・守備が大幅UP
       const meetGrowth = applyGrowth(Math.floor(Math.random() * 10) + 8);
       const mBefore = player.batting.meet;
       player.batting.meet = Math.min(99, mBefore + meetGrowth);
@@ -2001,7 +2001,7 @@ export function resolveDispatchTraining(player) {
       player.batting.power = Math.min(99, pBefore + powGrowth);
       growthReport.push({ statName: 'パワー', before: pBefore, after: player.batting.power, growth: player.batting.power - pBefore });
     } else {
-      // プロ研修: パワー・走力・肩が劇的UP
+      // 大学野球留学(physical): パワー・走力・肩が劇的UP
       const powGrowth = applyGrowth(Math.floor(Math.random() * 10) + 8);
       const pBefore = player.batting.power;
       player.batting.power = Math.min(99, pBefore + powGrowth);
