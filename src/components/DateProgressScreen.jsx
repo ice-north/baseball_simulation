@@ -6,6 +6,7 @@ import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../s
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
+import { formatInnings } from '../utils/physics.js';
 
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
@@ -464,7 +465,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         topics.push({ cat: 'bat_k', icon: '🌬️', text: `${abbr} ${p.name}が${bk}三振到達、粗さが目立つ`, color: 'text-gray-400' });
       }
 
-      if (ps && (ps.inningsPitched || 0) >= 30) {
+      // inningsPitched はアウト数で保存されている（3アウト=1イニング）
+      // 30イニング = 90アウトが閾値
+      if (ps && (ps.inningsPitched || 0) >= 90) {
         const era = ((ps.earnedRuns || 0) * 27) / ps.inningsPitched;
         if (era <= 1.99 && era >= 0) {
           topics.push({ cat: 'pitch_era', icon: '🎯', text: `${abbr} ${p.name}が防御率${era.toFixed(2)}と圧巻`, color: 'text-emerald-400' });
@@ -545,8 +548,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         topics.push({ cat: 'bat_allround', icon: '🌟', text: `${abbr} ${p.name}が打率${(bs.hits / bs.atBats).toFixed(3)}・${bs.stolenBases}盗塁の万能ぶり`, color: 'text-yellow-300' });
       }
 
-      if (ps && (ps.inningsPitched || 0) >= 20 && (ps.earnedRuns || 0) === 0) {
-        topics.push({ cat: 'pitch_scoreless', icon: '✨', text: `${abbr} ${p.name}が${ps.inningsPitched}イニング無失点の快投`, color: 'text-amber-300' });
+      // inningsPitched はアウト数（3アウト=1イニング）。20イニング = 60アウト
+      if (ps && (ps.inningsPitched || 0) >= 60 && (ps.earnedRuns || 0) === 0) {
+        topics.push({ cat: 'pitch_scoreless', icon: '✨', text: `${abbr} ${p.name}が${formatInnings(ps.inningsPitched)}無失点の快投`, color: 'text-amber-300' });
       }
     });
 
