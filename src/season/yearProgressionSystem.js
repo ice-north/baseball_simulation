@@ -1581,15 +1581,19 @@ export function executeCampTraining(player, trainingType, newPitchType) {
   const growthReport = [];
   let updatedPlayer = JSON.parse(JSON.stringify(player));
 
-  // 新球種習得の場合（大成功25%/成功50%/失敗25%）
+  // 新球種習得の場合（覚醒10%/大成功15%/成功20%/習得25%/失敗30%）
   if (trainingType === 'newpitch') {
     const arsenal = updatedPlayer.pitching?.arsenal || [];
     const existingTypes = arsenal.map(p => p.type);
     const targetType = newPitchType || ALL_PITCH_TYPES.find(t => !existingTypes.includes(t));
     if (targetType && !existingTypes.includes(targetType)) {
-      // 大成功25%, 成功50%, 失敗25%
+      // 覚醒10%, 大成功15%, 成功20%, 習得25%, 失敗30%
       const roll = Math.random();
-      const outcome = roll < 0.25 ? 'great_success' : roll < 0.75 ? 'success' : 'failure';
+      const outcome = roll < 0.10 ? 'awakening'
+        : roll < 0.25 ? 'great_success'
+        : roll < 0.45 ? 'success'
+        : roll < 0.70 ? 'learned'
+        : 'failure';
       if (outcome === 'failure') {
         growthReport.push({
           stat: 'newpitch',
@@ -1597,17 +1601,27 @@ export function executeCampTraining(player, trainingType, newPitchType) {
           before: 0, after: 0, growth: 0, isAwakening: false
         });
       } else {
-        const isGreat = outcome === 'great_success';
         const newId = arsenal.length > 0 ? Math.max(...arsenal.map(a => a.id)) + 1 : 1;
-        const startLevel = isGreat
-          ? Math.floor(Math.random() * 11) + 65 // 大成功: 65-75
-          : Math.floor(Math.random() * 10) + 10; // 成功: 10-19
+        let startLevel, label;
+        if (outcome === 'awakening') {
+          startLevel = Math.floor(Math.random() * 20) + 61; // 覚醒: 61-80
+          label = '(覚醒!!)';
+        } else if (outcome === 'great_success') {
+          startLevel = Math.floor(Math.random() * 20) + 41; // 大成功: 41-60
+          label = '(大成功!)';
+        } else if (outcome === 'success') {
+          startLevel = Math.floor(Math.random() * 20) + 21; // 成功: 21-40
+          label = '';
+        } else {
+          startLevel = Math.floor(Math.random() * 20) + 1; // 習得: 1-20
+          label = '';
+        }
         arsenal.push({ id: newId, type: targetType, level: startLevel });
         updatedPlayer.pitching.arsenal = arsenal;
         growthReport.push({
           stat: 'newpitch',
-          statName: `${getPitchTypeName(targetType)}習得${isGreat ? '(大成功!)' : ''}`,
-          before: 0, after: startLevel, growth: startLevel, isAwakening: isGreat
+          statName: `${getPitchTypeName(targetType)}習得${label}`,
+          before: 0, after: startLevel, growth: startLevel, isAwakening: outcome === 'awakening'
         });
       }
     } else {

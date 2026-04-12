@@ -577,9 +577,11 @@ const ManualContent = ({ category }) => {
                   <th className="text-right py-1 px-2">初期レベル</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-yellow-300">大成功</td><td className="text-right px-2">25%</td><td className="text-right px-2 text-green-400">Lv65〜75</td></tr>
-                  <tr><td className="py-0.5 px-2 text-blue-300">成功</td><td className="text-right px-2">50%</td><td className="text-right px-2">Lv10〜19</td></tr>
-                  <tr><td className="py-0.5 px-2 text-red-400">失敗</td><td className="text-right px-2">25%</td><td className="text-right px-2 text-gray-500">習得不可</td></tr>
+                  <tr><td className="py-0.5 px-2 text-purple-300">覚醒</td><td className="text-right px-2">10%</td><td className="text-right px-2 text-purple-400">Lv61〜80</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-300">大成功</td><td className="text-right px-2">15%</td><td className="text-right px-2 text-green-400">Lv41〜60</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">成功</td><td className="text-right px-2">20%</td><td className="text-right px-2">Lv21〜40</td></tr>
+                  <tr><td className="py-0.5 px-2 text-gray-300">習得</td><td className="text-right px-2">25%</td><td className="text-right px-2">Lv1〜20</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-400">失敗</td><td className="text-right px-2">30%</td><td className="text-right px-2 text-gray-500">習得不可</td></tr>
                 </tbody>
               </table>
             </div>
