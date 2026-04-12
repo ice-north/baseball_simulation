@@ -1050,8 +1050,11 @@ export const TRAINING_MENUS = {
   batting: {
     name: '打撃練習',
     icon: '🏏',
-    description: 'ミート・パワーを強化',
-    targets: ['meet', 'power'],
+    description: 'ミートを強化、パワー・選球眼を微増',
+    targets: ['meet', 'power', 'eye'],
+    // 能力ごとの成長倍率: パワーは才能依存のため半減、選球眼は副次効果として半減
+    // ミートは1.0倍維持（+0〜2）、パワー/選球眼は0.5倍（+0〜1）
+    growthMultipliers: { power: 0.5, eye: 0.5 },
     category: 'batting'
   },
   baserunning: {
@@ -1662,7 +1665,10 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     // クリーンナップ(expBonus最大2.25)でも年間成長が過剰にならないよう基礎値を下げる
     const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
     const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.11);
+    // 能力ごとの成長倍率（メニュー側で指定可能、未指定なら1.0）
+    // 例: 打撃練習のパワー/選球眼は0.5倍（"ボールを飛ばすのは才能"）
+    const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.11 * statMultiplier);
 
     // 覚醒判定（発生率を下げる: 従来の experience/10 → experience/15）
     // 覚醒は減衰を受けず、"何かのきっかけで飛躍する選手"を再現する大幅ボーナス
