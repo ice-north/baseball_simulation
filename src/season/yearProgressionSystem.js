@@ -1111,8 +1111,8 @@ export const SUB_TRAINING_MENUS = {
   muscle: {
     name: '筋トレ',
     icon: '💪',
-    description: 'パワー+肩力微増',
-    targets: ['power', 'arm'],
+    description: 'パワー/肩力/走力のいずれか微増',
+    targets: ['power', 'arm', 'speed'],
   },
   stretch: {
     name: 'ストレッチ',
@@ -1215,19 +1215,28 @@ export function executeSubTraining(player, subType, options = {}) {
       break;
     }
     case 'muscle': {
-      const pwrRaw = growthAmount();
-      if (pwrRaw > 0 && player.batting) {
-        const oldPwr = player.batting.power || 50;
-        const pwr = applyTechStatDecay(oldPwr, pwrRaw);
-        if (pwr > 0) {
-          player.batting.power = Math.min(100, oldPwr + pwr);
-          growthReport.push({ statName: 'パワー', before: oldPwr, after: player.batting.power, growth: pwr });
+      // パワー/肩力/走力のいずれか1つをランダムに強化（+0〜2）
+      // パワー特化を緩和し、打撃練習との重ね掛けによるパワーヒッター量産を抑制
+      const statChoices = ['power', 'arm', 'speed'];
+      const chosenStat = statChoices[Math.floor(Math.random() * statChoices.length)];
+      const gainRaw = growthAmount();
+      if (gainRaw > 0) {
+        if (chosenStat === 'power' && player.batting) {
+          const oldPwr = player.batting.power || 50;
+          const pwr = applyTechStatDecay(oldPwr, gainRaw);
+          if (pwr > 0) {
+            player.batting.power = Math.min(100, oldPwr + pwr);
+            growthReport.push({ statName: 'パワー', before: oldPwr, after: player.batting.power, growth: pwr });
+          }
+        } else if (chosenStat === 'arm' && player.physical) {
+          const oldArm = player.physical.arm || 50;
+          player.physical.arm = Math.min(100, oldArm + gainRaw);
+          growthReport.push({ statName: '肩力', before: oldArm, after: player.physical.arm, growth: gainRaw });
+        } else if (chosenStat === 'speed' && player.physical) {
+          const oldSpd = player.physical.speed || 50;
+          player.physical.speed = Math.min(100, oldSpd + gainRaw);
+          growthReport.push({ statName: '走力', before: oldSpd, after: player.physical.speed, growth: gainRaw });
         }
-      }
-      const arm = Math.random() < 0.25 ? 1 : 0;
-      if (arm > 0 && player.physical) {
-        player.physical.arm = Math.min(100, (player.physical.arm || 50) + arm);
-        growthReport.push({ statName: '肩力', before: player.physical.arm - arm, after: player.physical.arm, growth: arm });
       }
       break;
     }
