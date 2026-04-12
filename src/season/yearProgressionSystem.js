@@ -79,10 +79,13 @@ export function processSeasonEnd(seasonData, allTeams) {
     awards.champion = sortedStandings[0].team;
   }
 
-  // 個人タイトル集計
+  // 個人タイトル集計（IDで重複排除）
   const allPlayers = [];
+  const seenIds = new Set();
   Object.entries(allTeams).forEach(([teamName, team]) => {
     team.players.forEach(player => {
+      if (player.id != null && seenIds.has(player.id)) return;
+      if (player.id != null) seenIds.add(player.id);
       allPlayers.push({
         ...player,
         teamName: teamName
@@ -326,11 +329,14 @@ function computeSeasonAwardBonuses(allTeams) {
     bonusMap[playerId].awards.push(awardName);
   };
 
-  // 全選手を収集
+  // 全選手を収集（IDで重複排除）
   const allPlayers = [];
+  const seenIds2 = new Set();
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team.players) return;
     team.players.forEach(player => {
+      if (player.id != null && seenIds2.has(player.id)) return;
+      if (player.id != null) seenIds2.add(player.id);
       if (player.seasonStats) {
         allPlayers.push(player);
       }

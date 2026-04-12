@@ -12,10 +12,13 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
   const [pitchingSortDir, setPitchingSortDir] = useState('asc');
 
   const getAllPlayerStats = () => {
+    const seen = new Set();
     const allPlayers = [];
     Object.keys(TEAMS_DATA || {}).forEach(teamName => {
       const team = TEAMS_DATA[teamName];
       team.players.forEach(player => {
+        if (player.id != null && seen.has(player.id)) return;
+        if (player.id != null) seen.add(player.id);
         allPlayers.push({ ...player, teamName: team.name });
       });
     });

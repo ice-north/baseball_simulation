@@ -4,12 +4,15 @@ import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { generateTeamCalendar } from '../season/calendarUI.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 
-// 全選手の成績を取得してランキング形式に変換
+// 全選手の成績を取得してランキング形式に変換（IDで重複排除）
 const getAllPlayersStats = () => {
+  const seen = new Set();
   const allPlayers = [];
   Object.keys(TEAMS_DATA || {}).forEach(teamName => {
     const team = TEAMS_DATA[teamName];
     team.players.forEach(player => {
+      if (player.id != null && seen.has(player.id)) return;
+      if (player.id != null) seen.add(player.id);
       allPlayers.push({ ...player, teamName: team.name });
     });
   });

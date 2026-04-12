@@ -40,9 +40,12 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         });
       }
     });
+    const seenIds = new Set();
     Object.entries(allTeams).forEach(([teamName, team]) => {
       if (!team?.players) return;
       team.players.forEach(p => {
+        if (p.id != null && seenIds.has(p.id)) return;
+        if (p.id != null) seenIds.add(p.id);
         if (p.careerStats) {
           players.push({
             name: p.name, position: p.position, teamName,
