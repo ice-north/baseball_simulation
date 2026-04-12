@@ -34,7 +34,7 @@ export const generateAILineup = (teamData, teamName) => {
   const getEffectiveBatting = (p) => {
     const condMod = { 4: 5, 3: 2, 2: 0, 1: -2, 0: -5 }[p.condition ?? 2] || 0;
     const fatigue = p.fatigue || 0;
-    const fatiguePenalty = fatigue > 0 ? Math.round(fatigue * fatigue / 670) : 0;
+    const fatiguePenalty = fatigue > 0 ? Math.round(fatigue * fatigue / 1200) : 0;
     const meet = (p.batting?.meet || 50) + condMod - fatiguePenalty;
     const power = (p.batting?.power || 50) + condMod - fatiguePenalty;
     return { meet, power, condMod, fatiguePenalty };
@@ -57,7 +57,10 @@ export const generateAILineup = (teamData, teamName) => {
       const bEff = getEffectiveBatting(b);
       const aBat = aEff.meet + aEff.power;
       const bBat = bEff.meet + bEff.power;
-      return (bFit * 0.6 + bBat * 0.4) - (aFit * 0.6 + aBat * 0.4);
+      // 疲労ペナルティが高い選手はスコアに追加ペナルティ（ベンチ選手と交代しやすくする）
+      const aFatigueMalus = aEff.fatiguePenalty >= 8 ? -20 : aEff.fatiguePenalty >= 5 ? -10 : 0;
+      const bFatigueMalus = bEff.fatiguePenalty >= 8 ? -20 : bEff.fatiguePenalty >= 5 ? -10 : 0;
+      return (bFit * 0.6 + bBat * 0.4 + bFatigueMalus) - (aFit * 0.6 + aBat * 0.4 + aFatigueMalus);
     });
 
     const selected = available[0];
@@ -194,7 +197,11 @@ export const setRecommendedLineup = (teamData, teamName) => {
 
 };
 
-// 全チームの投手疲労を回復（日次処理）
+// 野手の日次回復ベース量（投手は別途 recoveryAmount を使用）
+export const POSITION_PLAYER_RECOVERY_BASE = 7;
+
+// 全チームの疲労を回復（日次処理）
+// 投手はrecoveryAmount(20)で回復、野手はPOSITION_PLAYER_RECOVERY_BASE(7)で回復
 export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
   Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
     if (!team || !team.players) return;
@@ -205,7 +212,9 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
         const recoveryAbility = player.physical?.recovery || 50;
         // 回復量 = ベース回復 × (0.7〜1.3)（回復能力50で1.0倍）
         const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
-        const actualRecovery = Math.round(recoveryAmount * recoveryMult);
+        // 野手は回復が遅い（投手は登板間隔があるため高回復を維持）
+        const baseRecov = isPitcherPlayer(player) ? recoveryAmount : POSITION_PLAYER_RECOVERY_BASE;
+        const actualRecovery = Math.round(baseRecov * recoveryMult);
         player.fatigue = Math.max(0, player.fatigue - actualRecovery);
       }
     });
@@ -447,7 +456,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     // 疲労による能力低下（疲労0→0%, 疲労50→-5%, 疲労100→-15%）
     const batterFatigue = batterPlayer.fatigue || 0;
-    const fatiguePenalty = batterFatigue > 0 ? Math.round(batterFatigue * batterFatigue / 670) : 0;
+    const fatiguePenalty = batterFatigue > 0 ? Math.round(batterFatigue * batterFatigue / 1200) : 0;
 
     const batter = {
       meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod - fatiguePenalty,
@@ -1880,7 +1889,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           const bodyStamina = playerData.physical?.bodyStamina || 50;
           // 基礎疲労 5〜10（体力100→5, 体力1→10）
           const baseFatigue = Math.round(10 - (bodyStamina / 100) * 5);
-          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
+          // 試合日は回復を相殺（progressDateで先に回復が適用されているため）
+          // これにより試合出場日は回復せず、休養日のみ回復する
+          const recoveryAbility = playerData.physical?.recovery || 50;
+          const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
+          const recovCancelled = Math.round(POSITION_PLAYER_RECOVERY_BASE * recoveryMult);
+          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue + recovCancelled;
         }
       }
 
