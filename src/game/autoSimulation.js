@@ -1558,7 +1558,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               shouldChange = true;
               situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
               const roleLabel = {
-                complete: '完投型', ace: 'エース', quality: '勝ち権利型',
+                complete: '完投型', ace: 'ゲームメーカー', quality: '勝ち権利型',
                 short: 'ショートスターター', closer: '守護神', setup: 'セットアッパー',
                 ace_relief: '中継ぎエース', long: 'ロングリリーフ', onepoint: 'ワンポイント',
                 behind: 'ビハインド', mopup: '敗戦処理'

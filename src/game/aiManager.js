@@ -60,13 +60,13 @@ export function executeAutoSubstitutePitcher(ctx) {
     if (currentRole === 'ace') {
       if (inning >= 9 && scoreDiff > 0 && scoreDiff <= 3) {
         shouldSubstitute = true;
-        reason = `エース${currentPitcher.name}が8回を投げ切り、守護神へリレー`;
+        reason = `ゲームメーカー${currentPitcher.name}が8回を投げ切り、守護神へリレー`;
       } else if (inning >= 9 && staminaRate < 0.35) {
         shouldSubstitute = true;
-        reason = `エース${currentPitcher.name}が8回投球後スタミナ低下(${Math.round(staminaRate * 100)}%)`;
+        reason = `ゲームメーカー${currentPitcher.name}が8回投球後スタミナ低下(${Math.round(staminaRate * 100)}%)`;
       } else if (staminaRate <= 0.30) {
         shouldSubstitute = true;
-        reason = `エース${currentPitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
+        reason = `ゲームメーカー${currentPitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
       }
     } else if (currentRole === 'complete') {
       if (staminaRate <= 0.25) {

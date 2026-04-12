@@ -367,7 +367,7 @@ const ManualContent = ({ category }) => {
       return (
         <div className="space-y-4">
           <h3 className="text-blue-300 font-bold text-sm border-b border-blue-800 pb-1">先発ロール</h3>
-          <Entry title="エース（ace）" range="球数上限: 110球">
+          <Entry title="ゲームメーカー（ace）" range="球数上限: 110球">
             チームの柱。セットアッパー・守護神へ繋ぐ。自動配置では最も総合力が高い先発に設定される。
           </Entry>
           <Entry title="完投型（complete）" range="球数上限: 120球">
@@ -422,7 +422,7 @@ const ManualContent = ({ category }) => {
                 </tr></thead>
                 <tbody className="text-gray-300">
                   <tr><td className="py-0.5 px-2 text-blue-300">完投型</td><td className="text-right px-2">120球</td></tr>
-                  <tr><td className="py-0.5 px-2 text-blue-300">エース</td><td className="text-right px-2">110球</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-300">ゲームメーカー</td><td className="text-right px-2">110球</td></tr>
                   <tr><td className="py-0.5 px-2 text-blue-300">勝ち権利交代</td><td className="text-right px-2">100球</td></tr>
                   <tr><td className="py-0.5 px-2 text-blue-300">ショートスターター</td><td className="text-right px-2">65球</td></tr>
                   <tr className="border-t border-gray-600"><td className="py-0.5 px-2 text-green-300">ロングリリーフ</td><td className="text-right px-2">60球</td></tr>

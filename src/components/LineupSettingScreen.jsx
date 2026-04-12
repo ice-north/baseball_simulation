@@ -308,7 +308,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const PITCHER_ROLES = {
     none:       { label: '未設定', color: 'bg-gray-600', textColor: 'text-gray-400', group: 'none' },
     auto_s:     { label: 'おまかせ', color: 'bg-gray-500', textColor: 'text-gray-200', group: 'starter' },
-    ace:        { label: 'エース', color: 'bg-red-600', textColor: 'text-red-200', group: 'starter' },
+    ace:        { label: 'ゲームメーカー', color: 'bg-red-600', textColor: 'text-red-200', group: 'starter' },
     complete:   { label: '完投型', color: 'bg-blue-700', textColor: 'text-blue-300', group: 'starter' },
     short:      { label: 'ショート', color: 'bg-blue-600', textColor: 'text-blue-300', group: 'starter' },
     quality:    { label: '勝ち権利', color: 'bg-blue-500', textColor: 'text-blue-200', group: 'starter' },
@@ -740,7 +740,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             const currentRole = getPitcherRole(player.id);
             const starterRoles = [
               { key: 'auto_s', label: 'おまかせ', desc: '能力に応じて自動調整', color: 'from-gray-600 to-gray-700' },
-              { key: 'ace', label: 'エース', desc: '7-8回を責任投球、勝ちパターンへ繋ぐ', color: 'from-red-700 to-red-800' },
+              { key: 'ace', label: 'ゲームメーカー', desc: '7-8回を責任投球、勝ちパターンへ繋ぐ', color: 'from-red-700 to-red-800' },
               { key: 'complete', label: '完投型', desc: 'スタミナ限界まで投げ抜く', color: 'from-blue-800 to-blue-900' },
               { key: 'short', label: 'ショート', desc: '3-4回で中継ぎに繋ぐ', color: 'from-blue-700 to-blue-800' },
               { key: 'quality', label: '勝ち権利', desc: '5-6回を投げて降板', color: 'from-blue-600 to-blue-700' },
