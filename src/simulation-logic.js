@@ -258,24 +258,24 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
 
   // 本塁打判定（バレルゾーン）
   // MLB基準: EV154km/h以上かつフェンス越えの飛距離
-  if (distance > 109 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 154) {
+  if (distance > 108 && launchAngle >= 23 && launchAngle <= 37 && exitVelocity >= 153) {
     // 確率的HR: EV高いほど確実、境界EVでは取られることもある
-    // EV154: 35%, EV164: 75%, EV174: 85%（上限）
-    const hr1Prob = Math.min(0.85, 0.35 + (exitVelocity - 154) / 25);
+    // EV153: 48%, EV163: 88%, EV173: 95%（上限）
+    const hr1Prob = Math.min(0.95, 0.48 + (exitVelocity - 153) / 25);
     if (Math.random() < hr1Prob) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！' };
     }
   }
 
-  // 長打圏フライ（102m以上の深いフライ、速度とパワー依存確率）
-  // 中堅〜パワー型が境界EVでも偶発的にHRを出せるよう確率を底上げ
-  if (distance > 102 && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 145) {
-    // 速度要因: EV145-163で 0→1
-    const velocityFactor = Math.max(0, (exitVelocity - 145) / 18);
-    // パワー要因: power 55-95 で 0→1（ミート特化型はHR少なめ維持）
-    const powerFactor = Math.max(0, ((batter.power || 50) - 55) / 40);
-    // velocity主体 + power補正（最大約19%）
-    const hrProb = velocityFactor * 0.12 + powerFactor * 0.07;
+  // 長打圏フライ（100m以上の深いフライ、速度とパワー依存確率）
+  // 中堅〜パワー型の境界HRを更に底上げ（2段階目の強化）
+  if (distance > 100 && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 143) {
+    // 速度要因: EV143-161で 0→1（早めに飽和）
+    const velocityFactor = Math.max(0, (exitVelocity - 143) / 18);
+    // パワー要因: power 50-95 で 0→1（ミート特化型も少しはHR出る）
+    const powerFactor = Math.max(0, ((batter.power || 50) - 50) / 45);
+    // velocity主体 + power補正（最大約30%）
+    const hrProb = velocityFactor * 0.19 + powerFactor * 0.11;
     if (Math.random() < hrProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス越え）' };
     }
