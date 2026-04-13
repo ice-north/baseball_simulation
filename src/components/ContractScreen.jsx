@@ -2,14 +2,22 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
+// AI自動解雇のロスター調整パラメータ
+const AI_MIN_ROSTER = 17;   // この人数を下回らない範囲で解雇
+const AI_MIN_RELEASES = 3;  // 各AIチームの最低解雇人数（ロスター余裕がある限り適用）
+
 /**
  * AI自動解雇ロジック
  * - 年齢が高い選手(26歳以降ペナルティ増加)
  * - 能力値が低い選手
- * を優先的に解雇。最低18人は残す。
+ * を優先的に解雇。最低でも AI_MIN_RELEASES 人は解雇する（ロスター下限の範囲内で）。
+ *
+ * スコアベースの候補（score >= 20）が AI_MIN_RELEASES より多い場合はそちらを優先。
+ * 少ない場合でも上位 AI_MIN_RELEASES 人は強制解雇する。
+ * これによりAIチームが選手を保持し続けてユーザーがトライアウトを独占するのを防ぐ。
  */
 const getAIReleaseCandidates = (players) => {
-  if (!players || players.length <= 18) return [];
+  if (!players || players.length <= AI_MIN_ROSTER) return [];
 
   const scored = players.map(p => {
     let score = 0; // 高いほど解雇候補
@@ -39,11 +47,17 @@ const getAIReleaseCandidates = (players) => {
     return { player: p, score };
   });
 
-  // スコア降順でソート、上位をリリース（最低18人残す）
+  // スコア降順でソート（解雇したい選手が先頭にくる）
   scored.sort((a, b) => b.score - a.score);
-  const maxRelease = Math.max(0, players.length - 18); // 18人まで減らせる
-  const candidates = scored.filter(s => s.score >= 20).slice(0, maxRelease);
-  return candidates.map(c => c.player.id);
+
+  // ロスター下限を守れる解雇可能数
+  const maxRelease = Math.max(0, players.length - AI_MIN_ROSTER);
+  // スコアベースの候補数と最低解雇数の大きい方を採用
+  const scoreBasedCount = scored.filter(s => s.score >= 20).length;
+  const desiredCount = Math.max(AI_MIN_RELEASES, scoreBasedCount);
+  const releaseCount = Math.min(desiredCount, maxRelease);
+
+  return scored.slice(0, releaseCount).map(s => s.player.id);
 };
 
 const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
