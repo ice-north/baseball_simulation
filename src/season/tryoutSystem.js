@@ -710,7 +710,25 @@ export const generateTwoWayPositionFitness = (mainPosition) => {
 }
 
 /**
+ * 年齢による評価補正（素材型 vs 即戦力）
+ * 大卒(22歳)を基準(±0)とし、若いほど将来性で加点、年上はやや辛口
+ * @param {number} age - 選手の年齢
+ * @returns {number} - ランク計算に加算する補正値
+ */
+function getAgeRankAdjust(age) {
+  if (age <= 18) return 10;  // 高卒素材（大化けの期待）
+  if (age <= 19) return 7;
+  if (age <= 20) return 5;
+  if (age <= 21) return 3;
+  if (age <= 22) return 0;   // 大卒基準
+  if (age <= 23) return -3;
+  if (age <= 24) return -7;
+  return -12;                // 即戦力レベル必須
+}
+
+/**
  * 選手の推薦ランクを計算（S/A/B/C/D）
+ * 年齢補正あり: 若手は素材型として加点、年上は即戦力として現能力ベースで評価
  * @param {Object} player - 選手データ
  * @returns {string} - 'S', 'A', 'B', 'C', 'D'
  */
@@ -736,6 +754,9 @@ export function calculatePlayerRank(player) {
 
     totalScore = (meetScore * 0.3) + (powerScore * 0.25) + (speedScore * 0.2) + (defenseScore * 0.15) + (armScore * 0.1);
   }
+
+  // 年齢補正（素材型ボーナス / 即戦力ペナルティ）
+  totalScore += getAgeRankAdjust(player.age || 22);
 
   // ランク判定
   if (totalScore >= 80) return 'S';
@@ -971,7 +992,20 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
     }
   }
 
-  return rankScore + bonusScore + specialistScore;
+  // 年齢による指名優先度補正（素材型 vs 即戦力）
+  // 若手は将来性を加味して強く優先、年上は即戦力級でないと敬遠される
+  const age = player.age || 22;
+  let ageBonus = 0;
+  if (age <= 18)      ageBonus = 30;  // 高卒素材は夢があるため最優先
+  else if (age <= 19) ageBonus = 20;
+  else if (age <= 20) ageBonus = 12;
+  else if (age <= 21) ageBonus = 6;
+  else if (age <= 22) ageBonus = 0;   // 大卒基準
+  else if (age <= 23) ageBonus = -8;
+  else if (age <= 24) ageBonus = -18;
+  else                ageBonus = -28; // 即戦力級でなければ指名回避
+
+  return rankScore + bonusScore + specialistScore + ageBonus;
 }
 
 /**

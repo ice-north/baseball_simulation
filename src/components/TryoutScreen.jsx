@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus } from '../season/tryoutSystem.js';
+import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, calculatePlayerRank } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
@@ -201,6 +201,17 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     return Math.round((vel + ctrl + sta) / 3);
   };
 
+  // 推薦ランク用の数値化（ソート用）
+  const rankToScore = (r) => ({ S: 5, A: 4, B: 3, C: 2, D: 1 }[r] || 0);
+
+  // 年齢による指名プロファイル表示
+  const getDraftProfile = (age) => {
+    if (age == null) return null;
+    if (age <= 20) return { label: '素材型', color: 'text-cyan-400' };
+    if (age >= 24) return { label: '即戦力', color: 'text-amber-400' };
+    return null;
+  };
+
   const getSortValue = (p, key) => {
     switch(key) {
       case 'name': return p.name;
@@ -216,6 +227,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       case 'stamina': return p.pitching?.stamina || 0;
       case 'fielderOverall': return getFielderOverall(p);
       case 'pitcherOverall': return getPitcherOverall(p);
+      case 'recommendRank': return rankToScore(calculatePlayerRank(p));
       case 'overall': default: {
         const isPitcher = p.position === 'pitcher';
         return isPitcher ? getPitcherOverall(p) : getFielderOverall(p);
@@ -619,6 +631,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     <th className="px-2 py-2 whitespace-nowrap">変化球</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野手総合{getSortIndicator('fielderOverall')}</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投手総合{getSortIndicator('pitcherOverall')}</th>
+                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('recommendRank')} title="年齢を考慮した推薦ランク（若手は素材型として加点、年上は即戦力として評価）">推薦{getSortIndicator('recommendRank')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -629,6 +642,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     const pOverall = getPitcherOverall(player);
                     const fRank = getAbilityRank(fOverall);
                     const pRank = getAbilityRank(pOverall);
+                    const recommendRank = calculatePlayerRank(player);
+                    const draftProfile = getDraftProfile(player.age);
                     return (
                       <tr
                         key={player.id}
@@ -636,7 +651,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         onClick={() => isUserTurn && handleSelectPlayer(player)}
                       >
                         <td className="px-2 py-1.5 text-white font-bold whitespace-nowrap">{player.name}</td>
-                        <td className="px-2 py-1.5 text-gray-300">{player.age}</td>
+                        <td className="px-2 py-1.5 text-gray-300 whitespace-nowrap">
+                          {player.age}
+                          {draftProfile && <span className={`ml-1 text-[10px] ${draftProfile.color}`}>({draftProfile.label})</span>}
+                        </td>
                         <td className="px-2 py-1.5 text-gray-300 whitespace-nowrap">{getPositionName(player.position)}</td>
                         <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{throwLabel}{batLabel}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.batting?.meet||0))}`}>{getAbilityRank(player.batting?.meet||0)}</td>
@@ -659,6 +677,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         </td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(fRank)}`}>{fRank}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(pRank)}`}>{pRank}</td>
+                        <td className={`px-2 py-1.5 font-bold ${getRankColor(recommendRank)}`}>{recommendRank}</td>
                       </tr>
                     );
                   })}
