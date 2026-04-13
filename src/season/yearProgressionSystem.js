@@ -1966,6 +1966,9 @@ export function resolveDispatchTraining(player) {
 
   const growthReport = [];
 
+  // 球速成長キャップ用に派遣前の球速を記録（投手のみ）
+  const initialVelocity = player.position === 'pitcher' ? (player.pitching?.velocity || 0) : null;
+
   // 飛躍: 1.5倍、成長: 1.0倍、微成長: 0.5倍（失敗なし）
   const multiplier = outcome === 'great_success' ? 1.5
                    : outcome === 'minor' ? 0.5
@@ -2001,8 +2004,9 @@ export function resolveDispatchTraining(player) {
       player.pitching.stamina = Math.min(200, staBefore + staGrowth);
       growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
     } else {
-      // 大学野球留学(physical): 球速が劇的UP、スタミナも
-      const velGrowth = applyGrowth(Math.floor(Math.random() * 5) + 4);
+      // 大学野球留学(physical): 球速UP、スタミナも
+      // 球速は1回の派遣で最大13kmまでに抑制（リアリズムのため）
+      const velGrowth = applyGrowth(Math.floor(Math.random() * 3) + 2); // 2〜4 → ×1.5で最大6km
       const vBefore = player.pitching.velocity;
       player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
@@ -2078,7 +2082,11 @@ export function resolveDispatchTraining(player) {
       ];
       const pick = awakeStats[Math.floor(Math.random() * awakeStats.length)];
       const current = getNestedValue(player, pick.path) || 50;
-      const bonus = applyGrowth(Math.floor(Math.random() * 8) + 5);
+      // 球速の覚醒ボーナスは抑制（現実離れした球速UPを防ぐ）
+      const baseBonus = pick.path === 'pitching.velocity'
+        ? Math.floor(Math.random() * 3) + 2  // 2〜4 → ×1.5で最大6km
+        : Math.floor(Math.random() * 8) + 5; // 5〜12（制球は従来通り）
+      const bonus = applyGrowth(baseBonus);
       const newVal = Math.min(pick.max, current + bonus);
       setNestedValueMut(player, pick.path, newVal);
       growthReport.push({ statName: `${pick.name}(覚醒!)`, before: current, after: newVal, growth: newVal - current, isAwakening: true });
@@ -2094,6 +2102,23 @@ export function resolveDispatchTraining(player) {
       const newVal = Math.min(pick.max, current + bonus);
       setNestedValueMut(player, pick.path, newVal);
       growthReport.push({ statName: `${pick.name}(覚醒!)`, before: current, after: newVal, growth: newVal - current, isAwakening: true });
+    }
+  }
+
+  // 球速総成長量の上限: 1回の派遣で最大13kmまで（リアリズム維持のための安全策）
+  const MAX_VELOCITY_GROWTH = 13;
+  if (initialVelocity != null && player.pitching && player.pitching.velocity > initialVelocity + MAX_VELOCITY_GROWTH) {
+    const cappedVelocity = initialVelocity + MAX_VELOCITY_GROWTH;
+    let overflow = player.pitching.velocity - cappedVelocity;
+    player.pitching.velocity = cappedVelocity;
+    // growthReportの球速エントリを後ろから減らして整合性を保つ
+    for (let i = growthReport.length - 1; i >= 0 && overflow > 0; i--) {
+      if (growthReport[i].statName.includes('球速')) {
+        const reduction = Math.min(overflow, growthReport[i].growth);
+        growthReport[i].after -= reduction;
+        growthReport[i].growth -= reduction;
+        overflow -= reduction;
+      }
     }
   }
 
