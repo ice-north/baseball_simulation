@@ -3,6 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
+import { importDraftedPlayers, convertDraftedPlayerToSandboxPlayer } from '../game/saveSystem.js';
 
 /**
  * 箱庭モード用のデフォルト選手を作成
@@ -149,6 +150,22 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
     }
   };
 
+  // ドラフト指名選手をJSONからインポートして現在のチームに追加
+  const handleImportDraftedPlayers = () => {
+    importDraftedPlayers((importedPlayers) => {
+      if (!TEAMS_DATA[activeTeam]) return;
+      let nextId = getNextId();
+      const converted = importedPlayers.map(p => {
+        const player = convertDraftedPlayerToSandboxPlayer(p, nextId);
+        nextId += 1;
+        return player;
+      });
+      TEAMS_DATA[activeTeam].players.push(...converted);
+      forceUpdate();
+      alert(`${converted.length}名のドラフト指名選手を「${activeTeam}」にインポートしました`);
+    });
+  };
+
   // 全チームの選手数チェック
   const canStart = () => {
     return allTeams.every(teamName => {
@@ -231,6 +248,13 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                 className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
               >
                 全チーム一括編成
+              </button>
+              <button
+                onClick={handleImportDraftedPlayers}
+                className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                title="資料室からエクスポートしたドラフト指名選手JSONを読み込み"
+              >
+                📤 ドラフト指名選手をインポート
               </button>
             </div>
           </div>

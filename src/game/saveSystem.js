@@ -1,5 +1,6 @@
 import { compressData, decompressData, getLocalStorageUsage } from '../utils/compression.js';
 import { TEAMS_DATA } from '../teams-data.js';
+import { createSeasonStats, createCareerStats } from '../players.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
 
@@ -124,6 +125,147 @@ export const exportTeam = (teamName) => {
   a.download = `team_${teamName.replace(/[^a-zA-Z0-9\u3040-\u9FFF]/g, '_')}.json`;
   a.click();
   URL.revokeObjectURL(url);
+};
+
+// ============================================================
+// ドラフト指名選手のエクスポート/インポート
+// （資料室 → 箱庭モードの選手設定 にデータを引き渡すための機能）
+// ============================================================
+
+// ドラフト指名選手をJSONファイルとしてエクスポート
+export const exportDraftedPlayers = (draftedPlayers) => {
+  if (!draftedPlayers || draftedPlayers.length === 0) {
+    alert('エクスポートするドラフト指名選手がいません');
+    return;
+  }
+  const exportData = {
+    version: '1.0',
+    type: 'drafted_players',
+    exportDate: new Date().toISOString(),
+    count: draftedPlayers.length,
+    players: draftedPlayers.map(p => ({
+      name: p.name,
+      position: p.position,
+      age: p.age,
+      year: p.year,
+      teamName: p.teamName,
+      npbTeam: p.npbTeam,
+      draftRound: p.draftRound,
+      throws: p.throws,
+      bats: p.bats,
+      hallOfFame: p.hallOfFame || false,
+      hofReason: p.hofReason || null,
+      draftStats: p.draftStats ? JSON.parse(JSON.stringify(p.draftStats)) : null,
+      careerStats: p.careerStats ? JSON.parse(JSON.stringify(p.careerStats)) : null,
+      yearsPlayed: p.yearsPlayed
+    }))
+  };
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.download = `drafted_players_${dateStr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// ドラフト指名選手データを箱庭モード用の選手オブジェクトに変換
+// draftStatsはドラフト時の能力値スナップショットなので、それを基に
+// 通常のplayer形式に展開する。draftStatsに含まれない項目はデフォルト値を補う。
+export const convertDraftedPlayerToSandboxPlayer = (draftedPlayer, id) => {
+  const ds = draftedPlayer.draftStats || {};
+  const isPitcher = draftedPlayer.position === 'pitcher';
+
+  // 守備位置適正の初期値を組み立てる
+  const defaultFitness = {
+    pitcher: 0, catcher: 0, first: 0, second: 0, third: 0,
+    short: 0, left: 0, center: 0, right: 0
+  };
+  if (draftedPlayer.position && defaultFitness.hasOwnProperty(draftedPlayer.position)) {
+    defaultFitness[draftedPlayer.position] = 100;
+  }
+  const positionFitness = ds.positionFitness
+    ? { ...defaultFitness, ...ds.positionFitness }
+    : defaultFitness;
+
+  // 球種(arsenal)を復元（draftStatsに含まれていればそれを使用）
+  const arsenal = ds.pitching?.arsenal && Array.isArray(ds.pitching.arsenal)
+    ? JSON.parse(JSON.stringify(ds.pitching.arsenal))
+    : (isPitcher
+      ? [{ id: 1, type: 'slider', level: 40 }, { id: 2, type: 'curve', level: 30 }]
+      : [{ id: 1, type: 'slider', level: 10 }]);
+
+  // 0が有効値の能力もあるため `??`(nullish) でフォールバック
+  return {
+    id,
+    name: draftedPlayer.name || '名無し',
+    age: draftedPlayer.age || 22,
+    position: draftedPlayer.position || 'pitcher',
+    battingOrder: 0,
+    isStarter: false,
+    isTwoWay: false,
+    batting: {
+      meet: ds.batting?.meet ?? (isPitcher ? 30 : 50),
+      power: ds.batting?.power ?? (isPitcher ? 25 : 50),
+      eye: ds.batting?.eye ?? (isPitcher ? 25 : 50),
+      bats: draftedPlayer.bats || 'right',
+      steal: ds.batting?.steal ?? (isPitcher ? 20 : 50)
+    },
+    physical: {
+      speed: ds.physical?.speed ?? (isPitcher ? 40 : 50),
+      arm: ds.physical?.arm ?? 50,
+      throws: draftedPlayer.throws || 'right',
+      bodyStamina: 50, // draftStatsには含まれないためデフォルト
+      recovery: 50     // draftStatsには含まれないためデフォルト
+    },
+    fielding: {
+      defense: ds.fielding?.defense ?? (isPitcher ? 40 : 50)
+    },
+    catching: {
+      lead: draftedPlayer.position === 'catcher' ? 50 : 30
+    },
+    pitching: {
+      velocity: ds.pitching?.velocity ?? (isPitcher ? 140 : 120),
+      control: ds.pitching?.control ?? (isPitcher ? 50 : 30),
+      stamina: ds.pitching?.stamina ?? (isPitcher ? 100 : 50),
+      form: 'overhand',
+      arsenal
+    },
+    traits: ds.traits ? [...ds.traits] : [],
+    positionFitness,
+    professionalCareer: { isDrafted: false, draftYear: null, draftTeam: null, achievements: [] },
+    fatigue: 0,
+    experience: 0,
+    seasonStats: createSeasonStats(),
+    careerStats: createCareerStats()
+  };
+};
+
+// ドラフト指名選手JSONファイルを読み込み、変換結果のリストをコールバックに渡す
+export const importDraftedPlayers = (onImported) => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.players || !Array.isArray(data.players)) {
+          alert('無効なドラフト指名選手データです（playersフィールドが見つかりません）');
+          return;
+        }
+        if (onImported) onImported(data.players);
+      } catch (err) {
+        alert('ファイルの読み込みに失敗しました: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 };
 
 // チームインポート（JSONファイルから読み込み、指定チームに上書き）

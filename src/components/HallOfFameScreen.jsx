@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
+import { exportDraftedPlayers } from '../game/saveSystem.js';
 
 const FULL_POSITION_NAMES = {
   pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手',
@@ -178,6 +179,19 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 <p className="text-gray-600 text-sm mt-1">NPBドラフトで指名された選手がここに表示されます</p>
               </div>
             ) : (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-gray-500 text-[10px]">
+                    全{draftedPlayers.length}名（指名当時の能力値付き） / 行をクリックで詳細
+                  </p>
+                  <button
+                    onClick={() => exportDraftedPlayers(draftedPlayers)}
+                    className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm"
+                    title="ドラフト指名選手をJSONでエクスポート（箱庭モードでインポート可能）"
+                  >
+                    📥 エクスポート
+                  </button>
+                </div>
               <div className="bg-gray-800 rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
@@ -306,6 +320,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         )}
