@@ -13,6 +13,17 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [selectedTeamForHistory, setSelectedTeamForHistory] = useState(null);
   const [expandedYear, setExpandedYear] = useState(null);
+  // ドラフト指名選手エクスポート用の選択状態（keyはdraftedPlayersのindex）
+  const [selectedDraftIndexes, setSelectedDraftIndexes] = useState(() => new Set());
+
+  const toggleDraftSelection = (idx) => {
+    setSelectedDraftIndexes(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
 
   const getPositionName = (pos) => {
     const names = {
@@ -180,22 +191,75 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                   <p className="text-gray-500 text-[10px]">
                     全{draftedPlayers.length}名（指名当時の能力値付き） / 行をクリックで詳細
+                    {selectedDraftIndexes.size > 0 && (
+                      <span className="ml-2 text-orange-400 font-bold">
+                        {selectedDraftIndexes.size}名選択中
+                      </span>
+                    )}
                   </p>
-                  <button
-                    onClick={() => exportDraftedPlayers(draftedPlayers)}
-                    className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm"
-                    title="ドラフト指名選手をJSONでエクスポート（箱庭モードでインポート可能）"
-                  >
-                    📥 エクスポート
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        if (selectedDraftIndexes.size === draftedPlayers.length) {
+                          setSelectedDraftIndexes(new Set());
+                        } else {
+                          setSelectedDraftIndexes(new Set(draftedPlayers.map((_, i) => i)));
+                        }
+                      }}
+                      className="bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1.5 rounded text-xs font-bold transition"
+                      title="全選択 / 全解除"
+                    >
+                      {selectedDraftIndexes.size === draftedPlayers.length ? '☐ 全解除' : '☑ 全選択'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const selected = draftedPlayers.filter((_, i) => selectedDraftIndexes.has(i));
+                        exportDraftedPlayers(selected);
+                      }}
+                      disabled={selectedDraftIndexes.size === 0}
+                      className={`px-3 py-1.5 rounded text-xs font-bold transition shadow-sm ${
+                        selectedDraftIndexes.size === 0
+                          ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                          : 'bg-orange-600 hover:bg-orange-700 text-white'
+                      }`}
+                      title="選択中の選手のみJSONでエクスポート"
+                    >
+                      📥 選択をエクスポート
+                    </button>
+                    <button
+                      onClick={() => exportDraftedPlayers(draftedPlayers)}
+                      className="bg-orange-700 hover:bg-orange-800 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow-sm"
+                      title="全てのドラフト指名選手をJSONでエクスポート（箱庭モードでインポート可能）"
+                    >
+                      📥 全件エクスポート
+                    </button>
+                  </div>
                 </div>
               <div className="bg-gray-800 rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+                      <th className="py-1.5 px-1 text-center w-8">
+                        <input
+                          type="checkbox"
+                          checked={selectedDraftIndexes.size === draftedPlayers.length && draftedPlayers.length > 0}
+                          ref={el => {
+                            if (el) el.indeterminate = selectedDraftIndexes.size > 0 && selectedDraftIndexes.size < draftedPlayers.length;
+                          }}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedDraftIndexes(new Set(draftedPlayers.map((_, i) => i)));
+                            } else {
+                              setSelectedDraftIndexes(new Set());
+                            }
+                          }}
+                          className="cursor-pointer accent-orange-500"
+                          title="全選択 / 全解除"
+                        />
+                      </th>
                       <th className="py-1.5 px-2 text-left">年</th>
                       <th className="py-1.5 px-2 text-left">選手名</th>
                       <th className="py-1.5 px-1 text-center">位</th>
@@ -220,12 +284,21 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       }
                       const isExpanded = expandedPlayer === idx;
                       const ds = player.draftStats;
+                      const isSelected = selectedDraftIndexes.has(idx);
                       return (
                         <React.Fragment key={idx}>
                           <tr
-                            className={`border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/30 ${player.hallOfFame ? 'bg-yellow-900/20' : ''} ${isExpanded ? 'bg-gray-700/40' : ''}`}
+                            className={`border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/30 ${player.hallOfFame ? 'bg-yellow-900/20' : ''} ${isExpanded ? 'bg-gray-700/40' : ''} ${isSelected ? 'bg-orange-900/20' : ''}`}
                             onClick={() => setExpandedPlayer(isExpanded ? null : idx)}
                           >
+                            <td className="py-1.5 px-1 text-center" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleDraftSelection(idx)}
+                                className="cursor-pointer accent-orange-500"
+                              />
+                            </td>
                             <td className="py-1.5 px-2 text-gray-500">{player.year || '-'}年目</td>
                             <td className="py-1.5 px-2">
                               <span className={`font-bold ${isP ? 'text-red-400' : 'text-blue-300'}`}>
@@ -257,7 +330,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                           </tr>
                           {isExpanded && (
                             <tr className="bg-gray-800/80">
-                              <td colSpan={8} className="px-3 py-2">
+                              <td colSpan={9} className="px-3 py-2">
                                 {ds ? (
                                   <div className="text-[11px]">
                                     <div className="text-gray-500 text-[9px] mb-1">指名当時の能力値</div>
