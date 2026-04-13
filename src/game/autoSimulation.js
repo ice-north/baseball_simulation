@@ -1830,6 +1830,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
   // 試合終了後、選手のシーズン成績と通算成績を更新
   const updatePlayerSeasonStats = (team, isWinner) => {
+    // 先発投手のIDを特定（pitcherAppearancesはリリーフ投手のみ記録されるため、
+    // リリーフリストに含まれない＆投球イニングがある投手＝先発投手）
+    const teamKey = team === gameState.homeTeam ? 'home' : 'away';
+    const reliefIds = new Set(gameState.pitcherAppearances[teamKey].map(a => a.id));
+
     team.players.forEach(player => {
       if (!player.gameStats) return;
 
@@ -1934,8 +1939,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const expGained = 1 + inningsPitched;
         playerData.experience = (playerData.experience || 0) + expGained;
 
-        // QS/HQS判定（先発投手のみ: 打順9番で最初から投げた投手）
-        if (player.battingOrder === 9) {
+        // QS/HQS判定（先発投手のみ: pitcherAppearancesに含まれない投手＝先発）
+        // 注: 試合中にリリーフ登板すると先発投手のbattingOrderは0に書き換えられるため、
+        // battingOrderでは判定できない
+        const wasStarter = !reliefIds.has(player.id);
+        if (wasStarter) {
           const innings = p.outs; // アウト数（18アウト = 6回）
           const earnedRuns = p.runsAllowed; // 簡易版：全て自責点
           // QS: 6回以上 && 自責点3以下
