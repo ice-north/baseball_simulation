@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
+import { finalizePlayerSeason } from '../season/yearProgressionSystem.js';
 
 // AI自動解雇のロスター調整パラメータ
 const AI_MIN_ROSTER = 17;   // この人数を下回らない範囲で解雇
@@ -164,18 +165,17 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           const age = p.age || 20;
           // 33歳以上は引退扱い（プールに入れない）
           if (age >= 33) return;
-          // ディープコピーして保存（参照を切り離す）
-          const snapshot = JSON.parse(JSON.stringify(p));
-          // シーズン成績はリセット（解雇後は無所属のため）
-          snapshot.seasonStats = {
-            batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-            pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-          };
+          // シーズン成績を通算に加算してからディープコピー保存
+          // （この段階ではまだ resetSeasonStats 未実行のため、自前で終了処理する）
+          const finalized = finalizePlayerSeason(p, currentYear);
+          const snapshot = JSON.parse(JSON.stringify(finalized));
           snapshot.isStarter = false;
           snapshot.battingOrder = 0;
           snapshot.releasedYear = currentYear;
           snapshot.previousTeam = teamName;
           snapshot.attemptsInPool = 0;
+          // 解雇後は試合出場しないため、シーズン終了処理を再適用されないようにマーク
+          snapshot.seasonFinalizedYear = currentYear;
           releasedPlayersPool.push(snapshot);
         });
         td.players = td.players.filter(p => !playerIds.includes(p.id));

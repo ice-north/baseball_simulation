@@ -712,86 +712,101 @@ export function resetSeasonStats(allTeams, year) {
   Object.entries(allTeams).forEach(([teamName, team]) => {
     updatedTeams[teamName] = {
       ...team,
-      players: team.players.map(player => {
-        // シーズン成績を通算成績に加算（古いセーブデータ対応: || 0）
-        const cb = player.careerStats.batting;
-        const sb = player.seasonStats.batting;
-        const updatedCareerBatting = {
-          games: (cb.games || 0) + (sb.games || 0),
-          atBats: (cb.atBats || 0) + (sb.atBats || 0),
-          hits: (cb.hits || 0) + (sb.hits || 0),
-          doubles: (cb.doubles || 0) + (sb.doubles || 0),
-          triples: (cb.triples || 0) + (sb.triples || 0),
-          homeruns: (cb.homeruns || 0) + (sb.homeruns || 0),
-          rbis: (cb.rbis || 0) + (sb.rbis || 0),
-          walks: (cb.walks || 0) + (sb.walks || 0),
-          strikeouts: (cb.strikeouts || 0) + (sb.strikeouts || 0),
-          stolenBases: (cb.stolenBases || 0) + (sb.stolenBases || 0),
-          errors: (cb.errors || 0) + (sb.errors || 0),
-          fieldingChances: (cb.fieldingChances || 0) + (sb.fieldingChances || 0)
-        };
-
-        const cp = player.careerStats.pitching;
-        const sp = player.seasonStats.pitching;
-        const updatedCareerPitching = {
-          games: (cp.games || 0) + (sp.games || 0),
-          wins: (cp.wins || 0) + (sp.wins || 0),
-          losses: (cp.losses || 0) + (sp.losses || 0),
-          saves: (cp.saves || 0) + (sp.saves || 0),
-          holds: (cp.holds || 0) + (sp.holds || 0),
-          inningsPitched: (cp.inningsPitched || 0) + (sp.inningsPitched || 0),
-          runsAllowed: (cp.runsAllowed || 0) + (sp.runsAllowed || 0),
-          earnedRuns: (cp.earnedRuns || 0) + (sp.earnedRuns || 0),
-          hits: (cp.hits || 0) + (sp.hits || 0),
-          homeruns: (cp.homeruns || 0) + (sp.homeruns || 0),
-          walks: (cp.walks || 0) + (sp.walks || 0),
-          strikeouts: (cp.strikeouts || 0) + (sp.strikeouts || 0),
-          pitches: (cp.pitches || 0) + (sp.pitches || 0),
-          qualityStarts: (cp.qualityStarts || 0) + (sp.qualityStarts || 0),
-          highQualityStarts: (cp.highQualityStarts || 0) + (sp.highQualityStarts || 0)
-        };
-
-        // 前年成績を保存してからシーズン成績をリセット
-        const statsHistoryEntry = {
-          year: year || '?',
-          batting: JSON.parse(JSON.stringify(player.seasonStats.batting)),
-          pitching: JSON.parse(JSON.stringify(player.seasonStats.pitching)),
-          abilities: {
-            meet: player.batting?.meet || 0,
-            power: player.batting?.power || 0,
-            speed: player.physical?.speed || 0,
-            arm: player.physical?.arm || 0,
-            defense: player.fielding?.defense || 0,
-            eye: player.batting?.eye || 0,
-            steal: player.batting?.steal || 0,
-            velocity: player.pitching?.velocity || 0,
-            control: player.pitching?.control || 0,
-            stamina: player.pitching?.stamina || 0,
-            catcherLead: player.catching?.lead,
-            arsenal: player.pitching?.arsenal ? JSON.parse(JSON.stringify(player.pitching.arsenal)) : [],
-            age: player.age || 0
-          }
-        };
-        const existingHistory = player.statsHistory || [];
-        return {
-          ...player,
-          statsHistory: [...existingHistory, statsHistoryEntry],
-          previousSeasonStats: JSON.parse(JSON.stringify(player.seasonStats)),
-          careerStats: {
-            batting: updatedCareerBatting,
-            pitching: updatedCareerPitching
-          },
-          seasonStats: {
-            batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, errors: 0, fieldingChances: 0 },
-            pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0, qualityStarts: 0, highQualityStarts: 0 }
-          }
-        };
-      })
+      players: team.players.map(player => finalizePlayerSeason(player, year))
     };
   });
 
   return updatedTeams;
 };
+
+/**
+ * 選手1人分のシーズン終了処理（シーズン成績→通算加算、履歴追加、リセット）
+ * resetSeasonStats の中身を1選手向けに抽出したもの。
+ * 解雇プールに入る選手など、TEAMS_DATA の外でもシーズン終了処理を適用するために使う。
+ * @param {Object} player - 選手オブジェクト
+ * @param {number} year - シーズン年
+ * @returns {Object} - シーズン終了処理済みの選手オブジェクト（新しいインスタンス）
+ */
+export function finalizePlayerSeason(player, year) {
+  // 既に同じ年で終了処理済みの選手はそのまま返す
+  // （解雇→再トライアウトで別チームに拾われた選手が、オフシーズンの resetSeasonStats で
+  //  再度シーズン終了処理されるのを防ぐ）
+  if (player.seasonFinalizedYear && player.seasonFinalizedYear === year) {
+    return player;
+  }
+  const cb = player.careerStats?.batting || {};
+  const sb = player.seasonStats?.batting || {};
+  const updatedCareerBatting = {
+    games: (cb.games || 0) + (sb.games || 0),
+    atBats: (cb.atBats || 0) + (sb.atBats || 0),
+    hits: (cb.hits || 0) + (sb.hits || 0),
+    doubles: (cb.doubles || 0) + (sb.doubles || 0),
+    triples: (cb.triples || 0) + (sb.triples || 0),
+    homeruns: (cb.homeruns || 0) + (sb.homeruns || 0),
+    rbis: (cb.rbis || 0) + (sb.rbis || 0),
+    walks: (cb.walks || 0) + (sb.walks || 0),
+    strikeouts: (cb.strikeouts || 0) + (sb.strikeouts || 0),
+    stolenBases: (cb.stolenBases || 0) + (sb.stolenBases || 0),
+    errors: (cb.errors || 0) + (sb.errors || 0),
+    fieldingChances: (cb.fieldingChances || 0) + (sb.fieldingChances || 0)
+  };
+
+  const cp = player.careerStats?.pitching || {};
+  const sp = player.seasonStats?.pitching || {};
+  const updatedCareerPitching = {
+    games: (cp.games || 0) + (sp.games || 0),
+    wins: (cp.wins || 0) + (sp.wins || 0),
+    losses: (cp.losses || 0) + (sp.losses || 0),
+    saves: (cp.saves || 0) + (sp.saves || 0),
+    holds: (cp.holds || 0) + (sp.holds || 0),
+    inningsPitched: (cp.inningsPitched || 0) + (sp.inningsPitched || 0),
+    runsAllowed: (cp.runsAllowed || 0) + (sp.runsAllowed || 0),
+    earnedRuns: (cp.earnedRuns || 0) + (sp.earnedRuns || 0),
+    hits: (cp.hits || 0) + (sp.hits || 0),
+    homeruns: (cp.homeruns || 0) + (sp.homeruns || 0),
+    walks: (cp.walks || 0) + (sp.walks || 0),
+    strikeouts: (cp.strikeouts || 0) + (sp.strikeouts || 0),
+    pitches: (cp.pitches || 0) + (sp.pitches || 0),
+    qualityStarts: (cp.qualityStarts || 0) + (sp.qualityStarts || 0),
+    highQualityStarts: (cp.highQualityStarts || 0) + (sp.highQualityStarts || 0)
+  };
+
+  const statsHistoryEntry = {
+    year: year || '?',
+    batting: JSON.parse(JSON.stringify(player.seasonStats?.batting || {})),
+    pitching: JSON.parse(JSON.stringify(player.seasonStats?.pitching || {})),
+    abilities: {
+      meet: player.batting?.meet || 0,
+      power: player.batting?.power || 0,
+      speed: player.physical?.speed || 0,
+      arm: player.physical?.arm || 0,
+      defense: player.fielding?.defense || 0,
+      eye: player.batting?.eye || 0,
+      steal: player.batting?.steal || 0,
+      velocity: player.pitching?.velocity || 0,
+      control: player.pitching?.control || 0,
+      stamina: player.pitching?.stamina || 0,
+      catcherLead: player.catching?.lead,
+      arsenal: player.pitching?.arsenal ? JSON.parse(JSON.stringify(player.pitching.arsenal)) : [],
+      age: player.age || 0
+    }
+  };
+  const existingHistory = player.statsHistory || [];
+  return {
+    ...player,
+    seasonFinalizedYear: year || '?',
+    statsHistory: [...existingHistory, statsHistoryEntry],
+    previousSeasonStats: JSON.parse(JSON.stringify(player.seasonStats || {})),
+    careerStats: {
+      batting: updatedCareerBatting,
+      pitching: updatedCareerPitching
+    },
+    seasonStats: {
+      batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, errors: 0, fieldingChances: 0 },
+      pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0, qualityStarts: 0, highQualityStarts: 0 }
+    }
+  };
+}
 
 /**
  * タイトル獲得記録を選手に追加
