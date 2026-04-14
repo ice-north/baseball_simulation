@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, calculatePlayerRank } from '../season/tryoutSystem.js';
+import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, calculatePlayerRank, updateReleasedPoolAfterTryout } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
@@ -157,6 +157,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       }
     }
 
+    // 全指名選手のIDを収集（解雇プール更新に使用）
+    const allDraftedIds = [];
     Object.keys(teamRosters).forEach(teamName => {
       const draftedPlayers = teamRosters[teamName] || [];
       const actualTeamName = teamName === 'ユーザー' ? teamsArrayForSave[0] : teamName;
@@ -166,7 +168,12 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           ...draftedPlayers
         ];
       }
+      draftedPlayers.forEach(p => allDraftedIds.push(p.id));
     });
+    // 解雇プールを更新（再獲得された選手は削除、不指名は年齢+1・能力減衰）
+    if (!isInitialTryout) {
+      updateReleasedPoolAfterTryout(allDraftedIds);
+    }
     if (initializeAllPitchingRotations) initializeAllPitchingRotations();
     setDraftComplete(true);
     if (isInitialTryout && onComplete) {
@@ -647,10 +654,20 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     return (
                       <tr
                         key={player.id}
-                        className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition`}
+                        className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition ${player.isReleasedCandidate ? 'bg-amber-950/30' : ''}`}
                         onClick={() => isUserTurn && handleSelectPlayer(player)}
                       >
-                        <td className="px-2 py-1.5 text-white font-bold whitespace-nowrap">{player.name}</td>
+                        <td className="px-2 py-1.5 text-white font-bold whitespace-nowrap">
+                          {player.name}
+                          {player.isReleasedCandidate && (
+                            <span
+                              className="ml-1 inline-block px-1 py-0.5 text-[10px] bg-amber-700 text-amber-100 rounded align-middle"
+                              title={`前所属: ${player.previousTeam || '不明'} / 解雇 ${player.releasedYear || '?'}年目`}
+                            >
+                              FA
+                            </span>
+                          )}
+                        </td>
                         <td className="px-2 py-1.5 text-gray-300 whitespace-nowrap">
                           {player.age}
                           {draftProfile && <span className={`ml-1 text-[10px] ${draftProfile.color}`}>({draftProfile.label})</span>}

@@ -4,6 +4,7 @@
 // ============================================================
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
+import { releasedPlayersPool } from '../teams-data.js';
 
 /**
  * 利き手を決定（左投・左打の発生率を強化）
@@ -109,6 +110,80 @@ function getSpecialistType() {
     'fireballer', 'controlPitcher', 'ironman',
   ];
   return types[Math.floor(Math.random() * types.length)];
+}
+
+/**
+ * 解雇プールから再トライアウト参加者を取り出し、候補者形式に整形
+ * - プール内の base snapshot を変更せずに、表示用コピーを生成
+ * - 年齢は attemptsInPool 分加算（プール滞在年数相当の経過）
+ * - 能力値にブランクによる微減衰を適用
+ * @returns {Array} 再トライアウト参加者（解雇フラグ付き）
+ */
+function getReleasedCandidatesFromPool() {
+  if (!releasedPlayersPool || releasedPlayersPool.length === 0) return [];
+
+  const candidates = [];
+  for (const p of releasedPlayersPool) {
+    const aged = JSON.parse(JSON.stringify(p));
+    // プール滞在年数（0回目の再挑戦=解雇直後の翌年 → +1歳, 1回目の不指名後の再挑戦=+2歳）
+    const yearsInPool = (p.attemptsInPool || 0) + 1;
+    aged.age = (p.age || 20) + yearsInPool;
+    // 能力値の微減衰: 滞在年数に応じて累積（1年あたり各-1〜-2）
+    const decay = (val, min = 1) => {
+      let result = val;
+      for (let y = 0; y < yearsInPool; y++) {
+        result = Math.max(min, result - (1 + Math.floor(Math.random() * 2)));
+      }
+      return result;
+    };
+    if (aged.batting) {
+      aged.batting.meet = decay(aged.batting.meet || 0);
+      aged.batting.power = decay(aged.batting.power || 0);
+      aged.batting.eye = decay(aged.batting.eye || 0);
+    }
+    if (aged.physical) {
+      aged.physical.speed = decay(aged.physical.speed || 0);
+    }
+    if (aged.fielding) {
+      aged.fielding.defense = decay(aged.fielding.defense || 0);
+    }
+    if (aged.pitching) {
+      aged.pitching.control = decay(aged.pitching.control || 0);
+      aged.pitching.velocity = decay(aged.pitching.velocity || 0, 100);
+      aged.pitching.stamina = decay(aged.pitching.stamina || 0, 30);
+    }
+    // 再トライアウトフラグ
+    aged.isReleasedCandidate = true;
+    candidates.push(aged);
+  }
+  return candidates;
+}
+
+/**
+ * トライアウト後に解雇プールを更新
+ * - 獲得された選手はプールから削除
+ * - 獲得されなかった選手は attemptsInPool++（base snapshotの能力値・年齢は変更しない）
+ * - 2回連続不指名、またはベース年齢+滞在年数が33歳以上の選手は引退（削除）
+ * @param {Array<number>} draftedIds - トライアウトで指名された選手のIDリスト
+ */
+export function updateReleasedPoolAfterTryout(draftedIds) {
+  if (!releasedPlayersPool || releasedPlayersPool.length === 0) return;
+  const drafted = new Set(draftedIds || []);
+  for (let i = releasedPlayersPool.length - 1; i >= 0; i--) {
+    const p = releasedPlayersPool[i];
+    if (drafted.has(p.id)) {
+      // 再獲得された: プールから削除
+      releasedPlayersPool.splice(i, 1);
+      continue;
+    }
+    // 不指名: attempts++（base age/能力は保持）
+    p.attemptsInPool = (p.attemptsInPool || 0) + 1;
+    // 引退判定: 2回連続不指名 or 実年齢（base + 次回表示時の滞在年数）が33以上
+    const nextDisplayAge = (p.age || 20) + (p.attemptsInPool + 1);
+    if (p.attemptsInPool >= 2 || nextDisplayAge >= 33) {
+      releasedPlayersPool.splice(i, 1);
+    }
+  }
 }
 
 /**
@@ -260,6 +335,12 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
     };
 
     candidates.push(player);
+  }
+
+  // 解雇プールから再トライアウト参加者を追加（初回トライアウト除く）
+  if (!isInitial) {
+    const releasedCandidates = getReleasedCandidatesFromPool();
+    candidates.push(...releasedCandidates);
   }
 
   return candidates;

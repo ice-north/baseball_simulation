@@ -11,6 +11,21 @@ import { createPlayerStats, createSeasonStats, createCareerStats } from './playe
 export const TEAMS_DATA = {};
 
 /**
+ * 解雇された選手のプール（グローバルミュータブル配列）
+ * - 契約更改で解雇された選手がここに入り、次年度以降のトライアウトに再登場する
+ * - 各エントリは通常の選手オブジェクト + { releasedYear, previousTeam, attemptsInPool }
+ * - ドラフトで再獲得されたら削除、2回連続で指名されなければ引退扱いで削除
+ */
+export const releasedPlayersPool = [];
+
+/**
+ * 解雇プールを完全にクリアする（ニューゲーム時など）
+ */
+export const clearReleasedPlayersPool = () => {
+  releasedPlayersPool.length = 0;
+};
+
+/**
  * 指定したチーム数でTEAMS_DATAを初期化
  * @param {number} teamCount - チーム数（2-12）
  * @param {Array<string>} customNames - カスタムチーム名（省略時はチームA, B, C...）
@@ -19,6 +34,8 @@ export const TEAMS_DATA = {};
 export const initializeTeamsForCount = (teamCount, customNames = null, customAbbreviations = null) => {
   // 既存のデータをクリア
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
+  // 解雇プールもクリア
+  clearReleasedPlayersPool();
 
   // チーム名を決定（カスタム名または自動生成）
   const teamNames = [];
