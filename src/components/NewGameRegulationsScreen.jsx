@@ -4,7 +4,7 @@ import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regul
 const NewGameRegulationsScreen = ({ onComplete }) => {
   const [tempSettings, setTempSettings] = useState({
     useDH: false,
-    gamesPerSeason: 75,
+    gamesPerSeason: 76,
     teamsCount: 4,
     leagueFormat: 'single',
     leagueNames: null,
@@ -29,15 +29,13 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を新しいチーム数に合わせて自動調整（近い値に丸める）
+    // 試合数を新しいチーム数の倍数に自動調整（近い値に丸める）
     const oldGames = tempSettings.gamesPerSeason || 60;
-    const newDivisor = newCount - 1;
-    // まずチーム数の倍数で近い値を探す
     const roundsPerTeam = Math.max(1, Math.round(oldGames / newCount));
     let adjustedGames = newCount * roundsPerTeam;
-    // 範囲内に収める
-    if (adjustedGames < newDivisor) adjustedGames = newDivisor;
-    if (adjustedGames > newDivisor * 50) adjustedGames = newDivisor * 50;
+    // 範囲内に収める（チーム数の倍数を維持）
+    if (adjustedGames < newCount) adjustedGames = newCount;
+    if (adjustedGames > newCount * 50) adjustedGames = newCount * 50;
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -173,15 +171,12 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                   {(() => {
                     const tc = tempSettings.teamsCount || 4;
                     const d = tc - 1; // 対戦チーム数
-                    const optionSet = new Set();
-                    // (チーム数-1)の倍数: 均等対戦
-                    for (let i = 1; i <= 50; i++) optionSet.add(d * i);
-                    // チーム数の倍数も追加
-                    for (let i = 1; i <= 50; i++) optionSet.add(tc * i);
-                    const options = [...optionSet].filter(v => v >= d && v <= d * 50).sort((a, b) => a - b);
+                    // チーム数の倍数のみ
+                    const options = [];
+                    for (let i = 1; i <= 50; i++) options.push(tc * i);
                     return options.map(v => {
-                      const isEven = v % d === 0;
-                      const label = isEven
+                      const isBalanced = d > 0 && v % d === 0;
+                      const label = isBalanced
                         ? `${v}試合（各${v / d}戦）`
                         : `${v}試合`;
                       return <option key={v} value={v}>{label}</option>;

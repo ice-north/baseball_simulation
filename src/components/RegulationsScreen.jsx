@@ -26,13 +26,12 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を新しいチーム数に合わせて自動調整
+    // 試合数を新しいチーム数の倍数に自動調整
     const oldGames = tempSettings.gamesPerSeason || 60;
-    const newDivisor = newCount - 1;
     const roundsPerTeam = Math.max(1, Math.round(oldGames / newCount));
     let adjustedGames = newCount * roundsPerTeam;
-    if (adjustedGames < newDivisor) adjustedGames = newDivisor;
-    if (adjustedGames > newDivisor * 50) adjustedGames = newDivisor * 50;
+    if (adjustedGames < newCount) adjustedGames = newCount;
+    if (adjustedGames > newCount * 50) adjustedGames = newCount * 50;
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -134,13 +133,12 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               {(() => {
                 const tc = tempSettings.teamsCount || 4;
                 const d = tc - 1;
-                const optionSet = new Set();
-                for (let i = 1; i <= 50; i++) optionSet.add(d * i);
-                for (let i = 1; i <= 50; i++) optionSet.add(tc * i);
-                const options = [...optionSet].filter(v => v >= d && v <= d * 50).sort((a, b) => a - b);
+                // チーム数の倍数のみ
+                const options = [];
+                for (let i = 1; i <= 50; i++) options.push(tc * i);
                 return options.map(v => {
-                  const isEven = v % d === 0;
-                  const label = isEven
+                  const isBalanced = d > 0 && v % d === 0;
+                  const label = isBalanced
                     ? `${v}試合（各${v / d}戦）`
                     : `${v}試合`;
                   return <option key={v} value={v}>{label}</option>;
