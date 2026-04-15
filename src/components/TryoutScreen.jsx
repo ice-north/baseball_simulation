@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout } from '../season/tryoutSystem.js';
+import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, generateScoutComment } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
@@ -626,6 +626,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     <th className="px-2 py-2 whitespace-nowrap">変化球</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野手総合{getSortIndicator('fielderOverall')}</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投手総合{getSortIndicator('pitcherOverall')}</th>
+                    <th className="px-2 py-2 whitespace-nowrap">スカウト評価</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -678,6 +679,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         </td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(fRank)}`}>{fRank}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(pRank)}`}>{pRank}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-400 max-w-[220px]" title={player.scoutComment || generateScoutComment(player)}>
+                          <span className="line-clamp-2">{player.scoutComment || generateScoutComment(player)}</span>
+                        </td>
                       </tr>
                     );
                   })}

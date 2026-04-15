@@ -317,10 +317,14 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         stamina: abilities.stamina,
         form: pitchingForm,
         arsenal: (isPitcher || isTwoWay)
-          ? generateRandomArsenal(playerTraits.includes('breakingBall') ? 2 : 0)
+          ? generateRandomArsenal(
+              playerTraits.includes('breakingBall') ? 2 : 0,
+              playerTraits.includes('fireballer') || playerTraits.includes('strikeoutArtist')
+            )
           : generateFielderArsenal()
       },
       traits: playerTraits, // 選手の特性を保存
+      scoutComment: null, // 後でgenerateScoutCommentで設定
       positionFitness: isTwoWay ? generateTwoWayPositionFitness(position) : generatePositionFitness(position),
       professionalCareer: {
         isDrafted: false,
@@ -340,6 +344,7 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       }
     };
 
+    player.scoutComment = generateScoutComment(player);
     candidates.push(player);
   }
 
@@ -751,12 +756,14 @@ function generateFielderArsenal() {
 /**
  * ランダムな変化球を生成
  * @param {number} extraPitches - 追加球種数（breakingBall特性用）
+ * @param {boolean} weak - 球威型（fireballer/strikeoutArtist）フラグ。変化球が少なく未熟（成長課題を演出）
  */
-export const generateRandomArsenal = (extraPitches = 0) => {
+export const generateRandomArsenal = (extraPitches = 0, weak = false) => {
   const pitchTypes = ['straight', 'twoSeam', 'slider', 'curve', 'fork', 'changeup',
                       'sinker', 'shoot', 'cutter', 'splitter', 'palm', 'knuckle'];
-  const baseSize = Math.floor(Math.random() * 3) + 2; // 2-4種類
-  const arsenalSize = Math.min(baseSize + extraPitches, 7); // 最大7種類
+  // weak: 球威型はストレート+変化球1種のみ（チェンジアップ等を覚えれば化ける演出）
+  const baseSize = weak ? 1 : (Math.floor(Math.random() * 3) + 2); // weak=ストレート+1種, 通常=2-4種
+  const arsenalSize = Math.min(baseSize + extraPitches, 7);
   const arsenal = [];
   const usedTypes = new Set();
 
@@ -769,12 +776,19 @@ export const generateRandomArsenal = (extraPitches = 0) => {
     if (availableTypes.length === 0) break;
 
     const selectedType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
-    // 独立リーグレベル: 変化球レベルを抑える（S/Aランクは稀に）
-    const levelMin = (i > baseSize) ? 40 : 25;
-    const levelMax = (i > baseSize) ? 80 : 70;
+    let levelMin, levelMax;
+    if (weak) {
+      // 球威型: 変化球は未熟（レベルF〜E帯）→ 習得・練習の伸びしろ演出
+      levelMin = 15;
+      levelMax = 40;
+    } else {
+      // 通常: 独立リーグレベル（S/Aランクは稀に）
+      levelMin = (i > baseSize) ? 40 : 25;
+      levelMax = (i > baseSize) ? 80 : 70;
+    }
     let level = Math.floor(Math.random() * (levelMax - levelMin + 1)) + levelMin;
-    // スライダー・スプリッターは底上げ（最低40、上限も+10）
-    if (selectedType === 'slider' || selectedType === 'splitter') {
+    // weakでない場合のみスライダー・スプリッター底上げ
+    if (!weak && (selectedType === 'slider' || selectedType === 'splitter')) {
       level = Math.max(level, 40);
       level = Math.min(level + 10, 90);
     }
@@ -907,6 +921,132 @@ export function calculatePlayerRank(player) {
   if (totalScore >= 50) return 'C';
   return 'D';
 };
+
+/**
+ * スカウトコメントテンプレート（特性別）
+ */
+const SCOUT_COMMENT_TEMPLATES = {
+  // 野手特性
+  speedster: [
+    '俊足は天下一品。バント・盗塁で試合を動かせる選手に育てたい。',
+    'とにかく足が速い。守備範囲の広い外野手として磨けば一線級になれる素材だ。',
+    'この走力は独立リーグでは際立っている。打撃が育てば面白い。'
+  ],
+  slugger: [
+    '打球の飛距離は将来性を感じさせる。ミートを鍛えればアーチを量産できるはず。',
+    '粗削りだが、あの打球の強さは本物。あとは当てる技術だけだ。',
+    '強いスイングが武器。制球眼を磨けば長距離砲になれる。'
+  ],
+  defender: [
+    '守備は光る。肩の強さと安定感は他の候補者とは別格だ。',
+    'グラブさばきが上手い。攻守のバランスを高めれば主力になれる。',
+    '守りで試合を作れる選手だ。打撃が育てば理想の守備職人になれる。'
+  ],
+  contactHitter: [
+    'バットコントロールが巧み。出塁率が高く、ラインナップに欠かせない存在になれる。',
+    'ミートの精度が高い。選球眼を鍛えれば出塁マシンになれる原石だ。',
+    '振り回さずしっかり当てる技術がある。打順の軸として活躍できそうだ。'
+  ],
+  eyeMaster: [
+    '選球眼が素晴らしい。四球を稼げる選手は攻撃の起点になれる。',
+    'ボール球に手を出さない冷静さがある。長打力が出れば面白い選手だ。',
+    '見極めが抜群。長所を活かした打席を増やせれば化けそうだ。'
+  ],
+  baserunner: [
+    '走塁センスが光る。バッティングが一人前になれば計算できる選手だ。',
+    '塁上での判断力が良い。盗塁技術を磨けば相手チームの脅威になれる。',
+    'スピードと判断力は独立リーグでも上位クラス。打撃が課題だ。'
+  ],
+  armStrong: [
+    '肩の強さは一級品。外野からの矢のような返球は見ていて気持ちいい。',
+    'この肩があれば外野はもちろん、右翼やサードでも使える可能性がある。',
+    '強肩が光る。守備と打撃が整えば即戦力に近づける素材だ。'
+  ],
+  speedContact: [
+    '俊足に加えてミートもなかなかある。磨けば上位打線を任せられる選手になれる。',
+    '足も使えてバットもそこそこ。バランスが整ってきたら怖い選手だ。',
+    '俊足巧打の素材。打撃をもう少し磨けばすぐに戦力計算できる。'
+  ],
+  powerArm: [
+    '長打力と強肩を兼ね備えた外野手の素材。打撃の精度が上がれば大きい。',
+    'パワーと肩が光る。バットコントロールさえ良くなれば主軸を任せたい。',
+    '強肩強打の片鱗あり。荒削りだが将来性は十分ある選手だ。'
+  ],
+  // 投手特性
+  fireballer: [
+    'この球速は魅力。チェンジアップを覚えれば、緩急で三振が量産できる素材だ。',
+    '球威は本物。変化球の精度を上げれば、打者は手こずるはずだ。',
+    'ストレートで押せる力がある。あとは制球と変化球を磨くだけだ。'
+  ],
+  controlPitcher: [
+    'コーナーへのコントロールが光る。球速を上げれば、打者は手も足も出ない。',
+    '打者の内外角を丁寧につける投球術がある。球威があれば面白い存在だ。',
+    '制球力は独立リーグでもトップクラス。あとは球威があればいうことなし。'
+  ],
+  ironman: [
+    'スタミナは抜群。先発として長いイニングを任せたい素材だ。',
+    '試合を通して安定して投げられる体力がある。技術面の成長が鍵だ。',
+    '9回まで投げ切るタフネスがある。技術を磨けば安定感あるローテ投手になれる。'
+  ],
+  breakingBall: [
+    '多彩な変化球が武器。制球が安定すれば、打者を翻弄できる投手になれる。',
+    '変化球の種類が豊富。コントロールを磨けば面白い投手に育つ。',
+    '曲がりの鋭い変化球がある。制球さえ安定すれば大きな武器になる。'
+  ],
+  sinkerballer: [
+    'ゴロを打たせる技術がある。守備陣と連携して試合を作れる投手になれそうだ。',
+    'バットの芯を外す投球ができる。制球とスタミナをさらに伸ばしたい素材だ。',
+    '打ち取る術を持っている。守りのチームに合った投球スタイルだ。'
+  ],
+  strikeoutArtist: [
+    '三振を取れる球威がある。変化球を覚えれば空振り量産型の投手になれる。',
+    'もう一球種磨けば手がつけられない存在になれる。まだ磨かれていない原石だ。',
+    '奪三振能力の片鱗を感じる。変化球を習得すれば一気に化ける素材だ。'
+  ]
+};
+
+/**
+ * スカウトコメントを生成
+ * @param {Object} player - 選手データ（traits, position, batting, pitching, physical, fielding を含む）
+ * @returns {string} スカウトコメント
+ */
+export function generateScoutComment(player) {
+  const traits = player.traits || [];
+
+  // 特性がある場合は最初の特性に対応するコメントを選択
+  if (traits.length > 0) {
+    const primaryTrait = traits[0];
+    const templates = SCOUT_COMMENT_TEMPLATES[primaryTrait];
+    if (templates) {
+      return templates[Math.floor(Math.random() * templates.length)];
+    }
+  }
+
+  // 特性なし: 最も高い能力値に基づくコメント
+  const isPitcher = player.position === 'pitcher';
+  if (isPitcher) {
+    const v = player.pitching?.velocity || 130;
+    const c = player.pitching?.control || 40;
+    const s = player.pitching?.stamina || 60;
+    if (v >= 145) return '球速は及第点以上。変化球と制球の精度次第で戦力になれる。';
+    if (c >= 60) return '丁寧なピッチングができる。球威が増せば面白い存在になれる。';
+    if (s >= 90) return '長いイニングを任せられる体力がある。技術を磨けばローテに入れる。';
+    return '平均的な能力だが、真摯に練習に取り組む姿勢が見えた。伸びしろに期待する。';
+  } else {
+    const meet = player.batting?.meet || 0;
+    const power = player.batting?.power || 0;
+    const speed = player.physical?.speed || 0;
+    const defense = player.fielding?.defense || 0;
+    const arm = player.physical?.arm || 0;
+    const maxStat = Math.max(meet, power, speed, defense, arm);
+    if (maxStat === speed && speed >= 50) return '俊足が光る。守備範囲を広げて打撃を磨けば戦力になれる。';
+    if (maxStat === meet && meet >= 45) return 'バットコントロールがある。打撃の精度を磨けば計算できる選手だ。';
+    if (maxStat === power && power >= 40) return '打球の飛距離は魅力的。当てる技術が身につけば大きな武器になる。';
+    if (maxStat === defense && defense >= 50) return '守備の安定感がある。攻撃面を鍛えれば即戦力に近づける。';
+    if (maxStat === arm && arm >= 50) return '肩の強さが光る。守備位置の適性を活かして育てたい。';
+    return '全体的に粗削りだが、真面目な取り組みが見えた。時間をかけて育てたい素材だ。';
+  }
+}
 
 /**
  * スネークドラフト順序を生成
