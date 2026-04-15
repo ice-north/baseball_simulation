@@ -35,16 +35,17 @@ export const validateRegulations = (regulations) => {
     errors.push('チーム数は2〜12の間で設定してください');
   }
 
-  // 年間試合数の検証（チーム数の倍数のみ）
+  // 年間試合数の検証（チーム数-1の倍数のみ、最大150）
   const tc = regulations.teamsCount;
-  const minGames = tc; // 最低: チーム数×1
-  const maxGames = tc * 50; // 最大: チーム数×50
+  const d = Math.max(1, tc - 1);
+  const minGames = d;
+  const maxGames = 150;
 
   if (regulations.gamesPerSeason < minGames || regulations.gamesPerSeason > maxGames) {
     errors.push(`年間試合数は${minGames}〜${maxGames}の間で設定してください`);
   }
-  if (regulations.gamesPerSeason % tc !== 0) {
-    errors.push(`年間試合数はチーム数(${tc})の倍数で設定してください`);
+  if (regulations.gamesPerSeason % d !== 0) {
+    errors.push(`年間試合数はチーム数-1(${d})の倍数で設定してください`);
   }
 
   // 延長回数の検証
@@ -109,10 +110,10 @@ export const getPlayoffFormatDescription = (format, leagueFormat) => {
 export const REGULATION_PRESETS = {
   shikoku: {
     name: '四国アイランドリーグplus',
-    description: '年間76試合、1位vs2位の3戦2勝制プレーオフ',
+    description: '年間75試合、1位vs2位の3戦2勝制プレーオフ',
     regulations: {
       useDH: false,
-      gamesPerSeason: 76,
+      gamesPerSeason: 75,
       teamsCount: 4,
       playoffFormat: 'short',
       maxExtraInnings: 12,
@@ -135,10 +136,10 @@ export const REGULATION_PRESETS = {
   },
   kyushu: {
     name: '九州アジアリーグ',
-    description: '年間76試合、4チームトーナメント制プレーオフ',
+    description: '年間75試合、4チームトーナメント制プレーオフ',
     regulations: {
       useDH: false,
-      gamesPerSeason: 76,
+      gamesPerSeason: 75,
       teamsCount: 4,
       playoffFormat: 'tournament',
       maxExtraInnings: 12,
@@ -147,10 +148,10 @@ export const REGULATION_PRESETS = {
   },
   hokkaido: {
     name: '北海道フロンティアリーグ',
-    description: '年間56試合、1位vs2位の5戦3勝制プレーオフ',
+    description: '年間57試合、1位vs2位の5戦3勝制プレーオフ',
     regulations: {
       useDH: false,
-      gamesPerSeason: 56,
+      gamesPerSeason: 57,
       teamsCount: 4,
       playoffFormat: 'full',
       maxExtraInnings: 12,

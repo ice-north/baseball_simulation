@@ -26,12 +26,14 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を新しいチーム数の倍数に自動調整
+    // 試合数を新しい(チーム数-1)の倍数に自動調整
     const oldGames = tempSettings.gamesPerSeason || 60;
-    const roundsPerTeam = Math.max(1, Math.round(oldGames / newCount));
-    let adjustedGames = newCount * roundsPerTeam;
-    if (adjustedGames < newCount) adjustedGames = newCount;
-    if (adjustedGames > newCount * 50) adjustedGames = newCount * 50;
+    const oldD = Math.max(1, (tempSettings.teamsCount || 4) - 1);
+    const newD = Math.max(1, newCount - 1);
+    const roundsPerOpponent = Math.max(1, Math.round(oldGames / oldD));
+    let adjustedGames = newD * roundsPerOpponent;
+    if (adjustedGames < newD) adjustedGames = newD;
+    if (adjustedGames > 150) adjustedGames = Math.floor(150 / newD) * newD;
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -132,17 +134,12 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
             >
               {(() => {
                 const tc = tempSettings.teamsCount || 4;
-                const d = tc - 1;
-                // チーム数の倍数のみ
+                const d = Math.max(1, tc - 1);
                 const options = [];
-                for (let i = 1; i <= 50; i++) options.push(tc * i);
-                return options.map(v => {
-                  const isBalanced = d > 0 && v % d === 0;
-                  const label = isBalanced
-                    ? `${v}試合（各${v / d}戦）`
-                    : `${v}試合`;
-                  return <option key={v} value={v}>{label}</option>;
-                });
+                for (let i = 1; d * i <= 150; i++) options.push(d * i);
+                return options.map(v => (
+                  <option key={v} value={v}>{v}試合（各{v / d}戦）</option>
+                ));
               })()}
             </select>
           </SettingRow>
