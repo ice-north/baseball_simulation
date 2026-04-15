@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, calculatePlayerRank, updateReleasedPoolAfterTryout } from '../season/tryoutSystem.js';
+import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
@@ -208,9 +208,6 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     return Math.round((vel + ctrl + sta) / 3);
   };
 
-  // 推薦ランク用の数値化（ソート用）
-  const rankToScore = (r) => ({ S: 5, A: 4, B: 3, C: 2, D: 1 }[r] || 0);
-
   const getSortValue = (p, key) => {
     switch(key) {
       case 'name': return p.name;
@@ -226,7 +223,6 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       case 'stamina': return p.pitching?.stamina || 0;
       case 'fielderOverall': return getFielderOverall(p);
       case 'pitcherOverall': return getPitcherOverall(p);
-      case 'recommendRank': return rankToScore(calculatePlayerRank(p));
       case 'overall': default: {
         const isPitcher = p.position === 'pitcher';
         return isPitcher ? getPitcherOverall(p) : getFielderOverall(p);
@@ -630,7 +626,6 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     <th className="px-2 py-2 whitespace-nowrap">変化球</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野手総合{getSortIndicator('fielderOverall')}</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投手総合{getSortIndicator('pitcherOverall')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('recommendRank')} title="年齢を考慮した推薦ランク">推薦{getSortIndicator('recommendRank')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -641,7 +636,6 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     const pOverall = getPitcherOverall(player);
                     const fRank = getAbilityRank(fOverall);
                     const pRank = getAbilityRank(pOverall);
-                    const recommendRank = calculatePlayerRank(player);
                     return (
                       <tr
                         key={player.id}
@@ -684,7 +678,6 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         </td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(fRank)}`}>{fRank}</td>
                         <td className={`px-2 py-1.5 font-bold ${getRankColor(pRank)}`}>{pRank}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(recommendRank)}`}>{recommendRank}</td>
                       </tr>
                     );
                   })}

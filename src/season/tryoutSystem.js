@@ -73,16 +73,20 @@ const BATTER_TRAITS = [
   'eyeMaster',      // 選球眼タイプ
   'baserunner',     // 走塁タイプ
   'armStrong',      // 強肩タイプ
+  'speedContact',   // 俊足巧打タイプ（走力+ミート）
+  'powerArm',       // 強打強肩タイプ（パワー+肩力）
 ];
 
 /**
  * 投手用特性リスト
  */
 const PITCHER_TRAITS = [
-  'fireballer',     // 速球タイプ
-  'controlPitcher', // 制球タイプ
-  'ironman',        // スタミナタイプ
-  'breakingBall',   // 変化球タイプ
+  'fireballer',       // 速球タイプ
+  'controlPitcher',   // 制球タイプ
+  'ironman',          // スタミナタイプ
+  'breakingBall',     // 変化球タイプ
+  'sinkerballer',     // ゴロ量産タイプ（制球+スタミナ重視）
+  'strikeoutArtist',  // 奪三振タイプ（球速高/制球不安定）
 ];
 
 /**
@@ -107,7 +111,9 @@ function getPlayerTraits(isPitcher) {
 function getSpecialistType() {
   const types = [
     'speedster', 'slugger', 'defender', 'contactHitter',
-    'fireballer', 'controlPitcher', 'ironman',
+    'eyeMaster', 'baserunner', 'armStrong', 'speedContact', 'powerArm',
+    'fireballer', 'controlPitcher', 'ironman', 'breakingBall',
+    'sinkerballer', 'strikeoutArtist',
   ];
   return types[Math.floor(Math.random() * types.length)];
 }
@@ -230,8 +236,8 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
     }
 
-    // 特性を持つ選手かどうか（35%の確率、二刀流以外）
-    const hasTraits = !isTwoWay && Math.random() < 0.35;
+    // 特性を持つ選手かどうか（65%の確率、二刀流以外）
+    const hasTraits = !isTwoWay && Math.random() < 0.65;
     const playerTraits = hasTraits ? getPlayerTraits(isPitcher) : [];
     // 後方互換用: 最初の特性をspecialistTypeとして使う
     const isSpecialist = playerTraits.length > 0;
@@ -630,10 +636,41 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       control: () => Math.min(randRange(55, 75) + controlAdjust, 85),
       velocity: () => Math.max(randVelocity(116, 134) + velocityAdjust, 114),
       stamina: () => randStamina(80, 107)
+    },
+    // --- 新投手特性 ---
+    sinkerballer: {
+      velocity: () => Math.min(randVelocity(121, 138) + velocityAdjust, 144),
+      control: () => Math.min(randRange(65, 82) + controlAdjust, 90),
+      stamina: () => randStamina(100, 133)
+    },
+    strikeoutArtist: {
+      velocity: () => Math.min(randVelocity(137, 151) + velocityAdjust, 156),
+      control: () => Math.min(randRange(30, 55) + controlAdjust, 65),
+      stamina: () => randStamina(58, 87)
+    },
+    // --- 新野手特性 ---
+    speedContact: {
+      meet: () => randRange(68, 83),
+      eye: () => randRange(60, 78),
+      speed: () => randRange(75, 91),
+      steal: () => randRange(72, 88),
+      power: () => randRange(12, 30),
+      defense: () => randRange(55, 75)
+    },
+    powerArm: {
+      power: () => randRange(62, 78),
+      arm: () => randRange(72, 88),
+      defense: () => randRange(55, 72),
+      meet: () => randRange(35, 55),
+      speed: () => randRange(22, 43),
+      steal: () => randRange(10, 25)
     }
   };
 
-  // 各特性を順に適用（複数特性は良い方の値を採用）
+  // 各特性を順に適用
+  // 単一特性: 常に上書き → 得意/不得意が明確な個性的な選手に
+  // 複数特性: 良い方を採用 → 複合的な長所を持つ選手に
+  const isSingleTrait = playerTraits.length === 1;
   let velocityChanged = false;
   let armChanged = false;
   playerTraits.forEach(trait => {
@@ -641,8 +678,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     if (!bonuses) return;
     Object.entries(bonuses).forEach(([stat, generator]) => {
       const traitValue = generator();
-      // 複数特性がある場合は、より高い値を採用（強化方向で合成）
-      if (traitValue > abilities[stat]) {
+      if (isSingleTrait || traitValue > abilities[stat]) {
         abilities[stat] = traitValue;
         if (stat === 'velocity') velocityChanged = true;
         if (stat === 'arm') armChanged = true;
