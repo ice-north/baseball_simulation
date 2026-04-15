@@ -255,12 +255,8 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
 
   // 能力ベースのドラフト評価（年齢が若いほど低い能力でも指名される）
   // 年齢ボーナス: 若い選手ほど将来性で高評価、大卒年齢(22歳)が基準(±0)
-  // 18歳以下は素材型として最優先、25歳以上は即戦力レベルが要求される
   const ageBonusMap = { 18: 25, 19: 20, 20: 15, 21: 10, 22: 0, 23: -5, 24: -10, 25: -15, 26: -20, 27: -30, 28: -40, 29: -50 };
   const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 25 : -50);
-
-  // 素材型 / 即戦力ラベル（表示用）
-  const draftProfile = age <= 20 ? '素材型' : (age >= 24 ? '即戦力' : null);
 
   let baseScore = 0;
 
@@ -277,7 +273,6 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const totalScore = baseScore + awardBonus;
 
     if (totalScore >= DRAFT_THRESHOLD) {
-      if (draftProfile) reasons.push(draftProfile);
       reasons.push(`投手力${Math.round(baseScore)}pt`);
       if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
       reasons.push(`総合${Math.round(totalScore)}pt`);
@@ -299,7 +294,6 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const totalScore = baseScore + awardBonus;
 
     if (totalScore >= DRAFT_THRESHOLD) {
-      if (draftProfile) reasons.push(draftProfile);
       reasons.push(`野手力${Math.round(baseScore)}pt`);
       if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
       reasons.push(`総合${Math.round(totalScore)}pt`);
