@@ -762,7 +762,8 @@ export const generateRandomArsenal = (extraPitches = 0, weak = false) => {
   const pitchTypes = ['straight', 'twoSeam', 'slider', 'curve', 'fork', 'changeup',
                       'sinker', 'shoot', 'cutter', 'splitter', 'palm', 'knuckle'];
   // weak: 球威型はストレート+変化球1種のみ（チェンジアップ等を覚えれば化ける演出）
-  const baseSize = weak ? 1 : (Math.floor(Math.random() * 3) + 2); // weak=ストレート+1種, 通常=2-4種
+  // 独立リーグ入りの投手は高校でもプレーしてきた選手なので、最低でも1球種は持つ
+  const baseSize = weak ? 2 : (Math.floor(Math.random() * 3) + 2); // weak=ストレート+1種, 通常=2-4種
   const arsenalSize = Math.min(baseSize + extraPitches, 7);
   const arsenal = [];
   const usedTypes = new Set();
