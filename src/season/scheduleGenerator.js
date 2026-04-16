@@ -50,14 +50,14 @@ export const generateRoundRobin = (teams) => {
  * 2リーグ制のラウンドロビンを生成
  * @param {Array} league1 - リーグ1のチーム配列
  * @param {Array} league2 - リーグ2のチーム配列
- * @param {number} intraLeagueGames - 同一リーグ内の対戦数（チーム当たり）
- * @param {number} interLeagueGames - 異リーグとの対戦数（チーム当たり）
+ * @param {number} intraPerPair - 同一リーグ内の各ペア対戦数
+ * @param {number} interPerPair - 異リーグ間の各ペア対戦数
  * @returns {Array} 対戦カード配列
  */
-export const generateTwoLeagueMatchups = (league1, league2, intraLeagueGames, interLeagueGames) => {
+export const generateTwoLeagueMatchups = (league1, league2, intraPerPair, interPerPair) => {
   const allMatchups = [];
 
-  // リーグ内対戦（多め）
+  // リーグ内対戦: 各ペアがintraPerPair回対戦
   const addIntraLeagueGames = (leagueTeams, gamesPerPair) => {
     const roundRobin = generateRoundRobin(leagueTeams);
     for (let rep = 0; rep < gamesPerPair; rep++) {
@@ -73,25 +73,62 @@ export const generateTwoLeagueMatchups = (league1, league2, intraLeagueGames, in
     }
   };
 
-  // リーグ間対戦（少なめ）
-  const addInterLeagueGames = (games) => {
-    for (let rep = 0; rep < games; rep++) {
-      league1.forEach((team1, idx) => {
-        const team2 = league2[idx % league2.length];
-        if (rep % 2 === 0) {
-          allMatchups.push({ home: team1, away: team2, isInterLeague: true });
-        } else {
-          allMatchups.push({ home: team2, away: team1, isInterLeague: true });
-        }
+  // リーグ間対戦: league1の全チーム × league2の全チーム、各ペアがinterPerPair回対戦
+  const addInterLeagueGames = (gamesPerPair) => {
+    for (let rep = 0; rep < gamesPerPair; rep++) {
+      league1.forEach((team1) => {
+        league2.forEach((team2) => {
+          if (rep % 2 === 0) {
+            allMatchups.push({ home: team1, away: team2, isInterLeague: true });
+          } else {
+            allMatchups.push({ home: team2, away: team1, isInterLeague: true });
+          }
+        });
       });
     }
   };
 
-  addIntraLeagueGames(league1, Math.ceil(intraLeagueGames / (league1.length - 1)));
-  addIntraLeagueGames(league2, Math.ceil(intraLeagueGames / (league2.length - 1)));
-  addInterLeagueGames(interLeagueGames);
+  addIntraLeagueGames(league1, intraPerPair);
+  addIntraLeagueGames(league2, intraPerPair);
+  addInterLeagueGames(interPerPair);
 
   return allMatchups;
+};
+
+/**
+ * 2リーグ制の試合数配分を計算
+ * 各チームの試合数がちょうどgamesPerSeasonになる整数解を探す
+ * @param {number} gamesPerSeason - チームあたりの目標試合数
+ * @param {number} intraOpponents - 同一リーグ内の対戦相手数
+ * @param {number} interOpponents - 異リーグの対戦相手数
+ * @returns {{intraPerPair: number, interPerPair: number}}
+ */
+export const balanceLeagueGames = (gamesPerSeason, intraOpponents, interOpponents) => {
+  // 理想配分: リーグ内70%、リーグ間30%
+  const idealIntraPerPair = (gamesPerSeason * 0.7) / intraOpponents;
+
+  let best = null;
+  // a * intraOpponents + b * interOpponents = gamesPerSeason となる (a, b) を総当たり
+  for (let a = 1; a * intraOpponents < gamesPerSeason; a++) {
+    const remaining = gamesPerSeason - a * intraOpponents;
+    if (remaining < interOpponents) break; // b >= 1 を要求
+    if (remaining % interOpponents !== 0) continue;
+    const b = remaining / interOpponents;
+
+    const error = Math.abs(a - idealIntraPerPair);
+    if (!best || error < best.error) {
+      best = { intraPerPair: a, interPerPair: b, error };
+    }
+  }
+
+  // 整数解が見つからない場合のフォールバック（近似）
+  if (!best) {
+    const intraPerPair = Math.max(1, Math.round(idealIntraPerPair));
+    const remaining = gamesPerSeason - intraPerPair * intraOpponents;
+    const interPerPair = Math.max(1, Math.round(remaining / interOpponents));
+    return { intraPerPair, interPerPair };
+  }
+  return { intraPerPair: best.intraPerPair, interPerPair: best.interPerPair };
 };
 
 /**
@@ -118,18 +155,23 @@ export const generateFullSeasonSchedule = (config) => {
     const league1 = teams.slice(0, halfTeams);
     const league2 = teams.slice(halfTeams);
 
-    // リーグ内対戦を多め（約70%）、リーグ間対戦を少なめ（約30%）
-    const intraLeagueGames = Math.floor(gamesPerSeason * 0.7);
-    const interLeagueGames = Math.floor(gamesPerSeason * 0.3 / league2.length);
-
-
-    allMatchups = generateTwoLeagueMatchups(league1, league2, intraLeagueGames, interLeagueGames);
-
-    // リーグ情報をチームに付与（後で順位表で使用）
-    teams.forEach((team, idx) => {
-      const leagueIdx = idx < halfTeams ? 0 : 1;
-      // チームオブジェクトにリーグ情報を付与する処理は外部で行う
-    });
+    // 非対称なリーグ構成（奇数チーム等）には完全な配分を保証できないため、
+    // 両リーグのサイズが等しい場合のみ整数解ベースの配分を行う
+    if (league1.length === league2.length && league1.length >= 2) {
+      const intraOpponents = league1.length - 1;
+      const interOpponents = league2.length;
+      const { intraPerPair, interPerPair } = balanceLeagueGames(gamesPerSeason, intraOpponents, interOpponents);
+      allMatchups = generateTwoLeagueMatchups(league1, league2, intraPerPair, interPerPair);
+    } else {
+      // 非対称リーグのフォールバック（従来の近似ロジック）
+      const intraOppA = Math.max(1, league1.length - 1);
+      const intraOppB = Math.max(1, league2.length - 1);
+      const idealIntraPerPair = Math.max(1, Math.round((gamesPerSeason * 0.7) / Math.max(intraOppA, intraOppB)));
+      const intraTotalA = idealIntraPerPair * intraOppA;
+      const remainingA = Math.max(0, gamesPerSeason - intraTotalA);
+      const interPerPair = Math.max(1, Math.round(remainingA / league2.length));
+      allMatchups = generateTwoLeagueMatchups(league1, league2, idealIntraPerPair, interPerPair);
+    }
   } else {
     // 1リーグ制（従来のロジック）
     const opponentsCount = teamsCount - 1;
