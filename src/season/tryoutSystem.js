@@ -1007,6 +1007,66 @@ const SCOUT_COMMENT_TEMPLATES = {
 };
 
 /**
+ * 特性のコメントテンプレートが選手の実能力に合致するか判定
+ * - 複数特性を持つ選手はgenerateAbilitiesで最大値が採用されるため、
+ *   primaryTraitのコメントが実能力と矛盾することがある（例: controlPitcher+fireballer → 球速A）
+ * - 本関数でコメントテンプレートの文言と実能力が矛盾しない特性だけを選ぶ
+ * @returns {boolean} trait のテンプレート文言が player の実能力と整合するか
+ */
+function traitCommentMatches(trait, player) {
+  const p = player.pitching || {};
+  const b = player.batting || {};
+  const ph = player.physical || {};
+  const f = player.fielding || {};
+  const arsenal = p.arsenal || [];
+  const breakingBallCount = arsenal.filter(a => a.type !== 'straight').length;
+  const hasSinkerType = arsenal.some(a => ['sinker', 'twoSeam', 'shoot', 'splitter'].includes(a.type));
+
+  switch (trait) {
+    // 投手特性
+    case 'fireballer':
+      // 「この球速は魅力」「球威は本物」→ 球速が高いこと
+      return (p.velocity || 0) >= 140;
+    case 'controlPitcher':
+      // 「球速を上げれば打者は手も足も出ない」→ 制球が高く球速が足りないこと
+      return (p.control || 0) >= 55 && (p.velocity || 0) < 140;
+    case 'ironman':
+      // 「スタミナは抜群」→ スタミナが高いこと
+      return (p.stamina || 0) >= 85;
+    case 'breakingBall':
+      // 「多彩な変化球が武器」→ 変化球が複数あること
+      return breakingBallCount >= 3;
+    case 'sinkerballer':
+      // 「ゴロを打たせる技術」→ 沈む系の球種を持ち、ある程度の制球があること
+      return hasSinkerType && (p.control || 0) >= 50;
+    case 'strikeoutArtist':
+      // 「三振を取れる球威」「制球はまだ粗い」→ 球速が高く制球が不安定であること
+      return (p.velocity || 0) >= 138 && (p.control || 0) < 58;
+    // 野手特性
+    case 'speedster':
+      return (ph.speed || 0) >= 60;
+    case 'slugger':
+      return (b.power || 0) >= 55;
+    case 'defender':
+      return (f.defense || 0) >= 55;
+    case 'contactHitter':
+      return (b.meet || 0) >= 55;
+    case 'eyeMaster':
+      return (b.eye || 0) >= 55;
+    case 'baserunner':
+      return (ph.speed || 0) >= 50 && (b.steal || 0) >= 45;
+    case 'armStrong':
+      return (ph.arm || 0) >= 60;
+    case 'speedContact':
+      return (ph.speed || 0) >= 50 && (b.meet || 0) >= 50;
+    case 'powerArm':
+      return (b.power || 0) >= 50 && (ph.arm || 0) >= 50;
+    default:
+      return false;
+  }
+}
+
+/**
  * スカウトコメントを生成
  * @param {Object} player - 選手データ（traits, position, batting, pitching, physical, fielding を含む）
  * @returns {string} スカウトコメント
@@ -1014,35 +1074,41 @@ const SCOUT_COMMENT_TEMPLATES = {
 export function generateScoutComment(player) {
   const traits = player.traits || [];
 
-  // 特性がある場合は最初の特性に対応するコメントを選択
-  if (traits.length > 0) {
-    const primaryTrait = traits[0];
-    const templates = SCOUT_COMMENT_TEMPLATES[primaryTrait];
-    if (templates) {
+  // 実能力と合致する特性を優先して選ぶ（複数特性時の矛盾コメントを防止）
+  for (const trait of traits) {
+    const templates = SCOUT_COMMENT_TEMPLATES[trait];
+    if (templates && traitCommentMatches(trait, player)) {
       return templates[Math.floor(Math.random() * templates.length)];
     }
   }
 
-  // 特性なし: 最も高い能力値に基づくコメント
+  // 特性なし or 実能力と合致する特性がなかった場合: 実能力ベースでコメントを生成
   const isPitcher = player.position === 'pitcher';
   if (isPitcher) {
     const v = player.pitching?.velocity || 130;
     const c = player.pitching?.control || 40;
     const s = player.pitching?.stamina || 60;
+    const arsenal = player.pitching?.arsenal || [];
+    const breakingBallCount = arsenal.filter(a => a.type !== 'straight').length;
+    if (v >= 145 && c < 58) return '球速は魅力。制球が安定すれば打者を抑えられる素材だ。';
     if (v >= 145) return '球速は及第点以上。変化球と制球の精度次第で戦力になれる。';
-    if (c >= 60) return '丁寧なピッチングができる。球威が増せば面白い存在になれる。';
+    if (c >= 60 && v < 135) return '丁寧なピッチングができる。球威が増せば面白い存在になれる。';
+    if (c >= 60) return '球の散らばりが少ない。持ち味を活かせば計算できる投手だ。';
     if (s >= 90) return '長いイニングを任せられる体力がある。技術を磨けばローテに入れる。';
+    if (breakingBallCount >= 3) return '変化球の引き出しは多い。制球が整えば打者を翻弄できる。';
     return '平均的な能力だが、真摯に練習に取り組む姿勢が見えた。伸びしろに期待する。';
   } else {
     const meet = player.batting?.meet || 0;
     const power = player.batting?.power || 0;
+    const eye = player.batting?.eye || 0;
     const speed = player.physical?.speed || 0;
     const defense = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
-    const maxStat = Math.max(meet, power, speed, defense, arm);
+    const maxStat = Math.max(meet, power, eye, speed, defense, arm);
     if (maxStat === speed && speed >= 50) return '俊足が光る。守備範囲を広げて打撃を磨けば戦力になれる。';
     if (maxStat === meet && meet >= 45) return 'バットコントロールがある。打撃の精度を磨けば計算できる選手だ。';
     if (maxStat === power && power >= 40) return '打球の飛距離は魅力的。当てる技術が身につけば大きな武器になる。';
+    if (maxStat === eye && eye >= 50) return '選球眼に光るものがある。出塁率を稼げる打者に育てたい。';
     if (maxStat === defense && defense >= 50) return '守備の安定感がある。攻撃面を鍛えれば即戦力に近づける。';
     if (maxStat === arm && arm >= 50) return '肩の強さが光る。守備位置の適性を活かして育てたい。';
     return '全体的に粗削りだが、真面目な取り組みが見えた。時間をかけて育てたい素材だ。';
