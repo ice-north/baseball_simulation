@@ -260,52 +260,53 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   }[rank]);
 
   return (
-    <div className="p-8 bg-green-900 min-h-screen">
+    <div className="p-6 bg-gray-900 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-6">🎯 トライアウト</h1>
+        <h1 className="text-xl font-bold text-white mb-1">トライアウト</h1>
+        <p className="text-gray-500 text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>
 
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
           <div className="grid grid-cols-3 gap-4 text-white">
             <div>
-              <div className="text-sm text-gray-400">現在のピック</div>
+              <div className="text-xs text-gray-400 mb-1">現在のピック</div>
               <div className="text-2xl font-bold">{currentPick + 1} / {draftOrder.length}</div>
             </div>
             <div>
-              <div className="text-sm text-gray-400">指名チーム</div>
+              <div className="text-xs text-gray-400 mb-1">指名チーム</div>
               <div className="text-2xl font-bold">{currentTeam || '終了'}</div>
             </div>
             <div>
-              <div className="text-sm text-gray-400">獲得選手数</div>
+              <div className="text-xs text-gray-400 mb-1">獲得選手数</div>
               <div className="text-2xl font-bold">{userRoster.length} 人</div>
             </div>
           </div>
           {isUserTurn && (
-            <div className="mt-4 text-green-400 font-bold">
-              ✅ あなたの指名順です。選手を選択してください。
+            <div className="mt-4 text-green-400 font-semibold text-sm">
+              あなたの指名順です。選手を選択してください。
             </div>
           )}
           {!isUserTurn && currentTeam && (
-            <div className="mt-4 text-yellow-400 font-bold">
-              ⏳ {currentTeam} が選択中...
+            <div className="mt-4 text-yellow-400 text-sm">
+              {currentTeam} が選択中...
             </div>
           )}
           {!draftComplete && isUserTurn && userRoster.length > 0 && (
             <button
               onClick={() => finalizeDraft()}
-              className="mt-4 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded font-bold transition"
+              className="mt-4 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg font-semibold transition text-sm"
             >
               指名終了
             </button>
           )}
           {draftComplete && (
             <div className="mt-4">
-              <div className="text-green-400 font-bold text-lg mb-3">
+              <div className="text-green-400 font-semibold mb-3">
                 ドラフト完了 - 各チームの選手がロスターに追加されました
               </div>
               {!isInitialTryout && onComplete && (
                 <button
                   onClick={() => onComplete()}
-                  className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded font-bold transition"
+                  className="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg font-semibold transition text-sm"
                 >
                   トライアウト終了 →
                 </button>
@@ -314,43 +315,27 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           )}
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-2 mb-4 flex gap-2">
-          <button
-            onClick={() => setViewTab('draft')}
-            className={`flex-1 px-4 py-2 rounded font-bold transition ${
-              viewTab === 'draft' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            ドラフト
-          </button>
-          <button
-            onClick={() => setViewTab('roster')}
-            className={`flex-1 px-4 py-2 rounded font-bold transition ${
-              viewTab === 'roster' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            現有戦力
-          </button>
-          <button
-            onClick={() => setViewTab('history')}
-            className={`flex-1 px-4 py-2 rounded font-bold transition ${
-              viewTab === 'history' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            指名結果
-          </button>
-          <button
-            onClick={() => setViewTab('details')}
-            className={`flex-1 px-4 py-2 rounded font-bold transition ${
-              viewTab === 'details' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            詳細
-          </button>
+        <div className="flex gap-1.5 mb-4 bg-gray-800/60 rounded-xl p-1.5 border border-gray-700/50">
+          {[
+            { key: 'draft', label: 'ドラフト' },
+            { key: 'roster', label: '現有戦力' },
+            { key: 'history', label: '指名結果' },
+            { key: 'details', label: '詳細' }
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setViewTab(key)}
+              className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                viewTab === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {viewTab === 'draft' && userRoster.length > 0 && (
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-white font-bold">現在の編成 ({userRoster.length}/24人)</h3>
             </div>
@@ -390,8 +375,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         )}
 
         {viewTab === 'roster' && (
-          <div className="bg-gray-800 rounded-lg p-6 mb-6">
-            <h2 className="text-2xl font-bold text-white mb-4">📋 現有戦力一覧</h2>
+          <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
+            <h2 className="text-lg font-bold text-white mb-4">現有戦力一覧</h2>
             {(() => {
               const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
               const userTeamName = teamsArray[0];
@@ -493,8 +478,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         )}
 
         {viewTab === 'history' && (
-          <div className="bg-gray-800 rounded-lg p-6 mb-6">
-            <h2 className="text-2xl font-bold text-white mb-4">📋 ドラフト指名結果</h2>
+          <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
+            <h2 className="text-lg font-bold text-white mb-4">ドラフト指名結果</h2>
             {draftHistory.length > 0 ? (
               <div className="space-y-1 max-h-[500px] overflow-y-auto">
                 {draftHistory.map((entry, index) => {
@@ -526,8 +511,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         {viewTab === 'details' && (
           <div className="space-y-4 mb-6">
             {userRoster.length > 0 && (
-              <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-6 border-2 border-blue-500">
-                <h2 className="text-2xl font-bold text-white mb-4">👥 あなたのチーム ({userRoster.length}/24人)</h2>
+              <div className="bg-blue-900/30 rounded-xl border border-blue-700/50 p-5">
+                <h2 className="text-lg font-bold text-white mb-4">あなたのチーム ({userRoster.length}/24人)</h2>
                 <div className="space-y-4">
                   {['pitcher', 'catcher', 'infielder', 'outfielder'].map(category => {
                     const categoryPlayers = userRoster.filter(p => getPositionCategory(p.position) === category);
@@ -551,8 +536,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               </div>
             )}
 
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-2xl font-bold text-white mb-4">🏆 各チームのドラフト状況</h2>
+            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5">
+              <h2 className="text-lg font-bold text-white mb-4">各チームのドラフト状況</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {Object.keys(teamRosters).map(teamName => {
                   const roster = teamRosters[teamName] || [];
@@ -581,8 +566,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
         {viewTab === 'draft' && (
           <>
-            <div className="bg-gray-800 rounded-lg p-4 mb-4">
-              <div className="flex gap-2">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <div className="flex gap-1 bg-gray-800/60 rounded-xl p-1 border border-gray-700/50">
                 {[
                   { key: 'all', label: '全選手' },
                   { key: 'pitcher', label: '投手' },
@@ -593,23 +578,20 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                   <button
                     key={tab.key}
                     onClick={() => setPositionTab(tab.key)}
-                    className={`px-4 py-2 rounded font-bold transition ${
-                      positionTab === tab.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                      positionTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
                     }`}
                   >
                     {tab.label}
                   </button>
                 ))}
               </div>
+              <div className="text-gray-400 text-sm ml-auto">候補者: {filteredCandidates.length} 人</div>
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-4 mb-6 flex gap-4">
-              <div className="text-white ml-auto self-center">候補者: {filteredCandidates.length} 人</div>
-            </div>
-
-            <div className="bg-gray-800 rounded-lg overflow-x-auto">
+            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-x-auto mb-5">
               <table className="w-full text-sm text-left">
-                <thead className="bg-gray-700 text-gray-300 text-xs sticky top-0">
+                <thead className="bg-gray-800 text-gray-400 text-xs sticky top-0 border-b border-gray-700/50">
                   <tr>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('name')}>名前{getSortIndicator('name')}</th>
                     <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('age')}>年齢{getSortIndicator('age')}</th>
@@ -692,12 +674,11 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         )}
 
         {userRoster.length > 24 && draftComplete && (
-          <div className="mt-8 bg-red-900 border-2 border-red-700 rounded-lg p-6">
+          <div className="mt-6 bg-red-900/40 border border-red-700/60 rounded-xl p-5">
             <div className="flex items-center gap-3">
-              <span className="text-4xl">⚠️</span>
               <div>
-                <div className="text-red-200 font-bold text-xl mb-1">ロスター人数が24人を超えています！</div>
-                <div className="text-red-300">ロスター管理画面で{userRoster.length - 24}人を解雇してください</div>
+                <div className="text-red-300 font-bold mb-1">ロスター人数が24人を超えています</div>
+                <div className="text-red-400 text-sm">ロスター管理画面で{userRoster.length - 24}人を解雇してください</div>
               </div>
             </div>
           </div>

@@ -15,25 +15,25 @@ export const PositionControl = ({ position, label, defense, setDefense }) => {
         {label}
       </button>
       {show && (
-        <div className="absolute z-10 bg-white p-2 rounded shadow-xl border-2 border-blue-600 w-48 text-xs"
+        <div className="absolute z-10 bg-gray-800 border border-gray-600 rounded-xl shadow-xl w-48 text-xs p-3"
              style={{left: '50%', transform: 'translateX(-50%)', marginTop: '4px'}}>
-          <div className="mb-1 text-gray-800">
-            <label className="block font-bold">守:{defense[position].defense}</label>
+          <div className="mb-1.5">
+            <label className="block font-bold text-gray-300">守:{defense[position].defense}</label>
             <input type="range" min="0" max="100" value={defense[position].defense}
               onChange={(e) => setDefense({...defense, [position]: {...defense[position], defense: Number(e.target.value)}})}
-              className="w-full h-1 cursor-pointer" />
+              className="w-full h-1 cursor-pointer accent-blue-500" />
           </div>
-          <div className="mb-1 text-gray-800">
-            <label className="block font-bold">足:{defense[position].speed}</label>
+          <div className="mb-1.5">
+            <label className="block font-bold text-gray-300">足:{defense[position].speed}</label>
             <input type="range" min="0" max="100" value={defense[position].speed}
               onChange={(e) => setDefense({...defense, [position]: {...defense[position], speed: Number(e.target.value)}})}
-              className="w-full h-1 cursor-pointer" />
+              className="w-full h-1 cursor-pointer accent-green-500" />
           </div>
-          <div className="text-gray-800">
-            <label className="block font-bold">肩:{defense[position].arm}</label>
+          <div>
+            <label className="block font-bold text-gray-300">肩:{defense[position].arm}</label>
             <input type="range" min="0" max="100" value={defense[position].arm}
               onChange={(e) => setDefense({...defense, [position]: {...defense[position], arm: Number(e.target.value)}})}
-              className="w-full h-1 cursor-pointer" />
+              className="w-full h-1 cursor-pointer accent-orange-500" />
           </div>
         </div>
       )}
@@ -46,12 +46,12 @@ export const PositionControl = ({ position, label, defense, setDefense }) => {
 export const RenderBases = ({ defense, setDefense, bases }) => (
   <div className="relative w-full max-w-2xl mx-auto">
     {/* 全ポジション一括設定 */}
-    <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-4 rounded-lg mb-4 shadow-md">
-      <h4 className="font-bold text-sm mb-3 text-purple-800">🌟 全ポジション一括設定</h4>
+    <div className="bg-gray-800/60 border border-gray-700/50 p-4 rounded-xl mb-4">
+      <h4 className="font-bold text-sm mb-3 text-gray-300">全ポジション一括設定</h4>
       <div className="grid grid-cols-1 gap-3">
         <div>
-          <label className="block text-xs font-semibold mb-1">
-            守備力: <span className="text-blue-600">{defense.first.defense}</span>
+          <label className="block text-xs font-semibold mb-1 text-gray-400">
+            守備力: <span className="text-blue-400">{defense.first.defense}</span>
           </label>
           <input
             type="range"
@@ -72,12 +72,12 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
                 right: { ...defense.right, defense: val }
               });
             }}
-            className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-blue-500"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold mb-1">
-            足: <span className="text-green-600">{defense.first.speed}</span>
+          <label className="block text-xs font-semibold mb-1 text-gray-400">
+            足: <span className="text-green-400">{defense.first.speed}</span>
           </label>
           <input
             type="range"
@@ -98,12 +98,12 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
                 right: { ...defense.right, speed: val }
               });
             }}
-            className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-green-500"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold mb-1">
-            肩: <span className="text-orange-600">{defense.first.arm}</span>
+          <label className="block text-xs font-semibold mb-1 text-gray-400">
+            肩: <span className="text-orange-400">{defense.first.arm}</span>
           </label>
           <input
             type="range"
@@ -124,7 +124,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
                 right: { ...defense.right, arm: val }
               });
             }}
-            className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
+            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-orange-500"
           />
         </div>
       </div>
@@ -291,17 +291,17 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
 );
 
 // --- AccordionSection コンポーネント ---
-export const AccordionSection = ({ title, isExpanded, onToggle, children, bgColor = "bg-blue-50" }) => (
-  <div className="bg-white rounded-lg shadow-md overflow-hidden">
+export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
+  <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden">
     <button
       onClick={onToggle}
-      className={`w-full px-4 py-3 flex justify-between items-center ${bgColor} hover:opacity-90 transition`}
+      className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-700/40 transition text-left"
     >
-      <span className="font-bold text-gray-800">{title}</span>
-      <span className="text-xl">{isExpanded ? '▼' : '▶'}</span>
+      <span className="font-semibold text-gray-200">{title}</span>
+      <span className="text-gray-500 text-sm">{isExpanded ? '▼' : '▶'}</span>
     </button>
     {isExpanded && (
-      <div className="p-4">
+      <div className="p-4 border-t border-gray-700/50">
         {children}
       </div>
     )}
