@@ -74,44 +74,73 @@ const TradeScreen = ({ userTeamName, onBack }) => {
 
   const canTrade = () => selectedMyPlayer && selectedTargetPlayer && selectedTargetTeam;
 
-  // AI チームからのトレード提案を生成（画面マウント時に1回だけ計算）
+  // チームのカテゴリ別プロファイル（余剰・不足）を返す
+  const getTeamProfile = (players) => {
+    const pitchers = players.filter(p => p.position === 'pitcher');
+    const fielders = players.filter(p => p.position !== 'pitcher');
+    const pitcherAvg = pitchers.length
+      ? pitchers.reduce((s, p) => s + getPlayerValue(p), 0) / pitchers.length : 0;
+    const fielderAvg = fielders.length
+      ? fielders.reduce((s, p) => s + getPlayerValue(p), 0) / fielders.length : 0;
+    // 平均値が高いほうが「余剰」、低いほうが「不足」
+    return {
+      surplus: pitcherAvg >= fielderAvg ? 'pitcher' : 'fielder',
+      need:    pitcherAvg <  fielderAvg ? 'pitcher' : 'fielder',
+      pitcherAvg, fielderAvg, pitchers, fielders,
+    };
+  };
+
+  // AI チームからのトレード提案を生成（win-win のみ）
   const aiProposals = useMemo(() => {
     const proposals = [];
     const myPlayers = myTeam?.players || [];
+    if (!myPlayers.length) return proposals;
+
+    const userProfile = getTeamProfile(myPlayers);
 
     Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
       if (teamName === userTeamName || !team.players?.length) return;
 
-      // AI チームの弱点ポジションを特定（能力値合計が最も低いカテゴリ）
-      const pitchers = team.players.filter(p => p.position === 'pitcher');
-      const fielders = team.players.filter(p => p.position !== 'pitcher');
-      const avgPitcherVal = pitchers.length
-        ? pitchers.reduce((s, p) => s + getPlayerValue(p), 0) / pitchers.length : 0;
-      const avgFielderVal = fielders.length
-        ? fielders.reduce((s, p) => s + getPlayerValue(p), 0) / fielders.length : 0;
-      const needsPitcher = avgPitcherVal < avgFielderVal;
+      const aiProfile = getTeamProfile(team.players);
 
-      // ユーザーチームから相手が欲しそうな選手を探す
-      const candidates = myPlayers.filter(p =>
-        needsPitcher ? p.position === 'pitcher' : p.position !== 'pitcher'
-      );
-      if (!candidates.length) return;
-      candidates.sort((a, b) => getPlayerValue(b) - getPlayerValue(a));
-      const wantedPlayer = candidates[0];
-      const wantedVal = getPlayerValue(wantedPlayer);
+      // win-win 条件：互いの余剰と不足が補完し合う場合のみ提案
+      // AI余剰 = ユーザー不足 かつ AI不足 = ユーザー余剰
+      if (aiProfile.surplus !== userProfile.need) return;
 
-      // 相手が提示できる選手（価値が近い選手）
-      const counterCandidates = team.players
-        .filter(p => needsPitcher ? p.position !== 'pitcher' : p.position === 'pitcher')
-        .sort((a, b) => Math.abs(getPlayerValue(a) - wantedVal) - Math.abs(getPlayerValue(b) - wantedVal));
-      if (!counterCandidates.length) return;
-      const offeredPlayer = counterCandidates[0];
+      // AI が提示できる選手（AIの余剰カテゴリの中で上位、ただし最良1人は除く）
+      const aiSurplusPool = (aiProfile.surplus === 'pitcher' ? aiProfile.pitchers : aiProfile.fielders)
+        .sort((a, b) => getPlayerValue(b) - getPlayerValue(a));
+      if (aiSurplusPool.length < 2) return;
+      // 最良は手放さない → 2番手以降から最も価値の高い選手を提示
+      const offeredPlayer = aiSurplusPool[1];
       const offeredVal = getPlayerValue(offeredPlayer);
 
-      // 相手にとって損すぎる提案は出さない（提示選手の価値がユーザー選手の75%以上）
-      if (offeredVal < wantedVal * 0.75) return;
+      // ユーザーが出せる選手（ユーザーの余剰カテゴリ）
+      // 平均値を超える選手の中でAIの提示選手に価値が近い選手を要求
+      const userSurplusPool = (userProfile.surplus === 'pitcher'
+        ? myPlayers.filter(p => p.position === 'pitcher')
+        : myPlayers.filter(p => p.position !== 'pitcher')
+      ).sort((a, b) => Math.abs(getPlayerValue(a) - offeredVal) - Math.abs(getPlayerValue(b) - offeredVal));
+      if (!userSurplusPool.length) return;
+      const wantedPlayer = userSurplusPool[0];
+      const wantedVal = getPlayerValue(wantedPlayer);
 
-      proposals.push({ fromTeam: teamName, offeredPlayer, wantedPlayer, offeredVal: Math.round(offeredVal), wantedVal: Math.round(wantedVal) });
+      // 価値差が大きすぎる提案は出さない（±30%以内）
+      const ratio = offeredVal / (wantedVal || 1);
+      if (ratio < 0.70 || ratio > 1.43) return;
+
+      // ユーザー側の純益を確認（受け取る選手がそのカテゴリの現平均より高いか）
+      const userCatAvg = userProfile.need === 'pitcher' ? userProfile.pitcherAvg : userProfile.fielderAvg;
+      if (offeredVal < userCatAvg * 0.85) return; // 補強にならない選手は除外
+
+      proposals.push({
+        fromTeam: teamName,
+        offeredPlayer,
+        wantedPlayer,
+        offeredVal: Math.round(offeredVal),
+        wantedVal:  Math.round(wantedVal),
+        reason: `${teamName}は${aiProfile.need === 'pitcher' ? '投手' : '野手'}補強、あなたは${userProfile.need === 'pitcher' ? '投手' : '野手'}補強`,
+      });
     });
 
     return proposals;
