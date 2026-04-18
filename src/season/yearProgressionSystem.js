@@ -2150,3 +2150,35 @@ function setNestedValueMut(obj, path, value) {
   }
   current[keys[keys.length - 1]] = value;
 }
+
+
+/**
+ * シーズン開始時に全選手の能力値をスナップショットとして記録
+ * キャンプ完了（開幕直前）に呼び出す
+ */
+export function snapshotAbilityHistory(allTeams, year) {
+  Object.values(allTeams).forEach(team => {
+    if (!team.players) return;
+    team.players.forEach(player => {
+      if (!player.growthHistory) player.growthHistory = [];
+      // 同じ年の記録が既にあれば上書き
+      const existing = player.growthHistory.findIndex(h => h.year === year);
+      const snapshot = {
+        year,
+        meet:     player.batting?.meet     || 0,
+        power:    player.batting?.power    || 0,
+        speed:    player.physical?.speed   || 0,
+        arm:      player.physical?.arm     || 0,
+        defense:  player.fielding?.defense || 0,
+        velocity: player.pitching?.velocity || 0,
+        control:  player.pitching?.control  || 0,
+        stamina:  player.pitching?.stamina  || 0,
+      };
+      if (existing !== -1) {
+        player.growthHistory[existing] = snapshot;
+      } else {
+        player.growthHistory.push(snapshot);
+      }
+    });
+  });
+}

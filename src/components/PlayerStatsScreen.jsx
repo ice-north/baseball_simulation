@@ -3,7 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { formatInnings } from '../utils/physics.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 
-const PlayerStatsScreen = ({ seasonData, allTeams }) => {
+const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
   const [statsTab, setStatsTab] = useState('season');
   const [statsType, setStatsType] = useState('batting');
   const [battingSortKey, setBattingSortKey] = useState('avg');
@@ -106,11 +106,70 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
     </th>
   );
 
+  // --- 成長グラフ用データ ---
+  const GROWTH_STATS_FIELDER = [
+    { key: 'meet',    label: 'ミート',  color: '#60a5fa' },
+    { key: 'power',   label: 'パワー',  color: '#f87171' },
+    { key: 'speed',   label: '走力',    color: '#34d399' },
+    { key: 'defense', label: '守備',    color: '#a78bfa' },
+  ];
+  const GROWTH_STATS_PITCHER = [
+    { key: 'velocity', label: '球速',   color: '#f87171' },
+    { key: 'control',  label: '制球',   color: '#60a5fa' },
+    { key: 'stamina',  label: 'スタミナ',color: '#34d399' },
+  ];
+
+  const Sparkline = ({ history, statKey, color, width = 80, height = 28 }) => {
+    if (!history || history.length < 2) return <span className="text-gray-700 text-xs">-</span>;
+    const vals = history.map(h => h[statKey] || 0);
+    const min = Math.max(0, Math.min(...vals) - 5);
+    const max = Math.min(100, Math.max(...vals) + 5);
+    const range = max - min || 1;
+    const pts = vals.map((v, i) => {
+      const x = (i / (vals.length - 1)) * width;
+      const y = height - ((v - min) / range) * height;
+      return `${x},${y}`;
+    }).join(' ');
+    const last = vals[vals.length - 1];
+    const prev = vals[vals.length - 2];
+    const delta = last - prev;
+    return (
+      <div className="flex items-center gap-1.5">
+        <svg width={width} height={height} className="shrink-0">
+          <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+          {vals.map((v, i) => (
+            <circle key={i} cx={(i / (vals.length - 1)) * width} cy={height - ((v - min) / range) * height}
+              r="2" fill={i === vals.length - 1 ? color : 'transparent'} />
+          ))}
+        </svg>
+        <span className="text-xs font-semibold" style={{ color }}>{last}</span>
+        {delta !== 0 && (
+          <span className={`text-[10px] ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {delta > 0 ? `+${delta}` : delta}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const growthPlayers = userTeamName
+    ? (allTeams[userTeamName]?.players || Object.values(TEAMS_DATA || {})[0]?.players || [])
+    : [];
+
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-bold text-white">選手成績</h1>
         <div className="flex gap-1">
+          <button
+            onClick={() => setStatsTab('growth')}
+            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
+              statsTab === 'growth' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+            }`}
+          >
+            成長
+          </button>
+          <div className="w-px bg-gray-600 mx-1"></div>
           <button
             onClick={() => setStatsTab('season')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
@@ -146,6 +205,77 @@ const PlayerStatsScreen = ({ seasonData, allTeams }) => {
           </button>
         </div>
       </div>
+
+      {statsTab === 'growth' && (
+        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-700/50">
+            <h2 className="text-sm font-semibold text-white">自チーム選手 能力成長履歴</h2>
+            <p className="text-xs text-gray-500 mt-0.5">キャンプ完了時にスナップショットを記録。2年目以降から表示されます。</p>
+          </div>
+          {growthPlayers.length === 0 ? (
+            <div className="py-12 text-center text-gray-600 text-sm">選手データがありません</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-gray-800 border-b border-gray-700/50 text-[10px] text-gray-400">
+                    <th className="py-2 px-3 font-medium">選手</th>
+                    <th className="py-2 px-2 font-medium">守備</th>
+                    <th className="py-2 px-2 font-medium text-center">齢</th>
+                    <th className="py-2 px-2 font-medium text-blue-400/80">ミート</th>
+                    <th className="py-2 px-2 font-medium text-red-400/80">パワー</th>
+                    <th className="py-2 px-2 font-medium text-green-400/80">走力</th>
+                    <th className="py-2 px-2 font-medium text-purple-400/80">守備</th>
+                    <th className="py-2 px-2 font-medium text-red-400/80 border-l border-gray-700/40">球速</th>
+                    <th className="py-2 px-2 font-medium text-blue-400/80">制球</th>
+                    <th className="py-2 px-2 font-medium text-green-400/80">スタミナ</th>
+                    <th className="py-2 px-2 font-medium text-gray-500 border-l border-gray-700/40">履歴</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {growthPlayers.map((player, i) => {
+                    const isPitcher = player.position === 'pitcher';
+                    const hist = player.growthHistory || [];
+                    const keyStats = isPitcher ? GROWTH_STATS_PITCHER : GROWTH_STATS_FIELDER;
+                    const POSITION_NAMES_LOCAL = { pitcher: '投', catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
+                    return (
+                      <tr key={player.id || i} className="border-b border-gray-700/30 hover:bg-gray-700/30 transition">
+                        <td className="py-1.5 px-3 font-bold text-white">{player.name}</td>
+                        <td className="py-1.5 px-2 text-gray-400">{POSITION_NAMES_LOCAL[player.position] || player.position}</td>
+                        <td className="py-1.5 px-2 text-gray-500 text-center">{player.age}</td>
+                        {/* 野手能力 */}
+                        <td className="py-1.5 px-2 text-blue-300">{player.batting?.meet || 0}</td>
+                        <td className="py-1.5 px-2 text-red-300">{player.batting?.power || 0}</td>
+                        <td className="py-1.5 px-2 text-green-300">{player.physical?.speed || 0}</td>
+                        <td className="py-1.5 px-2 text-purple-300">{player.fielding?.defense || 0}</td>
+                        {/* 投手能力 */}
+                        <td className="py-1.5 px-2 text-red-300 border-l border-gray-700/30">{player.pitching?.velocity || 0}</td>
+                        <td className="py-1.5 px-2 text-blue-300">{player.pitching?.control || 0}</td>
+                        <td className="py-1.5 px-2 text-green-300">{player.pitching?.stamina || 0}</td>
+                        {/* スパークライン */}
+                        <td className="py-1.5 px-2 border-l border-gray-700/30">
+                          {hist.length >= 2 ? (
+                            <div className="flex flex-col gap-0.5">
+                              {keyStats.map(s => (
+                                <div key={s.key} className="flex items-center gap-1">
+                                  <span className="text-[9px] text-gray-600 w-6">{s.label.slice(0,2)}</span>
+                                  <Sparkline history={hist} statKey={s.key} color={s.color} />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-700 text-[10px]">2年目以降</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {statsType === 'batting' && (
         <div className="bg-gray-800 rounded-lg p-3">

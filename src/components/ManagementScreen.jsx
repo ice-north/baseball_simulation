@@ -6,7 +6,7 @@ import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
-import { processNPBDraft } from '../season/yearProgressionSystem.js';
+import { processNPBDraft, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 
 import ScheduleScreen from './ScheduleScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
@@ -226,6 +226,7 @@ const ManagementScreen = ({
           }
         }
       });
+      snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
       setSeasonData(prev => {
         const calYear = 2024 + prev.year - 1;
         return {
@@ -280,6 +281,7 @@ const ManagementScreen = ({
           }
         }
       });
+      snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
       setSeasonData(prev => {
         const calYear = 2024 + prev.year - 1;
         return {
@@ -295,6 +297,7 @@ const ManagementScreen = ({
   if (managementView === 'stats') return <PlayerStatsScreen
     seasonData={seasonData}
     allTeams={allTeams}
+    userTeamName={userTeamName}
   />;
   if (managementView === 'halloffame') return <HallOfFameScreen
     hallOfFamePlayers={hallOfFamePlayers}

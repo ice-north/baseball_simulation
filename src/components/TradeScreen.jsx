@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
@@ -35,6 +35,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
   const [selectedTargetPlayer, setSelectedTargetPlayer] = useState(null);
   const [tradeResult, setTradeResult] = useState(null);
   const [updateTrigger, setUpdateTrigger] = useState(0);
+  const [tradeTab, setTradeTab] = useState('propose');
 
   const myTeam = TEAMS_DATA[userTeamName];
   const otherTeams = Object.keys(TEAMS_DATA).filter(t => t !== userTeamName);
@@ -72,6 +73,72 @@ const TradeScreen = ({ userTeamName, onBack }) => {
   };
 
   const canTrade = () => selectedMyPlayer && selectedTargetPlayer && selectedTargetTeam;
+
+  // AI チームからのトレード提案を生成（画面マウント時に1回だけ計算）
+  const aiProposals = useMemo(() => {
+    const proposals = [];
+    const myPlayers = myTeam?.players || [];
+
+    Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+      if (teamName === userTeamName || !team.players?.length) return;
+
+      // AI チームの弱点ポジションを特定（能力値合計が最も低いカテゴリ）
+      const pitchers = team.players.filter(p => p.position === 'pitcher');
+      const fielders = team.players.filter(p => p.position !== 'pitcher');
+      const avgPitcherVal = pitchers.length
+        ? pitchers.reduce((s, p) => s + getPlayerValue(p), 0) / pitchers.length : 0;
+      const avgFielderVal = fielders.length
+        ? fielders.reduce((s, p) => s + getPlayerValue(p), 0) / fielders.length : 0;
+      const needsPitcher = avgPitcherVal < avgFielderVal;
+
+      // ユーザーチームから相手が欲しそうな選手を探す
+      const candidates = myPlayers.filter(p =>
+        needsPitcher ? p.position === 'pitcher' : p.position !== 'pitcher'
+      );
+      if (!candidates.length) return;
+      candidates.sort((a, b) => getPlayerValue(b) - getPlayerValue(a));
+      const wantedPlayer = candidates[0];
+      const wantedVal = getPlayerValue(wantedPlayer);
+
+      // 相手が提示できる選手（価値が近い選手）
+      const counterCandidates = team.players
+        .filter(p => needsPitcher ? p.position !== 'pitcher' : p.position === 'pitcher')
+        .sort((a, b) => Math.abs(getPlayerValue(a) - wantedVal) - Math.abs(getPlayerValue(b) - wantedVal));
+      if (!counterCandidates.length) return;
+      const offeredPlayer = counterCandidates[0];
+      const offeredVal = getPlayerValue(offeredPlayer);
+
+      // 相手にとって損すぎる提案は出さない（提示選手の価値がユーザー選手の75%以上）
+      if (offeredVal < wantedVal * 0.75) return;
+
+      proposals.push({ fromTeam: teamName, offeredPlayer, wantedPlayer, offeredVal: Math.round(offeredVal), wantedVal: Math.round(wantedVal) });
+    });
+
+    return proposals;
+  }, [userTeamName, updateTrigger]);
+
+  const acceptAIProposal = (proposal) => {
+    const targetTeam = TEAMS_DATA[proposal.fromTeam];
+    const myTeamData = myTeam;
+    let myIdx = myTeamData.players.indexOf(proposal.wantedPlayer);
+    if (myIdx === -1) myIdx = myTeamData.players.findIndex(p => p.id === proposal.wantedPlayer.id);
+    let theirIdx = targetTeam.players.indexOf(proposal.offeredPlayer);
+    if (theirIdx === -1) theirIdx = targetTeam.players.findIndex(p => p.id === proposal.offeredPlayer.id);
+    if (myIdx === -1 || theirIdx === -1) { setTradeResult({ success: false, message: '選手が見つかりません' }); return; }
+
+    proposal.wantedPlayer.battingOrder = 0;
+    proposal.offeredPlayer.battingOrder = 0;
+    cleanupPlayerReferences(myTeamData, proposal.wantedPlayer.id);
+    cleanupPlayerReferences(targetTeam, proposal.offeredPlayer.id);
+    myTeamData.players.splice(myIdx, 1);
+    targetTeam.players.splice(theirIdx, 1);
+    myTeamData.players.push(proposal.offeredPlayer);
+    targetTeam.players.push(proposal.wantedPlayer);
+
+    setTradeResult({ success: true, message: `トレード成立！ ${proposal.wantedPlayer.name} ⇄ ${proposal.offeredPlayer.name}（${proposal.fromTeam}）` });
+    setTradeTab('propose');
+    setUpdateTrigger(prev => prev + 1);
+  };
 
   const evaluateTradeAI = () => {
     if (!selectedMyPlayer || !selectedTargetPlayer) return { accept: false, reason: '' };
@@ -280,7 +347,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
 
   return (
     <div className="p-6 min-h-screen">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-white">トレード</h1>
         {onBack && (
           <button onClick={onBack} className="px-3 py-1.5 bg-gray-700/80 text-gray-300 rounded-lg hover:bg-gray-600 transition text-sm">
@@ -288,7 +355,31 @@ const TradeScreen = ({ userTeamName, onBack }) => {
           </button>
         )}
       </div>
-      <p className="text-gray-500 text-sm mb-5">選手を選択して1対1のトレードを提案できます</p>
+
+      {/* タブ切り替え */}
+      <div className="flex gap-1.5 mb-5 bg-gray-800/60 rounded-xl p-1.5 border border-gray-700/50 w-fit">
+        <button
+          onClick={() => setTradeTab('propose')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
+            tradeTab === 'propose' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+          }`}
+        >
+          提案する
+        </button>
+        <button
+          onClick={() => setTradeTab('inbox')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
+            tradeTab === 'inbox' ? 'bg-yellow-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+          }`}
+        >
+          受信提案
+          {aiProposals.length > 0 && (
+            <span className="bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              {aiProposals.length}
+            </span>
+          )}
+        </button>
+      </div>
 
       {tradeResult && (
         <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-semibold border ${
@@ -300,7 +391,63 @@ const TradeScreen = ({ userTeamName, onBack }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 mb-5">
+      {tradeTab === 'inbox' && (
+        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden mb-5">
+          <div className="px-4 py-3 border-b border-gray-700/50">
+            <h2 className="font-semibold text-sm text-yellow-400">AIチームからの受信提案</h2>
+            <p className="text-xs text-gray-500 mt-0.5">相手チームが欲しがっている選手と引き換えに提案が来ています</p>
+          </div>
+          {aiProposals.length === 0 ? (
+            <div className="py-10 text-center text-gray-600 text-sm">現在、受信している提案はありません</div>
+          ) : (
+            <div className="divide-y divide-gray-700/40">
+              {aiProposals.map((proposal, i) => (
+                <div key={i} className="p-4 hover:bg-gray-700/20 transition">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-semibold text-yellow-400 bg-yellow-900/40 px-2 py-0.5 rounded-lg border border-yellow-700/40">
+                      {proposal.fromTeam}
+                    </span>
+                    <span className="text-xs text-gray-500">からの提案</span>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center mb-4">
+                    {/* 放出 (ユーザー側) */}
+                    <div className="bg-red-950/40 rounded-xl p-3 border border-red-900/40">
+                      <div className="text-xs text-red-400 font-medium mb-1">放出（あなたの選手）</div>
+                      <div className="font-bold text-white">{proposal.wantedPlayer.name}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{POSITION_NAMES[proposal.wantedPlayer.position]} / {proposal.wantedPlayer.age}歳</div>
+                      <div className={`text-xs font-bold mt-1 ${getValueColor(proposal.wantedVal)}`}>評価 {proposal.wantedVal}pt</div>
+                    </div>
+                    <div className="text-xl text-yellow-400/70 font-bold text-center">⇄</div>
+                    {/* 獲得 (AI側) */}
+                    <div className="bg-blue-950/40 rounded-xl p-3 border border-blue-900/40">
+                      <div className="text-xs text-blue-400 font-medium mb-1">獲得（相手の選手）</div>
+                      <div className="font-bold text-white">{proposal.offeredPlayer.name}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{POSITION_NAMES[proposal.offeredPlayer.position]} / {proposal.offeredPlayer.age}歳</div>
+                      <div className={`text-xs font-bold mt-1 ${getValueColor(proposal.offeredVal)}`}>評価 {proposal.offeredVal}pt</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => acceptAIProposal(proposal)}
+                      className="px-4 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm font-semibold transition"
+                    >
+                      承諾する
+                    </button>
+                    <button
+                      onClick={() => setTradeTab('propose')}
+                      className="px-4 py-1.5 bg-gray-700/80 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition"
+                    >
+                      断る
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tradeTab === 'propose' && <div className="grid grid-cols-2 gap-4 mb-5">
         <TeamTable
           players={myTeam.players || []}
           teamName={userTeamName}
@@ -370,33 +517,35 @@ const TradeScreen = ({ userTeamName, onBack }) => {
             <div className="text-gray-600 text-sm text-center py-12">チームを選択してください</div>
           )}
         </div>
-      </div>
+      </div>}
 
-      {/* トレード内容 */}
-      <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5">
-        <h3 className="font-semibold text-white text-sm mb-4">トレード内容</h3>
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
-          {renderPlayerCard(selectedMyPlayer, '放出', 'text-blue-400', 'bg-blue-950/40', userTeamName)}
-          <div className="flex items-center justify-center pt-8 text-2xl text-yellow-400/70 font-bold">⇄</div>
-          {renderPlayerCard(selectedTargetPlayer, '獲得', 'text-red-400', 'bg-red-950/40', selectedTargetTeam)}
+      {tradeTab === 'propose' && (
+        /* トレード内容 */
+        <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5">
+          <h3 className="font-semibold text-white text-sm mb-4">トレード内容</h3>
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
+            {renderPlayerCard(selectedMyPlayer, '放出', 'text-blue-400', 'bg-blue-950/40', userTeamName)}
+            <div className="flex items-center justify-center pt-8 text-2xl text-yellow-400/70 font-bold">⇄</div>
+            {renderPlayerCard(selectedTargetPlayer, '獲得', 'text-red-400', 'bg-red-950/40', selectedTargetTeam)}
+          </div>
+          <div className="text-center mt-5">
+            <button
+              onClick={executeTrade}
+              disabled={!canTrade()}
+              className={`px-6 py-2.5 rounded-lg font-semibold text-sm transition ${
+                canTrade()
+                  ? 'bg-yellow-600 text-white hover:bg-yellow-500'
+                  : 'bg-gray-700/60 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              トレード提案
+            </button>
+            <p className="text-[11px] text-gray-600 mt-2">
+              相手チームがトレードを受け入れるかはAIが判断します
+            </p>
+          </div>
         </div>
-        <div className="text-center mt-5">
-          <button
-            onClick={executeTrade}
-            disabled={!canTrade()}
-            className={`px-6 py-2.5 rounded-lg font-semibold text-sm transition ${
-              canTrade()
-                ? 'bg-yellow-600 text-white hover:bg-yellow-500'
-                : 'bg-gray-700/60 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            トレード提案
-          </button>
-          <p className="text-[11px] text-gray-600 mt-2">
-            相手チームがトレードを受け入れるかはAIが判断します
-          </p>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
