@@ -216,8 +216,8 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
     const throws = handedness.throws;
     const bats = handedness.bats;
 
-    // 二刀流選手かどうか（5%の確率、右投げのみ）
-    const isTwoWay = throws === 'right' && Math.random() < 0.05;
+    // 二刀流選手かどうか（15%の確率、右投げのみ）
+    const isTwoWay = throws === 'right' && Math.random() < 0.15;
 
     // 投手と野手を1:1の比率で生成（ただし左投げは制限あり）
     let isPitcher = Math.random() < 0.5;
