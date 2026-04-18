@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
 
 const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots, gameMode }) => {
   const [processing, setProcessing] = useState(false);
-  const [seasonResults, setSeasonResults] = useState(null);
   const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
   const [saveStatus, setSaveStatus] = useState(null);
 
@@ -17,6 +16,38 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     }
   };
 
+  // シーズン成果をstandingsとTEAMS_DATAから算出
+  const seasonSummary = useMemo(() => {
+    const standings = seasonData?.standings;
+    if (!standings || standings.length === 0) return null;
+
+    const sorted = [...standings].sort((a, b) => b.winRate - a.winRate);
+    const champion = sorted[0];
+
+    // 打撃王・本塁打王
+    let topBatter = null, topHR = null, topPitcher = null;
+    Object.values(TEAMS_DATA).forEach(team => {
+      (team.players || []).forEach(p => {
+        const bs = p.seasonStats?.batting;
+        const ps = p.seasonStats?.pitching;
+        if (bs && bs.atBats >= 30) {
+          const avg = bs.hits / bs.atBats;
+          if (!topBatter || avg > topBatter.avg)
+            topBatter = { name: p.name, team: team.name || '', avg: avg.toFixed(3), hits: bs.hits, atBats: bs.atBats };
+          if (!topHR || (bs.homeruns || 0) > topHR.hr)
+            topHR = { name: p.name, team: team.name || '', hr: bs.homeruns || 0 };
+        }
+        if (ps && (ps.inningsPitched || 0) >= 15) {
+          const era = ps.inningsPitched > 0 ? ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2) : '-.--';
+          if (!topPitcher || parseFloat(era) < parseFloat(topPitcher.era))
+            topPitcher = { name: p.name, team: team.name || '', era, wins: ps.wins || 0 };
+        }
+      });
+    });
+
+    return { champion, standings: sorted, topBatter, topHR, topPitcher };
+  }, [seasonData]);
+
   const handleAdvanceYear = () => {
     if (!advanceToNextYear) {
       alert('年間進行システムが読み込まれていません');
@@ -26,11 +57,9 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     try {
       const allTeams = TEAMS_DATA || {};
 
-      // チーム成績履歴を記録（年度進行前に現在のstandingsと主力を保存）
       if (onRecordTeamHistory && seasonData.standings) {
         const sortedStandings = [...seasonData.standings].sort((a, b) => b.winRate - a.winRate);
         const teamRecords = sortedStandings.map((s, idx) => {
-          // 各チームの主力選手を取得
           const team = allTeams[s.team];
           let mvpBatter = null;
           let mvpPitcher = null;
@@ -74,20 +103,12 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
             }
           }
           return {
-            team: s.team,
-            rank: idx + 1,
-            wins: s.wins,
-            losses: s.losses,
-            draws: s.draws || 0,
-            winRate: s.winRate,
-            mvpBatter,
-            mvpPitcher
+            team: s.team, rank: idx + 1,
+            wins: s.wins, losses: s.losses, draws: s.draws || 0,
+            winRate: s.winRate, mvpBatter, mvpPitcher
           };
         });
-        onRecordTeamHistory({
-          year: seasonData.year,
-          standings: teamRecords
-        });
+        onRecordTeamHistory({ year: seasonData.year, standings: teamRecords });
       }
 
       const result = gameMode === 'sandbox'
@@ -114,23 +135,25 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   const slotNames = ['スロット1', 'スロット2', 'スロット3'];
 
   const SaveSlotSelector = () => (
-    <div className="bg-gray-700/50 rounded-lg p-3 mb-4">
-      <h3 className="text-sm font-bold text-white mb-2">セーブ</h3>
-      <div className="flex gap-2 mb-2">
+    <div className="bg-gray-700/40 rounded-xl border border-gray-600/40 p-4 mb-5">
+      <h3 className="text-base font-black text-white mb-3 flex items-center gap-2">
+        <span>💾</span> セーブ
+      </h3>
+      <div className="flex gap-2 mb-3">
         {slotNames.map((name, idx) => {
           const info = saveSlots?.[idx];
           return (
             <button
               key={idx}
               onClick={() => setSelectedSaveSlot(idx)}
-              className={`flex-1 p-2 rounded-lg text-left transition text-xs ${
+              className={`flex-1 p-2.5 rounded-xl text-left transition-all duration-150 ${
                 selectedSaveSlot === idx
-                  ? 'bg-blue-600 text-white ring-1 ring-blue-400'
-                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                  ? 'bg-blue-600 text-white ring-1 ring-blue-400 shadow-lg shadow-blue-900/40'
+                  : 'bg-gray-600/60 text-gray-300 hover:bg-gray-500/60'
               }`}
             >
-              <div className="font-bold">{name}</div>
-              <div className="text-[10px] opacity-70 mt-0.5">
+              <div className="font-bold text-sm">{name}</div>
+              <div className="text-xs opacity-70 mt-0.5">
                 {info ? `${info.year}年目 ${info.date?.month}/${info.date?.day}` : '空き'}
               </div>
             </button>
@@ -139,121 +162,161 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       </div>
       <button
         onClick={handleSaveToSlot}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition"
+        className="w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold text-base transition-all duration-150 hover:shadow-lg hover:shadow-blue-900/30"
       >
         {slotNames[selectedSaveSlot]}に保存
       </button>
       {saveStatus === 'saved' && (
-        <div className="mt-1.5 text-green-400 text-center text-xs font-bold">セーブしました</div>
+        <div className="mt-2 text-green-400 text-center text-sm font-bold animate-pulse">✓ セーブしました</div>
       )}
     </div>
   );
 
-  if (!seasonResults) {
-    return (
-      <div className="p-4">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-xl font-bold text-white mb-4">オフシーズン</h1>
-          <div className="bg-gray-800 rounded-lg p-5">
-            <h2 className="text-lg font-bold text-white mb-3 text-center">
-              {seasonData.year}年目のシーズンを終了しますか？
-              {gameMode === 'sandbox' && <span className="ml-2 text-orange-400 text-sm">[箱庭モード]</span>}
-            </h2>
-            <div className="text-gray-400 text-sm mb-4 text-center space-y-0.5">
-              <p>1. 表彰（首位打者・本塁打王など）</p>
-              {gameMode === 'sandbox' ? (
-                <>
-                  <p>2. シーズン成績を通算成績に加算</p>
-                  <p>3. 次年度（{seasonData.year + 1}年目）へ移行</p>
-                  <p className="text-orange-400/70 text-xs mt-1">※ 箱庭モード: 加齢・成長・引退はありません</p>
-                </>
-              ) : (
-                <>
-                  <p>2. 選手の年齢+1 / 引退処理</p>
-                  <p>3. シーズン成績を通算成績に加算</p>
-                  <p>4. 次年度（{seasonData.year + 1}年目）へ移行</p>
-                </>
-              )}
-            </div>
-            <SaveSlotSelector />
-            <div className="text-center">
-              <button
-                onClick={handleAdvanceYear}
-                disabled={processing}
-                className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold text-base transition disabled:bg-gray-600 shadow"
-              >
-                {processing ? '処理中...' : `${seasonData.year + 1}年目へ進む`}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-4">
-      <div className="max-w-5xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-3">{seasonData.year - 1}年目 シーズン結果</h1>
+      <style>{`
+        @keyframes championGlow {
+          0%, 100% { box-shadow: 0 0 20px rgba(234,179,8,0.3), 0 0 40px rgba(234,179,8,0.1); }
+          50%       { box-shadow: 0 0 30px rgba(234,179,8,0.5), 0 0 60px rgba(234,179,8,0.2); }
+        }
+        @keyframes trophyBounce {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50%       { transform: translateY(-6px) scale(1.08); }
+        }
+        .champion-card { animation: championGlow 2.5s ease-in-out infinite; }
+        .trophy-icon   { animation: trophyBounce 2s ease-in-out infinite; }
+      `}</style>
 
-        {seasonResults.awards.champion && (
-          <div className="bg-gradient-to-r from-yellow-600 to-yellow-500 rounded-lg p-5 mb-3 text-center">
-            <h2 className="text-2xl font-bold text-white mb-1">🏆 優勝</h2>
-            <div className="text-3xl font-bold text-white">{seasonResults.awards.champion}</div>
+      <div className="max-w-3xl mx-auto">
+        {/* ヘッダー */}
+        <div className="mb-6">
+          <p className="text-gray-400 text-sm font-semibold tracking-[0.15em] uppercase">Off Season</p>
+          <h1 className="text-3xl font-black text-white">{seasonData.year}年目 シーズン終了</h1>
+          {gameMode === 'sandbox' && (
+            <span className="inline-block mt-1 bg-orange-500/20 text-orange-400 border border-orange-500/40 text-sm font-bold px-3 py-0.5 rounded-full">
+              箱庭モード
+            </span>
+          )}
+        </div>
+
+        {/* 優勝チームカード */}
+        {seasonSummary?.champion && (
+          <div className="champion-card bg-gradient-to-r from-yellow-900/60 via-yellow-800/40 to-yellow-900/60 rounded-2xl border border-yellow-500/50 p-5 mb-5 text-center">
+            <div className="trophy-icon text-5xl mb-2 inline-block">🏆</div>
+            <p className="text-yellow-400/80 text-sm font-bold tracking-widest uppercase mb-1">Champion</p>
+            <h2 className="text-3xl font-black text-white mb-1">{seasonSummary.champion.team}</h2>
+            <p className="text-yellow-300 text-base font-semibold">
+              {seasonSummary.champion.wins}勝 {seasonSummary.champion.losses}敗
+              {seasonSummary.champion.draws > 0 ? ` ${seasonSummary.champion.draws}分` : ''}
+              　勝率 {(seasonSummary.champion.winRate || 0).toFixed(3)}
+            </p>
           </div>
         )}
 
-        <div className="bg-gray-800 rounded-lg p-4 mb-3">
-          <h2 className="text-base font-bold text-white mb-3">個人タイトル</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {[
-              { key: 'battingChampion', title: '首位打者', stat: (a) => a.avg },
-              { key: 'homeRunKing', title: '本塁打王', stat: (a) => `${a.homeruns}本` },
-              { key: 'rbiKing', title: '打点王', stat: (a) => `${a.rbis}打点` },
-              { key: 'stolenBaseKing', title: '盗塁王', stat: (a) => `${a.stolenBases}盗塁` },
-              { key: 'eraChampion', title: '最優秀防御率', stat: (a) => a.era },
-              { key: 'winsLeader', title: '最多勝', stat: (a) => `${a.wins}勝` },
-              { key: 'savesLeader', title: '最多セーブ', stat: (a) => `${a.saves}S` },
-              { key: 'strikeoutKing', title: '最多奪三振', stat: (a) => `${a.strikeouts}K` },
-            ].filter(({ key }) => seasonResults.awards[key]).map(({ key, title, stat }) => {
-              const award = seasonResults.awards[key];
-              return (
-                <div key={key} className="bg-gray-700/60 rounded p-2.5">
-                  <div className="text-yellow-400 text-[10px] font-bold mb-0.5">{title}</div>
-                  <div className="text-white text-sm font-bold">{award.name}</div>
-                  <div className="text-gray-400 text-[10px]">{award.team} | {stat(award)}</div>
-                </div>
-              );
-            })}
+        {/* 個人タイトルハイライト */}
+        {seasonSummary && (seasonSummary.topBatter || seasonSummary.topHR || seasonSummary.topPitcher) && (
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            {seasonSummary.topBatter && (
+              <div className="bg-gray-800/80 rounded-xl border border-blue-500/30 p-3 text-center">
+                <p className="text-blue-400 text-xs font-bold tracking-wide mb-1">🏏 首位打者</p>
+                <p className="text-white font-black text-base leading-tight">{seasonSummary.topBatter.name}</p>
+                <p className="text-blue-300 text-xl font-black mt-0.5">{seasonSummary.topBatter.avg}</p>
+              </div>
+            )}
+            {seasonSummary.topHR && (
+              <div className="bg-gray-800/80 rounded-xl border border-red-500/30 p-3 text-center">
+                <p className="text-red-400 text-xs font-bold tracking-wide mb-1">💣 本塁打王</p>
+                <p className="text-white font-black text-base leading-tight">{seasonSummary.topHR.name}</p>
+                <p className="text-red-300 text-xl font-black mt-0.5">{seasonSummary.topHR.hr}本</p>
+              </div>
+            )}
+            {seasonSummary.topPitcher && (
+              <div className="bg-gray-800/80 rounded-xl border border-green-500/30 p-3 text-center">
+                <p className="text-green-400 text-xs font-bold tracking-wide mb-1">⚾ 防御率王</p>
+                <p className="text-white font-black text-base leading-tight">{seasonSummary.topPitcher.name}</p>
+                <p className="text-green-300 text-xl font-black mt-0.5">ERA {seasonSummary.topPitcher.era}</p>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
-        {seasonResults.retirements.length > 0 && (
-          <div className="bg-gray-800 rounded-lg p-4 mb-3">
-            <h2 className="text-base font-bold text-white mb-2">引退選手</h2>
-            <div className="space-y-1">
-              {seasonResults.retirements.map((retirement, idx) => (
-                <div key={idx} className={`rounded p-2.5 flex items-center justify-between ${retirement.hallOfFame ? 'bg-yellow-900/30 border border-yellow-700/50' : 'bg-gray-700/50'}`}>
-                  <div>
-                    <span className="text-white font-bold text-sm">
-                      {retirement.hallOfFame && '🏛️ '}{retirement.name}
-                    </span>
-                    <span className="text-gray-500 text-xs ml-2">{retirement.age}歳 | {POSITION_NAMES[retirement.position]} | {retirement.team}</span>
-                  </div>
-                  <span className="text-gray-500 text-xs">{retirement.reason}</span>
+        {/* 順位表（コンパクト） */}
+        {seasonSummary?.standings && seasonSummary.standings.length > 1 && (
+          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-5">
+            <h3 className="text-base font-black text-white mb-3">最終順位表</h3>
+            <div className="space-y-1.5">
+              {seasonSummary.standings.map((s, idx) => (
+                <div
+                  key={s.team}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
+                    idx === 0
+                      ? 'bg-yellow-800/30 border border-yellow-600/30'
+                      : 'bg-gray-700/40'
+                  }`}
+                >
+                  <span className={`font-black text-base w-6 text-center ${
+                    idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'
+                  }`}>{idx + 1}</span>
+                  <span className={`font-bold text-base flex-1 ${idx === 0 ? 'text-yellow-200' : 'text-white'}`}>
+                    {s.team}
+                  </span>
+                  <span className="text-gray-300 text-sm font-semibold tabular-nums">
+                    {s.wins}勝{s.losses}敗{s.draws > 0 ? `${s.draws}分` : ''}
+                  </span>
+                  <span className="text-gray-400 text-sm tabular-nums w-12 text-right">
+                    {(s.winRate || 0).toFixed(3)}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
+        {/* 次シーズンへ進む手順 */}
+        <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-5 mb-5">
+          <h3 className="text-base font-black text-white mb-4">シーズン終了処理</h3>
+          <div className="space-y-3">
+            {[
+              { icon: '🏅', label: '表彰（首位打者・本塁打王・防御率王など）' },
+              ...(gameMode === 'sandbox' ? [
+                { icon: '📊', label: 'シーズン成績を通算成績に加算' },
+                { icon: '📅', label: `次年度（${seasonData.year + 1}年目）へ移行` },
+              ] : [
+                { icon: '🎂', label: '選手の年齢 +1 / 引退処理' },
+                { icon: '📊', label: 'シーズン成績を通算成績に加算' },
+                { icon: '📅', label: `次年度（${seasonData.year + 1}年目）へ移行` },
+              ]),
+            ].map((step, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-gray-700 border border-gray-600 flex items-center justify-center text-xs font-black text-gray-300 shrink-0">
+                  {i + 1}
+                </div>
+                <span className="text-sm">{step.icon}</span>
+                <span className="text-gray-200 text-base">{step.label}</span>
+              </div>
+            ))}
+            {gameMode === 'sandbox' && (
+              <p className="text-orange-400/80 text-sm mt-2 pl-10">※ 箱庭モード: 加齢・成長・引退はありません</p>
+            )}
+          </div>
+        </div>
+
         <SaveSlotSelector />
+
         <div className="text-center">
           <button
-            onClick={() => { if (onStartNextSeason) onStartNextSeason(); }}
-            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold text-base transition shadow"
+            onClick={handleAdvanceYear}
+            disabled={processing}
+            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-600 disabled:to-gray-600 text-white px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:shadow-green-900/40 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            次のシーズンへ →
+            {processing ? (
+              <span className="flex items-center gap-2">
+                <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                処理中...
+              </span>
+            ) : (
+              `${seasonData.year + 1}年目へ進む →`
+            )}
           </button>
         </div>
       </div>
