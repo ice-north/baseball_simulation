@@ -133,26 +133,24 @@ const TradeScreen = ({ userTeamName, onBack }) => {
   };
 
   const getSeasonLine = (player) => {
-    const isPitcher = player.position === 'pitcher';
     const ps = player.seasonStats?.pitching;
     const bs = player.seasonStats?.batting;
-    if (isPitcher) {
-      const games = ps?.games || 0;
-      if (!games) return { games: 0, line: '' };
+    const parts = [];
+    if (ps?.games) {
       const ip = ps.inningsPitched || 0;
       const era = ip > 0 ? ((ps.earnedRuns || 0) * 27 / ip).toFixed(2) : '-';
-      return { games, line: `${era} ERA ${Math.floor(ip / 3)}.${ip % 3}回` };
-    } else {
-      const games = bs?.games || 0;
-      if (!games) return { games: 0, line: '' };
-      const avg = bs.atBats > 0 ? (bs.hits / bs.atBats).toFixed(3) : '.000';
-      return { games, line: `${avg} ${bs.homeruns || 0}本 ${bs.rbis || 0}点` };
+      parts.push(`投${ps.games}試 ${era}ERA`);
     }
+    if (bs?.games) {
+      const avg = bs.atBats > 0 ? (bs.hits / bs.atBats).toFixed(3) : '.000';
+      parts.push(`打${bs.games}試 ${avg} ${bs.homeruns || 0}本`);
+    }
+    const games = Math.max(ps?.games || 0, bs?.games || 0);
+    return { games, line: parts.join(' / ') };
   };
 
   const PlayerRow = ({ player, isSelected, onSelect, teamName }) => {
     const val = getPlayerValue(player);
-    const isPitcher = player.position === 'pitcher';
     const order = getLineupOrder(player, teamName);
     const season = getSeasonLine(player);
 
@@ -175,17 +173,20 @@ const TradeScreen = ({ userTeamName, onBack }) => {
         </td>
         <td className="py-1.5 px-1 text-xs text-gray-400">{POSITION_NAMES[player.position] || player.position}</td>
         <td className="py-1.5 px-1 text-xs text-gray-500 text-center">{player.age || 20}</td>
-        {/* 野手能力 */}
-        <td className="py-1.5 px-0.5 text-xs text-center">{isPitcher ? <span className="text-gray-700">-</span> : <StatVal value={player.batting?.meet || 0} />}</td>
-        <td className="py-1.5 px-0.5 text-xs text-center">{isPitcher ? <span className="text-gray-700">-</span> : <StatVal value={player.batting?.power || 0} />}</td>
-        <td className="py-1.5 px-0.5 text-xs text-center">{isPitcher ? <span className="text-gray-700">-</span> : <StatVal value={player.physical?.speed || 0} />}</td>
-        <td className="py-1.5 px-0.5 text-xs text-center">{isPitcher ? <span className="text-gray-700">-</span> : <StatVal value={player.fielding?.defense || 0} />}</td>
-        {/* 投手能力 */}
-        <td className="py-1.5 px-0.5 text-xs text-center border-l border-gray-700/30">{!isPitcher ? <span className="text-gray-700">-</span> : <StatVal value={player.pitching?.velocity || 0} isPitcherVelocity />}</td>
-        <td className="py-1.5 px-0.5 text-xs text-center">{!isPitcher ? <span className="text-gray-700">-</span> : <StatVal value={player.pitching?.control || 0} />}</td>
+        {/* 打撃 */}
+        <td className="py-1.5 px-0.5 text-xs text-center border-l border-gray-700/30"><StatVal value={player.batting?.meet || 0} /></td>
+        <td className="py-1.5 px-0.5 text-xs text-center"><StatVal value={player.batting?.power || 0} /></td>
+        {/* フィジカル */}
+        <td className="py-1.5 px-0.5 text-xs text-center border-l border-gray-700/30"><StatVal value={player.physical?.speed || 0} /></td>
+        <td className="py-1.5 px-0.5 text-xs text-center"><StatVal value={player.physical?.arm || 0} /></td>
+        <td className="py-1.5 px-0.5 text-xs text-center"><StatVal value={player.fielding?.defense || 0} /></td>
+        {/* 投手 */}
+        <td className="py-1.5 px-0.5 text-xs text-center border-l border-gray-700/30"><StatVal value={player.pitching?.velocity || 0} isPitcherVelocity /></td>
+        <td className="py-1.5 px-0.5 text-xs text-center"><StatVal value={player.pitching?.control || 0} /></td>
+        <td className="py-1.5 px-0.5 text-xs text-center"><StatVal value={player.pitching?.stamina || 0} /></td>
         {/* 出場 */}
         <td className="py-1.5 px-1 text-xs text-center text-gray-300 border-l border-gray-700/30">{season.games || '-'}</td>
-        <td className="py-1.5 px-1 text-[11px] text-gray-400 truncate max-w-[110px]">{season.line || '-'}</td>
+        <td className="py-1.5 px-1 text-[11px] text-gray-400 truncate max-w-[120px]">{season.line || '-'}</td>
         {/* 評価 */}
         <td className={`py-1.5 px-1.5 text-xs font-bold text-center border-l border-gray-700/30 ${getValueColor(val)}`}>{Math.round(val)}</td>
       </tr>
@@ -203,8 +204,9 @@ const TradeScreen = ({ userTeamName, onBack }) => {
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-800 border-b border-gray-700/30 text-[9px] font-medium">
               <th colSpan={3} className="py-0.5 pl-2 text-gray-500">選手情報</th>
-              <th colSpan={4} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">野手能力</th>
-              <th colSpan={2} className="py-0.5 px-1 text-center text-red-400/60 border-l border-gray-700/30">投手能力</th>
+              <th colSpan={2} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">打撃</th>
+              <th colSpan={3} className="py-0.5 px-1 text-center text-cyan-400/60 border-l border-gray-700/30">フィジカル</th>
+              <th colSpan={3} className="py-0.5 px-1 text-center text-red-400/60 border-l border-gray-700/30">投手</th>
               <th colSpan={2} className="py-0.5 px-1 text-center text-green-400/60 border-l border-gray-700/30">出場</th>
               <th className="py-0.5 px-1 text-center text-gray-500 border-l border-gray-700/30">総合</th>
             </tr>
@@ -214,10 +216,12 @@ const TradeScreen = ({ userTeamName, onBack }) => {
               <th className="py-1 px-1 text-center font-medium">齢</th>
               <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">ミ</th>
               <th className="py-1 px-0.5 text-center font-medium">パ</th>
-              <th className="py-1 px-0.5 text-center font-medium">走</th>
+              <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">走</th>
+              <th className="py-1 px-0.5 text-center font-medium">肩</th>
               <th className="py-1 px-0.5 text-center font-medium">守</th>
               <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">球速</th>
               <th className="py-1 px-0.5 text-center font-medium">制球</th>
+              <th className="py-1 px-0.5 text-center font-medium">ス</th>
               <th className="py-1 px-1 text-center font-medium border-l border-gray-700/30">試合</th>
               <th className="py-1 px-1 font-medium">成績</th>
               <th className="py-1 px-1 text-center font-medium border-l border-gray-700/30">評価</th>
@@ -242,7 +246,6 @@ const TradeScreen = ({ userTeamName, onBack }) => {
   const renderPlayerCard = (player, label, labelColor, bgColor, teamName) => {
     if (!player) return <div className="text-gray-600 text-sm text-center py-4">選手を選択してください</div>;
     const val = getPlayerValue(player);
-    const isPitcher = player.position === 'pitcher';
     const order = getLineupOrder(player, teamName);
     const season = getSeasonLine(player);
     return (
@@ -254,21 +257,14 @@ const TradeScreen = ({ userTeamName, onBack }) => {
         </div>
         <div className="text-gray-400 text-sm mb-3">{POSITION_NAMES[player.position]} / {player.age}歳</div>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mb-3">
-          {isPitcher ? (
-            <>
-              <span className="text-gray-400">球速 <StatVal value={player.pitching?.velocity || 0} isPitcherVelocity /></span>
-              <span className="text-gray-400">制球 <StatVal value={player.pitching?.control || 0} /></span>
-              <span className="text-gray-400">スタ <StatVal value={player.pitching?.stamina || 0} /></span>
-            </>
-          ) : (
-            <>
-              <span className="text-gray-400">ミ <StatVal value={player.batting?.meet || 0} /></span>
-              <span className="text-gray-400">パ <StatVal value={player.batting?.power || 0} /></span>
-              <span className="text-gray-400">走 <StatVal value={player.physical?.speed || 0} /></span>
-              <span className="text-gray-400">肩 <StatVal value={player.physical?.arm || 0} /></span>
-              <span className="text-gray-400">守 <StatVal value={player.fielding?.defense || 0} /></span>
-            </>
-          )}
+          <span className="text-gray-400">ミ <StatVal value={player.batting?.meet || 0} /></span>
+          <span className="text-gray-400">パ <StatVal value={player.batting?.power || 0} /></span>
+          <span className="text-gray-400">走 <StatVal value={player.physical?.speed || 0} /></span>
+          <span className="text-gray-400">肩 <StatVal value={player.physical?.arm || 0} /></span>
+          <span className="text-gray-400">守 <StatVal value={player.fielding?.defense || 0} /></span>
+          <span className="text-gray-400">球速 <StatVal value={player.pitching?.velocity || 0} isPitcherVelocity /></span>
+          <span className="text-gray-400">制球 <StatVal value={player.pitching?.control || 0} /></span>
+          <span className="text-gray-400">スタ <StatVal value={player.pitching?.stamina || 0} /></span>
         </div>
         {season.games > 0 && (
           <div className="text-xs text-gray-500 mb-2">
@@ -334,8 +330,9 @@ const TradeScreen = ({ userTeamName, onBack }) => {
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-gray-800 border-b border-gray-700/30 text-[9px] font-medium">
                     <th colSpan={3} className="py-0.5 pl-2 text-gray-500">選手情報</th>
-                    <th colSpan={4} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">野手能力</th>
-                    <th colSpan={2} className="py-0.5 px-1 text-center text-red-400/60 border-l border-gray-700/30">投手能力</th>
+                    <th colSpan={2} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">打撃</th>
+                    <th colSpan={3} className="py-0.5 px-1 text-center text-cyan-400/60 border-l border-gray-700/30">フィジカル</th>
+                    <th colSpan={3} className="py-0.5 px-1 text-center text-red-400/60 border-l border-gray-700/30">投手</th>
                     <th colSpan={2} className="py-0.5 px-1 text-center text-green-400/60 border-l border-gray-700/30">出場</th>
                     <th className="py-0.5 px-1 text-center text-gray-500 border-l border-gray-700/30">総合</th>
                   </tr>
@@ -345,10 +342,12 @@ const TradeScreen = ({ userTeamName, onBack }) => {
                     <th className="py-1 px-1 text-center font-medium">齢</th>
                     <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">ミ</th>
                     <th className="py-1 px-0.5 text-center font-medium">パ</th>
-                    <th className="py-1 px-0.5 text-center font-medium">走</th>
+                    <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">走</th>
+                    <th className="py-1 px-0.5 text-center font-medium">肩</th>
                     <th className="py-1 px-0.5 text-center font-medium">守</th>
                     <th className="py-1 px-0.5 text-center font-medium border-l border-gray-700/30">球速</th>
                     <th className="py-1 px-0.5 text-center font-medium">制球</th>
+                    <th className="py-1 px-0.5 text-center font-medium">ス</th>
                     <th className="py-1 px-1 text-center font-medium border-l border-gray-700/30">試合</th>
                     <th className="py-1 px-1 font-medium">成績</th>
                     <th className="py-1 px-1 text-center font-medium border-l border-gray-700/30">評価</th>
