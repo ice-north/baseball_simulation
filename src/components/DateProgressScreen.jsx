@@ -825,11 +825,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       <div className="flex items-center justify-between">
                         <div className="text-center flex-1">
                           <div className={`font-bold text-sm ${game.away === userTeamName ? 'text-yellow-300' : 'text-white'}`}>{getTeamAbbreviation(game.away)}</div>
-                          <div className="text-[10px] text-gray-400 truncate">{awayPitcher ? awayPitcher.name : '先発未定'}</div>
+                          <div className="text-xs text-gray-400 truncate">{awayPitcher ? awayPitcher.name : '先発未定'}</div>
                           {awayPitcher && !hasResult && (() => {
                             const ps = awayPitcher.seasonStats?.pitching;
                             if (!ps || !ps.games) return null;
-                            return <div className="text-[9px] text-gray-500">{ps.wins || 0}勝{ps.losses || 0}敗{(ps.saves || 0) > 0 ? ` ${ps.saves}S` : ''}</div>;
+                            return <div className="text-[11px] text-gray-500">{ps.wins || 0}勝{ps.losses || 0}敗{(ps.saves || 0) > 0 ? ` ${ps.saves}S` : ''}</div>;
                           })()}
                         </div>
                         {hasResult ? (
@@ -872,11 +872,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         )}
                         <div className="text-center flex-1">
                           <div className={`font-bold text-sm ${game.home === userTeamName ? 'text-yellow-300' : 'text-white'}`}>{getTeamAbbreviation(game.home)}</div>
-                          <div className="text-[10px] text-gray-400 truncate">{homePitcher ? homePitcher.name : '先発未定'}</div>
+                          <div className="text-xs text-gray-400 truncate">{homePitcher ? homePitcher.name : '先発未定'}</div>
                           {homePitcher && !hasResult && (() => {
                             const ps = homePitcher.seasonStats?.pitching;
                             if (!ps || !ps.games) return null;
-                            return <div className="text-[9px] text-gray-500">{ps.wins || 0}勝{ps.losses || 0}敗{(ps.saves || 0) > 0 ? ` ${ps.saves}S` : ''}</div>;
+                            return <div className="text-[11px] text-gray-500">{ps.wins || 0}勝{ps.losses || 0}敗{(ps.saves || 0) > 0 ? ` ${ps.saves}S` : ''}</div>;
                           })()}
                         </div>
                       </div>
