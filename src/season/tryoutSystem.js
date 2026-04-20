@@ -543,19 +543,19 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     // 【設計思想】原石段階。長所は光るが伸びしろを残す
     const archetypes = [
       // 巧打タイプ: ミート高、パワー低
-      { meet: [42, 62], power: [10, 30], eye: [38, 58], steal: [22, 48], speed: [30, 55], arm: [22, 48], defense: [28, 52] },
+      { meet: [50, 70], power: [18, 38], eye: [46, 66], steal: [30, 56], speed: [38, 63], arm: [30, 56], defense: [36, 60] },
       // 強打タイプ: パワー高、走力低
-      { meet: [25, 45], power: [35, 55], eye: [22, 45], steal: [12, 32], speed: [20, 42], arm: [32, 55], defense: [22, 45] },
+      { meet: [33, 53], power: [43, 63], eye: [30, 53], steal: [20, 40], speed: [28, 50], arm: [40, 63], defense: [30, 53] },
       // 俊足タイプ: 走力高、パワー低
-      { meet: [28, 48], power: [10, 30], eye: [25, 48], steal: [48, 68], speed: [50, 68], arm: [22, 48], defense: [32, 55] },
+      { meet: [36, 56], power: [18, 38], eye: [33, 56], steal: [56, 76], speed: [58, 76], arm: [30, 56], defense: [40, 63] },
       // 守備タイプ: 守備高、打撃低
-      { meet: [22, 42], power: [10, 30], eye: [25, 48], steal: [22, 48], speed: [35, 58], arm: [42, 62], defense: [48, 68] },
+      { meet: [30, 50], power: [18, 38], eye: [33, 56], steal: [30, 56], speed: [43, 66], arm: [50, 70], defense: [56, 76] },
       // バランスタイプ: 平均的
-      { meet: [28, 52], power: [18, 42], eye: [25, 52], steal: [22, 50], speed: [28, 55], arm: [25, 50], defense: [25, 52] },
+      { meet: [36, 60], power: [26, 50], eye: [33, 60], steal: [30, 58], speed: [36, 63], arm: [33, 58], defense: [33, 60] },
       // 打撃特化タイプ: 打撃全般高、守備走力低
-      { meet: [38, 58], power: [30, 52], eye: [32, 55], steal: [12, 32], speed: [20, 42], arm: [22, 45], defense: [18, 40] },
+      { meet: [46, 66], power: [38, 60], eye: [40, 63], steal: [20, 40], speed: [28, 50], arm: [30, 53], defense: [26, 48] },
       // 肩力タイプ: 肩力高、ミート低
-      { meet: [22, 42], power: [22, 42], eye: [22, 45], steal: [18, 42], speed: [28, 52], arm: [50, 68], defense: [35, 58] },
+      { meet: [30, 50], power: [30, 50], eye: [30, 53], steal: [26, 50], speed: [36, 60], arm: [58, 76], defense: [43, 66] },
     ];
     const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
     const fielderArm = randRangeWithVariance(arch.arm[0], arch.arm[1]);
@@ -592,76 +592,76 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     // --- 野手特性（原石、磨けば光る素材） ---
     speedster: {
       // 足は光るが打撃・守備は未熟 → 外野・代走から育成
-      speed: () => randRange(60, 75),
-      steal: () => randRange(55, 72),
-      meet: () => randRange(25, 42),
-      power: () => randRange(12, 28),
-      defense: () => randRange(38, 58)
+      speed: () => randRange(73, 88),
+      steal: () => randRange(68, 85),
+      meet: () => randRange(30, 47),
+      power: () => randRange(17, 33),
+      defense: () => randRange(43, 63)
     },
     slugger: {
       // パワーが魅力だが粗削り → ミート・選球眼を磨く余地
-      power: () => randRange(50, 65),
-      meet: () => randRange(28, 45),
-      eye: () => randRange(25, 45),
-      speed: () => randRange(18, 35),
-      steal: () => randRange(8, 22),
-      defense: () => randRange(22, 42),
-      arm: () => randRange(32, 52)
+      power: () => randRange(63, 78),
+      meet: () => randRange(33, 50),
+      eye: () => randRange(30, 50),
+      speed: () => randRange(23, 40),
+      steal: () => randRange(13, 27),
+      defense: () => randRange(27, 47),
+      arm: () => randRange(37, 57)
     },
     defender: {
       // 守備センスは光るが打撃は弱い → 守備固めから育成
-      defense: () => randRange(58, 73),
-      arm: () => randRange(52, 68),
-      meet: () => randRange(25, 42),
-      power: () => randRange(15, 32),
-      speed: () => randRange(38, 58)
+      defense: () => randRange(73, 88),
+      arm: () => randRange(67, 83),
+      meet: () => randRange(30, 47),
+      power: () => randRange(20, 37),
+      speed: () => randRange(43, 63)
     },
     contactHitter: {
       // 当てる感覚はあるが一発は期待薄 → 長打力を磨く余地
-      meet: () => randRange(52, 68),
-      eye: () => randRange(45, 62),
-      power: () => randRange(18, 35),
-      speed: () => randRange(38, 55)
+      meet: () => randRange(65, 80),
+      eye: () => randRange(58, 75),
+      power: () => randRange(23, 40),
+      speed: () => randRange(43, 60)
     },
     eyeMaster: {
       // 選球眼が光る → 四球選べるがミート/パワーに伸びしろ
-      eye: () => randRange(55, 70),
-      meet: () => randRange(35, 52),
-      power: () => randRange(18, 35),
-      steal: () => randRange(25, 45)
+      eye: () => randRange(68, 83),
+      meet: () => randRange(40, 57),
+      power: () => randRange(23, 40),
+      steal: () => randRange(30, 50)
     },
     baserunner: {
       // 走塁勘が抜群 → バッティングに成長余地
-      speed: () => randRange(55, 70),
-      steal: () => randRange(58, 73),
-      meet: () => randRange(28, 45),
-      power: () => randRange(15, 32),
-      defense: () => randRange(38, 58)
+      speed: () => randRange(68, 83),
+      steal: () => randRange(71, 86),
+      meet: () => randRange(33, 50),
+      power: () => randRange(20, 37),
+      defense: () => randRange(43, 63)
     },
     armStrong: {
       // 肩は魅力的だが打撃・守備は粗い
-      arm: () => randRange(58, 73),
-      defense: () => randRange(42, 60),
-      power: () => randRange(28, 48),
-      meet: () => randRange(22, 42)
+      arm: () => randRange(71, 86),
+      defense: () => randRange(47, 65),
+      power: () => randRange(33, 53),
+      meet: () => randRange(27, 47)
     },
     speedContact: {
       // 俊足+巧打の素材型（両方ほどほどに光る）
-      meet: () => randRange(48, 62),
-      eye: () => randRange(40, 58),
-      speed: () => randRange(52, 68),
-      steal: () => randRange(48, 65),
-      power: () => randRange(12, 28),
-      defense: () => randRange(38, 58)
+      meet: () => randRange(61, 75),
+      eye: () => randRange(45, 63),
+      speed: () => randRange(65, 80),
+      steal: () => randRange(61, 78),
+      power: () => randRange(17, 33),
+      defense: () => randRange(43, 63)
     },
     powerArm: {
       // 強打+強肩の素材型
-      power: () => randRange(45, 60),
-      arm: () => randRange(55, 70),
-      defense: () => randRange(40, 58),
-      meet: () => randRange(28, 45),
-      speed: () => randRange(20, 38),
-      steal: () => randRange(8, 22)
+      power: () => randRange(58, 73),
+      arm: () => randRange(68, 83),
+      defense: () => randRange(45, 63),
+      meet: () => randRange(33, 50),
+      speed: () => randRange(25, 43),
+      steal: () => randRange(13, 27)
     },
     // --- 投手特性（原石、磨けば光る素材） ---
     fireballer: {
