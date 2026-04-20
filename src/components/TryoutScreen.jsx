@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, generateScoutComment } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
@@ -15,6 +15,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   const [sortKey, setSortKey] = useState('overall');
   const [sortDir, setSortDir] = useState('desc');
   const [draftHistory, setDraftHistory] = useState([]);
+  const draftFinalizedRef = useRef(false);
+  const candidatesGeneratedRef = useRef(false);
 
   const getPositionName = (position) => {
     const positionNames = {
@@ -56,31 +58,30 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   };
 
   useEffect(() => {
-    if (tryoutCandidates.length === 0) {
-      const year = isInitialTryout ? 1 : (seasonData?.year || 1);
-      const teamCount = seasonData?.settings?.teamsCount || Object.keys(allTeams).length || 4;
-      let candidates = generateTryoutCandidates(year, teamCount, isInitialTryout);
-      // 育成評判ボーナス: プロ輩出実績があるリーグには良い選手が集まる
-      if (!isInitialTryout) {
-        candidates = applyReputationBonus(candidates, allTeams);
-      }
-      setTryoutCandidates(candidates);
+    if (candidatesGeneratedRef.current || tryoutCandidates.length > 0) return;
+    candidatesGeneratedRef.current = true;
 
-      const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
-      let teamNames = ['ユーザー', ...teamsArray.slice(1)];
-
-      // 非初回トライアウト: 順位の低いチームから指名（最下位が1巡目1位）
-      if (!isInitialTryout && seasonData?.standings?.length > 0) {
-        const standingsSorted = [...seasonData.standings].sort((a, b) => a.winRate - b.winRate);
-        teamNames = standingsSorted.map(s => {
-          return s.team === teamsArray[0] ? 'ユーザー' : s.team;
-        });
-      }
-
-      const rounds = isInitialTryout ? 24 : Math.min(24, Math.floor(candidates.length / teamNames.length));
-      const order = generateSnakeDraftOrder(teamNames, rounds);
-      setDraftOrder(order);
+    const year = isInitialTryout ? 1 : (seasonData?.year || 1);
+    const teamCount = seasonData?.settings?.teamsCount || Object.keys(allTeams).length || 4;
+    let candidates = generateTryoutCandidates(year, teamCount, isInitialTryout);
+    if (!isInitialTryout) {
+      candidates = applyReputationBonus(candidates, allTeams);
     }
+    setTryoutCandidates(candidates);
+
+    const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+    let teamNames = ['ユーザー', ...teamsArray.slice(1)];
+
+    if (!isInitialTryout && seasonData?.standings?.length > 0) {
+      const standingsSorted = [...seasonData.standings].sort((a, b) => a.winRate - b.winRate);
+      teamNames = standingsSorted.map(s => {
+        return s.team === teamsArray[0] ? 'ユーザー' : s.team;
+      });
+    }
+
+    const rounds = isInitialTryout ? 24 : Math.min(24, Math.floor(candidates.length / teamNames.length));
+    const order = generateSnakeDraftOrder(teamNames, rounds);
+    setDraftOrder(order);
   }, [seasonData, allTeams, tryoutCandidates.length, isInitialTryout]);
 
   const handleSelectPlayer = (player) => {
@@ -142,10 +143,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   }, [currentPick, draftOrder, tryoutCandidates, teamRosters]);
 
   const finalizeDraft = (skipCheck = false) => {
-    if (draftComplete) return;
+    if (draftFinalizedRef.current || draftComplete) return;
     const teamsArrayForSave = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
 
-    // 全チームの最終人数チェック（9人未満のチームがあれば警告）
     if (!skipCheck) {
       const userTeamName = teamsArrayForSave[0];
       const userDrafted = teamRosters['ユーザー'] || [];
@@ -157,15 +157,18 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       }
     }
 
-    // 全指名選手のIDを収集（解雇プール更新に使用）
+    draftFinalizedRef.current = true;
+
     const allDraftedIds = [];
     Object.keys(teamRosters).forEach(teamName => {
       const draftedPlayers = teamRosters[teamName] || [];
       const actualTeamName = teamName === 'ユーザー' ? teamsArrayForSave[0] : teamName;
       if (TEAMS_DATA[actualTeamName]) {
+        const existingIds = new Set((TEAMS_DATA[actualTeamName].players || []).map(p => p.id));
+        const newPlayers = draftedPlayers.filter(p => !existingIds.has(p.id));
         TEAMS_DATA[actualTeamName].players = [
           ...(TEAMS_DATA[actualTeamName].players || []),
-          ...draftedPlayers
+          ...newPlayers
         ];
       }
       draftedPlayers.forEach(p => allDraftedIds.push(p.id));
@@ -612,7 +615,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCandidates.map(player => {
+                  {filteredCandidates.map((player, idx) => {
                     const throwLabel = player.physical?.throws === 'left' ? '左投' : '右投';
                     const batLabel = player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打';
                     const fOverall = getFielderOverall(player);
@@ -621,7 +624,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     const pRank = getAbilityRank(pOverall);
                     return (
                       <tr
-                        key={player.id}
+                        key={`${player.id}-${idx}`}
                         className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition ${player.isReleasedCandidate ? 'bg-amber-950/30' : ''}`}
                         onClick={() => isUserTurn && handleSelectPlayer(player)}
                       >

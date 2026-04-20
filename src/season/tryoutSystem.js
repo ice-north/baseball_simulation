@@ -351,7 +351,13 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
   // 解雇プールから再トライアウト参加者を追加（初回トライアウト除く）
   if (!isInitial) {
     const releasedCandidates = getReleasedCandidatesFromPool();
-    candidates.push(...releasedCandidates);
+    const existingIds = new Set(candidates.map(c => c.id));
+    releasedCandidates.forEach(rc => {
+      if (!existingIds.has(rc.id)) {
+        existingIds.add(rc.id);
+        candidates.push(rc);
+      }
+    });
   }
 
   return candidates;
