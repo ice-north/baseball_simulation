@@ -468,9 +468,21 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           }
 
           // 試合中：スタメン同士の打順変更は禁止（野球のルール）
+          // ただし一方が投手、他方がリリーフ登録の野手なら二刀流交代を許可
           if (gameStarted && player1Current?.isStarter && player2Current?.isStarter) {
-            setSelectedSubstitute(null);
-            return;
+            const teamName = team.name;
+            const pitcherRoles = TEAMS_DATA[teamName]?.pitchingRotation?.pitcherRoles || {};
+            const RELIEF_ROLES = new Set(['closer', 'setup', 'ace_relief', 'onepoint', 'long', 'behind', 'mopup']);
+            const p1IsPitcher = player1Current.position === 'pitcher';
+            const p2IsPitcher = player2Current.position === 'pitcher';
+            const p1HasReliefRole = RELIEF_ROLES.has(pitcherRoles[player1Current.id]);
+            const p2HasReliefRole = RELIEF_ROLES.has(pitcherRoles[player2Current.id]);
+            const isTwoWaySwap = (p1IsPitcher && !p2IsPitcher && p2HasReliefRole) ||
+                                 (p2IsPitcher && !p1IsPitcher && p1HasReliefRole);
+            if (!isTwoWaySwap) {
+              setSelectedSubstitute(null);
+              return;
+            }
           }
 
           setTeam(prev => {
@@ -484,12 +496,53 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
                 return prev;
               }
 
-              // 試合前：スタメン同士の場合は打順のみ交換（守備位置はそのまま）
+              // スタメン同士の場合
               if (player1.isStarter && player2.isStarter) {
-                const tempOrder = player1.battingOrder;
-                player1.battingOrder = player2.battingOrder;
-                player2.battingOrder = tempOrder;
-                // 守備位置はそのまま、isStarterフラグも変更なし
+                // 試合中の二刀流リリーフ交代：野手→投手にポジションチェンジ
+                if (gameStarted && (player1.position === 'pitcher' || player2.position === 'pitcher')) {
+                  const pitcher = player1.position === 'pitcher' ? player1 : player2;
+                  const fielder = player1.position === 'pitcher' ? player2 : player1;
+                  const oldFieldPos = fielder.position;
+                  const oldFieldOrder = fielder.battingOrder;
+                  const pitcherOldOrder = pitcher.battingOrder;
+
+                  pitcher.isStarter = false;
+                  pitcher.hasSubbedOut = true;
+                  pitcher.battingOrder = 0;
+                  pitcher.position = getBestFitPosition(pitcher);
+
+                  fielder.battingOrder = pitcherOldOrder;
+                  fielder.position = 'pitcher';
+
+                  // 空いた野手スロットにベンチから最適な野手を補充
+                  const benchFielders = players.filter(p =>
+                    !p.isStarter && !p.hasSubbedOut && p.position !== 'pitcher' && p.id !== fielder.id
+                  );
+                  if (benchFielders.length > 0) {
+                    benchFielders.sort((a, b) =>
+                      (b.positionFitness?.[oldFieldPos] || 0) - (a.positionFitness?.[oldFieldPos] || 0)
+                    );
+                    const replacement = benchFielders[0];
+                    replacement.isStarter = true;
+                    replacement.battingOrder = oldFieldOrder;
+                    replacement.position = oldFieldPos;
+                  }
+
+                  // 投手スタミナリセット
+                  const isDefenseTeamChange = (teamType === 'home' && isTopInning) || (teamType === 'away' && !isTopInning);
+                  if (isDefenseTeamChange) {
+                    setTimeout(() => {
+                      const maxSt = fielder.pitching?.stamina || 100;
+                      const fat = fielder.fatigue || 0;
+                      setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
+                    }, 0);
+                  }
+                } else {
+                  // 試合前：打順のみ交換（守備位置はそのまま）
+                  const tempOrder = player1.battingOrder;
+                  player1.battingOrder = player2.battingOrder;
+                  player2.battingOrder = tempOrder;
+                }
               }
               // スタメンと控えの場合：交代処理
               else {

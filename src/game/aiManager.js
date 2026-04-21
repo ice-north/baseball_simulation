@@ -142,10 +142,16 @@ export function executeAutoSubstitutePitcher(ctx) {
 
   if (!shouldSubstitute) return;
 
-  // ロールベースの投手選択
-  const availablePitchers = defenseTeam.players.filter(p =>
-    !p.isStarter && p.position === 'pitcher' && !p.hasSubbedOut
-  );
+  const RELIEF_ROLES = new Set(['closer', 'setup', 'ace_relief', 'onepoint', 'long', 'behind', 'mopup']);
+
+  // ロールベースの投手選択（二刀流：野手スタメンでもリリーフ登録されていれば候補に含む）
+  const availablePitchers = defenseTeam.players.filter(p => {
+    if (p.hasSubbedOut) return false;
+    if (p.id === currentPitcher.id) return false;
+    if (!p.isStarter && p.position === 'pitcher') return true;
+    if (p.isStarter && p.position !== 'pitcher' && RELIEF_ROLES.has(pitcherRoles[p.id])) return true;
+    return false;
+  });
   if (availablePitchers.length === 0) return;
 
   let selectedPitcher = null;
@@ -203,6 +209,8 @@ export function executeAutoSubstitutePitcher(ctx) {
 
   isSubstituting.current = true;
 
+  const isTwoWayReliever = selectedPitcher.isStarter && selectedPitcher.position !== 'pitcher';
+
   setTeam(prev => {
     const players = [...prev.players];
     const oldPitcher = players.find(p => p.id === currentPitcher.id);
@@ -213,9 +221,32 @@ export function executeAutoSubstitutePitcher(ctx) {
       oldPitcher.hasSubbedOut = true;
       oldPitcher.battingOrder = 0;
 
-      newPitcher.isStarter = true;
-      newPitcher.battingOrder = currentPitcher.battingOrder;
-      newPitcher.position = 'pitcher';
+      if (isTwoWayReliever) {
+        // 二刀流リリーバー：野手→投手にポジションチェンジ
+        const oldFieldPos = newPitcher.position;
+        const oldFieldOrder = newPitcher.battingOrder;
+
+        newPitcher.battingOrder = currentPitcher.battingOrder;
+        newPitcher.position = 'pitcher';
+
+        // 空いた野手スロットにベンチから最適な野手を補充
+        const benchFielders = players.filter(p =>
+          !p.isStarter && !p.hasSubbedOut && p.position !== 'pitcher' && p.id !== newPitcher.id
+        );
+        if (benchFielders.length > 0) {
+          benchFielders.sort((a, b) =>
+            (b.positionFitness?.[oldFieldPos] || 0) - (a.positionFitness?.[oldFieldPos] || 0)
+          );
+          const replacement = benchFielders[0];
+          replacement.isStarter = true;
+          replacement.battingOrder = oldFieldOrder;
+          replacement.position = oldFieldPos;
+        }
+      } else {
+        newPitcher.isStarter = true;
+        newPitcher.battingOrder = currentPitcher.battingOrder;
+        newPitcher.position = 'pitcher';
+      }
 
       setTimeout(() => {
         const maxSt = newPitcher.pitching.stamina;
@@ -223,10 +254,11 @@ export function executeAutoSubstitutePitcher(ctx) {
         setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
       }, 0);
 
+      const twoWayLabel = isTwoWayReliever ? '二刀流' : '';
       setGameLog(prev => {
         const teamLabel = teamType === 'home' ? 'ホーム' : 'アウェイ';
         const updated = [...prev, {
-          description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamLabel}: 投手交代 ${oldPitcher.name} → ${newPitcher.name}（${roleLabel}）【${reason}】`,
+          description: `⚾ [${inning}回${isTopInning ? '裏' : '表'}] ${teamLabel}: 投手交代 ${oldPitcher.name} → ${newPitcher.name}（${twoWayLabel}${roleLabel}）【${reason}】`,
           isSpecial: true
         }];
         return updated.length > 50 ? updated.slice(-50) : updated;
