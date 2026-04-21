@@ -65,15 +65,42 @@ export function executeSetupManagedGame(ctx, gameInfo) {
       if (rotation?.starters?.length > 0) {
         const index = rotation.currentStarterIndex || 0;
         const starterId = rotation.starters[index];
+
+        // 先発投手がスタメンの別ポジションにいる場合、元9番と入れ替え
+        const starterPlayer = players.find(p => p.id === starterId);
+        const starterOldOrder = starterPlayer?.battingOrder || 0;
+        const starterOldPos = starterPlayer?.position;
+        const hadNonPitcherSlot = starterOldOrder > 0 && starterOldOrder !== 9;
+
+        const oldNinthPlayer = players.find(p => p.battingOrder === 9 && p.id !== starterId);
+
         players.forEach(p => {
           if (p.id === starterId) {
             p.battingOrder = 9;
             p.position = 'pitcher';
-          } else if (p.battingOrder === 9 && p.id !== starterId) {
-            p.battingOrder = 0;
           }
         });
+
+        if (oldNinthPlayer) {
+          if (hadNonPitcherSlot && starterOldPos) {
+            // 元9番打者を先発投手の旧スロットに配置
+            oldNinthPlayer.battingOrder = starterOldOrder;
+            oldNinthPlayer.position = starterOldPos;
+          } else {
+            oldNinthPlayer.battingOrder = 0;
+          }
+        }
       }
+
+      // 同一IDの重複を除去（先頭を残す）
+      const seenIds = new Set();
+      players.forEach(p => {
+        if (seenIds.has(p.id)) {
+          p.battingOrder = 0;
+          p.isStarter = false;
+        }
+        seenIds.add(p.id);
+      });
     }
 
     return players;
