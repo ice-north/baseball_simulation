@@ -13,6 +13,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [selectedDefensePos, setSelectedDefensePos] = useState(null);
   const [swapSource, setSwapSource] = useState(null); // クリックで打順入れ替え用
   const [roleSelectPlayer, setRoleSelectPlayer] = useState(null); // ロール選択モーダル対象
+  const [posConvertPlayer, setPosConvertPlayer] = useState(null); // ポジション変更モーダル対象
 
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
@@ -292,6 +293,84 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     setUpdateTrigger(prev => prev + 1);
   };
 
+  const handleConvertPosition = (playerId, newPosition) => {
+    const player = team.players.find(p => p.id === playerId);
+    if (!player) return;
+    const oldPos = player.position;
+    player.position = newPosition;
+    if (oldPos === 'pitcher' && newPosition !== 'pitcher') {
+      handleSetPitcherRole(playerId, 'none');
+    }
+    setUpdateTrigger(prev => prev + 1);
+  };
+
+  const POS_OPTIONS = [
+    { key: 'pitcher', label: '投手', icon: '⚾' },
+    { key: 'catcher', label: '捕手', icon: '🧤' },
+    { key: 'first', label: '一塁手', icon: '1B' },
+    { key: 'second', label: '二塁手', icon: '2B' },
+    { key: 'short', label: '遊撃手', icon: 'SS' },
+    { key: 'third', label: '三塁手', icon: '3B' },
+    { key: 'left', label: '左翼手', icon: 'LF' },
+    { key: 'center', label: '中堅手', icon: 'CF' },
+    { key: 'right', label: '右翼手', icon: 'RF' },
+  ];
+
+  const PosConvertModal = ({ player, onClose }) => {
+    if (!player) return null;
+    return (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+        <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+          <div className="border-b border-gray-700 px-4 py-3 rounded-t-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-bold">{player.name}</h3>
+                <p className="text-gray-400 text-xs">
+                  現在: <span className="text-white font-medium">{POSITION_NAMES[player.position] || player.position}</span>
+                </p>
+              </div>
+              <button onClick={onClose} className="text-gray-400 hover:text-white text-xl px-2">✕</button>
+            </div>
+          </div>
+          <div className="p-4">
+            <p className="text-gray-400 text-xs mb-3">変更先のポジションを選択してください</p>
+            <div className="grid grid-cols-3 gap-2">
+              {POS_OPTIONS.map(pos => {
+                const isCurrent = player.position === pos.key;
+                const fitness = player.positionFitness?.[pos.key] ?? 0;
+                const fitnessColor = fitness >= 80 ? 'text-green-400' : fitness >= 50 ? 'text-yellow-400' : 'text-red-400';
+                return (
+                  <button
+                    key={pos.key}
+                    onClick={() => {
+                      if (!isCurrent) {
+                        handleConvertPosition(player.id, pos.key);
+                        onClose();
+                      }
+                    }}
+                    disabled={isCurrent}
+                    className={`flex flex-col items-center gap-0.5 px-2 py-2.5 rounded-lg border transition-all ${
+                      isCurrent
+                        ? 'bg-blue-600/30 border-blue-500/50 ring-1 ring-blue-400/30'
+                        : 'bg-gray-700/50 border-gray-600/50 hover:bg-gray-600/70 hover:border-gray-500'
+                    }`}
+                  >
+                    <span className="text-base">{pos.icon}</span>
+                    <span className={`text-xs font-bold ${isCurrent ? 'text-blue-300' : 'text-white'}`}>{pos.label}</span>
+                    {pos.key !== 'pitcher' && (
+                      <span className={`text-[10px] ${fitnessColor}`}>適性{fitness}</span>
+                    )}
+                    {isCurrent && <span className="text-[9px] text-blue-400">現在</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // 投手の現在のロールを取得
   const getPitcherRole = (playerId) => {
     const rotation = team.pitchingRotation;
@@ -417,9 +496,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         </td>
         <td className="py-1.5 px-1 text-[11px] text-gray-500 text-center">{player.age}</td>
         <td className="py-1.5 px-1 text-[11px] whitespace-nowrap">
-          <span className={isPitcher ? 'text-indigo-300 font-medium' : 'text-gray-300'}>
+          <button
+            onClick={(e) => { e.stopPropagation(); setPosConvertPlayer(player); }}
+            className={`${isPitcher ? 'text-indigo-300 font-medium' : 'text-gray-300'} hover:underline hover:brightness-125`}
+            title="ポジション登録変更"
+          >
             {POSITION_NAMES[player.position] || player.position}
-          </span>
+          </button>
           {!isPitcher && (() => {
             const subs = getSubPositions(player, player.position);
             if (subs.length === 0) return null;
@@ -773,17 +856,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           const unassignedPitchers = allPlayers.filter(p => p.position === 'pitcher' && getPitcherRole(p.id) === 'none');
           const fieldersForConvert = allPlayers.filter(p => p.position !== 'pitcher' && getPitcherRole(p.id) === 'none');
 
-          const handleConvertPosition = (playerId, newPosition) => {
-            const player = allPlayers.find(p => p.id === playerId);
-            if (!player) return;
-            const oldPos = player.position;
-            player.position = newPosition;
-            if (oldPos === 'pitcher' && newPosition !== 'pitcher') {
-              handleSetPitcherRole(playerId, 'none');
-            }
-            setUpdateTrigger(prev => prev + 1);
-          };
-
           const StatVal = ({ label, value, isVelocity }) => {
             const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);
             return <span className={`${getRankColor(rank)}`}>{label}{value}</span>;
@@ -953,6 +1025,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <span className={`font-bold text-sm ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`}>
                       {player.name}
                     </span>
+                    <button
+                      onClick={() => setPosConvertPlayer(player)}
+                      className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${
+                        player.position === 'pitcher'
+                          ? 'bg-indigo-900/40 border-indigo-600/50 text-indigo-300 hover:bg-indigo-800/50'
+                          : 'bg-cyan-900/40 border-cyan-600/50 text-cyan-300 hover:bg-cyan-800/50'
+                      }`}
+                      title="ポジション登録変更"
+                    >
+                      {POSITION_NAMES[player.position] || player.position}
+                    </button>
                     <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                       {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
                     </span>
@@ -1704,6 +1787,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             </div>
           );
         })()}
+
+        {/* ポジション変更モーダル（全タブ共通） */}
+        {posConvertPlayer && (
+          <PosConvertModal player={posConvertPlayer} onClose={() => setPosConvertPlayer(null)} />
+        )}
       </div>
     </div>
   );
