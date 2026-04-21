@@ -66,7 +66,6 @@ export function executeSetupManagedGame(ctx, gameInfo) {
         const index = rotation.currentStarterIndex || 0;
         const starterId = rotation.starters[index];
 
-        // 先発投手がスタメンの別ポジションにいる場合、元9番と入れ替え
         const starterPlayer = players.find(p => p.id === starterId);
         const starterOldOrder = starterPlayer?.battingOrder || 0;
         const starterOldPos = starterPlayer?.position;
@@ -82,12 +81,25 @@ export function executeSetupManagedGame(ctx, gameInfo) {
         });
 
         if (oldNinthPlayer) {
-          if (hadNonPitcherSlot && starterOldPos) {
-            // 元9番打者を先発投手の旧スロットに配置
+          oldNinthPlayer.battingOrder = 0;
+        }
+
+        // 二刀流：野手スロットに空きが出た場合、ベンチから最適な野手を補充
+        if (hadNonPitcherSlot && starterOldPos) {
+          const startersInLineup = new Set(players.filter(p => p.battingOrder > 0).map(p => p.id));
+          const benchFielders = players.filter(p =>
+            p.battingOrder === 0 && !startersInLineup.has(p.id) && p.position !== 'pitcher'
+          );
+          if (benchFielders.length > 0) {
+            benchFielders.sort((a, b) =>
+              (b.positionFitness?.[starterOldPos] || 0) - (a.positionFitness?.[starterOldPos] || 0)
+            );
+            benchFielders[0].battingOrder = starterOldOrder;
+            benchFielders[0].position = starterOldPos;
+          } else if (oldNinthPlayer) {
+            // ベンチ野手がいない場合は元9番を入れる（フォールバック）
             oldNinthPlayer.battingOrder = starterOldOrder;
             oldNinthPlayer.position = starterOldPos;
-          } else {
-            oldNinthPlayer.battingOrder = 0;
           }
         }
       }
