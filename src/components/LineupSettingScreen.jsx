@@ -861,32 +861,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             return <span className={`${getRankColor(rank)}`}>{label}{value}</span>;
           };
 
-          const getArsenalDisplay = (player) => {
-            const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
-            if (arsenal.length === 0) return null;
-            return arsenal.map((a, i) => {
-              const rank = getAbilityRank(a.level || 0);
-              return <span key={i} className={`${getRankColor(rank)}`}>{i > 0 ? '/' : ''}{getPitchTypeName(a.type)}{rank}</span>;
-            });
-          };
-
-          // ロール説明テキスト
-          const ROLE_DESC = {
-            ace: '7-8回を責任投球、勝ちパターンへ繋ぐ',
-            complete: '完投を目指して長いイニングを投げる',
-            short: '3-4回で降板し中継ぎに繋ぐ',
-            quality: '5-6回・勝ち権利まで投げて降板',
-            auto_s: '能力に応じて自動で投球回数を調整',
-            long: '先発降板後に長いイニングをカバー',
-            mopup: '大差ビハインド時に登板',
-            behind: 'ビハインド時にイニングを繋ぐ',
-            onepoint: '特定の打者1人に対して登板',
-            ace_relief: '中継ぎの柱として僅差で登板',
-            setup: '7-8回の僅差で守護神に繋ぐ',
-            closer: '9回・リード時に試合を締める',
-            auto_r: '状況に応じて自動で登板場面を判断',
-          };
-
           // ロールアイコン
           const ROLE_ICON = {
             ace: '👑', complete: '🏔', short: '⚡', quality: '✓', auto_s: '🤖',
@@ -982,255 +956,182 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             );
           };
 
-          // 投手カードコンポーネント
-          const PitcherCard = ({ player, index, isStarter, showReorder, totalCount }) => {
+          // コンパクト投手行コンポーネント（1行表示）
+          const PitcherRow = ({ player, index, isStarter, totalCount }) => {
             const role = getPitcherRole(player.id);
             const roleInfo = PITCHER_ROLES[role];
             const p = player.pitching || {};
-            const b = player.batting || {};
             const ph = player.physical || {};
-            const f = player.fielding || {};
-            const arsenalDisplay = getArsenalDisplay(player);
-
-            // ロールごとの左ボーダー色
             const borderColors = {
               ace: 'border-l-red-500', complete: 'border-l-blue-500', short: 'border-l-blue-400', quality: 'border-l-blue-300',
-              auto_s: 'border-l-gray-400',
-              long: 'border-l-green-600', ace_relief: 'border-l-green-400', mopup: 'border-l-gray-500',
-              behind: 'border-l-yellow-600', onepoint: 'border-l-green-500',
-              setup: 'border-l-orange-500', closer: 'border-l-purple-500',
+              auto_s: 'border-l-gray-400', long: 'border-l-green-600', ace_relief: 'border-l-green-400', mopup: 'border-l-gray-500',
+              behind: 'border-l-yellow-600', onepoint: 'border-l-green-500', setup: 'border-l-orange-500', closer: 'border-l-purple-500',
               auto_r: 'border-l-gray-400', none: 'border-l-gray-600',
             };
 
+            const ps = player.seasonStats?.pitching;
+            const era = ps?.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : null;
+
             return (
-              <div className={`bg-gray-700/80 rounded-lg border-l-4 ${borderColors[role] || 'border-l-gray-600'} hover:bg-gray-700 transition-colors`}>
-                <div className="px-3 py-2.5">
-                  {/* 1行目: 名前・情報・ロールバッジ */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {isStarter && (
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          onClick={() => handleSwapStarter(index, -1)}
-                          disabled={index === 0}
-                          className={`w-5 h-5 flex items-center justify-center rounded text-[10px] ${index === 0 ? 'text-gray-600' : 'text-gray-400 hover:text-white hover:bg-gray-600'}`}
-                        >▲</button>
-                        <span className="text-blue-400 font-bold text-xs w-4 text-center">{index + 1}</span>
-                        <button
-                          onClick={() => handleSwapStarter(index, 1)}
-                          disabled={index === totalCount - 1}
-                          className={`w-5 h-5 flex items-center justify-center rounded text-[10px] ${index === totalCount - 1 ? 'text-gray-600' : 'text-gray-400 hover:text-white hover:bg-gray-600'}`}
-                        >▼</button>
-                      </div>
-                    )}
-                    <span className={`font-bold text-sm ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`}>
-                      {player.name}
-                    </span>
+              <div className={`flex items-center gap-1 px-2 py-1 border-l-2 ${borderColors[role] || 'border-l-gray-600'} hover:bg-gray-700/50 rounded-r transition-colors`}>
+                {isStarter && (
+                  <div className="flex items-center gap-0 shrink-0">
                     <button
-                      onClick={() => setPosConvertPlayer(player)}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${
-                        player.position === 'pitcher'
-                          ? 'bg-indigo-900/40 border-indigo-600/50 text-indigo-300 hover:bg-indigo-800/50'
-                          : 'bg-cyan-900/40 border-cyan-600/50 text-cyan-300 hover:bg-cyan-800/50'
-                      }`}
-                      title="ポジション登録変更"
-                    >
-                      {POSITION_NAMES[player.position] || player.position}
-                    </button>
-                    <span className={`text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
-                      {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
-                    </span>
-                    <span className="text-gray-500 text-xs">{player.age}歳</span>
-                    <span className="text-gray-500 text-xs">{getThrowsLabel(ph.throws)}{getBatsLabel(b.bats || ph.bats)}</span>
-                    {p.form && <span className="text-gray-600 text-xs">{getFormLabel(p.form)}</span>}
-
-                    {/* 体力バー */}
-                    <div className="flex items-center gap-1 ml-auto">
-                      <span className="text-gray-500 text-[10px]">体力</span>
-                      <div className="w-12 h-1.5 bg-gray-600 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${getStaminaBarColor(player.physical?.bodyStamina ?? 50)}`}
-                          style={{ width: `${Math.min(100, (player.physical?.bodyStamina ?? 50))}%` }}
-                        ></div>
-                      </div>
-                    </div>
-
-                    {/* ロールバッジ（クリックで変更） */}
+                      onClick={() => handleSwapStarter(index, -1)}
+                      disabled={index === 0}
+                      className={`w-4 h-4 flex items-center justify-center text-[8px] ${index === 0 ? 'text-gray-700' : 'text-gray-500 hover:text-white'}`}
+                    >▲</button>
+                    <span className="text-blue-400 font-bold text-[10px] w-3 text-center">{index + 1}</span>
                     <button
-                      onClick={() => setRoleSelectPlayer(player)}
-                      className={`${roleInfo.color} text-white px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 hover:brightness-125 transition-all shadow-sm shrink-0`}
-                    >
-                      <span className="text-[10px]">{ROLE_ICON[role]}</span>
-                      {roleInfo.label}
-                    </button>
+                      onClick={() => handleSwapStarter(index, 1)}
+                      disabled={index === totalCount - 1}
+                      className={`w-4 h-4 flex items-center justify-center text-[8px] ${index === totalCount - 1 ? 'text-gray-700' : 'text-gray-500 hover:text-white'}`}
+                    >▼</button>
                   </div>
-
-                  {/* 2行目: 能力値 */}
-                  <div className="flex items-center gap-1 text-xs flex-wrap">
-                    <span className="text-gray-500 mr-0.5">投:</span>
-                    <StatVal label="球速" value={p.velocity || 0} isVelocity />
-                    <StatVal label=" 制球" value={p.control || 0} />
-                    <StatVal label=" スタ" value={p.stamina || 0} />
-                    {arsenalDisplay && <>
-                      <span className="text-gray-600 mx-0.5">│</span>
-                      <span className="text-gray-500">変:</span>
-                      {arsenalDisplay}
-                    </>}
-                    <span className="text-gray-600 mx-0.5">│</span>
-                    <span className="text-gray-500">打:</span>
-                    <StatVal label="ミ" value={b.meet || 0} />
-                    <StatVal label=" パ" value={b.power || 0} />
-                    <StatVal label=" 走" value={ph.speed || 0} />
-                    <StatVal label=" 肩" value={ph.arm || 0} />
-                    <StatVal label=" 守" value={f.defense || 0} />
-                  </div>
-
-                  {/* シーズン成績 */}
-                  {(() => {
-                    const ps = player.seasonStats?.pitching;
-                    const bs = player.seasonStats?.batting;
-                    if (!ps?.games && !bs?.atBats) return null;
-                    return (
-                      <div className="flex items-center gap-1 text-[11px] mt-1 flex-wrap">
-                        {ps?.games > 0 && (() => {
-                          const ip = ps.inningsPitched ? (ps.inningsPitched / 3).toFixed(1) : '0.0';
-                          const era = ps.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : '-';
-                          const whip = ps.inningsPitched > 0 ? (((ps.walks || 0) + (ps.hits || 0)) / (ps.inningsPitched / 3)).toFixed(2) : '-';
-                          return <>
-                            <span className="text-gray-500">Season:</span>
-                            <span className="text-white">{ps.wins||0}勝{ps.losses||0}敗</span>
-                            {(ps.saves > 0) && <span className="text-white">{ps.saves}S</span>}
-                            {(ps.holds > 0) && <span className="text-white">{ps.holds}H</span>}
-                            <span className="text-orange-300">防{era}</span>
-                            <span className="text-gray-400">{ip}回</span>
-                            <span className="text-gray-400">WHIP{whip}</span>
-                            <span className="text-gray-400">{ps.games}試合</span>
-                          </>;
-                        })()}
-                        {bs?.atBats > 0 && <>
-                          <span className="text-gray-600 mx-1">│</span>
-                          <span className="text-blue-300">打率{(bs.hits / bs.atBats).toFixed(3)}</span>
-                          {bs.homeruns > 0 && <span className="text-gray-300">{bs.homeruns}本</span>}
-                        </>}
-                      </div>
-                    );
-                  })()}
+                )}
+                <span className={`font-bold text-xs truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`} style={{ minWidth: 0, maxWidth: '5.5rem' }}>
+                  {player.name}
+                </span>
+                <span className={`text-[9px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
+                  {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
+                </span>
+                <div className="flex items-center gap-0.5 text-[10px] shrink-0">
+                  <StatVal label="" value={p.velocity || 0} isVelocity />
+                  <span className="text-gray-600">/</span>
+                  <StatVal label="" value={p.control || 0} />
+                  <span className="text-gray-600">/</span>
+                  <StatVal label="" value={p.stamina || 0} />
+                </div>
+                {ps?.games > 0 && (
+                  <span className="text-[9px] text-gray-500 shrink-0">
+                    {ps.wins||0}勝{ps.losses||0}敗{era && <span className="text-orange-300/70 ml-0.5">{era}</span>}
+                  </span>
+                )}
+                <div className="flex items-center gap-0.5 ml-auto shrink-0">
+                  <button
+                    onClick={() => setPosConvertPlayer(player)}
+                    className={`text-[9px] px-1 py-0 rounded border ${
+                      player.position === 'pitcher'
+                        ? 'border-indigo-700/40 text-indigo-400/70 hover:bg-indigo-900/30'
+                        : 'border-cyan-700/40 text-cyan-400/70 hover:bg-cyan-900/30'
+                    }`}
+                    title="ポジション変更"
+                  >
+                    {POSITION_NAMES[player.position]?.charAt(0) || '投'}
+                  </button>
+                  <button
+                    onClick={() => setRoleSelectPlayer(player)}
+                    className={`${roleInfo.color} text-white px-1.5 py-0 rounded-full text-[10px] font-bold flex items-center gap-0.5 hover:brightness-125 shrink-0`}
+                  >
+                    <span className="text-[8px]">{ROLE_ICON[role]}</span>
+                    {roleInfo.label}
+                  </button>
                 </div>
               </div>
             );
           };
 
-          // ブルペンフロー図（先発→中継→SU→抑え）
-          const BullpenFlow = () => {
-            const sections = [
-              { label: '先発', count: starterPitchers.length, color: 'bg-blue-500', icon: '⚾', target: 6 },
-              { label: '中継ぎ', count: reliefByRole.long.length + reliefByRole.middle.length, color: 'bg-green-500', icon: '🔄', target: 3 },
-              { label: 'SU', count: reliefByRole.setup.length, color: 'bg-orange-500', icon: '⬆', target: 1 },
-              { label: '抑え', count: reliefByRole.closer.length, color: 'bg-purple-500', icon: '🔒', target: 1 },
+          // コンパクトブルペンフロー
+          const BullpenFlowCompact = () => {
+            const items = [
+              { label: '先発', count: starterPitchers.length, target: 6, color: 'text-blue-400' },
+              { label: '中継', count: reliefByRole.long.length + reliefByRole.middle.length, target: 3, color: 'text-green-400' },
+              { label: 'SU', count: reliefByRole.setup.length, target: 1, color: 'text-orange-400' },
+              { label: '抑', count: reliefByRole.closer.length, target: 1, color: 'text-purple-400' },
+              { label: '未', count: unassignedPitchers.length, target: 0, color: 'text-gray-400' },
             ];
             return (
-              <div className="bg-gray-800/50 rounded-xl p-3 mb-4 border border-gray-700/50">
-                <div className="flex items-center gap-1">
-                  {sections.map((s, i) => (
-                    <React.Fragment key={s.label}>
-                      <div className="flex-1 text-center">
-                        <div className="text-lg mb-0.5">{s.icon}</div>
-                        <div className="text-[11px] text-gray-400 font-medium">{s.label}</div>
-                        <div className={`text-lg font-bold ${s.count >= s.target ? 'text-white' : s.count > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
-                          {s.count}<span className="text-gray-600 text-xs">/{s.target}</span>
-                        </div>
-                        <div className="mt-1 mx-auto w-full h-1 rounded-full bg-gray-700 overflow-hidden">
-                          <div className={`h-full rounded-full ${s.color} transition-all`} style={{ width: `${Math.min(100, (s.count / s.target) * 100)}%` }}></div>
-                        </div>
-                      </div>
-                      {i < sections.length - 1 && (
-                        <div className="text-gray-600 text-xs px-0.5 pt-2">▸</div>
-                      )}
-                    </React.Fragment>
-                  ))}
-                  <div className="border-l border-gray-700 pl-2 ml-1 text-center">
-                    <div className="text-gray-500 text-[10px]">未設定</div>
-                    <div className={`text-sm font-bold ${unassignedPitchers.length > 0 ? 'text-gray-300' : 'text-gray-600'}`}>{unassignedPitchers.length}</div>
-                  </div>
-                </div>
+              <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700/50 mb-2">
+                {items.map((s, i) => (
+                  <React.Fragment key={s.label}>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-[10px] font-medium ${s.color}`}>{s.label}</span>
+                      <span className={`text-xs font-bold ${s.target > 0 && s.count >= s.target ? 'text-white' : s.count > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
+                        {s.count}{s.target > 0 && <span className="text-gray-600 text-[9px]">/{s.target}</span>}
+                      </span>
+                    </div>
+                    {i < items.length - 1 && <span className="text-gray-700 text-[10px]">▸</span>}
+                  </React.Fragment>
+                ))}
+                <span className="text-gray-600 text-[9px] ml-auto">バッジ: 役割変更 / ポジ: 登録変更</span>
               </div>
             );
           };
 
           return (
-            <div className="space-y-3">
-              {/* ブルペンフロー図 */}
-              <BullpenFlow />
+            <div>
+              <BullpenFlowCompact />
 
               {/* ロール選択モーダル */}
               {roleSelectPlayer && (
                 <RoleSelectModal player={roleSelectPlayer} onClose={() => setRoleSelectPlayer(null)} />
               )}
 
-              {/* 先発ローテーション */}
-              <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-gray-700/50 flex items-center gap-2">
-                  <span className="text-blue-400 text-sm">⚾</span>
-                  <h2 className="text-sm font-bold text-blue-400">先発ローテーション</h2>
-                  <span className="text-gray-500 text-xs">{starterPitchers.length}人</span>
-                  <span className="text-gray-600 text-[10px] ml-auto">▲▼でローテ順変更 / バッジクリックで役割変更</span>
-                </div>
-                <div className="p-2 space-y-1.5">
-                  {starterPitchers.length === 0 ? (
-                    <p className="text-gray-500 text-sm py-4 text-center">先発投手が設定されていません。下の未設定投手から割り当ててください。</p>
-                  ) : starterPitchers.map((player, idx) => (
-                    <PitcherCard key={player.id} player={player} index={idx} isStarter showReorder totalCount={starterPitchers.length} />
-                  ))}
-                </div>
-              </div>
-
-              {/* リリーフ陣 */}
-              <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-gray-700/50 flex items-center gap-2">
-                  <span className="text-green-400 text-sm">🔄</span>
-                  <h2 className="text-sm font-bold text-green-400">リリーフ・ブルペン</h2>
-                  <span className="text-gray-500 text-xs">{allReliefPitchers.length}人</span>
-                  <span className="text-gray-600 text-[10px] ml-auto">バッジクリックで役割変更</span>
-                </div>
-                <div className="p-2 space-y-1.5">
-                  {allReliefPitchers.length === 0 ? (
-                    <p className="text-gray-500 text-sm py-4 text-center">リリーフ投手が設定されていません。</p>
-                  ) : allReliefPitchers.map((player, idx) => (
-                    <PitcherCard key={player.id} player={player} index={idx} />
-                  ))}
-                </div>
-              </div>
-
-              {/* 未設定投手 */}
-              {unassignedPitchers.length > 0 && (
-                <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-gray-700/50 flex items-center gap-2">
-                    <span className="text-gray-400 text-sm">📋</span>
-                    <h2 className="text-sm font-bold text-gray-400">未設定の投手</h2>
-                    <span className="text-gray-500 text-xs">{unassignedPitchers.length}人</span>
+              {/* 2カラム: 先発（左） / リリーフ（右） */}
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {/* 先発ローテーション */}
+                <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
+                  <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
+                    <span className="text-blue-400 text-xs">⚾</span>
+                    <h2 className="text-xs font-bold text-blue-400">先発ローテーション</h2>
+                    <span className="text-gray-500 text-[10px]">{starterPitchers.length}人</span>
                   </div>
-                  <div className="p-2 space-y-1.5">
-                    {unassignedPitchers.map((player, idx) => (
-                      <PitcherCard key={player.id} player={player} index={idx} />
+                  <div className="p-1 space-y-0.5">
+                    {starterPitchers.length === 0 ? (
+                      <p className="text-gray-500 text-xs py-3 text-center">未設定</p>
+                    ) : starterPitchers.map((player, idx) => (
+                      <PitcherRow key={player.id} player={player} index={idx} isStarter totalCount={starterPitchers.length} />
                     ))}
                   </div>
                 </div>
-              )}
 
-              {/* 野手（コンバート候補） - 折りたたみ */}
-              <details className="bg-gray-800/60 rounded-xl border border-gray-700/50 overflow-hidden">
-                <summary className="px-4 py-2.5 border-b border-gray-700/50 flex items-center gap-2 cursor-pointer hover:bg-gray-700/30 transition-colors list-none">
-                  <span className="text-cyan-400 text-sm">🔀</span>
-                  <h2 className="text-sm font-bold text-cyan-400">野手（コンバート候補）</h2>
-                  <span className="text-gray-500 text-xs">{fieldersForConvert.length}人</span>
-                  <span className="text-gray-600 text-[10px] ml-auto">クリックで展開</span>
-                </summary>
-                <div className="p-2 space-y-1.5">
-                  <p className="text-gray-500 text-xs px-2 py-1">バッジをクリックして起用法を設定すると投手としてコンバートされます</p>
-                  {fieldersForConvert.map((player, idx) => (
-                    <PitcherCard key={player.id} player={player} index={idx} />
-                  ))}
+                {/* リリーフ陣 */}
+                <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
+                  <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
+                    <span className="text-green-400 text-xs">🔄</span>
+                    <h2 className="text-xs font-bold text-green-400">リリーフ</h2>
+                    <span className="text-gray-500 text-[10px]">{allReliefPitchers.length}人</span>
+                  </div>
+                  <div className="p-1 space-y-0.5">
+                    {allReliefPitchers.length === 0 ? (
+                      <p className="text-gray-500 text-xs py-3 text-center">未設定</p>
+                    ) : allReliefPitchers.map((player, idx) => (
+                      <PitcherRow key={player.id} player={player} index={idx} />
+                    ))}
+                  </div>
                 </div>
-              </details>
+              </div>
+
+              {/* 未設定＋コンバート（横並び折りたたみ） */}
+              <div className="grid grid-cols-2 gap-2">
+                {unassignedPitchers.length > 0 && (
+                  <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
+                    <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
+                      <span className="text-gray-400 text-xs">📋</span>
+                      <h2 className="text-xs font-bold text-gray-400">未設定</h2>
+                      <span className="text-gray-500 text-[10px]">{unassignedPitchers.length}人</span>
+                    </div>
+                    <div className="p-1 space-y-0.5">
+                      {unassignedPitchers.map((player, idx) => (
+                        <PitcherRow key={player.id} player={player} index={idx} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <details className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
+                  <summary className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5 cursor-pointer hover:bg-gray-700/30 list-none">
+                    <span className="text-cyan-400 text-xs">🔀</span>
+                    <h2 className="text-xs font-bold text-cyan-400">野手コンバート</h2>
+                    <span className="text-gray-500 text-[10px]">{fieldersForConvert.length}人</span>
+                    <span className="text-gray-600 text-[9px] ml-auto">▶</span>
+                  </summary>
+                  <div className="p-1 space-y-0.5">
+                    {fieldersForConvert.map((player, idx) => (
+                      <PitcherRow key={player.id} player={player} index={idx} />
+                    ))}
+                  </div>
+                </details>
+              </div>
             </div>
           );
         })()}
