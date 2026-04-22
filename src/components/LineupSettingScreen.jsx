@@ -997,19 +997,19 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     >▼</button>
                   </div>
                 )}
-                <span className={`font-bold text-sm truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`} style={{ minWidth: 0, maxWidth: '5.5rem' }}>
+                <span className={`font-bold text-sm truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`} style={{ width: '5.5rem', minWidth: '5.5rem', maxWidth: '5.5rem' }}>
                   {player.name}
                 </span>
-                <span className={`text-[11px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
+                <span className={`text-[11px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                   {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
                 </span>
-                <span className="text-[11px] text-gray-500 shrink-0">{throwsChar}{formChar && `/${formChar}`}</span>
-                <div className="flex items-center gap-0.5 text-xs shrink-0">
-                  <StatVal label="" value={p.velocity || 0} isVelocity />
+                <span className="text-[11px] text-gray-500 shrink-0" style={{ width: '3.5rem', minWidth: '3.5rem' }}>{throwsChar}{formChar && `/${formChar}`}</span>
+                <div className="flex items-center gap-0.5 text-xs shrink-0" style={{ width: '10rem', minWidth: '10rem' }}>
+                  <span className="text-gray-500 text-[10px]">球</span><StatVal label="" value={p.velocity || 0} isVelocity />
                   <span className="text-gray-600">/</span>
-                  <StatVal label="" value={p.control || 0} />
+                  <span className="text-gray-500 text-[10px]">制</span><StatVal label="" value={p.control || 0} />
                   <span className="text-gray-600">/</span>
-                  <StatVal label="" value={p.stamina || 0} />
+                  <span className="text-gray-500 text-[10px]">ス</span><StatVal label="" value={p.stamina || 0} />
                 </div>
                 {ps?.games > 0 && (
                   <span className="text-[11px] text-gray-500 shrink-0">
