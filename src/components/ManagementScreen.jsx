@@ -6,7 +6,7 @@ import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
-import { processNPBDraft, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { processNPBDraft, processSeasonEnd, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 
 import ScheduleScreen from './ScheduleScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
@@ -117,6 +117,10 @@ const ManagementScreen = ({
     onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
     onForceEvent={(eventType) => {
       if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft')) {
+        if (!seasonData.frozenAwards) {
+          const awards = processSeasonEnd(seasonData, TEAMS_DATA);
+          setSeasonData(prev => ({ ...prev, frozenAwards: awards }));
+        }
         setManagementView('offseason');
         return;
       }
@@ -158,7 +162,13 @@ const ManagementScreen = ({
         }
         setManagementView('draft');
       }
-      else if (eventType === 'offseason') setManagementView('offseason');
+      else if (eventType === 'offseason') {
+        if (!seasonData.frozenAwards) {
+          const awards = processSeasonEnd(seasonData, TEAMS_DATA);
+          setSeasonData(prev => ({ ...prev, frozenAwards: awards }));
+        }
+        setManagementView('offseason');
+      }
     }}
   />;
   if (managementView === 'offseason') return <OffSeasonScreen

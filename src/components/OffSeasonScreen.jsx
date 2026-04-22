@@ -16,7 +16,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     }
   };
 
-  // シーズン成果をstandingsとTEAMS_DATAから算出
+  // シーズン成果をstandingsとfrozenAwardsから取得（プレーオフ完了時に確定済み）
   const seasonSummary = useMemo(() => {
     const standings = seasonData?.standings;
     if (!standings || standings.length === 0) return null;
@@ -24,28 +24,18 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
     const sorted = [...standings].sort((a, b) => b.winRate - a.winRate);
     const champion = sorted[0];
 
-    // 打撃王・本塁打王
-    let topBatter = null, topHR = null, topPitcher = null;
-    Object.values(TEAMS_DATA).forEach(team => {
-      (team.players || []).forEach(p => {
-        const bs = p.seasonStats?.batting;
-        const ps = p.seasonStats?.pitching;
-        if (bs && bs.atBats >= 30) {
-          const avg = bs.hits / bs.atBats;
-          if (!topBatter || avg > topBatter.avg)
-            topBatter = { name: p.name, team: team.name || '', avg: avg.toFixed(3), hits: bs.hits, atBats: bs.atBats };
-          if (!topHR || (bs.homeruns || 0) > topHR.hr)
-            topHR = { name: p.name, team: team.name || '', hr: bs.homeruns || 0 };
-        }
-        if (ps && (ps.inningsPitched || 0) >= 15) {
-          const era = ps.inningsPitched > 0 ? ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2) : '-.--';
-          if (!topPitcher || parseFloat(era) < parseFloat(topPitcher.era))
-            topPitcher = { name: p.name, team: team.name || '', era, wins: ps.wins || 0 };
-        }
-      });
-    });
+    const awards = seasonData.frozenAwards;
+    const topBatter = awards?.battingChampion
+      ? { name: awards.battingChampion.name, team: awards.battingChampion.team, avg: awards.battingChampion.avg }
+      : null;
+    const topHR = awards?.homeRunKing
+      ? { name: awards.homeRunKing.name, team: awards.homeRunKing.team, hr: awards.homeRunKing.homeruns }
+      : null;
+    const topPitcher = awards?.eraChampion
+      ? { name: awards.eraChampion.name, team: awards.eraChampion.team, era: awards.eraChampion.era, wins: awards.winsLeader?.wins || 0 }
+      : null;
 
-    return { champion, standings: sorted, topBatter, topHR, topPitcher };
+    return { champion, standings: sorted, topBatter, topHR, topPitcher, awards };
   }, [seasonData]);
 
   const handleAdvanceYear = () => {
@@ -214,31 +204,31 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         )}
 
         {/* 個人タイトルハイライト */}
-        {seasonSummary && (seasonSummary.topBatter || seasonSummary.topHR || seasonSummary.topPitcher) && (
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            {seasonSummary.topBatter && (
-              <div className="bg-gray-800/80 rounded-xl border border-blue-500/30 p-3 text-center">
-                <p className="text-blue-400 text-xs font-bold tracking-wide mb-1">🏏 首位打者</p>
-                <p className="text-white font-black text-base leading-tight">{seasonSummary.topBatter.name}</p>
-                <p className="text-blue-300 text-xl font-black mt-0.5">{seasonSummary.topBatter.avg}</p>
-              </div>
-            )}
-            {seasonSummary.topHR && (
-              <div className="bg-gray-800/80 rounded-xl border border-red-500/30 p-3 text-center">
-                <p className="text-red-400 text-xs font-bold tracking-wide mb-1">💣 本塁打王</p>
-                <p className="text-white font-black text-base leading-tight">{seasonSummary.topHR.name}</p>
-                <p className="text-red-300 text-xl font-black mt-0.5">{seasonSummary.topHR.hr}本</p>
-              </div>
-            )}
-            {seasonSummary.topPitcher && (
-              <div className="bg-gray-800/80 rounded-xl border border-green-500/30 p-3 text-center">
-                <p className="text-green-400 text-xs font-bold tracking-wide mb-1">⚾ 防御率王</p>
-                <p className="text-white font-black text-base leading-tight">{seasonSummary.topPitcher.name}</p>
-                <p className="text-green-300 text-xl font-black mt-0.5">ERA {seasonSummary.topPitcher.era}</p>
-              </div>
-            )}
-          </div>
-        )}
+        {seasonSummary?.awards && (() => {
+          const a = seasonSummary.awards;
+          const titles = [
+            a.battingChampion && { label: '🏏 首位打者', name: a.battingChampion.name, value: a.battingChampion.avg, border: 'border-blue-500/30', titleColor: 'text-blue-400', valueColor: 'text-blue-300' },
+            a.homeRunKing && { label: '💣 本塁打王', name: a.homeRunKing.name, value: `${a.homeRunKing.homeruns}本`, border: 'border-red-500/30', titleColor: 'text-red-400', valueColor: 'text-red-300' },
+            a.rbiKing && { label: '🎯 打点王', name: a.rbiKing.name, value: `${a.rbiKing.rbis}打点`, border: 'border-orange-500/30', titleColor: 'text-orange-400', valueColor: 'text-orange-300' },
+            a.stolenBaseKing && a.stolenBaseKing.stolenBases > 0 && { label: '💨 盗塁王', name: a.stolenBaseKing.name, value: `${a.stolenBaseKing.stolenBases}盗塁`, border: 'border-cyan-500/30', titleColor: 'text-cyan-400', valueColor: 'text-cyan-300' },
+            a.eraChampion && { label: '⚾ 防御率王', name: a.eraChampion.name, value: `ERA ${a.eraChampion.era}`, border: 'border-green-500/30', titleColor: 'text-green-400', valueColor: 'text-green-300' },
+            a.winsLeader && { label: '🏆 最多勝', name: a.winsLeader.name, value: `${a.winsLeader.wins}勝`, border: 'border-yellow-500/30', titleColor: 'text-yellow-400', valueColor: 'text-yellow-300' },
+            a.savesLeader && { label: '🔒 最多セーブ', name: a.savesLeader.name, value: `${a.savesLeader.saves}S`, border: 'border-purple-500/30', titleColor: 'text-purple-400', valueColor: 'text-purple-300' },
+            a.strikeoutKing && { label: '🔥 最多奪三振', name: a.strikeoutKing.name, value: `${a.strikeoutKing.strikeouts}K`, border: 'border-pink-500/30', titleColor: 'text-pink-400', valueColor: 'text-pink-300' },
+          ].filter(Boolean);
+
+          return titles.length > 0 && (
+            <div className="grid grid-cols-4 gap-2.5 mb-5">
+              {titles.map((t, i) => (
+                <div key={i} className={`bg-gray-800/80 rounded-xl border ${t.border} p-2.5 text-center`}>
+                  <p className={`${t.titleColor} text-[10px] font-bold tracking-wide mb-0.5`}>{t.label}</p>
+                  <p className="text-white font-black text-sm leading-tight">{t.name}</p>
+                  <p className={`${t.valueColor} text-lg font-black mt-0.5`}>{t.value}</p>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* 順位表（コンパクト） */}
         {seasonSummary?.standings && seasonSummary.standings.length > 1 && (
