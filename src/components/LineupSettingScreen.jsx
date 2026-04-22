@@ -874,11 +874,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             if (!player) return null;
             const currentRole = getPitcherRole(player.id);
             const starterRoles = [
-              { key: 'auto_s', label: 'おまかせ', desc: '能力に応じて自動調整', color: 'from-gray-600 to-gray-700' },
-              { key: 'ace', label: 'ゲームメーカー', desc: '7-8回を責任投球、勝ちパターンへ繋ぐ', color: 'from-red-700 to-red-800' },
               { key: 'complete', label: '完投型', desc: 'スタミナ限界まで投げ抜く', color: 'from-blue-800 to-blue-900' },
-              { key: 'short', label: 'ショート', desc: '3-4回で中継ぎに繋ぐ', color: 'from-blue-700 to-blue-800' },
+              { key: 'ace', label: 'ゲームメーカー', desc: '7-8回を責任投球、勝ちパターンへ繋ぐ', color: 'from-red-700 to-red-800' },
               { key: 'quality', label: '勝ち権利', desc: '5-6回を投げて降板', color: 'from-blue-600 to-blue-700' },
+              { key: 'short', label: 'ショート', desc: '3-4回で中継ぎに繋ぐ', color: 'from-blue-700 to-blue-800' },
+              { key: 'auto_s', label: 'おまかせ', desc: '能力に応じて自動調整', color: 'from-gray-600 to-gray-700' },
             ];
             const reliefRoles = [
               { key: 'mopup', label: '敗戦処理', desc: '大差で登板しスタミナ温存', color: 'from-gray-700 to-gray-800' },
@@ -957,7 +957,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             );
           };
 
-          const FORM_SHORT = { overhand: 'オ', threeQuarter: '3/4', sidearm: 'サ', submarine: 'ア' };
+          const FORM_SHORT = { overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' };
 
           // コンパクト投手行コンポーネント（1行表示・クリックで詳細）
           const PitcherRow = ({ player, index, isStarter, totalCount }) => {
@@ -987,24 +987,24 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <button
                       onClick={(e) => { e.stopPropagation(); handleSwapStarter(index, -1); }}
                       disabled={index === 0}
-                      className={`w-4 h-4 flex items-center justify-center text-[8px] ${index === 0 ? 'text-gray-700' : 'text-gray-500 hover:text-white'}`}
+                      className={`w-4 h-4 flex items-center justify-center text-[10px] ${index === 0 ? 'text-gray-700' : 'text-gray-500 hover:text-white'}`}
                     >▲</button>
-                    <span className="text-blue-400 font-bold text-[10px] w-3 text-center">{index + 1}</span>
+                    <span className="text-blue-400 font-bold text-xs w-3 text-center">{index + 1}</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleSwapStarter(index, 1); }}
                       disabled={index === totalCount - 1}
-                      className={`w-4 h-4 flex items-center justify-center text-[8px] ${index === totalCount - 1 ? 'text-gray-700' : 'text-gray-500 hover:text-white'}`}
+                      className={`w-4 h-4 flex items-center justify-center text-[10px] ${index === totalCount - 1 ? 'text-gray-700' : 'text-gray-500 hover:text-white'}`}
                     >▼</button>
                   </div>
                 )}
-                <span className={`font-bold text-xs truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`} style={{ minWidth: 0, maxWidth: '5.5rem' }}>
+                <span className={`font-bold text-sm truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`} style={{ minWidth: 0, maxWidth: '5.5rem' }}>
                   {player.name}
                 </span>
-                <span className={`text-[9px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
+                <span className={`text-[11px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                   {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
                 </span>
-                <span className="text-[9px] text-gray-500 shrink-0">{throwsChar}{formChar && `/${formChar}`}</span>
-                <div className="flex items-center gap-0.5 text-[10px] shrink-0">
+                <span className="text-[11px] text-gray-500 shrink-0">{throwsChar}{formChar && `/${formChar}`}</span>
+                <div className="flex items-center gap-0.5 text-xs shrink-0">
                   <StatVal label="" value={p.velocity || 0} isVelocity />
                   <span className="text-gray-600">/</span>
                   <StatVal label="" value={p.control || 0} />
@@ -1012,14 +1012,14 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   <StatVal label="" value={p.stamina || 0} />
                 </div>
                 {ps?.games > 0 && (
-                  <span className="text-[9px] text-gray-500 shrink-0">
+                  <span className="text-[11px] text-gray-500 shrink-0">
                     {ps.wins||0}勝{ps.losses||0}敗{era && <span className="text-orange-300/70 ml-0.5">{era}</span>}
                   </span>
                 )}
                 <div className="flex items-center gap-0.5 ml-auto shrink-0">
                   <button
                     onClick={(e) => { e.stopPropagation(); setPosConvertPlayer(player); }}
-                    className={`text-[9px] px-1 py-0 rounded border ${
+                    className={`text-[11px] px-1 py-0 rounded border ${
                       player.position === 'pitcher'
                         ? 'border-indigo-700/40 text-indigo-400/70 hover:bg-indigo-900/30'
                         : 'border-cyan-700/40 text-cyan-400/70 hover:bg-cyan-900/30'
@@ -1030,9 +1030,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); setRoleSelectPlayer(player); }}
-                    className={`${roleInfo.color} text-white px-1.5 py-0 rounded-full text-[10px] font-bold flex items-center gap-0.5 hover:brightness-125 shrink-0`}
+                    className={`${roleInfo.color} text-white px-1.5 py-0 rounded-full text-xs font-bold flex items-center gap-0.5 hover:brightness-125 shrink-0`}
                   >
-                    <span className="text-[8px]">{ROLE_ICON[role]}</span>
+                    <span className="text-[10px]">{ROLE_ICON[role]}</span>
                     {roleInfo.label}
                   </button>
                 </div>
@@ -1200,15 +1200,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 {items.map((s, i) => (
                   <React.Fragment key={s.label}>
                     <div className="flex items-center gap-1">
-                      <span className={`text-[10px] font-medium ${s.color}`}>{s.label}</span>
-                      <span className={`text-xs font-bold ${s.target > 0 && s.count >= s.target ? 'text-white' : s.count > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
-                        {s.count}{s.target > 0 && <span className="text-gray-600 text-[9px]">/{s.target}</span>}
+                      <span className={`text-xs font-medium ${s.color}`}>{s.label}</span>
+                      <span className={`text-sm font-bold ${s.target > 0 && s.count >= s.target ? 'text-white' : s.count > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
+                        {s.count}{s.target > 0 && <span className="text-gray-600 text-[11px]">/{s.target}</span>}
                       </span>
                     </div>
-                    {i < items.length - 1 && <span className="text-gray-700 text-[10px]">▸</span>}
+                    {i < items.length - 1 && <span className="text-gray-700 text-xs">▸</span>}
                   </React.Fragment>
                 ))}
-                <span className="text-gray-600 text-[9px] ml-auto">バッジ: 役割変更 / ポジ: 登録変更</span>
+                <span className="text-gray-600 text-[11px] ml-auto">バッジ: 役割変更 / ポジ: 登録変更</span>
               </div>
             );
           };
@@ -1231,9 +1231,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 {/* 先発ローテーション */}
                 <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
                   <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
-                    <span className="text-blue-400 text-xs">⚾</span>
-                    <h2 className="text-xs font-bold text-blue-400">先発ローテーション</h2>
-                    <span className="text-gray-500 text-[10px]">{starterPitchers.length}人</span>
+                    <span className="text-blue-400 text-sm">⚾</span>
+                    <h2 className="text-sm font-bold text-blue-400">先発ローテーション</h2>
+                    <span className="text-gray-500 text-xs">{starterPitchers.length}人</span>
                   </div>
                   <div className="p-1 space-y-0.5">
                     {starterPitchers.length === 0 ? (
@@ -1247,9 +1247,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 {/* リリーフ陣 */}
                 <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
                   <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
-                    <span className="text-green-400 text-xs">🔄</span>
-                    <h2 className="text-xs font-bold text-green-400">リリーフ</h2>
-                    <span className="text-gray-500 text-[10px]">{allReliefPitchers.length}人</span>
+                    <span className="text-green-400 text-sm">🔄</span>
+                    <h2 className="text-sm font-bold text-green-400">リリーフ</h2>
+                    <span className="text-gray-500 text-xs">{allReliefPitchers.length}人</span>
                   </div>
                   <div className="p-1 space-y-0.5">
                     {allReliefPitchers.length === 0 ? (
@@ -1266,9 +1266,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 {unassignedPitchers.length > 0 && (
                   <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
                     <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
-                      <span className="text-gray-400 text-xs">📋</span>
-                      <h2 className="text-xs font-bold text-gray-400">未設定</h2>
-                      <span className="text-gray-500 text-[10px]">{unassignedPitchers.length}人</span>
+                      <span className="text-gray-400 text-sm">📋</span>
+                      <h2 className="text-sm font-bold text-gray-400">未設定</h2>
+                      <span className="text-gray-500 text-xs">{unassignedPitchers.length}人</span>
                     </div>
                     <div className="p-1 space-y-0.5">
                       {unassignedPitchers.map((player, idx) => (
@@ -1279,10 +1279,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 )}
                 <details className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
                   <summary className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5 cursor-pointer hover:bg-gray-700/30 list-none">
-                    <span className="text-cyan-400 text-xs">🔀</span>
-                    <h2 className="text-xs font-bold text-cyan-400">野手コンバート</h2>
-                    <span className="text-gray-500 text-[10px]">{fieldersForConvert.length}人</span>
-                    <span className="text-gray-600 text-[9px] ml-auto">▶</span>
+                    <span className="text-cyan-400 text-sm">🔀</span>
+                    <h2 className="text-sm font-bold text-cyan-400">野手コンバート</h2>
+                    <span className="text-gray-500 text-xs">{fieldersForConvert.length}人</span>
+                    <span className="text-gray-600 text-[11px] ml-auto">▶</span>
                   </summary>
                   <div className="p-1 space-y-0.5">
                     {fieldersForConvert.map((player, idx) => (
