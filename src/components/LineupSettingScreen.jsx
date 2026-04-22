@@ -1003,9 +1003,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <span className={`text-[11px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                   {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
                 </span>
-                <span className="text-[11px] text-gray-500 shrink-0" style={{ width: '3.5rem', minWidth: '3.5rem' }}>{throwsChar}{formChar && `/${formChar}`}</span>
+                <span className="text-[11px] text-gray-500 shrink-0" style={{ width: '4.5rem', minWidth: '4.5rem' }}>{throwsChar}{formChar && `/${formChar}`}</span>
                 <div className="flex items-center gap-0.5 text-xs shrink-0" style={{ width: '10rem', minWidth: '10rem' }}>
-                  <span className="text-gray-500 text-[10px]">球</span><StatVal label="" value={p.velocity || 0} isVelocity />
+                  <span className="text-gray-500 text-[10px]">速</span><StatVal label="" value={p.velocity || 0} isVelocity />
                   <span className="text-gray-600">/</span>
                   <span className="text-gray-500 text-[10px]">制</span><StatVal label="" value={p.control || 0} />
                   <span className="text-gray-600">/</span>
