@@ -222,6 +222,15 @@ const ScheduleScreen = ({
   const league1Teams = isTwoLeague ? teamNamesList.slice(0, halfTeams) : [];
   const league2Teams = isTwoLeague ? teamNamesList.slice(halfTeams) : [];
 
+  const getStartingPitcher = (teamName) => {
+    const team = TEAMS_DATA[teamName];
+    if (!team || !team.pitchingRotation || !team.pitchingRotation.starters) return null;
+    const rotation = team.pitchingRotation;
+    const index = rotation.currentStarterIndex || 0;
+    const starterId = rotation.starters[index];
+    return team.players.find(p => p.id === starterId);
+  };
+
   // 当月のカレンダーデータを生成
   const calendarData = seasonData && selectedMonth
     ? generateTeamCalendar(seasonData.schedule, userTeamName, currentDate.year, selectedMonth)
@@ -365,29 +374,33 @@ const ScheduleScreen = ({
         {(() => {
           const renderGameCards = (games) => (
             <div className="grid grid-cols-2 gap-2">
-              {games.map((game, index) => (
-                <div key={index} className="bg-gray-900/50 border border-gray-700/40 rounded-lg p-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-center flex-1">
-                      <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.away)}</div>
-                      <div className="text-[10px] text-gray-500 mt-0.5">{game.awayPitcher || '未定'}</div>
-                    </div>
-                    <div className="text-gray-600 text-xs font-mono px-1">
-                      {game.result ? (
-                        <span>
-                          <span className={game.result.awayScore > game.result.homeScore ? 'text-green-400 font-bold' : 'text-gray-400'}>{game.result.awayScore}</span>
-                          <span className="text-gray-600 mx-0.5">-</span>
-                          <span className={game.result.homeScore > game.result.awayScore ? 'text-green-400 font-bold' : 'text-gray-400'}>{game.result.homeScore}</span>
-                        </span>
-                      ) : <span className="text-gray-600">vs</span>}
-                    </div>
-                    <div className="text-center flex-1">
-                      <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.home)}</div>
-                      <div className="text-[10px] text-gray-500 mt-0.5">{game.homePitcher || '未定'}</div>
+              {games.map((game, index) => {
+                const awayP = getStartingPitcher(game.away);
+                const homeP = getStartingPitcher(game.home);
+                return (
+                  <div key={index} className="bg-gray-900/50 border border-gray-700/40 rounded-lg p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-center flex-1">
+                        <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.away)}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{awayP ? awayP.name : '先発未定'}</div>
+                      </div>
+                      <div className="text-gray-600 text-xs font-mono px-1">
+                        {game.result ? (
+                          <span>
+                            <span className={game.result.awayScore > game.result.homeScore ? 'text-green-400 font-bold' : 'text-gray-400'}>{game.result.awayScore}</span>
+                            <span className="text-gray-600 mx-0.5">-</span>
+                            <span className={game.result.homeScore > game.result.awayScore ? 'text-green-400 font-bold' : 'text-gray-400'}>{game.result.homeScore}</span>
+                          </span>
+                        ) : <span className="text-gray-600">vs</span>}
+                      </div>
+                      <div className="text-center flex-1">
+                        <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.home)}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{homeP ? homeP.name : '先発未定'}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           );
           if (todayGames.length === 0) {

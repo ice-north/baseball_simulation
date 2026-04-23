@@ -13,6 +13,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [isSimulating, setIsSimulating] = useState(false);
   const [lastGameResults, setLastGameResults] = useState([]);
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
+  const [rankingLeague, setRankingLeague] = useState('all');
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -939,6 +940,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const allPlayers = [];
             Object.entries(TEAMS_DATA || {}).forEach(([teamName, team]) => {
               if (!team?.players) return;
+              if (isTwoLeague && rankingLeague === 'l1' && !league1Teams.includes(teamName)) return;
+              if (isTwoLeague && rankingLeague === 'l2' && !league2Teams.includes(teamName)) return;
               team.players.forEach(p => {
                 allPlayers.push({ ...p, teamName });
               });
@@ -1033,6 +1036,25 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   </div>
                   <span>個人成績ランキング</span>
                   <span className="text-[10px] text-gray-300 font-normal ml-1">規定打席{qualifiedAB} / 規定投球{qualifiedInnings}回</span>
+                  {isTwoLeague && (
+                    <div className="flex gap-1 ml-auto">
+                      {[
+                        { key: 'all', label: '全体', color: 'bg-gray-600' },
+                        { key: 'l1', label: leagueNamesList[0], color: 'bg-blue-600' },
+                        { key: 'l2', label: leagueNamesList[1], color: 'bg-orange-600' },
+                      ].map(opt => (
+                        <button
+                          key={opt.key}
+                          onClick={() => setRankingLeague(opt.key)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                            rankingLeague === opt.key
+                              ? `${opt.color} text-white`
+                              : 'bg-gray-700/50 text-gray-400 hover:text-white'
+                          }`}
+                        >{opt.label}</button>
+                      ))}
+                    </div>
+                  )}
                 </h2>
                 {/* 打撃部門 */}
                 <div className="text-[10px] text-blue-300 font-bold mb-1 mt-1">打撃部門</div>

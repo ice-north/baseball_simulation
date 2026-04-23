@@ -92,7 +92,21 @@ export const generateTwoLeagueMatchups = (league1, league2, intraPerPair, interP
   addIntraLeagueGames(league2, intraPerPair);
   addInterLeagueGames(interPerPair);
 
-  return allMatchups;
+  // インターリーブ: L1とL2を交互に配置（同日に両リーグの試合が入るようにする）
+  const l1Set = new Set(league1);
+  const l1Matchups = allMatchups.filter(m => !m.isInterLeague && (l1Set.has(m.home) || l1Set.has(m.away)));
+  const l2Matchups = allMatchups.filter(m => !m.isInterLeague && !l1Set.has(m.home) && !l1Set.has(m.away));
+  const interMatchups = allMatchups.filter(m => m.isInterLeague);
+
+  const interleaved = [];
+  const maxLen = Math.max(l1Matchups.length, l2Matchups.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < l1Matchups.length) interleaved.push(l1Matchups[i]);
+    if (i < l2Matchups.length) interleaved.push(l2Matchups[i]);
+  }
+  interleaved.push(...interMatchups);
+
+  return interleaved;
 };
 
 /**
