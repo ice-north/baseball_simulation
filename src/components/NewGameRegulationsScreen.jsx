@@ -248,9 +248,19 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
             <>
               {/* 2リーグ制の場合はリーグごとに表示 */}
               <div className="mb-4">
-                <h3 className="text-lg font-bold text-blue-400 mb-2">
-                  {tempSettings.leagueNames?.[0] || 'リーグ1'}
-                </h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={tempSettings.leagueNames?.[0] || 'リーグ1'}
+                    onChange={(e) => {
+                      const names = [...(tempSettings.leagueNames || ['リーグ1', 'リーグ2'])];
+                      names[0] = e.target.value;
+                      setTempSettings({ ...tempSettings, leagueNames: names });
+                    }}
+                    maxLength={10}
+                    className="bg-gray-700 text-blue-400 font-bold text-lg rounded px-3 py-1 border border-blue-600/50 w-48"
+                  />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {tempSettings.teamNames.slice(0, Math.floor(tempSettings.teamsCount / 2)).map((name, index) => (
                     <div key={index} className="flex items-center gap-2">
@@ -275,9 +285,19 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                 </div>
               </div>
               <div>
-                <h3 className="text-lg font-bold text-orange-400 mb-2">
-                  {tempSettings.leagueNames?.[1] || 'リーグ2'}
-                </h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={tempSettings.leagueNames?.[1] || 'リーグ2'}
+                    onChange={(e) => {
+                      const names = [...(tempSettings.leagueNames || ['リーグ1', 'リーグ2'])];
+                      names[1] = e.target.value;
+                      setTempSettings({ ...tempSettings, leagueNames: names });
+                    }}
+                    maxLength={10}
+                    className="bg-gray-700 text-orange-400 font-bold text-lg rounded px-3 py-1 border border-orange-600/50 w-48"
+                  />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {tempSettings.teamNames.slice(Math.floor(tempSettings.teamsCount / 2)).map((name, index) => {
                     const actualIndex = Math.floor(tempSettings.teamsCount / 2) + index;
