@@ -222,11 +222,25 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
     // 投手と野手を1:1の比率で生成（ただし左投げは制限あり）
     let isPitcher = Math.random() < 0.5;
     let position;
+    let twoWaySubPosition = null;
 
     if (isTwoWay) {
-      // 二刀流選手は外野手または一塁手として登録
-      position = Math.random() < 0.7 ? fieldPositions[Math.floor(Math.random() * 3) + 5] : 'first'; // 外野 or 一塁
-      isPitcher = false;
+      const twoWayRoll = Math.random();
+      if (twoWayRoll < 0.7) {
+        // 70%: 投手登録の二刀流（野手としても出場可能）
+        position = 'pitcher';
+        isPitcher = true;
+        twoWaySubPosition = Math.random() < 0.5 ? 'short' : 'center';
+      } else if (twoWayRoll < 0.9) {
+        // 20%: 遊撃手 or センター登録の二刀流
+        position = Math.random() < 0.5 ? 'short' : 'center';
+        isPitcher = false;
+      } else {
+        // 10%: その他の野手登録の二刀流
+        const otherPositions = ['catcher', 'first', 'second', 'third', 'left', 'right'];
+        position = otherPositions[Math.floor(Math.random() * otherPositions.length)];
+        isPitcher = false;
+      }
     } else if (throws === 'left') {
       // 左投げの場合、ポジションを制限
       position = getPositionForLeftHander();
@@ -291,6 +305,8 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       battingOrder: 0,
       isStarter: false,
       isTwoWay: isTwoWay, // 二刀流フラグ
+      twoWaySubPosition: twoWaySubPosition, // 投手登録二刀流の野手サブポジション
+      primaryRole: isTwoWay && position === 'pitcher' ? 'pitcher' : null, // 投手登録二刀流マーカー
       batting: {
         meet: abilities.meet,
         power: abilities.power,
@@ -325,7 +341,7 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       },
       traits: playerTraits, // 選手の特性を保存
       scoutComment: null, // 後でgenerateScoutCommentで設定
-      positionFitness: isTwoWay ? generateTwoWayPositionFitness(position) : generatePositionFitness(position),
+      positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition) : generatePositionFitness(position),
       professionalCareer: {
         isDrafted: false,
         draftYear: null,
@@ -501,23 +517,41 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
 
   // 二刀流選手の場合は投打両方に能力を持つ
   if (isTwoWay) {
-    const twoWayVelocity = Math.min(randVelocity(121, 139) + velocityAdjust, 149);
-    return applyGlobalOffset({
-      // 野手能力（平均的）
-      meet: randRangeWithVariance(40, 65),
-      power: randRangeWithVariance(32, 57),
-      eye: randRangeWithVariance(35, 65),
-      steal: randRangeWithVariance(30, 60),
-      speed: randRangeWithVariance(43, 73),
-      arm: armFromVelocity(twoWayVelocity),
-      defense: randRangeWithVariance(40, 65),
-      bodyStamina: randRangeWithVariance(40, 70),
-      recovery: randRangeWithVariance(40, 70),
-      // 投手能力（平均的だが投げられる、球速-6km、スタミナ2/3調整済み）
-      velocity: twoWayVelocity,
-      control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
-      stamina: randStamina(67, 100)
-    });
+    if (isPitcher) {
+      // 投手登録の二刀流: 投手能力が本職寄り、打撃もプロレベル
+      const twoWayVelocity = Math.min(randVelocity(125, 145, ageBonus) + velocityAdjust, 152);
+      return applyGlobalOffset({
+        meet: randRangeWithVariance(38, 60),
+        power: randRangeWithVariance(35, 60),
+        eye: randRangeWithVariance(35, 60),
+        steal: randRangeWithVariance(30, 55),
+        speed: randRangeWithVariance(45, 75),
+        arm: armFromVelocity(twoWayVelocity),
+        defense: randRangeWithVariance(45, 70),
+        bodyStamina: randRangeWithVariance(45, 75),
+        recovery: randRangeWithVariance(45, 75),
+        velocity: twoWayVelocity,
+        control: Math.min(randRangeWithVariance(40, 68) + controlAdjust, 85),
+        stamina: randStamina(80, 110)
+      });
+    } else {
+      // 野手登録の二刀流: 野手能力メイン、投手もそこそこ
+      const twoWayVelocity = Math.min(randVelocity(121, 139) + velocityAdjust, 149);
+      return applyGlobalOffset({
+        meet: randRangeWithVariance(40, 65),
+        power: randRangeWithVariance(32, 57),
+        eye: randRangeWithVariance(35, 65),
+        steal: randRangeWithVariance(30, 60),
+        speed: randRangeWithVariance(43, 73),
+        arm: armFromVelocity(twoWayVelocity),
+        defense: randRangeWithVariance(40, 65),
+        bodyStamina: randRangeWithVariance(40, 70),
+        recovery: randRangeWithVariance(40, 70),
+        velocity: twoWayVelocity,
+        control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
+        stamina: randStamina(67, 100)
+      });
+    }
   }
 
   // 通常の能力値範囲（投手用 or 野手アーキタイプ別）
@@ -848,26 +882,48 @@ export const generatePositionFitness = (mainPosition) => {
 /**
  * 二刀流選手のポジション適性を生成
  * 投手と野手の両方に高い適性を持つ
+ * @param {string} mainPosition - 登録ポジション
+ * @param {string|null} subPosition - 投手登録二刀流の野手サブポジション
  */
-export const generateTwoWayPositionFitness = (mainPosition) => {
+export const generateTwoWayPositionFitness = (mainPosition, subPosition) => {
   const fitness = {
-    pitcher: 80, // 投手としても高い適性
+    pitcher: 80,
     catcher: 30, first: 30,
     second: 30, third: 30, short: 30,
     left: 30, center: 30, right: 30
   };
 
-  // メインポジションは100
   fitness[mainPosition] = 100;
 
-  // 投手適性を高く設定
-  fitness.pitcher = Math.floor(Math.random() * 15) + 75; // 75-90
-
-  // 外野と一塁の適性も高め
-  if (mainPosition !== 'first') fitness.first = Math.floor(Math.random() * 20) + 60;
-  if (mainPosition !== 'left') fitness.left = Math.floor(Math.random() * 20) + 55;
-  if (mainPosition !== 'center') fitness.center = Math.floor(Math.random() * 20) + 55;
-  if (mainPosition !== 'right') fitness.right = Math.floor(Math.random() * 20) + 55;
+  if (mainPosition === 'pitcher' && subPosition) {
+    // 投手登録の二刀流: サブポジション高適性、関連ポジションもやや高め
+    fitness[subPosition] = Math.floor(Math.random() * 11) + 85; // 85-95
+    if (subPosition === 'short') {
+      fitness.second = Math.floor(Math.random() * 15) + 60;
+      fitness.third = Math.floor(Math.random() * 15) + 55;
+      fitness.center = Math.floor(Math.random() * 15) + 50;
+    } else if (subPosition === 'center') {
+      fitness.left = Math.floor(Math.random() * 15) + 60;
+      fitness.right = Math.floor(Math.random() * 15) + 60;
+      fitness.short = Math.floor(Math.random() * 15) + 45;
+    }
+  } else {
+    // 野手登録の二刀流: 投手適性高め、周辺ポジションも対応可
+    fitness.pitcher = Math.floor(Math.random() * 15) + 75; // 75-90
+    if (mainPosition === 'short') {
+      fitness.second = Math.floor(Math.random() * 15) + 65;
+      fitness.third = Math.floor(Math.random() * 15) + 55;
+      fitness.center = Math.floor(Math.random() * 15) + 50;
+    } else if (mainPosition === 'center') {
+      fitness.left = Math.floor(Math.random() * 15) + 65;
+      fitness.right = Math.floor(Math.random() * 15) + 65;
+    } else {
+      if (mainPosition !== 'first') fitness.first = Math.floor(Math.random() * 20) + 60;
+      if (mainPosition !== 'left') fitness.left = Math.floor(Math.random() * 20) + 55;
+      if (mainPosition !== 'center') fitness.center = Math.floor(Math.random() * 20) + 55;
+      if (mainPosition !== 'right') fitness.right = Math.floor(Math.random() * 20) + 55;
+    }
+  }
 
   return fitness;
 }

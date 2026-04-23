@@ -27,8 +27,55 @@ export const generateAILineup = (teamData, teamName) => {
   // 全員の打順をリセット
   players.forEach(p => { p.battingOrder = 0; });
 
-  // 投手を除いた野手を取得（投手能力でも判定）
-  const fieldPlayers = players.filter(p => !isPitcherPlayer(p));
+  // 先発投手を先に決定（二刀流選手のフィールド配置に影響するため）
+  const rotation = teamData.pitchingRotation;
+  const allPitchers = players.filter(p => isPitcherPlayer(p));
+  let starter = null;
+
+  if (rotation?.starters?.length > 0) {
+    const index = rotation.currentStarterIndex || 0;
+    for (let i = 0; i < rotation.starters.length; i++) {
+      const candidateIdx = (index + i) % rotation.starters.length;
+      const candidateId = rotation.starters[candidateIdx];
+      const candidate = allPitchers.find(p => p.id === candidateId);
+      if (candidate && (candidate.fatigue || 0) < 80) {
+        starter = candidate;
+        if (TEAMS_DATA[teamName]?.pitchingRotation) {
+          TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
+            (candidateIdx + 1) % rotation.starters.length;
+        }
+        break;
+      }
+    }
+  }
+
+  if (!starter) {
+    const availablePitchers = allPitchers.filter(p => (p.fatigue || 0) < 80);
+    if (availablePitchers.length > 0) {
+      availablePitchers.sort((a, b) => {
+        const staminaA = a.pitching?.stamina || 100;
+        const staminaB = b.pitching?.stamina || 100;
+        if (staminaA !== staminaB) return staminaB - staminaA;
+        return (a.fatigue || 0) - (b.fatigue || 0);
+      });
+      starter = availablePitchers[0];
+    } else {
+      allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
+      starter = allPitchers[0];
+    }
+  }
+
+  if (starter) {
+    starter.battingOrder = 9;
+    starter.position = 'pitcher';
+  }
+
+  // 野手を取得（投手登録の二刀流は今日の先発でなければ野手として起用）
+  const fieldPlayers = players.filter(p => {
+    if (starter && p.id === starter.id) return false;
+    if (p.isTwoWay) return true;
+    return !isPitcherPlayer(p);
+  });
 
   // コンディション・疲労による実効打撃力の計算
   const getEffectiveBatting = (p) => {
@@ -57,7 +104,6 @@ export const generateAILineup = (teamData, teamName) => {
       const bEff = getEffectiveBatting(b);
       const aBat = aEff.meet + aEff.power;
       const bBat = bEff.meet + bEff.power;
-      // 疲労ペナルティが高い選手はスコアに追加ペナルティ（ベンチ選手と交代しやすくする）
       const aFatigueMalus = aEff.fatiguePenalty >= 8 ? -20 : aEff.fatiguePenalty >= 5 ? -10 : 0;
       const bFatigueMalus = bEff.fatiguePenalty >= 8 ? -20 : bEff.fatiguePenalty >= 5 ? -10 : 0;
       return (bFit * 0.6 + bBat * 0.4 + bFatigueMalus) - (aFit * 0.6 + aBat * 0.4 + aFatigueMalus);
@@ -127,50 +173,6 @@ export const generateAILineup = (teamData, teamName) => {
       player.position = entry.position;
     }
   });
-
-  // 先発投手をローテーションから選択
-  const rotation = teamData.pitchingRotation;
-  const allPitchers = players.filter(p => isPitcherPlayer(p));
-  let starter = null;
-
-  if (rotation?.starters?.length > 0) {
-    const index = rotation.currentStarterIndex || 0;
-    for (let i = 0; i < rotation.starters.length; i++) {
-      const candidateIdx = (index + i) % rotation.starters.length;
-      const candidateId = rotation.starters[candidateIdx];
-      const candidate = allPitchers.find(p => p.id === candidateId);
-      if (candidate && (candidate.fatigue || 0) < 80) {
-        starter = candidate;
-        if (TEAMS_DATA[teamName]?.pitchingRotation) {
-          TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
-            (candidateIdx + 1) % rotation.starters.length;
-        }
-        break;
-      }
-    }
-  }
-
-  if (!starter) {
-    // ローテ未設定 or 全員疲労: スタミナが高い投手を先発に
-    const availablePitchers = allPitchers.filter(p => (p.fatigue || 0) < 80);
-    if (availablePitchers.length > 0) {
-      availablePitchers.sort((a, b) => {
-        const staminaA = a.pitching?.stamina || 100;
-        const staminaB = b.pitching?.stamina || 100;
-        if (staminaA !== staminaB) return staminaB - staminaA;
-        return (a.fatigue || 0) - (b.fatigue || 0);
-      });
-      starter = availablePitchers[0];
-    } else {
-      allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
-      starter = allPitchers[0];
-    }
-  }
-
-  if (starter) {
-    starter.battingOrder = 9;
-    starter.position = 'pitcher';
-  }
 
 };
 
@@ -1140,13 +1142,31 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         isStarter: false
       });
 
+      const relieverData = defenseTeam.players.find(p => p.id === reliever.id);
+      const relieverOldOrder = relieverData.battingOrder;
+      const relieverOldPos = relieverData.position;
+      const isTwoWaySwap = relieverOldOrder > 0 && relieverOldOrder < 9;
+
       pitcherData.battingOrder = 0;
       pitcherData.position = 'pitcher';
 
-      const relieverData = defenseTeam.players.find(p => p.id === reliever.id);
       relieverData.battingOrder = 9;
       relieverData.position = 'pitcher';
       relieverData.currentStamina = relieverData.pitching?.stamina || 80;
+
+      // 二刀流リリーフ: 空いた野手スロットをベンチから補充
+      if (isTwoWaySwap && relieverOldPos) {
+        const benchFielders = defenseTeam.players.filter(p =>
+          p.battingOrder === 0 && !isPitcher(p) && p.id !== relieverData.id
+        );
+        if (benchFielders.length > 0) {
+          benchFielders.sort((a, b) =>
+            (b.positionFitness?.[relieverOldPos] || 0) - (a.positionFitness?.[relieverOldPos] || 0)
+          );
+          benchFielders[0].battingOrder = relieverOldOrder;
+          benchFielders[0].position = relieverOldPos;
+        }
+      }
 
       reliefTrack.currentRelieverId = reliever.id;
       reliefTrack.relieverOutsPitched = 0;
@@ -1770,13 +1790,30 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
                 isStarter: false
               });
 
+              const relieverData = team.players.find(p => p.id === reliever.id);
+              const relieverOldOrder2 = relieverData.battingOrder;
+              const relieverOldPos2 = relieverData.position;
+              const isTwoWaySwap2 = relieverOldOrder2 > 0 && relieverOldOrder2 < 9;
+
               pitcherData.battingOrder = 0;
               pitcherData.position = 'pitcher';
 
-              const relieverData = team.players.find(p => p.id === reliever.id);
               relieverData.battingOrder = 9;
               relieverData.position = 'pitcher';
               relieverData.currentStamina = relieverData.pitching?.stamina || 80;
+
+              if (isTwoWaySwap2 && relieverOldPos2) {
+                const benchFielders2 = team.players.filter(p =>
+                  p.battingOrder === 0 && !isPitcher(p) && p.id !== relieverData.id
+                );
+                if (benchFielders2.length > 0) {
+                  benchFielders2.sort((a, b) =>
+                    (b.positionFitness?.[relieverOldPos2] || 0) - (a.positionFitness?.[relieverOldPos2] || 0)
+                  );
+                  benchFielders2[0].battingOrder = relieverOldOrder2;
+                  benchFielders2[0].position = relieverOldPos2;
+                }
+              }
 
               reliefTrack.currentRelieverId = reliever.id;
               reliefTrack.relieverOutsPitched = 0;

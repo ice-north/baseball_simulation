@@ -8,8 +8,8 @@ export const generateOptimalLineup = (teamName) => {
   }
 
   const team = TEAMS_DATA[teamName];
-  // 野手と投手を分ける
-  const fielders = team.players.filter(p => !p.position || p.position !== 'pitcher');
+  // 野手と投手を分ける（投手登録の二刀流は野手候補にも含める）
+  const fielders = team.players.filter(p => !p.position || p.position !== 'pitcher' || p.isTwoWay);
   const pitchers = team.players.filter(p => p.position === 'pitcher');
 
   // 野手を総合力でソート（打撃+走力+守備）
