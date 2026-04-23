@@ -307,8 +307,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const teamNamesList = seasonData?.settings?.teamNames || [];
   const leagueNamesList = seasonData?.settings?.leagueNames || ['リーグ1', 'リーグ2'];
   const halfTeams = Math.floor((seasonData?.settings?.teamsCount || 4) / 2);
-  const league1Teams = useMemo(() => isTwoLeague ? teamNamesList.slice(0, halfTeams) : [], [isTwoLeague, teamNamesList, halfTeams]);
-  const league2Teams = useMemo(() => isTwoLeague ? teamNamesList.slice(halfTeams) : [], [isTwoLeague, teamNamesList, halfTeams]);
+  const league1Teams = isTwoLeague ? teamNamesList.slice(0, halfTeams) : [];
+  const league2Teams = isTwoLeague ? teamNamesList.slice(halfTeams) : [];
   const getLeagueLabel = (game) => {
     if (!isTwoLeague) return null;
     if (league1Teams.includes(game.home) && league1Teams.includes(game.away)) return leagueNamesList[0];
@@ -1002,7 +1002,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
             const allRankings = [...battingRankings, ...pitchingRankings];
             const hasAnyData = allRankings.some(r => r.data.length > 0);
-            if (!hasAnyData) return null;
+            if (!hasAnyData && !isTwoLeague) return null;
 
             const renderRankingCard = (r) => (
               <div key={r.title} className="bg-gray-900/80 rounded-xl p-2.5 border border-gray-700/20">
@@ -1056,16 +1056,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     </div>
                   )}
                 </h2>
-                {/* 打撃部門 */}
-                <div className="text-[10px] text-blue-300 font-bold mb-1 mt-1">打撃部門</div>
-                <div className="grid grid-cols-3 gap-2 mb-2">
-                  {battingRankings.map(r => renderRankingCard(r))}
-                </div>
-                {/* 投手部門 */}
-                <div className="text-[10px] text-orange-300 font-bold mb-1">投手部門</div>
-                <div className="grid grid-cols-3 gap-2">
-                  {pitchingRankings.map(r => renderRankingCard(r))}
-                </div>
+                {!hasAnyData ? (
+                  <div className="text-center text-gray-500 text-xs py-4">まだ成績データがありません</div>
+                ) : (<>
+                  {/* 打撃部門 */}
+                  <div className="text-[10px] text-blue-300 font-bold mb-1 mt-1">打撃部門</div>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {battingRankings.map(r => renderRankingCard(r))}
+                  </div>
+                  {/* 投手部門 */}
+                  <div className="text-[10px] text-orange-300 font-bold mb-1">投手部門</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {pitchingRankings.map(r => renderRankingCard(r))}
+                  </div>
+                </>)}
               </div>
             );
           })()}
