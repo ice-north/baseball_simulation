@@ -300,6 +300,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const totalGames = seasonData?.settings?.gamesPerSeason || 60;
   const standings = seasonData.standings || [];
+
+  const leagueFormat = seasonData?.settings?.leagueFormat || 'single';
+  const isTwoLeague = leagueFormat === 'two';
+  const teamNamesList = seasonData?.settings?.teamNames || [];
+  const leagueNamesList = seasonData?.settings?.leagueNames || ['リーグ1', 'リーグ2'];
+  const halfTeams = Math.floor((seasonData?.settings?.teamsCount || 4) / 2);
+  const league1Teams = useMemo(() => isTwoLeague ? teamNamesList.slice(0, halfTeams) : [], [isTwoLeague, teamNamesList, halfTeams]);
+  const league2Teams = useMemo(() => isTwoLeague ? teamNamesList.slice(halfTeams) : [], [isTwoLeague, teamNamesList, halfTeams]);
+  const getLeagueLabel = (game) => {
+    if (!isTwoLeague) return null;
+    if (league1Teams.includes(game.home) && league1Teams.includes(game.away)) return leagueNamesList[0];
+    if (league2Teams.includes(game.home) && league2Teams.includes(game.away)) return leagueNamesList[1];
+    return '交流戦';
+  };
   const leader = standings[0];
   const leaderWins = leader?.wins || 0;
   const leaderLosses = leader?.losses || 0;
@@ -719,8 +733,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               const awayShort = getTeamAbbreviation(game.away);
                               const homeShort = getTeamAbbreviation(game.home);
                               const isUserInGame = game.home === userTeamName || game.away === userTeamName;
+                              const leagueColor = !isTwoLeague ? '' :
+                                (league1Teams.includes(game.home) && league1Teams.includes(game.away)) ? 'border-l border-blue-500/50 pl-0.5' :
+                                (league2Teams.includes(game.home) && league2Teams.includes(game.away)) ? 'border-l border-orange-500/50 pl-0.5' :
+                                'border-l border-green-500/50 pl-0.5';
                               if (showAsScheduled || !game.result) {
-                                return <div key={gIdx} className={`text-[11px] leading-tight text-center font-medium ${isUserInGame ? 'text-yellow-300' : 'text-white'}`}>{awayShort}-{homeShort}</div>;
+                                return <div key={gIdx} className={`text-[11px] leading-tight text-center font-medium ${isUserInGame ? 'text-yellow-300' : 'text-white'} ${leagueColor}`}>{awayShort}-{homeShort}</div>;
                               }
                               if (game.result?.cancelled) return null;
                               const awayWin = game.result.awayScore > game.result.homeScore;
@@ -747,7 +765,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                 seriesInfo = `${homeWins}-${awayWins}`;
                               }
                               return (
-                                <div key={gIdx} className="leading-tight text-center">
+                                <div key={gIdx} className={`leading-tight text-center ${leagueColor}`}>
                                   <div className="text-[11px]">
                                     <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-300'}>{awayShort}</span>
                                     <span className="text-white mx-px font-mono text-[10px]">{game.result.awayScore}-{game.result.homeScore}</span>
@@ -788,8 +806,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <span className="text-gray-500 text-xs">本日は試合がありません（休養日）</span>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-1.5">
-                {todaysGames.map(game => {
+              <div>
+                {(() => {
+                  const renderGameCards = (games) => (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {games.map(game => {
                   const awayPitcher = getStartingPitcher(game.away);
                   const homePitcher = getStartingPitcher(game.home);
                   const hasResult = !!game.result;
@@ -882,7 +903,32 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       </div>
                     </div>
                   );
-                })}
+                      })}
+                    </div>
+                  );
+                  if (isTwoLeague) {
+                    const l1Games = todaysGames.filter(g => league1Teams.includes(g.home) && league1Teams.includes(g.away));
+                    const l2Games = todaysGames.filter(g => league2Teams.includes(g.home) && league2Teams.includes(g.away));
+                    const interGames = todaysGames.filter(g => !l1Games.includes(g) && !l2Games.includes(g));
+                    return (
+                      <div className="space-y-1.5">
+                        {l1Games.length > 0 && (<>
+                          <div className="text-[11px] font-bold text-blue-400 px-1">{leagueNamesList[0]}</div>
+                          {renderGameCards(l1Games)}
+                        </>)}
+                        {l2Games.length > 0 && (<>
+                          <div className="text-[11px] font-bold text-orange-400 px-1">{leagueNamesList[1]}</div>
+                          {renderGameCards(l2Games)}
+                        </>)}
+                        {interGames.length > 0 && (<>
+                          <div className="text-[11px] font-bold text-green-400 px-1">交流戦</div>
+                          {renderGameCards(interGames)}
+                        </>)}
+                      </div>
+                    );
+                  }
+                  return renderGameCards(todaysGames);
+                })()}
               </div>
             )}
             </div>
@@ -1006,14 +1052,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         {/* 右カラム: 順位表 */}
         <div className="w-[420px] shrink-0">
           {(() => {
-            const leagueFormat = seasonData?.settings?.leagueFormat || 'single';
-            const isTwoLeague = leagueFormat === 'two';
-            const teamNamesList = seasonData?.settings?.teamNames || [];
-            const leagueNamesList = seasonData?.settings?.leagueNames || ['リーグ1', 'リーグ2'];
-            const halfTeams = Math.floor((seasonData?.settings?.teamsCount || 4) / 2);
-            const league1Teams = teamNamesList.slice(0, halfTeams);
-            const league2Teams = teamNamesList.slice(halfTeams);
-
             const renderStandingsTable = (leagueStandings, title, titleColor) => {
               const lLeader = leagueStandings[0];
               const lLeaderWins = lLeader?.wins || 0;
