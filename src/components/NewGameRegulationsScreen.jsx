@@ -46,6 +46,45 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     });
   };
 
+  const PLACE_NAMES = [
+    '札幌', '函館', '旭川', '仙台', '秋田', '盛岡', '山形', '福島', '新潟', '長野',
+    '富山', '金沢', '東京', '横浜', '千葉', '埼玉', '水戸', '宇都宮', '前橋', '甲府',
+    '静岡', '浜松', '名古屋', '岐阜', '三重', '大阪', '神戸', '京都', '奈良', '和歌山',
+    '広島', '岡山', '松山', '高松', '高知', '徳島', '福岡', '北九州', '熊本', '大分',
+    '長崎', '鹿児島', '那覇', '青森', '松本', '堺', '姫路', '下関', '佐賀', '宮崎',
+    '釧路', '帯広', '小樽', '弘前', '八戸', '石巻', '郡山', '柏', '湘南', '浦和',
+    '川崎', '相模原', '豊田', '四日市', '滋賀', '尼崎', '倉敷', '福山', '鳥取', '松江',
+    '久留米', '佐世保', '別府', '宮古島', '沖縄', '富士', '信州', '越後', '能登', '琉球',
+  ];
+  const TEAM_SUFFIXES = [
+    'ファイターズ', 'ドラゴンズ', 'タイガース', 'イーグルス', 'ホークス',
+    'マリナーズ', 'ベアーズ', 'ライオンズ', 'スターズ', 'フェニックス',
+    'サンダーズ', 'ブレイブス', 'レイズ', 'ウォリアーズ', 'ナイツ',
+    'オーシャンズ', 'フレイムズ', 'ウィングス', 'キングス', 'パイレーツ',
+    'バッファローズ', 'カープ', 'ジャガーズ', 'コンドルズ', 'レジェンズ',
+    'ストームズ', 'ガルーダ', 'サムライズ', 'ブリッツ', 'シャークス',
+    'タイタンズ', 'セイバーズ', 'ヴィクトリー', 'クレインズ', 'マーベリックス',
+  ];
+
+  const generateRandomTeamNames = () => {
+    const count = tempSettings.teamsCount;
+    const usedPlaces = new Set();
+    const usedSuffixes = new Set();
+    const newNames = [];
+    const newAbbrs = [];
+    for (let i = 0; i < count; i++) {
+      let place, suffix;
+      do { place = PLACE_NAMES[Math.floor(Math.random() * PLACE_NAMES.length)]; } while (usedPlaces.has(place));
+      usedPlaces.add(place);
+      do { suffix = TEAM_SUFFIXES[Math.floor(Math.random() * TEAM_SUFFIXES.length)]; } while (usedSuffixes.has(suffix));
+      usedSuffixes.add(suffix);
+      newNames.push(`${place}${suffix}`);
+      const abbrChars = [...place].slice(0, 3);
+      newAbbrs.push(abbrChars.length >= 3 ? abbrChars.join('') : toFullWidth(place).slice(0, 3));
+    }
+    setTempSettings(prev => ({ ...prev, teamNames: newNames, teamAbbreviations: newAbbrs }));
+  };
+
   const handleTeamNameChange = (index, newName) => {
     const newNames = [...tempSettings.teamNames];
     newNames[index] = newName;
@@ -198,7 +237,13 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
 
         {/* チーム名設定 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 text-white">📝 チーム名設定</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-xl font-bold text-white">📝 チーム名設定</h2>
+            <button
+              onClick={generateRandomTeamNames}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm font-bold transition"
+            >🎲 ランダム生成</button>
+          </div>
           {tempSettings.leagueFormat === 'two' ? (
             <>
               {/* 2リーグ制の場合はリーグごとに表示 */}
