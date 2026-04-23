@@ -336,32 +336,90 @@ export const generateFullSeasonSchedule = (config) => {
 
   // スケジュールを配置
   const schedule = [];
-  let matchupIndex = 0;
 
-  for (const gameDay of selectedDays) {
-    if (matchupIndex >= allMatchups.length) break;
+  if (leagueFormat === 'two' && teamsCount >= 4) {
+    // 2リーグ制: 各日にL1/L2の試合を均等配置
+    const halfTeamsLocal = Math.floor(teamsCount / 2);
+    const l1Set = new Set(teams.slice(0, halfTeamsLocal));
+    const l1Pool = allMatchups.filter(m => l1Set.has(m.home) && l1Set.has(m.away));
+    const l2Pool = allMatchups.filter(m => !l1Set.has(m.home) && !l1Set.has(m.away));
+    const interPool = allMatchups.filter(m => (l1Set.has(m.home)) !== (l1Set.has(m.away)));
+    const l1PerDay = Math.floor(halfTeamsLocal / 2);
+    const l2PerDay = Math.floor(halfTeamsLocal / 2);
+    let l1Idx = 0, l2Idx = 0, interIdx = 0;
 
-    // この日の試合数
-    const gamesThisDay = Math.min(gamesPerDay, allMatchups.length - matchupIndex);
-
-    for (let i = 0; i < gamesThisDay; i++) {
-      const matchup = allMatchups[matchupIndex + i];
-
-      schedule.push({
-        id: schedule.length + 1,
-        date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
-        home: matchup.home,
-        away: matchup.away,
-        starterHome: null,
-        starterAway: null,
-        result: null,
-        phase: SEASON_PHASES.REGULAR_SEASON
+    for (const gameDay of selectedDays) {
+      const dayMatchups = [];
+      // L1の試合
+      for (let i = 0; i < l1PerDay && l1Idx < l1Pool.length; i++) {
+        dayMatchups.push(l1Pool[l1Idx++]);
+      }
+      // L2の試合
+      for (let i = 0; i < l2PerDay && l2Idx < l2Pool.length; i++) {
+        dayMatchups.push(l2Pool[l2Idx++]);
+      }
+      // 残り枠に交流戦
+      const remaining = gamesPerDay - dayMatchups.length;
+      for (let i = 0; i < remaining && interIdx < interPool.length; i++) {
+        dayMatchups.push(interPool[interIdx++]);
+      }
+      if (dayMatchups.length === 0) {
+        // L1/L2消化済み、交流戦のみ
+        for (let i = 0; i < gamesPerDay && interIdx < interPool.length; i++) {
+          dayMatchups.push(interPool[interIdx++]);
+        }
+      }
+      if (dayMatchups.length === 0) break;
+      dayMatchups.forEach(matchup => {
+        schedule.push({
+          id: schedule.length + 1,
+          date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
+          home: matchup.home, away: matchup.away,
+          starterHome: null, starterAway: null,
+          result: null, phase: SEASON_PHASES.REGULAR_SEASON
+        });
       });
     }
-
-    matchupIndex += gamesThisDay;
+    // 余りを最終日以降に配置
+    const remainingMatchups = [
+      ...l1Pool.slice(l1Idx), ...l2Pool.slice(l2Idx), ...interPool.slice(interIdx)
+    ];
+    let extraDayIdx = schedule.length > 0
+      ? selectedDays.findIndex(d => d.month === schedule[schedule.length - 1].date.month && d.day === schedule[schedule.length - 1].date.day) + 1
+      : 0;
+    let rmIdx = 0;
+    while (rmIdx < remainingMatchups.length && extraDayIdx < selectedDays.length) {
+      const gameDay = selectedDays[extraDayIdx++];
+      for (let i = 0; i < gamesPerDay && rmIdx < remainingMatchups.length; i++) {
+        const matchup = remainingMatchups[rmIdx++];
+        schedule.push({
+          id: schedule.length + 1,
+          date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
+          home: matchup.home, away: matchup.away,
+          starterHome: null, starterAway: null,
+          result: null, phase: SEASON_PHASES.REGULAR_SEASON
+        });
+      }
+    }
+  } else {
+    // 1リーグ制: 従来のシーケンシャル配置
+    let matchupIndex = 0;
+    for (const gameDay of selectedDays) {
+      if (matchupIndex >= allMatchups.length) break;
+      const gamesThisDay = Math.min(gamesPerDay, allMatchups.length - matchupIndex);
+      for (let i = 0; i < gamesThisDay; i++) {
+        const matchup = allMatchups[matchupIndex + i];
+        schedule.push({
+          id: schedule.length + 1,
+          date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
+          home: matchup.home, away: matchup.away,
+          starterHome: null, starterAway: null,
+          result: null, phase: SEASON_PHASES.REGULAR_SEASON
+        });
+      }
+      matchupIndex += gamesThisDay;
+    }
   }
-
 
   return schedule;
 };
