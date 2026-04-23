@@ -1391,41 +1391,56 @@ export function executeSubTraining(player, subType, options = {}) {
       break;
     }
     case 'breaking': {
-      // 変化球練習（サブ練習版）
+      // 変化球練習（サブ練習版）- フォーム適性で成長ボーナス
       if (player.position === 'pitcher' && player.pitching) {
         const arsenal = player.pitching?.arsenal || [];
         const nonStraight = arsenal.filter(p => p.type !== 'straight');
+        const playerForm = player.pitching?.form;
         if (nonStraight.length > 0) {
           nonStraight.forEach(pitch => {
             const age = player.age || 20;
             const ageBase = getAgeGrowthBase(age, false);
             const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
+            const formAff = getFormPitchAffinity(playerForm, pitch.type);
+            const formMult = formAff ? formAff.growth : 1.0;
             const rawGrowth = (Math.floor(Math.random() * 3) + 1 + Math.floor(Math.random() * 4) + 1) * ageMultiplier;
-            const growth = Math.max(1, Math.round(rawGrowth * 0.167));
+            const growth = Math.max(1, Math.round(rawGrowth * 0.167 * formMult));
             const before = pitch.level;
             pitch.level = before + growth;
-            growthReport.push({ statName: `${getPitchTypeName(pitch.type)}`, before, after: pitch.level, growth: pitch.level - before });
+            const affinityTag = formAff ? ' [適性]' : '';
+            growthReport.push({ statName: `${getPitchTypeName(pitch.type)}${affinityTag}`, before, after: pitch.level, growth: pitch.level - before });
           });
         }
       }
       break;
     }
     case 'newpitch': {
-      // 新球種習得（サブ練習版 - 成功率低め）
+      // 新球種習得（サブ練習版 - 成功率低め、フォーム適性で確率UP）
       if (player.position === 'pitcher' && player.pitching) {
         const allPitchTypes = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'cutter', 'knuckle', 'shoot'];
         const currentArsenal = (player.pitching.arsenal || []).map(a => a.type);
         const available = allPitchTypes.filter(t => !currentArsenal.includes(t));
-        if (available.length > 0 && Math.random() < 0.12) {
-          const newType = available[Math.floor(Math.random() * available.length)];
-          const level = 20 + Math.floor(Math.random() * 20);
-          if (!player.pitching.arsenal) player.pitching.arsenal = [{ type: 'straight', level: 50 }];
-          player.pitching.arsenal.push({ type: newType, level });
-          growthReport.push({ statName: '新球種', before: '-', after: `${getPitchTypeName(newType)}Lv${level}`, growth: 0, isAwakening: true });
-        } else if (available.length === 0) {
-          growthReport.push({ statName: '新球種', before: '-', after: '習得済み', growth: 0 });
+        // フォーム適性のある球種を優先的に選ぶ（50%の確率で適性球種を選択）
+        const playerForm = player.pitching?.form;
+        const affinityTypes = available.filter(t => getFormPitchAffinity(playerForm, t));
+        const useAffinity = affinityTypes.length > 0 && Math.random() < 0.5;
+        const candidates = useAffinity ? affinityTypes : available;
+        if (available.length > 0) {
+          const newType = candidates[Math.floor(Math.random() * candidates.length)];
+          const formAff = getFormPitchAffinity(playerForm, newType);
+          const baseRate = 0.12;
+          const successRate = formAff ? Math.min(0.25, baseRate + formAff.affinity) : baseRate;
+          if (Math.random() < successRate) {
+            const level = 20 + Math.floor(Math.random() * 20);
+            if (!player.pitching.arsenal) player.pitching.arsenal = [{ type: 'straight', level: 50 }];
+            player.pitching.arsenal.push({ type: newType, level });
+            const affinityTag = formAff ? ' [適性]' : '';
+            growthReport.push({ statName: '新球種', before: '-', after: `${getPitchTypeName(newType)}Lv${level}${affinityTag}`, growth: 0, isAwakening: true });
+          } else {
+            growthReport.push({ statName: '新球種', before: '-', after: '習得失敗', growth: 0 });
+          }
         } else {
-          growthReport.push({ statName: '新球種', before: '-', after: '習得失敗', growth: 0 });
+          growthReport.push({ statName: '新球種', before: '-', after: '習得済み', growth: 0 });
         }
       }
       break;
@@ -1594,6 +1609,35 @@ const ALL_PITCH_TYPES = [
   'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
 ];
 
+// フォーム別の変化球適性（習得しやすさ・成長ボーナス）
+// affinity: 習得成功率ボーナス(加算), growth: 変化球練習の成長倍率
+const FORM_PITCH_AFFINITY = {
+  overhand: {
+    fork: { affinity: 0.15, growth: 1.5 },
+    curve: { affinity: 0.10, growth: 1.3 },
+    splitter: { affinity: 0.10, growth: 1.3 },
+  },
+  threeQuarter: {
+    slider: { affinity: 0.10, growth: 1.3 },
+    changeup: { affinity: 0.10, growth: 1.3 },
+    cutter: { affinity: 0.10, growth: 1.3 },
+  },
+  sidearm: {
+    sinker: { affinity: 0.15, growth: 1.5 },
+    slider: { affinity: 0.10, growth: 1.3 },
+    shoot: { affinity: 0.10, growth: 1.3 },
+  },
+  submarine: {
+    sinker: { affinity: 0.20, growth: 1.7 },
+    changeup: { affinity: 0.10, growth: 1.3 },
+    twoSeam: { affinity: 0.10, growth: 1.3 },
+  },
+};
+
+function getFormPitchAffinity(form, pitchType) {
+  return FORM_PITCH_AFFINITY[form]?.[pitchType] || null;
+}
+
 /**
  * キャンプ練習を実行（1クール分）
  * 成長量は1/4に調整済み
@@ -1620,40 +1664,47 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const existingTypes = arsenal.map(p => p.type);
     const targetType = newPitchType || ALL_PITCH_TYPES.find(t => !existingTypes.includes(t));
     if (targetType && !existingTypes.includes(targetType)) {
-      // 覚醒10%, 大成功15%, 成功20%, 習得25%, 失敗30%
+      // フォーム適性ボーナス（適性球種は失敗率が下がる）
+      const formAff = getFormPitchAffinity(updatedPlayer.pitching?.form, targetType);
+      const affinityBonus = formAff ? formAff.affinity : 0;
+      // 基本: 覚醒10%, 大成功15%, 成功20%, 習得25%, 失敗30%
+      // 適性ボーナス分だけ失敗率が減り、成功率に上乗せ
+      const failRate = Math.max(0.05, 0.30 - affinityBonus);
+      const learnedRate = 0.25 + affinityBonus * 0.5;
       const roll = Math.random();
       const outcome = roll < 0.10 ? 'awakening'
         : roll < 0.25 ? 'great_success'
         : roll < 0.45 ? 'success'
-        : roll < 0.70 ? 'learned'
+        : roll < (0.45 + learnedRate) ? 'learned'
         : 'failure';
+      const affinityTag = formAff ? ' [適性]' : '';
       if (outcome === 'failure') {
         growthReport.push({
           stat: 'newpitch',
-          statName: `${getPitchTypeName(targetType)}習得失敗`,
+          statName: `${getPitchTypeName(targetType)}習得失敗${affinityTag}`,
           before: 0, after: 0, growth: 0, isAwakening: false
         });
       } else {
         const newId = arsenal.length > 0 ? Math.max(...arsenal.map(a => a.id)) + 1 : 1;
         let startLevel, label;
         if (outcome === 'awakening') {
-          startLevel = Math.floor(Math.random() * 20) + 61; // 覚醒: 61-80
+          startLevel = Math.floor(Math.random() * 20) + 61;
           label = '(覚醒!!)';
         } else if (outcome === 'great_success') {
-          startLevel = Math.floor(Math.random() * 20) + 41; // 大成功: 41-60
+          startLevel = Math.floor(Math.random() * 20) + 41;
           label = '(大成功!)';
         } else if (outcome === 'success') {
-          startLevel = Math.floor(Math.random() * 20) + 21; // 成功: 21-40
+          startLevel = Math.floor(Math.random() * 20) + 21;
           label = '';
         } else {
-          startLevel = Math.floor(Math.random() * 20) + 1; // 習得: 1-20
+          startLevel = Math.floor(Math.random() * 20) + 1;
           label = '';
         }
         arsenal.push({ id: newId, type: targetType, level: startLevel });
         updatedPlayer.pitching.arsenal = arsenal;
         growthReport.push({
           stat: 'newpitch',
-          statName: `${getPitchTypeName(targetType)}習得${label}`,
+          statName: `${getPitchTypeName(targetType)}習得${label}${affinityTag}`,
           before: 0, after: startLevel, growth: startLevel, isAwakening: outcome === 'awakening'
         });
       }
@@ -1755,7 +1806,7 @@ function getPitchTypeName(type) {
   };
   return names[type] || type;
 }
-export { ALL_PITCH_TYPES, getPitchTypeName };
+export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY };
 
 /**
  * チーム全体のキャンプ練習を実行

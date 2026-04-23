@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
@@ -418,6 +418,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-1 text-center w-7">位</th>
                     <th className="py-1.5 px-1 text-center w-6">齢</th>
                     <th className="py-1.5 px-1 text-center w-8">投/打</th>
+                    <th className="py-1.5 px-1 text-center w-12">フォーム</th>
                     <th className="py-1.5 px-1 text-center w-7">ミ</th>
                     <th className="py-1.5 px-1 text-center w-7">パ</th>
                     <th className="py-1.5 px-1 text-center w-7">走</th>
@@ -465,6 +466,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>{ph.throws === 'left' ? '左' : '右'}</span>
                           <span className="text-gray-600">/</span>
                           <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
+                        </td>
+                        <td className="py-1 px-1 text-center text-[10px] text-gray-400">
+                          {isPitcher(player) ? ({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-') : '-'}
                         </td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>
@@ -517,11 +521,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                               <select
                                 value={newPitchSelections[player.id] || availableNewPitches[0]}
                                 onChange={(e) => setNewPitchSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
-                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-24"
+                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-28"
                               >
-                                {availableNewPitches.map(pt => (
-                                  <option key={pt} value={pt}>{getPitchTypeName(pt)}</option>
-                                ))}
+                                {availableNewPitches.map(pt => {
+                                  const hasAffinity = FORM_PITCH_AFFINITY[p.form]?.[pt];
+                                  return <option key={pt} value={pt}>{getPitchTypeName(pt)}{hasAffinity ? ' ★適性' : ''}</option>;
+                                })}
                               </select>
                             )}
                           </div>
