@@ -1404,17 +1404,17 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
   }
 
   // 年齢による指名優先度補正（素材型 vs 即戦力）
-  // 若手は将来性を加味して強く優先、年上は即戦力級でないと敬遠される
+  // 若手はやや加点されるが、能力差を覆すほどではない
   const age = player.age || 22;
   let ageBonus = 0;
-  if (age <= 18)      ageBonus = 30;  // 高卒素材は夢があるため最優先
-  else if (age <= 19) ageBonus = 20;
-  else if (age <= 20) ageBonus = 12;
-  else if (age <= 21) ageBonus = 6;
+  if (age <= 18)      ageBonus = 10;
+  else if (age <= 19) ageBonus = 7;
+  else if (age <= 20) ageBonus = 4;
+  else if (age <= 21) ageBonus = 2;
   else if (age <= 22) ageBonus = 0;   // 大卒基準
-  else if (age <= 23) ageBonus = -8;
-  else if (age <= 24) ageBonus = -18;
-  else                ageBonus = -28; // 即戦力級でなければ指名回避
+  else if (age <= 23) ageBonus = -3;
+  else if (age <= 24) ageBonus = -8;
+  else                ageBonus = -15;
 
   return rankScore + bonusScore + specialistScore + ageBonus;
 }
