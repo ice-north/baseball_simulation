@@ -649,34 +649,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   };
 
   // ユーザーチームの成績取得
-  const userStanding = standings.find(s => s.team === userTeamName);
-  const userWins = userStanding?.wins || 0;
-  const userLosses = userStanding?.losses || 0;
-  const userDraws = userStanding?.draws || 0;
-  const userRank = standings.findIndex(s => s.team === userTeamName) + 1;
-
   return (
     <div className="p-3 min-h-screen">
-      {/* コンパクトヘッダー */}
-      <div className="mb-2 flex items-center gap-3 bg-gray-900/80 rounded-xl px-3 py-1.5 border border-gray-700/30">
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-          currentPhase === SEASON_PHASES.PLAYOFFS ? 'bg-yellow-600/40 text-yellow-200' :
-          currentPhase === SEASON_PHASES.REGULAR_SEASON ? 'bg-blue-600/40 text-blue-200' :
-          currentPhase === SEASON_PHASES.SPRING_CAMP ? 'bg-green-600/40 text-green-200' :
-          'bg-gray-600/40 text-gray-300'
-        }`}>{phaseInfo.name}</span>
-        <span className="text-base font-bold text-white">{formatDate(seasonData.currentDate)}</span>
-        <span className="text-xs text-gray-400">{getDayOfWeek(seasonData.currentDate)}</span>
-        <span className="text-xs text-gray-500">{seasonData.year}年目</span>
-        <div className="ml-auto flex items-center gap-2 text-sm">
-          <span className="text-green-400 font-bold">{userWins}<span className="text-[10px] text-gray-500 ml-0.5">勝</span></span>
-          <span className="text-red-400 font-bold">{userLosses}<span className="text-[10px] text-gray-500 ml-0.5">敗</span></span>
-          <span className="text-gray-400 font-bold">{userDraws}<span className="text-[10px] text-gray-500 ml-0.5">分</span></span>
-          <span className={`font-bold ${userRank <= 2 ? 'text-yellow-400' : 'text-white'}`}>{userRank}位</span>
-        </div>
-        {isSimulating && <span className="text-xs text-yellow-400 animate-pulse">処理中...</span>}
-      </div>
-
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
