@@ -323,8 +323,13 @@ export const generateFullSeasonSchedule = (config) => {
   const allGameDays = collectAllGameDays(year);
 
   // 必要な試合日数を計算
-  const totalGamesNeeded = allMatchups.length;
-  const neededDays = Math.ceil(totalGamesNeeded / gamesPerDay);
+  let neededDays;
+  if (leagueFormat === 'two' && teamsCount >= 4) {
+    neededDays = allMatchups.length;
+  } else {
+    const totalGamesNeeded = allMatchups.length;
+    neededDays = Math.ceil(totalGamesNeeded / gamesPerDay);
+  }
 
   // 土日を優先して選択し、足りなければ平日も使用
   const weekends = allGameDays.filter(d => d.priority === 1);
