@@ -201,7 +201,7 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
 
       if (leagueFormat === 'two') {
         // 2リーグ制: リーグ別に上位チームを取得
-        const allTeamNames = Object.keys(seasonData.standings.reduce((acc, s) => { acc[s.team] = true; return acc; }, {}));
+        const allTeamNames = seasonData.settings.teamNames || Object.keys(seasonData.standings.reduce((acc, s) => { acc[s.team] = true; return acc; }, {}));
         const halfTeams = Math.floor(allTeamNames.length / 2);
         const league1Teams = allTeamNames.slice(0, halfTeams);
         const league2Teams = allTeamNames.slice(halfTeams);
