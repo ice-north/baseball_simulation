@@ -1,5 +1,5 @@
 import React from 'react';
-import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
+import { TEAMS_DATA, initializeAllPitchingRotations, releasedPlayersPool } from '../teams-data.js';
 import { SEASON_PHASES } from '../season/seasonManager.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { progressDate } from '../season/dateProgression.js';
@@ -196,9 +196,50 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     onConfirm={() => {
-      const teams = Object.keys(TEAMS_DATA);
       const settings = seasonData.settings || {};
       const calendarYear = 2024 + seasonData.year - 1;
+      const configuredTeams = settings.teamNames || [];
+
+      // 新チーム追加
+      const existingTeams = new Set(Object.keys(TEAMS_DATA));
+      const newTeamNames = configuredTeams.filter(t => !existingTeams.has(t));
+      if (newTeamNames.length > 0) {
+        const abbrs = settings.teamAbbreviations || [];
+        newTeamNames.forEach(teamName => {
+          const idx = configuredTeams.indexOf(teamName);
+          const abbr = abbrs[idx] || teamName.slice(0, 3);
+          TEAMS_DATA[teamName] = {
+            name: teamName,
+            abbreviation: abbr,
+            players: generateExpansionRoster(seasonData.year || 1, 24),
+            pitchingRotation: null
+          };
+          generatePitchingRotation(teamName);
+        });
+      }
+
+      // 解散チーム処理
+      const configuredSet = new Set(configuredTeams);
+      const dissolvedTeamNames = Object.keys(TEAMS_DATA).filter(t => configuredTeams.length > 0 && !configuredSet.has(t));
+      let dissolvedPlayerCount = 0;
+      if (dissolvedTeamNames.length > 0) {
+        dissolvedTeamNames.forEach(teamName => {
+          const teamData = TEAMS_DATA[teamName];
+          if (teamData && teamData.players) {
+            teamData.players.forEach(player => {
+              releasedPlayersPool.push({
+                ...JSON.parse(JSON.stringify(player)),
+                formerTeam: teamName,
+                attemptsInPool: 0
+              });
+              dissolvedPlayerCount++;
+            });
+          }
+          delete TEAMS_DATA[teamName];
+        });
+      }
+
+      const teams = configuredTeams.length > 0 ? configuredTeams : Object.keys(TEAMS_DATA);
       const schedule = generateFullSeasonSchedule({
         teams,
         gamesPerSeason: settings.gamesPerSeason || 60,
@@ -215,6 +256,16 @@ const ManagementScreen = ({
           team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
         }))
       }));
+      const alerts = [];
+      if (newTeamNames.length > 0) {
+        alerts.push(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
+      }
+      if (dissolvedTeamNames.length > 0) {
+        alerts.push(`${dissolvedTeamNames.join('、')}が解散しました。所属${dissolvedPlayerCount}名の選手はフリーエージェントプールに移動し、次回トライアウトに参加します`);
+      }
+      if (alerts.length > 0) {
+        alert(alerts.join('\n\n'));
+      }
       setManagementView('sandbox_setup');
     }}
   />;
@@ -273,8 +324,29 @@ const ManagementScreen = ({
             players: generateExpansionRoster(seasonData.year || 1, 24),
             pitchingRotation: null
           };
-          // AI用のラインナップ・ローテーション生成
           generatePitchingRotation(teamName);
+        });
+      }
+
+      // 解散チーム検出: TEAMS_DATAにあるがsettings.teamNamesに存在しないチーム
+      const configuredSet = new Set(configuredTeams);
+      const dissolvedTeamNames = Object.keys(TEAMS_DATA).filter(t => configuredTeams.length > 0 && !configuredSet.has(t));
+      let dissolvedPlayerCount = 0;
+
+      if (dissolvedTeamNames.length > 0) {
+        dissolvedTeamNames.forEach(teamName => {
+          const teamData = TEAMS_DATA[teamName];
+          if (teamData && teamData.players) {
+            teamData.players.forEach(player => {
+              releasedPlayersPool.push({
+                ...JSON.parse(JSON.stringify(player)),
+                formerTeam: teamName,
+                attemptsInPool: 0
+              });
+              dissolvedPlayerCount++;
+            });
+          }
+          delete TEAMS_DATA[teamName];
         });
       }
 
@@ -295,8 +367,15 @@ const ManagementScreen = ({
           team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
         }))
       }));
+      const alerts = [];
       if (newTeamNames.length > 0) {
-        alert(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
+        alerts.push(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
+      }
+      if (dissolvedTeamNames.length > 0) {
+        alerts.push(`${dissolvedTeamNames.join('、')}が解散しました。所属${dissolvedPlayerCount}名の選手はフリーエージェントプールに移動し、次回トライアウトに参加します`);
+      }
+      if (alerts.length > 0) {
+        alert(alerts.join('\n\n'));
       }
       setManagementView('camp');
     }}
