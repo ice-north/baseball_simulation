@@ -238,6 +238,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const [showBenchAway, setShowBenchAway] = useState(false);  // ベンチ表示切り替え（アウェイ）
       const [showBenchHome, setShowBenchHome] = useState(false);  // ベンチ表示切り替え（ホーム）
       const [autoManagerMode, setAutoManagerMode] = useState(true);  // 監督AI自動采配モード
+      const [showSubModal, setShowSubModal] = useState(false);  // 選手交代モーダル
+      const [subModalSelected, setSubModalSelected] = useState(null);  // モーダル内選択中選手ID
       const isSubstituting = React.useRef(false);  // 交代処理中フラグ（二重実行防止）
       // 采配モード（日程進行から起動した試合）
       const [managedGameInfo, setManagedGameInfo] = useState(null);  // { gameId, home, away, otherGames }
@@ -3077,9 +3079,172 @@ if (newOuts === 3) {
                   >
                     🤖 {autoManagerMode ? 'AI ON' : 'AI OFF'}
                   </button>
+                  {managedGameInfo && !gameOver && (
+                    <button
+                      onClick={() => {
+                        if (isAutoSimulating) {
+                          setSimMode(null);
+                          setRemainingPitches(0);
+                          setIsAutoSimulating(false);
+                        }
+                        setSubModalSelected(null);
+                        setShowSubModal(true);
+                      }}
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded text-sm font-semibold transition"
+                    >
+                      選手交代
+                    </button>
+                  )}
                 </div>
               </div>
               )}
+
+              {/* 選手交代モーダル */}
+              {showSubModal && gameStarted && managedGameInfo && (() => {
+                const isUserHome = homeTeam.name === userTeamName;
+                const userTeam = isUserHome ? homeTeam : awayTeam;
+                const teamType = isUserHome ? 'home' : 'away';
+                const fieldPlayers = userTeam.players
+                  .filter(p => p.isStarter && !p.hasSubbedOut && p.battingOrder > 0)
+                  .sort((a, b) => a.battingOrder - b.battingOrder);
+                const benchPlayers = userTeam.players.filter(p => !p.isStarter && !p.hasSubbedOut);
+                const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                const getPositionColor = (pos) => {
+                  if (pos === 'pitcher') return 'bg-red-600 text-white';
+                  if (pos === 'catcher') return 'bg-blue-600 text-white';
+                  if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';
+                  if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';
+                  return 'bg-gray-700 text-white';
+                };
+                const selectedPlayer = subModalSelected ? userTeam.players.find(p => p.id === subModalSelected) : null;
+                const selectedIsField = selectedPlayer?.isStarter && !selectedPlayer?.hasSubbedOut && selectedPlayer?.battingOrder > 0;
+
+                const setUserTeam = isUserHome ? setHomeTeam : setAwayTeam;
+                const handleModalClick = (playerId) => {
+                  const clicked = userTeam.players.find(p => p.id === playerId);
+                  if (!clicked) return;
+                  const clickedIsField = clicked.isStarter && !clicked.hasSubbedOut && clicked.battingOrder > 0;
+
+                  if (!subModalSelected) {
+                    setSubModalSelected(playerId);
+                  } else if (subModalSelected === playerId) {
+                    setSubModalSelected(null);
+                  } else {
+                    const fieldId = selectedIsField ? subModalSelected : (clickedIsField ? playerId : null);
+                    const benchId = !selectedIsField ? subModalSelected : (!clickedIsField ? playerId : null);
+                    if (!fieldId || !benchId) {
+                      setSubModalSelected(playerId);
+                      return;
+                    }
+                    const fieldPlayer = userTeam.players.find(p => p.id === fieldId);
+                    const benchPlayer = userTeam.players.find(p => p.id === benchId);
+                    const posLabel = { pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁', short: '遊撃', third: '三塁', left: '左翼', center: '中堅', right: '右翼' };
+                    setGameLog(prev => [...prev, {
+                      description: `[選手交代] ${fieldPlayer?.name} → ${benchPlayer?.name} (${posLabel[fieldPlayer?.position] || ''})`,
+                      isSpecial: true
+                    }]);
+                    setUserTeam(prev => {
+                      const players = prev.players.map(p => ({...p}));
+                      const fieldP = players.find(p => p.id === fieldId);
+                      const benchP = players.find(p => p.id === benchId);
+                      if (!fieldP || !benchP) return prev;
+
+                      const oldOrder = fieldP.battingOrder;
+                      const oldPos = fieldP.position;
+
+                      fieldP.isStarter = false;
+                      fieldP.hasSubbedOut = true;
+                      fieldP.battingOrder = 0;
+                      fieldP.position = getBestFitPosition(fieldP);
+
+                      benchP.isStarter = true;
+                      benchP.battingOrder = oldOrder;
+                      benchP.position = oldPos;
+
+                      if (oldPos === 'pitcher') {
+                        const isDefense = (isUserHome && isTopInning) || (!isUserHome && !isTopInning);
+                        if (isDefense) {
+                          setTimeout(() => {
+                            const maxSt = benchP.pitching?.stamina || 100;
+                            const fat = benchP.fatigue || 0;
+                            setCurrentStamina(Math.max(Math.floor(maxSt * 0.5), maxSt - fat));
+                          }, 0);
+                        }
+                      }
+                      return { ...prev, players };
+                    });
+                    setSubModalSelected(null);
+                    setShowSubModal(false);
+                  }
+                };
+
+                return (
+                  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => { setShowSubModal(false); setSubModalSelected(null); }}>
+                    <div className="bg-gray-900 rounded-xl p-4 max-w-lg w-full mx-4 border border-gray-600 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-white font-bold text-lg">選手交代</h3>
+                        <button onClick={() => { setShowSubModal(false); setSubModalSelected(null); }} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                      </div>
+                      <p className="text-xs text-gray-400 mb-3">フィールド選手を選んでからベンチ選手を選ぶと交代します</p>
+
+                      <div className="mb-3">
+                        <div className="text-xs text-gray-500 font-bold mb-1">フィールド</div>
+                        <div className="space-y-1">
+                          {fieldPlayers.map(p => {
+                            const isPitcher = p.position === 'pitcher';
+                            const throwH = p.physical.throws === 'right' ? '右' : '左';
+                            const batH = p.batting.bats === 'right' ? '右' : p.batting.bats === 'left' ? '左' : '両';
+                            const isSelected = subModalSelected === p.id;
+                            const fitness = calculateDefensiveFitness(p, p.position);
+                            return (
+                              <div key={p.id} onClick={() => handleModalClick(p.id)}
+                                className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-orange-600 ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-gray-400 w-4 text-center text-xs">{p.battingOrder}</span>
+                                  <span className={`w-6 text-center text-xs font-bold rounded ${getPositionColor(p.position)}`}>{posNames[p.position]}</span>
+                                  <span className="text-white text-sm font-medium truncate flex-1">{p.name}</span>
+                                  <span className="text-gray-400 text-xs">{throwH}{batH}</span>
+                                  <span className="text-gray-500 text-xs">M{p.batting.meet} P{p.batting.power}</span>
+                                  {isPitcher && <span className="text-blue-400 text-xs">{p.pitching.velocity}km</span>}
+                                  <span className={`text-[10px] ${fitness.grade === 'S' ? 'text-yellow-400' : fitness.grade === 'A' ? 'text-green-400' : fitness.grade === 'B' ? 'text-blue-400' : fitness.grade === 'D' ? 'text-red-400' : 'text-gray-500'}`}>{fitness.grade}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-gray-500 font-bold mb-1">ベンチ</div>
+                        {benchPlayers.length === 0 ? (
+                          <div className="text-xs text-gray-600 p-2">交代可能な選手がいません</div>
+                        ) : (
+                          <div className="space-y-1">
+                            {benchPlayers.map(p => {
+                              const isPitcher = p.position === 'pitcher';
+                              const throwH = p.physical.throws === 'right' ? '右' : '左';
+                              const batH = p.batting.bats === 'right' ? '右' : p.batting.bats === 'left' ? '左' : '両';
+                              const isSelected = subModalSelected === p.id;
+                              return (
+                                <div key={p.id} onClick={() => handleModalClick(p.id)}
+                                  className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-blue-600 ring-2 ring-blue-400' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`w-6 text-center text-xs font-bold rounded ${getPositionColor(p.position)}`}>{posNames[p.position]}</span>
+                                    <span className="text-white text-sm font-medium truncate flex-1">{p.name}</span>
+                                    <span className="text-gray-400 text-xs">{throwH}{batH}</span>
+                                    <span className="text-gray-500 text-xs">M{p.batting.meet} P{p.batting.power}</span>
+                                    {isPitcher && <span className="text-blue-400 text-xs">{p.pitching.velocity}km</span>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 最新結果 */}
               {gameStarted && lastResult && (
