@@ -1493,3 +1493,26 @@ export function selectPlayerForAI(candidates, currentRoster = []) {
 
   return scoredCandidates[0];
 }
+
+/**
+ * 新規参入チーム用のロスター（24人）を自動生成
+ * 既存リーグの平均的な戦力の選手を生成し、AIドラフトで選出
+ * @param {number} year - 現在の年度
+ * @param {number} rosterSize - ロスターサイズ（デフォルト24）
+ * @returns {Array} 選手配列
+ */
+export function generateExpansionRoster(year = 1, rosterSize = 24) {
+  const candidates = generateTryoutCandidates(year, 1, true);
+  const roster = [];
+  const remaining = [...candidates];
+
+  for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
+    const pick = selectPlayerForAI(remaining, roster);
+    if (!pick) break;
+    const idx = remaining.findIndex(c => c.id === pick.id);
+    if (idx >= 0) remaining.splice(idx, 1);
+    roster.push(pick);
+  }
+
+  return roster;
+}

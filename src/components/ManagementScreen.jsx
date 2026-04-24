@@ -7,6 +7,7 @@ import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
 import { processNPBDraft, processSeasonEnd, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { generateExpansionRoster } from '../season/tryoutSystem.js';
 
 import ScheduleScreen from './ScheduleScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
@@ -253,9 +254,31 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     onConfirm={() => {
-      const teams = Object.keys(TEAMS_DATA);
       const settings = seasonData.settings || {};
       const calendarYear = 2024 + seasonData.year - 1;
+
+      // 新チーム検出: settings.teamNamesにあるがTEAMS_DATAに存在しないチーム
+      const configuredTeams = settings.teamNames || [];
+      const existingTeams = new Set(Object.keys(TEAMS_DATA));
+      const newTeamNames = configuredTeams.filter(t => !existingTeams.has(t));
+
+      if (newTeamNames.length > 0) {
+        const abbrs = settings.teamAbbreviations || [];
+        newTeamNames.forEach(teamName => {
+          const idx = configuredTeams.indexOf(teamName);
+          const abbr = abbrs[idx] || teamName.slice(0, 3);
+          TEAMS_DATA[teamName] = {
+            name: teamName,
+            abbreviation: abbr,
+            players: generateExpansionRoster(seasonData.year || 1, 24),
+            pitchingRotation: null
+          };
+          // AI用のラインナップ・ローテーション生成
+          generatePitchingRotation(teamName);
+        });
+      }
+
+      const teams = configuredTeams.length > 0 ? configuredTeams : Object.keys(TEAMS_DATA);
       const schedule = generateFullSeasonSchedule({
         teams,
         gamesPerSeason: settings.gamesPerSeason || 60,
@@ -272,6 +295,9 @@ const ManagementScreen = ({
           team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0
         }))
       }));
+      if (newTeamNames.length > 0) {
+        alert(`新規参入チーム（${newTeamNames.join('、')}）にロスター24人を自動編成しました`);
+      }
       setManagementView('camp');
     }}
   />;
