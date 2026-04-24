@@ -774,7 +774,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <span>{formatDate(seasonData.currentDate)} の対戦</span>
               <span className="text-xs font-normal text-gray-500 ml-1">{todaysGames.length}試合</span>
             </h2>
-            <div className="h-[160px] overflow-y-auto">
+            <div>
             {todaysGames.length === 0 ? (
               <div className="text-center py-3 bg-gray-800/50 rounded-xl h-full flex flex-col items-center justify-center">
                 <div className="text-gray-600 text-xl mb-1">⚾</div>
@@ -784,13 +784,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <div>
                 {(() => {
                   const renderGameCards = (games) => (
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-2 gap-1">
                       {games.map(game => {
                   const awayPitcher = getStartingPitcher(game.away);
                   const homePitcher = getStartingPitcher(game.home);
                   const hasResult = !!game.result;
                   const isUserGame = game.home === userTeamName || game.away === userTeamName;
-                  // プレーオフ通算成績
                   let todaySeriesInfo = null;
                   if (game.seriesId && game.phase === SEASON_PHASES.PLAYOFFS) {
                     const seriesAll = (seasonData.schedule || []).filter(g => g.seriesId === game.seriesId && !g.result?.cancelled);
@@ -807,7 +806,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     todaySeriesInfo = `${roundLabel} 第${game.seriesGame}戦 (${hWins}-${aWins})`;
                   }
                   return (
-                    <div key={game.id} className={`rounded-lg p-2 transition-all relative overflow-hidden ${
+                    <div key={game.id} className={`rounded-lg p-1.5 transition-all relative overflow-hidden ${
                       isUserGame && !hasResult ? 'bg-gradient-to-br from-blue-900/50 to-blue-800/30 border border-blue-500/30 shadow-md shadow-blue-900/20' :
                       hasResult ? 'bg-gray-800/60 border border-gray-700/20' :
                       'bg-gradient-to-br from-gray-800/80 to-gray-800/50 border border-gray-700/20'
@@ -887,18 +886,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     const interGames = todaysGames.filter(g => !l1Games.includes(g) && !l2Games.includes(g));
                     return (
                       <div className="space-y-1.5">
-                        {l1Games.length > 0 && (<>
-                          <div className="text-[11px] font-bold text-blue-400 px-1">{leagueNamesList[0]}</div>
-                          {renderGameCards(l1Games)}
-                        </>)}
-                        {l2Games.length > 0 && (<>
-                          <div className="text-[11px] font-bold text-orange-400 px-1">{leagueNamesList[1]}</div>
-                          {renderGameCards(l2Games)}
-                        </>)}
-                        {interGames.length > 0 && (<>
-                          <div className="text-[11px] font-bold text-green-400 px-1">交流戦</div>
-                          {renderGameCards(interGames)}
-                        </>)}
+                        {l1Games.length > 0 && renderGameCards(l1Games)}
+                        {l2Games.length > 0 && renderGameCards(l2Games)}
+                        {interGames.length > 0 && renderGameCards(interGames)}
                       </div>
                     );
                   }
