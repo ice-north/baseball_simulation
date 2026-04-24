@@ -47,66 +47,72 @@ export const generateRoundRobin = (teams) => {
 };
 
 /**
- * 2リーグ制のラウンドロビンを生成
+ * 2リーグ制の対戦カードをラウンド単位で生成
+ * 各ラウンド内はチーム重複なし（同日開催可能）
  * @param {Array} league1 - リーグ1のチーム配列
  * @param {Array} league2 - リーグ2のチーム配列
  * @param {number} intraPerPair - 同一リーグ内の各ペア対戦数
  * @param {number} interPerPair - 異リーグ間の各ペア対戦数
- * @returns {Array} 対戦カード配列
+ * @returns {Array<Array>} ラウンド配列 [[{home, away, isInterLeague}, ...], ...]
  */
 export const generateTwoLeagueMatchups = (league1, league2, intraPerPair, interPerPair) => {
-  const allMatchups = [];
+  const rounds = [];
 
-  // リーグ内対戦: 各ペアがintraPerPair回対戦
-  const addIntraLeagueGames = (leagueTeams, gamesPerPair) => {
-    const roundRobin = generateRoundRobin(leagueTeams);
-    for (let rep = 0; rep < gamesPerPair; rep++) {
-      roundRobin.forEach(roundGames => {
-        roundGames.forEach(game => {
-          if (rep % 2 === 0) {
-            allMatchups.push({ home: game.home, away: game.away, isInterLeague: false });
-          } else {
-            allMatchups.push({ home: game.away, away: game.home, isInterLeague: false });
-          }
+  // リーグ内対戦: ラウンドロビンのラウンド構造を維持
+  const l1RR = generateRoundRobin(league1);
+  const l2RR = generateRoundRobin(league2);
+
+  for (let rep = 0; rep < intraPerPair; rep++) {
+    const maxRounds = Math.max(l1RR.length, l2RR.length);
+    for (let r = 0; r < maxRounds; r++) {
+      const round = [];
+      if (r < l1RR.length) {
+        l1RR[r].forEach(g => {
+          round.push(rep % 2 === 0
+            ? { home: g.home, away: g.away, isInterLeague: false }
+            : { home: g.away, away: g.home, isInterLeague: false });
         });
-      });
-    }
-  };
-
-  // リーグ間対戦: league1の全チーム × league2の全チーム、各ペアがinterPerPair回対戦
-  const addInterLeagueGames = (gamesPerPair) => {
-    for (let rep = 0; rep < gamesPerPair; rep++) {
-      league1.forEach((team1) => {
-        league2.forEach((team2) => {
-          if (rep % 2 === 0) {
-            allMatchups.push({ home: team1, away: team2, isInterLeague: true });
-          } else {
-            allMatchups.push({ home: team2, away: team1, isInterLeague: true });
-          }
+      }
+      if (r < l2RR.length) {
+        l2RR[r].forEach(g => {
+          round.push(rep % 2 === 0
+            ? { home: g.home, away: g.away, isInterLeague: false }
+            : { home: g.away, away: g.home, isInterLeague: false });
         });
-      });
+      }
+      rounds.push(round);
     }
-  };
-
-  addIntraLeagueGames(league1, intraPerPair);
-  addIntraLeagueGames(league2, intraPerPair);
-  addInterLeagueGames(interPerPair);
-
-  // インターリーブ: L1とL2を交互に配置（同日に両リーグの試合が入るようにする）
-  const l1Set = new Set(league1);
-  const l1Matchups = allMatchups.filter(m => !m.isInterLeague && (l1Set.has(m.home) || l1Set.has(m.away)));
-  const l2Matchups = allMatchups.filter(m => !m.isInterLeague && !l1Set.has(m.home) && !l1Set.has(m.away));
-  const interMatchups = allMatchups.filter(m => m.isInterLeague);
-
-  const interleaved = [];
-  const maxLen = Math.max(l1Matchups.length, l2Matchups.length);
-  for (let i = 0; i < maxLen; i++) {
-    if (i < l1Matchups.length) interleaved.push(l1Matchups[i]);
-    if (i < l2Matchups.length) interleaved.push(l2Matchups[i]);
   }
-  interleaved.push(...interMatchups);
 
-  return interleaved;
+  // リーグ間対戦: 同日にチーム重複がないようラウンド分け
+  for (let rep = 0; rep < interPerPair; rep++) {
+    const pairs = [];
+    league1.forEach(t1 => {
+      league2.forEach(t2 => {
+        pairs.push(rep % 2 === 0
+          ? { home: t1, away: t2, isInterLeague: true }
+          : { home: t2, away: t1, isInterLeague: true });
+      });
+    });
+    // 貪欲法でラウンド分け: 各ラウンドでチーム重複なし
+    const remaining = [...pairs];
+    while (remaining.length > 0) {
+      const round = [];
+      const usedTeams = new Set();
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        const p = remaining[i];
+        if (!usedTeams.has(p.home) && !usedTeams.has(p.away)) {
+          round.push(p);
+          usedTeams.add(p.home);
+          usedTeams.add(p.away);
+          remaining.splice(i, 1);
+        }
+      }
+      rounds.push(round);
+    }
+  }
+
+  return rounds;
 };
 
 /**
@@ -370,39 +376,13 @@ export const generateFullSeasonSchedule = (config) => {
   const schedule = [];
 
   if (leagueFormat === 'two' && teamsCount >= 4) {
-    // 2リーグ制: 各日にL1/L2の試合を均等配置
-    const halfTeamsLocal = Math.floor(teamsCount / 2);
-    const l1Set = new Set(teams.slice(0, halfTeamsLocal));
-    const l1Pool = allMatchups.filter(m => l1Set.has(m.home) && l1Set.has(m.away));
-    const l2Pool = allMatchups.filter(m => !l1Set.has(m.home) && !l1Set.has(m.away));
-    const interPool = allMatchups.filter(m => (l1Set.has(m.home)) !== (l1Set.has(m.away)));
-    const l1PerDay = Math.floor(halfTeamsLocal / 2);
-    const l2PerDay = Math.floor(halfTeamsLocal / 2);
-    let l1Idx = 0, l2Idx = 0, interIdx = 0;
-
+    // 2リーグ制: ラウンド単位で配置（各ラウンド内はチーム重複なし）
+    // allMatchups は [[{home,away,isInterLeague},...], ...] のラウンド配列
+    let roundIdx = 0;
     for (const gameDay of selectedDays) {
-      const dayMatchups = [];
-      // L1の試合
-      for (let i = 0; i < l1PerDay && l1Idx < l1Pool.length; i++) {
-        dayMatchups.push(l1Pool[l1Idx++]);
-      }
-      // L2の試合
-      for (let i = 0; i < l2PerDay && l2Idx < l2Pool.length; i++) {
-        dayMatchups.push(l2Pool[l2Idx++]);
-      }
-      // 残り枠に交流戦
-      const remaining = gamesPerDay - dayMatchups.length;
-      for (let i = 0; i < remaining && interIdx < interPool.length; i++) {
-        dayMatchups.push(interPool[interIdx++]);
-      }
-      if (dayMatchups.length === 0) {
-        // L1/L2消化済み、交流戦のみ
-        for (let i = 0; i < gamesPerDay && interIdx < interPool.length; i++) {
-          dayMatchups.push(interPool[interIdx++]);
-        }
-      }
-      if (dayMatchups.length === 0) break;
-      dayMatchups.forEach(matchup => {
+      if (roundIdx >= allMatchups.length) break;
+      const round = allMatchups[roundIdx++];
+      round.forEach(matchup => {
         schedule.push({
           id: schedule.length + 1,
           date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
@@ -412,18 +392,17 @@ export const generateFullSeasonSchedule = (config) => {
         });
       });
     }
-    // 余りを最終日以降に配置
-    const remainingMatchups = [
-      ...l1Pool.slice(l1Idx), ...l2Pool.slice(l2Idx), ...interPool.slice(interIdx)
-    ];
-    let extraDayIdx = schedule.length > 0
-      ? selectedDays.findIndex(d => d.month === schedule[schedule.length - 1].date.month && d.day === schedule[schedule.length - 1].date.day) + 1
-      : 0;
-    let rmIdx = 0;
-    while (rmIdx < remainingMatchups.length && extraDayIdx < selectedDays.length) {
-      const gameDay = selectedDays[extraDayIdx++];
-      for (let i = 0; i < gamesPerDay && rmIdx < remainingMatchups.length; i++) {
-        const matchup = remainingMatchups[rmIdx++];
+    // 残りラウンドがあれば続きの日程に配置
+    while (roundIdx < allMatchups.length) {
+      const dayIdx = schedule.length > 0
+        ? selectedDays.findIndex(d =>
+            d.month === schedule[schedule.length - 1].date.month &&
+            d.day === schedule[schedule.length - 1].date.day) + 1
+        : 0;
+      if (dayIdx >= selectedDays.length) break;
+      const gameDay = selectedDays[dayIdx];
+      const round = allMatchups[roundIdx++];
+      round.forEach(matchup => {
         schedule.push({
           id: schedule.length + 1,
           date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
@@ -431,7 +410,7 @@ export const generateFullSeasonSchedule = (config) => {
           starterHome: null, starterAway: null,
           result: null, phase: SEASON_PHASES.REGULAR_SEASON
         });
-      }
+      });
     }
   } else {
     // 1リーグ制: 従来のシーケンシャル配置
