@@ -35,17 +35,17 @@ export const validateRegulations = (regulations) => {
     errors.push('チーム数は2〜12の間で設定してください');
   }
 
-  // 年間試合数の検証（チーム数-1の倍数のみ、最大150）
+  // 年間試合数の検証
   const tc = regulations.teamsCount;
-  const d = Math.max(1, tc - 1);
-  const minGames = d;
   const maxGames = 150;
 
-  if (regulations.gamesPerSeason < minGames || regulations.gamesPerSeason > maxGames) {
-    errors.push(`年間試合数は${minGames}〜${maxGames}の間で設定してください`);
-  }
-  if (regulations.gamesPerSeason % d !== 0) {
-    errors.push(`年間試合数はチーム数-1(${d})の倍数で設定してください`);
+  if (regulations.gamesPerSeason < 1 || regulations.gamesPerSeason > maxGames) {
+    errors.push(`年間試合数は1〜${maxGames}の間で設定してください`);
+  } else if (regulations.leagueFormat !== 'two') {
+    const d = Math.max(1, tc - 1);
+    if (regulations.gamesPerSeason % d !== 0) {
+      errors.push(`年間試合数はチーム数-1(${d})の倍数で設定してください`);
+    }
   }
 
   // 延長回数の検証

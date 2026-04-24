@@ -146,6 +146,38 @@ export const balanceLeagueGames = (gamesPerSeason, intraOpponents, interOpponent
 };
 
 /**
+ * 2リーグ制で有効な試合数の選択肢を生成
+ * a * intraOpponents + b * interOpponents = total の整数解が存在する値のみ
+ * @param {number} teamsCount - 総チーム数
+ * @param {number} maxGames - 最大試合数
+ * @returns {Array<{value: number, intra: number, inter: number}>}
+ */
+export const getValidTwoLeagueGameCounts = (teamsCount, maxGames = 150) => {
+  const halfTeams = Math.floor(teamsCount / 2);
+  if (halfTeams < 2) return [];
+  const intraOpp = halfTeams - 1;
+  const interOpp = halfTeams;
+  const results = [];
+  for (let a = 1; ; a++) {
+    for (let b = 1; ; b++) {
+      const total = a * intraOpp + b * interOpp;
+      if (total > maxGames) break;
+      if (total >= intraOpp + interOpp) {
+        results.push({ value: total, intra: a, inter: b });
+      }
+    }
+    if (a * intraOpp >= maxGames) break;
+  }
+  results.sort((x, y) => x.value - y.value);
+  const seen = new Set();
+  return results.filter(r => {
+    if (seen.has(r.value)) return false;
+    seen.add(r.value);
+    return true;
+  });
+};
+
+/**
  * 年間スケジュールを生成（レギュラーシーズン）
  * 月間バランス型: 土日優先、平日も含めて全試合を配置
  *

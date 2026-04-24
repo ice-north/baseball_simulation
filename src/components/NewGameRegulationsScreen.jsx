@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regulationSettings.js';
+import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
 
 const NewGameRegulationsScreen = ({ onComplete }) => {
   const [tempSettings, setTempSettings] = useState({
@@ -29,14 +30,28 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
       newNames.push(currentNames[i] || `チーム${String.fromCharCode(65 + i)}`);
       newAbbrs.push(currentAbbrs[i] || defaultAbbr(i));
     }
-    // 試合数を新しい(チーム数-1)の倍数に自動調整（近い値に丸める）
+    // 試合数を自動調整
     const oldGames = tempSettings.gamesPerSeason || 60;
-    const oldD = Math.max(1, (tempSettings.teamsCount || 4) - 1);
-    const newD = Math.max(1, newCount - 1);
-    const roundsPerOpponent = Math.max(1, Math.round(oldGames / oldD));
-    let adjustedGames = newD * roundsPerOpponent;
-    if (adjustedGames < newD) adjustedGames = newD;
-    if (adjustedGames > 150) adjustedGames = Math.floor(150 / newD) * newD;
+    const isTwoLeague = tempSettings.leagueFormat === 'two' && newCount >= 4;
+    let adjustedGames;
+    if (isTwoLeague) {
+      const validCounts = getValidTwoLeagueGameCounts(newCount, 150);
+      if (validCounts.length > 0) {
+        const closest = validCounts.reduce((best, o) =>
+          Math.abs(o.value - oldGames) < Math.abs(best.value - oldGames) ? o : best
+        );
+        adjustedGames = closest.value;
+      } else {
+        adjustedGames = oldGames;
+      }
+    } else {
+      const newD = Math.max(1, newCount - 1);
+      const oldD = Math.max(1, (tempSettings.teamsCount || 4) - 1);
+      const roundsPerOpponent = Math.max(1, Math.round(oldGames / oldD));
+      adjustedGames = newD * roundsPerOpponent;
+      if (adjustedGames < newD) adjustedGames = newD;
+      if (adjustedGames > 150) adjustedGames = Math.floor(150 / newD) * newD;
+    }
     setTempSettings({
       ...tempSettings,
       teamsCount: newCount,
@@ -195,7 +210,28 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
             </div>
             <div className="flex items-center justify-between">
               <label className="font-medium">リーグ形式</label>
-              <select value={tempSettings.leagueFormat || 'single'} onChange={(e) => setTempSettings({...tempSettings, leagueFormat: e.target.value})} className="bg-gray-700 rounded px-3 py-2">
+              <select value={tempSettings.leagueFormat || 'single'} onChange={(e) => {
+                const newFormat = e.target.value;
+                const tc = tempSettings.teamsCount || 4;
+                const currentGames = tempSettings.gamesPerSeason || 60;
+                let adjustedGames = currentGames;
+                if (newFormat === 'two' && tc >= 4) {
+                  const validCounts = getValidTwoLeagueGameCounts(tc, 150);
+                  if (validCounts.length > 0 && !validCounts.some(o => o.value === currentGames)) {
+                    const closest = validCounts.reduce((best, o) =>
+                      Math.abs(o.value - currentGames) < Math.abs(best.value - currentGames) ? o : best
+                    );
+                    adjustedGames = closest.value;
+                  }
+                } else {
+                  const d = Math.max(1, tc - 1);
+                  if (currentGames % d !== 0) {
+                    adjustedGames = Math.max(d, Math.round(currentGames / d) * d);
+                    if (adjustedGames > 150) adjustedGames = Math.floor(150 / d) * d;
+                  }
+                }
+                setTempSettings({...tempSettings, leagueFormat: newFormat, gamesPerSeason: adjustedGames});
+              }} className="bg-gray-700 rounded px-3 py-2">
                 <option value="single">1リーグ制</option>
                 <option value="two" disabled={tempSettings.teamsCount < 4}>2リーグ制（{Math.floor(tempSettings.teamsCount / 2)}チーム×2）</option>
               </select>
@@ -210,12 +246,22 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                 >
                   {(() => {
                     const tc = tempSettings.teamsCount || 4;
-                    const d = Math.max(1, tc - 1);
-                    const options = [];
-                    for (let i = 1; d * i <= 150; i++) options.push(d * i);
-                    return options.map(v => (
-                      <option key={v} value={v}>{v}試合（各{v / d}戦）</option>
-                    ));
+                    const isTwoLeague = tempSettings.leagueFormat === 'two' && tc >= 4;
+                    if (isTwoLeague) {
+                      const validCounts = getValidTwoLeagueGameCounts(tc, 150);
+                      return validCounts.map(opt => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.value}試合（リーグ内各{opt.intra}戦・交流各{opt.inter}戦）
+                        </option>
+                      ));
+                    } else {
+                      const d = Math.max(1, tc - 1);
+                      const options = [];
+                      for (let i = 1; d * i <= 150; i++) options.push(d * i);
+                      return options.map(v => (
+                        <option key={v} value={v}>{v}試合（各{v / d}戦）</option>
+                      ));
+                    }
                   })()}
                 </select>
               </div>

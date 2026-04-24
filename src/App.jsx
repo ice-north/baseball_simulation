@@ -2227,6 +2227,20 @@ if (newOuts === 3) {
             {managedGameInfo && (
               <span className="text-yellow-400 text-sm font-bold">
                 {formatDate(seasonData?.currentDate)} - 采配モード
+                {(() => {
+                  const fmt = seasonData?.settings?.leagueFormat;
+                  if (fmt !== 'two') return null;
+                  const allTeamNames = seasonData?.settings?.teamNames || [];
+                  const half = Math.floor(allTeamNames.length / 2);
+                  const l1 = new Set(allTeamNames.slice(0, half));
+                  const h = homeTeam?.name, a = awayTeam?.name;
+                  if (!h || !a) return null;
+                  const isInter = l1.has(h) !== l1.has(a);
+                  if (isInter) return <span className="ml-2 text-green-400">[ 交流戦 ]</span>;
+                  const leagueNames = seasonData?.settings?.leagueNames;
+                  const lName = l1.has(h) ? (leagueNames?.[0] || 'リーグ1') : (leagueNames?.[1] || 'リーグ2');
+                  return <span className="ml-2 text-blue-400">[ {lName} ]</span>;
+                })()}
               </span>
             )}
             <div className="ml-auto">
