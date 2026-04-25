@@ -84,31 +84,22 @@ export const generateTwoLeagueMatchups = (league1, league2, intraPerPair, interP
     }
   }
 
-  // リーグ間対戦: 同日にチーム重複がないようラウンド分け
+  // リーグ間対戦: ラテン方格方式で最適ラウンド分け
+  // n×nの全ペアをちょうどnラウンド（各n試合）に分割
+  const n1 = league1.length, n2 = league2.length;
+  const maxN = Math.max(n1, n2);
   for (let rep = 0; rep < interPerPair; rep++) {
-    const pairs = [];
-    league1.forEach(t1 => {
-      league2.forEach(t2 => {
-        pairs.push(rep % 2 === 0
-          ? { home: t1, away: t2, isInterLeague: true }
-          : { home: t2, away: t1, isInterLeague: true });
-      });
-    });
-    // 貪欲法でラウンド分け: 各ラウンドでチーム重複なし
-    const remaining = [...pairs];
-    while (remaining.length > 0) {
+    for (let k = 0; k < maxN; k++) {
       const round = [];
-      const usedTeams = new Set();
-      for (let i = remaining.length - 1; i >= 0; i--) {
-        const p = remaining[i];
-        if (!usedTeams.has(p.home) && !usedTeams.has(p.away)) {
-          round.push(p);
-          usedTeams.add(p.home);
-          usedTeams.add(p.away);
-          remaining.splice(i, 1);
+      for (let i = 0; i < n1; i++) {
+        const j = (i + k) % n2;
+        if (j < n2) {
+          round.push(rep % 2 === 0
+            ? { home: league1[i], away: league2[j], isInterLeague: true }
+            : { home: league2[j], away: league1[i], isInterLeague: true });
         }
       }
-      rounds.push(round);
+      if (round.length > 0) rounds.push(round);
     }
   }
 
@@ -163,24 +154,54 @@ export const getValidTwoLeagueGameCounts = (teamsCount, maxGames = 150) => {
   if (halfTeams < 2) return [];
   const intraOpp = halfTeams - 1;
   const interOpp = halfTeams;
-  const results = [];
+
+  // 4-9月（月曜休み）のカレンダー上限: 約156日
+  const MAX_CALENDAR_DAYS = 156;
+
+  // ダミーチーム名でマージ後ラウンド数を計算
+  const dummyL1 = Array.from({length: halfTeams}, (_, i) => 'L1_' + i);
+  const dummyL2 = Array.from({length: halfTeams}, (_, i) => 'L2_' + i);
+
+  const countMergedDays = (a, b) => {
+    const rounds = generateTwoLeagueMatchups(dummyL1, dummyL2, a, b);
+    const used = new Array(rounds.length).fill(false);
+    let days = 0;
+    for (let i = 0; i < rounds.length; i++) {
+      if (used[i]) continue;
+      const teams = new Set();
+      rounds[i].forEach(g => { teams.add(g.home); teams.add(g.away); });
+      used[i] = true;
+      for (let j = i + 1; j < rounds.length; j++) {
+        if (used[j]) continue;
+        if (rounds[j].every(g => !teams.has(g.home) && !teams.has(g.away))) {
+          rounds[j].forEach(g => { teams.add(g.home); teams.add(g.away); });
+          used[j] = true;
+        }
+      }
+      days++;
+    }
+    return days;
+  };
+
+  // 有効な合計値を列挙し、balanceLeagueGamesと同じ(a,b)で日数チェック
+  const totals = new Set();
   for (let a = 1; ; a++) {
     for (let b = 1; ; b++) {
       const total = a * intraOpp + b * interOpp;
       if (total > maxGames) break;
-      if (total >= intraOpp + interOpp) {
-        results.push({ value: total, intra: a, inter: b });
-      }
+      if (total >= intraOpp + interOpp) totals.add(total);
     }
     if (a * intraOpp >= maxGames) break;
   }
-  results.sort((x, y) => x.value - y.value);
-  const seen = new Set();
-  return results.filter(r => {
-    if (seen.has(r.value)) return false;
-    seen.add(r.value);
-    return true;
-  });
+
+  const results = [];
+  for (const total of [...totals].sort((a, b) => a - b)) {
+    const { intraPerPair, interPerPair } = balanceLeagueGames(total, intraOpp, interOpp);
+    if (countMergedDays(intraPerPair, interPerPair) <= MAX_CALENDAR_DAYS) {
+      results.push({ value: total, intra: intraPerPair, inter: interPerPair });
+    }
+  }
+  return results;
 };
 
 /**
@@ -382,31 +403,34 @@ export const generateFullSeasonSchedule = (config) => {
 
   if (leagueFormat === 'two' && teamsCount >= 4) {
     // 2リーグ制: ラウンド単位で配置（各ラウンド内はチーム重複なし）
-    // allMatchups は [[{home,away,isInterLeague},...], ...] のラウンド配列
+    // ラウンド数が日数を超える場合、チーム重複のないラウンド同士を同日にまとめる
+    let mergedRounds = [...allMatchups.map(r => [...r])];
+    if (mergedRounds.length > selectedDays.length) {
+      const result = [];
+      const used = new Array(mergedRounds.length).fill(false);
+      for (let i = 0; i < mergedRounds.length; i++) {
+        if (used[i]) continue;
+        const dayGames = [...mergedRounds[i]];
+        const dayTeams = new Set();
+        dayGames.forEach(g => { dayTeams.add(g.home); dayTeams.add(g.away); });
+        used[i] = true;
+        for (let j = i + 1; j < mergedRounds.length; j++) {
+          if (used[j]) continue;
+          const canMerge = mergedRounds[j].every(g => !dayTeams.has(g.home) && !dayTeams.has(g.away));
+          if (canMerge) {
+            mergedRounds[j].forEach(g => { dayGames.push(g); dayTeams.add(g.home); dayTeams.add(g.away); });
+            used[j] = true;
+          }
+        }
+        result.push(dayGames);
+      }
+      mergedRounds = result;
+    }
+
     let roundIdx = 0;
     for (const gameDay of selectedDays) {
-      if (roundIdx >= allMatchups.length) break;
-      const round = allMatchups[roundIdx++];
-      round.forEach(matchup => {
-        schedule.push({
-          id: schedule.length + 1,
-          date: { year: gameDay.year, month: gameDay.month, day: gameDay.day },
-          home: matchup.home, away: matchup.away,
-          starterHome: null, starterAway: null,
-          result: null, phase: SEASON_PHASES.REGULAR_SEASON
-        });
-      });
-    }
-    // 残りラウンドがあれば続きの日程に配置
-    while (roundIdx < allMatchups.length) {
-      const dayIdx = schedule.length > 0
-        ? selectedDays.findIndex(d =>
-            d.month === schedule[schedule.length - 1].date.month &&
-            d.day === schedule[schedule.length - 1].date.day) + 1
-        : 0;
-      if (dayIdx >= selectedDays.length) break;
-      const gameDay = selectedDays[dayIdx];
-      const round = allMatchups[roundIdx++];
+      if (roundIdx >= mergedRounds.length) break;
+      const round = mergedRounds[roundIdx++];
       round.forEach(matchup => {
         schedule.push({
           id: schedule.length + 1,
