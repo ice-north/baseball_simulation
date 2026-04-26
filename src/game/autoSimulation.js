@@ -839,7 +839,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     // 1. 7回以降リード時: 守備力が低いスタメンを守備固め（閾値緩め）
     if (gameState.inning >= 7 && isLeading) {
       defenseTeam.players.forEach(starter => {
-        if (starter.battingOrder > 0 && starter.battingOrder < 9 && starter.position !== 'dh') {
+        if (starter.battingOrder > 0 && starter.position !== 'pitcher' && starter.position !== 'dh') {
           const starterDef = starter.fielding?.defense || 50;
           if (starterDef < 60) {
             const replacement = benchFielders.find(p =>
@@ -892,8 +892,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           return pGames < bGames ? p : best;
         }, activeBench[0]);
 
-        // 打撃が最も弱いスタメンと交代（DHは守備固め対象外）
-        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.battingOrder < 9 && p.position !== 'dh');
+        // 打撃が最も弱いスタメンと交代（投手・DHは守備固め対象外）
+        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.position !== 'pitcher' && p.position !== 'dh');
         if (starters.length > 0) {
           const weakest = starters.reduce((w, p) => {
             const wBat = (w.batting?.meet || 0) + (w.batting?.power || 0);
