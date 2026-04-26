@@ -1,4 +1,4 @@
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 
 // AIオーダー編成関数
 export const generateOptimalLineup = (teamName) => {
@@ -84,7 +84,15 @@ export const generateOptimalLineup = (teamName) => {
     .sort((a, b) => b.totalPower - a.totalPower);
   remainingFielders.forEach(p => lineupOrder.push(p));
 
-  // 9番: 投手（スタメンには入れない）
+  // DH制: ベンチから打撃力の高い選手をDHとして追加
+  if (LEAGUE_SETTINGS.useDH) {
+    const dhCandidates = rankedFielders.filter(p => !assigned.has(p.id));
+    if (dhCandidates.length > 0) {
+      lineupOrder.push(dhCandidates[0]);
+      positionAssignments['dh'] = dhCandidates[0];
+      assigned.add(dhCandidates[0].id);
+    }
+  }
 
   // lineupSettingsに保存（新形式）
   if (!team.lineupSettings) {

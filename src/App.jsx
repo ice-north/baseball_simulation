@@ -22,7 +22,7 @@ import {
 
 // Data imports
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
-import { initializeTeamsData, TEAMS_DATA, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue, getTeamAbbreviation } from './teams-data.js';
+import { initializeTeamsData, TEAMS_DATA, LEAGUE_SETTINGS, initializeTeamsForCount, selectReliefPitcher, updateReliefFatigue, recoverReliefFatigue, getTeamAbbreviation } from './teams-data.js';
 import { generateRandomPlayerName } from './data/playerNames.js';
 
 // Game logic imports
@@ -169,6 +169,11 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (migrateOldSaveData()) refreshSaveSlots();
       }, []);
 
+      // LEAGUE_SETTINGSをseasonDataと同期
+      useEffect(() => {
+        LEAGUE_SETTINGS.useDH = seasonData?.settings?.useDH || false;
+      }, [seasonData?.settings?.useDH]);
+
       const saveGame = (slotIndex = 0) => {
         const result = saveGameToSlot(slotIndex, {
           seasonData, leagueConfig, screenMode, managementView,
@@ -294,7 +299,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               name: homeTeamName,
               players: homeTeamData.players.map(p => ({
                 ...p,
-                isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+                isStarter: (p.battingOrder > 0 && p.battingOrder <= 9) || (LEAGUE_SETTINGS.useDH && p.position === 'pitcher' && p._isStartingPitcher),
                 hasSubbedOut: false,
                 originalPosition: p.position
               })),
@@ -307,7 +312,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               name: awayTeamName,
               players: awayTeamData.players.map(p => ({
                 ...p,
-                isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+                isStarter: (p.battingOrder > 0 && p.battingOrder <= 9) || (LEAGUE_SETTINGS.useDH && p.position === 'pitcher' && p._isStartingPitcher),
                 hasSubbedOut: false,
                 originalPosition: p.position
               })),
@@ -2665,7 +2670,7 @@ if (newOuts === 3) {
                   <>
                     <div className="text-sm font-bold text-gray-300 mb-1">⚾ 予告先発</div>
                     {(() => {
-                      const pitcher = awayTeam.players.find(p => p.position === 'pitcher' && p.battingOrder === 9);
+                      const pitcher = awayTeam.players.find(p => p.isStarter && p.position === 'pitcher');
                       if (!pitcher) return null;
                       const formNames = {
                         overhand: 'オーバー',
@@ -3105,25 +3110,26 @@ if (newOuts === 3) {
                 const userTeam = isUserHome ? homeTeam : awayTeam;
                 const teamType = isUserHome ? 'home' : 'away';
                 const fieldPlayers = userTeam.players
-                  .filter(p => p.isStarter && !p.hasSubbedOut && p.battingOrder > 0)
-                  .sort((a, b) => a.battingOrder - b.battingOrder);
+                  .filter(p => p.isStarter && !p.hasSubbedOut && (p.battingOrder > 0 || p.position === 'pitcher'))
+                  .sort((a, b) => (a.battingOrder || 10) - (b.battingOrder || 10));
                 const benchPlayers = userTeam.players.filter(p => !p.isStarter && !p.hasSubbedOut);
-                const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
                 const getPositionColor = (pos) => {
                   if (pos === 'pitcher') return 'bg-red-600 text-white';
                   if (pos === 'catcher') return 'bg-blue-600 text-white';
                   if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';
                   if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';
+                  if (pos === 'dh') return 'bg-purple-600 text-white';
                   return 'bg-gray-700 text-white';
                 };
                 const selectedPlayer = subModalSelected ? userTeam.players.find(p => p.id === subModalSelected) : null;
-                const selectedIsField = selectedPlayer?.isStarter && !selectedPlayer?.hasSubbedOut && selectedPlayer?.battingOrder > 0;
+                const selectedIsField = selectedPlayer?.isStarter && !selectedPlayer?.hasSubbedOut && (selectedPlayer?.battingOrder > 0 || selectedPlayer?.position === 'pitcher');
 
                 const setUserTeam = isUserHome ? setHomeTeam : setAwayTeam;
                 const handleModalClick = (playerId) => {
                   const clicked = userTeam.players.find(p => p.id === playerId);
                   if (!clicked) return;
-                  const clickedIsField = clicked.isStarter && !clicked.hasSubbedOut && clicked.battingOrder > 0;
+                  const clickedIsField = clicked.isStarter && !clicked.hasSubbedOut && (clicked.battingOrder > 0 || clicked.position === 'pitcher');
 
                   if (!subModalSelected) {
                     setSubModalSelected(playerId);
@@ -3138,7 +3144,7 @@ if (newOuts === 3) {
                     }
                     const fieldPlayer = userTeam.players.find(p => p.id === fieldId);
                     const benchPlayer = userTeam.players.find(p => p.id === benchId);
-                    const posLabel = { pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁', short: '遊撃', third: '三塁', left: '左翼', center: '中堅', right: '右翼' };
+                    const posLabel = { pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁', short: '遊撃', third: '三塁', left: '左翼', center: '中堅', right: '右翼', dh: 'DH' };
                     setGameLog(prev => [...prev, {
                       description: `[選手交代] ${fieldPlayer?.name} → ${benchPlayer?.name} (${posLabel[fieldPlayer?.position] || ''})`,
                       isSpecial: true
@@ -3957,7 +3963,7 @@ if (newOuts === 3) {
                   <>
                     <div className="text-sm font-bold text-gray-300 mb-1">⚾ 予告先発</div>
                     {(() => {
-                      const pitcher = homeTeam.players.find(p => p.position === 'pitcher' && p.battingOrder === 9);
+                      const pitcher = homeTeam.players.find(p => p.isStarter && p.position === 'pitcher');
                       if (!pitcher) return null;
                       const formNames = {
                         overhand: 'オーバー',

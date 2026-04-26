@@ -11,6 +11,14 @@ import { createPlayerStats, createSeasonStats, createCareerStats } from './playe
 export const TEAMS_DATA = {};
 
 /**
+ * リーグ全体の設定（グローバルミュータブル）
+ * seasonData.settings から同期される
+ */
+export const LEAGUE_SETTINGS = {
+  useDH: false
+};
+
+/**
  * 解雇された選手のプール（グローバルミュータブル配列）
  * - 契約更改で解雇された選手がここに入り、次年度以降のトライアウトに再登場する
  * - 各エントリは通常の選手オブジェクト + { releasedYear, previousTeam, attemptsInPool }

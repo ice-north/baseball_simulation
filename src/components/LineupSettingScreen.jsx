@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
@@ -89,11 +89,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
   const lineup = team.lineupSettings.battingOrder;
 
+  const useDH = LEAGUE_SETTINGS.useDH;
+  const maxFielderSlots = useDH ? 9 : 8;
+
   const { fielders, pitchers, lineupPlayerIds, benchPlayers } = useMemo(() => {
     const f = team.players.filter(p => p.position !== 'pitcher');
     const p = team.players.filter(p => p.position === 'pitcher');
     const lpIds = new Set(lineup.map(e => e.playerId));
-    const fieldIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= 8).map(e => e.playerId));
+    const maxSlot = useDH ? 9 : 8;
+    const fieldIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= maxSlot).map(e => e.playerId));
     const seen = new Set();
     const bench = team.players.filter(pl => {
       if (fieldIds.has(pl.id)) return false;
@@ -104,19 +108,21 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     return { fielders: f, pitchers: p, lineupPlayerIds: lpIds, benchPlayers: bench };
   }, [team.players, lineup, updateTrigger]);
 
-  // 初期化：投手枠がなければ9番に投手を自動設定
+  // 初期化：非DH制では投手枠がなければ9番に投手を自動設定
   useEffect(() => {
-    const hasPitcherSlot = lineup.some(e => e.position === 'pitcher');
-    if (!hasPitcherSlot && pitchers.length > 0) {
-      const starterId = team.pitchingRotation?.starters?.[0] || pitchers[0].id;
-      lineup.push({ playerId: starterId, position: 'pitcher', battingOrder: 9 });
-      setUpdateTrigger(prev => prev + 1);
+    if (!useDH) {
+      const hasPitcherSlot = lineup.some(e => e.position === 'pitcher');
+      if (!hasPitcherSlot && pitchers.length > 0) {
+        const starterId = team.pitchingRotation?.starters?.[0] || pitchers[0].id;
+        lineup.push({ playerId: starterId, position: 'pitcher', battingOrder: 9 });
+        setUpdateTrigger(prev => prev + 1);
+      }
     }
   }, []);
 
   const handleAddToLineup = (playerId) => {
     if (!selectedBattingOrder) {
-      alert('打順を選択してください（1-8番の枠をクリック）');
+      alert(`打順を選択してください（1-${maxFielderSlots}番の枠をクリック）`);
       return;
     }
 
@@ -144,33 +150,36 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     if (playerIndex !== -1) lineup.splice(playerIndex, 1);
 
     // 投手が野手枠に入る場合、適正の高いポジションを選ぶ
+    const fieldPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
     let assignedPosition = isPitcher ? 'first' : player.position;
     if (isPitcher && player.positionFitness) {
-      const allPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
       const usedPositions = lineup.filter(e => e.position !== 'pitcher').map(e => e.position);
-      const availablePositions = allPositions.filter(pos => !usedPositions.includes(pos));
+      const availablePositions = fieldPositions.filter(pos => !usedPositions.includes(pos));
       if (availablePositions.length > 0) {
         availablePositions.sort((a, b) => (player.positionFitness[b] || 0) - (player.positionFitness[a] || 0));
         assignedPosition = availablePositions[0];
+      } else if (useDH) {
+        assignedPosition = 'dh';
       }
     } else {
       const existingPositionEntry = lineup.find(e => e.position === assignedPosition && e.position !== 'pitcher' && e.battingOrder !== selectedBattingOrder);
       if (existingPositionEntry) {
-        const allPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
         const usedPositions = lineup.filter(e => e.position !== 'pitcher').map(e => e.position);
-        const availablePositions = allPositions.filter(pos => !usedPositions.includes(pos));
+        const availablePositions = fieldPositions.filter(pos => !usedPositions.includes(pos));
         if (availablePositions.length > 0) {
           if (player.positionFitness) {
             availablePositions.sort((a, b) => (player.positionFitness[b] || 0) - (player.positionFitness[a] || 0));
           }
           assignedPosition = availablePositions[0];
+        } else if (useDH && !usedPositions.includes('dh')) {
+          assignedPosition = 'dh';
         }
       }
     }
 
     lineup.push({ playerId, position: assignedPosition, battingOrder: selectedBattingOrder });
     lineup.sort((a, b) => a.battingOrder - b.battingOrder);
-    const nextOrder = selectedBattingOrder < 8 ? selectedBattingOrder + 1 : 1;
+    const nextOrder = selectedBattingOrder < maxFielderSlots ? selectedBattingOrder + 1 : 1;
     setSelectedBattingOrder(nextOrder);
     setUpdateTrigger(prev => prev + 1);
   };
@@ -609,22 +618,23 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               <div className="px-4 py-3 border-b border-gray-700/50 flex items-center gap-2">
                 <h2 className="font-semibold text-white text-sm">スタメン設定</h2>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                  lineup.filter(e => e.position !== 'pitcher').length === 8
+                  lineup.filter(e => e.position !== 'pitcher').length === maxFielderSlots
                     ? 'bg-green-900/60 text-green-400 border border-green-700/40'
                     : 'bg-gray-700 text-gray-400'
                 }`}>
-                  {lineup.filter(e => e.position !== 'pitcher').length}/8
+                  {lineup.filter(e => e.position !== 'pitcher').length}/{maxFielderSlots}
                 </span>
+                {useDH && <span className="text-[10px] text-purple-400 font-medium">DH制</span>}
                 {swapSource !== null && (
                   <span className="text-blue-400 text-[10px] ml-auto">→ 入替先を選択</span>
                 )}
               </div>
               <div className="p-2 space-y-1">
-                {[1,2,3,4,5,6,7,8,9].map(order => {
+                {(useDH ? [1,2,3,4,5,6,7,8,9] : [1,2,3,4,5,6,7,8,9]).map(order => {
                   const entry = lineup.find(e => e.battingOrder === order);
                   const player = entry ? team.players.find(p => p.id === entry.playerId) : null;
                   const isSelected = selectedBattingOrder === order;
-                  const isPitcherSlot = entry?.position === 'pitcher';
+                  const isPitcherSlot = !useDH && entry?.position === 'pitcher';
                   const isSwapSource = swapSource === order;
                   const isSwapTarget = swapSource !== null && swapSource !== order;
 
@@ -688,6 +698,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 <option value="left">左翼</option>
                                 <option value="center">中堅</option>
                                 <option value="right">右翼</option>
+                                {useDH && <option value="dh">DH</option>}
                               </select>
                               {(() => {
                                 const subs = getSubPositions(player, entry.position);

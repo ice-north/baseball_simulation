@@ -1,4 +1,4 @@
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
@@ -65,8 +65,10 @@ export const generateAILineup = (teamData, teamName) => {
     }
   }
 
+  const useDH = LEAGUE_SETTINGS.useDH;
+
   if (starter) {
-    starter.battingOrder = 9;
+    starter.battingOrder = useDH ? 0 : 9;
     starter.position = 'pitcher';
   }
 
@@ -114,9 +116,24 @@ export const generateAILineup = (teamData, teamName) => {
     usedPlayers.add(selected.id);
   });
 
+  // DH制: 打撃専門のDHをベンチから選出
+  if (useDH) {
+    const dhCandidates = fieldPlayers.filter(p => !usedPlayers.has(p.id));
+    if (dhCandidates.length > 0) {
+      dhCandidates.sort((a, b) => {
+        const aEff = getEffectiveBatting(a);
+        const bEff = getEffectiveBatting(b);
+        return (bEff.meet + bEff.power) - (aEff.meet + aEff.power);
+      });
+      lineup.push({ player: dhCandidates[0], position: 'dh' });
+      usedPlayers.add(dhCandidates[0].id);
+    }
+  }
+
   // 打順を決定
   const battingOrder = [];
   const remaining = [...lineup];
+  const maxBattingOrder = useDH ? 9 : 8;
 
   // 1番: 出塁率重視（ミート+選球眼+足）※調子・疲労込み
   remaining.sort((a, b) => {
@@ -154,14 +171,14 @@ export const generateAILineup = (teamData, teamName) => {
   remaining.sort((a, b) => getEffectiveBatting(b.player).power - getEffectiveBatting(a.player).power);
   if (remaining.length > 0) battingOrder.push({ ...remaining.shift(), battingOrder: 5 });
 
-  // 6-8番: 残りを総合打力順
+  // 6-最終番: 残りを総合打力順
   remaining.sort((a, b) => {
     const aEff = getEffectiveBatting(a.player);
     const bEff = getEffectiveBatting(b.player);
     return (bEff.meet + bEff.power) - (aEff.meet + aEff.power);
   });
   let nextOrder = 6;
-  while (remaining.length > 0 && nextOrder <= 8) {
+  while (remaining.length > 0 && nextOrder <= maxBattingOrder) {
     battingOrder.push({ ...remaining.shift(), battingOrder: nextOrder++ });
   }
 
@@ -273,11 +290,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   applyLineupSettings(homeTeamData, homeTeamName);
   applyLineupSettings(awayTeamData, awayTeamName);
 
+  const useDH = LEAGUE_SETTINGS.useDH;
+  const pitcherBattingOrder = useDH ? 0 : 9;
+
   // 投手ローテーションから先発投手を選択
   const selectStarterFromRotation = (teamData, teamName) => {
     const rotation = teamData.pitchingRotation;
     if (!rotation || !rotation.starters || rotation.starters.length === 0) {
-      return teamData.players.find(p => p.battingOrder === 9);
+      return teamData.players.find(p => p.position === 'pitcher');
     }
 
     // ローテーションインデックスを取得
@@ -291,28 +311,28 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
         (index + 1) % rotation.starters.length;
 
-      // 先発投手を打順9、ポジションpitcherに設定
+      // 先発投手を設定（DH制では打順0＝打席に立たない）
       teamData.players.forEach(p => {
         if (p.id === starterId) {
-          p.battingOrder = 9;
+          p.battingOrder = pitcherBattingOrder;
           p.position = 'pitcher';
-        } else if (p.battingOrder === 9 && p.id !== starterId) {
-          p.battingOrder = 0; // 他の投手をベンチに
+        } else if (!useDH && p.battingOrder === 9 && p.id !== starterId) {
+          p.battingOrder = 0;
         }
       });
 
       return starter;
     }
 
-    return teamData.players.find(p => p.battingOrder === 9);
+    return teamData.players.find(p => p.position === 'pitcher');
   };
 
   selectStarterFromRotation(homeTeamData, homeTeamName);
   selectStarterFromRotation(awayTeamData, awayTeamName);
 
   // 先発投手を確認
-  const homePitchers = homeTeamData.players.filter(p => p.battingOrder === 9);
-  const awayPitchers = awayTeamData.players.filter(p => p.battingOrder === 9);
+  const homePitchers = homeTeamData.players.filter(p => p.position === 'pitcher' && (p.battingOrder === pitcherBattingOrder || p.battingOrder === 9));
+  const awayPitchers = awayTeamData.players.filter(p => p.position === 'pitcher' && (p.battingOrder === pitcherBattingOrder || p.battingOrder === 9));
 
   // 試合状態の初期化
   let gameState = {
@@ -400,15 +420,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   };
 
   const getCurrentPitcher = (team) => {
-    // 先発投手は打順9番
-    const pitcher = team.players.find(p => p.battingOrder === 9 && isPitcher(p));
+    // DH制: 投手は打順0でposition='pitcher'
+    // 非DH制: 投手は打順9でposition='pitcher'
+    const pitcher = team.players.find(p => p.position === 'pitcher' && (p.battingOrder === pitcherBattingOrder || p.battingOrder === 9));
     if (pitcher) return pitcher;
 
-    // 見つからない場合は投手能力を持つ選手を探す
     const reliever = team.players.find(p => isPitcher(p) && p.pitching);
     if (reliever) return reliever;
 
-    // それでも見つからない場合は投手能力（スタミナ100以上）を持つ選手
     return team.players.find(p => p.pitching?.stamina >= 100);
   };
 
@@ -426,7 +445,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const outfieldBonus = defStrat === 'infield_in' ? -5 : defStrat === 'shift' ? 5 : 0;
     const infieldPositions = ['first', 'second', 'short', 'third', 'catcher', 'pitcher'];
 
-    team.players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9).forEach(player => {
+    // DH制: 投手はbattingOrder=0だが守備参加、DHはbattingOrder>0だが守備不参加
+    const currentPitcherForDef = getCurrentPitcher(team);
+    team.players.filter(p =>
+      (p.battingOrder > 0 && p.battingOrder <= 9 && p.position !== 'dh') ||
+      (p.position === 'pitcher' && p.id === currentPitcherForDef?.id)
+    ).forEach(player => {
       const fitness = getPositionFitness(player, player.position);
       const fitnessMult = 0.5 + (fitness / 100) * 0.5;
       const posBonus = infieldPositions.includes(player.position) ? infieldBonus : outfieldBonus;
@@ -815,7 +839,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     // 1. 7回以降リード時: 守備力が低いスタメンを守備固め（閾値緩め）
     if (gameState.inning >= 7 && isLeading) {
       defenseTeam.players.forEach(starter => {
-        if (starter.battingOrder > 0 && starter.battingOrder < 9) {
+        if (starter.battingOrder > 0 && starter.battingOrder < 9 && starter.position !== 'dh') {
           const starterDef = starter.fielding?.defense || 50;
           if (starterDef < 60) {
             const replacement = benchFielders.find(p =>
@@ -868,8 +892,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           return pGames < bGames ? p : best;
         }, activeBench[0]);
 
-        // 打撃が最も弱いスタメンと交代
-        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.battingOrder < 9);
+        // 打撃が最も弱いスタメンと交代（DHは守備固め対象外）
+        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.battingOrder < 9 && p.position !== 'dh');
         if (starters.length > 0) {
           const weakest = starters.reduce((w, p) => {
             const wBat = (w.batting?.meet || 0) + (w.batting?.power || 0);
@@ -1150,7 +1174,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       pitcherData.battingOrder = 0;
       pitcherData.position = 'pitcher';
 
-      relieverData.battingOrder = 9;
+      relieverData.battingOrder = useDH ? 0 : 9;
       relieverData.position = 'pitcher';
       relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 
@@ -1798,7 +1822,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               pitcherData.battingOrder = 0;
               pitcherData.position = 'pitcher';
 
-              relieverData.battingOrder = 9;
+              relieverData.battingOrder = useDH ? 0 : 9;
               relieverData.position = 'pitcher';
               relieverData.currentStamina = relieverData.pitching?.stamina || 80;
 

@@ -167,7 +167,8 @@ export const POSITION_NAMES = {
   short: '遊',
   left: '左',
   center: '中',
-  right: '右'
+  right: '右',
+  dh: 'DH'
 };
 
 /**
@@ -182,7 +183,8 @@ export const POSITION_COLORS = {
   short: 'bg-yellow-600 text-white',
   left: 'bg-green-600 text-white',
   center: 'bg-green-600 text-white',
-  right: 'bg-green-600 text-white'
+  right: 'bg-green-600 text-white',
+  dh: 'bg-purple-600 text-white'
 };
 
 /**

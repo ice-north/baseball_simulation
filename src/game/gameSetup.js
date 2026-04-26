@@ -3,7 +3,7 @@
 // Extracted from App.jsx GAME_SETUP section
 // ========================================================================
 
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { autoSimulateGame, generateAILineup } from './autoSimulation.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 
@@ -38,6 +38,8 @@ export function executeSetupManagedGame(ctx, gameInfo) {
 
   if (!htd || !atd) return;
 
+  const useDH = LEAGUE_SETTINGS.useDH;
+
   // ユーザーチームがどちら側かに応じてスタメンを適用
   const applyLineup = (teamData, teamName) => {
     const players = JSON.parse(JSON.stringify(teamData.players));
@@ -69,37 +71,61 @@ export function executeSetupManagedGame(ctx, gameInfo) {
         const starterPlayer = players.find(p => p.id === starterId);
         const starterOldOrder = starterPlayer?.battingOrder || 0;
         const starterOldPos = starterPlayer?.position;
-        const hadNonPitcherSlot = starterOldOrder > 0 && starterOldOrder !== 9;
+        const hadNonPitcherSlot = starterOldOrder > 0 && (!useDH ? starterOldOrder !== 9 : true);
 
-        const oldNinthPlayer = players.find(p => p.battingOrder === 9 && p.id !== starterId);
+        if (!useDH) {
+          const oldNinthPlayer = players.find(p => p.battingOrder === 9 && p.id !== starterId);
 
-        players.forEach(p => {
-          if (p.id === starterId) {
-            p.battingOrder = 9;
-            p.position = 'pitcher';
+          players.forEach(p => {
+            if (p.id === starterId) {
+              p.battingOrder = 9;
+              p.position = 'pitcher';
+            }
+          });
+
+          if (oldNinthPlayer) {
+            oldNinthPlayer.battingOrder = 0;
           }
-        });
 
-        if (oldNinthPlayer) {
-          oldNinthPlayer.battingOrder = 0;
-        }
-
-        // 二刀流：野手スロットに空きが出た場合、ベンチから最適な野手を補充
-        if (hadNonPitcherSlot && starterOldPos) {
-          const startersInLineup = new Set(players.filter(p => p.battingOrder > 0).map(p => p.id));
-          const benchFielders = players.filter(p =>
-            p.battingOrder === 0 && !startersInLineup.has(p.id) && p.position !== 'pitcher'
-          );
-          if (benchFielders.length > 0) {
-            benchFielders.sort((a, b) =>
-              (b.positionFitness?.[starterOldPos] || 0) - (a.positionFitness?.[starterOldPos] || 0)
+          // 二刀流：野手スロットに空きが出た場合、ベンチから最適な野手を補充
+          if (hadNonPitcherSlot && starterOldPos) {
+            const startersInLineup = new Set(players.filter(p => p.battingOrder > 0).map(p => p.id));
+            const benchFielders = players.filter(p =>
+              p.battingOrder === 0 && !startersInLineup.has(p.id) && p.position !== 'pitcher'
             );
-            benchFielders[0].battingOrder = starterOldOrder;
-            benchFielders[0].position = starterOldPos;
-          } else if (oldNinthPlayer) {
-            // ベンチ野手がいない場合は元9番を入れる（フォールバック）
-            oldNinthPlayer.battingOrder = starterOldOrder;
-            oldNinthPlayer.position = starterOldPos;
+            if (benchFielders.length > 0) {
+              benchFielders.sort((a, b) =>
+                (b.positionFitness?.[starterOldPos] || 0) - (a.positionFitness?.[starterOldPos] || 0)
+              );
+              benchFielders[0].battingOrder = starterOldOrder;
+              benchFielders[0].position = starterOldPos;
+            } else if (oldNinthPlayer) {
+              oldNinthPlayer.battingOrder = starterOldOrder;
+              oldNinthPlayer.position = starterOldPos;
+            }
+          }
+        } else {
+          // DH制: 投手はbattingOrder=0で守備のみ参加
+          players.forEach(p => {
+            if (p.id === starterId) {
+              p.battingOrder = 0;
+              p.position = 'pitcher';
+            }
+          });
+
+          // 二刀流：空いた野手スロットをベンチから補充
+          if (hadNonPitcherSlot && starterOldPos && starterOldPos !== 'dh') {
+            const startersInLineup = new Set(players.filter(p => p.battingOrder > 0).map(p => p.id));
+            const benchFielders = players.filter(p =>
+              p.battingOrder === 0 && !startersInLineup.has(p.id) && p.position !== 'pitcher'
+            );
+            if (benchFielders.length > 0) {
+              benchFielders.sort((a, b) =>
+                (b.positionFitness?.[starterOldPos] || 0) - (a.positionFitness?.[starterOldPos] || 0)
+              );
+              benchFielders[0].battingOrder = starterOldOrder;
+              benchFielders[0].position = starterOldPos;
+            }
           }
         }
       }
@@ -112,6 +138,22 @@ export function executeSetupManagedGame(ctx, gameInfo) {
           p.isStarter = false;
         }
         seenIds.add(p.id);
+      });
+    }
+
+    // DH制: 先発投手を特定（isStartingPitcherフラグ）
+    if (useDH) {
+      const rotation = teamData.pitchingRotation;
+      let starterPitcherId = null;
+      if (isUserTeam && rotation?.starters?.length > 0) {
+        const index = rotation.currentStarterIndex || 0;
+        starterPitcherId = rotation.starters[index];
+      } else {
+        const pitcher = players.find(p => p.position === 'pitcher');
+        starterPitcherId = pitcher?.id;
+      }
+      players.forEach(p => {
+        p._isStartingPitcher = (p.id === starterPitcherId && p.position === 'pitcher');
       });
     }
 
@@ -151,7 +193,7 @@ export function executeSetupManagedGame(ctx, gameInfo) {
     name: htn,
     players: homePlayers.map(p => ({
       ...p,
-      isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+      isStarter: (p.battingOrder > 0 && p.battingOrder <= 9) || (useDH && p._isStartingPitcher),
       hasSubbedOut: false,
       originalPosition: p.position,
       gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
@@ -163,7 +205,7 @@ export function executeSetupManagedGame(ctx, gameInfo) {
     name: atn,
     players: awayPlayers.map(p => ({
       ...p,
-      isStarter: p.battingOrder > 0 && p.battingOrder <= 9,
+      isStarter: (p.battingOrder > 0 && p.battingOrder <= 9) || (useDH && p._isStartingPitcher),
       hasSubbedOut: false,
       originalPosition: p.position,
       gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
@@ -171,7 +213,9 @@ export function executeSetupManagedGame(ctx, gameInfo) {
     currentBatterOrder: 1
   });
 
-  const startingPitcher = homePlayers.find(p => p.battingOrder === 9);
+  const startingPitcher = useDH
+    ? homePlayers.find(p => p._isStartingPitcher)
+    : homePlayers.find(p => p.battingOrder === 9);
   if (startingPitcher) {
     const maxStamina = startingPitcher.pitching?.stamina || 100;
     const fatigue = startingPitcher.fatigue || 0;
@@ -290,7 +334,8 @@ export function executeHandleManagedGameEnd(ctx) {
         cp.homeruns = (cp.homeruns || 0) + (ps.homeruns || 0);
         cp.pitches = (cp.pitches || 0) + (ps.pitches || 0);
 
-        const fatigue = Math.floor((ps.pitches || 0) / (p.battingOrder === 9 ? 2 : 3));
+        const isPitcherRole = p.position === 'pitcher' || p.originalPosition === 'pitcher' || p.battingOrder === 9;
+        const fatigue = Math.floor((ps.pitches || 0) / (isPitcherRole ? 2 : 3));
         playerData.fatigue = (playerData.fatigue || 0) + fatigue;
       }
     });
@@ -373,8 +418,8 @@ export function executeHandleManagedGameEnd(ctx) {
           if (oWinTeam && oLoseTeam) {
             const oWinPs = oWinTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
             const oLosePs = oLoseTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-            // 勝ち投手
-            const oStarter = oWinPs.find(p => p.battingOrder === 9);
+            // 勝ち投手（DH制では投手battingOrder=0）
+            const oStarter = oWinPs.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
             const oWinP = oStarter && oStarter.gameStats.pitching.outs >= 15
               ? oStarter : (oWinPs.filter(p => p !== oStarter).sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs)[0] || oWinPs[0]);
             // 負け投手

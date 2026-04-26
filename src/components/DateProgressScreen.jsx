@@ -44,12 +44,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
     // 勝ち投手: 先発が5回以上投げてチームが最後までリードを守れば先発の勝ち
     // そうでなければ、リードを奪った時点で投げていたリリーフ（最多投球回の中継ぎ）
-    const winStarter = winPitchers.find(p => p.battingOrder === 9);
+    const winStarter = winPitchers.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
     if (winStarter && winStarter.gameStats.pitching.outs >= 15) {
       decisions.winningPitcher = winStarter;
     } else {
-      // 先発が条件を満たさない場合、最も長く投げたリリーフに勝ち
-      const relievers = winPitchers.filter(p => p.battingOrder !== 9 || (winStarter && winStarter.gameStats.pitching.outs < 15));
+      const relievers = winPitchers.filter(p => p !== winStarter || (winStarter && winStarter.gameStats.pitching.outs < 15));
       if (relievers.length > 0) {
         relievers.sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs);
         decisions.winningPitcher = relievers[0];
@@ -84,7 +83,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     winPitchers.forEach(p => {
       if (p !== decisions.winningPitcher && p !== decisions.savePitcher && p.gameStats.pitching.outs >= 1) {
         // 先発投手はホールド対象外
-        if (p.battingOrder === 9 && winStarter === p) return;
+        if (winStarter === p) return;
         decisions.holdPitchers.push(p);
       }
     });
