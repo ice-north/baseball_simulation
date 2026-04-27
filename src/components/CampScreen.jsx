@@ -5,22 +5,8 @@ import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
 
-// 練習プリセット定義
+// 練習プリセット定義（各選手のポジション・能力を見て個別にメニューを割り振る）
 const CAMP_PRESETS = {
-  fielder_balanced: {
-    name: '野手総合', icon: '⚾',
-    desc: '打撃・守備・走力をバランスよく強化',
-    getMain: () => 'batting',
-    getSub: () => 'running',
-    effect: 'ミート/パワー+2〜5, 走力+1〜3',
-  },
-  pitcher_balanced: {
-    name: '投手総合', icon: '⚾',
-    desc: '球速・制球・スタミナをバランスよく強化',
-    getMain: () => 'stamina',
-    getSub: () => 'running',
-    effect: 'スタミナ+2〜5, 走力+1〜3',
-  },
   weakness: {
     name: '弱点克服', icon: '📈',
     desc: '最も低い能力を集中的に強化',
@@ -38,16 +24,22 @@ const CAMP_PRESETS = {
       return 'batting';
     },
     getSub: (p) => {
-      if (p.position === 'pitcher') return 'running';
+      if (p.position === 'pitcher') {
+        const stats = { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
+        const sorted = Object.entries(stats).sort((a,b) => a[1]-b[1]);
+        const second = sorted[1][0];
+        if (second === 'velocity') return 'muscle';
+        if (second === 'stamina') return 'running';
+        return 'running';
+      }
       const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
       const sorted = Object.entries(stats).sort((a,b) => a[1]-b[1]);
-      const lowest = sorted[0][0];
-      if (lowest === 'eye') return 'eye';
-      const secondLowest = sorted[1][0];
-      if (secondLowest === 'speed') return 'running';
-      return 'eye';
+      const second = sorted[1][0];
+      if (second === 'eye') return 'eye';
+      if (second === 'speed') return 'running';
+      if (second === 'defense') return 'defense_sub';
+      return 'muscle';
     },
-    effect: '最低能力+2〜5',
   },
   strength: {
     name: '長所強化', icon: '💪',
@@ -66,39 +58,90 @@ const CAMP_PRESETS = {
       return 'batting';
     },
     getSub: (p) => {
+      if (p.position === 'pitcher') {
+        const stats = { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
+        const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
+        if (highest === 'velocity') return 'muscle';
+        if (highest === 'stamina') return 'running';
+        return 'stretch';
+      }
       const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
       const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
-      return highest === 'eye' ? 'eye' : 'stretch';
+      if (highest === 'eye') return 'eye';
+      if (highest === 'speed') return 'running';
+      if (highest === 'defense') return 'defense_sub';
+      return 'muscle';
     },
-    effect: '最高能力+2〜5',
   },
-  batting_focus: {
-    name: '打撃特化', icon: '🏏',
-    desc: 'ミート・パワー・選球眼を集中強化',
-    getMain: () => 'batting',
-    getSub: () => 'eye',
-    effect: 'ミート/パワー+2〜5, 選球眼+0〜2',
+  balanced: {
+    name: 'バランス育成', icon: '⚖️',
+    desc: '投手は投手練習、野手は野手練習をバランスよく',
+    getMain: (p) => {
+      if (p.position === 'pitcher') {
+        const v = ((p.pitching?.velocity||130)-115)*2.5;
+        const c = p.pitching?.control||50;
+        const s = (p.pitching?.stamina||100)/2;
+        const lowest = Object.entries({velocity:v, control:c, stamina:s}).sort((a,b) => a[1]-b[1])[0][0];
+        return lowest === 'velocity' ? 'velocity' : lowest === 'control' ? 'control' : 'stamina';
+      }
+      const meet = p.batting?.meet||0;
+      const def = p.fielding?.defense||0;
+      const spd = p.physical?.speed||0;
+      if (meet <= def && meet <= spd) return 'batting';
+      if (def <= spd) return 'fielding';
+      return 'baserunning';
+    },
+    getSub: (p) => {
+      if (p.position === 'pitcher') return 'running';
+      return 'running';
+    },
   },
-  pitching_velocity: {
-    name: '球速強化', icon: '🔥',
-    desc: '球速とスタミナを集中強化',
-    getMain: () => 'velocity',
-    getSub: () => 'running',
-    effect: '球速+1〜3km, 走力+1〜3',
+  physical: {
+    name: 'フィジカル', icon: '🏃',
+    desc: '投手は球速、野手は走力・パワーを重点強化',
+    getMain: (p) => {
+      if (p.position === 'pitcher') return 'velocity';
+      const spd = p.physical?.speed||0;
+      const pow = p.batting?.power||0;
+      return spd <= pow ? 'baserunning' : 'batting';
+    },
+    getSub: (p) => {
+      if (p.position === 'pitcher') return 'running';
+      return 'muscle';
+    },
   },
-  defense_focus: {
-    name: '守備強化', icon: '🧤',
-    desc: '守備力・肩力・走力を強化',
-    getMain: () => 'fielding',
-    getSub: () => 'running',
-    effect: '守備/肩+2〜5, 走力+1〜3',
+  technical: {
+    name: '技術磨き', icon: '🎯',
+    desc: '投手は制球・変化球、野手はミート・選球眼を強化',
+    getMain: (p) => {
+      if (p.position === 'pitcher') return 'control';
+      return 'batting';
+    },
+    getSub: (p) => {
+      if (p.position === 'pitcher') return 'breaking';
+      return 'eye';
+    },
   },
-  subposition: {
-    name: 'サブポジ開発', icon: '🔄',
-    desc: '守備位置の適性を集中的に向上',
-    getMain: (p) => p.position === 'pitcher' ? 'control' : 'fielding',
-    getSub: () => 'subposition',
-    effect: 'サブ適性+9〜15, 守備+2〜5',
+  role_focused: {
+    name: '実戦重視', icon: '🏟️',
+    desc: '先発投手はスタミナ、リリーフは制球、野手は打撃/守備を強化',
+    getMain: (p) => {
+      if (p.position === 'pitcher') {
+        const stamina = p.pitching?.stamina || 80;
+        return stamina >= 90 ? 'control' : 'stamina';
+      }
+      const meet = p.batting?.meet||0;
+      const def = p.fielding?.defense||0;
+      return meet < 45 ? 'batting' : def < 45 ? 'fielding' : 'batting';
+    },
+    getSub: (p) => {
+      if (p.position === 'pitcher') {
+        const control = p.pitching?.control || 50;
+        return control >= 55 ? 'breaking' : 'running';
+      }
+      const def = p.fielding?.defense||0;
+      return def < 40 ? 'defense_sub' : 'running';
+    },
   },
 };
 
@@ -365,7 +408,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                 <button
                   key={key}
                   onClick={() => applyPreset(key)}
-                  title={`${preset.desc}\n効果: ${preset.effect}`}
+                  title={preset.desc}
                   className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded px-2 py-0.5 text-[11px] text-gray-300 hover:text-blue-300 transition"
                 >
                   {preset.icon} {preset.name}
