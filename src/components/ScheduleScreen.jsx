@@ -300,7 +300,7 @@ const ScheduleScreen = ({
 
       {/* カレンダー */}
       <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-3 mb-4">
-        <div className="text-xs font-semibold text-gray-400 mb-2 px-1">{selectedMonth}月の日程（{userTeamName}）</div>
+        <div className="text-xs font-semibold text-gray-300 mb-2 px-1">{selectedMonth}月の日程（{userTeamName}）</div>
         <div className="grid grid-cols-7 gap-0.5">
           <div className="text-center text-red-400 font-bold py-1 text-[10px]">日</div>
           <div className="text-center text-gray-500 font-bold py-1 text-[10px]">月</div>
@@ -368,7 +368,7 @@ const ScheduleScreen = ({
 
       {/* 本日の対戦カード */}
       <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-3 mb-4">
-        <div className="text-xs font-semibold text-gray-400 mb-2 px-1">
+        <div className="text-xs font-semibold text-gray-300 mb-2 px-1">
           {currentDate.month}/{currentDate.day} の対戦カード
         </div>
         {(() => {

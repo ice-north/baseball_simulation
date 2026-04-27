@@ -2284,12 +2284,13 @@ if (newOuts === 3) {
                         .sort((a, b) => a.battingOrder - b.battingOrder)
                         .map(player => {
                           const isPitcher = player.position === 'pitcher';
-                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
                           const getPositionColor = (pos) => {
                             if (pos === 'pitcher') return 'bg-red-600 text-white';
                             if (pos === 'catcher') return 'bg-blue-600 text-white';
                             if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';
                             if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';
+                            if (pos === 'dh') return 'bg-purple-600 text-white';
                             return 'bg-gray-700';
                           };
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
@@ -2369,7 +2370,7 @@ if (newOuts === 3) {
                       {awayTeam.players
                         .filter(p => !p.isStarter)
                         .map(player => {
-                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
                           const isPitcher = player.position === 'pitcher';
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
@@ -2381,6 +2382,7 @@ if (newOuts === 3) {
                             if (pos === 'catcher') return 'bg-blue-600 text-white';  // 捕：青
                             if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';  // 内野：黄
                             if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';  // 外野：緑
+                            if (pos === 'dh') return 'bg-purple-600 text-white';
                             return 'bg-gray-700 text-white';
                           };
 
@@ -2434,7 +2436,7 @@ if (newOuts === 3) {
                       .map(player => {
                     const isCurrentBatter = gameStarted && isTopInning && player.battingOrder === awayTeam.currentBatterOrder;
                     const isPitcher = player.position === 'pitcher';
-                    const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                    const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
 
                     // 守備位置の色分け
                     const getPositionColor = (pos) => {
@@ -2442,6 +2444,7 @@ if (newOuts === 3) {
                       if (pos === 'catcher') return isCurrentBatter ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white';  // 🔵 青
                       if (['first', 'second', 'third', 'short'].includes(pos)) return isCurrentBatter ? 'bg-yellow-400 text-black' : 'bg-yellow-600 text-white';  // 🟡 黄色
                       if (['left', 'center', 'right'].includes(pos)) return isCurrentBatter ? 'bg-green-500 text-white' : 'bg-green-600 text-white';  // 🟢 緑
+                      if (pos === 'dh') return isCurrentBatter ? 'bg-purple-500 text-white' : 'bg-purple-600 text-white';
                       return 'bg-gray-700';
                     };
 
@@ -2577,7 +2580,7 @@ if (newOuts === 3) {
                       {awayTeam.players
                         .filter(p => !p.isStarter)
                         .map(player => {
-                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
                           const isPitcher = player.position === 'pitcher';
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
@@ -2589,6 +2592,7 @@ if (newOuts === 3) {
                             if (pos === 'catcher') return 'bg-blue-600 text-white';  // 捕：青
                             if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';  // 内野：黄
                             if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';  // 外野：緑
+                            if (pos === 'dh') return 'bg-purple-600 text-white';
                             return 'bg-gray-700 text-white';
                           };
 
@@ -3577,12 +3581,13 @@ if (newOuts === 3) {
                         .sort((a, b) => a.battingOrder - b.battingOrder)
                         .map(player => {
                           const isPitcher = player.position === 'pitcher';
-                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
                           const getPositionColor = (pos) => {
                             if (pos === 'pitcher') return 'bg-red-600 text-white';
                             if (pos === 'catcher') return 'bg-blue-600 text-white';
                             if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';
                             if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';
+                            if (pos === 'dh') return 'bg-purple-600 text-white';
                             return 'bg-gray-700';
                           };
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
@@ -3662,7 +3667,7 @@ if (newOuts === 3) {
                       {homeTeam.players
                         .filter(p => !p.isStarter)
                         .map(player => {
-                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
                           const isPitcher = player.position === 'pitcher';
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
@@ -3674,6 +3679,7 @@ if (newOuts === 3) {
                             if (pos === 'catcher') return 'bg-blue-600 text-white';  // 捕：青
                             if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';  // 内野：黄
                             if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';  // 外野：緑
+                            if (pos === 'dh') return 'bg-purple-600 text-white';
                             return 'bg-gray-700 text-white';
                           };
 
@@ -3727,7 +3733,7 @@ if (newOuts === 3) {
                       .map(player => {
                       const isCurrentBatter = gameStarted && !isTopInning && player.battingOrder === homeTeam.currentBatterOrder;
                       const isPitcher = player.position === 'pitcher';
-                      const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                      const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
 
                     // 守備位置の色分け
                     const getPositionColor = (pos) => {
@@ -3735,6 +3741,7 @@ if (newOuts === 3) {
                       if (pos === 'catcher') return isCurrentBatter ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white';  // 🔵 青
                       if (['first', 'second', 'third', 'short'].includes(pos)) return isCurrentBatter ? 'bg-yellow-400 text-black' : 'bg-yellow-600 text-white';  // 🟡 黄色
                       if (['left', 'center', 'right'].includes(pos)) return isCurrentBatter ? 'bg-green-500 text-white' : 'bg-green-600 text-white';  // 🟢 緑
+                      if (pos === 'dh') return isCurrentBatter ? 'bg-purple-500 text-white' : 'bg-purple-600 text-white';
                       return 'bg-gray-700';
                     };
 
@@ -3870,7 +3877,7 @@ if (newOuts === 3) {
                       {homeTeam.players
                         .filter(p => !p.isStarter)
                         .map(player => {
-                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                          const posNames = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右', dh: 'DH' };
                           const isPitcher = player.position === 'pitcher';
                           const throwHand = player.physical.throws === 'right' ? '右' : '左';
                           const batHand = player.batting.bats === 'right' ? '右' : player.batting.bats === 'left' ? '左' : '両';
@@ -3882,6 +3889,7 @@ if (newOuts === 3) {
                             if (pos === 'catcher') return 'bg-blue-600 text-white';  // 捕：青
                             if (['first', 'second', 'third', 'short'].includes(pos)) return 'bg-yellow-600 text-white';  // 内野：黄
                             if (['left', 'center', 'right'].includes(pos)) return 'bg-green-600 text-white';  // 外野：緑
+                            if (pos === 'dh') return 'bg-purple-600 text-white';
                             return 'bg-gray-700 text-white';
                           };
 

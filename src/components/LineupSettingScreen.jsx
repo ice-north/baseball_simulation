@@ -635,6 +635,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   const player = entry ? team.players.find(p => p.id === entry.playerId) : null;
                   const isSelected = selectedBattingOrder === order;
                   const isPitcherSlot = !useDH && entry?.position === 'pitcher';
+                  const isDHSlot = useDH && entry?.position === 'dh';
                   const isSwapSource = swapSource === order;
                   const isSwapTarget = swapSource !== null && swapSource !== order;
 
@@ -661,6 +662,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                       isSelected   ? 'bg-blue-900/40 border-blue-500/60 ring-1 ring-blue-400/30' :
                       player ? (isPitcherSlot
                         ? 'bg-indigo-950/60 border-indigo-700/40 hover:border-indigo-600/60'
+                        : isDHSlot
+                        ? 'bg-purple-950/60 border-purple-700/40 hover:border-purple-600/60'
                         : 'bg-gray-800/90 border-gray-700/50 hover:border-gray-600/70')
                       : 'bg-gray-900/30 border-gray-700/40 border-dashed hover:border-gray-500/60'
                     }`}>
