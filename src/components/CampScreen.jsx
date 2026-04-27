@@ -145,6 +145,127 @@ const CAMP_PRESETS = {
   },
 };
 
+const FIELD_POSITIONS = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+
+function generateTrainingSuggestions(team) {
+  if (!team?.players) return [];
+  const suggestions = [];
+  const players = team.players;
+  const pitchers = players.filter(p => p.position === 'pitcher');
+  const fielders = players.filter(p => p.position !== 'pitcher');
+
+  // 1. ポジション過不足分析 → コンバート提案
+  const posCount = {};
+  FIELD_POSITIONS.forEach(pos => { posCount[pos] = 0; });
+  fielders.forEach(p => { if (posCount[p.position] !== undefined) posCount[p.position]++; });
+
+  const scarcePositions = FIELD_POSITIONS.filter(pos => posCount[pos] <= 1);
+  const surplusPositions = FIELD_POSITIONS.filter(pos => posCount[pos] >= 3);
+
+  if (scarcePositions.length > 0 && surplusPositions.length > 0) {
+    for (const scarce of scarcePositions) {
+      const candidates = fielders
+        .filter(p => surplusPositions.includes(p.position))
+        .filter(p => (p.positionFitness?.[scarce] || 0) >= 35)
+        .sort((a, b) => (b.positionFitness?.[scarce] || 0) - (a.positionFitness?.[scarce] || 0));
+      if (candidates.length > 0) {
+        const c = candidates[0];
+        const fitness = c.positionFitness?.[scarce] || 0;
+        suggestions.push({
+          playerId: c.id, type: 'convert',
+          text: `${POSITION_NAMES[c.position]}が${posCount[c.position]}人、${POSITION_NAMES[scarce]}が${posCount[scarce]}人。${c.name}（適性${fitness}）を${POSITION_NAMES[scarce]}にコンバートしませんか？`,
+          mainMenu: 'fielding', subMenu: 'subposition',
+          extra: { targetPosition: scarce },
+        });
+      }
+    }
+  }
+
+  // 2. 新球種提案（フォーム適性のある未習得球種）
+  for (const p of pitchers) {
+    const arsenal = (p.pitching?.arsenal || []).map(a => a.type);
+    const breakingCount = arsenal.filter(t => t !== 'straight').length;
+    if (breakingCount >= 4) continue;
+    const form = p.pitching?.form || 'threeQuarter';
+    const affinityPitches = FORM_PITCH_AFFINITY[form] || {};
+    const candidates = Object.entries(affinityPitches)
+      .filter(([type]) => !arsenal.includes(type))
+      .sort((a, b) => b[1].affinity - a[1].affinity);
+    if (candidates.length > 0) {
+      const [pitchType, info] = candidates[0];
+      const formNames = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+      suggestions.push({
+        playerId: p.id, type: 'newpitch',
+        text: `${p.name}は${formNames[form] || form}投げ。${getPitchTypeName(pitchType)}はフォームとの相性◎で習得しやすい。`,
+        mainMenu: 'newpitch', subMenu: 'breaking',
+        extra: { pitchType },
+      });
+    }
+  }
+
+  // 3. 球種が少ない投手への提案
+  for (const p of pitchers) {
+    const arsenal = (p.pitching?.arsenal || []).map(a => a.type);
+    const breakingCount = arsenal.filter(t => t !== 'straight').length;
+    if (breakingCount <= 1) {
+      if (suggestions.find(s => s.playerId === p.id && s.type === 'newpitch')) continue;
+      suggestions.push({
+        playerId: p.id, type: 'newpitch',
+        text: `${p.name}は変化球が${breakingCount}種のみ。球種を増やせば投球の幅が大きく広がる。`,
+        mainMenu: 'newpitch', subMenu: 'breaking',
+        extra: {},
+      });
+    }
+  }
+
+  // 4. 打席変更提案（ミートが低い野手）
+  for (const p of fielders) {
+    const meet = p.batting?.meet || 0;
+    const bats = p.batting?.bats;
+    if (meet < 30 && bats !== 'switch') {
+      suggestions.push({
+        playerId: p.id, type: 'switch_hit',
+        text: `${p.name}はミート${meet}と打撃に苦しんでいる。思い切って打席変更で活路を見出しませんか？`,
+        mainMenu: p.position === 'pitcher' ? 'stamina' : 'batting', subMenu: 'switch_hit',
+        extra: {},
+      });
+    }
+  }
+
+  // 5. キャッチャーリード提案
+  const catchers = players.filter(p => p.position === 'catcher');
+  for (const p of catchers) {
+    const lead = p.catching?.lead || 0;
+    if (lead < 40) {
+      suggestions.push({
+        playerId: p.id, type: 'clead',
+        text: `${p.name}のキャッチャーリードは${lead}。リードを磨けば投手陣の能力を引き出せる。`,
+        mainMenu: 'fielding', subMenu: 'clead_study',
+        extra: {},
+      });
+    }
+  }
+
+  // 6. 投手のフォーム改造提案（若手で制球が低い）
+  for (const p of pitchers) {
+    const control = p.pitching?.control || 50;
+    const age = p.age || 20;
+    if (control < 40 && age <= 24) {
+      suggestions.push({
+        playerId: p.id, type: 'form_change',
+        text: `${p.name}は制球${control}と荒れ球。若いうちにフォーム改造に挑戦する価値はある。`,
+        mainMenu: 'control', subMenu: 'form_change',
+        extra: {},
+      });
+    }
+  }
+
+  // 優先度順にソート: convert > newpitch > switch_hit > clead > form_change
+  const priority = { convert: 0, newpitch: 1, switch_hit: 2, clead: 3, form_change: 4 };
+  suggestions.sort((a, b) => (priority[a.type] ?? 99) - (priority[b.type] ?? 99));
+  return suggestions.slice(0, 8);
+}
+
 const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
   const userTeamName = teamNames[0] || 'チームA';
@@ -171,8 +292,25 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
   const [roundResults, setRoundResults] = useState(null);
   const [viewMode, setViewMode] = useState('select');
   const [dispatchConfirm, setDispatchConfirm] = useState(null); // { playerId, destKey }
-  const [dispatchResults, setDispatchResults] = useState([]); // キャンプ終了時の派遣��果表示
-  const [updateKey, setUpdateKey] = useState(0); // 再レ��ダリング用
+  const [dispatchResults, setDispatchResults] = useState([]); // キャンプ終了時の派遣結果表示
+  const [updateKey, setUpdateKey] = useState(0); // 再レンダリング用
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState(new Set());
+
+  const suggestions = userTeam ? generateTrainingSuggestions(userTeam).filter(s => !dismissedSuggestions.has(s.playerId + s.type)) : [];
+
+  const applySuggestion = (suggestion) => {
+    const { playerId, mainMenu, subMenu, extra } = suggestion;
+    if (mainMenu) setAssignments(prev => ({ ...prev, [playerId]: mainMenu }));
+    if (subMenu) setSubAssignments(prev => ({ ...prev, [playerId]: subMenu }));
+    if (extra?.targetPosition) setSubPositionSelections(prev => ({ ...prev, [playerId]: extra.targetPosition }));
+    if (extra?.pitchType) setNewPitchSelections(prev => ({ ...prev, [playerId]: extra.pitchType }));
+    setDismissedSuggestions(prev => new Set([...prev, playerId + suggestion.type]));
+  };
+
+  const dismissSuggestion = (suggestion) => {
+    setDismissedSuggestions(prev => new Set([...prev, suggestion.playerId + suggestion.type]));
+  };
   // キャンプ開始時のステータスを保存（成長合計計算用）
   const [preCampStats] = useState(() => {
     const stats = {};
@@ -432,6 +570,53 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                 </button>
               ))}
             </div>
+
+            {/* コーチからの提案 */}
+            {suggestions.length > 0 && (
+              <div className="mb-2">
+                <button
+                  onClick={() => setShowSuggestions(!showSuggestions)}
+                  className="flex items-center gap-1 text-xs font-bold text-yellow-400 hover:text-yellow-300 mb-1 transition"
+                >
+                  <span>{showSuggestions ? '▼' : '▶'}</span>
+                  <span>コーチからの提案（{suggestions.length}件）</span>
+                </button>
+                {showSuggestions && (
+                  <div className="space-y-1">
+                    {suggestions.map((s, idx) => {
+                      const typeColors = {
+                        convert: 'border-green-700/60 bg-green-950/40',
+                        newpitch: 'border-blue-700/60 bg-blue-950/40',
+                        switch_hit: 'border-orange-700/60 bg-orange-950/40',
+                        clead: 'border-cyan-700/60 bg-cyan-950/40',
+                        form_change: 'border-purple-700/60 bg-purple-950/40',
+                      };
+                      const typeIcons = {
+                        convert: '🔄', newpitch: '✨', switch_hit: '↔️', clead: '🧠', form_change: '⚡',
+                      };
+                      const typeLabels = {
+                        convert: 'コンバート', newpitch: '新球種', switch_hit: '打席変更', clead: 'Cリード', form_change: 'フォーム改造',
+                      };
+                      return (
+                        <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${typeColors[s.type] || 'border-gray-700 bg-gray-800'}`}>
+                          <span className="text-sm">{typeIcons[s.type]}</span>
+                          <span className="text-[10px] font-bold text-gray-400 w-16 shrink-0">{typeLabels[s.type]}</span>
+                          <span className="text-xs text-gray-200 flex-1">{s.text}</span>
+                          <button
+                            onClick={() => applySuggestion(s)}
+                            className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded bg-yellow-600 hover:bg-yellow-500 text-white transition"
+                          >適用</button>
+                          <button
+                            onClick={() => dismissSuggestion(s)}
+                            className="shrink-0 text-gray-600 hover:text-gray-400 text-xs transition"
+                          >✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 派遣中の選手 */}
             {dispatchedPlayers.length > 0 && (
