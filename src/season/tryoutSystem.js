@@ -912,8 +912,38 @@ export const generateTwoWayPositionFitness = (mainPosition, subPosition, throws)
   fitness[mainPosition] = 100;
 
   if (mainPosition === 'pitcher' && subPosition) {
-    // 投手登録の二刀流: サブポジションを50-80で設定
+    // 投手登録の二刀流: サブポジションを50-80で設定 + 関連ポジションもブースト
+    // 投手は子供の頃からエースで各ポジションをこなしてきた選手が多い
     fitness[subPosition] = Math.floor(Math.random() * 31) + 50; // 50-80
+    if (throws === 'left') {
+      // 左投げ: ファーストと外野のみ守れる
+      const leftPositions = ['first', 'left', 'center', 'right'].filter(p => p !== subPosition);
+      for (const pos of leftPositions) {
+        fitness[pos] = Math.floor(Math.random() * 15) + 40; // 40-54
+      }
+    } else {
+      // 右投げ: 全ポジション経験あり
+      if (['short', 'second', 'third'].includes(subPosition)) {
+        const infield = ['short', 'second', 'third'].filter(p => p !== subPosition);
+        for (const pos of infield) {
+          fitness[pos] = Math.floor(Math.random() * 15) + 45; // 45-59
+        }
+        fitness.center = Math.floor(Math.random() * 15) + 40;
+      } else if (['left', 'center', 'right'].includes(subPosition)) {
+        const outfield = ['left', 'center', 'right'].filter(p => p !== subPosition);
+        for (const pos of outfield) {
+          fitness[pos] = Math.floor(Math.random() * 15) + 45; // 45-59
+        }
+        fitness.first = Math.floor(Math.random() * 15) + 40;
+      } else {
+        // catcher/first等: 周辺ポジションを広めにブースト
+        fitness.first = Math.max(fitness.first, Math.floor(Math.random() * 15) + 40);
+        fitness.third = Math.max(fitness.third, Math.floor(Math.random() * 15) + 40);
+        fitness.left = Math.max(fitness.left, Math.floor(Math.random() * 15) + 38);
+        fitness.center = Math.max(fitness.center, Math.floor(Math.random() * 15) + 38);
+        fitness.right = Math.max(fitness.right, Math.floor(Math.random() * 15) + 38);
+      }
+    }
   } else {
     // 野手登録の二刀流: 投手適性高め、周辺ポジションも対応可
     fitness.pitcher = Math.floor(Math.random() * 15) + 75; // 75-90
