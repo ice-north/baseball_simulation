@@ -260,10 +260,171 @@ function generateTrainingSuggestions(team) {
     }
   }
 
-  // 優先度順にソート: convert > newpitch > switch_hit > clead > form_change
-  const priority = { convert: 0, newpitch: 1, switch_hit: 2, clead: 3, form_change: 4 };
-  suggestions.sort((a, b) => (priority[a.type] ?? 99) - (priority[b.type] ?? 99));
-  return suggestions.slice(0, 8);
+  // 7. 若手投手の球速強化（25歳以下で球速低め）
+  for (const p of pitchers) {
+    const v = p.pitching?.velocity || 130;
+    const age = p.age || 20;
+    if (v < 140 && age <= 25) {
+      suggestions.push({
+        playerId: p.id, type: 'velocity',
+        text: `${p.name}は${v}km/hとまだ球速が伸びる余地がある。若いうちに鍛えたい。`,
+        mainMenu: 'velocity', subMenu: 'muscle',
+        extra: {},
+      });
+    }
+  }
+
+  // 8. スタミナ不足の投手（先発候補なのにスタミナが低い）
+  for (const p of pitchers) {
+    const stamina = p.pitching?.stamina || 80;
+    if (stamina < 70) {
+      suggestions.push({
+        playerId: p.id, type: 'stamina',
+        text: `${p.name}はスタミナ${stamina}で長いイニングが持たない。体力を付ければ先発ローテも見えてくる。`,
+        mainMenu: 'stamina', subMenu: 'running',
+        extra: {},
+      });
+    }
+  }
+
+  // 9. 守備が低い野手（レギュラー候補なのに守備力不足）
+  for (const p of fielders) {
+    const def = p.fielding?.defense || 0;
+    if (def < 35) {
+      suggestions.push({
+        playerId: p.id, type: 'defense',
+        text: `${p.name}は守備${def}と不安定。失策が多くては試合に使いづらい。`,
+        mainMenu: 'fielding', subMenu: 'defense_sub',
+        extra: {},
+      });
+    }
+  }
+
+  // 10. 変化球レベルが低い投手（球種は持っているがレベルが低い）
+  for (const p of pitchers) {
+    const arsenal = p.pitching?.arsenal || [];
+    const lowLevel = arsenal.filter(a => a.type !== 'straight' && a.level < 25);
+    if (lowLevel.length >= 2) {
+      const names = lowLevel.slice(0, 2).map(a => getPitchTypeName(a.type)).join('・');
+      suggestions.push({
+        playerId: p.id, type: 'breaking_lv',
+        text: `${p.name}の${names}はレベルが低い。変化球の精度を上げれば実戦で使える武器になる。`,
+        mainMenu: 'control', subMenu: 'breaking',
+        extra: {},
+      });
+    }
+  }
+
+  // 11. 俊足なのに盗塁技術が低い
+  for (const p of fielders) {
+    const speed = p.physical?.speed || 0;
+    const steal = p.batting?.steal || 0;
+    if (speed >= 55 && steal < 40) {
+      suggestions.push({
+        playerId: p.id, type: 'baserun',
+        text: `${p.name}は走力${speed}の俊足だが盗塁${steal}と技術が追いついていない。走塁練習で武器にしたい。`,
+        mainMenu: 'baserunning', subMenu: 'running',
+        extra: {},
+      });
+    }
+  }
+
+  // 12. 選球眼が低い野手（出塁率に影響）
+  for (const p of fielders) {
+    const eye = p.batting?.eye || 0;
+    const meet = p.batting?.meet || 0;
+    if (eye < 30 && meet >= 35) {
+      suggestions.push({
+        playerId: p.id, type: 'eye',
+        text: `${p.name}は打撃センスがあるが選球眼${eye}と低い。見極めを覚えれば出塁率が上がる。`,
+        mainMenu: 'batting', subMenu: 'eye',
+        extra: {},
+      });
+    }
+  }
+
+  // 13. 外野手の肩が弱い
+  const outfielders = fielders.filter(p => ['left', 'center', 'right'].includes(p.position));
+  for (const p of outfielders) {
+    const arm = p.physical?.arm || 0;
+    if (arm < 35) {
+      suggestions.push({
+        playerId: p.id, type: 'arm',
+        text: `${p.name}は肩力${arm}と外野手としては弱い。肩を鍛えれば送球で走者を刺せるようになる。`,
+        mainMenu: 'fielding', subMenu: 'muscle',
+        extra: {},
+      });
+    }
+  }
+
+  // 14. ベテランのコンディション維持
+  for (const p of players) {
+    const age = p.age || 20;
+    const recovery = p.physical?.recovery || 50;
+    if (age >= 30 && recovery < 45) {
+      suggestions.push({
+        playerId: p.id, type: 'veteran',
+        text: `${p.name}は${age}歳で回復力${recovery}。ストレッチで身体のケアを優先すべきだ。`,
+        mainMenu: p.position === 'pitcher' ? 'control' : 'batting', subMenu: 'stretch',
+        extra: {},
+      });
+    }
+  }
+
+  // 15. 二刀流選手の育成提案
+  const twoWayPlayers = players.filter(p => p.isTwoWay);
+  for (const p of twoWayPlayers) {
+    if (p.position === 'pitcher') {
+      const meet = p.batting?.meet || 0;
+      if (meet < 35) {
+        suggestions.push({
+          playerId: p.id, type: 'twoway',
+          text: `${p.name}は二刀流だがミート${meet}と打撃が課題。打撃練習で投打両面の戦力に育てたい。`,
+          mainMenu: 'batting', subMenu: 'muscle',
+          extra: {},
+        });
+      }
+    } else {
+      const v = p.pitching?.velocity || 130;
+      const control = p.pitching?.control || 50;
+      if (v < 138 || control < 40) {
+        const weak = v < 138 ? `球速${v}km` : `制球${control}`;
+        suggestions.push({
+          playerId: p.id, type: 'twoway',
+          text: `${p.name}は二刀流だが${weak}と投手能力が不足。鍛えれば登板機会が増える。`,
+          mainMenu: v < 138 ? 'velocity' : 'control', subMenu: 'running',
+          extra: {},
+        });
+      }
+    }
+  }
+
+  // 16. パワーが低い長距離砲候補（高いパワーだが中途半端な選手を強化）
+  for (const p of fielders) {
+    const power = p.batting?.power || 0;
+    const meet = p.batting?.meet || 0;
+    if (power >= 40 && power < 55 && meet >= 35) {
+      suggestions.push({
+        playerId: p.id, type: 'power',
+        text: `${p.name}はパワー${power}と素質がある。筋力強化でもう一段上の打球を飛ばせる。`,
+        mainMenu: 'batting', subMenu: 'muscle',
+        extra: {},
+      });
+    }
+  }
+
+  // 同一選手の重複を除く（最初の提案のみ残す）
+  const seen = new Set();
+  const deduped = suggestions.filter(s => {
+    if (seen.has(s.playerId)) return false;
+    seen.add(s.playerId);
+    return true;
+  });
+
+  // 優先度順にソート
+  const priority = { convert: 0, twoway: 1, newpitch: 2, breaking_lv: 3, switch_hit: 4, clead: 5, form_change: 6, velocity: 7, stamina: 8, defense: 9, baserun: 10, eye: 11, arm: 12, power: 13, veteran: 14 };
+  deduped.sort((a, b) => (priority[a.type] ?? 99) - (priority[b.type] ?? 99));
+  return deduped.slice(0, 12);
 }
 
 const CampScreen = ({ onComplete, allTeams, seasonData }) => {
@@ -586,16 +747,32 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     {suggestions.map((s, idx) => {
                       const typeColors = {
                         convert: 'border-green-700/60 bg-green-950/40',
+                        twoway: 'border-amber-700/60 bg-amber-950/40',
                         newpitch: 'border-blue-700/60 bg-blue-950/40',
+                        breaking_lv: 'border-blue-700/60 bg-blue-950/40',
                         switch_hit: 'border-orange-700/60 bg-orange-950/40',
                         clead: 'border-cyan-700/60 bg-cyan-950/40',
                         form_change: 'border-purple-700/60 bg-purple-950/40',
+                        velocity: 'border-red-700/60 bg-red-950/40',
+                        stamina: 'border-teal-700/60 bg-teal-950/40',
+                        defense: 'border-yellow-700/60 bg-yellow-950/40',
+                        baserun: 'border-emerald-700/60 bg-emerald-950/40',
+                        eye: 'border-indigo-700/60 bg-indigo-950/40',
+                        arm: 'border-rose-700/60 bg-rose-950/40',
+                        power: 'border-orange-700/60 bg-orange-950/40',
+                        veteran: 'border-gray-600/60 bg-gray-800/40',
                       };
                       const typeIcons = {
-                        convert: '🔄', newpitch: '✨', switch_hit: '↔️', clead: '🧠', form_change: '⚡',
+                        convert: '🔄', twoway: '⚾', newpitch: '✨', breaking_lv: '🌀',
+                        switch_hit: '↔️', clead: '🧠', form_change: '⚡', velocity: '🔥',
+                        stamina: '💪', defense: '🧤', baserun: '🏃', eye: '👁️',
+                        arm: '💪', power: '💥', veteran: '🧘',
                       };
                       const typeLabels = {
-                        convert: 'コンバート', newpitch: '新球種', switch_hit: '打席変更', clead: 'Cリード', form_change: 'フォーム改造',
+                        convert: 'コンバート', twoway: '二刀流', newpitch: '新球種', breaking_lv: '変化球強化',
+                        switch_hit: '打席変更', clead: 'Cリード', form_change: 'フォーム改造', velocity: '球速強化',
+                        stamina: 'スタミナ', defense: '守備強化', baserun: '走塁', eye: '選球眼',
+                        arm: '肩力強化', power: 'パワー', veteran: '身体ケア',
                       };
                       return (
                         <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${typeColors[s.type] || 'border-gray-700 bg-gray-800'}`}>
