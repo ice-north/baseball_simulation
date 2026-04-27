@@ -216,13 +216,17 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
     const throws = handedness.throws;
     const bats = handedness.bats;
 
-    // 二刀流選手かどうか（8%の確率、右投げのみ）
-    const isTwoWay = throws === 'right' && Math.random() < 0.08;
+    // 二刀流選手かどうか（8%の確率）
+    const isTwoWay = Math.random() < 0.08;
 
     // 投手と野手を1:1の比率で生成（ただし左投げは制限あり）
     let isPitcher = Math.random() < 0.5;
     let position;
     let twoWaySubPosition = null;
+
+    // 左投げ野手が守れるポジション
+    const leftHandFieldPositions = ['first', 'left', 'center', 'right'];
+    const allFieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
 
     if (isTwoWay) {
       const twoWayRoll = Math.random();
@@ -230,15 +234,27 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         // 70%: 投手登録の二刀流（野手としても出場可能）
         position = 'pitcher';
         isPitcher = true;
-        twoWaySubPosition = Math.random() < 0.5 ? 'short' : 'center';
+        if (throws === 'left') {
+          twoWaySubPosition = leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)];
+        } else {
+          twoWaySubPosition = allFieldPositions[Math.floor(Math.random() * allFieldPositions.length)];
+        }
       } else if (twoWayRoll < 0.9) {
-        // 20%: 遊撃手 or センター登録の二刀流
-        position = Math.random() < 0.5 ? 'short' : 'center';
+        // 20%: 主要野手登録の二刀流
+        if (throws === 'left') {
+          position = leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)];
+        } else {
+          position = Math.random() < 0.5 ? 'short' : 'center';
+        }
         isPitcher = false;
       } else {
         // 10%: その他の野手登録の二刀流
-        const otherPositions = ['catcher', 'first', 'second', 'third', 'left', 'right'];
-        position = otherPositions[Math.floor(Math.random() * otherPositions.length)];
+        if (throws === 'left') {
+          position = leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)];
+        } else {
+          const otherPositions = ['catcher', 'first', 'second', 'third', 'left', 'right'];
+          position = otherPositions[Math.floor(Math.random() * otherPositions.length)];
+        }
         isPitcher = false;
       }
     } else if (throws === 'left') {
@@ -341,7 +357,7 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       },
       traits: playerTraits, // 選手の特性を保存
       scoutComment: null, // 後でgenerateScoutCommentで設定
-      positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition) : generatePositionFitness(position),
+      positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
       professionalCareer: {
         isDrafted: false,
         draftYear: null,
@@ -881,11 +897,11 @@ export const generatePositionFitness = (mainPosition) => {
 
 /**
  * 二刀流選手のポジション適性を生成
- * 投手と野手の両方に高い適性を持つ
  * @param {string} mainPosition - 登録ポジション
  * @param {string|null} subPosition - 投手登録二刀流の野手サブポジション
+ * @param {string} throws - 利き腕 ('right' or 'left')
  */
-export const generateTwoWayPositionFitness = (mainPosition, subPosition) => {
+export const generateTwoWayPositionFitness = (mainPosition, subPosition, throws) => {
   const fitness = {
     pitcher: 80,
     catcher: 30, first: 30,
@@ -896,32 +912,30 @@ export const generateTwoWayPositionFitness = (mainPosition, subPosition) => {
   fitness[mainPosition] = 100;
 
   if (mainPosition === 'pitcher' && subPosition) {
-    // 投手登録の二刀流: サブポジション高適性、関連ポジションもやや高め
-    fitness[subPosition] = Math.floor(Math.random() * 11) + 85; // 85-95
-    if (subPosition === 'short') {
-      fitness.second = Math.floor(Math.random() * 15) + 60;
-      fitness.third = Math.floor(Math.random() * 15) + 55;
-      fitness.center = Math.floor(Math.random() * 15) + 50;
-    } else if (subPosition === 'center') {
-      fitness.left = Math.floor(Math.random() * 15) + 60;
-      fitness.right = Math.floor(Math.random() * 15) + 60;
-      fitness.short = Math.floor(Math.random() * 15) + 45;
-    }
+    // 投手登録の二刀流: サブポジションを50-80で設定
+    fitness[subPosition] = Math.floor(Math.random() * 31) + 50; // 50-80
   } else {
     // 野手登録の二刀流: 投手適性高め、周辺ポジションも対応可
     fitness.pitcher = Math.floor(Math.random() * 15) + 75; // 75-90
-    if (mainPosition === 'short') {
-      fitness.second = Math.floor(Math.random() * 15) + 65;
-      fitness.third = Math.floor(Math.random() * 15) + 55;
-      fitness.center = Math.floor(Math.random() * 15) + 50;
-    } else if (mainPosition === 'center') {
-      fitness.left = Math.floor(Math.random() * 15) + 65;
-      fitness.right = Math.floor(Math.random() * 15) + 65;
+    if (throws === 'left') {
+      const leftPositions = ['first', 'left', 'center', 'right'].filter(p => p !== mainPosition);
+      for (const pos of leftPositions) {
+        fitness[pos] = Math.floor(Math.random() * 20) + 55;
+      }
     } else {
-      if (mainPosition !== 'first') fitness.first = Math.floor(Math.random() * 20) + 60;
-      if (mainPosition !== 'left') fitness.left = Math.floor(Math.random() * 20) + 55;
-      if (mainPosition !== 'center') fitness.center = Math.floor(Math.random() * 20) + 55;
-      if (mainPosition !== 'right') fitness.right = Math.floor(Math.random() * 20) + 55;
+      if (mainPosition === 'short') {
+        fitness.second = Math.floor(Math.random() * 15) + 65;
+        fitness.third = Math.floor(Math.random() * 15) + 55;
+        fitness.center = Math.floor(Math.random() * 15) + 50;
+      } else if (mainPosition === 'center') {
+        fitness.left = Math.floor(Math.random() * 15) + 65;
+        fitness.right = Math.floor(Math.random() * 15) + 65;
+      } else {
+        if (mainPosition !== 'first') fitness.first = Math.floor(Math.random() * 20) + 60;
+        if (mainPosition !== 'left') fitness.left = Math.floor(Math.random() * 20) + 55;
+        if (mainPosition !== 'center') fitness.center = Math.floor(Math.random() * 20) + 55;
+        if (mainPosition !== 'right') fitness.right = Math.floor(Math.random() * 20) + 55;
+      }
     }
   }
 
