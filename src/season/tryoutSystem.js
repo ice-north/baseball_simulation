@@ -216,8 +216,8 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
     const throws = handedness.throws;
     const bats = handedness.bats;
 
-    // 二刀流選手かどうか（15%の確率、右投げのみ）
-    const isTwoWay = throws === 'right' && Math.random() < 0.15;
+    // 二刀流選手かどうか（8%の確率、右投げのみ）
+    const isTwoWay = throws === 'right' && Math.random() < 0.08;
 
     // 投手と野手を1:1の比率で生成（ただし左投げは制限あり）
     let isPitcher = Math.random() < 0.5;
@@ -1135,6 +1135,38 @@ function traitCommentMatches(trait, player) {
  */
 export function generateScoutComment(player) {
   const traits = player.traits || [];
+
+  // 二刀流選手は専用コメントを生成
+  if (player.isTwoWay) {
+    const isPitcher = player.position === 'pitcher';
+    const v = player.pitching?.velocity || 130;
+    const meet = player.batting?.meet || 0;
+    const power = player.batting?.power || 0;
+    const speed = player.physical?.speed || 0;
+
+    if (isPitcher) {
+      const pitcherTwoWayComments = [
+        '投手としての素材は十分。それに加えて打撃センスも光り、野手として育てる選択肢もある。',
+        '投手だが、バットスイングの力強さが目を引く。二刀流で起用すれば面白い存在になれる。',
+        'マウンドでの投球も魅力だが、打席での対応力が非凡。投打両面での活躍が期待できる。',
+        '投手能力に加え、野手としてのポテンシャルも秘めている。使い方次第で大きな戦力になる。',
+      ];
+      if (v >= 145 && meet >= 45) return '速球派の投手でありながら打撃もプロ級。二刀流の逸材と言っていい。';
+      if (v >= 140) return pitcherTwoWayComments[Math.floor(Math.random() * pitcherTwoWayComments.length)];
+      if (meet >= 50 || power >= 45) return '投手としてはまだ発展途上だが、打撃の良さは光る。野手転向も視野に入る素材だ。';
+      return pitcherTwoWayComments[Math.floor(Math.random() * pitcherTwoWayComments.length)];
+    } else {
+      const fielderTwoWayComments = [
+        '野手としての打力が武器だが、マウンドに上がれば投手としても通用する腕を持っている。',
+        '本職は野手だが、投手としても面白い。リリーフ起用で二刀流の真価を発揮できるタイプだ。',
+        '打って投げて走れる万能型。投手としての起用も計算に入れられる貴重な存在だ。',
+        '野手能力の高さに加え、投手経験も豊富。チーム事情に応じて柔軟に起用できる。',
+      ];
+      if (v >= 140 && (meet >= 50 || power >= 50)) return '打撃も投球も高水準。投手と野手、どちらでも一軍で勝負できる二刀流の逸材だ。';
+      if (speed >= 55) return fielderTwoWayComments[2];
+      return fielderTwoWayComments[Math.floor(Math.random() * fielderTwoWayComments.length)];
+    }
+  }
 
   // 実能力と合致する特性を優先して選ぶ（複数特性時の矛盾コメントを防止）
   for (const trait of traits) {
