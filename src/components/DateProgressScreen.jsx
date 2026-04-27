@@ -636,6 +636,133 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seasonData.results?.length]);
 
+  // 自チーム専用レポート（監督・コーチ視点の状況報告）
+  const teamReport = useMemo(() => {
+    const reports = [];
+    const userTeam = TEAMS_DATA[userTeamName];
+    if (!userTeam?.players) return reports;
+    const players = userTeam.players;
+    const results = seasonData.results || [];
+    const teamGames = results.filter(g => g.result && !g.result.cancelled && (g.home === userTeamName || g.away === userTeamName));
+    if (teamGames.length < 3) return reports;
+
+    // --- 直近5試合の傾向分析 ---
+    const recent = teamGames.slice(-5);
+    let rWins = 0, rLosses = 0, rScored = 0, rAllowed = 0;
+    recent.forEach(g => {
+      const isHome = g.home === userTeamName;
+      const won = isHome ? g.result.homeScore > g.result.awayScore : g.result.awayScore > g.result.homeScore;
+      const lost = isHome ? g.result.homeScore < g.result.awayScore : g.result.awayScore < g.result.homeScore;
+      if (won) rWins++; else if (lost) rLosses++;
+      rScored += isHome ? g.result.homeScore : g.result.awayScore;
+      rAllowed += isHome ? g.result.awayScore : g.result.homeScore;
+    });
+    const avgScored = (rScored / recent.length).toFixed(1);
+    const avgAllowed = (rAllowed / recent.length).toFixed(1);
+
+    if (rWins >= 4) {
+      reports.push({ icon: '🔥', text: `直近${recent.length}試合で${rWins}勝と絶好調。この勢いを維持したい。`, color: 'text-green-400' });
+    } else if (rLosses >= 4) {
+      reports.push({ icon: '⚠️', text: `直近${recent.length}試合で${rLosses}敗。何か手を打たないと順位が下がる一方だ。`, color: 'text-red-400' });
+    } else if (rWins >= 3) {
+      reports.push({ icon: '📈', text: `直近${recent.length}試合は${rWins}勝${rLosses}敗と上り調子。チームに勢いが出てきた。`, color: 'text-green-300' });
+    } else if (rLosses >= 3) {
+      reports.push({ icon: '📉', text: `直近${recent.length}試合は${rWins}勝${rLosses}敗。立て直しが急務だ。`, color: 'text-orange-400' });
+    }
+
+    if (parseFloat(avgScored) < 2.5 && teamGames.length >= 5) {
+      reports.push({ icon: '🦗', text: `直近の平均得点${avgScored}。打線が湿りがちだ。打順の入れ替えも検討したい。`, color: 'text-orange-300' });
+    }
+    if (parseFloat(avgAllowed) >= 6 && teamGames.length >= 5) {
+      reports.push({ icon: '🚒', text: `直近の平均失点${avgAllowed}。投手陣が打ち込まれている。起用法を見直す必要がある。`, color: 'text-red-300' });
+    }
+
+    // --- 好調・不調の野手 ---
+    const fieldPlayers = players.filter(p => p.position !== 'pitcher');
+    fieldPlayers.forEach(p => {
+      const bs = p.seasonStats?.batting;
+      if (!bs || bs.atBats < 15) return;
+      const recentGameData = results.slice(-8);
+      let rh = 0, rab = 0, rhr = 0;
+      recentGameData.forEach(g => {
+        if (!g.result || g.result.cancelled) return;
+        const isHome = g.home === userTeamName;
+        if (g.home !== userTeamName && g.away !== userTeamName) return;
+        const lineup = isHome ? g.result.homeLineup : g.result.awayLineup;
+        const ps = lineup?.find(l => l.name === p.name);
+        if (ps) { rh += ps.hits || 0; rab += ps.atBats || 0; rhr += ps.homeruns || 0; }
+      });
+      if (rab >= 8) {
+        const avg = rh / rab;
+        if (avg >= 0.400) {
+          reports.push({ icon: '🔥', text: `${p.name}が直近${rab}打数${rh}安打と打ちまくっている。クリーンナップでの起用が効果的だ。`, color: 'text-red-400' });
+        } else if (avg <= 0.100 && rab >= 12) {
+          reports.push({ icon: '❄️', text: `${p.name}が直近${rab}打数${rh}安打と深刻な不振。打順を下げるか、思い切って休ませることも必要かもしれない。`, color: 'text-blue-300' });
+        }
+        if (rhr >= 3) {
+          reports.push({ icon: '💣', text: `${p.name}が直近で${rhr}本塁打と量産中。長打力が頼りになる。`, color: 'text-pink-400' });
+        }
+      }
+    });
+
+    // --- 投手陣の状況 ---
+    const pitchers = players.filter(p => p.position === 'pitcher');
+    pitchers.forEach(p => {
+      const ps = p.seasonStats?.pitching;
+      if (!ps || (ps.inningsPitched || 0) < 18) return; // 6イニング以上
+      const era = ((ps.earnedRuns || 0) * 27) / ps.inningsPitched;
+      if (era <= 2.00) {
+        reports.push({ icon: '🎯', text: `${p.name}が防御率${era.toFixed(2)}と安定。エース格の働きをしている。`, color: 'text-emerald-400' });
+      } else if (era >= 5.50 && ps.games >= 3) {
+        reports.push({ icon: '😓', text: `${p.name}が防御率${era.toFixed(2)}と苦しんでいる。配置転換や登板間隔の調整を考えたい。`, color: 'text-red-300' });
+      }
+    });
+
+    // --- 順位状況 ---
+    const standings = seasonData.standings || [];
+    const userIdx = standings.findIndex(s => s.team === userTeamName);
+    if (userIdx >= 0 && standings[userIdx].gamesPlayed >= 5) {
+      const rank = userIdx + 1;
+      const total = standings.length;
+      const us = standings[userIdx];
+      if (rank === 1) {
+        const second = standings[1];
+        if (second) {
+          const gb = ((us.wins - second.wins) - (us.losses - second.losses)) / 2;
+          if (gb >= 3) {
+            reports.push({ icon: '👑', text: `現在首位。2位に${gb}ゲーム差をつけている。この調子で突き放したい。`, color: 'text-yellow-400' });
+          } else {
+            reports.push({ icon: '⚡', text: `首位だが2位${getTeamAbbreviation(second.team)}とは${gb}ゲーム差。油断は禁物だ。`, color: 'text-yellow-300' });
+          }
+        }
+      } else if (rank === total) {
+        const above = standings[userIdx - 1];
+        const gb = ((above.wins - us.wins) - (above.losses - us.losses)) / 2;
+        reports.push({ icon: '🏳️', text: `現在最下位。${rank - 1}位${getTeamAbbreviation(above.team)}まで${gb}ゲーム差。巻き返しを図りたい。`, color: 'text-gray-400' });
+      } else {
+        const above = standings[userIdx - 1];
+        const gb = ((above.wins - us.wins) - (above.losses - us.losses)) / 2;
+        reports.push({ icon: '📊', text: `現在${rank}位。${rank - 1}位${getTeamAbbreviation(above.team)}まで${gb}ゲーム差。`, color: 'text-blue-300' });
+      }
+    }
+
+    // --- チーム打撃成績の傾向 ---
+    let totalHR = 0, totalSB = 0;
+    fieldPlayers.forEach(p => {
+      totalHR += p.seasonStats?.batting?.homeruns || 0;
+      totalSB += p.seasonStats?.batting?.stolenBases || 0;
+    });
+    if (teamGames.length >= 10 && totalHR < teamGames.length * 0.3) {
+      reports.push({ icon: '💤', text: `チーム本塁打が${totalHR}本と少ない。長打不足が課題だ。`, color: 'text-gray-400' });
+    }
+    if (teamGames.length >= 10 && totalSB >= teamGames.length * 1.2) {
+      reports.push({ icon: '💨', text: `チーム盗塁${totalSB}個と機動力が武器になっている。足を活かした攻撃を続けたい。`, color: 'text-green-300' });
+    }
+
+    return reports.slice(0, 5);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seasonData.results?.length, seasonData.standings]);
+
   const getEventColor = (label) => {
     if (label === 'シーズン終了') return 'text-red-400';
     if (label === 'プレーオフ') return 'text-yellow-400';
@@ -1307,6 +1434,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               </div>
             );
           })()}
+
+          {/* チーム状況レポート（自チーム専用） */}
+          {teamReport.length > 0 && (
+            <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30 mt-3">
+              <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
+                <span className="text-blue-400">📋</span> チーム状況レポート
+              </h2>
+              <div className="space-y-1">
+                {teamReport.map((r, i) => (
+                  <div key={i} className="flex items-start gap-1.5 bg-blue-950/30 rounded-lg px-2.5 py-1.5 border border-blue-800/20">
+                    <span className="text-sm shrink-0">{r.icon}</span>
+                    <span className={`text-xs ${r.color}`}>{r.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 主なトピック（試合のある日のみ更新、休日は前日のトピックを表示） */}
           {cachedTopics.length > 0 && (
