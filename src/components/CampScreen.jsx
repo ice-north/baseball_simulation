@@ -1046,7 +1046,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {roundResults?.map((result, idx) => (
+                  {roundResults?.slice().sort((a, b) => {
+                    const posA = POSITION_ORDER.indexOf(a.player.position);
+                    const posB = POSITION_ORDER.indexOf(b.player.position);
+                    if (posA !== posB) return posA - posB;
+                    return (b.player.age || 20) - (a.player.age || 20);
+                  }).map((result, idx) => (
                     <tr key={idx} className="border-b border-gray-700/50">
                       <td className="py-1 px-2">
                         <span className={`font-bold ${isPitcher(result.player) ? 'text-red-400' : 'text-blue-300'}`}>
@@ -1209,7 +1214,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
         )}
 
         {viewMode === 'summary' && (() => {
-          const currentPlayers = userTeam?.players || [];
+          const currentPlayers = [...(userTeam?.players || [])].sort((a, b) => {
+            const posA = POSITION_ORDER.indexOf(a.position);
+            const posB = POSITION_ORDER.indexOf(b.position);
+            if (posA !== posB) return posA - posB;
+            return (b.age || 20) - (a.age || 20);
+          });
           const STAT_DEFS = [
             { key: 'batting.meet', name: 'ミート', get: (s) => s.batting?.meet || 0 },
             { key: 'batting.power', name: 'パワー', get: (s) => s.batting?.power || 0 },
