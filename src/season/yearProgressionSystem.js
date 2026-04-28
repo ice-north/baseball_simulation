@@ -960,10 +960,10 @@ const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 'steal'];
  */
 function getAgeGrowthBase(age, isPhysical) {
   if (isPhysical) {
-    // フィジカル: 18-22で大きく伸びる、23-27で微増、28以降は衰退
-    if (age <= 20) return 2.5;
-    if (age <= 22) return 1.8;
-    if (age <= 25) return 0.8;
+    // フィジカル: 18-22で伸びる、23-27で微増、28以降は衰退
+    if (age <= 20) return 1.5;
+    if (age <= 22) return 1.2;
+    if (age <= 25) return 0.6;
     if (age <= 28) return 0.1;
     if (age <= 31) return -0.5;
     if (age <= 34) return -1.2;
@@ -971,9 +971,9 @@ function getAgeGrowthBase(age, isPhysical) {
     return -3.0;
   } else {
     // 技術: 18-21で微増、22-26でよく伸びる、27-30で微増、31以降衰退
-    if (age <= 21) return 1.0;
-    if (age <= 24) return 2.2;
-    if (age <= 27) return 1.5;
+    if (age <= 21) return 0.5;
+    if (age <= 24) return 1.8;
+    if (age <= 27) return 1.2;
     if (age <= 30) return 0.3;
     if (age <= 33) return -0.3;
     if (age <= 36) return -1.0;
@@ -1722,23 +1722,25 @@ export function executeCampTraining(player, trainingType, newPitchType) {
   menu.targets.forEach(targetStat => {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
     const ageBase = getAgeGrowthBase(age, isPhysical);
-    const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
+    const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.10);
     const posBonus = getPositionGrowthBonus(player, targetStat);
     const boBonus = getBattingOrderGrowthBonus(player, targetStat);
     const expBonus = posBonus * boBonus;
 
+    // プロ経験が浅い選手は成長しにくい（環境適応に時間がかかる）
+    // experience 0→0.5倍、50→0.75倍、100→1.0倍、200以上→1.0倍
+    const rookieFactor = Math.min(1.0, 0.5 + (experience / 200));
+
     // 成長量を約1/9に抑制: (base + focus) * 0.11
-    // クリーンナップ(expBonus最大2.25)でも年間成長が過剰にならないよう基礎値を下げる
     const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
     const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-    // 能力ごとの成長倍率（メニュー側で指定可能、未指定なら1.0）
-    // 例: 打撃練習のパワー/選球眼は0.5倍（"ボールを飛ばすのは才能"）
     const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.11 * statMultiplier);
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.11 * statMultiplier * rookieFactor);
 
     // 覚醒判定（発生率を下げる: 従来の experience/10 → experience/15）
     // 覚醒は減衰を受けず、"何かのきっかけで飛躍する選手"を再現する大幅ボーナス
-    const awakeningChance = Math.floor(experience / 15);
+    // ただしプロ経験が浅い選手は覚醒しにくい
+    const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
     const isAwakening = Math.random() * 100 < awakeningChance;
     const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 6) + 3 : 0;
 
