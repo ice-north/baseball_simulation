@@ -1802,18 +1802,16 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     // experience 0→0.5倍、50→0.75倍、100→1.0倍、200以上→1.0倍
     const rookieFactor = Math.min(1.0, 0.5 + (experience / 200));
 
-    // 成長量を約1/9に抑制: (base + focus) * 0.11
+    // 成長量: (base + focus) * 0.10
     const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
     const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
     const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.11 * statMultiplier * rookieFactor);
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * rookieFactor);
 
-    // 覚醒判定（発生率を下げる: 従来の experience/10 → experience/15）
-    // 覚醒は減衰を受けず、"何かのきっかけで飛躍する選手"を再現する大幅ボーナス
-    // ただしプロ経験が浅い選手は覚醒しにくい
+    // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
     const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
     const isAwakening = Math.random() * 100 < awakeningChance;
-    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 6) + 3 : 0;
+    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
 
     const statPath = getStatPath(targetStat);
     if (statPath) {
