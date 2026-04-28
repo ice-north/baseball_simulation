@@ -1100,6 +1100,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                       <span>{getThrowsLabel(ph.throws)}{getBatsLabel(b.bats || ph.bats)}</span>
                       {p.form && <span>{getFormLabel(p.form)}</span>}
                       <span>{POSITION_NAMES[player.position]}</span>
+                      <button
+                        onClick={() => { onClose(); setPosConvertPlayer(player); }}
+                        className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-300 transition"
+                      >登録変更</button>
                       <div className="flex items-center gap-1 ml-auto">
                         <span className="text-[10px]">体力</span>
                         <div className="w-16 h-1.5 bg-gray-600 rounded-full overflow-hidden">
