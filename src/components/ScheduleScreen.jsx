@@ -480,6 +480,7 @@ const ScheduleScreen = ({
                   <tr className="border-b border-gray-700">
                     <th className="text-left py-3 text-lg">順位</th>
                     <th className="text-left py-3 text-lg">チーム</th>
+                    <th className="text-center py-3 text-lg">試</th>
                     <th className="text-center py-3 text-lg">勝</th>
                     <th className="text-center py-3 text-lg">敗</th>
                     <th className="text-center py-3 text-lg">分</th>
@@ -512,6 +513,7 @@ const ScheduleScreen = ({
                       <tr key={index} className={`border-b border-gray-700 ${index === 0 && lIsChampion ? 'bg-yellow-900/30' : ''}`}>
                         <td className="py-3 text-lg font-bold">{index + 1}</td>
                         <td className="py-3 text-lg font-bold">{team.team}</td>
+                        <td className="text-center py-3 text-lg">{team.gamesPlayed || ((team.wins || 0) + (team.losses || 0) + (team.draws || 0))}</td>
                         <td className="text-center py-3 text-lg">{team.wins}</td>
                         <td className="text-center py-3 text-lg">{team.losses}</td>
                         <td className="text-center py-3 text-lg">{team.draws}</td>

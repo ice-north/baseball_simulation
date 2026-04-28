@@ -406,6 +406,9 @@ export const updateStandings = (standings, gameResult) => {
 
   if (!homeTeam || !awayTeam) return standings;
 
+  homeTeam.gamesPlayed = (homeTeam.gamesPlayed || 0) + 1;
+  awayTeam.gamesPlayed = (awayTeam.gamesPlayed || 0) + 1;
+
   if (homeScore > awayScore) {
     homeTeam.wins++;
     awayTeam.losses++;

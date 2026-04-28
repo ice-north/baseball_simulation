@@ -2107,6 +2107,8 @@ export const autoSimulateDailyGames = (currentDate, allGames, setAllGames, setCa
       const awayTeam = updated.find(t => t.team === game.away);
 
       if (homeTeam && awayTeam) {
+        homeTeam.gamesPlayed = (homeTeam.gamesPlayed || 0) + 1;
+        awayTeam.gamesPlayed = (awayTeam.gamesPlayed || 0) + 1;
         if (game.homeScore > game.awayScore) {
           homeTeam.wins++;
           awayTeam.losses++;
