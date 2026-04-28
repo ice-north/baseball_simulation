@@ -715,7 +715,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
               ))}
               <span className="text-gray-600 mx-1">|</span>
               <span className="text-gray-500 text-xs font-bold">一括:</span>
-              {Object.entries(TRAINING_MENUS).filter(([k]) => !['newpitch'].includes(k)).map(([key, menu]) => (
+              {Object.entries(TRAINING_MENUS).filter(([k, m]) => !['newpitch'].includes(k) && !m.intensive).map(([key, menu]) => (
                 <button
                   key={key}
                   onClick={() => {
@@ -915,9 +915,14 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             <select
                               value={currentTraining}
                               onChange={(e) => setAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
-                              className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
+                              className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-32"
                             >
-                              {Object.entries(TRAINING_MENUS)
+                              {Object.entries(TRAINING_MENUS).filter(([, m]) => !m.intensive)
+                                .map(([key, menu]) => (
+                                <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                              ))}
+                              <option disabled>── 集中コース ──</option>
+                              {Object.entries(TRAINING_MENUS).filter(([, m]) => m.intensive)
                                 .map(([key, menu]) => (
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
@@ -1067,7 +1072,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             <span
                               key={gIdx}
                               className={`px-1.5 py-0 rounded text-[10px] leading-relaxed ${
-                                growth.isAwakening
+                                growth.isPenalty
+                                  ? 'bg-red-700/80 text-red-100'
+                                  : growth.isAwakening
                                   ? 'bg-yellow-500 text-black font-bold'
                                   : growth.growth > 0
                                     ? 'bg-green-700/80 text-green-100'
@@ -1076,7 +1083,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             >
                               {growth.statName}: {growth.before}→{growth.after}
                               {growth.growth > 0 && ` +${growth.growth}`}
+                              {growth.growth < 0 && ` ${growth.growth}`}
                               {growth.isAwakening && ' 覚醒!'}
+                              {growth.isPenalty && ' 代償'}
                             </span>
                           ))}
                           {result.growthReport.length === 0 && (
