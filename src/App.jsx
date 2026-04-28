@@ -1816,31 +1816,29 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             }
 
             if (Math.random() < stealAttempt) {
-              // 新しい成功率システム
-              // ステップ1: 走力による基本成功率（20%-80%）
-              const baseRate = 0.20 + runnerSpeed * 0.60;
-              
+              // 成功率システム
+              // ステップ1: 走力による基本成功率（30%-90%）
+              const baseRate = 0.30 + runnerSpeed * 0.60;
+
               // ステップ2: 各種補正
               const stealBonus = stealSkill * 0.15;  // 0-15%
               const velocityEffect = (pitchVelocity - 135) / 350;  // ±10%
               const controlEffect = pitcherControl * 0.05;  // 0-5%
-              
+
               const adjustedRate = baseRate + stealBonus - velocityEffect - controlEffect;
-              
-              // ステップ3: 捕手の肩による阻止（段階的・削減版）
+
+              // ステップ3: 捕手の肩による阻止（二乗スケール: 肩が弱いとほぼ刺せない）
+              const catcherArmSq = catcherArm * catcherArm;
               let catcherBlock;
               if (adjustedRate < 0.30) {
-                // 低成功率: 80%阻止
-                catcherBlock = adjustedRate * catcherArm * 0.80;
+                catcherBlock = adjustedRate * catcherArmSq * 0.80;
               } else if (adjustedRate > 0.60) {
-                // 高成功率: 35%阻止
-                catcherBlock = adjustedRate * catcherArm * 0.35;
+                catcherBlock = adjustedRate * catcherArmSq * 0.35;
               } else {
-                // 中間: 線形補間（80% → 35%）
                 const t = (adjustedRate - 0.30) / 0.30;
-                catcherBlock = adjustedRate * catcherArm * (0.80 - t * 0.45);
+                catcherBlock = adjustedRate * catcherArmSq * (0.80 - t * 0.45);
               }
-              
+
               const stealSuccess = Math.max(0.05, Math.min(0.95, adjustedRate - catcherBlock));
               
               if (Math.random() < stealSuccess) {
@@ -1912,28 +1910,29 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
     }
 
     if (Math.random() < stealThirdAttempt) {
-      // 新しい成功率システム（三塁盗塁は基本成功率が高い）
-      // ステップ1: 走力による基本成功率（30%-90%）
-      const baseRate = 0.30 + runnerSpeed * 0.60;
-      
+      // 三塁盗塁は基本成功率が高い
+      // ステップ1: 走力による基本成功率（40%-100%）
+      const baseRate = 0.40 + runnerSpeed * 0.60;
+
       // ステップ2: 各種補正
       const stealBonus = stealSkill * 0.12;  // 0-12%
       const velocityEffect = (pitchVelocity - 135) / 350;  // ±10%
       const controlEffect = pitcherControl * 0.04;  // 0-4%
-      
+
       const adjustedRate = baseRate + stealBonus - velocityEffect - controlEffect;
-      
-      // ステップ3: 捕手の肩による阻止（段階的・削減版）
+
+      // ステップ3: 捕手の肩による阻止（二乗スケール）
+              const catcherArmThirdSq = catcherArmForThird * catcherArmForThird;
               let catcherBlock;
               if (adjustedRate < 0.30) {
-                catcherBlock = adjustedRate * catcherArmForThird * 0.80;
+                catcherBlock = adjustedRate * catcherArmThirdSq * 0.80;
               } else if (adjustedRate > 0.60) {
-                catcherBlock = adjustedRate * catcherArmForThird * 0.35;
+                catcherBlock = adjustedRate * catcherArmThirdSq * 0.35;
               } else {
                 const t = (adjustedRate - 0.30) / 0.30;
-                catcherBlock = adjustedRate * catcherArmForThird * (0.80 - t * 0.45);
+                catcherBlock = adjustedRate * catcherArmThirdSq * (0.80 - t * 0.45);
               }
-              
+
               const stealThirdSuccess = Math.max(0.05, Math.min(0.95, adjustedRate - catcherBlock));
               
               if (Math.random() < stealThirdSuccess) {
