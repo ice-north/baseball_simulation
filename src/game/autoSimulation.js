@@ -720,13 +720,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
         // 走塁方針の効果
         const baseRunStrat = offenseTeam.strategy?.baseRunning || 'normal';
-        const stealThreshold = baseRunStrat === 'aggressive' ? 38 : baseRunStrat === 'conservative' ? 60 : 48;
-        const stealAggressMod = baseRunStrat === 'aggressive' ? 1.3 : baseRunStrat === 'conservative' ? 0.4 : 0.8;
+        const stealThreshold = baseRunStrat === 'aggressive' ? 45 : baseRunStrat === 'conservative' ? 65 : 55;
+        const stealAggressMod = baseRunStrat === 'aggressive' ? 1.1 : baseRunStrat === 'conservative' ? 0.3 : 0.6;
 
         // 盗塁を試みる条件
-        const shouldAttempt = runnerSpeed >= 52 && gameState.outs < 2 && successChance > stealThreshold;
+        const shouldAttempt = runnerSpeed >= 55 && gameState.outs < 2 && successChance > stealThreshold;
         // 走力が高いほど積極的に走る（方針で補正）
-        const aggressiveness = Math.random() * 100 < (runnerSpeed - 40) * 1.4 * stealAggressMod;
+        const aggressiveness = Math.random() * 100 < (runnerSpeed - 45) * 1.0 * stealAggressMod;
 
         if (shouldAttempt && aggressiveness) {
           const rand = Math.random() * 100;

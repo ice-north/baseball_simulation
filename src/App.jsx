@@ -1773,16 +1773,16 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           const pitchVelocity = result.velocity || pitcher.velocity;
           
           // 盗塁試行率
-          const stealSkillBonus = Math.pow(stealSkill, 1.5) * 0.25;  // 0-25%
-          const speedBonus = runnerSpeed * 0.03;  // 0-3%
-          const countBonus = newCount.balls >= 2 ? 0.02 : 0;  // 2%
-          const outsBonus = newOuts === 2 ? 0.01 : 0;  // 1%
+          const stealSkillBonus = Math.pow(stealSkill, 1.5) * 0.18;  // 0-18%
+          const speedBonus = runnerSpeed * 0.02;  // 0-2%
+          const countBonus = newCount.balls >= 2 ? 0.01 : 0;  // 1%
+          const outsBonus = 0;  // アウトカウントボーナス廃止
           
           // 二塁盗塁試行
           if (bases[0] && !bases[1]) {
             // 二塁盗塁は正面への送球なので左右ペナルティなし
             let catcherArm = defense.catcher.arm / 100;
-            let catcherDeterrent = catcherArm * 0.15;  // 捕手の肩による牽制効果 0-15%
+            let catcherDeterrent = catcherArm * 0.18;  // 捕手の肩による牽制効果 0-18%
             
             // 左投手は牽制ボーナス
             if (pitcher.throws === 'left') {
@@ -1878,14 +1878,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       catcherArmForThird = Math.max(0, catcherArmForThird - 0.20);  // -20%
     }
     
-    let catcherDeterrentThird = catcherArmForThird * 0.18;
+    let catcherDeterrentThird = catcherArmForThird * 0.22;
     
     // 左投手は牽制ボーナス
     if (pitcher.throws === 'left') {
       catcherDeterrentThird += 0.05;
     }
     
-    let stealThirdAttempt = Math.max(0, (stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrentThird) * 0.7);
+    let stealThirdAttempt = Math.max(0, (stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrentThird) * 0.5);
 
     // 監督AI：盗塁判断（Phase 3）
     if (autoManagerMode) {

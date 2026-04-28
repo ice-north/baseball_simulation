@@ -467,34 +467,34 @@ export function executeAutoStealingDecision(ctx, runner, situation) {
 
   const { scoreDiff, isCloseGame, outs, batterType, runnerSteal } = situation;
 
-  let stealMultiplier = 1.0;
+  let stealMultiplier = 0.7;  // ベース倍率を下げる
 
   if (isCloseGame) {
-    stealMultiplier *= 1.15;
-  } else if (scoreDiff >= 4) {
-    stealMultiplier *= 0.4;
-  }
-
-  if (outs === 0) {
     stealMultiplier *= 1.1;
-  } else if (outs === 2) {
-    stealMultiplier *= 0.5;
-  }
-
-  if (batterType === 'pitcher' || batterType === 'weak') {
-    stealMultiplier *= 1.3;
-  } else if (batterType === 'strong') {
+  } else if (scoreDiff >= 4) {
     stealMultiplier *= 0.3;
   }
 
-  if (runnerSteal >= 70) {
+  if (outs === 0) {
+    stealMultiplier *= 1.05;
+  } else if (outs === 2) {
+    stealMultiplier *= 0.4;
+  }
+
+  if (batterType === 'pitcher' || batterType === 'weak') {
     stealMultiplier *= 1.2;
-  } else if (runnerSteal < 40) {
+  } else if (batterType === 'strong') {
     stealMultiplier *= 0.2;
   }
 
-  if (inning >= 7 && isCloseGame) {
+  if (runnerSteal >= 70) {
     stealMultiplier *= 1.15;
+  } else if (runnerSteal < 40) {
+    stealMultiplier *= 0.15;
+  }
+
+  if (inning >= 7 && isCloseGame) {
+    stealMultiplier *= 1.1;
   }
 
   return stealMultiplier;
