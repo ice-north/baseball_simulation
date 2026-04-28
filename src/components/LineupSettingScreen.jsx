@@ -218,7 +218,18 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const handleRemoveFromLineup = (playerId) => {
     const entry = lineup.find(e => e.playerId === playerId);
     if (entry?.position === 'pitcher') {
-      alert('投手枠は外せません。投手を交換するには投手リストから別の投手を選択してください。');
+      // 投手枠は削除せず、次のローテーション投手と自動交換
+      const lineupPlayerIds = new Set(lineup.map(e => e.playerId));
+      const rotation = team.pitchingRotation;
+      const rotationPitchers = [...(rotation?.starters || []), ...(rotation?.relievers || [])];
+      const replacement = rotationPitchers.find(pid => pid !== playerId && !lineupPlayerIds.has(pid))
+        || team.players.find(p => p.position === 'pitcher' && p.id !== playerId && !lineupPlayerIds.has(p.id))?.id;
+      if (replacement) {
+        entry.playerId = replacement;
+        setUpdateTrigger(prev => prev + 1);
+      } else {
+        alert('交換できる投手がベンチにいません');
+      }
       return;
     }
     // splice で配列を直接変更（filter で新配列を作ると lineup 参照がずれてバグの原因になる）

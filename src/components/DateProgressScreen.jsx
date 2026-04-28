@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
+import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
@@ -175,21 +175,76 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return newData;
   };
 
-  const checkUserLineupComplete = () => {
+  const autoFillLineup = () => {
     const team = TEAMS_DATA[userTeamName];
     if (!team) return true;
     const settings = team.lineupSettings;
-    if (!settings || !settings.battingOrder || settings.battingOrder.length === 0) return false;
-    const validStarters = settings.battingOrder.filter(e => {
-      if (e.battingOrder < 1 || e.battingOrder > 9) return false;
-      return team.players.some(p => p.id === e.playerId);
-    });
-    return validStarters.length >= 9;
+    if (!settings) return false;
+    if (!settings.battingOrder) settings.battingOrder = [];
+    const lineup = settings.battingOrder;
+    const useDH = LEAGUE_SETTINGS.useDH;
+    const maxSlots = useDH ? 9 : 9;
+
+    // 存在しない選手のエントリを除去
+    for (let i = lineup.length - 1; i >= 0; i--) {
+      const e = lineup[i];
+      if (e.battingOrder >= 1 && e.battingOrder <= maxSlots && !team.players.some(p => p.id === e.playerId)) {
+        lineup.splice(i, 1);
+      }
+    }
+
+    const validStarters = lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= maxSlots);
+    if (validStarters.length >= maxSlots) return true;
+
+    // 空き打順を特定
+    const usedOrders = new Set(validStarters.map(e => e.battingOrder));
+    const missingOrders = [];
+    for (let i = 1; i <= maxSlots; i++) {
+      if (!usedOrders.has(i)) missingOrders.push(i);
+    }
+
+    const lineupPlayerIds = new Set(lineup.map(e => e.playerId));
+
+    // 投手枠がなければ自動追加（非DH制）
+    if (!useDH && !lineup.some(e => e.position === 'pitcher')) {
+      const rotation = team.pitchingRotation;
+      const starterId = rotation?.starters?.[0] || team.players.find(p => p.position === 'pitcher')?.id;
+      if (starterId && missingOrders.length > 0) {
+        const order = missingOrders.pop();
+        lineup.push({ playerId: starterId, position: 'pitcher', battingOrder: order });
+        lineupPlayerIds.add(starterId);
+      }
+    }
+
+    // 残りの空き枠をベンチ野手で補完
+    const fieldPositions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
+    const usedPositions = new Set(lineup.filter(e => e.position !== 'pitcher' && e.position !== 'dh').map(e => e.position));
+
+    for (const order of [...missingOrders]) {
+      const benchFielders = team.players.filter(p =>
+        p.position !== 'pitcher' && !lineupPlayerIds.has(p.id)
+      );
+      if (benchFielders.length === 0) break;
+      const player = benchFielders[0];
+      let pos = player.position;
+      if (usedPositions.has(pos)) {
+        const avail = fieldPositions.filter(fp => !usedPositions.has(fp));
+        pos = avail.length > 0 ? avail[0] : (useDH ? 'dh' : player.position);
+      }
+      usedPositions.add(pos);
+      lineup.push({ playerId: player.id, position: pos, battingOrder: order });
+      lineupPlayerIds.add(player.id);
+      missingOrders.shift();
+    }
+
+    lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+    const finalValid = lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= maxSlots);
+    return finalValid.length >= maxSlots;
   };
 
   const handleProgressDate = (days) => {
-    if ((currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS) && !checkUserLineupComplete()) {
-      alert('スタメンが9人揃っていません。ロスター管理で打順を設定してください。');
+    if ((currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS) && !autoFillLineup()) {
+      alert('スタメンを自動補完できませんでした。ロスター管理で打順を設定してください。');
       return;
     }
 
