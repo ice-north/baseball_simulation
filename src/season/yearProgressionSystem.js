@@ -1013,8 +1013,16 @@ export function applyAgeCurveChanges(allTeams) {
           const normalRandom = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
           const variance = normalRandom * 2.0;
 
+          // 才能依存の能力は年齢カーブでの成長も抑制（衰退方向は通常通り）
+          const AGE_TALENT_MULT = { arm: 0.5, speed: 0.6, power: 0.6, velocity: 0.5 };
+          const ageTalentMult = AGE_TALENT_MULT[stat] ?? 1.0;
+
           // 最終変動値（四捨五入、±0の場合もある）
-          let change = Math.round(base + variance);
+          let rawChange = base + variance;
+          // 成長方向のみ才能補正（衰退はそのまま）
+          let change = rawChange > 0
+            ? Math.round(rawChange * ageTalentMult)
+            : Math.round(rawChange);
 
           // 能力値を取得・更新
           const statPath = getStatPath(stat);
@@ -1023,10 +1031,12 @@ export function applyAgeCurveChanges(allTeams) {
           const currentValue = getNestedValue(updatedPlayer, statPath);
           if (currentValue == null) return;
 
-          // 球速は変動幅を2倍に（スケールが大きいため）
-          if (stat === 'velocity') change = Math.round((base + variance) * 1.5);
-          // スタミナも変動幅を2倍
-          if (stat === 'stamina') change = Math.round((base + variance) * 1.5);
+          // 球速は変動幅を1.5倍に（スケールが大きいため）
+          if (stat === 'velocity') change = rawChange > 0
+            ? Math.round(rawChange * 1.5 * ageTalentMult)
+            : Math.round(rawChange * 1.5);
+          // スタミナも変動幅を1.5倍
+          if (stat === 'stamina') change = Math.round(rawChange * 1.5);
 
           const newValue = Math.max(1, currentValue + change);
 
@@ -1803,15 +1813,25 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const rookieFactor = Math.min(1.0, 0.5 + (experience / 200));
 
     // 成長量: (base + focus) * 0.10
+    // 才能依存の能力は練習だけでは伸びにくい（グローバル補正）
+    const TALENT_STAT_MULTIPLIERS = {
+      arm: 0.5,       // 肩力: 生まれ持った体格に依存
+      speed: 0.6,     // 走力: 先天的な筋繊維に依存
+      power: 0.6,     // パワー: 体格・筋力の素質に依存
+      velocity: 0.5,  // 球速: 身体能力の限界に依存
+    };
     const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
     const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
     const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * rookieFactor);
+    const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * talentMult * rookieFactor);
 
     // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
     const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
     const isAwakening = Math.random() * 100 < awakeningChance;
-    const awakeningGrowth = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
+    // 才能依存の能力は覚醒量も抑制
+    const rawAwakening = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
+    const awakeningGrowth = isAwakening ? Math.max(1, Math.round(rawAwakening * talentMult)) : 0;
 
     const statPath = getStatPath(targetStat);
     if (statPath) {

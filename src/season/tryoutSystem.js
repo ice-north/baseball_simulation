@@ -468,8 +468,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
   // 年齢補正: 18歳を基準に、年齢が上がるほど即戦力（大卒・社会人の実力差を反映）
-  // 18=0, 19=+2, 20=+5, 21=+8, 22=+12, 23=+16, 24=+20, 25=+24
-  const ageBonus = Math.max(0, Math.round((age - 18) * (age - 18) * 0.5 + (age - 18) * 1.5));
+  // 二次曲線だが+22でキャップ（24-25歳で個性がなくなるのを防止）
+  const ageBonus = Math.min(22, Math.max(0, Math.round((age - 18) * (age - 18) * 0.5 + (age - 18) * 1.5)));
 
   // バラつき付きランダム生成（能力値用、10-99制限）
   const randRangeWithVariance = (min, max, bonus = ageBonus) => {
