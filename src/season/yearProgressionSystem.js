@@ -1014,7 +1014,7 @@ export function applyAgeCurveChanges(allTeams) {
           const variance = normalRandom * 2.0;
 
           // 才能依存の能力は年齢カーブでの成長も抑制（衰退方向は通常通り）
-          const AGE_TALENT_MULT = { arm: 0.5, speed: 0.6, power: 0.6, velocity: 0.5 };
+          const AGE_TALENT_MULT = { arm: 0.5, speed: 0.6, power: 0.8, velocity: 0.8 };
           const ageTalentMult = AGE_TALENT_MULT[stat] ?? 1.0;
 
           // 最終変動値（四捨五入、±0の場合もある）
@@ -1817,8 +1817,8 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const TALENT_STAT_MULTIPLIERS = {
       arm: 0.5,       // 肩力: 生まれ持った体格に依存
       speed: 0.6,     // 走力: 先天的な筋繊維に依存
-      power: 0.6,     // パワー: 体格・筋力の素質に依存
-      velocity: 0.5,  // 球速: 身体能力の限界に依存
+      power: 0.8,     // パワー: 筋力トレーニングで伸びる余地あり
+      velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
     };
     const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
     const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
