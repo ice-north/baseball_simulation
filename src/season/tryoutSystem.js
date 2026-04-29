@@ -357,6 +357,14 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       },
       traits: playerTraits, // 選手の特性を保存
       scoutComment: null, // 後でgenerateScoutCommentで設定
+      // 隠し成長力: 正規分布（平均1.0、標準偏差0.2）で個人差
+      // 0.5〜1.5の範囲、一部の選手だけが大きく伸びる
+      growthPotential: (() => {
+        const u1 = Math.random() || 0.001;
+        const u2 = Math.random();
+        const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        return Math.max(0.5, Math.min(1.5, 1.0 + normal * 0.2));
+      })(),
       positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
       professionalCareer: {
         isDrafted: false,
@@ -1180,6 +1188,21 @@ function traitCommentMatches(trait, player) {
  */
 export function generateScoutComment(player) {
   const traits = player.traits || [];
+  const gp = player.growthPotential || 1.0;
+
+  // 成長力に応じた追加コメント（確率で付与、高すぎ/低すぎ以外は控えめ）
+  let potentialSuffix = '';
+  if (gp >= 1.35) {
+    potentialSuffix = ['素材としては今年の目玉。大化けの予感がする。', '練習での吸収力が飛び抜けている。将来のスター候補だ。', 'ダイヤの原石。磨けばリーグを代表する選手になれる。'][Math.floor(Math.random() * 3)];
+  } else if (gp >= 1.2) {
+    potentialSuffix = Math.random() < 0.7 ? ['伸びしろは十分。成長次第で主力に化ける。', '練習への取り組み方を見ると、まだまだ伸びる印象だ。'][Math.floor(Math.random() * 2)] : '';
+  } else if (gp <= 0.65) {
+    potentialSuffix = Math.random() < 0.7 ? ['ただ、現状の能力がほぼ天井かもしれない。', '伸びしろという点では少し物足りない印象だ。'][Math.floor(Math.random() * 2)] : '';
+  } else if (gp <= 0.8) {
+    potentialSuffix = Math.random() < 0.4 ? '大きな成長を期待するより、即戦力として計算したい。' : '';
+  }
+
+  const addSuffix = (comment) => potentialSuffix ? comment + potentialSuffix : comment;
 
   // 二刀流選手は専用コメントを生成
   if (player.isTwoWay) {
@@ -1196,10 +1219,10 @@ export function generateScoutComment(player) {
         'マウンドでの投球も魅力だが、打席での対応力が非凡。投打両面での活躍が期待できる。',
         '投手能力に加え、野手としてのポテンシャルも秘めている。使い方次第で大きな戦力になる。',
       ];
-      if (v >= 145 && meet >= 45) return '速球派の投手でありながら打撃もプロ級。二刀流の逸材と言っていい。';
-      if (v >= 140) return pitcherTwoWayComments[Math.floor(Math.random() * pitcherTwoWayComments.length)];
-      if (meet >= 50 || power >= 45) return '投手としてはまだ発展途上だが、打撃の良さは光る。野手転向も視野に入る素材だ。';
-      return pitcherTwoWayComments[Math.floor(Math.random() * pitcherTwoWayComments.length)];
+      if (v >= 145 && meet >= 45) return addSuffix('速球派の投手でありながら打撃もプロ級。二刀流の逸材と言っていい。');
+      if (v >= 140) return addSuffix(pitcherTwoWayComments[Math.floor(Math.random() * pitcherTwoWayComments.length)]);
+      if (meet >= 50 || power >= 45) return addSuffix('投手としてはまだ発展途上だが、打撃の良さは光る。野手転向も視野に入る素材だ。');
+      return addSuffix(pitcherTwoWayComments[Math.floor(Math.random() * pitcherTwoWayComments.length)]);
     } else {
       const fielderTwoWayComments = [
         '野手としての打力が武器だが、マウンドに上がれば投手としても通用する腕を持っている。',
@@ -1207,9 +1230,9 @@ export function generateScoutComment(player) {
         '打って投げて走れる万能型。投手としての起用も計算に入れられる貴重な存在だ。',
         '野手能力の高さに加え、投手経験も豊富。チーム事情に応じて柔軟に起用できる。',
       ];
-      if (v >= 140 && (meet >= 50 || power >= 50)) return '打撃も投球も高水準。投手と野手、どちらでも一軍で勝負できる二刀流の逸材だ。';
-      if (speed >= 55) return fielderTwoWayComments[2];
-      return fielderTwoWayComments[Math.floor(Math.random() * fielderTwoWayComments.length)];
+      if (v >= 140 && (meet >= 50 || power >= 50)) return addSuffix('打撃も投球も高水準。投手と野手、どちらでも一軍で勝負できる二刀流の逸材だ。');
+      if (speed >= 55) return addSuffix(fielderTwoWayComments[2]);
+      return addSuffix(fielderTwoWayComments[Math.floor(Math.random() * fielderTwoWayComments.length)]);
     }
   }
 
@@ -1217,7 +1240,7 @@ export function generateScoutComment(player) {
   for (const trait of traits) {
     const templates = SCOUT_COMMENT_TEMPLATES[trait];
     if (templates && traitCommentMatches(trait, player)) {
-      return templates[Math.floor(Math.random() * templates.length)];
+      return addSuffix(templates[Math.floor(Math.random() * templates.length)]);
     }
   }
 
@@ -1229,13 +1252,13 @@ export function generateScoutComment(player) {
     const s = player.pitching?.stamina || 60;
     const arsenal = player.pitching?.arsenal || [];
     const breakingBallCount = arsenal.filter(a => a.type !== 'straight').length;
-    if (v >= 145 && c < 58) return '球速は魅力。制球が安定すれば打者を抑えられる素材だ。';
-    if (v >= 145) return '球速は及第点以上。変化球と制球の精度次第で戦力になれる。';
-    if (c >= 60 && v < 135) return '丁寧なピッチングができる。球威が増せば面白い存在になれる。';
-    if (c >= 60) return '球の散らばりが少ない。持ち味を活かせば計算できる投手だ。';
-    if (s >= 90) return '長いイニングを任せられる体力がある。技術を磨けばローテに入れる。';
-    if (breakingBallCount >= 3) return '変化球の引き出しは多い。制球が整えば打者を翻弄できる。';
-    return '平均的な能力だが、真摯に練習に取り組む姿勢が見えた。伸びしろに期待する。';
+    if (v >= 145 && c < 58) return addSuffix('球速は魅力。制球が安定すれば打者を抑えられる素材だ。');
+    if (v >= 145) return addSuffix('球速は及第点以上。変化球と制球の精度次第で戦力になれる。');
+    if (c >= 60 && v < 135) return addSuffix('丁寧なピッチングができる。球威が増せば面白い存在になれる。');
+    if (c >= 60) return addSuffix('球の散らばりが少ない。持ち味を活かせば計算できる投手だ。');
+    if (s >= 90) return addSuffix('長いイニングを任せられる体力がある。技術を磨けばローテに入れる。');
+    if (breakingBallCount >= 3) return addSuffix('変化球の引き出しは多い。制球が整えば打者を翻弄できる。');
+    return addSuffix('平均的な能力だが、真摯に練習に取り組む姿勢が見えた。伸びしろに期待する。');
   } else {
     const meet = player.batting?.meet || 0;
     const power = player.batting?.power || 0;
@@ -1244,13 +1267,13 @@ export function generateScoutComment(player) {
     const defense = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
     const maxStat = Math.max(meet, power, eye, speed, defense, arm);
-    if (maxStat === speed && speed >= 50) return '俊足が光る。守備範囲を広げて打撃を磨けば戦力になれる。';
-    if (maxStat === meet && meet >= 45) return 'バットコントロールがある。打撃の精度を磨けば計算できる選手だ。';
-    if (maxStat === power && power >= 40) return '打球の飛距離は魅力的。当てる技術が身につけば大きな武器になる。';
-    if (maxStat === eye && eye >= 50) return '選球眼に光るものがある。出塁率を稼げる打者に育てたい。';
-    if (maxStat === defense && defense >= 50) return '守備の安定感がある。攻撃面を鍛えれば即戦力に近づける。';
-    if (maxStat === arm && arm >= 50) return '肩の強さが光る。守備位置の適性を活かして育てたい。';
-    return '全体的に粗削りだが、真面目な取り組みが見えた。時間をかけて育てたい素材だ。';
+    if (maxStat === speed && speed >= 50) return addSuffix('俊足が光る。守備範囲を広げて打撃を磨けば戦力になれる。');
+    if (maxStat === meet && meet >= 45) return addSuffix('バットコントロールがある。打撃の精度を磨けば計算できる選手だ。');
+    if (maxStat === power && power >= 40) return addSuffix('打球の飛距離は魅力的。当てる技術が身につけば大きな武器になる。');
+    if (maxStat === eye && eye >= 50) return addSuffix('選球眼に光るものがある。出塁率を稼げる打者に育てたい。');
+    if (maxStat === defense && defense >= 50) return addSuffix('守備の安定感がある。攻撃面を鍛えれば即戦力に近づける。');
+    if (maxStat === arm && arm >= 50) return addSuffix('肩の強さが光る。守備位置の適性を活かして育てたい。');
+    return addSuffix('全体的に粗削りだが、真面目な取り組みが見えた。時間をかけて育てたい素材だ。');
   }
 }
 
