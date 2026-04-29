@@ -5,6 +5,24 @@ import { POSITION_NAMES } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
 
+function getCampCoachComment(player, round) {
+  if (round < 2) return null;
+  const gp = player.growthPotential ?? 1.0;
+  if (gp >= 1.3 && Math.random() < 0.6) {
+    return { text: ['吸収が早い', '伸びが凄い', '手応え十分'][Math.floor(Math.random() * 3)], color: 'text-yellow-400' };
+  }
+  if (gp >= 1.15 && Math.random() < 0.4) {
+    return { text: ['順調に伸びている', '良い成長を見せている'][Math.floor(Math.random() * 2)], color: 'text-green-400' };
+  }
+  if (gp <= 0.7 && Math.random() < 0.5) {
+    return { text: ['伸び悩みか…', '壁にぶつかっている'][Math.floor(Math.random() * 2)], color: 'text-gray-500' };
+  }
+  if (gp <= 0.85 && Math.random() < 0.3) {
+    return { text: '現状維持が精一杯か', color: 'text-gray-500' };
+  }
+  return null;
+}
+
 // 練習プリセット定義（各選手のポジション・能力を見て個別にメニューを割り振る）
 const CAMP_PRESETS = {
   weakness: {
@@ -1056,12 +1074,17 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     const posB = POSITION_ORDER.indexOf(b.player.position);
                     if (posA !== posB) return posA - posB;
                     return (b.player.age || 20) - (a.player.age || 20);
-                  }).map((result, idx) => (
+                  }).map((result, idx) => {
+                    const coachComment = getCampCoachComment(result.player, currentRound);
+                    return (
                     <tr key={idx} className="border-b border-gray-700/50">
                       <td className="py-1 px-2">
                         <span className={`font-bold ${isPitcher(result.player) ? 'text-red-400' : 'text-blue-300'}`}>
                           {result.player.name}
                         </span>
+                        {coachComment && (
+                          <div className={`text-[9px] ${coachComment.color}`}>📋{coachComment.text}</div>
+                        )}
                       </td>
                       <td className="py-1 px-2 text-gray-500 text-[10px]">
                         {TRAINING_MENUS[result.trainingType]?.icon} {TRAINING_MENUS[result.trainingType]?.name}
@@ -1125,7 +1148,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
