@@ -213,38 +213,64 @@ function generateTrainingSuggestions(team) {
     }
   }
 
-  // 2. 新球種提案（フォーム適性のある未習得球種）
-  for (const p of pitchers) {
-    const arsenal = (p.pitching?.arsenal || []).map(a => a.type);
-    const breakingCount = arsenal.filter(t => t !== 'straight').length;
-    if (breakingCount >= 4) continue;
-    const form = p.pitching?.form || 'threeQuarter';
-    const affinityPitches = FORM_PITCH_AFFINITY[form] || {};
-    const candidates = Object.entries(affinityPitches)
-      .filter(([type]) => !arsenal.includes(type))
-      .sort((a, b) => b[1].affinity - a[1].affinity);
-    if (candidates.length > 0) {
-      const [pitchType, info] = candidates[0];
-      const formNames = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
-      suggestions.push({
-        playerId: p.id, type: 'newpitch',
-        text: `${p.name}は${formNames[form] || form}投げ。${getPitchTypeName(pitchType)}はフォームとの相性◎で習得しやすい。`,
-        mainMenu: 'newpitch', subMenu: 'breaking',
-        extra: { pitchType },
-      });
+  // 2. 高ポテンシャル選手の集中育成提案
+  for (const p of players) {
+    const gp = (p.growthPotential ?? 1.0) + (p.growthModifier || 0);
+    if (gp < 1.2) continue;
+    if (p.position === 'pitcher') {
+      const v = p.pitching?.velocity || 130;
+      const c = p.pitching?.control || 50;
+      if (v < 145) {
+        suggestions.push({
+          playerId: p.id, type: 'potential',
+          text: `${p.name}は吸収力が高い。今のうちに球速を集中的に伸ばせば大きな武器になる。`,
+          mainMenu: 'intensive_velocity', subMenu: 'running',
+          extra: {},
+        });
+      } else if (c < 55) {
+        suggestions.push({
+          playerId: p.id, type: 'potential',
+          text: `${p.name}は練習の吸収が早い。制球を重点的に鍛えれば一気にエース級になれる。`,
+          mainMenu: 'intensive_control', subMenu: 'stretch',
+          extra: {},
+        });
+      }
+    } else {
+      const meet = p.batting?.meet || 0;
+      const power = p.batting?.power || 0;
+      if (power < 45) {
+        suggestions.push({
+          playerId: p.id, type: 'potential',
+          text: `${p.name}は伸びしろが大きい。パワーを集中的に鍛えれば長距離砲に化ける。`,
+          mainMenu: 'intensive_power', subMenu: 'muscle',
+          extra: {},
+        });
+      } else if (meet < 40) {
+        suggestions.push({
+          playerId: p.id, type: 'potential',
+          text: `${p.name}は成長力が高い。ミートを集中強化すれば打線の柱に育つ。`,
+          mainMenu: 'intensive_meet', subMenu: 'stretch',
+          extra: {},
+        });
+      }
     }
   }
 
-  // 3. 球種が少ない投手への提案
-  for (const p of pitchers) {
-    const arsenal = (p.pitching?.arsenal || []).map(a => a.type);
-    const breakingCount = arsenal.filter(t => t !== 'straight').length;
-    if (breakingCount <= 1) {
-      if (suggestions.find(s => s.playerId === p.id && s.type === 'newpitch')) continue;
+  // 3. 疲労酷使からの回復提案
+  for (const p of players) {
+    const gm = p.growthModifier || 0;
+    if (gm <= -0.10) {
       suggestions.push({
-        playerId: p.id, type: 'newpitch',
-        text: `${p.name}は変化球が${breakingCount}種のみ。球種を増やせば投球の幅が大きく広がる。`,
-        mainMenu: 'newpitch', subMenu: 'breaking',
+        playerId: p.id, type: 'fatigue_recovery',
+        text: `${p.name}は昨季の酷使で身体に負担が残っている。ストレッチで回復を最優先にすべきだ。`,
+        mainMenu: p.position === 'pitcher' ? 'control' : 'batting', subMenu: 'stretch',
+        extra: {},
+      });
+    } else if (gm <= -0.05) {
+      suggestions.push({
+        playerId: p.id, type: 'fatigue_recovery',
+        text: `${p.name}は昨季の疲れが抜けきっていない。身体のケアも意識した練習を。`,
+        mainMenu: p.position === 'pitcher' ? 'stamina' : 'batting', subMenu: 'running',
         extra: {},
       });
     }
@@ -445,6 +471,80 @@ function generateTrainingSuggestions(team) {
     }
   }
 
+  // 17. 制球はあるが球速が低い投手（技巧派への提案）
+  for (const p of pitchers) {
+    const v = p.pitching?.velocity || 130;
+    const c = p.pitching?.control || 50;
+    if (c >= 55 && v < 135) {
+      suggestions.push({
+        playerId: p.id, type: 'craft',
+        text: `${p.name}は制球${c}で丁寧に投げられる。変化球の精度を上げて技巧派として磨き上げたい。`,
+        mainMenu: 'control', subMenu: 'breaking',
+        extra: {},
+      });
+    }
+  }
+
+  // 18. 走力が高い内野手 → 盗塁強化
+  const infielders = fielders.filter(p => ['second', 'shortstop', 'third'].includes(p.position));
+  for (const p of infielders) {
+    const speed = p.physical?.speed || 0;
+    const steal = p.batting?.steal || 0;
+    if (speed >= 50 && steal >= 30 && steal < 55) {
+      suggestions.push({
+        playerId: p.id, type: 'steal_upgrade',
+        text: `${p.name}は走力${speed}に加え盗塁センスもある。走塁を極めればリーグ屈指の脚になる。`,
+        mainMenu: 'baserunning', subMenu: 'running',
+        extra: {},
+      });
+    }
+  }
+
+  // 19. 守備は良いが打撃が物足りない野手
+  for (const p of fielders) {
+    const def = p.fielding?.defense || 0;
+    const meet = p.batting?.meet || 0;
+    const power = p.batting?.power || 0;
+    if (def >= 50 && meet < 35 && power < 35) {
+      suggestions.push({
+        playerId: p.id, type: 'bat_improve',
+        text: `${p.name}は守備${def}で堅実だが打撃が弱い。打撃練習でレギュラー争いに名乗りを上げたい。`,
+        mainMenu: 'batting', subMenu: 'muscle',
+        extra: {},
+      });
+    }
+  }
+
+  // 20. 若手投手のスタミナ＋球速の総合育成
+  for (const p of pitchers) {
+    const v = p.pitching?.velocity || 130;
+    const stamina = p.pitching?.stamina || 80;
+    const age = p.age || 20;
+    if (age <= 22 && v >= 140 && stamina < 80) {
+      suggestions.push({
+        playerId: p.id, type: 'young_pitcher',
+        text: `${p.name}は${v}km/hの速球が武器だが体力${stamina}が不安。スタミナを付ければ先発として計算できる。`,
+        mainMenu: 'stamina', subMenu: 'running',
+        extra: {},
+      });
+    }
+  }
+
+  // 21. ミートもパワーも高い野手 → 選球眼で完成形に
+  for (const p of fielders) {
+    const meet = p.batting?.meet || 0;
+    const power = p.batting?.power || 0;
+    const eye = p.batting?.eye || 0;
+    if (meet >= 50 && power >= 45 && eye < 40) {
+      suggestions.push({
+        playerId: p.id, type: 'eye_upgrade',
+        text: `${p.name}はミート${meet}・パワー${power}と打撃は一級品。選球眼を磨けば手がつけられなくなる。`,
+        mainMenu: 'eye', subMenu: 'eye',
+        extra: {},
+      });
+    }
+  }
+
   // 同一選手の重複を除く（最初の提案のみ残す）
   const seen = new Set();
   const deduped = suggestions.filter(s => {
@@ -454,7 +554,7 @@ function generateTrainingSuggestions(team) {
   });
 
   // 優先度順にソート
-  const priority = { convert: 0, twoway: 1, newpitch: 2, breaking_lv: 3, switch_hit: 4, clead: 5, form_change: 6, velocity: 7, stamina: 8, defense: 9, baserun: 10, eye: 11, arm: 12, power: 13, veteran: 14 };
+  const priority = { convert: 0, fatigue_recovery: 1, twoway: 2, potential: 3, breaking_lv: 4, switch_hit: 5, clead: 6, form_change: 7, velocity: 8, stamina: 9, defense: 10, baserun: 11, eye: 12, arm: 13, power: 14, craft: 15, steal_upgrade: 16, bat_improve: 17, young_pitcher: 18, eye_upgrade: 19, veteran: 20 };
   deduped.sort((a, b) => (priority[a.type] ?? 99) - (priority[b.type] ?? 99));
   return deduped.slice(0, 12);
 }
@@ -779,8 +879,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     {suggestions.map((s, idx) => {
                       const typeColors = {
                         convert: 'border-green-700/60 bg-green-950/40',
+                        fatigue_recovery: 'border-red-700/60 bg-red-950/40',
                         twoway: 'border-amber-700/60 bg-amber-950/40',
-                        newpitch: 'border-blue-700/60 bg-blue-950/40',
+                        potential: 'border-yellow-700/60 bg-yellow-950/40',
                         breaking_lv: 'border-blue-700/60 bg-blue-950/40',
                         switch_hit: 'border-orange-700/60 bg-orange-950/40',
                         clead: 'border-cyan-700/60 bg-cyan-950/40',
@@ -792,19 +893,26 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         eye: 'border-indigo-700/60 bg-indigo-950/40',
                         arm: 'border-rose-700/60 bg-rose-950/40',
                         power: 'border-orange-700/60 bg-orange-950/40',
+                        craft: 'border-violet-700/60 bg-violet-950/40',
+                        steal_upgrade: 'border-emerald-700/60 bg-emerald-950/40',
+                        bat_improve: 'border-sky-700/60 bg-sky-950/40',
+                        young_pitcher: 'border-teal-700/60 bg-teal-950/40',
+                        eye_upgrade: 'border-indigo-700/60 bg-indigo-950/40',
                         veteran: 'border-gray-600/60 bg-gray-800/40',
                       };
                       const typeIcons = {
-                        convert: '🔄', twoway: '⚾', newpitch: '✨', breaking_lv: '🌀',
-                        switch_hit: '↔️', clead: '🧠', form_change: '⚡', velocity: '🔥',
-                        stamina: '💪', defense: '🧤', baserun: '🏃', eye: '👁️',
-                        arm: '💪', power: '💥', veteran: '🧘',
+                        convert: '🔄', fatigue_recovery: '🏥', twoway: '⚾', potential: '🌟',
+                        breaking_lv: '🌀', switch_hit: '↔️', clead: '🧠', form_change: '⚡',
+                        velocity: '🔥', stamina: '💪', defense: '🧤', baserun: '🏃', eye: '👁️',
+                        arm: '💪', power: '💥', craft: '🎯', steal_upgrade: '💨',
+                        bat_improve: '🏏', young_pitcher: '🌱', eye_upgrade: '👁️', veteran: '🧘',
                       };
                       const typeLabels = {
-                        convert: 'コンバート', twoway: '二刀流', newpitch: '新球種', breaking_lv: '変化球強化',
-                        switch_hit: '打席変更', clead: 'Cリード', form_change: 'フォーム改造', velocity: '球速強化',
-                        stamina: 'スタミナ', defense: '守備強化', baserun: '走塁', eye: '選球眼',
-                        arm: '肩力強化', power: 'パワー', veteran: '身体ケア',
+                        convert: 'コンバート', fatigue_recovery: '疲労回復', twoway: '二刀流', potential: '素材育成',
+                        breaking_lv: '変化球強化', switch_hit: '打席変更', clead: 'Cリード', form_change: 'フォーム改造',
+                        velocity: '球速強化', stamina: 'スタミナ', defense: '守備強化', baserun: '走塁', eye: '選球眼',
+                        arm: '肩力強化', power: 'パワー', craft: '技巧派', steal_upgrade: '盗塁強化',
+                        bat_improve: '打撃改善', young_pitcher: '若手育成', eye_upgrade: '選球眼', veteran: '身体ケア',
                       };
                       return (
                         <div key={idx} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${typeColors[s.type] || 'border-gray-700 bg-gray-800'}`}>
