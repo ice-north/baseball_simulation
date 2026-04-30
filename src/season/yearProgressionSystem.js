@@ -1850,7 +1850,20 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const boBonus = getBattingOrderGrowthBonus(player, targetStat);
     const expBonus = posBonus * boBonus;
 
-    // 成長量: (base + focus) * 0.10
+    // 技術系は経験で伸びる、フィジカル系は若さで伸びる
+    let aptitudeFactor = 1.0;
+    if (isPhysical) {
+      // フィジカル: 若いほど鍛えやすい
+      if (age <= 20) aptitudeFactor = 1.3;
+      else if (age <= 23) aptitudeFactor = 1.1;
+      else if (age <= 26) aptitudeFactor = 1.0;
+      else if (age <= 29) aptitudeFactor = 0.8;
+      else aptitudeFactor = 0.6;
+    } else {
+      // 技術系: 経験が生きる
+      aptitudeFactor = Math.min(1.2, 0.7 + (experience / 300));
+    }
+
     // 才能依存の能力は練習だけでは伸びにくい（グローバル補正）
     const TALENT_STAT_MULTIPLIERS = {
       arm: 0.5,       // 肩力: 生まれ持った体格に依存
@@ -1863,7 +1876,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
     const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * talentMult * potential);
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * talentMult * potential * aptitudeFactor);
 
     // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
     const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
