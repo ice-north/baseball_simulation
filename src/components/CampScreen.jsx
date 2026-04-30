@@ -854,6 +854,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-2 text-left w-20">選手</th>
                     <th className="py-1.5 px-1 text-center w-7">位</th>
                     <th className="py-1.5 px-1 text-center w-6">齢</th>
+                    <th className="py-1.5 px-1 text-center w-10" title="成長率 (基礎+変動)">成長</th>
                     <th className="py-1.5 px-1 text-center w-8">投/打</th>
                     <th className="py-1.5 px-1 text-center w-12">フォーム</th>
                     <th className="py-1.5 px-1 text-center w-7">ミ</th>
@@ -899,6 +900,19 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
                         </td>
                         <td className="py-1 px-1 text-center text-gray-500 text-[10px]">{player.age || 20}</td>
+                        <td className="py-1 px-1 text-center text-[10px]">
+                          {(() => {
+                            const base = player.growthPotential ?? 1.0;
+                            const mod = player.growthModifier || 0;
+                            const effective = Math.max(0.3, Math.min(1.8, base + mod));
+                            const color = effective >= 1.3 ? 'text-yellow-400' : effective >= 1.1 ? 'text-green-400' : effective <= 0.7 ? 'text-red-400' : effective <= 0.9 ? 'text-orange-400' : 'text-gray-400';
+                            return (
+                              <span className={color} title={`基礎:${base.toFixed(2)} 変動:${mod >= 0 ? '+' : ''}${mod.toFixed(2)}`}>
+                                {effective.toFixed(2)}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="py-1 px-1 text-center text-[10px]">
                           <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>{ph.throws === 'left' ? '左' : '右'}</span>
                           <span className="text-gray-600">/</span>
