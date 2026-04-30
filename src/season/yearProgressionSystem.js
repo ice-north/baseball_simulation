@@ -860,6 +860,43 @@ export function recordAwardsToPlayers(allTeams, awards) {
 };
 
 /**
+ * 成長率変動の更新（シーズン終了時に呼び出し）
+ * - 疲労酷使: 高疲労で出場し続けた選手は成長率ダウン
+ * - 優勝経験: 優勝チーム全員+0.05
+ */
+export function updateGrowthModifiers(allTeams, awards) {
+  const championTeam = awards?.champion;
+
+  Object.entries(allTeams).forEach(([teamName, team]) => {
+    if (!team.players) return;
+    const isChampion = teamName === championTeam;
+
+    team.players.forEach(player => {
+      let modifier = player.growthModifier || 0;
+
+      const fatigue = player.fatigue || 0;
+      const battingGames = player.seasonStats?.batting?.games || 0;
+      const pitchingGames = player.seasonStats?.pitching?.games || 0;
+      const totalGames = Math.max(battingGames, pitchingGames);
+
+      if (fatigue >= 120 && totalGames >= 40) {
+        modifier -= 0.15;
+      } else if (fatigue >= 100 && totalGames >= 35) {
+        modifier -= 0.10;
+      } else if (fatigue >= 80 && totalGames >= 30) {
+        modifier -= 0.05;
+      }
+
+      if (isChampion) {
+        modifier += 0.05;
+      }
+
+      player.growthModifier = Math.round(modifier * 100) / 100;
+    });
+  });
+}
+
+/**
  * 次年度への完全移行
  * @param {Object} seasonData - 現在のシーズンデータ
  * @param {Object} allTeams - 全チームデータ
@@ -871,6 +908,9 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 2. タイトルを選手に記録
   let updatedTeams = recordAwardsToPlayers(allTeams, awards);
+
+  // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
+  updateGrowthModifiers(updatedTeams, awards);
 
   // 3. シーズン統計を通算に加算してリセット
   updatedTeams = resetSeasonStats(updatedTeams, seasonData.year);
@@ -1017,7 +1057,7 @@ export function applyAgeCurveChanges(allTeams) {
           const AGE_TALENT_MULT = { arm: 0.5, speed: 0.6, power: 0.8, velocity: 0.8 };
           const ageTalentMult = AGE_TALENT_MULT[stat] ?? 1.0;
 
-          const potential = player.growthPotential ?? 1.0;
+          const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
           // 最終変動値（四捨五入、±0の場合もある）
           let rawChange = base + variance;
           // 成長方向のみ才能補正+成長ポテンシャル（衰退はそのまま）
@@ -1827,7 +1867,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
     const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
-    const potential = player.growthPotential ?? 1.0;
+    const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
     const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * talentMult * rookieFactor * potential);
 
     // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）

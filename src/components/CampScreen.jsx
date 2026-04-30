@@ -7,7 +7,21 @@ const MAX_CAMP_ROUNDS = 4;
 
 function getCampCoachComment(player, round) {
   if (round < 2) return null;
-  const gp = player.growthPotential ?? 1.0;
+  const gp = (player.growthPotential ?? 1.0) + (player.growthModifier || 0);
+  const gm = player.growthModifier || 0;
+
+  // 疲労酷使による低下を優先表示
+  if (gm <= -0.10 && Math.random() < 0.7) {
+    return { text: ['昨季の疲れが残っている', '身体が重そうだ'][Math.floor(Math.random() * 2)], color: 'text-red-400' };
+  }
+  if (gm <= -0.05 && Math.random() < 0.5) {
+    return { text: '少し疲労の影響が見える', color: 'text-orange-400' };
+  }
+  // 優勝経験による上昇
+  if (gm >= 0.05 && Math.random() < 0.5) {
+    return { text: ['優勝の自信が練習に出ている', '一皮むけた印象だ'][Math.floor(Math.random() * 2)], color: 'text-cyan-400' };
+  }
+
   if (gp >= 1.3 && Math.random() < 0.6) {
     return { text: ['吸収が早い', '伸びが凄い', '手応え十分'][Math.floor(Math.random() * 3)], color: 'text-yellow-400' };
   }
