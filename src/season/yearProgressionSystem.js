@@ -1850,10 +1850,6 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const boBonus = getBattingOrderGrowthBonus(player, targetStat);
     const expBonus = posBonus * boBonus;
 
-    // プロ経験が浅い選手は成長しにくい（環境適応に時間がかかる）
-    // experience 0→0.5倍、50→0.75倍、100→1.0倍、200以上→1.0倍
-    const rookieFactor = Math.min(1.0, 0.5 + (experience / 200));
-
     // 成長量: (base + focus) * 0.10
     // 才能依存の能力は練習だけでは伸びにくい（グローバル補正）
     const TALENT_STAT_MULTIPLIERS = {
@@ -1867,7 +1863,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
     const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * talentMult * rookieFactor * potential);
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * talentMult * potential);
 
     // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
     const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
