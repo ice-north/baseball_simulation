@@ -814,7 +814,35 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       reports.push({ icon: '💨', text: `チーム盗塁${totalSB}個と機動力が武器になっている。足を活かした攻撃を続けたい。`, color: 'text-green-300' });
     }
 
-    return reports.slice(0, 5);
+    // --- 疲労蓄積の警告（成長率低下の閾値に近い選手を報告） ---
+    const fatigueWarnings = [];
+    players.forEach(p => {
+      const fatigue = p.fatigue || 0;
+      const games = Math.max(p.seasonStats?.batting?.games || 0, p.seasonStats?.pitching?.games || 0);
+      if (fatigue >= 120 && games >= 40) {
+        fatigueWarnings.push({ name: p.name, fatigue, games, level: 'critical' });
+      } else if (fatigue >= 100 && games >= 35) {
+        fatigueWarnings.push({ name: p.name, fatigue, games, level: 'danger' });
+      } else if (fatigue >= 90 && games >= 30) {
+        fatigueWarnings.push({ name: p.name, fatigue, games, level: 'warning' });
+      }
+    });
+    fatigueWarnings.sort((a, b) => b.fatigue - a.fatigue);
+
+    if (fatigueWarnings.some(w => w.level === 'critical')) {
+      const names = fatigueWarnings.filter(w => w.level === 'critical').map(w => w.name).join('、');
+      reports.push({ icon: '🚨', text: `${names}の疲労が限界を超えている（成長率に大きな悪影響）。休養させるべきだ。`, color: 'text-red-500' });
+    }
+    if (fatigueWarnings.some(w => w.level === 'danger')) {
+      const names = fatigueWarnings.filter(w => w.level === 'danger').map(w => w.name).join('、');
+      reports.push({ icon: '⚠️', text: `${names}に疲労蓄積の兆候（成長率低下の恐れ）。起用頻度に注意が必要だ。`, color: 'text-orange-400' });
+    }
+    if (fatigueWarnings.some(w => w.level === 'warning')) {
+      const names = fatigueWarnings.filter(w => w.level === 'warning').map(w => w.name).join('、');
+      reports.push({ icon: '💤', text: `${names}の疲労が蓄積しつつある。このペースだとシーズン終盤に影響が出るかもしれない。`, color: 'text-yellow-400' });
+    }
+
+    return reports.slice(0, 8);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seasonData.results?.length, seasonData.standings]);
 
