@@ -1082,20 +1082,20 @@ const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 'steal'];
 function getAgeGrowthBase(age, isPhysical) {
   if (isPhysical) {
     // フィジカル: 18-22で伸びる、23-27で微増、28以降は衰退
-    if (age <= 20) return 1.5;
-    if (age <= 22) return 1.2;
-    if (age <= 25) return 0.6;
-    if (age <= 28) return 0.1;
+    if (age <= 20) return 0.8;
+    if (age <= 22) return 0.6;
+    if (age <= 25) return 0.3;
+    if (age <= 28) return 0.0;
     if (age <= 31) return -0.5;
     if (age <= 34) return -1.2;
     if (age <= 37) return -2.0;
     return -3.0;
   } else {
     // 技術: 18-21で微増、22-26でよく伸びる、27-30で微増、31以降衰退
-    if (age <= 21) return 0.5;
-    if (age <= 24) return 1.8;
-    if (age <= 27) return 1.2;
-    if (age <= 30) return 0.3;
+    if (age <= 21) return 0.3;
+    if (age <= 24) return 0.9;
+    if (age <= 27) return 0.6;
+    if (age <= 30) return 0.2;
     if (age <= 33) return -0.3;
     if (age <= 36) return -1.0;
     return -2.0;
@@ -1132,7 +1132,7 @@ export function applyAgeCurveChanges(allTeams) {
           const u1 = Math.random() || 0.001;
           const u2 = Math.random();
           const normalRandom = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-          const variance = normalRandom * 2.0;
+          const variance = normalRandom * 1.0;
 
           // 才能依存の能力は年齢カーブでの成長も抑制（衰退方向は通常通り）
           const AGE_TALENT_MULT = { arm: 0.5, speed: 0.6, power: 0.8, velocity: 0.8 };
@@ -1153,14 +1153,14 @@ export function applyAgeCurveChanges(allTeams) {
           const currentValue = getNestedValue(updatedPlayer, statPath);
           if (currentValue == null) return;
 
-          // 球速は変動幅を1.5倍に（スケールが大きいため）
+          // 球速は変動幅を1.2倍に（スケールが大きいため）
           if (stat === 'velocity') change = rawChange > 0
-            ? Math.round(rawChange * 1.5 * ageTalentMult * potential)
-            : Math.round(rawChange * 1.5);
-          // スタミナも変動幅を1.5倍（成長方向のみポテンシャル適用）
+            ? Math.round(rawChange * 1.2 * ageTalentMult * potential)
+            : Math.round(rawChange * 1.2);
+          // スタミナも変動幅を1.2倍（成長方向のみポテンシャル適用）
           if (stat === 'stamina') change = rawChange > 0
-            ? Math.round(rawChange * 1.5 * potential)
-            : Math.round(rawChange * 1.5);
+            ? Math.round(rawChange * 1.2 * potential)
+            : Math.round(rawChange * 1.2);
 
           const newValue = Math.max(1, currentValue + change);
 
@@ -1958,7 +1958,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
     const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.10 * statMultiplier * talentMult * potential * aptitudeFactor);
+    const baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * potential * aptitudeFactor);
 
     // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
     const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
