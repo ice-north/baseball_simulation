@@ -546,19 +546,19 @@ const ScheduleScreen = ({
 
       {scheduleTab === 'batting' && (
         <div className="grid grid-cols-4 gap-4">
-          <RankingTable title="打率ランキング" data={getBattingAverageRanking()} valueLabel="打率" />
-          <RankingTable title="本塁打ランキング" data={getHomeRunRanking()} valueLabel="本塁打" />
-          <RankingTable title="打点ランキング" data={getRBIRanking()} valueLabel="打点" />
-          <RankingTable title="盗塁ランキング" data={getStolenBaseRanking()} valueLabel="盗塁" />
+          <RankingTable title="打率ランキング" data={seasonData?.finalRankings?.battingAverage || getBattingAverageRanking()} valueLabel="打率" />
+          <RankingTable title="本塁打ランキング" data={seasonData?.finalRankings?.homeRuns || getHomeRunRanking()} valueLabel="本塁打" />
+          <RankingTable title="打点ランキング" data={seasonData?.finalRankings?.rbis || getRBIRanking()} valueLabel="打点" />
+          <RankingTable title="盗塁ランキング" data={seasonData?.finalRankings?.stolenBases || getStolenBaseRanking()} valueLabel="盗塁" />
         </div>
       )}
 
       {scheduleTab === 'pitching' && (
         <div className="grid grid-cols-4 gap-4">
-          <RankingTable title="防御率ランキング" data={getERARanking()} valueLabel="防御率" />
-          <RankingTable title="勝利数ランキング" data={getWinsRanking()} valueLabel="勝利" />
-          <RankingTable title="ホールドランキング" data={getHoldsRanking()} valueLabel="ホールド" />
-          <RankingTable title="セーブランキング" data={getSavesRanking()} valueLabel="セーブ" />
+          <RankingTable title="防御率ランキング" data={seasonData?.finalRankings?.era || getERARanking()} valueLabel="防御率" />
+          <RankingTable title="勝利数ランキング" data={seasonData?.finalRankings?.wins || getWinsRanking()} valueLabel="勝利" />
+          <RankingTable title="ホールドランキング" data={seasonData?.finalRankings?.holds || getHoldsRanking()} valueLabel="ホールド" />
+          <RankingTable title="セーブランキング" data={seasonData?.finalRankings?.saves || getSavesRanking()} valueLabel="セーブ" />
         </div>
       )}
     </div>

@@ -214,6 +214,85 @@ export function processSeasonEnd(seasonData, allTeams) {
 };
 
 /**
+ * ランキングのスナップショットを生成（シーズン確定時に呼び出し）
+ * プレーオフ後にseasonDataに保存し、選手が引退/解雇されても成績が残る
+ */
+export function snapshotRankings(allTeams) {
+  const allPlayers = [];
+  const seenIds = new Set();
+  Object.entries(allTeams).forEach(([teamName, team]) => {
+    team.players.forEach(player => {
+      if (player.id != null && seenIds.has(player.id)) return;
+      if (player.id != null) seenIds.add(player.id);
+      allPlayers.push({ ...player, teamName });
+    });
+  });
+
+  const makeRanking = (list) => {
+    list.forEach((p, i) => p.rank = i + 1);
+    return list;
+  };
+
+  const battingAverage = makeRanking(
+    allPlayers.filter(p => p.seasonStats?.batting?.atBats > 0)
+      .map(p => {
+        const s = p.seasonStats.batting;
+        const avg = s.hits / s.atBats;
+        return { rank: 0, name: p.name, team: p.teamName, value: avg.toFixed(3), sortValue: avg };
+      })
+      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
+  );
+
+  const homeRuns = makeRanking(
+    allPlayers.filter(p => p.seasonStats?.batting?.homeruns > 0)
+      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.batting.homeruns, sortValue: p.seasonStats.batting.homeruns }))
+      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
+  );
+
+  const rbis = makeRanking(
+    allPlayers.filter(p => p.seasonStats?.batting?.rbis > 0)
+      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.batting.rbis, sortValue: p.seasonStats.batting.rbis }))
+      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
+  );
+
+  const stolenBases = makeRanking(
+    allPlayers.filter(p => p.seasonStats?.batting?.stolenBases > 0)
+      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.batting.stolenBases, sortValue: p.seasonStats.batting.stolenBases }))
+      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
+  );
+
+  const era = makeRanking(
+    allPlayers.filter(p => p.seasonStats?.pitching?.inningsPitched > 0)
+      .map(p => {
+        const s = p.seasonStats.pitching;
+        const e = (s.earnedRuns * 27) / s.inningsPitched;
+        return { rank: 0, name: p.name, team: p.teamName, value: e.toFixed(2), sortValue: e };
+      })
+      .sort((a, b) => a.sortValue - b.sortValue).slice(0, 10)
+  );
+
+  const wins = makeRanking(
+    allPlayers.filter(p => p.seasonStats?.pitching?.wins > 0)
+      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.pitching.wins, sortValue: p.seasonStats.pitching.wins }))
+      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
+  );
+
+  const holds = makeRanking(
+    allPlayers.filter(p => p.seasonStats?.pitching?.holds > 0)
+      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.pitching.holds, sortValue: p.seasonStats.pitching.holds }))
+      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
+  );
+
+  const saves = makeRanking(
+    allPlayers.filter(p => p.seasonStats?.pitching?.saves > 0)
+      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.pitching.saves, sortValue: p.seasonStats.pitching.saves }))
+      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
+  );
+
+  return { battingAverage, homeRuns, rbis, stolenBases, era, wins, holds, saves };
+}
+
+/**
  * 全選手の年齢を1歳増やす
  * @param {Object} allTeams - 全チームデータ
  * @returns {Object} - 更新されたチームデータ
@@ -910,6 +989,9 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
   updateGrowthModifiers(updatedTeams, awards);
+
+  // 2.8. ランキングをスナップショット（成績リセット前に確定）
+  seasonData.finalRankings = snapshotRankings(updatedTeams);
 
   // 3. シーズン統計を通算に加算してリセット
   updatedTeams = resetSeasonStats(updatedTeams, seasonData.year);
