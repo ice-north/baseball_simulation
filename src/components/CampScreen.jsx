@@ -175,6 +175,62 @@ const CAMP_PRESETS = {
       return def < 40 ? 'defense_sub' : 'running';
     },
   },
+  coach: {
+    name: 'コーチおすすめ', icon: '📋',
+    desc: '年齢と経験から最も成長が期待できるメニューを選択',
+    getMain: (p) => {
+      const age = p.age || 20;
+      const exp = p.experience || 0;
+      if (p.position === 'pitcher') {
+        // 若手(≤23): フィジカル(球速)が伸びやすい
+        // 中堅(24-28): 経験で技術(制球)が伸びる
+        // ベテラン(29+): 制球+スタミナ維持
+        if (age <= 21) return 'velocity';
+        if (age <= 23) {
+          const v = p.pitching?.velocity || 130;
+          return v < 145 ? 'velocity' : 'stamina';
+        }
+        if (age <= 28) {
+          const c = p.pitching?.control || 50;
+          return c < 60 ? 'control' : 'stamina';
+        }
+        return 'control';
+      }
+      // 野手
+      // 若手(≤23): フィジカル(走塁/パワー)が伸びやすい
+      // 中堅(24-28): 技術(打撃/選球眼)が伸びる
+      // ベテラン(29+): 守備・選球眼で安定感
+      if (age <= 21) {
+        const spd = p.physical?.speed || 0;
+        return spd < 50 ? 'baserunning' : 'batting';
+      }
+      if (age <= 23) {
+        const pow = p.batting?.power || 0;
+        const spd = p.physical?.speed || 0;
+        return pow < spd ? 'batting' : 'baserunning';
+      }
+      if (age <= 28) {
+        if (exp >= 150) {
+          const eye = p.batting?.eye || 0;
+          return eye < 40 ? 'eye' : 'batting';
+        }
+        return 'batting';
+      }
+      const def = p.fielding?.defense || 0;
+      return def < 45 ? 'fielding' : 'eye';
+    },
+    getSub: (p) => {
+      const age = p.age || 20;
+      if (p.position === 'pitcher') {
+        if (age <= 23) return 'running';
+        if (age <= 28) return 'breaking';
+        return 'stretch';
+      }
+      if (age <= 23) return 'muscle';
+      if (age <= 28) return 'eye';
+      return 'stretch';
+    },
+  },
 };
 
 const FIELD_POSITIONS = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
