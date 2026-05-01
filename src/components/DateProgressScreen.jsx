@@ -1634,30 +1634,33 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
     return 'text-white';
   };
 
-  // 打順入れ替え（スタメン同士）/ 控え交代のソース選択
+  // 打順入れ替え（クリック2回で打順スワップ）
   const handleSwap = (order) => {
-    if (showBench && swapTarget !== null) {
-      // 控え交代モード中にスタメンをタップ → ソース変更
-      setSwapTarget(order);
-      return;
-    }
     if (swapTarget === null) {
       setSwapTarget(order);
-      setShowBench(true); // 控え選手との交代も可能にする
+    } else if (swapTarget === order) {
+      // 同じ選手を再クリック → 選択解除
+      setSwapTarget(null);
+      setShowBench(false);
     } else {
-      if (swapTarget !== order) {
-        const entry1 = lineup.find(e => e.battingOrder === swapTarget);
-        const entry2 = lineup.find(e => e.battingOrder === order);
-        if (entry1 && entry2) {
-          entry1.battingOrder = order;
-          entry2.battingOrder = swapTarget;
-          lineup.sort((a, b) => a.battingOrder - b.battingOrder);
-        }
+      // 別のスタメンをクリック → 打順入れ替え
+      const entry1 = lineup.find(e => e.battingOrder === swapTarget);
+      const entry2 = lineup.find(e => e.battingOrder === order);
+      if (entry1 && entry2) {
+        entry1.battingOrder = order;
+        entry2.battingOrder = swapTarget;
+        lineup.sort((a, b) => a.battingOrder - b.battingOrder);
       }
       setSwapTarget(null);
       setShowBench(false);
       setTick(t => t + 1);
     }
+  };
+
+  // 控え交代モードを開く
+  const openBenchSwap = (order) => {
+    setSwapTarget(order);
+    setShowBench(true);
   };
 
   // 控え選手とスタメン選手を入れ替え
@@ -1735,11 +1738,13 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         {/* スタメン一覧（疲労色+簡易変更） */}
         <div className="bg-gray-900 rounded-lg p-3 mb-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold text-gray-400">スタメン <span className="text-gray-600 font-normal">（タップで打順入替）</span></h3>
+            <h3 className="text-xs font-bold text-gray-400">スタメン <span className="text-gray-600 font-normal">
+              {swapTarget !== null && !showBench ? '（入れ替え先をタップ）' : '（タップで打順入替）'}
+            </span></h3>
             <div className="flex items-center gap-2 text-[9px] text-gray-500">
-              <span className="text-red-400">●</span>疲労80↑
-              <span className="text-yellow-400">●</span>60↑
-              <span className="text-green-400">●</span>40↑
+              <span className="inline-block w-4 h-1.5 rounded-sm bg-red-500" />危険
+              <span className="inline-block w-4 h-1.5 rounded-sm bg-yellow-400" />注意
+              <span className="inline-block w-4 h-1.5 rounded-sm bg-green-600" />良好
             </div>
           </div>
           <div className="space-y-0.5 text-sm">
@@ -1747,7 +1752,8 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
               const order = player._battingOrder || (i + 1);
               const pos = player._position || player.position;
               const cond = player.condition ?? CONDITION_LEVELS.NORMAL;
-              const isSelected = swapTarget === order && !showBench;
+              const isSelected = swapTarget === order;
+              const isSwapCandidate = swapTarget !== null && swapTarget !== order && !showBench && pos !== 'pitcher';
               const f = player.fatigue || 0;
               const bats = player.batting?.bats || 'right';
               const batsLabel = bats === 'left' ? '左' : bats === 'switch' ? '両' : '右';
@@ -1759,19 +1765,36 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                   className={`flex items-center gap-1.5 rounded px-2 py-1.5 transition-all ${
                     pos === 'pitcher' ? 'bg-gray-800/50 cursor-default' :
                     isSelected ? 'bg-blue-900 ring-1 ring-blue-400 cursor-pointer' :
+                    isSwapCandidate ? 'bg-gray-800 hover:bg-blue-900/50 ring-1 ring-blue-800/50 cursor-pointer' :
                     'bg-gray-800 hover:bg-gray-700 cursor-pointer'
                   }`}
                 >
-                  <span className="text-gray-500 w-5 text-center font-mono shrink-0">{order}</span>
+                  <span className={`w-5 text-center font-mono shrink-0 ${isSwapCandidate ? 'text-blue-400' : 'text-gray-500'}`}>{order}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 w-7 text-center ${
                     pos === 'pitcher' ? 'bg-red-800 text-red-200' :
                     ['catcher'].includes(pos) ? 'bg-blue-800 text-blue-200' :
                     ['left','center','right'].includes(pos) ? 'bg-green-800 text-green-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[pos] || pos}</span>
-                  <span className={`font-bold ${getFatigueColor(player)} w-20 truncate shrink-0`}>{player.name}</span>
+                  <span className={`font-bold text-white w-20 truncate shrink-0`}>{player.name}</span>
                   <span className={`shrink-0 ${CONDITION_COLORS[cond]}`} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
                   <span className={`text-xs ${batsColor} shrink-0`}>{batsLabel}</span>
+                  {/* 疲労ゲージ */}
+                  {pos !== 'pitcher' && (() => {
+                    const maxW = 32;
+                    const ratio = Math.min(1, f / 150);
+                    const barW = Math.round(ratio * maxW);
+                    const barColor = f >= 100 ? 'bg-red-500' : f >= 80 ? 'bg-orange-400' : f >= 60 ? 'bg-yellow-400' : f >= 40 ? 'bg-green-400' : 'bg-green-600';
+                    const growthWarning = f >= 100 ? '⚠' : f >= 80 ? '!' : '';
+                    return (
+                      <span className="shrink-0 flex items-center gap-0.5" title={`疲労: ${f}${f >= 100 ? '（成長率低下）' : f >= 80 ? '（低下間近）' : ''}`}>
+                        <span className="relative bg-gray-700 rounded-sm overflow-hidden" style={{ width: maxW, height: 6 }}>
+                          <span className={`absolute left-0 top-0 h-full rounded-sm ${barColor}`} style={{ width: barW }} />
+                        </span>
+                        {growthWarning && <span className="text-[9px] text-red-400">{growthWarning}</span>}
+                      </span>
+                    );
+                  })()}
                   {pos !== 'pitcher' && (() => {
                     const subs = getSubPositions(player, pos);
                     return subs.length > 0 ? <span className="text-xs shrink-0">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
@@ -1789,6 +1812,12 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                       </span>
                     );
                   })()}
+                  {isSelected && pos !== 'pitcher' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openBenchSwap(order); }}
+                      className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-600 hover:bg-orange-500 text-white transition ml-1"
+                    >交代</button>
+                  )}
                 </div>
               );
             })}
@@ -1830,11 +1859,24 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     player.position === 'catcher' ? 'bg-blue-800 text-blue-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[player.position] || player.position}</span>
-                  <span className={`font-bold ${getFatigueColor(player)}`} style={{whiteSpace:'nowrap'}}>{player.name}</span>
+                  <span className="font-bold text-white" style={{whiteSpace:'nowrap'}}>{player.name}</span>
                   <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                     {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
                   </span>
                   <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
+                  {(() => {
+                    const maxW = 24;
+                    const ratio = Math.min(1, f / 150);
+                    const barW = Math.round(ratio * maxW);
+                    const barColor = f >= 100 ? 'bg-red-500' : f >= 80 ? 'bg-orange-400' : f >= 60 ? 'bg-yellow-400' : f >= 40 ? 'bg-green-400' : 'bg-green-600';
+                    return (
+                      <span className="shrink-0" title={`疲労: ${f}`}>
+                        <span className="relative bg-gray-700 rounded-sm overflow-hidden inline-block" style={{ width: maxW, height: 5 }}>
+                          <span className={`absolute left-0 top-0 h-full rounded-sm ${barColor}`} style={{ width: barW }} />
+                        </span>
+                      </span>
+                    );
+                  })()}
                   {(() => {
                     const subs = getSubPositions(player, player.position);
                     return subs.length > 0 ? <span className="text-[9px]">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
