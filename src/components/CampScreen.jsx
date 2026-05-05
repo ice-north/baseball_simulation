@@ -1446,21 +1446,33 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
             return (b.age || 20) - (a.age || 20);
           });
           const STAT_DEFS = [
-            { key: 'batting.meet', name: 'ミート', get: (s) => s.batting?.meet || 0 },
-            { key: 'batting.power', name: 'パワー', get: (s) => s.batting?.power || 0 },
-            { key: 'batting.eye', name: '選球眼', get: (s) => s.batting?.eye || 0 },
-            { key: 'physical.speed', name: '走力', get: (s) => s.physical?.speed || 0 },
-            { key: 'physical.arm', name: '肩力', get: (s) => s.physical?.arm || 0 },
-            { key: 'fielding.defense', name: '守備', get: (s) => s.fielding?.defense || 0 },
-            { key: 'catching.lead', name: 'Cリード', get: (s) => s.catching?.lead || 0 },
-            { key: 'pitching.velocity', name: '球速', get: (s) => s.pitching?.velocity || 0, isVelocity: true },
-            { key: 'pitching.control', name: '制球', get: (s) => s.pitching?.control || 0 },
-            { key: 'pitching.stamina', name: 'スタミナ', get: (s) => s.pitching?.stamina || 0, isStamina: true },
+            { key: 'batting.meet', stat: 'meet', name: 'ミート', get: (s) => s.batting?.meet || 0 },
+            { key: 'batting.power', stat: 'power', name: 'パワー', get: (s) => s.batting?.power || 0 },
+            { key: 'batting.eye', stat: 'eye', name: '選球眼', get: (s) => s.batting?.eye || 0 },
+            { key: 'physical.speed', stat: 'speed', name: '走力', get: (s) => s.physical?.speed || 0 },
+            { key: 'physical.arm', stat: 'arm', name: '肩力', get: (s) => s.physical?.arm || 0 },
+            { key: 'fielding.defense', stat: 'defense', name: '守備', get: (s) => s.fielding?.defense || 0 },
+            { key: 'catching.lead', stat: 'lead', name: 'Cリード', get: (s) => s.catching?.lead || 0 },
+            { key: 'pitching.velocity', stat: 'velocity', name: '球速', get: (s) => s.pitching?.velocity || 0, isVelocity: true },
+            { key: 'pitching.control', stat: 'control', name: '制球', get: (s) => s.pitching?.control || 0 },
+            { key: 'pitching.stamina', stat: 'stamina', name: 'スタミナ', get: (s) => s.pitching?.stamina || 0, isStamina: true },
           ];
+          const ageReports = seasonData?.ageReports || [];
+          const ageReportMap = {};
+          ageReports.filter(r => r.team === userTeamName).forEach(r => {
+            const changeMap = {};
+            r.changes.forEach(c => { changeMap[c.stat] = c.change; });
+            ageReportMap[r.name] = changeMap;
+          });
           return (
             <>
               <div className="flex items-center justify-between mb-2">
                 <h1 className="text-xl font-bold text-white">春季キャンプ成長レポート - {userTeamName}</h1>
+              </div>
+              <div className="flex gap-4 text-[10px] mb-1 ml-1">
+                <span className="text-green-400">■ キャンプ成長</span>
+                <span className="text-cyan-400">■ 自然成長()</span>
+                <span className="text-red-400">■ 衰退</span>
               </div>
               <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto mb-3">
                 <table className="w-full text-xs">
@@ -1480,12 +1492,15 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                       const pre = preCampStats[player.id];
                       if (!pre) return null;
                       let totalGrowth = 0;
+                      const playerAgeReport = ageReportMap[player.name] || {};
                       const diffs = STAT_DEFS.map(sd => {
                         const before = sd.get(pre);
                         const after = sd.get(player);
-                        const diff = after - before;
-                        if (diff > 0) totalGrowth += diff;
-                        return { ...sd, before, after, diff };
+                        const totalDiff = after - before;
+                        const naturalDiff = playerAgeReport[sd.stat] || 0;
+                        const campDiff = totalDiff - naturalDiff;
+                        if (totalDiff > 0) totalGrowth += totalDiff;
+                        return { ...sd, before, after, diff: totalDiff, campDiff, naturalDiff };
                       });
                       // 新球種チェック
                       const preArsenal = (pre.pitching?.arsenal || []).map(a => a.type);
@@ -1506,12 +1521,19 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             <td key={d.key} className="py-1 px-1 text-center font-mono text-[10px]">
                               {d.diff !== 0 ? (
                                 <span>
-                                  <span className="text-gray-500">{d.before}</span>
+                                  <span className="text-gray-500">{d.before - d.naturalDiff}</span>
                                   <span className="text-gray-600 mx-0.5">{'\u2192'}</span>
                                   <span className={d.diff > 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{d.after}</span>
-                                  <span className={`ml-0.5 ${d.diff > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                    {d.diff > 0 ? `+${d.diff}` : d.diff}
-                                  </span>
+                                  {d.campDiff !== 0 && (
+                                    <span className={`ml-0.5 ${d.campDiff > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                      {d.campDiff > 0 ? `+${d.campDiff}` : d.campDiff}
+                                    </span>
+                                  )}
+                                  {d.naturalDiff !== 0 && (
+                                    <span className={`ml-0.5 ${d.naturalDiff > 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                                      ({d.naturalDiff > 0 ? `+${d.naturalDiff}` : d.naturalDiff})
+                                    </span>
+                                  )}
                                 </span>
                               ) : (
                                 <span className="text-gray-600">-</span>

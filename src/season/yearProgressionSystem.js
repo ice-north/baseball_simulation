@@ -1017,6 +1017,9 @@ export function advanceToNextYear(seasonData, allTeams) {
   newSeasonData.schedule = [];
   newSeasonData.standings = initializeStandings(teams);
 
+  // 年齢カーブの結果を新シーズンデータに保存（キャンプ画面で表示用）
+  newSeasonData.ageReports = ageReports;
+
   return {
     newSeasonData,
     updatedTeams: teamsAfterRetirement,
