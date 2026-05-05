@@ -37,71 +37,68 @@ function getCampCoachComment(player, round) {
   return null;
 }
 
-// 練習プリセット定義（各選手のポジション・能力を見て個別にメニューを割り振る）
+// 投手/野手のステータスを正規化して比較可能にするヘルパー
+function getPitcherStats(p) {
+  return { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
+}
+function getFielderStats(p) {
+  return { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
+}
+function sortedStatKeys(stats, ascending = true) {
+  return Object.entries(stats).sort((a,b) => ascending ? a[1]-b[1] : b[1]-a[1]).map(e => e[0]);
+}
+function pitcherStatToMain(statKey) {
+  return statKey === 'velocity' ? 'velocity' : statKey === 'control' ? 'control' : 'stamina';
+}
+function fielderStatToMain(statKey) {
+  if (statKey === 'meet' || statKey === 'power' || statKey === 'eye') return 'batting';
+  if (statKey === 'speed') return 'baserunning';
+  if (statKey === 'defense') return 'fielding';
+  return 'batting';
+}
+function pitcherStatToSub(statKey) {
+  if (statKey === 'velocity') return 'muscle';
+  if (statKey === 'stamina') return 'running';
+  return 'running';
+}
+function fielderStatToSub(statKey) {
+  if (statKey === 'eye') return 'eye';
+  if (statKey === 'speed') return 'running';
+  if (statKey === 'defense') return 'defense_sub';
+  return 'muscle';
+}
+
 const CAMP_PRESETS = {
   weakness: {
     name: '弱点克服', icon: '📈',
     desc: '最も低い能力を集中的に強化',
     getMain: (p) => {
-      if (p.position === 'pitcher') {
-        const stats = { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
-        const lowest = Object.entries(stats).sort((a,b) => a[1]-b[1])[0][0];
-        return lowest === 'velocity' ? 'velocity' : lowest === 'control' ? 'control' : 'stamina';
-      }
-      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
-      const lowest = Object.entries(stats).sort((a,b) => a[1]-b[1])[0][0];
-      if (lowest === 'meet' || lowest === 'power' || lowest === 'eye') return 'batting';
-      if (lowest === 'speed') return 'baserunning';
-      if (lowest === 'defense') return 'fielding';
-      return 'batting';
+      if (p.position === 'pitcher') return pitcherStatToMain(sortedStatKeys(getPitcherStats(p))[0]);
+      return fielderStatToMain(sortedStatKeys(getFielderStats(p))[0]);
     },
     getSub: (p) => {
-      if (p.position === 'pitcher') {
-        const stats = { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
-        const sorted = Object.entries(stats).sort((a,b) => a[1]-b[1]);
-        const second = sorted[1][0];
-        if (second === 'velocity') return 'muscle';
-        if (second === 'stamina') return 'running';
-        return 'running';
-      }
-      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
-      const sorted = Object.entries(stats).sort((a,b) => a[1]-b[1]);
-      const second = sorted[1][0];
-      if (second === 'eye') return 'eye';
-      if (second === 'speed') return 'running';
-      if (second === 'defense') return 'defense_sub';
-      return 'muscle';
+      if (p.position === 'pitcher') return pitcherStatToSub(sortedStatKeys(getPitcherStats(p))[1]);
+      return fielderStatToSub(sortedStatKeys(getFielderStats(p))[1]);
     },
   },
   strength: {
     name: '長所強化', icon: '💪',
     desc: '最も高い能力をさらに伸ばす',
     getMain: (p) => {
-      if (p.position === 'pitcher') {
-        const stats = { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
-        const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
-        return highest === 'velocity' ? 'velocity' : highest === 'control' ? 'control' : 'stamina';
-      }
-      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
-      const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
-      if (highest === 'meet' || highest === 'power' || highest === 'eye') return 'batting';
-      if (highest === 'speed') return 'baserunning';
-      if (highest === 'defense') return 'fielding';
-      return 'batting';
+      if (p.position === 'pitcher') return pitcherStatToMain(sortedStatKeys(getPitcherStats(p), false)[0]);
+      return fielderStatToMain(sortedStatKeys(getFielderStats(p), false)[0]);
     },
     getSub: (p) => {
       if (p.position === 'pitcher') {
-        const stats = { velocity: ((p.pitching?.velocity||130)-115)*2.5, control: p.pitching?.control||50, stamina: (p.pitching?.stamina||100)/2 };
-        const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
-        if (highest === 'velocity') return 'muscle';
-        if (highest === 'stamina') return 'running';
+        const top = sortedStatKeys(getPitcherStats(p), false)[0];
+        if (top === 'velocity') return 'muscle';
+        if (top === 'stamina') return 'running';
         return 'stretch';
       }
-      const stats = { meet: p.batting?.meet||0, power: p.batting?.power||0, speed: p.physical?.speed||0, defense: p.fielding?.defense||0, eye: p.batting?.eye||0 };
-      const highest = Object.entries(stats).sort((a,b) => b[1]-a[1])[0][0];
-      if (highest === 'eye') return 'eye';
-      if (highest === 'speed') return 'running';
-      if (highest === 'defense') return 'defense_sub';
+      const top = sortedStatKeys(getFielderStats(p), false)[0];
+      if (top === 'eye') return 'eye';
+      if (top === 'speed') return 'running';
+      if (top === 'defense') return 'defense_sub';
       return 'muscle';
     },
   },
@@ -109,13 +106,7 @@ const CAMP_PRESETS = {
     name: 'バランス育成', icon: '⚖️',
     desc: '投手は投手練習、野手は野手練習をバランスよく',
     getMain: (p) => {
-      if (p.position === 'pitcher') {
-        const v = ((p.pitching?.velocity||130)-115)*2.5;
-        const c = p.pitching?.control||50;
-        const s = (p.pitching?.stamina||100)/2;
-        const lowest = Object.entries({velocity:v, control:c, stamina:s}).sort((a,b) => a[1]-b[1])[0][0];
-        return lowest === 'velocity' ? 'velocity' : lowest === 'control' ? 'control' : 'stamina';
-      }
+      if (p.position === 'pitcher') return pitcherStatToMain(sortedStatKeys(getPitcherStats(p))[0]);
       const meet = p.batting?.meet||0;
       const def = p.fielding?.defense||0;
       const spd = p.physical?.speed||0;

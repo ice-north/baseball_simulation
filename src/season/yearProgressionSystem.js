@@ -50,26 +50,29 @@ export function cleanupPlayerReferences(team, playerId) {
   }
 }
 
+function collectAllPlayers(allTeams) {
+  const allPlayers = [];
+  const seenIds = new Set();
+  Object.entries(allTeams).forEach(([teamName, team]) => {
+    team.players.forEach(player => {
+      if (player.id != null && seenIds.has(player.id)) return;
+      if (player.id != null) seenIds.add(player.id);
+      allPlayers.push({ ...player, teamName });
+    });
+  });
+  return allPlayers;
+}
+
 /**
  * シーズン終了処理
- * @param {Object} seasonData - シーズンデータ
- * @param {Object} allTeams - 全チームデータ
- * @returns {Object} - 表彰結果と統計
  */
 export function processSeasonEnd(seasonData, allTeams) {
   const awards = {
-    champion: null,           // 優勝チーム
-    battingChampion: null,    // 首位打者
-    homeRunKing: null,        // 本塁打王
-    rbiKing: null,            // 打点王
-    stolenBaseKing: null,     // 盗塁王
-    eraChampion: null,        // 最優秀防御率
-    winsLeader: null,         // 最多勝
-    savesLeader: null,        // 最多セーブ
-    strikeoutKing: null       // 最多奪三振
+    champion: null, battingChampion: null, homeRunKing: null,
+    rbiKing: null, stolenBaseKing: null, eraChampion: null,
+    winsLeader: null, savesLeader: null, strikeoutKing: null
   };
 
-  // 優勝チーム確定
   if (seasonData.standings && seasonData.standings.length > 0) {
     const sortedStandings = [...seasonData.standings].sort((a, b) => {
       if (b.wins !== a.wins) return b.wins - a.wins;
@@ -79,135 +82,43 @@ export function processSeasonEnd(seasonData, allTeams) {
     awards.champion = sortedStandings[0].team;
   }
 
-  // 個人タイトル集計（IDで重複排除）
-  const allPlayers = [];
-  const seenIds = new Set();
-  Object.entries(allTeams).forEach(([teamName, team]) => {
-    team.players.forEach(player => {
-      if (player.id != null && seenIds.has(player.id)) return;
-      if (player.id != null) seenIds.add(player.id);
-      allPlayers.push({
-        ...player,
-        teamName: teamName
-      });
-    });
-  });
+  const allPlayers = collectAllPlayers(allTeams);
+  const qualifiedBatters = allPlayers.filter(p => p.seasonStats.batting.atBats >= 100);
+  const qualifiedPitchers = allPlayers.filter(p => p.seasonStats.pitching.inningsPitched >= 30);
 
-  // 打撃タイトル
-  const qualifiedBatters = allPlayers.filter(p =>
-    p.seasonStats.batting.atBats >= 100
-  );
+  const findLeader = (players, getValue, ascending = false) => {
+    if (players.length === 0) return null;
+    return players.reduce((best, p) =>
+      ascending ? (getValue(p) < getValue(best) ? p : best) : (getValue(p) > getValue(best) ? p : best)
+    );
+  };
+  const toAward = (player, statObj) => player ? { id: player.id, name: player.name, team: player.teamName, ...statObj } : null;
+  const getBattingAvg = (p) => p.seasonStats.batting.atBats > 0 ? p.seasonStats.batting.hits / p.seasonStats.batting.atBats : 0;
+  const getEra = (p) => p.seasonStats.pitching.inningsPitched > 0 ? (p.seasonStats.pitching.earnedRuns * 27) / p.seasonStats.pitching.inningsPitched : 99.99;
 
   if (qualifiedBatters.length > 0) {
-    // 首位打者（最高打率）
-    const battingLeader = qualifiedBatters.reduce((best, p) => {
-      const avg = p.seasonStats.batting.atBats > 0
-        ? p.seasonStats.batting.hits / p.seasonStats.batting.atBats
-        : 0;
-      const bestAvg = best.seasonStats.batting.atBats > 0
-        ? best.seasonStats.batting.hits / best.seasonStats.batting.atBats
-        : 0;
-      return avg > bestAvg ? p : best;
-    });
-    awards.battingChampion = {
-      id: battingLeader.id,
-      name: battingLeader.name,
-      team: battingLeader.teamName,
-      avg: (battingLeader.seasonStats.batting.hits / battingLeader.seasonStats.batting.atBats).toFixed(3)
-    };
-
-    // 本塁打王
-    const hrLeader = qualifiedBatters.reduce((best, p) =>
-      p.seasonStats.batting.homeruns > best.seasonStats.batting.homeruns ? p : best
-    );
-    awards.homeRunKing = {
-      id: hrLeader.id,
-      name: hrLeader.name,
-      team: hrLeader.teamName,
-      homeruns: hrLeader.seasonStats.batting.homeruns
-    };
-
-    // 打点王
-    const rbiLeader = qualifiedBatters.reduce((best, p) =>
-      p.seasonStats.batting.rbis > best.seasonStats.batting.rbis ? p : best
-    );
-    awards.rbiKing = {
-      id: rbiLeader.id,
-      name: rbiLeader.name,
-      team: rbiLeader.teamName,
-      rbis: rbiLeader.seasonStats.batting.rbis
-    };
-
-    // 盗塁王
-    const sbLeader = qualifiedBatters.reduce((best, p) =>
-      p.seasonStats.batting.stolenBases > best.seasonStats.batting.stolenBases ? p : best
-    );
-    awards.stolenBaseKing = {
-      id: sbLeader.id,
-      name: sbLeader.name,
-      team: sbLeader.teamName,
-      stolenBases: sbLeader.seasonStats.batting.stolenBases
-    };
+    const ba = findLeader(qualifiedBatters, getBattingAvg);
+    awards.battingChampion = toAward(ba, { avg: getBattingAvg(ba).toFixed(3) });
+    const hr = findLeader(qualifiedBatters, p => p.seasonStats.batting.homeruns);
+    awards.homeRunKing = toAward(hr, { homeruns: hr.seasonStats.batting.homeruns });
+    const rbi = findLeader(qualifiedBatters, p => p.seasonStats.batting.rbis);
+    awards.rbiKing = toAward(rbi, { rbis: rbi.seasonStats.batting.rbis });
+    const sb = findLeader(qualifiedBatters, p => p.seasonStats.batting.stolenBases);
+    awards.stolenBaseKing = toAward(sb, { stolenBases: sb.seasonStats.batting.stolenBases });
   }
 
-  // 投手タイトル
-  const qualifiedPitchers = allPlayers.filter(p =>
-    p.seasonStats.pitching.inningsPitched >= 30
-  );
-
   if (qualifiedPitchers.length > 0) {
-    // 最優秀防御率
-    const eraLeader = qualifiedPitchers.reduce((best, p) => {
-      const era = p.seasonStats.pitching.inningsPitched > 0
-        ? (p.seasonStats.pitching.earnedRuns * 27) / p.seasonStats.pitching.inningsPitched
-        : 99.99;
-      const bestEra = best.seasonStats.pitching.inningsPitched > 0
-        ? (best.seasonStats.pitching.earnedRuns * 27) / best.seasonStats.pitching.inningsPitched
-        : 99.99;
-      return era < bestEra ? p : best;
-    });
-    const era = (eraLeader.seasonStats.pitching.earnedRuns * 27) / eraLeader.seasonStats.pitching.inningsPitched;
-    awards.eraChampion = {
-      id: eraLeader.id,
-      name: eraLeader.name,
-      team: eraLeader.teamName,
-      era: era.toFixed(2)
-    };
+    const eraL = findLeader(qualifiedPitchers, getEra, true);
+    awards.eraChampion = toAward(eraL, { era: getEra(eraL).toFixed(2) });
+    const winsL = findLeader(qualifiedPitchers, p => p.seasonStats.pitching.wins);
+    awards.winsLeader = toAward(winsL, { wins: winsL.seasonStats.pitching.wins });
+    const soL = findLeader(qualifiedPitchers, p => p.seasonStats.pitching.strikeouts);
+    awards.strikeoutKing = toAward(soL, { strikeouts: soL.seasonStats.pitching.strikeouts });
+  }
 
-    // 最多勝
-    const winsLeader = qualifiedPitchers.reduce((best, p) =>
-      p.seasonStats.pitching.wins > best.seasonStats.pitching.wins ? p : best
-    );
-    awards.winsLeader = {
-      id: winsLeader.id,
-      name: winsLeader.name,
-      team: winsLeader.teamName,
-      wins: winsLeader.seasonStats.pitching.wins
-    };
-
-    // 最多セーブ
-    const savesLeader = allPlayers.reduce((best, p) =>
-      p.seasonStats.pitching.saves > best.seasonStats.pitching.saves ? p : best
-    );
-    if (savesLeader.seasonStats.pitching.saves > 0) {
-      awards.savesLeader = {
-        id: savesLeader.id,
-        name: savesLeader.name,
-        team: savesLeader.teamName,
-        saves: savesLeader.seasonStats.pitching.saves
-      };
-    }
-
-    // 最多奪三振
-    const soLeader = qualifiedPitchers.reduce((best, p) =>
-      p.seasonStats.pitching.strikeouts > best.seasonStats.pitching.strikeouts ? p : best
-    );
-    awards.strikeoutKing = {
-      id: soLeader.id,
-      name: soLeader.name,
-      team: soLeader.teamName,
-      strikeouts: soLeader.seasonStats.pitching.strikeouts
-    };
+  const savesL = findLeader(allPlayers, p => p.seasonStats.pitching.saves || 0);
+  if (savesL && (savesL.seasonStats.pitching.saves || 0) > 0) {
+    awards.savesLeader = toAward(savesL, { saves: savesL.seasonStats.pitching.saves });
   }
 
   return awards;
@@ -218,78 +129,32 @@ export function processSeasonEnd(seasonData, allTeams) {
  * プレーオフ後にseasonDataに保存し、選手が引退/解雇されても成績が残る
  */
 export function snapshotRankings(allTeams) {
-  const allPlayers = [];
-  const seenIds = new Set();
-  Object.entries(allTeams).forEach(([teamName, team]) => {
-    team.players.forEach(player => {
-      if (player.id != null && seenIds.has(player.id)) return;
-      if (player.id != null) seenIds.add(player.id);
-      allPlayers.push({ ...player, teamName });
-    });
-  });
+  const allPlayers = collectAllPlayers(allTeams);
 
-  const makeRanking = (list) => {
-    list.forEach((p, i) => p.rank = i + 1);
-    return list;
+  const buildRanking = (filterFn, getValue, formatValue, ascending = false) => {
+    return allPlayers.filter(filterFn)
+      .map(p => {
+        const sv = getValue(p);
+        return { rank: 0, name: p.name, team: p.teamName, value: formatValue ? formatValue(sv) : sv, sortValue: sv };
+      })
+      .sort((a, b) => ascending ? a.sortValue - b.sortValue : b.sortValue - a.sortValue)
+      .slice(0, 10)
+      .map((p, i) => ({ ...p, rank: i + 1 }));
   };
 
-  const battingAverage = makeRanking(
-    allPlayers.filter(p => p.seasonStats?.batting?.atBats > 0)
-      .map(p => {
-        const s = p.seasonStats.batting;
-        const avg = s.hits / s.atBats;
-        return { rank: 0, name: p.name, team: p.teamName, value: avg.toFixed(3), sortValue: avg };
-      })
-      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
-  );
+  const hasBatAB = p => p.seasonStats?.batting?.atBats > 0;
+  const hasIP = p => p.seasonStats?.pitching?.inningsPitched > 0;
 
-  const homeRuns = makeRanking(
-    allPlayers.filter(p => p.seasonStats?.batting?.homeruns > 0)
-      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.batting.homeruns, sortValue: p.seasonStats.batting.homeruns }))
-      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
-  );
-
-  const rbis = makeRanking(
-    allPlayers.filter(p => p.seasonStats?.batting?.rbis > 0)
-      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.batting.rbis, sortValue: p.seasonStats.batting.rbis }))
-      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
-  );
-
-  const stolenBases = makeRanking(
-    allPlayers.filter(p => p.seasonStats?.batting?.stolenBases > 0)
-      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.batting.stolenBases, sortValue: p.seasonStats.batting.stolenBases }))
-      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
-  );
-
-  const era = makeRanking(
-    allPlayers.filter(p => p.seasonStats?.pitching?.inningsPitched > 0)
-      .map(p => {
-        const s = p.seasonStats.pitching;
-        const e = (s.earnedRuns * 27) / s.inningsPitched;
-        return { rank: 0, name: p.name, team: p.teamName, value: e.toFixed(2), sortValue: e };
-      })
-      .sort((a, b) => a.sortValue - b.sortValue).slice(0, 10)
-  );
-
-  const wins = makeRanking(
-    allPlayers.filter(p => p.seasonStats?.pitching?.wins > 0)
-      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.pitching.wins, sortValue: p.seasonStats.pitching.wins }))
-      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
-  );
-
-  const holds = makeRanking(
-    allPlayers.filter(p => p.seasonStats?.pitching?.holds > 0)
-      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.pitching.holds, sortValue: p.seasonStats.pitching.holds }))
-      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
-  );
-
-  const saves = makeRanking(
-    allPlayers.filter(p => p.seasonStats?.pitching?.saves > 0)
-      .map(p => ({ rank: 0, name: p.name, team: p.teamName, value: p.seasonStats.pitching.saves, sortValue: p.seasonStats.pitching.saves }))
-      .sort((a, b) => b.sortValue - a.sortValue).slice(0, 10)
-  );
-
-  return { battingAverage, homeRuns, rbis, stolenBases, era, wins, holds, saves };
+  return {
+    battingAverage: buildRanking(hasBatAB, p => p.seasonStats.batting.hits / p.seasonStats.batting.atBats, v => v.toFixed(3)),
+    homeRuns: buildRanking(p => p.seasonStats?.batting?.homeruns > 0, p => p.seasonStats.batting.homeruns),
+    rbis: buildRanking(p => p.seasonStats?.batting?.rbis > 0, p => p.seasonStats.batting.rbis),
+    stolenBases: buildRanking(p => p.seasonStats?.batting?.stolenBases > 0, p => p.seasonStats.batting.stolenBases),
+    era: buildRanking(hasIP, p => (p.seasonStats.pitching.earnedRuns * 27) / p.seasonStats.pitching.inningsPitched, v => v.toFixed(2), true),
+    wins: buildRanking(p => p.seasonStats?.pitching?.wins > 0, p => p.seasonStats.pitching.wins),
+    holds: buildRanking(p => p.seasonStats?.pitching?.holds > 0, p => p.seasonStats.pitching.holds),
+    saves: buildRanking(p => p.seasonStats?.pitching?.saves > 0, p => p.seasonStats.pitching.saves),
+  };
 }
 
 /**
@@ -400,102 +265,42 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
  * @returns {Object} - playerId -> { bonus: number, awards: string[] }
  */
 function computeSeasonAwardBonuses(allTeams) {
-  const bonusMap = {}; // playerId -> { bonus, awards }
-
+  const bonusMap = {};
   const addBonus = (playerId, points, awardName) => {
     if (!bonusMap[playerId]) bonusMap[playerId] = { bonus: 0, awards: [] };
     bonusMap[playerId].bonus += points;
     bonusMap[playerId].awards.push(awardName);
   };
 
-  // 全選手を収集（IDで重複排除）
   const allPlayers = [];
-  const seenIds2 = new Set();
-  Object.entries(allTeams).forEach(([teamName, team]) => {
+  Object.values(allTeams).forEach(team => {
     if (!team.players) return;
-    team.players.forEach(player => {
-      if (player.id != null && seenIds2.has(player.id)) return;
-      if (player.id != null) seenIds2.add(player.id);
-      if (player.seasonStats) {
-        allPlayers.push(player);
-      }
-    });
+    team.players.forEach(p => { if (p.seasonStats) allPlayers.push(p); });
   });
 
-  // 打撃ランキング（規定打席: 100打席以上）
+  const getBattingAvg = p => p.seasonStats.batting.atBats > 0 ? p.seasonStats.batting.hits / p.seasonStats.batting.atBats : 0;
+  const getEra = p => p.seasonStats.pitching.inningsPitched > 0 ? (p.seasonStats.pitching.earnedRuns * 27) / p.seasonStats.pitching.inningsPitched : 99.99;
+
+  const awardRanking = (players, getValue, title, ascending = false) => {
+    if (players.length === 0) return;
+    const sorted = [...players].sort((a, b) => ascending ? getValue(a) - getValue(b) : getValue(b) - getValue(a));
+    addBonus(sorted[0].id, 10, `${title}1位`);
+    if (sorted.length >= 2) addBonus(sorted[1].id, 5, `${title}2位`);
+  };
+
   const qualifiedBatters = allPlayers.filter(p => p.seasonStats?.batting?.atBats >= 100);
+  awardRanking(qualifiedBatters, getBattingAvg, '首位打者');
+  awardRanking(qualifiedBatters, p => p.seasonStats.batting.homeruns || 0, '本塁打王');
+  awardRanking(qualifiedBatters, p => p.seasonStats.batting.rbis || 0, '打点王');
+  awardRanking(qualifiedBatters, p => p.seasonStats.batting.stolenBases || 0, '盗塁王');
 
-  if (qualifiedBatters.length >= 1) {
-    // 首位打者（打率）
-    const baSorted = [...qualifiedBatters].sort((a, b) => {
-      const avgA = a.seasonStats.batting.hits / a.seasonStats.batting.atBats;
-      const avgB = b.seasonStats.batting.hits / b.seasonStats.batting.atBats;
-      return avgB - avgA;
-    });
-    addBonus(baSorted[0].id, 10, '首位打者1位');
-    if (baSorted.length >= 2) addBonus(baSorted[1].id, 5, '首位打者2位');
-
-    // 本塁打王
-    const hrSorted = [...qualifiedBatters].sort((a, b) =>
-      (b.seasonStats.batting.homeruns || 0) - (a.seasonStats.batting.homeruns || 0)
-    );
-    addBonus(hrSorted[0].id, 10, '本塁打王1位');
-    if (hrSorted.length >= 2) addBonus(hrSorted[1].id, 5, '本塁打王2位');
-
-    // 打点王
-    const rbiSorted = [...qualifiedBatters].sort((a, b) =>
-      (b.seasonStats.batting.rbis || 0) - (a.seasonStats.batting.rbis || 0)
-    );
-    addBonus(rbiSorted[0].id, 10, '打点王1位');
-    if (rbiSorted.length >= 2) addBonus(rbiSorted[1].id, 5, '打点王2位');
-
-    // 盗塁王
-    const sbSorted = [...qualifiedBatters].sort((a, b) =>
-      (b.seasonStats.batting.stolenBases || 0) - (a.seasonStats.batting.stolenBases || 0)
-    );
-    addBonus(sbSorted[0].id, 10, '盗塁王1位');
-    if (sbSorted.length >= 2) addBonus(sbSorted[1].id, 5, '盗塁王2位');
-  }
-
-  // 投手ランキング（規定投球回: 30イニング以上）
   const qualifiedPitchers = allPlayers.filter(p => p.seasonStats?.pitching?.inningsPitched >= 30);
+  awardRanking(qualifiedPitchers, getEra, '最優秀防御率', true);
+  awardRanking(qualifiedPitchers, p => p.seasonStats.pitching.wins || 0, '最多勝');
+  awardRanking(qualifiedPitchers, p => p.seasonStats.pitching.strikeouts || 0, '最多奪三振');
 
-  if (qualifiedPitchers.length >= 1) {
-    // 最優秀防御率（低いほど良い）
-    const eraSorted = [...qualifiedPitchers].sort((a, b) => {
-      const eraA = a.seasonStats.pitching.inningsPitched > 0
-        ? (a.seasonStats.pitching.earnedRuns * 27) / a.seasonStats.pitching.inningsPitched : 99.99;
-      const eraB = b.seasonStats.pitching.inningsPitched > 0
-        ? (b.seasonStats.pitching.earnedRuns * 27) / b.seasonStats.pitching.inningsPitched : 99.99;
-      return eraA - eraB;
-    });
-    addBonus(eraSorted[0].id, 10, '最優秀防御率1位');
-    if (eraSorted.length >= 2) addBonus(eraSorted[1].id, 5, '最優秀防御率2位');
-
-    // 最多勝
-    const winsSorted = [...qualifiedPitchers].sort((a, b) =>
-      (b.seasonStats.pitching.wins || 0) - (a.seasonStats.pitching.wins || 0)
-    );
-    addBonus(winsSorted[0].id, 10, '最多勝1位');
-    if (winsSorted.length >= 2) addBonus(winsSorted[1].id, 5, '最多勝2位');
-
-    // 最多奪三振
-    const soSorted = [...qualifiedPitchers].sort((a, b) =>
-      (b.seasonStats.pitching.strikeouts || 0) - (a.seasonStats.pitching.strikeouts || 0)
-    );
-    addBonus(soSorted[0].id, 10, '最多奪三振1位');
-    if (soSorted.length >= 2) addBonus(soSorted[1].id, 5, '最多奪三振2位');
-  }
-
-  // 最多セーブ（規定投球回不要、セーブ1以上）
   const savePitchers = allPlayers.filter(p => (p.seasonStats?.pitching?.saves || 0) > 0);
-  if (savePitchers.length >= 1) {
-    const savesSorted = [...savePitchers].sort((a, b) =>
-      (b.seasonStats.pitching.saves || 0) - (a.seasonStats.pitching.saves || 0)
-    );
-    addBonus(savesSorted[0].id, 10, '最多セーブ1位');
-    if (savesSorted.length >= 2) addBonus(savesSorted[1].id, 5, '最多セーブ2位');
-  }
+  awardRanking(savePitchers, p => p.seasonStats.pitching.saves || 0, '最多セーブ');
 
   return bonusMap;
 }
