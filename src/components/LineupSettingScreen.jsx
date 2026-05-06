@@ -1025,6 +1025,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <span className={`font-bold text-sm truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`} style={{ width: '5.5rem', minWidth: '5.5rem', maxWidth: '5.5rem' }}>
                   {player.name}
                 </span>
+                <span className="text-[10px] text-gray-500 shrink-0 w-4">{player.age || ''}</span>
                 <span className={`text-[11px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                   {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
                 </span>
