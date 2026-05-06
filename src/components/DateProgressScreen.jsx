@@ -1829,12 +1829,12 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-bold text-gray-400">
               控え野手
-              {showBench && swapTarget !== null
+              {swapTarget !== null
                 ? <span className="text-blue-400 ml-1">→ {swapTarget}番と交代する選手をタップ</span>
                 : <span className="text-gray-600 font-normal ml-1">スタメンをタップ後、控えをタップで交代</span>
               }
             </h3>
-            {showBench && swapTarget !== null && (
+            {swapTarget !== null && (
               <button onClick={() => { setShowBench(false); setSwapTarget(null); }} className="text-gray-500 hover:text-white text-xs">✕</button>
             )}
           </div>
@@ -1845,7 +1845,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
               const bats = player.batting?.bats || 'right';
               const batsLabel = bats === 'left' ? '左' : bats === 'switch' ? '両' : '右';
               const batsColor = bats === 'left' ? 'text-blue-400' : bats === 'switch' ? 'text-purple-400' : 'text-gray-500';
-              const canSwap = showBench && swapTarget !== null;
+              const canSwap = swapTarget !== null;
               return (
                 <div
                   key={player.id}
