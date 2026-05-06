@@ -1776,9 +1776,10 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     ['left','center','right'].includes(pos) ? 'bg-green-800 text-green-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[pos] || pos}</span>
-                  <span className={`font-bold text-white w-20 truncate shrink-0`}>{player.name}</span>
+                  <span className={`font-bold text-white truncate shrink-0`} style={{width:'4.5rem'}}>{player.name}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0 w-5 text-right">{player.age || ''}</span>
                   <span className={`shrink-0 ${CONDITION_COLORS[cond]}`} title={CONDITION_LABELS[cond]}>{CONDITION_ICONS[cond]}</span>
-                  <span className={`text-xs ${batsColor} shrink-0`}>{batsLabel}</span>
+                  <span className={`text-xs ${batsColor} shrink-0 w-3`}>{batsLabel}</span>
                   {/* 疲労ゲージ */}
                   {pos !== 'pitcher' && (() => {
                     const maxW = 32;
@@ -1802,13 +1803,13 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                   <span className="flex-1" />
                   {(() => {
                     const bs = player.seasonStats?.batting;
-                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-xs">-</span>;
+                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-xs shrink-0" style={{width:'7.5rem'}}>-</span>;
                     const avg = (bs.hits / bs.atBats).toFixed(3);
                     return (
-                      <span className="text-xs text-gray-400 flex gap-1.5 shrink-0">
-                        <span className="text-blue-300">{avg}</span>
-                        <span>{bs.homeruns || 0}本</span>
-                        <span>{bs.rbis || 0}点</span>
+                      <span className="text-xs text-gray-400 shrink-0 font-mono tabular-nums" style={{width:'7.5rem'}}>
+                        <span className="text-blue-300 inline-block w-9 text-right">{avg}</span>
+                        <span className="inline-block w-7 text-right">{bs.homeruns || 0}本</span>
+                        <span className="inline-block w-8 text-right">{bs.rbis || 0}点</span>
                       </span>
                     );
                   })()}
@@ -1854,16 +1855,17 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     canSwap ? 'bg-gray-800 hover:bg-blue-900 ring-1 ring-blue-800/50 cursor-pointer' : 'bg-gray-800/60'
                   }`}
                 >
-                  <span className={`text-[10px] px-1 rounded ${
+                  <span className={`text-[10px] px-1 rounded shrink-0 w-7 text-center ${
                     ['left','center','right'].includes(player.position) ? 'bg-green-800 text-green-200' :
                     player.position === 'catcher' ? 'bg-blue-800 text-blue-200' :
                     'bg-yellow-800 text-yellow-200'
                   }`}>{POSITION_NAMES[player.position] || player.position}</span>
-                  <span className="font-bold text-white" style={{whiteSpace:'nowrap'}}>{player.name}</span>
+                  <span className="font-bold text-white shrink-0 truncate" style={{width:'4.5rem'}}>{player.name}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0 w-5 text-right">{player.age || ''}</span>
                   <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                     {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
                   </span>
-                  <span className={`text-[10px] ${batsColor}`}>{batsLabel}</span>
+                  <span className={`text-[10px] ${batsColor} shrink-0 w-3`}>{batsLabel}</span>
                   {(() => {
                     const maxW = 24;
                     const ratio = Math.min(1, f / 150);
@@ -1884,13 +1886,13 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                   <span className="flex-1" />
                   {(() => {
                     const bs = player.seasonStats?.batting;
-                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px]">-</span>;
+                    if (!bs || !bs.atBats) return <span className="text-gray-600 text-[10px] shrink-0" style={{width:'7.5rem'}}>-</span>;
                     const avg = (bs.hits / bs.atBats).toFixed(3);
                     return (
-                      <span className="text-[10px] text-gray-400 flex gap-1.5 shrink-0">
-                        <span className="text-blue-300">{avg}</span>
-                        <span>{bs.homeruns || 0}本</span>
-                        <span>{bs.rbis || 0}点</span>
+                      <span className="text-[10px] text-gray-400 shrink-0 font-mono tabular-nums" style={{width:'7.5rem'}}>
+                        <span className="text-blue-300 inline-block w-9 text-right">{avg}</span>
+                        <span className="inline-block w-7 text-right">{bs.homeruns || 0}本</span>
+                        <span className="inline-block w-8 text-right">{bs.rbis || 0}点</span>
                       </span>
                     );
                   })()}
