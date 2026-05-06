@@ -179,19 +179,6 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
           </div>
         </div>
 
-        {/* 選択中のプリセット情報 */}
-        {selectedPreset && (
-          <div className="bg-blue-900 border border-blue-700 rounded-lg p-4 mb-6">
-            <div className="text-white">
-              <div className="font-bold text-lg mb-2">
-                📋 {REGULATION_PRESETS[selectedPreset].name}
-              </div>
-              <div className="text-sm text-blue-200">
-                {getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* 詳細設定 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
