@@ -12,6 +12,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [benchSortAsc, setBenchSortAsc] = useState(false);
   const [selectedDefensePos, setSelectedDefensePos] = useState(null);
   const [swapSource, setSwapSource] = useState(null); // クリックで打順入れ替え用
+  const [selectedBenchPlayer, setSelectedBenchPlayer] = useState(null); // 控え選手→スタメン入れ替え用
   const [roleSelectPlayer, setRoleSelectPlayer] = useState(null); // ロール選択モーダル対象
   const [posConvertPlayer, setPosConvertPlayer] = useState(null); // ポジション変更モーダル対象
   const [detailPlayer, setDetailPlayer] = useState(null); // 投手詳細モーダル対象
@@ -510,7 +511,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       <tr
         className={`border-b border-gray-700/30 cursor-pointer transition-colors ${
           isInLineup ? 'opacity-30' :
-          swapSource !== null ? 'hover:bg-blue-900/30' :
+          selectedBenchPlayer === player.id ? 'bg-blue-900/40 ring-1 ring-blue-400/30' :
+          swapSource !== null || selectedBenchPlayer !== null ? 'hover:bg-blue-900/30' :
           'hover:bg-gray-700/40'
         }`}
         onClick={() => {
@@ -521,19 +523,23 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             if (entry && entry.position !== 'pitcher') {
               entry.playerId = player.id;
               setSwapSource(null);
+              setSelectedBenchPlayer(null);
               setUpdateTrigger(prev => prev + 1);
             }
             return;
           }
-          // 1-8番が選択されている場合は、投手でも野手としてスタメンに追加
-          if (selectedBattingOrder && selectedBattingOrder >= 1 && selectedBattingOrder <= 8) {
-            handleAddToLineup(player.id);
-          } else if (isPitcher) {
-            // 打順未選択または9番の場合は投手枠を交換
-            handleChangePitcher(player.id);
-          } else {
-            handleAddToLineup(player.id);
+          // 空き打順が選択されている場合 → そこに追加
+          if (selectedBattingOrder && selectedBattingOrder >= 1 && selectedBattingOrder <= maxFielderSlots) {
+            const slotEntry = lineup.find(e => e.battingOrder === selectedBattingOrder);
+            if (!slotEntry) {
+              handleAddToLineup(player.id);
+              return;
+            }
           }
+          // 控え選手を選択（トグル）→ スタメン枠タップで入れ替え
+          setSelectedBenchPlayer(prev => prev === player.id ? null : player.id);
+          setSwapSource(null);
+          setSelectedBattingOrder(null);
         }}
       >
         <td className="py-1.5 pl-2 pr-1 text-sm text-white font-semibold whitespace-nowrap">
@@ -663,7 +669,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   {lineup.filter(e => e.position !== 'pitcher').length}/{maxFielderSlots}
                 </span>
                 {useDH && <span className="text-[10px] text-purple-400 font-medium">DH制</span>}
-                {swapSource !== null && (
+                {(swapSource !== null || selectedBenchPlayer !== null) && (
                   <span className="text-blue-400 text-[10px] ml-auto">→ 入替先を選択</span>
                 )}
               </div>
@@ -677,7 +683,25 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   const isSwapSource = swapSource === order;
                   const isSwapTarget = swapSource !== null && swapSource !== order;
 
+                  const isBenchTarget = selectedBenchPlayer !== null;
+
                   const handleSlotClick = () => {
+                    if (selectedBenchPlayer !== null) {
+                      // 控え選手が選択済み → このスタメン枠に入れる
+                      if (entry && entry.position !== 'pitcher') {
+                        entry.playerId = selectedBenchPlayer;
+                        setSelectedBenchPlayer(null);
+                        setUpdateTrigger(prev => prev + 1);
+                      } else if (!entry && order <= maxFielderSlots) {
+                        const bp = team.players.find(p => p.id === selectedBenchPlayer);
+                        const pos = bp?.position === 'pitcher' ? 'first' : (bp?.position || 'first');
+                        lineup.push({ playerId: selectedBenchPlayer, position: pos, battingOrder: order });
+                        lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+                        setSelectedBenchPlayer(null);
+                        setUpdateTrigger(prev => prev + 1);
+                      }
+                      return;
+                    }
                     if (swapSource !== null) {
                       // 入れ替え実行
                       if (swapSource !== order) {
@@ -687,9 +711,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     } else if (entry) {
                       // 選手がいる枠をタップ → 入れ替えソースにする
                       setSwapSource(order);
+                      setSelectedBenchPlayer(null);
+                      setSelectedBattingOrder(null);
                     } else {
                       // 空枠をタップ → 追加モード
                       setSelectedBattingOrder(order);
+                      setSelectedBenchPlayer(null);
                     }
                   };
 
@@ -697,6 +724,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <div key={order} onClick={handleSlotClick} className={`rounded-lg cursor-pointer transition-all border ${
                       isSwapSource ? 'bg-blue-900/50 border-blue-500/70 ring-1 ring-blue-400/30' :
                       isSwapTarget ? 'bg-gray-800 border-blue-400/30 hover:border-blue-400/60 hover:bg-blue-900/20' :
+                      isBenchTarget ? 'bg-gray-800 border-blue-400/30 hover:border-blue-400/60 hover:bg-blue-900/20' :
                       isSelected   ? 'bg-blue-900/40 border-blue-500/60 ring-1 ring-blue-400/30' :
                       player ? (isPitcherSlot
                         ? 'bg-indigo-950/60 border-indigo-700/40 hover:border-indigo-600/60'
@@ -821,7 +849,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   控え選手
                   <span className="ml-1.5 text-gray-500 font-normal text-xs">{benchPlayers.length}人</span>
                 </h2>
-                {swapSource !== null ? (
+                {selectedBenchPlayer !== null ? (
+                  <span className="bg-blue-900/50 text-blue-300 border border-blue-700/40 text-[10px] px-2 py-0.5 rounded-full">
+                    → スタメン枠を選択
+                  </span>
+                ) : swapSource !== null ? (
                   <span className="bg-blue-900/50 text-blue-300 border border-blue-700/40 text-[10px] px-2 py-0.5 rounded-full">
                     {swapSource}番と入れ替え
                   </span>
