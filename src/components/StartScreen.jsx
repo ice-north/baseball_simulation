@@ -115,49 +115,54 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onManual, hasSa
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center space-y-4">
+          <div className="flex flex-col items-center space-y-3">
             <button
               onClick={onNewGame}
-              className="w-80 bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg"
+              className="group w-80 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-8 py-4 rounded-xl font-bold text-2xl transition-all shadow-lg shadow-green-900/30 active:scale-[0.98] flex items-center justify-center gap-3"
             >
+              <span className="text-3xl group-hover:scale-110 transition-transform">🎮</span>
               NEW GAME
             </button>
 
             <button
               onClick={onSandbox}
-              className="w-80 bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg"
+              className="group w-80 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white px-8 py-4 rounded-xl font-bold text-2xl transition-all shadow-lg shadow-orange-900/30 active:scale-[0.98] flex items-center justify-center gap-3"
             >
+              <span className="text-3xl group-hover:scale-110 transition-transform">🏗</span>
               SANDBOX
             </button>
 
             <button
               onClick={handleContinue}
               disabled={!hasSaveData}
-              className={`w-80 px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg ${
+              className={`group w-80 px-8 py-4 rounded-xl font-bold text-2xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-3 ${
                 hasSaveData
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-900/30'
+                  : 'bg-gray-700/50 text-gray-500 cursor-not-allowed shadow-none'
               }`}
             >
+              <span className="text-3xl group-hover:scale-110 transition-transform">📂</span>
               CONTINUE
             </button>
 
             <button
               onClick={handleEdit}
               disabled={!hasSaveData}
-              className={`w-80 px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg ${
+              className={`group w-80 px-8 py-4 rounded-xl font-bold text-2xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-3 ${
                 hasSaveData
-                  ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white shadow-purple-900/30'
+                  : 'bg-gray-700/50 text-gray-500 cursor-not-allowed shadow-none'
               }`}
             >
+              <span className="text-3xl group-hover:scale-110 transition-transform">✏️</span>
               EDIT
             </button>
 
             <button
               onClick={onManual}
-              className="w-80 bg-yellow-700 hover:bg-yellow-600 text-white px-8 py-4 rounded-lg font-bold text-2xl transition shadow-lg"
+              className="group w-80 bg-gray-700/80 hover:bg-gray-600 text-gray-300 hover:text-white px-8 py-3 rounded-xl font-bold text-lg transition-all border border-gray-600/50 hover:border-gray-500 active:scale-[0.98] flex items-center justify-center gap-3"
             >
+              <span className="text-2xl">📖</span>
               MANUAL
             </button>
           </div>

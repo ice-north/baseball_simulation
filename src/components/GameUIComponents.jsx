@@ -311,18 +311,22 @@ export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
 // --- SidebarButton コンポーネント ---
 export const SidebarButton = ({ view, icon, label, color = 'green', onActiveClick, screenMode, managementView, setScreenMode, setManagementView }) => {
   const isActive = screenMode === 'management' && managementView === view;
-  const activeColors = { green: 'bg-green-600/90 text-white', yellow: 'bg-yellow-600/90 text-white', blue: 'bg-blue-600/90 text-white' };
+  const activeColors = { green: 'bg-green-600/20 text-green-300 border-green-400', yellow: 'bg-yellow-600/20 text-yellow-300 border-yellow-400', blue: 'bg-blue-600/20 text-blue-300 border-blue-400' };
+  const hoverColors = { green: 'hover:bg-green-900/20 hover:text-green-300', yellow: 'hover:bg-yellow-900/20 hover:text-yellow-300', blue: 'hover:bg-blue-900/20 hover:text-blue-300' };
   return (
     <button
       onClick={() => {
         if (isActive && onActiveClick) { onActiveClick(); return; }
         setScreenMode('management'); setManagementView(view);
       }}
-      className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-all ${
-        isActive ? `${activeColors[color] || activeColors.green} shadow-sm` : 'text-gray-300 hover:bg-gray-800/80 hover:text-white'
+      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2.5 ${
+        isActive
+          ? `${activeColors[color] || activeColors.green} border-l-[3px] shadow-sm`
+          : `text-gray-400 ${hoverColors[color] || hoverColors.green} border-l-[3px] border-transparent`
       }`}
     >
-      <span className="mr-2">{icon}</span>{label}
+      <span className="text-base w-5 text-center shrink-0">{icon}</span>
+      <span>{label}</span>
     </button>
   );
 };
@@ -341,40 +345,44 @@ export const Sidebar = ({
   exportTeam,
   importTeam
 }) => (
-  <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-800">
-    <div className="px-4 py-3 border-b border-gray-800">
-      <h2 className={`text-lg font-bold ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
-      <div className="text-xs text-gray-500 mt-0.5">
-        {gameMode === 'sandbox' && <span className="text-orange-400/70">[箱庭] </span>}
-        {seasonData?.year || 1}年目 {seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}
+  <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-700/50">
+    <div className="px-4 py-4 border-b border-gray-700/50 bg-gray-800/30">
+      <h2 className={`text-lg font-black tracking-tight ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
+      <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
+        {gameMode === 'sandbox' && <span className="text-orange-400/80 bg-orange-400/10 px-1.5 py-0.5 rounded text-[10px] font-bold">箱庭</span>}
+        <span>{seasonData?.year || 1}年目</span>
+        <span className="text-gray-600">|</span>
+        <span>{seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}</span>
       </div>
     </div>
 
-    <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-2 pb-1">進行</div>
-      <SidebarButton view="dateprogress" icon="▶" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+    <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">進行</div>
+      <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
-      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-3 pb-1">チーム</div>
+      <div className="border-t border-gray-700/40 my-2"></div>
+      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">チーム</div>
       <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="trade" icon="🔄" label="トレード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="halloffame" icon="🏆" label="資料室" color="yellow" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
-      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-3 pt-3 pb-1">システム</div>
+      <div className="border-t border-gray-700/40 my-2"></div>
+      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">システム</div>
       <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <button
         onClick={() => exportTeam(userTeamName)}
-        className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-gray-800/80 hover:text-white transition-all"
+        className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all flex items-center gap-2.5 border-l-[3px] border-transparent"
       >
-        <span className="mr-2">📤</span>エクスポート
+        <span className="text-base w-5 text-center shrink-0">📤</span><span>エクスポート</span>
       </button>
       <button
         onClick={() => importTeam(userTeamName)}
-        className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-gray-800/80 hover:text-white transition-all"
+        className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all flex items-center gap-2.5 border-l-[3px] border-transparent"
       >
-        <span className="mr-2">📥</span>インポート
+        <span className="text-base w-5 text-center shrink-0">📥</span><span>インポート</span>
       </button>
     </nav>
   </div>

@@ -883,8 +883,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 )}
               </h2>
               <div className="flex gap-1">
-                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700/80 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-95 border border-gray-600/30">◀</button>
-                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700/80 hover:bg-gray-600 text-white w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-95 border border-gray-600/30">▶</button>
+                <button onClick={() => setSelectedMonth(m => m > 1 ? m - 1 : 12)} className="bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white w-10 h-10 rounded-xl flex items-center justify-center text-base transition-all active:scale-90 border border-gray-600/30 hover:border-gray-500">◀</button>
+                <button onClick={() => setSelectedMonth(m => m < 12 ? m + 1 : 1)} className="bg-gray-700/60 hover:bg-gray-600 text-gray-300 hover:text-white w-10 h-10 rounded-xl flex items-center justify-center text-base transition-all active:scale-90 border border-gray-600/30 hover:border-gray-500">▶</button>
               </div>
             </div>
 
@@ -902,7 +902,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 return (
                   <div key={i} className={`min-h-[62px] p-1 rounded-lg text-sm transition-all ${
                     cell.day === null ? 'bg-transparent' :
-                    cell.isToday ? 'bg-gradient-to-br from-green-800/90 to-emerald-900/80 border-2 border-green-400/80 shadow-lg shadow-green-900/50 ring-1 ring-green-400/20' :
+                    cell.isToday ? 'bg-gradient-to-br from-green-700/90 to-emerald-800/80 border-2 border-green-400 shadow-lg shadow-green-500/30 ring-2 ring-green-400/30' :
+                    hasUserGame && !cell.games.some(g => g.result) ? 'bg-blue-900/30 border border-blue-500/20 hover:border-blue-400/40' :
                     hasUserGame && cell.games.some(g => g.result) ? 'bg-gray-700/60 border border-gray-600/20' :
                     colIdx === 0 ? 'bg-gray-800/60 hover:bg-gray-700/60' :
                     colIdx === 6 ? 'bg-gray-800/60 hover:bg-gray-700/60' :
@@ -1905,20 +1906,22 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         <div className="flex gap-3 justify-center">
           <button
             onClick={() => handleGameChoice('manage')}
-            className="bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg shadow-lg shadow-green-900/30 active:scale-95"
+            className="group bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3.5 px-8 rounded-xl transition-all text-lg shadow-lg shadow-green-900/40 active:scale-95 flex items-center gap-2"
           >
+            <span className="text-xl group-hover:scale-110 transition-transform">🎮</span>
             試合采配
           </button>
           <button
             onClick={() => handleGameChoice('skip')}
-            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg active:scale-95"
+            className="bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white font-bold py-3.5 px-8 rounded-xl transition-all text-lg active:scale-95 border border-gray-600/50 hover:border-gray-500 flex items-center gap-2"
           >
+            <span className="text-xl">⏭</span>
             試合スキップ
           </button>
         </div>
         <button
           onClick={() => setShowGameChoiceModal(false)}
-          className="mt-3 w-full text-center text-gray-500 hover:text-gray-300 text-sm transition"
+          className="mt-4 w-full text-center text-gray-500 hover:text-gray-300 text-sm py-2 rounded-lg hover:bg-gray-700/30 transition-all"
         >
           キャンセル
         </button>

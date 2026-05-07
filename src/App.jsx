@@ -2253,9 +2253,10 @@ if (newOuts === 3) {
               {!managedGameInfo && (
                 <button
                   onClick={() => setScreenMode('management')}
-                  className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded transition"
+                  className="bg-gray-700/80 hover:bg-gray-600 text-gray-300 hover:text-white px-5 py-2.5 rounded-xl transition-all border border-gray-600/50 hover:border-gray-500 flex items-center gap-2 active:scale-95"
                 >
-                  ⚙️ 管理画面へ
+                  <span>⚙️</span>
+                  <span className="font-medium">管理画面へ</span>
                 </button>
               )}
             </div>
@@ -2336,9 +2337,9 @@ if (newOuts === 3) {
                                 </span>
                                 <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
 <span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
-                                {isSubSelected && <span className="text-blue-300">👆</span>}
-                                {isSelected && <span className="text-blue-300">👆</span>}
-                                {isPositionSelected && <span className="text-purple-300">🔄</span>}
+                                {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
+                                {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
+                                {isPositionSelected && <span className="text-purple-300 animate-pulse">◀</span>}
                               </div>
                               <div className="ml-9 mt-0.5">
                                 <div className="flex gap-3 text-xs text-gray-500 font-bold">
@@ -3633,9 +3634,9 @@ if (newOuts === 3) {
                                 </span>
                                 <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
 <span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
-                                {isSubSelected && <span className="text-blue-300">👆</span>}
-                                {isSelected && <span className="text-blue-300">👆</span>}
-                                {isPositionSelected && <span className="text-purple-300">🔄</span>}
+                                {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
+                                {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
+                                {isPositionSelected && <span className="text-purple-300 animate-pulse">◀</span>}
                               </div>
                               <div className="ml-9 mt-0.5">
                                 <div className="flex gap-3 text-xs text-gray-500 font-bold">
