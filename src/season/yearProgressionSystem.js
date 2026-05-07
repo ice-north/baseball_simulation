@@ -790,7 +790,8 @@ export function updateGrowthModifiers(allTeams, awards) {
  */
 export function advanceToNextYear(seasonData, allTeams) {
   // 1. シーズン終了処理（表彰）
-  const awards = processSeasonEnd(seasonData, allTeams);
+  // ドラフト前にfrozenAwardsが確定済みならそれを使用（指名選手がランキングから消えるのを防ぐ）
+  const awards = seasonData.frozenAwards || processSeasonEnd(seasonData, allTeams);
 
   // 2. タイトルを選手に記録
   let updatedTeams = recordAwardsToPlayers(allTeams, awards);
@@ -798,8 +799,10 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
   updateGrowthModifiers(updatedTeams, awards);
 
-  // 2.8. ランキングをスナップショット（成績リセット前に確定）
-  seasonData.finalRankings = snapshotRankings(updatedTeams);
+  // 2.8. ランキングをスナップショット（ドラフト前に確定済みならそのまま使用）
+  if (!seasonData.finalRankings) {
+    seasonData.finalRankings = snapshotRankings(updatedTeams);
+  }
 
   // 3. シーズン統計を通算に加算してリセット
   updatedTeams = resetSeasonStats(updatedTeams, seasonData.year);
@@ -845,8 +848,8 @@ export function advanceToNextYear(seasonData, allTeams) {
  * @returns {Object} - { newSeasonData, updatedTeams, awards, retirements: [] }
  */
 export function advanceToNextYearSandbox(seasonData, allTeams) {
-  // 1. シーズン終了処理（表彰）
-  const awards = processSeasonEnd(seasonData, allTeams);
+  // 1. シーズン終了処理（表彰）- 確定済みのfrozenAwardsがあればそれを使用
+  const awards = seasonData.frozenAwards || processSeasonEnd(seasonData, allTeams);
 
   // 2. タイトルを選手に記録
   let updatedTeams = recordAwardsToPlayers(allTeams, awards);

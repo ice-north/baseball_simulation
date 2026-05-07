@@ -6,7 +6,7 @@ import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
-import { processNPBDraft, processSeasonEnd, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { processNPBDraft, processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 import { generateExpansionRoster } from '../season/tryoutSystem.js';
 
 import ScheduleScreen from './ScheduleScreen.jsx';
@@ -118,16 +118,21 @@ const ManagementScreen = ({
     onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
     onForceEvent={(eventType) => {
       if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft')) {
-        if (!seasonData.frozenAwards) {
-          const awards = processSeasonEnd(seasonData, TEAMS_DATA);
-          setSeasonData(prev => ({ ...prev, frozenAwards: awards }));
-        }
+        const update = {};
+        if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
+        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (Object.keys(update).length > 0) setSeasonData(prev => ({ ...prev, ...update }));
         setManagementView('offseason');
         return;
       }
       if (eventType === 'contract') setManagementView('contract');
       else if (eventType === 'tryout') setManagementView('tryout');
       else if (eventType === 'draft') {
+        // プロ指名で選手が消える前にランキング・表彰を確定する
+        const preUpdate = {};
+        if (!seasonData.frozenAwards) preUpdate.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
+        if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (Object.keys(preUpdate).length > 0) setSeasonData(prev => ({ ...prev, ...preUpdate }));
         const results = processNPBDraft(TEAMS_DATA);
         setDraftResults(results);
         if (results.draftedPlayers.length > 0) {
@@ -164,10 +169,10 @@ const ManagementScreen = ({
         setManagementView('draft');
       }
       else if (eventType === 'offseason') {
-        if (!seasonData.frozenAwards) {
-          const awards = processSeasonEnd(seasonData, TEAMS_DATA);
-          setSeasonData(prev => ({ ...prev, frozenAwards: awards }));
-        }
+        const update = {};
+        if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
+        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (Object.keys(update).length > 0) setSeasonData(prev => ({ ...prev, ...update }));
         setManagementView('offseason');
       }
     }}
