@@ -321,6 +321,30 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     player.position = newPosition;
     if (oldPos === 'pitcher' && newPosition !== 'pitcher') {
       handleSetPitcherRole(playerId, 'none');
+      // ラインナップの投手スロットを後任投手に差し替え
+      const pitcherEntry = lineup.find(e => e.playerId === playerId && e.position === 'pitcher');
+      if (pitcherEntry) {
+        const lineupIds = new Set(lineup.map(e => e.playerId));
+        const rotation = team.pitchingRotation;
+        const candidates = [
+          ...(rotation?.starters || []),
+          ...(rotation?.middleRelievers || []),
+          ...(rotation?.setupMen || []),
+          rotation?.closer,
+        ].filter(Boolean);
+        const replacement = candidates.find(pid => pid !== playerId && !lineupIds.has(pid))
+          || team.players.find(p => p.position === 'pitcher' && p.id !== playerId && !lineupIds.has(p.id))?.id;
+        if (replacement) {
+          pitcherEntry.playerId = replacement;
+        } else {
+          const idx = lineup.findIndex(e => e.playerId === playerId && e.position === 'pitcher');
+          if (idx !== -1) lineup.splice(idx, 1);
+        }
+      }
+      // 投手にpositionFitnessがなければ初期値を設定
+      if (!player.positionFitness) {
+        player.positionFitness = { catcher: 50, first: 50, second: 50, short: 50, third: 50, left: 60, center: 60, right: 60 };
+      }
     }
     setUpdateTrigger(prev => prev + 1);
   };
@@ -358,6 +382,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             <div className="grid grid-cols-3 gap-2">
               {POS_OPTIONS.map(pos => {
                 const isCurrent = player.position === pos.key;
+                const hasFitness = player.positionFitness != null;
                 const fitness = player.positionFitness?.[pos.key] ?? 0;
                 const fitnessColor = fitness >= 80 ? 'text-green-400' : fitness >= 50 ? 'text-yellow-400' : 'text-red-400';
                 return (
@@ -379,7 +404,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <span className="text-base">{pos.icon}</span>
                     <span className={`text-xs font-bold ${isCurrent ? 'text-blue-300' : 'text-white'}`}>{pos.label}</span>
                     {pos.key !== 'pitcher' && (
-                      <span className={`text-[10px] ${fitnessColor}`}>適性{fitness}</span>
+                      hasFitness
+                        ? <span className={`text-[10px] ${fitnessColor}`}>適性{fitness}</span>
+                        : <span className="text-[10px] text-gray-500">適性-</span>
                     )}
                     {isCurrent && <span className="text-[9px] text-blue-400">現在</span>}
                   </button>
