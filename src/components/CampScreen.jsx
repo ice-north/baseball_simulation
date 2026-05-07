@@ -1060,7 +1060,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             const base = player.growthPotential ?? 1.0;
                             const mod = player.growthModifier || 0;
                             const effective = Math.max(0.3, Math.min(1.8, base + mod));
-                            const color = effective >= 1.3 ? 'text-yellow-400' : effective >= 1.1 ? 'text-green-400' : effective <= 0.7 ? 'text-red-400' : effective <= 0.9 ? 'text-orange-400' : 'text-gray-400';
+                            const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-400';
                             return (
                               <span className={color} title={`基礎:${base.toFixed(2)} 変動:${mod >= 0 ? '+' : ''}${mod.toFixed(2)}`}>
                                 {effective.toFixed(2)}
