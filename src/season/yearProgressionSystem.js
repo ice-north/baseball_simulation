@@ -148,12 +148,25 @@ export function snapshotRankings(allTeams) {
   const hasBatAB = p => p.seasonStats?.batting?.atBats > 0;
   const hasIP = p => p.seasonStats?.pitching?.inningsPitched > 0;
 
+  const getOPS = p => {
+    const s = p.seasonStats.batting;
+    const obp = (s.hits + s.walks) / (s.atBats + s.walks);
+    const totalBases = (s.hits - (s.doubles || 0) - (s.triples || 0) - s.homeruns) + (s.doubles || 0) * 2 + (s.triples || 0) * 3 + s.homeruns * 4;
+    return obp + totalBases / s.atBats;
+  };
+  const getWHIP = p => {
+    const s = p.seasonStats.pitching;
+    return ((s.hits || 0) + (s.walks || 0)) / (s.inningsPitched / 3);
+  };
+
   return {
     battingAverage: buildRanking(hasBatAB, p => p.seasonStats.batting.hits / p.seasonStats.batting.atBats, v => v.toFixed(3)),
     homeRuns: buildRanking(p => p.seasonStats?.batting?.homeruns > 0, p => p.seasonStats.batting.homeruns),
     rbis: buildRanking(p => p.seasonStats?.batting?.rbis > 0, p => p.seasonStats.batting.rbis),
     stolenBases: buildRanking(p => p.seasonStats?.batting?.stolenBases > 0, p => p.seasonStats.batting.stolenBases),
+    ops: buildRanking(hasBatAB, getOPS, v => v.toFixed(3)),
     era: buildRanking(hasIP, p => (p.seasonStats.pitching.earnedRuns * 27) / p.seasonStats.pitching.inningsPitched, v => v.toFixed(2), true),
+    whip: buildRanking(hasIP, getWHIP, v => v.toFixed(2), true),
     wins: buildRanking(p => p.seasonStats?.pitching?.wins > 0, p => p.seasonStats.pitching.wins),
     holds: buildRanking(p => p.seasonStats?.pitching?.holds > 0, p => p.seasonStats.pitching.holds),
     saves: buildRanking(p => p.seasonStats?.pitching?.saves > 0, p => p.seasonStats.pitching.saves),
@@ -676,6 +689,7 @@ export function finalizePlayerSeason(player, year) {
   return {
     ...player,
     seasonFinalizedYear: year || '?',
+    fatigue: 0,
     statsHistory: [...existingHistory, statsHistoryEntry],
     previousSeasonStats: JSON.parse(JSON.stringify(player.seasonStats || {})),
     careerStats: {
@@ -953,6 +967,22 @@ export function applyAgeCurveChanges(allTeams) {
               stat, statName: getStatName(stat),
               before: currentValue, after: newValue, change
             });
+
+            // 球速変動時は肩力も連動（50%連動）
+            if (stat === 'velocity') {
+              const armChange = Math.round(change * 0.5);
+              if (armChange !== 0) {
+                const armPath = getStatPath('arm');
+                const currentArm = getNestedValue(updatedPlayer, armPath);
+                if (currentArm != null) {
+                  const newArm = Math.max(1, Math.min(99, currentArm + armChange));
+                  if (newArm !== currentArm) {
+                    updatedPlayer = setNestedValue(updatedPlayer, armPath, newArm);
+                    changes.push({ stat: 'arm', statName: getStatName('arm'), before: currentArm, after: newArm, change: newArm - currentArm });
+                  }
+                }
+              }
+            }
           }
         });
 

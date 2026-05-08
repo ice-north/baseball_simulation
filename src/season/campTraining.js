@@ -823,6 +823,25 @@ export function executeCampTraining(player, trainingType, newPitchType) {
         before: currentValue, after: newValue,
         growth: newValue - currentValue, isAwakening
       });
+
+      // 球速変動時は肩力も連動（投手: 球速→肩力の50%連動）
+      if (targetStat === 'velocity' && newValue !== currentValue) {
+        const velocityChange = newValue - currentValue;
+        const armChange = Math.round(velocityChange * 0.5);
+        if (armChange !== 0) {
+          const armPath = getStatPath('arm');
+          const currentArm = getNestedValue(updatedPlayer, armPath) || 50;
+          const newArm = Math.max(1, Math.min(99, currentArm + armChange));
+          if (newArm !== currentArm) {
+            updatedPlayer = setNestedValue(updatedPlayer, armPath, newArm);
+            growthReport.push({
+              stat: 'arm', statName: getStatName('arm'),
+              before: currentArm, after: newArm,
+              growth: newArm - currentArm, isAwakening: false, isLinked: true
+            });
+          }
+        }
+      }
     }
   });
 

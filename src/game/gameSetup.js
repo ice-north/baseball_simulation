@@ -367,14 +367,18 @@ export function executeHandleManagedGameEnd(ctx) {
 
     // セーブ投手判定: 最後に投げた投手で、3点差以内1イニング以上 or 3イニング以上
     const scoreDiff = Math.abs(finalScore.home - finalScore.away);
-    const lastPitcher = winPitchers.length > 1
-      ? winPitchers.find(p => p !== winPitcher && p.position === 'pitcher') || winPitchers.find(p => p !== winPitcher)
-      : null;
-    const savePitcher = lastPitcher && lastPitcher !== winPitcher &&
-      ((scoreDiff <= 3 && (lastPitcher.stats?.pitching?.outs || 0) >= 3) || (lastPitcher.stats?.pitching?.outs || 0) >= 9)
-      ? lastPitcher : null;
+    let savePitcher = null;
+    if (winPitchers.length > 1) {
+      const lastPitcher = winPitchers[winPitchers.length - 1];
+      if (lastPitcher && lastPitcher !== winPitcher) {
+        const outs = lastPitcher.stats?.pitching?.outs || 0;
+        if ((scoreDiff <= 3 && outs >= 3) || outs >= 9) {
+          savePitcher = lastPitcher;
+        }
+      }
+    }
 
-    // ホールド: 勝ちチームのリリーフで、勝ち投手でもセーブでもなく、1アウト以上
+    // ホールド: 勝ちチームのリリーフで、勝ち投手でもセーブでもなく、先発でもなく、1アウト以上
     const holdPitchers = winPitchers.filter(p =>
       p !== winPitcher && p !== savePitcher && p !== winStarter &&
       (p.stats?.pitching?.outs || 0) >= 1

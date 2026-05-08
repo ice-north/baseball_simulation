@@ -543,12 +543,12 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 二刀流選手の場合は投打両方に能力を持つ
   if (isTwoWay) {
     if (isPitcher) {
-      // 投手登録の二刀流: 投手能力が本職寄り、打撃もプロレベル
+      // 投手登録の二刀流: 投手能力が本職寄り、打撃は原石レベル
       const twoWayVelocity = Math.min(randVelocity(125, 145, ageBonus) + velocityAdjust, 152);
       return applyGlobalOffset({
-        meet: randRangeWithVariance(38, 60),
-        power: randRangeWithVariance(35, 60),
-        eye: randRangeWithVariance(35, 60),
+        meet: randRangeWithVariance(33, 55),
+        power: randRangeWithVariance(30, 55),
+        eye: randRangeWithVariance(30, 55),
         steal: randRangeWithVariance(30, 55),
         speed: randRangeWithVariance(45, 75),
         arm: armFromVelocity(twoWayVelocity),

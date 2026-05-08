@@ -129,6 +129,37 @@ const getWinsRanking = () => {
   return players;
 };
 
+const getOPSRanking = () => {
+  const players = getAllPlayersStats()
+    .filter(p => p.seasonStats?.batting?.atBats > 0)
+    .map(p => {
+      const s = p.seasonStats.batting;
+      const obp = (s.hits + s.walks) / (s.atBats + s.walks);
+      const totalBases = (s.hits - (s.doubles || 0) - (s.triples || 0) - s.homeruns) + (s.doubles || 0) * 2 + (s.triples || 0) * 3 + s.homeruns * 4;
+      const slg = totalBases / s.atBats;
+      return { rank: 0, name: p.name, team: p.teamName, value: (obp + slg).toFixed(3), sortValue: obp + slg };
+    })
+    .sort((a, b) => b.sortValue - a.sortValue)
+    .slice(0, 10);
+  players.forEach((p, i) => p.rank = i + 1);
+  return players;
+};
+
+const getWHIPRanking = () => {
+  const players = getAllPlayersStats()
+    .filter(p => p.seasonStats?.pitching?.inningsPitched > 0)
+    .map(p => {
+      const s = p.seasonStats.pitching;
+      const innings = s.inningsPitched / 3;
+      const whip = ((s.hits || 0) + (s.walks || 0)) / innings;
+      return { rank: 0, name: p.name, team: p.teamName, value: whip.toFixed(2), sortValue: whip };
+    })
+    .sort((a, b) => a.sortValue - b.sortValue)
+    .slice(0, 10);
+  players.forEach((p, i) => p.rank = i + 1);
+  return players;
+};
+
 const getHoldsRanking = () => {
   const players = getAllPlayersStats()
     .filter(p => p.seasonStats?.pitching?.holds > 0)
@@ -545,17 +576,19 @@ const ScheduleScreen = ({
       })()}
 
       {scheduleTab === 'batting' && (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           <RankingTable title="打率ランキング" data={seasonData?.finalRankings?.battingAverage || getBattingAverageRanking()} valueLabel="打率" />
           <RankingTable title="本塁打ランキング" data={seasonData?.finalRankings?.homeRuns || getHomeRunRanking()} valueLabel="本塁打" />
           <RankingTable title="打点ランキング" data={seasonData?.finalRankings?.rbis || getRBIRanking()} valueLabel="打点" />
           <RankingTable title="盗塁ランキング" data={seasonData?.finalRankings?.stolenBases || getStolenBaseRanking()} valueLabel="盗塁" />
+          <RankingTable title="OPSランキング" data={seasonData?.finalRankings?.ops || getOPSRanking()} valueLabel="OPS" />
         </div>
       )}
 
       {scheduleTab === 'pitching' && (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           <RankingTable title="防御率ランキング" data={seasonData?.finalRankings?.era || getERARanking()} valueLabel="防御率" />
+          <RankingTable title="WHIPランキング" data={seasonData?.finalRankings?.whip || getWHIPRanking()} valueLabel="WHIP" />
           <RankingTable title="勝利数ランキング" data={seasonData?.finalRankings?.wins || getWinsRanking()} valueLabel="勝利" />
           <RankingTable title="ホールドランキング" data={seasonData?.finalRankings?.holds || getHoldsRanking()} valueLabel="ホールド" />
           <RankingTable title="セーブランキング" data={seasonData?.finalRankings?.saves || getSavesRanking()} valueLabel="セーブ" />
