@@ -5,24 +5,32 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
   const [saveStatus, setSaveStatus] = useState(null);
 
   const handleSave = (slotIndex) => {
-    const success = onSave(slotIndex);
-    setSaveStatus(success ? 'saved' : 'error');
-    setTimeout(() => setSaveStatus(null), 3000);
+    const result = onSave(slotIndex);
+    if (result?.success) {
+      setSaveStatus({ type: 'saved' });
+    } else {
+      setSaveStatus({ type: 'error', message: result?.error || 'セーブに失敗しました' });
+    }
+    setTimeout(() => setSaveStatus(null), 4000);
   };
 
   const handleLoad = (slotIndex) => {
     if (window.confirm('現在の進行データは失われます。ロードしますか？')) {
-      const success = onLoad(slotIndex);
-      setSaveStatus(success ? 'loaded' : 'error');
-      setTimeout(() => setSaveStatus(null), 3000);
+      const result = onLoad(slotIndex);
+      if (result?.success) {
+        setSaveStatus({ type: 'loaded' });
+      } else {
+        setSaveStatus({ type: 'error', message: result?.error || 'ロードに失敗しました' });
+      }
+      setTimeout(() => setSaveStatus(null), 4000);
     }
   };
 
   const handleDelete = (slotIndex) => {
     if (window.confirm('セーブデータを削除しますか？この操作は取り消せません。')) {
       const success = onDelete(slotIndex);
-      setSaveStatus(success ? 'deleted' : 'error');
-      setTimeout(() => setSaveStatus(null), 3000);
+      setSaveStatus(success ? { type: 'deleted' } : { type: 'error', message: '削除に失敗しました' });
+      setTimeout(() => setSaveStatus(null), 4000);
     }
   };
 
@@ -53,15 +61,20 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
       {/* ステータスメッセージ */}
       {saveStatus && (
         <div className={`mb-6 p-4 rounded-lg font-bold text-center ${
-          saveStatus === 'saved' ? 'bg-green-600 text-white' :
-          saveStatus === 'loaded' ? 'bg-blue-600 text-white' :
-          saveStatus === 'deleted' ? 'bg-yellow-600 text-white' :
+          saveStatus.type === 'saved' ? 'bg-green-600 text-white' :
+          saveStatus.type === 'loaded' ? 'bg-blue-600 text-white' :
+          saveStatus.type === 'deleted' ? 'bg-yellow-600 text-white' :
           'bg-red-600 text-white'
         }`}>
-          {saveStatus === 'saved' && '✅ セーブしました'}
-          {saveStatus === 'loaded' && '✅ ロードしました'}
-          {saveStatus === 'deleted' && '🗑️ 削除しました'}
-          {saveStatus === 'error' && '❌ エラーが発生しました'}
+          {saveStatus.type === 'saved' && '✅ セーブしました'}
+          {saveStatus.type === 'loaded' && '✅ ロードしました'}
+          {saveStatus.type === 'deleted' && '🗑️ 削除しました'}
+          {saveStatus.type === 'error' && (
+            <div>
+              <div>❌ エラーが発生しました</div>
+              {saveStatus.message && <div className="text-sm font-normal mt-1">{saveStatus.message}</div>}
+            </div>
+          )}
         </div>
       )}
 

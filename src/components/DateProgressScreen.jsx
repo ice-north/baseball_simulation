@@ -243,6 +243,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   };
 
   const handleProgressDate = (days) => {
+    if (isSimulating) return;
     if ((currentPhase === SEASON_PHASES.REGULAR_SEASON || currentPhase === SEASON_PHASES.PLAYOFFS) && !autoFillLineup()) {
       alert('スタメンを自動補完できませんでした。ロスター管理で打順を設定してください。');
       return;
@@ -274,6 +275,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   };
 
   const handleGameChoice = (choice) => {
+    if (isSimulating) return;
     setShowGameChoiceModal(false);
     if (choice === 'skip') {
       executeSkipDay(1);

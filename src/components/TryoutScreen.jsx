@@ -117,6 +117,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         const existingCount = TEAMS_DATA[currentTeam]?.players?.length || 0;
         const draftedCount = (teamRosters[currentTeam] || []).length;
         if (existingCount + draftedCount >= 24) {
+          setDraftHistory(prev => [...prev, {
+            pick: currentPick + 1,
+            round: draftOrder[currentPick].round,
+            team: currentTeam,
+            player: null,
+            skipped: true,
+            reason: 'ロスター満員'
+          }]);
           setCurrentPick(currentPick + 1);
           return;
         }
@@ -152,8 +160,12 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       const existingPlayers = TEAMS_DATA[userTeamName]?.players || [];
       const totalPlayers = existingPlayers.length + userDrafted.length;
       if (totalPlayers < 9) {
-        alert(`チームの合計人数が${totalPlayers}人です。試合に必要な最低9人になるまで指名を続けてください。`);
-        return;
+        if (tryoutCandidates.length === 0) {
+          if (!window.confirm(`チームの合計人数が${totalPlayers}人です（最低9人必要）。\n候補選手がいないため、このまま続行します。`)) return;
+        } else {
+          alert(`チームの合計人数が${totalPlayers}人です。試合に必要な最低9人になるまで指名を続けてください。`);
+          return;
+        }
       }
     }
 
@@ -186,7 +198,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
   useEffect(() => {
     if ((currentPick >= draftOrder.length || tryoutCandidates.length === 0) && draftOrder.length > 0 && !draftComplete) {
-      finalizeDraft(true); // 自動完了時はチェックスキップ
+      finalizeDraft(false);
     }
   }, [currentPick, draftOrder.length, draftComplete, tryoutCandidates.length, teamRosters]);
 
@@ -488,6 +500,16 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                 {draftHistory.map((entry, index) => {
                   const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
                   const isUserTeam = entry.team === teamsArray[0];
+                  if (entry.skipped) {
+                    return (
+                      <div key={index} className="flex items-center gap-3 p-2 rounded bg-gray-800/50 opacity-60">
+                        <span className="text-gray-500 font-bold w-24 shrink-0">ドラフト{entry.round}位</span>
+                        <span className="text-gray-500 w-24 shrink-0">---</span>
+                        <span className="text-gray-600 w-16 shrink-0">{entry.reason}</span>
+                        <span className="text-gray-600">{entry.team}</span>
+                      </div>
+                    );
+                  }
                   const positionLabel = entry.player.position === 'pitcher' ? '投手' :
                     entry.player.position === 'catcher' ? '捕手' :
                     ['first', 'second', 'third', 'short'].includes(entry.player.position) ? '内野手' : '外野手';

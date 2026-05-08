@@ -179,14 +179,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           seasonData, leagueConfig, screenMode, managementView,
           gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory
         });
-        if (result) refreshSaveSlots();
+        if (result.success) refreshSaveSlots();
         return result;
       };
 
       const loadGame = (slotIndex = 0) => {
-        const saveData = loadGameFromSlot(slotIndex);
-        if (!saveData) return false;
+        const result = loadGameFromSlot(slotIndex);
+        if (!result.success) return result;
 
+        const saveData = result.data;
         if (saveData.seasonData) setSeasonData(saveData.seasonData);
         if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
         if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
@@ -199,7 +200,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         setScreenMode('management');
         setManagementView('dateprogress');
         setGameFlowState('season');
-        return true;
+        return result;
       };
 
       const deleteSave = (slotIndex = 0) => {

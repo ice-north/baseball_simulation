@@ -35,10 +35,16 @@ const GameFlowScreens = ({
     return <StartScreen
       onNewGame={() => { setGameMode('normal'); setGameFlowState('newgame_regulations'); }}
       onSandbox={() => { setGameMode('sandbox'); setGameFlowState('sandbox_regulations'); }}
-      onContinue={(slotIndex) => { loadGame(slotIndex); }}
+      onContinue={(slotIndex) => {
+        const result = loadGame(slotIndex);
+        if (!result?.success) alert(result?.error || 'ロードに失敗しました');
+      }}
       onEdit={(slotIndex) => {
-        if (loadGame(slotIndex)) {
+        const result = loadGame(slotIndex);
+        if (result?.success) {
           setManagementView('edit');
+        } else {
+          alert(result?.error || 'ロードに失敗しました');
         }
       }}
       onManual={() => setGameFlowState('manual')}

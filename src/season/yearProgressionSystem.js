@@ -191,7 +191,7 @@ export function updateAllPlayerAges(allTeams) {
  */
 export function checkNPBDraftEligibility(player, awardBonus = 0) {
   const isPitcher = player.position === 'pitcher';
-  const DRAFT_THRESHOLD = isPitcher ? 230 : 260; // 投手230pt、野手260pt
+  const DRAFT_THRESHOLD = isPitcher ? 225 : 255; // 投手225pt、野手255pt
   const reasons = [];
   const age = player.age || 20;
 

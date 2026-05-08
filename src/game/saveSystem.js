@@ -55,16 +55,28 @@ export const saveGameToSlot = (slotIndex, gameState) => {
 
     const compressed = compressData(saveData);
     localStorage.setItem(SAVE_SLOT_KEYS[slotIndex], compressed);
-    return true;
+    return { success: true };
   } catch (error) {
     console.error('セーブ失敗:', error);
     if (error.name === 'QuotaExceededError') {
-      const usage = getLocalStorageUsage();
-      console.error(`ストレージ容量超過: ${(usage.used / 1024).toFixed(1)}KB / ${(usage.total / 1024).toFixed(1)}KB`);
-      alert('セーブデータの容量が限界を超えました。古いセーブデータを削除してください。');
+      return { success: false, error: 'ストレージ容量が不足しています。古いセーブデータを削除してください。' };
     }
-    return false;
+    return { success: false, error: 'セーブに失敗しました: ' + error.message };
   }
+};
+
+// セーブデータの基本バリデーション
+const validateSaveData = (data) => {
+  if (!data || typeof data !== 'object') return 'セーブデータが空または不正です';
+  if (!data.seasonData) return 'シーズンデータが含まれていません';
+  if (!data.teamsData || typeof data.teamsData !== 'object') return 'チームデータが含まれていません';
+  const teamNames = Object.keys(data.teamsData);
+  if (teamNames.length === 0) return 'チームデータが空です';
+  for (const name of teamNames) {
+    const team = data.teamsData[name];
+    if (!team.players || !Array.isArray(team.players)) return `${name}の選手データが不正です`;
+  }
+  return null;
 };
 
 // ゲームデータを読み込み（スロット指定、圧縮対応）
@@ -72,28 +84,37 @@ export const loadGameFromSlot = (slotIndex) => {
   try {
     const savedData = localStorage.getItem(SAVE_SLOT_KEYS[slotIndex]);
     if (!savedData) {
-      console.warn('セーブデータがありません');
-      return null;
+      return { success: false, error: 'セーブデータがありません' };
     }
 
     const saveData = decompressData(savedData);
     if (!saveData) {
-      console.error('セーブデータの解凍に失敗しました');
-      return null;
+      return { success: false, error: 'セーブデータの解凍に失敗しました。データが破損している可能性があります。' };
     }
 
-    // TEAMS_DATAを復元
-    if (saveData.teamsData) {
+    const validationError = validateSaveData(saveData);
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+
+    // TEAMS_DATAを安全に復元（バックアップを取ってから入れ替え）
+    const backup = JSON.parse(JSON.stringify(TEAMS_DATA));
+    try {
       Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
       Object.keys(saveData.teamsData).forEach(teamName => {
         TEAMS_DATA[teamName] = saveData.teamsData[teamName];
       });
+    } catch (restoreError) {
+      // 復元失敗時はバックアップから戻す
+      Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
+      Object.keys(backup).forEach(k => { TEAMS_DATA[k] = backup[k]; });
+      return { success: false, error: 'データの復元中にエラーが発生しました。元の状態に戻しました。' };
     }
 
-    return saveData;
+    return { success: true, data: saveData };
   } catch (error) {
     console.error('ロード失敗:', error);
-    return null;
+    return { success: false, error: 'ロードに失敗しました: ' + error.message };
   }
 };
 

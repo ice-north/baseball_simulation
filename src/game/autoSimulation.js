@@ -1139,6 +1139,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       if (reliever) selectedRoleLabel = '緊急中継ぎ';
     }
 
+    // 最終フォールバック: 全員疲労でも最もスタミナの残っている投手を選ぶ
+    if (!reliever) {
+      const allPitchers = defenseTeam.players
+        .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id))
+        .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
+      if (allPitchers.length > 0) {
+        reliever = allPitchers[0];
+        selectedRoleLabel = '緊急登板';
+      }
+    }
+
     if (reliever) {
 
       // 投手交代記録を保存
@@ -1775,14 +1786,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               );
               if (reliever) selectedRoleLabel = '緊急中継ぎ';
               if (!reliever) {
-                // 最終手段: 登板済みでも使う（ただし現在の投手は除外）
-                reliever = team.players.find(p =>
-                  isPitcher(p) &&
-                  p.battingOrder === 0 &&
-                  p.id !== pitcher.id &&
-                  (p.currentStamina || 80) > 20
-                );
-                if (reliever) selectedRoleLabel = '緊急登板';
+                // 最終手段: 最もスタミナの残っている投手を選ぶ
+                const allPitchers = team.players
+                  .filter(p => isPitcher(p) && p.battingOrder === 0 && p.id !== pitcher.id)
+                  .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
+                if (allPitchers.length > 0) {
+                  reliever = allPitchers[0];
+                  selectedRoleLabel = '緊急登板';
+                }
               }
             }
 
