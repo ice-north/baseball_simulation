@@ -968,7 +968,7 @@ export function applyAgeCurveChanges(allTeams) {
               before: currentValue, after: newValue, change
             });
 
-            // 球速変動時は肩力も連動（50%連動）
+            // 球速⇔肩力の連動
             if (stat === 'velocity') {
               const armChange = Math.round(change * 0.5);
               if (armChange !== 0) {
@@ -979,6 +979,20 @@ export function applyAgeCurveChanges(allTeams) {
                   if (newArm !== currentArm) {
                     updatedPlayer = setNestedValue(updatedPlayer, armPath, newArm);
                     changes.push({ stat: 'arm', statName: getStatName('arm'), before: currentArm, after: newArm, change: newArm - currentArm });
+                  }
+                }
+              }
+            }
+            if (stat === 'arm' && player.position !== 'pitcher') {
+              const velChange = Math.round(change * 0.5);
+              if (velChange !== 0) {
+                const velPath = getStatPath('velocity');
+                const currentVel = getNestedValue(updatedPlayer, velPath);
+                if (currentVel != null) {
+                  const newVel = Math.max(100, Math.min(150, currentVel + velChange));
+                  if (newVel !== currentVel) {
+                    updatedPlayer = setNestedValue(updatedPlayer, velPath, newVel);
+                    changes.push({ stat: 'velocity', statName: getStatName('velocity'), before: currentVel, after: newVel, change: newVel - currentVel });
                   }
                 }
               }

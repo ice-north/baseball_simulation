@@ -824,21 +824,30 @@ export function executeCampTraining(player, trainingType, newPitchType) {
         growth: newValue - currentValue, isAwakening
       });
 
-      // 球速変動時は肩力も連動（投手: 球速→肩力の50%連動）
+      // 球速⇔肩力の連動
       if (targetStat === 'velocity' && newValue !== currentValue) {
-        const velocityChange = newValue - currentValue;
-        const armChange = Math.round(velocityChange * 0.5);
+        // 球速変動→肩力50%連動
+        const armChange = Math.round((newValue - currentValue) * 0.5);
         if (armChange !== 0) {
           const armPath = getStatPath('arm');
           const currentArm = getNestedValue(updatedPlayer, armPath) || 50;
           const newArm = Math.max(1, Math.min(99, currentArm + armChange));
           if (newArm !== currentArm) {
             updatedPlayer = setNestedValue(updatedPlayer, armPath, newArm);
-            growthReport.push({
-              stat: 'arm', statName: getStatName('arm'),
-              before: currentArm, after: newArm,
-              growth: newArm - currentArm, isAwakening: false, isLinked: true
-            });
+            growthReport.push({ stat: 'arm', statName: getStatName('arm'), before: currentArm, after: newArm, growth: newArm - currentArm, isAwakening: false, isLinked: true });
+          }
+        }
+      }
+      if (targetStat === 'arm' && newValue !== currentValue && player.position !== 'pitcher') {
+        // 野手: 肩力変動→球速連動（1pt肩力 ≈ 0.5km球速）
+        const velChange = Math.round((newValue - currentValue) * 0.5);
+        if (velChange !== 0) {
+          const velPath = getStatPath('velocity');
+          const currentVel = getNestedValue(updatedPlayer, velPath) || 120;
+          const newVel = Math.max(100, Math.min(150, currentVel + velChange));
+          if (newVel !== currentVel) {
+            updatedPlayer = setNestedValue(updatedPlayer, velPath, newVel);
+            growthReport.push({ stat: 'velocity', statName: getStatName('velocity'), before: currentVel, after: newVel, growth: newVel - currentVel, isAwakening: false, isLinked: true });
           }
         }
       }
