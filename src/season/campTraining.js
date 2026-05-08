@@ -63,13 +63,12 @@ export const TRAINING_MENUS = {
     targets: ['newpitch'],
     category: 'pitching'
   },
-  // 集中練習コース: 1能力に特化、成長2.5倍だが他能力にリスクあり
+  // 集中練習コース: +1確定、ペナルティ確率と同じ確率で+1〜2上乗せ
   intensive_power: {
     name: '長打集中',
     icon: '💥',
-    description: 'パワー特化（2.5倍）。ミート-1〜2のリスク',
+    description: 'パワー+1確定。35%で+2〜3 / 35%でミート-1〜2',
     targets: ['power'],
-    growthMultipliers: { power: 2.5 },
     category: 'batting',
     intensive: true,
     penalty: { stat: 'meet', min: 1, max: 2, chance: 0.35 }
@@ -77,9 +76,8 @@ export const TRAINING_MENUS = {
   intensive_meet: {
     name: 'ミート集中',
     icon: '🎯',
-    description: 'ミート特化（2.5倍）。パワー-1のリスク',
+    description: 'ミート+1確定。30%で+2〜3 / 30%でパワー-1',
     targets: ['meet'],
-    growthMultipliers: { meet: 2.5 },
     category: 'batting',
     intensive: true,
     penalty: { stat: 'power', min: 1, max: 1, chance: 0.3 }
@@ -87,9 +85,8 @@ export const TRAINING_MENUS = {
   intensive_speed: {
     name: '走力集中',
     icon: '⚡',
-    description: '走力特化（2.5倍）。パワー-1のリスク',
+    description: '走力+1確定。30%で+2〜3 / 30%でパワー-1',
     targets: ['speed'],
-    growthMultipliers: { speed: 2.5 },
     category: 'batting',
     intensive: true,
     penalty: { stat: 'power', min: 1, max: 1, chance: 0.3 }
@@ -97,9 +94,8 @@ export const TRAINING_MENUS = {
   intensive_control: {
     name: '制球集中',
     icon: '🎯',
-    description: '制球特化（2.5倍）。球速-1のリスク',
+    description: '制球+1確定。30%で+2〜3 / 30%で球速-1',
     targets: ['control'],
-    growthMultipliers: { control: 2.5 },
     category: 'pitching',
     intensive: true,
     penalty: { stat: 'velocity', min: 1, max: 1, chance: 0.3 }
@@ -107,9 +103,8 @@ export const TRAINING_MENUS = {
   intensive_velocity: {
     name: '球速集中',
     icon: '🔥',
-    description: '球速特化（2.5倍）。制球-1〜2のリスク',
+    description: '球速+1確定。35%で+2〜3 / 35%で制球-1〜2',
     targets: ['velocity'],
-    growthMultipliers: { velocity: 2.5 },
     category: 'pitching',
     intensive: true,
     penalty: { stat: 'control', min: 1, max: 2, chance: 0.35 }
@@ -117,9 +112,8 @@ export const TRAINING_MENUS = {
   intensive_defense: {
     name: '守備集中',
     icon: '🛡️',
-    description: '守備特化（2.5倍）。ミート-1のリスク',
+    description: '守備+1確定。30%で+2〜3 / 30%でミート-1',
     targets: ['defense'],
-    growthMultipliers: { defense: 2.5 },
     category: 'fielding',
     intensive: true,
     penalty: { stat: 'meet', min: 1, max: 1, chance: 0.3 }
@@ -127,9 +121,8 @@ export const TRAINING_MENUS = {
   intensive_eye: {
     name: '選球眼集中',
     icon: '👁️',
-    description: '選球眼特化（2.5倍）。走力-1のリスク',
+    description: '選球眼+1確定。25%で+2〜3 / 25%で走力-1',
     targets: ['eye'],
-    growthMultipliers: { eye: 2.5 },
     category: 'batting',
     intensive: true,
     penalty: { stat: 'speed', min: 1, max: 1, chance: 0.25 }
@@ -775,19 +768,30 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       power: 0.8,     // パワー: 筋力トレーニングで伸びる余地あり
       velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
     };
-    const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
-    const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
-    const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
     const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
-    const baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * potential * aptitudeFactor);
 
-    // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
-    const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
-    const isAwakening = Math.random() * 100 < awakeningChance;
-    // 才能依存の能力は覚醒量も抑制
-    const rawAwakening = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
-    const awakeningGrowth = isAwakening ? Math.max(1, Math.round(rawAwakening * talentMult * potential)) : 0;
+    let baseGrowth, isAwakening, awakeningGrowth;
+
+    if (menu.intensive && menu.penalty) {
+      // 集中練習: +1確定、ペナルティ確率と同じ確率で+1〜2上乗せ
+      const bonusChance = menu.penalty.chance;
+      const bonus = Math.random() < bonusChance ? (Math.floor(Math.random() * 2) + 1) : 0;
+      baseGrowth = 1 + bonus;
+      isAwakening = false;
+      awakeningGrowth = 0;
+    } else {
+      const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
+      const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
+      const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * potential * aptitudeFactor);
+      // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
+      const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
+      isAwakening = Math.random() * 100 < awakeningChance;
+      // 才能依存の能力は覚醒量も抑制
+      const rawAwakening = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
+      awakeningGrowth = isAwakening ? Math.max(1, Math.round(rawAwakening * talentMult * potential)) : 0;
+    }
 
     const statPath = getStatPath(targetStat);
     if (statPath) {
