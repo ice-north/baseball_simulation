@@ -63,69 +63,69 @@ export const TRAINING_MENUS = {
     targets: ['newpitch'],
     category: 'pitching'
   },
-  // 集中練習コース: +1確定、ペナルティ確率と同じ確率で+1〜2上乗せ
+  // 集中練習コース: +1確定 + 50%で+1〜2上乗せ / 25%で他1能力-1 / 25%で他2能力-1
   intensive_power: {
     name: '長打集中',
     icon: '💥',
-    description: 'パワー+1確定。35%で+2〜3 / 35%でミート-1〜2',
+    description: 'パワー+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
     targets: ['power'],
     category: 'batting',
     intensive: true,
-    penalty: { stat: 'meet', min: 1, max: 2, chance: 0.35 }
+    penaltyPool: ['meet', 'eye', 'speed', 'defense']
   },
   intensive_meet: {
     name: 'ミート集中',
     icon: '🎯',
-    description: 'ミート+1確定。30%で+2〜3 / 30%でパワー-1',
+    description: 'ミート+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
     targets: ['meet'],
     category: 'batting',
     intensive: true,
-    penalty: { stat: 'power', min: 1, max: 1, chance: 0.3 }
+    penaltyPool: ['power', 'eye', 'speed', 'defense']
   },
   intensive_speed: {
     name: '走力集中',
     icon: '⚡',
-    description: '走力+1確定。30%で+2〜3 / 30%でパワー-1',
+    description: '走力+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
     targets: ['speed'],
     category: 'batting',
     intensive: true,
-    penalty: { stat: 'power', min: 1, max: 1, chance: 0.3 }
+    penaltyPool: ['meet', 'power', 'eye', 'defense']
   },
   intensive_control: {
     name: '制球集中',
     icon: '🎯',
-    description: '制球+1確定。30%で+2〜3 / 30%で球速-1',
+    description: '制球+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
     targets: ['control'],
     category: 'pitching',
     intensive: true,
-    penalty: { stat: 'velocity', min: 1, max: 1, chance: 0.3 }
+    penaltyPool: ['velocity', 'stamina', 'meet', 'defense']
   },
   intensive_velocity: {
     name: '球速集中',
     icon: '🔥',
-    description: '球速+1確定。35%で+2〜3 / 35%で制球-1〜2',
+    description: '球速+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
     targets: ['velocity'],
     category: 'pitching',
     intensive: true,
-    penalty: { stat: 'control', min: 1, max: 2, chance: 0.35 }
+    penaltyPool: ['control', 'stamina', 'meet', 'defense']
   },
   intensive_defense: {
     name: '守備集中',
     icon: '🛡️',
-    description: '守備+1確定。30%で+2〜3 / 30%でミート-1',
+    description: '守備+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
     targets: ['defense'],
     category: 'fielding',
     intensive: true,
-    penalty: { stat: 'meet', min: 1, max: 1, chance: 0.3 }
+    penaltyPool: ['meet', 'power', 'eye', 'speed']
   },
   intensive_eye: {
     name: '選球眼集中',
     icon: '👁️',
-    description: '選球眼+1確定。25%で+2〜3 / 25%で走力-1',
+    description: '選球眼+1確定、50%で+2〜3。25%で他-1、25%で他2つ-1',
     targets: ['eye'],
     category: 'batting',
     intensive: true,
-    penalty: { stat: 'speed', min: 1, max: 1, chance: 0.25 }
+    penaltyPool: ['meet', 'power', 'speed', 'defense']
   }
 };
 
@@ -773,10 +773,9 @@ export function executeCampTraining(player, trainingType, newPitchType) {
 
     let baseGrowth, isAwakening, awakeningGrowth;
 
-    if (menu.intensive && menu.penalty) {
-      // 集中練習: +1確定、ペナルティ確率と同じ確率で+1〜2上乗せ
-      const bonusChance = menu.penalty.chance;
-      const bonus = Math.random() < bonusChance ? (Math.floor(Math.random() * 2) + 1) : 0;
+    if (menu.intensive && menu.penaltyPool) {
+      // 集中練習: +1確定、50%で+1〜2上乗せ
+      const bonus = Math.random() < 0.5 ? (Math.floor(Math.random() * 2) + 1) : 0;
       baseGrowth = 1 + bonus;
       isAwakening = false;
       awakeningGrowth = 0;
@@ -865,23 +864,28 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     }
   });
 
-  // 集中練習のペナルティ処理
-  if (menu.intensive && menu.penalty) {
-    const { stat: penaltyStat, min, max, chance } = menu.penalty;
-    if (Math.random() < chance) {
-      const penaltyAmount = Math.floor(Math.random() * (max - min + 1)) + min;
-      const penaltyPath = getStatPath(penaltyStat);
-      if (penaltyPath) {
-        const currentVal = getNestedValue(updatedPlayer, penaltyPath) || 50;
-        const newVal = Math.max(1, currentVal - penaltyAmount);
-        updatedPlayer = setNestedValue(updatedPlayer, penaltyPath, newVal);
-        growthReport.push({
-          stat: penaltyStat,
-          statName: getStatName(penaltyStat),
-          before: currentVal, after: newVal,
-          growth: newVal - currentVal, isAwakening: false, isPenalty: true
-        });
-      }
+  // 集中練習のペナルティ処理: 50%で±0、25%で1能力-1、25%で2能力-1
+  if (menu.intensive && menu.penaltyPool) {
+    const pool = menu.penaltyPool.filter(s => !menu.targets.includes(s));
+    const roll = Math.random();
+    const penaltyCount = roll < 0.5 ? 0 : roll < 0.75 ? 1 : 2;
+    if (penaltyCount > 0 && pool.length > 0) {
+      const shuffled = [...pool].sort(() => Math.random() - 0.5);
+      const chosen = shuffled.slice(0, Math.min(penaltyCount, shuffled.length));
+      chosen.forEach(penaltyStat => {
+        const penaltyPath = getStatPath(penaltyStat);
+        if (penaltyPath) {
+          const currentVal = getNestedValue(updatedPlayer, penaltyPath) || 50;
+          const newVal = Math.max(1, currentVal - 1);
+          updatedPlayer = setNestedValue(updatedPlayer, penaltyPath, newVal);
+          growthReport.push({
+            stat: penaltyStat,
+            statName: getStatName(penaltyStat),
+            before: currentVal, after: newVal,
+            growth: newVal - currentVal, isAwakening: false, isPenalty: true
+          });
+        }
+      });
     }
   }
 
