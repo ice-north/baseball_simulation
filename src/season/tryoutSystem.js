@@ -509,19 +509,19 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   };
 
   // 球速から肩力を導出（投手・二刀流用）
-  // velocity 110→arm ~30, 130→arm ~55, 150→arm ~80
+  // velocity 119→arm ~20, 134→arm ~50, 150→arm ~80, 158→arm ~95
   const armFromVelocity = (velocity) => {
-    const base = Math.round((velocity - 110) / 45 * 55 + 28);
+    const base = Math.round((velocity - 108) / 0.525);
     const variance = Math.floor(Math.random() * 17) - 8; // -8 ~ +8
     return Math.max(10, Math.min(99, base + variance));
   };
 
   // 肩力から球速を導出（野手用）
-  // arm 20→velocity ~108, 50→velocity ~122, 70→velocity ~132, 80→velocity ~137, 99→velocity ~145
+  // arm 20→velocity ~119, 50→velocity ~134, 70→velocity ~145, 80→velocity ~150, 99→velocity ~158
   const velocityFromArm = (arm) => {
-    const base = Math.round((arm - 10) / 90 * 40 + 105);
+    const base = Math.round(108 + arm * 0.525);
     const variance = Math.floor(Math.random() * 7) - 3; // -3 ~ +3
-    return Math.max(100, Math.min(150, base + variance));
+    return Math.max(100, Math.min(158, base + variance));
   };
 
   // 全生成選手の平均能力を-3する調整関数
