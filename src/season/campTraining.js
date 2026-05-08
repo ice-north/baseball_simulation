@@ -63,76 +63,76 @@ export const TRAINING_MENUS = {
     targets: ['newpitch'],
     category: 'pitching'
   },
-  // 集中練習コース: 1能力に特化、成長1.8倍だが他能力にリスクあり
+  // 集中練習コース: 1能力に特化、成長2.5倍だが他能力にリスクあり
   intensive_power: {
     name: '長打集中',
     icon: '💥',
-    description: 'パワー特化（1.8倍）。ミート-1〜2のリスク',
+    description: 'パワー特化（2.5倍）。ミート-1〜2のリスク',
     targets: ['power'],
-    growthMultipliers: { power: 1.8 },
+    growthMultipliers: { power: 2.5 },
     category: 'batting',
     intensive: true,
-    penalty: { stat: 'meet', min: 1, max: 2, chance: 0.5 }
+    penalty: { stat: 'meet', min: 1, max: 2, chance: 0.35 }
   },
   intensive_meet: {
     name: 'ミート集中',
     icon: '🎯',
-    description: 'ミート特化（1.8倍）。パワー-1のリスク',
+    description: 'ミート特化（2.5倍）。パワー-1のリスク',
     targets: ['meet'],
-    growthMultipliers: { meet: 1.8 },
+    growthMultipliers: { meet: 2.5 },
     category: 'batting',
     intensive: true,
-    penalty: { stat: 'power', min: 1, max: 1, chance: 0.4 }
+    penalty: { stat: 'power', min: 1, max: 1, chance: 0.3 }
   },
   intensive_speed: {
     name: '走力集中',
     icon: '⚡',
-    description: '走力特化（1.8倍）。パワー-1のリスク',
+    description: '走力特化（2.5倍）。パワー-1のリスク',
     targets: ['speed'],
-    growthMultipliers: { speed: 1.8 },
+    growthMultipliers: { speed: 2.5 },
     category: 'batting',
     intensive: true,
-    penalty: { stat: 'power', min: 1, max: 1, chance: 0.4 }
+    penalty: { stat: 'power', min: 1, max: 1, chance: 0.3 }
   },
   intensive_control: {
     name: '制球集中',
     icon: '🎯',
-    description: '制球特化（1.8倍）。球速-1のリスク',
+    description: '制球特化（2.5倍）。球速-1のリスク',
     targets: ['control'],
-    growthMultipliers: { control: 1.8 },
+    growthMultipliers: { control: 2.5 },
     category: 'pitching',
     intensive: true,
-    penalty: { stat: 'velocity', min: 1, max: 1, chance: 0.4 }
+    penalty: { stat: 'velocity', min: 1, max: 1, chance: 0.3 }
   },
   intensive_velocity: {
     name: '球速集中',
     icon: '🔥',
-    description: '球速特化（1.8倍）。制球-1〜2のリスク',
+    description: '球速特化（2.5倍）。制球-1〜2のリスク',
     targets: ['velocity'],
-    growthMultipliers: { velocity: 1.8 },
+    growthMultipliers: { velocity: 2.5 },
     category: 'pitching',
     intensive: true,
-    penalty: { stat: 'control', min: 1, max: 2, chance: 0.5 }
+    penalty: { stat: 'control', min: 1, max: 2, chance: 0.35 }
   },
   intensive_defense: {
     name: '守備集中',
     icon: '🛡️',
-    description: '守備特化（1.8倍）。ミート-1のリスク',
+    description: '守備特化（2.5倍）。ミート-1のリスク',
     targets: ['defense'],
-    growthMultipliers: { defense: 1.8 },
+    growthMultipliers: { defense: 2.5 },
     category: 'fielding',
     intensive: true,
-    penalty: { stat: 'meet', min: 1, max: 1, chance: 0.4 }
+    penalty: { stat: 'meet', min: 1, max: 1, chance: 0.3 }
   },
   intensive_eye: {
     name: '選球眼集中',
     icon: '👁️',
-    description: '選球眼特化（1.8倍）。走力-1のリスク',
+    description: '選球眼特化（2.5倍）。走力-1のリスク',
     targets: ['eye'],
-    growthMultipliers: { eye: 1.8 },
+    growthMultipliers: { eye: 2.5 },
     category: 'batting',
     intensive: true,
-    penalty: { stat: 'speed', min: 1, max: 1, chance: 0.3 }
+    penalty: { stat: 'speed', min: 1, max: 1, chance: 0.25 }
   }
 };
 
