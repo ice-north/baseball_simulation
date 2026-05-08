@@ -1151,15 +1151,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               .map(p => ({ ...p, value: p.seasonStats.batting.rbis }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const opsRanking = [...battingQualified]
-              .map(p => {
-                const s = p.seasonStats.batting;
-                const obp = (s.hits + s.walks) / (s.atBats + s.walks);
-                const tb = (s.hits - (s.doubles || 0) - (s.triples || 0) - s.homeruns) + (s.doubles || 0) * 2 + (s.triples || 0) * 3 + s.homeruns * 4;
-                return { ...p, value: obp + tb / s.atBats };
-              })
-              .sort((a, b) => b.value - a.value).slice(0, 5);
-
             const eraRanking = [...pitchingQualified]
               .map(p => ({ ...p, value: (p.seasonStats.pitching.earnedRuns / (p.seasonStats.pitching.inningsPitched / 3)) * 9 }))
               .sort((a, b) => a.value - b.value).slice(0, 5);
@@ -1174,23 +1165,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               .map(p => ({ ...p, value: p.seasonStats.pitching.strikeouts }))
               .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            const whipRanking = [...pitchingQualified]
-              .map(p => {
-                const s = p.seasonStats.pitching;
-                return { ...p, value: ((s.hits || 0) + (s.walks || 0)) / (s.inningsPitched / 3) };
-              })
-              .sort((a, b) => a.value - b.value).slice(0, 5);
-
             const battingRankings = [
               { title: '打率', data: avgRanking, format: v => v.toFixed(3), color: 'text-blue-400', icon: '🏏' },
               { title: '本塁打', data: hrRanking, format: v => v, color: 'text-pink-400', icon: '💥' },
               { title: '打点', data: rbiRanking, format: v => v, color: 'text-green-400', icon: '🔋' },
-              { title: 'OPS', data: opsRanking, format: v => v.toFixed(3), color: 'text-cyan-400', icon: '📈' },
             ];
 
             const pitchingRankings = [
               { title: '防御率', data: eraRanking, format: v => v.toFixed(2), color: 'text-orange-400', icon: '🛡' },
-              { title: 'WHIP', data: whipRanking, format: v => v.toFixed(2), color: 'text-teal-400', icon: '📉' },
               { title: '勝利', data: winRanking, format: v => v, color: 'text-yellow-400', icon: '🏆' },
               { title: '奪三振', data: soRanking, format: v => v, color: 'text-purple-400', icon: '🔥' },
             ];
