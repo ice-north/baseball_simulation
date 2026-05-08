@@ -156,7 +156,13 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white">{editFormData.name} の能力値編集</h2>
+              <div className="flex items-center gap-3">
+                <input type="text" value={editFormData.name || ''}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                  className="text-2xl font-bold text-white bg-gray-700 border border-gray-600 rounded px-3 py-1 focus:border-blue-500 focus:outline-none"
+                  placeholder="選手名" />
+                <span className="text-gray-400 text-sm">の能力値編集</span>
+              </div>
               <button onClick={cancelEdit} className="text-gray-400 hover:text-white text-2xl">✕</button>
             </div>
 
