@@ -1112,11 +1112,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           {/* 個人成績ランキング */}
           {(() => {
             const allPlayers = [];
+            const seenIds = new Set();
             Object.entries(TEAMS_DATA || {}).forEach(([teamName, team]) => {
               if (!team?.players) return;
               if (isTwoLeague && rankingLeague === 'l1' && !league1Teams.includes(teamName)) return;
               if (isTwoLeague && rankingLeague === 'l2' && !league2Teams.includes(teamName)) return;
               team.players.forEach(p => {
+                if (p.id != null && seenIds.has(p.id)) return;
+                if (p.id != null) seenIds.add(p.id);
                 allPlayers.push({ ...p, teamName });
               });
             });
