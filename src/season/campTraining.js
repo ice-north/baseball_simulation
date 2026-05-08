@@ -279,8 +279,7 @@ export function executeSubTraining(player, subType, options = {}) {
       break;
     }
     case 'stretch': {
-      // 全能力微増（10%の確率で各能力+1）
-      // 技術系(meet/power/defense)は70以上で減衰対象
+      // ランダムに1能力を選んで確定+1、回復は30%で+1
       const stats = [
         { key: 'batting.meet', name: 'ミート', isTech: true },
         { key: 'batting.power', name: 'パワー', isTech: true },
@@ -288,19 +287,27 @@ export function executeSubTraining(player, subType, options = {}) {
         { key: 'physical.arm', name: '肩力', isTech: false },
         { key: 'fielding.defense', name: '守備', isTech: true },
       ];
-      stats.forEach(({ key, name, isTech }) => {
-        if (Math.random() < 0.1) {
-          const [obj, prop] = key.split('.');
-          if (player[obj]) {
-            const old = player[obj][prop] || 50;
-            const gain = isTech ? applyTechStatDecay(old, 1) : 1;
-            if (gain > 0) {
-              player[obj][prop] = Math.min(100, old + gain);
-              growthReport.push({ statName: name, before: old, after: old + gain, growth: gain });
+      const picked = stats[Math.floor(Math.random() * stats.length)];
+      const [obj, prop] = picked.key.split('.');
+      if (player[obj]) {
+        const old = player[obj][prop] || 50;
+        const gain = picked.isTech ? applyTechStatDecay(old, 1) : 1;
+        if (gain > 0) {
+          player[obj][prop] = Math.min(100, old + gain);
+          growthReport.push({ statName: picked.name, before: old, after: old + gain, growth: gain });
+          if (picked.key === 'physical.arm' && player.position !== 'pitcher') {
+            const velChange = Math.round(gain * 0.5);
+            if (velChange > 0 && player.pitching) {
+              const oldVel = player.pitching.velocity || 120;
+              const newVel = Math.min(158, oldVel + velChange);
+              if (newVel !== oldVel) {
+                player.pitching.velocity = newVel;
+                growthReport.push({ statName: '球速', before: oldVel, after: newVel, growth: newVel - oldVel, isLinked: true });
+              }
             }
           }
         }
-      });
+      }
       // 回復力UP（30%の確率で+1）
       if (player.physical && Math.random() < 0.3) {
         const recBefore = player.physical.recovery || 50;
