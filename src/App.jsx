@@ -3334,9 +3334,14 @@ if (newOuts === 3) {
                 const starter = winPitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9);
                 const winPitcher = !isDraw ? (starter && (starter.stats?.pitching?.outs || 0) >= 15 ? starter : winPitchers[0]) : null;
 
-                // 敗戦投手: 負けチームの先発（最多投球）
-                const losePitchers = loseTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0).sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
-                const losePitcher = !isDraw ? losePitchers[0] : null;
+                // 敗戦投手: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
+                const losePitchers = loseTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
+                const loseStarter = losePitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9) || losePitchers.sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0))[0];
+                const losePitcher = !isDraw ? (
+                  loseStarter && (loseStarter.stats?.pitching?.runsAllowed || 0) > 0
+                    ? loseStarter
+                    : losePitchers.sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0))[0] || null
+                ) : null;
 
                 // セーブ投手: 勝ちチームの最後の投手（勝利投手と異なり、3アウト以上取得）
                 const lastPitcher = winPitchers.length > 1 ? winPitchers.find(p => p !== winPitcher && p.position === 'pitcher') || winPitchers.find(p => p !== winPitcher) : null;

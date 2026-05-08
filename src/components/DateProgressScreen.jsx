@@ -57,10 +57,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
-    // 負け投手: 決勝点を与えた投手（最も失点が多い投手）
-    // NPB/MLB公式: リードを許した時にマウンドにいた投手
-    losePitchers.sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed);
-    decisions.losingPitcher = losePitchers[0];
+    // 負け投手: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
+    const loseStarter = losePitchers.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
+    if (loseStarter && (loseStarter.gameStats?.pitching?.runsAllowed || 0) > 0) {
+      decisions.losingPitcher = loseStarter;
+    } else {
+      losePitchers.sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed);
+      decisions.losingPitcher = losePitchers[0];
+    }
 
     // セーブ: 以下の条件をすべて満たすリリーフ
     // 1) 勝ちチームの最後の投手 2) 勝ち投手ではない 3) 以下のいずれか:

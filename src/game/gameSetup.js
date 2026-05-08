@@ -360,10 +360,13 @@ export function executeHandleManagedGameEnd(ctx) {
       ? winStarter
       : (winPitchers.filter(p => p !== winStarter)[0] || winPitchers[0]);
 
-    // 敗戦投手判定: 最も多く失点した投手
-    const losePitchers = loseTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
-      .sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0));
-    const losePitcher = losePitchers[0];
+    // 敗戦投手判定: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
+    const losePitchers = loseTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
+    const loseStarter = losePitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9)
+      || [...losePitchers].sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0))[0];
+    const losePitcher = loseStarter && (loseStarter.stats?.pitching?.runsAllowed || 0) > 0
+      ? loseStarter
+      : [...losePitchers].sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0))[0] || null;
 
     // セーブ投手判定: 最後に投げた投手で、3点差以内1イニング以上 or 3イニング以上
     const scoreDiff = Math.abs(finalScore.home - finalScore.away);
@@ -426,8 +429,11 @@ export function executeHandleManagedGameEnd(ctx) {
             const oStarter = oWinPs.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
             const oWinP = oStarter && oStarter.gameStats.pitching.outs >= 15
               ? oStarter : (oWinPs.filter(p => p !== oStarter).sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs)[0] || oWinPs[0]);
-            // 負け投手
-            const oLoseP = [...oLosePs].sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed)[0];
+            // 負け投手: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
+            const oLoseStarter = oLosePs.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
+            const oLoseP = oLoseStarter && (oLoseStarter.gameStats?.pitching?.runsAllowed || 0) > 0
+              ? oLoseStarter
+              : [...oLosePs].sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed)[0];
             // セーブ
             const oScoreDiff = Math.abs(otherResult.homeScore - otherResult.awayScore);
             const oLastP = oWinPs.length > 1 ? oWinPs[oWinPs.length - 1] : null;
