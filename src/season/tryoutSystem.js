@@ -478,6 +478,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 年齢補正: 18歳を基準に、年齢が上がるほど即戦力（大卒・社会人の実力差を反映）
   // 二次曲線だが+22でキャップ（24-25歳で個性がなくなるのを防止）
   const ageBonus = Math.min(22, Math.max(0, Math.round((age - 18) * (age - 18) * 0.5 + (age - 18) * 1.5)));
+  const battingAgeBonus = Math.floor(ageBonus * 0.4);
+  const velocityAgeBonus = Math.floor(ageBonus * 0.3);
 
   // バラつき付きランダム生成（能力値用、10-99制限）
   const randRangeWithVariance = (min, max, bonus = ageBonus) => {
@@ -544,11 +546,11 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   if (isTwoWay) {
     if (isPitcher) {
       // 投手登録の二刀流: 投手能力が本職寄り、打撃は原石レベル
-      const twoWayVelocity = Math.min(randVelocity(125, 145, ageBonus) + velocityAdjust, 152);
+      const twoWayVelocity = Math.min(randVelocity(125, 145, velocityAgeBonus) + velocityAdjust, 152);
       return applyGlobalOffset({
-        meet: randRangeWithVariance(33, 55),
-        power: randRangeWithVariance(30, 55),
-        eye: randRangeWithVariance(30, 55),
+        meet: randRangeWithVariance(33, 55, battingAgeBonus),
+        power: randRangeWithVariance(30, 55, battingAgeBonus),
+        eye: randRangeWithVariance(30, 55, battingAgeBonus),
         steal: randRangeWithVariance(30, 55),
         speed: randRangeWithVariance(45, 75),
         arm: armFromVelocity(twoWayVelocity),
@@ -561,11 +563,11 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       });
     } else {
       // 野手登録の二刀流: 野手能力メイン、投手もそこそこ
-      const twoWayVelocity = Math.min(randVelocity(121, 139) + velocityAdjust, 149);
+      const twoWayVelocity = Math.min(randVelocity(121, 139, velocityAgeBonus) + velocityAdjust, 149);
       return applyGlobalOffset({
-        meet: randRangeWithVariance(40, 65),
-        power: randRangeWithVariance(32, 57),
-        eye: randRangeWithVariance(35, 65),
+        meet: randRangeWithVariance(40, 65, battingAgeBonus),
+        power: randRangeWithVariance(32, 57, battingAgeBonus),
+        eye: randRangeWithVariance(35, 65, battingAgeBonus),
         steal: randRangeWithVariance(30, 60),
         speed: randRangeWithVariance(43, 73),
         arm: armFromVelocity(twoWayVelocity),
@@ -582,11 +584,11 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 通常の能力値範囲（投手用 or 野手アーキタイプ別）
   let normalAbilities;
   if (isPitcher) {
-    const pitcherVelocity = Math.min(randVelocity(116, 139, ageBonus) + velocityAdjust, 152);
+    const pitcherVelocity = Math.min(randVelocity(112, 142, velocityAgeBonus) + velocityAdjust, 152);
     normalAbilities = {
-      meet: randRangeWithVariance(15, 40),
-      power: randRangeWithVariance(5, 29),
-      eye: randRangeWithVariance(25, 50),
+      meet: randRangeWithVariance(15, 40, battingAgeBonus),
+      power: randRangeWithVariance(5, 29, battingAgeBonus),
+      eye: randRangeWithVariance(25, 50, battingAgeBonus),
       steal: randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
       speed: randRangeWithVariance(33, 58, Math.max(0, Math.floor(ageBonus * 0.5))),
       arm: armFromVelocity(pitcherVelocity),
@@ -619,9 +621,9 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
     const fielderArm = randRangeWithVariance(arch.arm[0], arch.arm[1]);
     normalAbilities = {
-      meet: randRangeWithVariance(arch.meet[0], arch.meet[1]),
-      power: randRangeWithVariance(arch.power[0], arch.power[1]),
-      eye: randRangeWithVariance(arch.eye[0], arch.eye[1]),
+      meet: randRangeWithVariance(arch.meet[0], arch.meet[1], battingAgeBonus),
+      power: randRangeWithVariance(arch.power[0], arch.power[1], battingAgeBonus),
+      eye: randRangeWithVariance(arch.eye[0], arch.eye[1], battingAgeBonus),
       steal: randRangeWithVariance(arch.steal[0], arch.steal[1], Math.max(0, Math.floor(ageBonus * 0.7))),
       speed: randRangeWithVariance(arch.speed[0], arch.speed[1], Math.max(0, Math.floor(ageBonus * 0.7))),
       arm: fielderArm,
