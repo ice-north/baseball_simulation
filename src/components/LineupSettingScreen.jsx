@@ -1451,11 +1451,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           };
 
           const getRangeColor = (range) => {
-            if (range >= 0.75) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' };
-            if (range >= 0.65) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' };
+            if (range >= 0.82) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' };
+            if (range >= 0.70) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' };
             if (range >= 0.55) return { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24' };
-            if (range >= 0.45) return { fill: 'rgba(74,222,128,0.12)', stroke: '#4ade80' };
-            return { fill: 'rgba(96,165,250,0.10)', stroke: '#60a5fa' };
+            if (range >= 0.42) return { fill: 'rgba(74,222,128,0.12)', stroke: '#4ade80' };
+            if (range >= 0.30) return { fill: 'rgba(96,165,250,0.10)', stroke: '#60a5fa' };
+            return { fill: 'rgba(148,163,184,0.08)', stroke: '#94a3b8' };
           };
 
           const getFitnessColor = (fitness) => {
@@ -1473,12 +1474,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           };
 
           const getRangeGrade = (range) => {
-            if (range >= 0.75) return { label: 'S', color: 'text-pink-400' };
-            if (range >= 0.65) return { label: 'A', color: 'text-red-400' };
-            if (range >= 0.55) return { label: 'B', color: 'text-orange-400' };
-            if (range >= 0.45) return { label: 'C', color: 'text-yellow-400' };
-            if (range >= 0.35) return { label: 'D', color: 'text-green-400' };
-            return { label: 'E', color: 'text-blue-400' };
+            if (range >= 0.82) return { label: 'A', color: 'text-pink-400' };
+            if (range >= 0.70) return { label: 'B', color: 'text-red-400' };
+            if (range >= 0.55) return { label: 'C', color: 'text-orange-400' };
+            if (range >= 0.42) return { label: 'D', color: 'text-yellow-400' };
+            if (range >= 0.30) return { label: 'E', color: 'text-green-400' };
+            return { label: 'F', color: 'text-blue-400' };
           };
 
           // 守備位置クリック → 選択 or スワップ

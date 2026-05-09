@@ -602,7 +602,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
             if (bases[0] && battedBall.launchAngle < 10 && battedBall.distance < 40) {
               const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
               const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
-              const dpBase = 15 + (ifAvg - 50) * 0.2;
+              const dpBase = 15 + (ifAvg - 50) * 0.35;
               if (Math.random() * 100 < dpBase) {
                 return { type: 'double_play' };
               }

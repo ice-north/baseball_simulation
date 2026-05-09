@@ -361,8 +361,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     if (distance < 40) {
       // 内野ゴロ - 守備重要度で係数を強化
       const baseOutRate = 0.975;
-      const defenseBonus = (fielder.defense - 70) / 100 * 0.04 * weight;  // 重要ポジションほど守備力が効く
-      const speedBonus = (fielder.speed - 60) / 100 * 0.05 * weight;     // 足で守備範囲拡大（走力強化）
+      const defenseBonus = (fielder.defense - 70) / 100 * 0.07 * weight;  // 重要ポジションほど守備力が効く
+      const speedBonus = (fielder.speed - 60) / 100 * 0.07 * weight;     // 足で守備範囲拡大（走力強化）
       const batterSpeedPenalty = (batter.speed - 60) / 100 * 0.04;
       // ミートが高い打者は打球方向の制御が良く、野手の間を抜きやすい（ミート30以上から段階的に効果）
       const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.15;
@@ -370,7 +370,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
 
       if (Math.random() < catchProb) {
         // エラー判定
-        const errorRate = 0.003 + (100 - fielder.defense) / 2000;
+        const errorRate = 0.002 + (100 - fielder.defense) / 1200;
         if (Math.random() < errorRate) {
           return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
         }
@@ -379,7 +379,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       return { result: 'single', bases: 1, description: '内野安打' };
     } else {
       // 外野への速いゴロ - 足と守備で大きく変動
-      const catchProb = 0.25 + (fielder.speed / 100) * 0.20 * weight + (fielder.defense / 100) * 0.10 * weight;
+      const catchProb = 0.25 + (fielder.speed / 100) * 0.25 * weight + (fielder.defense / 100) * 0.15 * weight;
       if (Math.random() < catchProb) {
         return { result: 'out', bases: 0, description: '外野ゴロアウト', isOutfieldFly: false, fieldingPosition: position };
       }
@@ -392,8 +392,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     if (distance < 40) {
       // 内野ライナー - ポジション重要度で守備力の効きが変わる
       const baseOutRate = 0.88;
-      const defenseBonus = (fielder.defense - 70) / 100 * 0.08 * weight;
-      const speedBonus = (fielder.speed - 60) / 100 * 0.06 * weight; // 走力強化
+      const defenseBonus = (fielder.defense - 70) / 100 * 0.13 * weight;
+      const speedBonus = (fielder.speed - 60) / 100 * 0.10 * weight;
       // ミートが高い打者は鋭いライナーで野手の正面を避けやすい（ミート30以上から段階的に効果）
       const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.18;
       const catchProb = Math.min(0.96, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
@@ -405,8 +405,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     } else {
       // 外野ライナー - CF/RFの守備・足が大きく効く
       const baseOutRate = 0.78;
-      const defenseBonus = (fielder.defense - 70) / 100 * 0.12 * weight;
-      const speedBonus = (fielder.speed - 65) / 100 * 0.14 * weight; // 走力強化
+      const defenseBonus = (fielder.defense - 70) / 100 * 0.18 * weight;
+      const speedBonus = (fielder.speed - 65) / 100 * 0.18 * weight;
       // ミートが高い打者は野手の間を抜く鋭いライナーを打てる（ミート30以上から段階的に効果）
       const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.20;
       const catchProb = Math.min(0.94, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
@@ -445,8 +445,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     baseOutRate = 0.71;
   }
 
-  const defenseBonus = (fielder.defense - 70) / 100 * 0.06 * weight;
-  const speedBonus = (fielder.speed - 65) / 100 * 0.14 * weight; // 走力強化
+  const defenseBonus = (fielder.defense - 70) / 100 * 0.10 * weight;
+  const speedBonus = (fielder.speed - 65) / 100 * 0.18 * weight;
   // ミート打者は野手の間を狙って打てる（ミート30以上から段階的に効果）
   const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.14;
   // 強い打球ほど野手の頭を越えやすい
