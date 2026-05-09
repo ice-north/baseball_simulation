@@ -1535,6 +1535,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             return { main: '#6366f1', glow: 'rgba(99,102,241,0.25)', bg: 'rgba(99,102,241,0.04)' };
           };
 
+          const getRangeGradient = (range) => {
+            if (range >= 0.90) return { main: '#ec4899', glow: 'rgba(236,72,153,0.55)', bg: 'rgba(236,72,153,0.11)' };
+            if (range >= 0.82) return { main: '#f87171', glow: 'rgba(248,113,113,0.5)', bg: 'rgba(248,113,113,0.10)' };
+            if (range >= 0.70) return { main: '#fb923c', glow: 'rgba(251,146,60,0.45)', bg: 'rgba(251,146,60,0.09)' };
+            if (range >= 0.55) return { main: '#fbbf24', glow: 'rgba(251,191,36,0.4)', bg: 'rgba(251,191,36,0.08)' };
+            if (range >= 0.42) return { main: '#4ade80', glow: 'rgba(74,222,128,0.35)', bg: 'rgba(74,222,128,0.07)' };
+            if (range >= 0.30) return { main: '#60a5fa', glow: 'rgba(96,165,250,0.3)', bg: 'rgba(96,165,250,0.06)' };
+            return { main: '#94a3b8', glow: 'rgba(148,163,184,0.25)', bg: 'rgba(148,163,184,0.04)' };
+          };
+
           return (
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-gray-800 rounded-lg p-4 col-span-2">
@@ -1550,11 +1560,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 </div>
                 <svg viewBox="0 -20 500 560" className="w-full max-w-2xl mx-auto">
                   <defs>
-                    {/* 各ポジションの守備範囲グラデーション（適正で色変化） */}
+                    {/* 各ポジションの守備範囲グラデーション（守備ランク色で表示） */}
                     {Object.entries(posCoords).map(([pos]) => {
                       const player = positionPlayers[pos];
-                      const fitness = player ? getFitness(player, pos) : 0;
-                      const grad = getFitnessGradient(fitness);
+                      const range = player ? getDefenseRange(player, pos) : 0;
+                      const grad = getRangeGradient(range);
                       return (
                         <radialGradient key={`grad-${pos}-${player?.id || 'none'}`} id={`rangeGrad-${pos}`}>
                           <stop offset="0%" stopColor={grad.main} stopOpacity="0.35" />
@@ -1620,10 +1630,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     const range = getDefenseRange(player, pos);
                     const isOutfield = ['left', 'center', 'right'].includes(pos);
                     const baseRadius = isOutfield ? 55 : 35;
-                    // 円のサイズ: getDefenseRange（守備力+走力+肩+適正補正）で決定
-                    const radius = baseRadius * (0.4 + range * 0.9);
-                    const fitness = getFitness(player, pos);
-                    const grad = getFitnessGradient(fitness);
+                    const radius = baseRadius * (0.15 + range * 1.3);
+                    const grad = getRangeGradient(range);
                     const rangeDelay = `${Object.keys(posCoords).indexOf(pos) * 0.06}s`;
                     return (
                       <g key={`range-${pos}-${player.id}`}>
