@@ -1451,9 +1451,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           };
 
           const getRangeColor = (range) => {
-            if (range >= 0.90) return { fill: 'rgba(168,85,247,0.20)', stroke: '#a855f7' };
-            if (range >= 0.82) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' };
-            if (range >= 0.70) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' };
+            if (range >= 0.90) return { fill: 'rgba(236,72,153,0.18)', stroke: '#ec4899' };
+            if (range >= 0.82) return { fill: 'rgba(248,113,113,0.16)', stroke: '#f87171' };
+            if (range >= 0.70) return { fill: 'rgba(251,146,60,0.14)', stroke: '#fb923c' };
             if (range >= 0.55) return { fill: 'rgba(251,191,36,0.14)', stroke: '#fbbf24' };
             if (range >= 0.42) return { fill: 'rgba(74,222,128,0.12)', stroke: '#4ade80' };
             if (range >= 0.30) return { fill: 'rgba(96,165,250,0.10)', stroke: '#60a5fa' };
@@ -1475,13 +1475,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           };
 
           const getRangeGrade = (range) => {
-            if (range >= 0.90) return { label: 'S', color: 'text-purple-400' };
-            if (range >= 0.82) return { label: 'A', color: 'text-pink-400' };
-            if (range >= 0.70) return { label: 'B', color: 'text-red-400' };
-            if (range >= 0.55) return { label: 'C', color: 'text-orange-400' };
-            if (range >= 0.42) return { label: 'D', color: 'text-yellow-400' };
-            if (range >= 0.30) return { label: 'E', color: 'text-green-400' };
-            return { label: 'F', color: 'text-blue-400' };
+            if (range >= 0.90) return { label: 'S', color: 'text-pink-400' };
+            if (range >= 0.82) return { label: 'A', color: 'text-red-400' };
+            if (range >= 0.70) return { label: 'B', color: 'text-orange-400' };
+            if (range >= 0.55) return { label: 'C', color: 'text-yellow-400' };
+            if (range >= 0.42) return { label: 'D', color: 'text-green-400' };
+            if (range >= 0.30) return { label: 'E', color: 'text-blue-400' };
+            return { label: 'F', color: 'text-slate-400' };
           };
 
           // 守備位置クリック → 選択 or スワップ
