@@ -45,13 +45,22 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     }
   };
 
+  const getCombinedCareer = (p, type) => {
+    const career = p.careerStats?.[type] || {};
+    const season = p.seasonStats?.[type] || {};
+    const combined = {};
+    const keys = new Set([...Object.keys(career), ...Object.keys(season)]);
+    keys.forEach(key => { combined[key] = (career[key] || 0) + (season[key] || 0); });
+    return combined;
+  };
+
   const battingStats = allPlayers
     .filter(p => {
-      const stats = statsTab === 'season' ? p.seasonStats?.batting : p.careerStats?.batting;
+      const stats = statsTab === 'season' ? p.seasonStats?.batting : getCombinedCareer(p, 'batting');
       return stats && stats.atBats > 0;
     })
     .map(p => {
-      const stats = statsTab === 'season' ? p.seasonStats.batting : p.careerStats.batting;
+      const stats = statsTab === 'season' ? p.seasonStats.batting : getCombinedCareer(p, 'batting');
       const avg = stats.atBats > 0 ? (stats.hits / stats.atBats) : 0;
       const pa = stats.atBats + (stats.walks || 0);
       const obp = pa > 0 ? ((stats.hits + (stats.walks || 0)) / pa) : 0;
@@ -74,11 +83,11 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
 
   const pitchingStats = allPlayers
     .filter(p => {
-      const stats = statsTab === 'season' ? p.seasonStats?.pitching : p.careerStats?.pitching;
+      const stats = statsTab === 'season' ? p.seasonStats?.pitching : getCombinedCareer(p, 'pitching');
       return stats && stats.inningsPitched > 0;
     })
     .map(p => {
-      const stats = statsTab === 'season' ? p.seasonStats.pitching : p.careerStats.pitching;
+      const stats = statsTab === 'season' ? p.seasonStats.pitching : getCombinedCareer(p, 'pitching');
       const era = stats.inningsPitched > 0 ? (stats.earnedRuns * 27) / stats.inningsPitched : 0;
       const ip = formatInnings(stats.inningsPitched);
       const innings = stats.inningsPitched / 3;

@@ -106,7 +106,11 @@ const TeamInfoScreen = () => {
     const isPitcher = player.position === 'pitcher';
     const batting = player.seasonStats?.batting || {};
     const pitching = player.seasonStats?.pitching || {};
-    const career = isPitcher ? player.careerStats?.pitching : player.careerStats?.batting;
+    const careerBase = isPitcher ? player.careerStats?.pitching : player.careerStats?.batting;
+    const seasonCurrent = isPitcher ? pitching : batting;
+    const career = careerBase ? Object.fromEntries(
+      Object.keys(careerBase).map(key => [key, (careerBase[key] || 0) + (seasonCurrent[key] || 0)])
+    ) : null;
     const arsenal = player.pitching?.arsenal || [];
     const formName = PITCHING_FORM_EFFECTS[player.pitching?.form]?.name || player.pitching?.form || '-';
     const catcherLead = player.catching?.lead;

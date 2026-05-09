@@ -1140,7 +1140,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             const era = ps?.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : '-';
             const whip = ps?.inningsPitched > 0 ? (((ps.walks || 0) + (ps.hits || 0)) / (ps.inningsPitched / 3)).toFixed(2) : '-';
             const ip = ps?.inningsPitched ? (ps.inningsPitched / 3).toFixed(1) : '0.0';
-            const cEra = cs?.inningsPitched > 0 ? ((cs.earnedRuns || 0) / (cs.inningsPitched / 3) * 9).toFixed(2) : '-';
+            const totalIP = (cs?.inningsPitched || 0) + (ps?.inningsPitched || 0);
+            const totalER = (cs?.earnedRuns || 0) + (ps?.earnedRuns || 0);
+            const cEra = totalIP > 0 ? (totalER / (totalIP / 3) * 9).toFixed(2) : '-';
 
             const StatBox = ({ label, value, isVelocity }) => {
               const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value);

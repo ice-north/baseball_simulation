@@ -59,9 +59,17 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         if (p.id != null && seenIds.has(p.id)) return;
         if (p.id != null) seenIds.add(p.id);
         if (p.careerStats) {
+          const sb = p.seasonStats?.batting || {};
+          const sp = p.seasonStats?.pitching || {};
+          const cb = p.careerStats.batting || {};
+          const cpitch = p.careerStats.pitching || {};
+          const combinedBatting = {};
+          const combinedPitching = {};
+          Object.keys(cb).forEach(k => { combinedBatting[k] = (cb[k] || 0) + (sb[k] || 0); });
+          Object.keys(cpitch).forEach(k => { combinedPitching[k] = (cpitch[k] || 0) + (sp[k] || 0); });
           players.push({
             name: p.name, position: p.position, teamName,
-            careerStats: p.careerStats, status: '現役',
+            careerStats: { batting: combinedBatting, pitching: combinedPitching }, status: '現役',
             age: p.age, yearsPlayed: p.yearsPlayed
           });
         }

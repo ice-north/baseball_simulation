@@ -100,7 +100,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const teamData = TEAMS_DATA[teamName];
     if (teamData) {
       const p = teamData.players.find(pl => pl.id === pitcher.id);
-      if (p) { p.seasonStats.pitching[stat] = (p.seasonStats.pitching[stat] || 0) + 1; p.careerStats.pitching[stat] = (p.careerStats.pitching[stat] || 0) + 1; }
+      if (p) { p.seasonStats.pitching[stat] = (p.seasonStats.pitching[stat] || 0) + 1; }
     }
   };
 

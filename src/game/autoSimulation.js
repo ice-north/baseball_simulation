@@ -1921,7 +1921,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       if (player.gameStats.batting.atBats > 0) {
         const b = player.gameStats.batting;
         const season = playerData.seasonStats.batting;
-        const career = playerData.careerStats.batting;
 
         season.games++;
         season.atBats += b.atBats;
@@ -1933,17 +1932,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         season.walks += b.walks;
         season.strikeouts += b.strikeouts;
         season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
-
-        career.games++;
-        career.atBats += b.atBats;
-        career.hits += b.hits;
-        career.doubles = (career.doubles || 0) + (b.doubles || 0);
-        career.triples = (career.triples || 0) + (b.triples || 0);
-        career.homeruns += b.homeruns;
-        career.rbis += b.rbis;
-        career.walks += b.walks;
-        career.strikeouts += b.strikeouts;
-        career.stolenBases = (career.stolenBases || 0) + (b.stolenBases || 0);
 
         // 経験値蓄積（出場1 + 打席数/3）
         const expGained = 1 + Math.floor(b.atBats / 3);
@@ -1979,7 +1967,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       if (player.gameStats.pitching.outs > 0) {
         const p = player.gameStats.pitching;
         const season = playerData.seasonStats.pitching;
-        const career = playerData.careerStats.pitching;
 
         season.games++;
         season.inningsPitched += p.outs;
@@ -1990,16 +1977,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         season.strikeouts += p.strikeouts;
         season.walks += p.walks;
         season.pitches += p.pitches;
-
-        career.games++;
-        career.inningsPitched += p.outs;
-        career.runsAllowed += p.runsAllowed;
-        career.earnedRuns += p.runsAllowed;
-        career.hits = (career.hits || 0) + (p.hits || 0);
-        career.homeruns = (career.homeruns || 0) + (p.homeruns || 0);
-        career.strikeouts += p.strikeouts;
-        career.walks += p.walks;
-        career.pitches += p.pitches;
 
         // 疲労度を蓄積（先発は球数/2、リリーフは球数/3で蓄積）
         const isStarterPitcher = p.outs >= 15; // 5回以上投げたら先発扱い
@@ -2021,12 +1998,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           // QS: 6回以上 && 自責点3以下
           if (innings >= 18 && earnedRuns <= 3) {
             season.qualityStarts = (season.qualityStarts || 0) + 1;
-            career.qualityStarts = (career.qualityStarts || 0) + 1;
           }
           // HQS: 7回以上 && 自責点2以下
           if (innings >= 21 && earnedRuns <= 2) {
             season.highQualityStarts = (season.highQualityStarts || 0) + 1;
-            career.highQualityStarts = (career.highQualityStarts || 0) + 1;
           }
         }
 
@@ -2039,11 +2014,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const f = player.gameStats.fielding;
         if (f.chances > 0 || f.errors > 0) {
           const season = playerData.seasonStats.batting;
-          const career = playerData.careerStats.batting;
           season.fieldingChances = (season.fieldingChances || 0) + f.chances;
           season.errors = (season.errors || 0) + f.errors;
-          career.fieldingChances = (career.fieldingChances || 0) + f.chances;
-          career.errors = (career.errors || 0) + f.errors;
         }
       }
     });

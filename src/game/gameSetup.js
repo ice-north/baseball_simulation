@@ -296,16 +296,6 @@ export function executeHandleManagedGameEnd(ctx) {
         season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
         season.walks = (season.walks || 0) + (gs.walks || 0);
 
-        if (!playerData.careerStats) playerData.careerStats = { batting: {}, pitching: {} };
-        if (!playerData.careerStats.batting) playerData.careerStats.batting = {};
-        const career = playerData.careerStats.batting;
-        career.games = (career.games || 0) + 1;
-        career.atBats = (career.atBats || 0) + (gs.atBats || 0);
-        career.hits = (career.hits || 0) + (gs.hits || 0);
-        career.homeruns = (career.homeruns || 0) + (gs.homeruns || 0);
-        career.rbis = (career.rbis || 0) + (gs.rbis || 0);
-        career.strikeouts = (career.strikeouts || 0) + (gs.strikeouts || 0);
-        career.walks = (career.walks || 0) + (gs.walks || 0);
       }
 
       const ps = p.stats?.pitching || {};
@@ -321,18 +311,6 @@ export function executeHandleManagedGameEnd(ctx) {
         sp.hits = (sp.hits || 0) + (ps.hits || 0);
         sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
         sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
-
-        if (!playerData.careerStats.pitching) playerData.careerStats.pitching = {};
-        const cp = playerData.careerStats.pitching;
-        cp.games = (cp.games || 0) + 1;
-        cp.inningsPitched = (cp.inningsPitched || 0) + (ps.outs || 0);
-        cp.strikeouts = (cp.strikeouts || 0) + (ps.strikeouts || 0);
-        cp.walks = (cp.walks || 0) + (ps.walks || 0);
-        cp.runsAllowed = (cp.runsAllowed || 0) + (ps.runsAllowed || 0);
-        cp.earnedRuns = (cp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
-        cp.hits = (cp.hits || 0) + (ps.hits || 0);
-        cp.homeruns = (cp.homeruns || 0) + (ps.homeruns || 0);
-        cp.pitches = (cp.pitches || 0) + (ps.pitches || 0);
 
         const isPitcherRole = p.position === 'pitcher' || p.originalPosition === 'pitcher' || p.battingOrder === 9;
         const fatigue = Math.floor((ps.pitches || 0) / (isPitcherRole ? 2 : 3));
@@ -395,10 +373,7 @@ export function executeHandleManagedGameEnd(ctx) {
       if (!playerData) return;
       if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
       if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
-      if (!playerData.careerStats) playerData.careerStats = { batting: {}, pitching: {} };
-      if (!playerData.careerStats.pitching) playerData.careerStats.pitching = {};
       playerData.seasonStats.pitching[stat] = (playerData.seasonStats.pitching[stat] || 0) + 1;
-      playerData.careerStats.pitching[stat] = (playerData.careerStats.pitching[stat] || 0) + 1;
     };
 
     if (winPitcher) updatePitcherDecision(winPitcher, winTeamName, 'wins');
@@ -446,9 +421,7 @@ export function executeHandleManagedGameEnd(ctx) {
               const pd = td.players.find(pl => pl.id === playerState.id);
               if (!pd) return;
               if (!pd.seasonStats?.pitching) { if (!pd.seasonStats) pd.seasonStats = { batting: {}, pitching: {} }; if (!pd.seasonStats.pitching) pd.seasonStats.pitching = {}; }
-              if (!pd.careerStats?.pitching) { if (!pd.careerStats) pd.careerStats = { batting: {}, pitching: {} }; if (!pd.careerStats.pitching) pd.careerStats.pitching = {}; }
               pd.seasonStats.pitching[stat] = (pd.seasonStats.pitching[stat] || 0) + 1;
-              pd.careerStats.pitching[stat] = (pd.careerStats.pitching[stat] || 0) + 1;
             };
             if (oWinP) recordOther(oWinP, oWinName, 'wins');
             if (oLoseP) recordOther(oLoseP, oLoseName, 'losses');
