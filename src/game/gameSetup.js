@@ -335,8 +335,12 @@ export function executeHandleManagedGameEnd(ctx) {
           playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
         }
 
+        // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
         const isPitcherRole = p.position === 'pitcher' || p.originalPosition === 'pitcher' || p.battingOrder === 9;
-        const fatigue = Math.floor((ps.pitches || 0) / (isPitcherRole ? 2 : 3));
+        const bodyStamina = playerData.physical?.bodyStamina || 50;
+        const staminaBonus = (bodyStamina / 100) * 1.5;
+        const baseDivisor = isPitcherRole ? 2 : 3;
+        const fatigue = Math.floor((ps.pitches || 0) / (baseDivisor + staminaBonus));
         playerData.fatigue = (playerData.fatigue || 0) + fatigue;
 
         // 成長率変動: 5イニング(15アウト)ごとに+0.01

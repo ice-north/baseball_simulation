@@ -1991,9 +1991,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
         }
 
-        // 疲労度を蓄積（先発は球数/2、リリーフは球数/3で蓄積）
-        const isStarterPitcher = p.outs >= 15; // 5回以上投げたら先発扱い
-        const fatigueGain = isStarterPitcher ? Math.floor(p.pitches / 2) : Math.floor(p.pitches / 3);
+        // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
+        const isStarterPitcher = p.outs >= 15;
+        const bodyStamina = playerData.physical?.bodyStamina || 50;
+        const staminaBonus = (bodyStamina / 100) * 1.5;
+        const baseDivisor = isStarterPitcher ? 2 : 3;
+        const fatigueGain = Math.floor(p.pitches / (baseDivisor + staminaBonus));
         playerData.fatigue = (playerData.fatigue || 0) + fatigueGain;
 
         // 成長率変動: 通算投球回が5イニング(15アウト)の倍数になったら+0.01
