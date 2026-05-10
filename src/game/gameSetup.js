@@ -4,7 +4,7 @@
 // ========================================================================
 
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { autoSimulateGame, generateAILineup } from './autoSimulation.js';
+import { autoSimulateGame, generateAILineup, POSITION_PLAYER_RECOVERY_BASE } from './autoSimulation.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 
 /**
@@ -302,6 +302,16 @@ export function executeHandleManagedGameEnd(ctx) {
         }
         if (season.games % 10 === 0) {
           playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+        }
+
+        // 野手疲労蓄積: スタメン出場(3打席以上)のみ
+        if ((gs.atBats || 0) >= 3) {
+          const bodyStamina = playerData.physical?.bodyStamina || 50;
+          const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
+          const recoveryAbility = playerData.physical?.recovery || 50;
+          const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
+          const recovCancelled = Math.round(POSITION_PLAYER_RECOVERY_BASE * recoveryMult);
+          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue + recovCancelled;
         }
       }
 
