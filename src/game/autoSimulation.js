@@ -1961,6 +1961,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           const recovCancelled = Math.round(POSITION_PLAYER_RECOVERY_BASE * recoveryMult);
           playerData.fatigue = (playerData.fatigue || 0) + baseFatigue + recovCancelled;
         }
+
+        // 成長率変動: 10試合出場ごとに+0.01、疲労50超で出場なら-0.01
+        if ((playerData.fatigue || 0) > 50) {
+          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
+        }
+        if (season.games % 10 === 0) {
+          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+        }
       }
 
       // 投手成績の集計
@@ -1978,10 +1986,21 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         season.walks += p.walks;
         season.pitches += p.pitches;
 
+        // 成長率変動: 疲労50超で登板なら-0.01
+        if ((playerData.fatigue || 0) > 50) {
+          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
+        }
+
         // 疲労度を蓄積（先発は球数/2、リリーフは球数/3で蓄積）
         const isStarterPitcher = p.outs >= 15; // 5回以上投げたら先発扱い
         const fatigueGain = isStarterPitcher ? Math.floor(p.pitches / 2) : Math.floor(p.pitches / 3);
         playerData.fatigue = (playerData.fatigue || 0) + fatigueGain;
+
+        // 成長率変動: 通算投球回が5イニング(15アウト)の倍数になったら+0.01
+        const prevTotalOuts = season.inningsPitched - p.outs;
+        if (Math.floor(season.inningsPitched / 15) > Math.floor(prevTotalOuts / 15)) {
+          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+        }
 
         // 経験値蓄積（登板1 + 投球回数）
         const inningsPitched = Math.floor(p.outs / 3);

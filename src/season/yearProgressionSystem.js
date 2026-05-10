@@ -773,19 +773,8 @@ export function updateGrowthModifiers(allTeams, awards) {
     const isChampion = teamName === championTeam;
 
     team.players.forEach(player => {
-      // 前年の変動は半減して引き継ぎ（徐々にゼロに戻る）
+      // シーズン中に蓄積された変動を半減して次年度に引き継ぎ（徐々にゼロに戻る）
       let modifier = (player.growthModifier || 0) * 0.5;
-
-      const fatigue = player.fatigue || 0;
-      const battingGames = player.seasonStats?.batting?.games || 0;
-      const pitchingGames = player.seasonStats?.pitching?.games || 0;
-      const totalGames = Math.max(battingGames, pitchingGames);
-
-      if (fatigue >= 120 && totalGames >= 40) {
-        modifier -= 0.10;
-      } else if (fatigue >= 100 && totalGames >= 35) {
-        modifier -= 0.05;
-      }
 
       if (isChampion) {
         modifier += 0.05;

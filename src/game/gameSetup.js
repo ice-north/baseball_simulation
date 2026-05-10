@@ -296,12 +296,20 @@ export function executeHandleManagedGameEnd(ctx) {
         season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
         season.walks = (season.walks || 0) + (gs.walks || 0);
 
+        // 成長率変動: 疲労50超で出場なら-0.01、10試合ごとに+0.01
+        if ((playerData.fatigue || 0) > 50) {
+          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
+        }
+        if (season.games % 10 === 0) {
+          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+        }
       }
 
       const ps = p.stats?.pitching || {};
       if (ps.outs > 0 || ps.pitches > 0) {
         if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
         const sp = playerData.seasonStats.pitching;
+        const prevTotalOuts = sp.inningsPitched || 0;
         sp.games = (sp.games || 0) + 1;
         sp.inningsPitched = (sp.inningsPitched || 0) + (ps.outs || 0);
         sp.strikeouts = (sp.strikeouts || 0) + (ps.strikeouts || 0);
@@ -312,9 +320,19 @@ export function executeHandleManagedGameEnd(ctx) {
         sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
         sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
 
+        // 成長率変動: 疲労50超で登板なら-0.01
+        if ((playerData.fatigue || 0) > 50) {
+          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
+        }
+
         const isPitcherRole = p.position === 'pitcher' || p.originalPosition === 'pitcher' || p.battingOrder === 9;
         const fatigue = Math.floor((ps.pitches || 0) / (isPitcherRole ? 2 : 3));
         playerData.fatigue = (playerData.fatigue || 0) + fatigue;
+
+        // 成長率変動: 5イニング(15アウト)ごとに+0.01
+        if (Math.floor(sp.inningsPitched / 15) > Math.floor(prevTotalOuts / 15)) {
+          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+        }
       }
     });
   };
