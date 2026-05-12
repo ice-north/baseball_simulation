@@ -357,13 +357,16 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       },
       traits: playerTraits, // 選手の特性を保存
       scoutComment: null, // 後でgenerateScoutCommentで設定
-      // 隠し成長力: 正規分布（平均1.0、標準偏差0.2）で個人差
-      // 0.5〜1.5の範囲、一部の選手だけが大きく伸びる
+      // 隠し成長力: 非対称正規分布（中央0.95、高成長は圧縮してレアに）
+      // 10代は+0.08ブースト。24人ドラフトで1.2以上は平均1.5人程度
       growthPotential: (() => {
         const u1 = Math.random() || 0.001;
         const u2 = Math.random();
         const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-        return Math.max(0.5, Math.min(1.5, 1.0 + normal * 0.2));
+        const skewed = normal > 0 ? normal * 0.75 : normal;
+        let base = 0.95 + skewed * 0.2;
+        if (age <= 19) base += 0.08;
+        return Math.max(0.5, Math.min(1.5, base));
       })(),
       positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
       professionalCareer: {
