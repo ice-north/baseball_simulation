@@ -343,9 +343,23 @@ export function executeHandleManagedGameEnd(ctx) {
         const fatigue = Math.floor((ps.pitches || 0) / (baseDivisor + staminaBonus));
         playerData.fatigue = (playerData.fatigue || 0) + fatigue;
 
-        // 成長率変動: 5イニング(15アウト)ごとに+0.01
-        if (Math.floor(sp.inningsPitched / 15) > Math.floor(prevTotalOuts / 15)) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+        // 成長率変動: 先発はイニング数ベース、リリーフは登板数ベース
+        const pitcherRoles = teamData.pitchingRotation?.pitcherRoles || {};
+        const starterIds = new Set(teamData.pitchingRotation?.starters || []);
+        const isStarter = starterIds.has(p.id);
+        if (isStarter) {
+          // 先発: 15イニング(45アウト)ごとに+0.01
+          if (Math.floor(sp.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {
+            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+          }
+        } else {
+          // リリーフ: 登板数ベース（守護神/セットアッパー/中継ぎエースは4登板、その他は5登板ごと）
+          const role = pitcherRoles[p.id] || '';
+          const highPressureRoles = ['closer', 'setup', 'ace_relief'];
+          const threshold = highPressureRoles.includes(role) ? 4 : 5;
+          if (sp.games % threshold === 0) {
+            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+          }
         }
       }
     });

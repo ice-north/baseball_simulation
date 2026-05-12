@@ -1999,10 +1999,23 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const fatigueGain = Math.floor(p.pitches / (baseDivisor + staminaBonus));
         playerData.fatigue = (playerData.fatigue || 0) + fatigueGain;
 
-        // 成長率変動: 通算投球回が5イニング(15アウト)の倍数になったら+0.01
-        const prevTotalOuts = season.inningsPitched - p.outs;
-        if (Math.floor(season.inningsPitched / 15) > Math.floor(prevTotalOuts / 15)) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+        // 成長率変動: 先発はイニング数ベース、リリーフは登板数ベース
+        const wasStarter = !reliefIds.has(player.id);
+        if (wasStarter) {
+          // 先発: 15イニング(45アウト)ごとに+0.01
+          const prevTotalOuts = season.inningsPitched - p.outs;
+          if (Math.floor(season.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {
+            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+          }
+        } else {
+          // リリーフ: 登板数ベース（守護神/セットアッパー/中継ぎエースは4登板、その他は5登板ごと）
+          const pitcherRoles = teamData.pitchingRotation?.pitcherRoles || {};
+          const role = pitcherRoles[player.id] || '';
+          const highPressureRoles = ['closer', 'setup', 'ace_relief'];
+          const threshold = highPressureRoles.includes(role) ? 4 : 5;
+          if (season.games % threshold === 0) {
+            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+          }
         }
 
         // 経験値蓄積（登板1 + 投球回数）
@@ -2010,10 +2023,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const expGained = 1 + inningsPitched;
         playerData.experience = (playerData.experience || 0) + expGained;
 
-        // QS/HQS判定（先発投手のみ: pitcherAppearancesに含まれない投手＝先発）
-        // 注: 試合中にリリーフ登板すると先発投手のbattingOrderは0に書き換えられるため、
-        // battingOrderでは判定できない
-        const wasStarter = !reliefIds.has(player.id);
+        // QS/HQS判定（先発投手のみ）
         if (wasStarter) {
           const innings = p.outs; // アウト数（18アウト = 6回）
           const earnedRuns = p.runsAllowed; // 簡易版：全て自責点
