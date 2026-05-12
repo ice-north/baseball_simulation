@@ -162,7 +162,8 @@ const ManagementScreen = ({
               bats: p?.batting?.bats || 'right',
               age: d.age,
               yearsPlayed: d.yearsPlayed,
-              year: seasonData?.year
+              year: seasonData?.year,
+              draftInfo: p?.draftInfo || null
             };
           })]);
         }

@@ -563,7 +563,9 @@ export function processRetirements(allTeams) {
           bats: player.batting?.bats || 'right',
           hallOfFame,
           reason,
-          careerStats: player.careerStats
+          careerStats: player.careerStats,
+          draftInfo: player.draftInfo || null,
+          yearsPlayed: player.yearsPlayed
         });
       } else {
         remainingPlayers.push(player);

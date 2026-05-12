@@ -13,6 +13,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [selectedTeamForHistory, setSelectedTeamForHistory] = useState(null);
   const [expandedYear, setExpandedYear] = useState(null);
+  const [draftHistoryYear, setDraftHistoryYear] = useState(null);
   // ドラフト指名選手エクスポート用の選択状態（keyはdraftedPlayersのindex）
   const [selectedDraftIndexes, setSelectedDraftIndexes] = useState(() => new Set());
 
@@ -77,6 +78,56 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
     });
     return players;
   }, [hallOfFamePlayers, allTeams]);
+
+  const draftHistoryByYear = useMemo(() => {
+    const records = [];
+    Object.entries(allTeams).forEach(([teamName, team]) => {
+      if (!team?.players) return;
+      team.players.forEach(p => {
+        if (p.draftInfo) {
+          const sb = p.seasonStats?.batting || {};
+          const sp = p.seasonStats?.pitching || {};
+          const cb = p.careerStats?.batting || {};
+          const cpitch = p.careerStats?.pitching || {};
+          records.push({
+            name: p.name, position: p.position, teamName,
+            draftYear: p.draftInfo.year, draftRound: p.draftInfo.round,
+            age: p.age, status: '現役',
+            isPitcher: p.position === 'pitcher',
+            batting: { games: (cb.games || 0) + (sb.games || 0), hits: (cb.hits || 0) + (sb.hits || 0), atBats: (cb.atBats || 0) + (sb.atBats || 0), homeruns: (cb.homeruns || 0) + (sb.homeruns || 0) },
+            pitching: { games: (cpitch.games || 0) + (sp.games || 0), wins: (cpitch.wins || 0) + (sp.wins || 0), losses: (cpitch.losses || 0) + (sp.losses || 0), saves: (cpitch.saves || 0) + (sp.saves || 0), inningsPitched: (cpitch.inningsPitched || 0) + (sp.inningsPitched || 0), earnedRuns: (cpitch.earnedRuns || 0) + (sp.earnedRuns || 0) }
+          });
+        }
+      });
+    });
+    hallOfFamePlayers.forEach(p => {
+      if (p.draftInfo) {
+        const cs = p.careerStats || {};
+        records.push({
+          name: p.name, position: p.position, teamName: p.teamName || p.team,
+          draftYear: p.draftInfo.year, draftRound: p.draftInfo.round,
+          age: p.age,
+          status: p.departureType === 'npb_drafted' ? 'NPB' : '引退',
+          statusDetail: p.reason || '',
+          isPitcher: p.position === 'pitcher',
+          batting: cs.batting || {},
+          pitching: cs.pitching || {}
+        });
+      }
+    });
+    const grouped = {};
+    records.forEach(r => {
+      if (!grouped[r.draftYear]) grouped[r.draftYear] = [];
+      grouped[r.draftYear].push(r);
+    });
+    Object.values(grouped).forEach(list => list.sort((a, b) => a.draftRound - b.draftRound));
+    return grouped;
+  }, [allTeams, hallOfFamePlayers]);
+
+  const draftYears = useMemo(() =>
+    Object.keys(draftHistoryByYear).map(Number).sort((a, b) => a - b),
+    [draftHistoryByYear]
+  );
 
   const battingCategories = [
     { key: 'avg', label: '打率', getValue: (s) => { const ab = s.batting?.atBats || 0; return ab >= 30 ? (s.batting?.hits || 0) / ab : 0; }, format: (v) => v > 0 ? v.toFixed(3) : '.000', minAB: 30 },
@@ -156,6 +207,16 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl font-bold text-yellow-400">資料室</h1>
           <div className="flex gap-1">
+            <button
+              onClick={() => setActiveTab('roster')}
+              className={`px-4 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'roster'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              }`}
+            >
+              入団記録
+            </button>
             <button
               onClick={() => setActiveTab('draft')}
               className={`px-4 py-1.5 rounded-md text-sm font-bold transition ${
@@ -687,6 +748,85 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         </table>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'roster' && (
+          <div>
+            {draftYears.length === 0 ? (
+              <div className="bg-gray-800 rounded-lg p-6 text-center">
+                <p className="text-gray-400">まだ入団記録がありません</p>
+                <p className="text-gray-600 text-sm mt-1">トライアウトで指名した選手の記録がここに表示されます</p>
+              </div>
+            ) : (
+              <div>
+                <div className="flex gap-1 mb-3 flex-wrap">
+                  {draftYears.map(year => (
+                    <button key={year}
+                      onClick={() => setDraftHistoryYear(draftHistoryYear === year ? null : year)}
+                      className={`px-3 py-1 rounded text-xs font-bold transition ${
+                        draftHistoryYear === year
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      }`}
+                    >
+                      {year}年目
+                    </button>
+                  ))}
+                </div>
+                {draftHistoryYear && draftHistoryByYear[draftHistoryYear] && (
+                  <div className="bg-gray-800 rounded-lg overflow-hidden">
+                    <div className="px-4 py-2 border-b border-gray-700">
+                      <span className="text-sm font-bold text-white">{draftHistoryYear}年目入団 — {draftHistoryByYear[draftHistoryYear].length}名</span>
+                    </div>
+                    <table className="w-full text-xs text-gray-300">
+                      <thead>
+                        <tr className="border-b border-gray-700 text-gray-500">
+                          <th className="py-1.5 px-2 text-center w-10">巡</th>
+                          <th className="py-1.5 px-2 text-left">選手名</th>
+                          <th className="py-1.5 px-2 text-center">守</th>
+                          <th className="py-1.5 px-2 text-center">年齢</th>
+                          <th className="py-1.5 px-2 text-center">状態</th>
+                          <th className="py-1.5 px-2 text-right">通算成績</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {draftHistoryByYear[draftHistoryYear].map((p, i) => {
+                          const statusColor = p.status === '現役' ? 'text-green-400' : p.status === 'NPB' ? 'text-yellow-400' : 'text-gray-500';
+                          let statLine = '';
+                          if (p.isPitcher) {
+                            const ip = p.pitching.inningsPitched > 0 ? (p.pitching.inningsPitched / 3).toFixed(0) : '0';
+                            const era = p.pitching.inningsPitched > 0 ? ((p.pitching.earnedRuns * 27) / p.pitching.inningsPitched).toFixed(2) : '-.--';
+                            statLine = `${p.pitching.wins || 0}勝${p.pitching.losses || 0}敗 ${p.pitching.saves || 0}S ${ip}回 防${era}`;
+                          } else {
+                            const avg = p.batting.atBats > 0 ? (p.batting.hits / p.batting.atBats).toFixed(3) : '.000';
+                            statLine = `${p.batting.games || 0}試 ${avg} ${p.batting.hits || 0}安 ${p.batting.homeruns || 0}本`;
+                          }
+                          return (
+                            <tr key={i} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                              <td className="py-1.5 px-2 text-center font-bold text-purple-400">{p.draftRound}</td>
+                              <td className="py-1.5 px-2 text-left">
+                                <span className={`font-bold ${p.isPitcher ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
+                                <span className="text-gray-600 text-[10px] ml-1">{p.teamName}</span>
+                              </td>
+                              <td className="py-1.5 px-2 text-center text-gray-500">{getPositionName(p.position)}</td>
+                              <td className="py-1.5 px-2 text-center text-gray-500">{p.age}</td>
+                              <td className={`py-1.5 px-2 text-center font-bold ${statusColor}`}>{p.status}</td>
+                              <td className="py-1.5 px-2 text-right text-gray-400 text-[10px]">{statLine}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {!draftHistoryYear && (
+                  <div className="bg-gray-800 rounded-lg p-6 text-center">
+                    <p className="text-gray-500 text-sm">年度を選択してください</p>
                   </div>
                 )}
               </div>
