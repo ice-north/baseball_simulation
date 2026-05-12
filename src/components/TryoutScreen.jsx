@@ -172,12 +172,20 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     draftFinalizedRef.current = true;
 
     const allDraftedIds = [];
+    const draftYear = isInitialTryout ? 1 : (seasonData?.year || 1);
     Object.keys(teamRosters).forEach(teamName => {
       const draftedPlayers = teamRosters[teamName] || [];
       const actualTeamName = teamName === 'ユーザー' ? teamsArrayForSave[0] : teamName;
       if (TEAMS_DATA[actualTeamName]) {
         const existingIds = new Set((TEAMS_DATA[actualTeamName].players || []).map(p => p.id));
         const newPlayers = draftedPlayers.filter(p => !existingIds.has(p.id));
+        newPlayers.forEach(p => {
+          const historyEntry = draftHistory.find(h => h.player?.id === p.id);
+          p.draftInfo = {
+            year: draftYear,
+            round: historyEntry?.round || 0
+          };
+        });
         TEAMS_DATA[actualTeamName].players = [
           ...(TEAMS_DATA[actualTeamName].players || []),
           ...newPlayers

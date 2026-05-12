@@ -141,6 +141,13 @@ const TeamInfoScreen = () => {
             <div>投: <span className="text-white">{player.physical?.throws === 'left' ? '左' : '右'}</span></div>
             <div>打: <span className="text-white">{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</span></div>
           </div>
+          {player.draftInfo && (
+            <div className="text-sm text-gray-400 mb-4">
+              入団: <span className="text-white">{player.draftInfo.year}年目</span>
+              <span className="mx-2">|</span>
+              指名: <span className="text-white">{player.draftInfo.round}巡目</span>
+            </div>
+          )}
 
           {/* タブ切り替え */}
           <div className="flex gap-1 mb-4 border-b border-gray-600">
