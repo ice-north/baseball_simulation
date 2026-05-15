@@ -806,13 +806,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               </div>
                               <div className="flex items-center gap-1 ml-auto">
                                 <div className="flex items-center gap-0.5">
-                                  <span className="text-[10px] text-gray-600">体</span>
+                                  <span className="text-[10px] text-gray-400">体</span>
                                   <div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                                     <div className={`h-full ${getStaminaBarColor(player.physical?.bodyStamina || 50)} rounded-full`} style={{width:`${player.physical?.bodyStamina || 50}%`}} />
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-0.5">
-                                  <span className="text-[10px] text-gray-600">疲</span>
+                                  <span className="text-[10px] text-gray-400">疲</span>
                                   <div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                                     <div className="h-full bg-red-500/80 rounded-full" style={{width:`${Math.min(player.fatigue || 0, 100)}%`}} />
                                   </div>
@@ -833,7 +833,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                             </div>
                           </div>
                         ) : (
-                          <div className="text-gray-600 text-base italic">未設定</div>
+                          <div className="text-gray-500 text-base italic">未設定</div>
                         )}
                       </div>
                     </div>
@@ -862,7 +862,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     {selectedBattingOrder}番に追加
                   </span>
                 ) : null}
-                <span className="text-[10px] text-gray-600 ml-auto">ヘッダークリックでソート</span>
+                <span className="text-[10px] text-gray-500 ml-auto">ヘッダークリックでソート</span>
               </div>
               <div className="overflow-y-auto max-h-[700px]">
                 <table className="w-full text-left">
@@ -1091,9 +1091,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <span className="text-[11px] text-gray-500 shrink-0" style={{ width: '4.5rem', minWidth: '4.5rem' }}>{throwsChar}{formChar && `/${formChar}`}</span>
                 <div className="flex items-center gap-0.5 text-xs shrink-0" style={{ width: '10rem', minWidth: '10rem' }}>
                   <span className="text-gray-500 text-[10px]">速</span><StatVal label="" value={p.velocity || 0} isVelocity />
-                  <span className="text-gray-600">/</span>
+                  <span className="text-gray-500">/</span>
                   <span className="text-gray-500 text-[10px]">制</span><StatVal label="" value={p.control || 0} />
-                  <span className="text-gray-600">/</span>
+                  <span className="text-gray-500">/</span>
                   <span className="text-gray-500 text-[10px]">ス</span><StatVal label="" value={p.stamina || 0} />
                 </div>
                 {ps?.games > 0 && (
@@ -1293,13 +1293,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <div className="flex items-center gap-1">
                       <span className={`text-xs font-medium ${s.color}`}>{s.label}</span>
                       <span className={`text-sm font-bold ${s.target > 0 && s.count >= s.target ? 'text-white' : s.count > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
-                        {s.count}{s.target > 0 && <span className="text-gray-600 text-[11px]">/{s.target}</span>}
+                        {s.count}{s.target > 0 && <span className="text-gray-500 text-[11px]">/{s.target}</span>}
                       </span>
                     </div>
                     {i < items.length - 1 && <span className="text-gray-700 text-xs">▸</span>}
                   </React.Fragment>
                 ))}
-                <span className="text-gray-600 text-[11px] ml-auto">バッジ: 役割変更 / ポジ: 登録変更</span>
+                <span className="text-gray-500 text-[11px] ml-auto">バッジ: 役割変更 / ポジ: 登録変更</span>
               </div>
             );
           };
@@ -1373,7 +1373,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     <span className="text-cyan-400 text-sm">🔀</span>
                     <h2 className="text-sm font-bold text-cyan-400">野手コンバート</h2>
                     <span className="text-gray-500 text-xs">{fieldersForConvert.length}人</span>
-                    <span className="text-gray-600 text-[11px] ml-auto">▶</span>
+                    <span className="text-gray-500 text-[11px] ml-auto">▶</span>
                   </summary>
                   <div className="p-1 space-y-0.5">
                     {fieldersForConvert.map((player, idx) => (

@@ -256,7 +256,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             {draftedPlayers.length === 0 ? (
               <div className="bg-gray-800 rounded-lg p-6 text-center">
                 <p className="text-gray-400">まだドラフト指名選手はいません</p>
-                <p className="text-gray-600 text-sm mt-1">NPBドラフトで指名された選手がここに表示されます</p>
+                <p className="text-gray-500 text-sm mt-1">NPBドラフトで指名された選手がここに表示されます</p>
               </div>
             ) : (
               <>
@@ -310,7 +310,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               <div className="bg-gray-800 rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+                    <tr className="bg-gray-700/80 text-gray-400 text-xs">
                       <th className="py-1.5 px-1 text-center w-8">
                         <input
                           type="checkbox"
@@ -373,14 +373,14 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                               <span className={`font-bold ${isP ? 'text-red-400' : 'text-blue-300'}`}>
                                 {player.hallOfFame && '🏛️ '}{player.name}
                               </span>
-                              <span className="text-gray-600 text-[9px] ml-1">{isExpanded ? '▲' : '▼'}</span>
+                              <span className="text-gray-500 text-[10px] ml-1">{isExpanded ? '▲' : '▼'}</span>
                             </td>
                             <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
                             <td className="py-1.5 px-1 text-center text-[10px]">
                               <span className={player.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>
                                 {player.throws === 'left' ? '左' : '右'}
                               </span>
-                              <span className="text-gray-600">/</span>
+                              <span className="text-gray-500">/</span>
                               <span className={player.bats === 'left' ? 'text-green-400' : player.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>
                                 {player.bats === 'left' ? '左' : player.bats === 'switch' ? '両' : '右'}
                               </span>
@@ -390,7 +390,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             <td className="py-1.5 px-2">
                               <span className="text-yellow-400 font-bold">{player.npbTeam || '-'}</span>
                               {player.draftRound && (
-                                <span className={`ml-1 text-[9px] px-1 py-0.5 rounded ${player.draftRound === 'ドラフト1位' ? 'bg-red-600/60 text-red-200' : player.draftRound === 'ドラフト2位' ? 'bg-orange-600/60 text-orange-200' : player.draftRound === '育成指名' ? 'bg-gray-600/60 text-gray-300' : 'bg-yellow-700/60 text-yellow-200'}`}>
+                                <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded ${player.draftRound === 'ドラフト1位' ? 'bg-red-600/60 text-red-200' : player.draftRound === 'ドラフト2位' ? 'bg-orange-600/60 text-orange-200' : player.draftRound === '育成指名' ? 'bg-gray-600/60 text-gray-300' : 'bg-yellow-700/60 text-yellow-200'}`}>
                                   {player.draftRound}
                                 </span>
                               )}
@@ -402,7 +402,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                               <td colSpan={9} className="px-3 py-2">
                                 {ds ? (
                                   <div className="text-[11px]">
-                                    <div className="text-gray-500 text-[9px] mb-1">指名当時の能力値</div>
+                                    <div className="text-gray-400 text-[10px] mb-1">指名当時の能力値</div>
                                     <div className="flex flex-wrap gap-x-4 gap-y-1">
                                       {isP ? (
                                         <>
@@ -429,7 +429,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                         <span className="text-gray-500">球種:</span>
                                         {ds.pitching.arsenal.map((pitch, pi) => (
                                           <span key={pi} className={`${pitch.type === 'straight' ? 'text-red-400' : 'text-cyan-400'}`}>
-                                            {getPitchTypeName(pitch.type)} <span className="text-gray-500 text-[9px]">Lv{pitch.level}</span>
+                                            {getPitchTypeName(pitch.type)} <span className="text-gray-400 text-[10px]">Lv{pitch.level}</span>
                                           </span>
                                         ))}
                                       </div>
@@ -443,7 +443,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                           <span className="text-gray-500">サブポジ:</span>
                                           {subPositions.map(([pos, fit], si) => (
                                             <span key={si} className={`${fit >= 70 ? 'text-green-400' : fit >= 50 ? 'text-yellow-400' : 'text-gray-400'}`}>
-                                              {FULL_POSITION_NAMES[pos] || pos} <span className="text-gray-500 text-[9px]">{fit}</span>
+                                              {FULL_POSITION_NAMES[pos] || pos} <span className="text-gray-400 text-[10px]">{fit}</span>
                                             </span>
                                           ))}
                                         </div>
@@ -451,7 +451,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                     })()}
                                   </div>
                                 ) : (
-                                  <div className="text-gray-600 text-[10px]">能力値データなし（過去のセーブデータの選手）</div>
+                                  <div className="text-gray-500 text-[10px]">能力値データなし（過去のセーブデータの選手）</div>
                                 )}
                               </td>
                             </tr>
@@ -513,7 +513,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               <div className="bg-gray-800 rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+                    <tr className="bg-gray-700/80 text-gray-400 text-xs">
                       <th className="py-1.5 px-2 text-center w-8">#</th>
                       <th className="py-1.5 px-2 text-left">選手名</th>
                       <th className="py-1.5 px-1 text-center">位</th>
@@ -529,7 +529,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       return (
                         <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30">
                           <td className="py-1.5 px-2 text-center">
-                            <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-600'}`}>
+                            <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
                               {idx + 1}
                             </span>
                           </td>
@@ -560,7 +560,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             {teamHistory.length === 0 ? (
               <div className="bg-gray-800 rounded-lg p-6 text-center">
                 <p className="text-gray-400">まだチーム成績データがありません</p>
-                <p className="text-gray-600 text-sm mt-1">シーズン終了後にチーム成績が記録されます</p>
+                <p className="text-gray-500 text-sm mt-1">シーズン終了後にチーム成績が記録されます</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -652,7 +652,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                               {s.mvpBatter.avg} {s.mvpBatter.hr}HR {s.mvpBatter.rbi}打点
                                             </span>
                                           </span>
-                                        ) : <span className="text-gray-600">-</span>}
+                                        ) : <span className="text-gray-500">-</span>}
                                       </td>
                                       <td className="py-2 px-2 text-xs">
                                         {s.mvpPitcher ? (
@@ -662,7 +662,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                               {s.mvpPitcher.wins}勝{s.mvpPitcher.losses}敗 {s.mvpPitcher.saves > 0 ? `${s.mvpPitcher.saves}S ` : ''}防{s.mvpPitcher.era}
                                             </span>
                                           </span>
-                                        ) : <span className="text-gray-600">-</span>}
+                                        ) : <span className="text-gray-500">-</span>}
                                       </td>
                                     </tr>
                                   ))}
@@ -730,7 +730,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                         {record.mvpBatter.avg} {record.mvpBatter.hr}HR {record.mvpBatter.rbi}打点 {record.mvpBatter.hits}安
                                       </div>
                                     </div>
-                                  ) : <span className="text-gray-600">-</span>}
+                                  ) : <span className="text-gray-500">-</span>}
                                 </td>
                                 <td className="py-2 px-2 text-xs">
                                   {record.mvpPitcher ? (
@@ -740,7 +740,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                         {record.mvpPitcher.wins}勝{record.mvpPitcher.losses}敗 {record.mvpPitcher.saves > 0 ? `${record.mvpPitcher.saves}S ` : ''}防{record.mvpPitcher.era} {record.mvpPitcher.strikeouts}K
                                       </div>
                                     </div>
-                                  ) : <span className="text-gray-600">-</span>}
+                                  ) : <span className="text-gray-500">-</span>}
                                 </td>
                               </tr>
                             ))}
@@ -760,7 +760,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             {draftYears.length === 0 ? (
               <div className="bg-gray-800 rounded-lg p-6 text-center">
                 <p className="text-gray-400">まだ入団記録がありません</p>
-                <p className="text-gray-600 text-sm mt-1">トライアウトで指名した選手の記録がここに表示されます</p>
+                <p className="text-gray-500 text-sm mt-1">トライアウトで指名した選手の記録がここに表示されます</p>
               </div>
             ) : (
               <div>
@@ -811,7 +811,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                               <td className="py-1.5 px-2 text-center font-bold text-purple-400">{p.draftRound}</td>
                               <td className="py-1.5 px-2 text-left">
                                 <span className={`font-bold ${p.isPitcher ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
-                                <span className="text-gray-600 text-[10px] ml-1">{p.teamName}</span>
+                                <span className="text-gray-400 text-[10px] ml-1">{p.teamName}</span>
                               </td>
                               <td className="py-1.5 px-2 text-center text-gray-500">{getPositionName(p.position)}</td>
                               <td className="py-1.5 px-2 text-center text-gray-500">{p.age}</td>

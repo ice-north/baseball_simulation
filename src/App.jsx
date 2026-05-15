@@ -645,15 +645,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
       // 能力値バーを表示するコンポーネント（コンパクト版）
       const AbilityBar = ({ label, value }) => (
-        <div className="flex items-center gap-0.5">
-          <span className="text-[7px] text-gray-500 w-2">{label}</span>
-          <div className="flex-1 bg-gray-700 rounded-full h-0.5 overflow-hidden">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-400 w-3">{label}</span>
+          <div className="flex-1 bg-gray-700 rounded-full h-1 overflow-hidden">
             <div
               className={`h-full ${getAbilityColor(value)} transition-all`}
               style={{ width: `${value}%` }}
             />
           </div>
-          <span className="text-[7px] text-gray-400 w-3.5 text-right">{value}</span>
+          <span className="text-[10px] text-gray-300 w-4 text-right font-mono">{value}</span>
         </div>
       );
 

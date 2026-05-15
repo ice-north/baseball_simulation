@@ -222,7 +222,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
             <p className="text-xs text-gray-500 mt-0.5">キャンプ完了時にスナップショットを記録。2年目以降から表示されます。</p>
           </div>
           {growthPlayers.length === 0 ? (
-            <div className="py-12 text-center text-gray-600 text-sm">選手データがありません</div>
+            <div className="py-12 text-center text-gray-500 text-sm">選手データがありません</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
@@ -322,7 +322,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                       <td className="py-1.5 px-1.5 font-bold">
                         {player.name}
                         {draftCheck.isDraftEligible && (
-                          <span className="ml-1 text-[9px] bg-purple-600 text-white px-1 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
+                          <span className="ml-1 text-[10px] bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
                       <td className="py-1.5 px-1.5 text-gray-400">{player.teamName}</td>
@@ -344,7 +344,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                 })}
                 {battingStats.length === 0 && (
                   <tr>
-                    <td colSpan="16" className="py-6 text-center text-gray-600 text-sm">
+                    <td colSpan="16" className="py-6 text-center text-gray-500 text-sm">
                       まだ野手成績がありません。試合を進行してください。
                     </td>
                   </tr>
@@ -392,7 +392,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                       <td className="py-1.5 px-1.5 font-bold">
                         {player.name}
                         {draftCheck.isDraftEligible && (
-                          <span className="ml-1 text-[9px] bg-purple-600 text-white px-1 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
+                          <span className="ml-1 text-[10px] bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
                       <td className="py-1.5 px-1.5 text-gray-400">{player.teamName}</td>
@@ -415,7 +415,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                 })}
                 {pitchingStats.length === 0 && (
                   <tr>
-                    <td colSpan="17" className="py-6 text-center text-gray-600 text-sm">
+                    <td colSpan="17" className="py-6 text-center text-gray-500 text-sm">
                       まだ投手成績がありません。試合を進行してください。
                     </td>
                   </tr>

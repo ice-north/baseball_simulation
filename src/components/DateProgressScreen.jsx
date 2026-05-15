@@ -962,9 +962,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                     <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-300'}>{homeShort}</span>
                                   </div>
                                   {isUserInGame && userWon !== null && (
-                                    <div className={`text-[9px] font-bold ${userWon ? 'text-green-400' : 'text-red-400'}`}>{userWon ? '○' : '●'}</div>
+                                    <div className={`text-[10px] font-bold ${userWon ? 'text-green-400' : 'text-red-400'}`}>{userWon ? '○' : '●'}</div>
                                   )}
-                                  {seriesInfo && <div className="text-[9px] text-yellow-300 font-mono">{seriesInfo}</div>}
+                                  {seriesInfo && <div className="text-[10px] text-yellow-400 font-mono">{seriesInfo}</div>}
                                 </div>
                               );
                             })}
@@ -972,7 +972,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         ) : cell.eventLabel ? (
                           <div className={`text-[10px] font-bold leading-tight mt-0.5 ${getEventColor(cell.eventLabel)}`}>{cell.eventLabel}</div>
                         ) : (
-                          <div className="text-[10px] text-gray-700">-</div>
+                          <div className="text-[10px] text-gray-600">-</div>
                         )}
                       </>
                     )}
@@ -1046,7 +1046,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           <div className="px-3 text-center">
                             <div className="flex items-center gap-1.5">
                               <span className={`text-base font-black font-mono ${game.result.awayScore > game.result.homeScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.awayScore}</span>
-                              <span className="text-gray-600 text-xs">-</span>
+                              <span className="text-gray-500 text-xs">-</span>
                               <span className={`text-base font-black font-mono ${game.result.homeScore > game.result.awayScore ? 'text-green-400' : 'text-gray-400'}`}>{game.result.homeScore}</span>
                             </div>
                             {/* 勝敗投手・セーブ表示 */}
@@ -1057,8 +1057,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               if (dec.winningPitcher) parts.push(<span key="w" className="text-green-400">○{dec.winningPitcher.name}</span>);
                               if (dec.losingPitcher) parts.push(<span key="l" className="text-red-400">●{dec.losingPitcher.name}</span>);
                               if (dec.savePitcher) parts.push(<span key="s" className="text-indigo-400">S{dec.savePitcher.name}</span>);
-                              if (parts.length === 0) return <div className="text-[9px] text-gray-500 mt-0.5">試合終了</div>;
-                              return <div className="text-[9px] mt-0.5 flex flex-wrap justify-center gap-x-1.5">{parts}</div>;
+                              if (parts.length === 0) return <div className="text-[10px] text-gray-500 mt-0.5">試合終了</div>;
+                              return <div className="text-[10px] mt-0.5 flex flex-wrap justify-center gap-x-1.5">{parts}</div>;
                             })()}
                             {/* 投手交代理由（ユーザーチームのみ） */}
                             {isUserGame && game.result.pitcherChanges?.length > 0 && (
@@ -1067,7 +1067,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                   .filter(c => c.team === userTeamName)
                                   .slice(0, 3)
                                   .map((c, ci) => (
-                                  <div key={ci} className="text-[8px] text-gray-400 leading-tight">
+                                  <div key={ci} className="text-[10px] text-gray-400 leading-tight">
                                     <span className="text-yellow-400">{c.inning}回</span> {c.out}→<span className="text-cyan-300">{c.in}</span>
                                     <span className="text-gray-500 ml-0.5">({c.role})</span>
                                   </div>
@@ -1190,7 +1190,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span>{r.icon}</span> {r.title}
                 </div>
                 {r.data.length === 0 ? (
-                  <div className="text-xs text-gray-600 py-1">該当者なし</div>
+                  <div className="text-xs text-gray-500 py-1">該当者なし</div>
                 ) : (
                   r.data.map((p, i) => {
                     const isUser = p.teamName === userTeamName;
@@ -1326,7 +1326,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                             </td>
                             <td className={`py-1.5 px-1 font-bold text-sm ${isUser ? 'text-yellow-300' : ''}`}>
                               {team.team}
-                              {isUser && <span className="ml-1 text-[9px] text-blue-400">YOU</span>}
+                              {isUser && <span className="ml-1 text-[10px] text-blue-400 font-bold">YOU</span>}
                             </td>
                             <td className="py-1.5 px-0.5 text-center text-white text-xs">{team.gamesPlayed || 0}</td>
                             <td className="py-1.5 px-0.5 text-center text-green-400 font-bold">{team.wins || 0}</td>
@@ -1384,7 +1384,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 if (!seriesData) return (
                   <div className={`rounded-xl p-2.5 text-center border border-dashed ${isFinal ? 'bg-gray-800/40 border-yellow-700/30' : 'bg-gray-800/40 border-gray-600/30'}`}>
                     <div className={`text-xs font-bold mb-1 ${isFinal ? 'text-yellow-500' : 'text-gray-500'}`}>{title}</div>
-                    <div className="text-gray-600 text-xs">準決勝結果待ち</div>
+                    <div className="text-gray-500 text-xs">準決勝結果待ち</div>
                   </div>
                 );
                 const { team1, team2, team1Wins, team2Wins, gameResults, isComplete, winner } = seriesData;
@@ -1748,7 +1748,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             <h3 className="text-xs font-bold text-gray-400">スタメン <span className="text-gray-600 font-normal">
               {swapTarget !== null && !showBench ? '（入れ替え先をタップ）' : '（タップで打順入替）'}
             </span></h3>
-            <div className="flex items-center gap-2 text-[9px] text-gray-500">
+            <div className="flex items-center gap-2 text-[10px] text-gray-400">
               <span className="inline-block w-4 h-1.5 rounded-sm bg-red-500" />危険
               <span className="inline-block w-4 h-1.5 rounded-sm bg-yellow-400" />注意
               <span className="inline-block w-4 h-1.5 rounded-sm bg-green-600" />良好
@@ -1839,7 +1839,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
               控え野手
               {swapTarget !== null
                 ? <span className="text-blue-400 ml-1">→ {swapTarget}番と交代する選手をタップ</span>
-                : <span className="text-gray-600 font-normal ml-1">スタメンをタップ後、控えをタップで交代</span>
+                : <span className="text-gray-500 font-normal ml-1">スタメンをタップ後、控えをタップで交代</span>
               }
             </h3>
             {swapTarget !== null && (
@@ -1847,7 +1847,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             )}
           </div>
           <div className="space-y-0.5 text-xs max-h-44 overflow-y-auto">
-            {benchFielders.length === 0 && <div className="text-gray-600 text-center py-1">控え野手なし</div>}
+            {benchFielders.length === 0 && <div className="text-gray-500 text-center py-1">控え野手なし</div>}
             {benchFielders.map(player => {
               const f = player.fatigue || 0;
               const bats = player.batting?.bats || 'right';
@@ -1888,7 +1888,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                   })()}
                   {(() => {
                     const subs = getSubPositions(player, player.position);
-                    return subs.length > 0 ? <span className="text-[9px]">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
+                    return subs.length > 0 ? <span className="text-[10px]">{subs.map((s, j) => <span key={j} className={s.color}>{s.label}</span>)}</span> : null;
                   })()}
                   <span className="flex-1" />
                   {(() => {

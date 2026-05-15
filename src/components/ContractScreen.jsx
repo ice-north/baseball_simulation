@@ -137,7 +137,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const SortHeader = ({ label, sortKeyVal, className = '' }) => (
     <th
-      className={`py-1 px-2 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
+      className={`py-2 px-2 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
       onClick={(e) => { e.stopPropagation(); handleSort(sortKeyVal); }}
     >
       {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
@@ -220,7 +220,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-gray-800 z-10">
                 <tr className="border-b border-gray-600 text-xs text-gray-400">
-                  <th className="py-1 px-2">契約</th>
+                  <th className="py-2 px-2">契約</th>
                   <SortHeader label="名前" sortKeyVal="name" />
                   <SortHeader label="齢" sortKeyVal="age" />
                   <SortHeader label="守備" sortKeyVal="position" />
@@ -257,25 +257,25 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                       className={`border-b border-gray-700 cursor-pointer transition ${isReleased ? 'bg-red-900/30 opacity-60' : 'hover:bg-gray-700'}`}
                       onClick={() => toggleRelease(player.id)}
                     >
-                      <td className="py-1 px-2">
+                      <td className="py-2 px-2">
                         {isReleased
                           ? <span className="text-red-400 font-bold">解雇</span>
                           : <span className="text-green-400">契約</span>
                         }
                       </td>
-                      <td className="py-1 px-2 text-sm text-white font-bold">{player.name}</td>
-                      <td className="py-1 px-2 text-xs text-gray-400">{player.age || '?'}</td>
-                      <td className="py-1 px-2 text-xs text-gray-300">{POSITION_NAMES[player.position] || player.position}</td>
-                      <td className={`py-1 px-2 text-xs text-center ${getAbilityColor(player.batting?.meet || 0)}`}>{player.batting?.meet || 0}</td>
-                      <td className={`py-1 px-2 text-xs text-center ${getAbilityColor(player.batting?.power || 0)}`}>{player.batting?.power || 0}</td>
-                      <td className={`py-1 px-2 text-xs text-center ${getAbilityColor(player.physical?.speed || 0)}`}>{player.physical?.speed || 0}</td>
-                      <td className={`py-1 px-2 text-xs text-center ${getAbilityColor(player.physical?.arm || 0)}`}>{player.physical?.arm || 0}</td>
-                      <td className={`py-1 px-2 text-xs text-center ${getAbilityColor(player.fielding?.defense || 0)}`}>{player.fielding?.defense || 0}</td>
-                      <td className={`py-1 px-2 text-xs text-center ${getAbilityColor(player.pitching?.velocity || 0)}`}>{player.pitching?.velocity || 0}</td>
-                      <td className={`py-1 px-2 text-xs text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
-                      <td className={`py-1 px-2 text-xs text-center ${getAbilityColor(player.pitching?.stamina || 0)}`}>{player.pitching?.stamina || 0}</td>
-                      <td className="py-1 px-2 text-xs text-center text-gray-300">{games}</td>
-                      <td className="py-1 px-2 text-xs text-gray-300 whitespace-nowrap">{statsStr}</td>
+                      <td className="py-2 px-2 text-sm text-white font-bold">{player.name}</td>
+                      <td className="py-2 px-2 text-xs text-gray-300">{player.age || '?'}</td>
+                      <td className="py-2 px-2 text-xs text-gray-300">{POSITION_NAMES[player.position] || player.position}</td>
+                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.batting?.meet || 0)}`}>{player.batting?.meet || 0}</td>
+                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.batting?.power || 0)}`}>{player.batting?.power || 0}</td>
+                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.physical?.speed || 0)}`}>{player.physical?.speed || 0}</td>
+                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.physical?.arm || 0)}`}>{player.physical?.arm || 0}</td>
+                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.fielding?.defense || 0)}`}>{player.fielding?.defense || 0}</td>
+                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.pitching?.velocity || 0)}`}>{player.pitching?.velocity || 0}</td>
+                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
+                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.pitching?.stamina || 0)}`}>{player.pitching?.stamina || 0}</td>
+                      <td className="py-2 px-2 text-xs text-center text-gray-300">{games}</td>
+                      <td className="py-2 px-2 text-xs text-gray-300 whitespace-nowrap">{statsStr}</td>
                     </tr>
                   );
                 })}

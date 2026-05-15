@@ -177,7 +177,7 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContin
                   <span className="text-white font-bold text-base">{entry.name}</span>
                   <span className="text-gray-400 text-sm">{entry.age}歳</span>
                   <span className="text-blue-400 font-semibold text-sm">{POSITION_NAMES[entry.position] || entry.position}</span>
-                  <span className="text-gray-600 text-sm">({entry.teamName})</span>
+                  <span className="text-gray-400 text-sm">({entry.teamName})</span>
                 </div>
                 <div className="text-sm text-orange-300/80">{entry.reasons.join(' / ')}</div>
               </div>

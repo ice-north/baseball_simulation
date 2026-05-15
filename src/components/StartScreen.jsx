@@ -170,7 +170,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onManual, hasSa
 
         <div className="text-xs text-gray-500 mt-8 space-y-0.5">
           <p>{hasSaveData ? 'セーブデータあり' : ''}</p>
-          <p className="text-gray-600">SANDBOX: 成長・ドラフト・引退なし。自由にチームを編集してシーズンを戦うモード</p>
+          <p className="text-gray-400">SANDBOX: 成長・ドラフト・引退なし。自由にチームを編集してシーズンを戦うモード</p>
         </div>
       </div>
     </div>

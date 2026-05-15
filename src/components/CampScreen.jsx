@@ -892,7 +892,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                   {preset.icon} {preset.name}
                 </button>
               ))}
-              <span className="text-gray-600 mx-1">|</span>
+              <span className="text-gray-500 mx-1">|</span>
               <span className="text-gray-500 text-xs font-bold">一括:</span>
               {Object.entries(TRAINING_MENUS).filter(([k, m]) => !['newpitch'].includes(k) && !m.intensive).map(([key, menu]) => (
                 <button
@@ -972,7 +972,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           >適用</button>
                           <button
                             onClick={() => dismissSuggestion(s)}
-                            className="shrink-0 text-gray-600 hover:text-gray-400 text-xs transition"
+                            className="shrink-0 text-gray-500 hover:text-gray-300 text-xs transition"
                           >✕</button>
                         </div>
                       );
@@ -1070,7 +1070,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         </td>
                         <td className="py-1 px-1 text-center text-[10px]">
                           <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>{ph.throws === 'left' ? '左' : '右'}</span>
-                          <span className="text-gray-600">/</span>
+                          <span className="text-gray-500">/</span>
                           <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
                         </td>
                         <td className="py-1 px-1 text-center text-[10px] text-gray-400">
@@ -1090,7 +1090,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         <td className="py-1 px-2 text-[10px] font-mono text-gray-400 whitespace-nowrap">
                           {(() => {
                             const prev = player.previousSeasonStats;
-                            if (!prev) return <span className="text-gray-600">-</span>;
+                            if (!prev) return <span className="text-gray-500">-</span>;
                             if (isPitcher(player)) {
                               const ip = prev.pitching?.inningsPitched || 0;
                               const era = ip > 0 ? ((prev.pitching?.earnedRuns || 0) / ip * 9).toFixed(2) : '-';
@@ -1206,7 +1206,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                                     className={`px-1 py-0.5 rounded text-[10px] font-bold transition ${
                                       eligible
                                         ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
-                                        : 'bg-gray-700 text-gray-600 cursor-not-allowed'
+                                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                     }`}
                                   >
                                     {dest.icon}
@@ -1295,7 +1295,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             </span>
                           ))}
                           {result.growthReport.length === 0 && (
-                            <span className="text-gray-600 text-[10px]">変化なし</span>
+                            <span className="text-gray-500 text-[10px]">変化なし</span>
                           )}
                         </div>
                       </td>
@@ -1326,7 +1326,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             </span>
                           ))}
                           {(!result.subGrowthReport || result.subGrowthReport.length === 0) && (
-                            <span className="text-gray-600 text-[10px]">変化なし</span>
+                            <span className="text-gray-500 text-[10px]">変化なし</span>
                           )}
                         </div>
                       </td>
@@ -1513,7 +1513,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                               {d.diff !== 0 ? (
                                 <span>
                                   <span className="text-gray-500">{d.before - d.naturalDiff}</span>
-                                  <span className="text-gray-600 mx-0.5">{'\u2192'}</span>
+                                  <span className="text-gray-500 mx-0.5">{'\u2192'}</span>
                                   <span className={d.diff > 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{d.after}</span>
                                   {d.campDiff !== 0 && (
                                     <span className={`ml-0.5 ${d.campDiff > 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -1527,7 +1527,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                                   )}
                                 </span>
                               ) : (
-                                <span className="text-gray-600">-</span>
+                                <span className="text-gray-500">-</span>
                               )}
                             </td>
                           ))}
@@ -1537,11 +1537,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                                 {newPitches.map(t => getPitchTypeName(t)).join(', ')}
                               </span>
                             ) : (
-                              <span className="text-gray-600">-</span>
+                              <span className="text-gray-500">-</span>
                             )}
                           </td>
                           <td className="py-1 px-1 text-center">
-                            <span className={`font-bold text-xs ${totalGrowth >= 10 ? 'text-yellow-400' : totalGrowth >= 5 ? 'text-green-400' : totalGrowth > 0 ? 'text-blue-300' : 'text-gray-600'}`}>
+                            <span className={`font-bold text-xs ${totalGrowth >= 10 ? 'text-yellow-400' : totalGrowth >= 5 ? 'text-green-400' : totalGrowth > 0 ? 'text-blue-300' : 'text-gray-500'}`}>
                               {totalGrowth > 0 ? `+${totalGrowth}` : '-'}
                             </span>
                           </td>
