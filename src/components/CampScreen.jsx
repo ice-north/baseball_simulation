@@ -1022,6 +1022,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-1 text-center w-9">速</th>
                     <th className="py-1.5 px-1 text-center w-7">制</th>
                     <th className="py-1.5 px-1 text-center w-9">ス</th>
+                    <th className="py-1.5 px-1 text-center w-7">体</th>
                     <th className="py-1.5 px-2 text-left">変化球</th>
                     <th className="py-1.5 px-2 text-left">前年成績</th>
                     {/* サブポジション適性 */}
@@ -1086,6 +1087,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
                         <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono truncate max-w-[100px]">{getArsenalDisplay(player)}</td>
                         <td className="py-1 px-2 text-[10px] font-mono text-gray-400 whitespace-nowrap">
                           {(() => {
