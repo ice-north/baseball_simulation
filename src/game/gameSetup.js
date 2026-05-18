@@ -336,17 +336,15 @@ export function executeHandleManagedGameEnd(ctx) {
         }
 
         // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
-        const isPitcherRole = p.position === 'pitcher' || p.originalPosition === 'pitcher' || p.battingOrder === 9;
         const bodyStamina = playerData.physical?.bodyStamina || 50;
         const staminaBonus = (bodyStamina / 100) * 1.5;
-        const baseDivisor = isPitcherRole ? 2 : 3;
-        const fatigue = Math.floor((ps.pitches || 0) / (baseDivisor + staminaBonus));
-        playerData.fatigue = (playerData.fatigue || 0) + fatigue;
-
-        // 成長率変動: 先発はイニング数ベース、リリーフは登板数ベース
         const pitcherRoles = teamData.pitchingRotation?.pitcherRoles || {};
         const starterIds = new Set(teamData.pitchingRotation?.starters || []);
         const isStarter = starterIds.has(p.id);
+        const baseDivisor = isStarter ? 2 : 3;
+        const pitchFatigue = Math.floor((ps.pitches || 0) / (baseDivisor + staminaBonus));
+        const fatigue = isStarter ? pitchFatigue : Math.max(11, pitchFatigue);
+        playerData.fatigue = (playerData.fatigue || 0) + fatigue;
         if (isStarter) {
           // 先発: 15イニング(45アウト)ごとに+0.01
           if (Math.floor(sp.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {

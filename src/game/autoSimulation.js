@@ -1997,7 +1997,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const bodyStamina = playerData.physical?.bodyStamina || 50;
         const staminaBonus = (bodyStamina / 100) * 1.5;
         const baseDivisor = isStarterPitcher ? 2 : 3;
-        const fatigueGain = Math.floor(p.pitches / (baseDivisor + staminaBonus));
+        const pitchFatigue = Math.floor(p.pitches / (baseDivisor + staminaBonus));
+        const fatigueGain = isStarterPitcher ? pitchFatigue : Math.max(11, pitchFatigue);
         playerData.fatigue = (playerData.fatigue || 0) + fatigueGain;
 
         // 成長率変動: 先発はイニング数ベース、リリーフは登板数ベース
