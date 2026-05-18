@@ -217,8 +217,8 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
             </span>
           </div>
 
-          <div className="overflow-y-auto max-h-[500px] mb-4">
-            <table className="w-full text-left">
+          <div className="overflow-auto max-h-[500px] mb-4">
+            <table className="w-full text-left min-w-[900px]">
               <thead className="sticky top-0 bg-gray-800 z-10">
                 <tr className="border-b border-gray-600 text-xs text-gray-400">
                   <th className="py-2 px-2">契約</th>
