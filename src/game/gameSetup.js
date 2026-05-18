@@ -303,11 +303,6 @@ export function executeHandleManagedGameEnd(ctx) {
         if (season.games % 10 === 0) {
           playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
         }
-        // 活躍ボーナス: 猛打賞(3安打以上)で+0.005、HR含むなら+0.01
-        if ((gs.hits || 0) >= 3) {
-          const bonus = (gs.homeruns || 0) > 0 ? 0.01 : 0.005;
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + bonus) * 1000) / 1000;
-        }
 
         // 野手疲労蓄積: スタメン出場(3打席以上)のみ
         if ((gs.atBats || 0) >= 3) {
@@ -357,13 +352,6 @@ export function executeHandleManagedGameEnd(ctx) {
           if (Math.floor(sp.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {
             playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
           }
-          // 好投ボーナス: QS達成で+0.005、完封なら+0.015
-          const outs = ps.outs || 0;
-          const runs = ps.runsAllowed || 0;
-          if (outs >= 18 && runs <= 3) {
-            const pitchBonus = (runs === 0 && outs >= 27) ? 0.015 : 0.005;
-            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + pitchBonus) * 1000) / 1000;
-          }
         } else {
           // リリーフ: 登板数ベース（守護神/セットアッパー/中継ぎエースは4登板、その他は5登板ごと）
           const role = pitcherRoles[p.id] || '';
@@ -371,10 +359,6 @@ export function executeHandleManagedGameEnd(ctx) {
           const threshold = highPressureRoles.includes(role) ? 4 : 5;
           if (sp.games % threshold === 0) {
             playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
-          }
-          // リリーフ: 無失点で3アウト以上取った場合 +0.005
-          if ((ps.outs || 0) >= 3 && (ps.runsAllowed || 0) === 0) {
-            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.005) * 1000) / 1000;
           }
         }
       }

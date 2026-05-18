@@ -1970,11 +1970,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         if (season.games % 10 === 0) {
           playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
         }
-        // 活躍ボーナス: 猛打賞(3安打以上)で+0.005、HR含むなら+0.01
-        if (b.hits >= 3) {
-          const bonus = b.homeruns > 0 ? 0.01 : 0.005;
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + bonus) * 1000) / 1000;
-        }
       }
 
       // 投手成績の集計
@@ -2036,18 +2031,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           // QS: 6回以上 && 自責点3以下
           if (innings >= 18 && earnedRuns <= 3) {
             season.qualityStarts = (season.qualityStarts || 0) + 1;
-            // 好投ボーナス: QS達成で+0.005、完封なら+0.015
-            const pitchBonus = (earnedRuns === 0 && innings >= 27) ? 0.015 : 0.005;
-            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + pitchBonus) * 1000) / 1000;
           }
           // HQS: 7回以上 && 自責点2以下
           if (innings >= 21 && earnedRuns <= 2) {
             season.highQualityStarts = (season.highQualityStarts || 0) + 1;
           }
-        }
-        // リリーフ: 無失点で3アウト以上取った場合 +0.005
-        if (!wasStarter && p.outs >= 3 && p.runsAllowed === 0) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.005) * 1000) / 1000;
         }
 
         // 勝敗はDateProgressScreen.determinePitcherDecisionsで正式判定・記録する
