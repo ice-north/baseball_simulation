@@ -513,21 +513,13 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     return Math.max(40, Math.min(150, base + variance));
   };
 
-  // 球速から肩力を導出（投手・二刀流用）
-  // velocity 119→arm ~20, 134→arm ~50, 150→arm ~80, 158→arm ~95
-  const armFromVelocity = (velocity) => {
-    const base = Math.round((velocity - 108) / 0.525);
-    const variance = Math.floor(Math.random() * 17) - 8; // -8 ~ +8
-    return Math.max(10, Math.min(99, base + variance));
-  };
-
-  // 肩力から球速を導出（野手用）
-  // 野手の肩力は送球の強さであり、投球速度とは異なる
-  // arm 30→velocity ~111, 50→velocity ~118, 70→velocity ~125, 80→velocity ~128
+  // 肩力から球速を導出（全選手共通）
+  // 肩の強さが球速を決める統一システム
+  // arm 30→108, 50→121, 60→127, 70→134, 80→140, 90→147, 95→150, 99→152
   const velocityFromArm = (arm) => {
-    const base = Math.round(100 + arm * 0.35);
-    const variance = Math.floor(Math.random() * 7) - 3; // -3 ~ +3
-    return Math.max(100, Math.min(140, base + variance));
+    const base = Math.round(88 + arm * 0.65);
+    const variance = Math.floor(Math.random() * 5) - 2; // -2 ~ +2
+    return Math.max(100, Math.min(158, base + variance));
   };
 
   // 全生成選手の平均能力を-3する調整関数
@@ -549,36 +541,36 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 二刀流選手の場合は投打両方に能力を持つ
   if (isTwoWay) {
     if (isPitcher) {
-      // 投手登録の二刀流: 投手能力が本職寄り、打撃は原石レベル
-      const twoWayVelocity = Math.min(randVelocity(125, 145, velocityAgeBonus) + velocityAdjust, 152);
+      // 投手登録の二刀流: 肩が強く投手能力寄り、打撃は原石レベル
+      const twoWayArm = randRangeWithVariance(72, 90, ageBonus);
       return applyGlobalOffset({
         meet: randRangeWithVariance(33, 55, battingAgeBonus),
         power: randRangeWithVariance(30, 55, battingAgeBonus),
         eye: randRangeWithVariance(30, 55, battingAgeBonus),
         steal: randRangeWithVariance(30, 55),
         speed: randRangeWithVariance(45, 75),
-        arm: armFromVelocity(twoWayVelocity),
+        arm: twoWayArm,
         defense: randRangeWithVariance(45, 70),
         bodyStamina: randRangeWithVariance(45, 75),
         recovery: randRangeWithVariance(45, 75),
-        velocity: twoWayVelocity,
+        velocity: velocityFromArm(twoWayArm),
         control: Math.min(randRangeWithVariance(40, 68) + controlAdjust, 85),
         stamina: randStamina(80, 110)
       });
     } else {
-      // 野手登録の二刀流: 野手能力メイン、投手もそこそこ
-      const twoWayVelocity = Math.min(randVelocity(121, 139, velocityAgeBonus) + velocityAdjust, 149);
+      // 野手登録の二刀流: 野手能力メイン、肩が強めで投手もそこそこ
+      const twoWayArm = randRangeWithVariance(65, 82, ageBonus);
       return applyGlobalOffset({
         meet: randRangeWithVariance(40, 65, battingAgeBonus),
         power: randRangeWithVariance(32, 57, battingAgeBonus),
         eye: randRangeWithVariance(35, 65, battingAgeBonus),
         steal: randRangeWithVariance(30, 60),
         speed: randRangeWithVariance(43, 73),
-        arm: armFromVelocity(twoWayVelocity),
+        arm: twoWayArm,
         defense: randRangeWithVariance(40, 65),
         bodyStamina: randRangeWithVariance(40, 70),
         recovery: randRangeWithVariance(40, 70),
-        velocity: twoWayVelocity,
+        velocity: velocityFromArm(twoWayArm),
         control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
         stamina: randStamina(67, 100)
       });
@@ -588,18 +580,19 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 通常の能力値範囲（投手用 or 野手アーキタイプ別）
   let normalAbilities;
   if (isPitcher) {
-    const pitcherVelocity = Math.min(randVelocity(112, 142, velocityAgeBonus) + velocityAdjust, 152);
+    // 投手は肩力が高い選手（肩力68-88 → 球速132-145程度）
+    const pitcherArm = randRangeWithVariance(68, 88, ageBonus);
     normalAbilities = {
       meet: randRangeWithVariance(15, 40, battingAgeBonus),
       power: randRangeWithVariance(5, 29, battingAgeBonus),
       eye: randRangeWithVariance(25, 50, battingAgeBonus),
       steal: randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
       speed: randRangeWithVariance(33, 58, Math.max(0, Math.floor(ageBonus * 0.5))),
-      arm: armFromVelocity(pitcherVelocity),
+      arm: pitcherArm,
       defense: randRangeWithVariance(40, 65),
       bodyStamina: randRangeWithVariance(40, 70),
       recovery: randRangeWithVariance(40, 70),
-      velocity: pitcherVelocity,
+      velocity: velocityFromArm(pitcherArm),
       control: Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85),
       stamina: randStamina(73, 113, ageBonus)
     };
@@ -729,40 +722,40 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       steal: () => randRange(13, 27)
     },
     // --- 投手特性（原石、磨けば光る素材） ---
+    // 肩力を指定 → 球速は後で肩力から自動導出
     fireballer: {
-      // 球速が魅力。制球や変化球を磨けば戦力に
-      // 例: チェンジアップ覚えれば緩急で三振が取れる
-      velocity: () => Math.min(randVelocity(143, 150) + velocityAdjust, 153),
+      // 剛腕が魅力。制球や変化球を磨けば戦力に
+      arm: () => randRange(88, 96),
       control: () => Math.min(randRange(28, 45) + controlAdjust, 58),
       stamina: () => randStamina(55, 82)
     },
     controlPitcher: {
-      // 制球派の素材。球威は平均以下だが守備を磨けば
-      velocity: () => Math.max(randVelocity(118, 130) + velocityAdjust, 115),
+      // 制球派の素材。肩はそこそこだが制球が光る
+      arm: () => randRange(58, 72),
       control: () => Math.min(randRange(58, 73) + controlAdjust, 80),
       stamina: () => randStamina(72, 100)
     },
     ironman: {
       // タフネス型。技術は粗いが練習で伸びる
-      velocity: () => Math.min(randVelocity(120, 131) + velocityAdjust, 137),
+      arm: () => randRange(60, 73),
       control: () => Math.min(randRange(35, 52) + controlAdjust, 65),
       stamina: () => randStamina(95, 125)
     },
     breakingBall: {
       // 変化球派（arsenalで+2球種、早熟型）
+      arm: () => randRange(55, 70),
       control: () => Math.min(randRange(48, 63) + controlAdjust, 72),
-      velocity: () => Math.max(randVelocity(117, 130) + velocityAdjust, 114),
       stamina: () => randStamina(70, 95)
     },
     sinkerballer: {
       // ゴロ量産候補。制球とスタミナが売り
-      velocity: () => Math.min(randVelocity(118, 130) + velocityAdjust, 135),
+      arm: () => randRange(58, 72),
       control: () => Math.min(randRange(52, 68) + controlAdjust, 75),
       stamina: () => randStamina(82, 110)
     },
     strikeoutArtist: {
-      // 空振り奪取型。球威あるが粗削り
-      velocity: () => Math.min(randVelocity(139, 146) + velocityAdjust, 150),
+      // 空振り奪取型。肩が強く粗削り
+      arm: () => randRange(82, 93),
       control: () => Math.min(randRange(30, 48) + controlAdjust, 60),
       stamina: () => randStamina(55, 80)
     }
@@ -772,7 +765,6 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 単一特性: 常に上書き → 得意/不得意が明確な個性的な選手に
   // 複数特性: 良い方を採用 → 複合的な長所を持つ選手に
   const isSingleTrait = playerTraits.length === 1;
-  let velocityChanged = false;
   let armChanged = false;
   playerTraits.forEach(trait => {
     const bonuses = traitBonuses[trait];
@@ -781,23 +773,14 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       const traitValue = generator();
       if (isSingleTrait || traitValue > abilities[stat]) {
         abilities[stat] = traitValue;
-        if (stat === 'velocity') velocityChanged = true;
         if (stat === 'arm') armChanged = true;
       }
     });
   });
 
-  // 特性で球速or肩が変わった場合、もう片方を連動させる
-  if (isPitcher && velocityChanged) {
-    // 投手: 球速から肩を再導出（特性のarm指定がなければ）
-    if (!armChanged) {
-      abilities.arm = armFromVelocity(abilities.velocity);
-    }
-  } else if (!isPitcher && armChanged) {
-    // 野手: 肩から球速を再導出（特性のvelocity指定がなければ）
-    if (!velocityChanged) {
-      abilities.velocity = velocityFromArm(abilities.arm);
-    }
+  // 肩力が変わった場合、球速を肩力から再導出（統一ルール）
+  if (armChanged) {
+    abilities.velocity = velocityFromArm(abilities.arm);
   }
 
   return applyGlobalOffset(abilities);
