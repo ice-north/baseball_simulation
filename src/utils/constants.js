@@ -108,31 +108,39 @@ export const BALL_EFFECTS = {
 export const PITCHING_FORM_EFFECTS = {
   overhand: {
     name: 'オーバースロー',
-    velocityBonus: 3,
-    verticalBreakBonus: 0.15,      // 縦の変化球が15%効果的
+    velocityMult: 1.00,
+    velocityGrowthMult: 1.1,       // 球速が伸びやすい
+    controlGrowthMult: 0.9,        // 制球が伸びにくい
+    verticalBreakBonus: 0.15,
     horizontalBreakBonus: 0,
     whiffBonus: 0
   },
   threeQuarter: {
     name: 'スリークォーター',
-    velocityBonus: 0,
+    velocityMult: 0.98,
+    velocityGrowthMult: 1.0,
+    controlGrowthMult: 1.0,
     verticalBreakBonus: 0.05,
     horizontalBreakBonus: 0.05,
     whiffBonus: 0
   },
   sidearm: {
     name: 'サイドスロー',
-    velocityBonus: -2,
+    velocityMult: 0.95,
+    velocityGrowthMult: 0.9,       // 球速が伸びにくい
+    controlGrowthMult: 1.1,        // 制球が伸びやすい
+    horizontalBreakBonus: 0.15,
     verticalBreakBonus: -0.05,
-    horizontalBreakBonus: 0.15,    // 横の変化球が15%効果的
-    whiffBonus: 0.03               // 同じ利き腕の打者に対して+3%（例: 左サイドは左打者に強い）
+    whiffBonus: 0.03
   },
   submarine: {
     name: 'アンダースロー',
-    velocityBonus: -5,
-    verticalBreakBonus: 0.1,       // 浮き上がる軌道でカーブが効く
+    velocityMult: 0.92,
+    velocityGrowthMult: 0.8,       // 球速が伸びにくい
+    controlGrowthMult: 1.2,        // 制球が伸びやすい
+    verticalBreakBonus: 0.1,
     horizontalBreakBonus: 0.05,
-    whiffBonus: 0.05               // 同じ利き腕の打者に対して+5%（例: 右アンダーは右打者に強い）
+    whiffBonus: 0.05
   }
 };
 

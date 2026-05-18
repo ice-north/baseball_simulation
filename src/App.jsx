@@ -1191,7 +1191,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
         // 投球フォームの効果を適用
         const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-        let baseVelocity = pitcher.velocity + velocityPenalty + pitchingFormEffect.velocityBonus;
+        let baseVelocity = Math.round(pitcher.velocity * (pitchingFormEffect.velocityMult || 1.0)) + velocityPenalty;
         baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
         const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
 

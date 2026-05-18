@@ -7,6 +7,7 @@
 import { createSeasonData, initializeStandings } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
+import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
 
@@ -941,10 +942,17 @@ export function applyAgeCurveChanges(allTeams) {
           const currentValue = getNestedValue(updatedPlayer, statPath);
           if (currentValue == null) return;
 
-          // 球速は変動幅を1.2倍に（スケールが大きいため）
+          // フォーム別成長補正
+          const formEff = PITCHING_FORM_EFFECTS[updatedPlayer.pitching?.form] || PITCHING_FORM_EFFECTS.threeQuarter;
+          const formVelMult = stat === 'velocity' ? (formEff.velocityGrowthMult || 1.0) : 1.0;
+          const formCtrlMult = stat === 'control' ? (formEff.controlGrowthMult || 1.0) : 1.0;
+
+          // 球速は変動幅を1.2倍に（スケールが大きいため）+ フォーム補正
           if (stat === 'velocity') change = rawChange > 0
-            ? Math.round(rawChange * 1.2 * ageTalentMult * potential)
+            ? Math.round(rawChange * 1.2 * ageTalentMult * potential * formVelMult)
             : Math.round(rawChange * 1.2);
+          // 制球はフォーム補正適用
+          if (stat === 'control' && rawChange > 0) change = Math.round(change * formCtrlMult);
           // スタミナも変動幅を1.2倍（成長方向のみポテンシャル適用）
           if (stat === 'stamina') change = rawChange > 0
             ? Math.round(rawChange * 1.2 * potential)

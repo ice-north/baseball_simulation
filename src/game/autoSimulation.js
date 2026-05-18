@@ -496,8 +496,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const pitcherFatigue = pitcherPlayer.fatigue || 0;
     const pitcherFatiguePenalty = pitcherFatigue > 0 ? Math.round(pitcherFatigue * pitcherFatigue / 670) : 0;
 
+    const pitcherFormEffect = PITCHING_FORM_EFFECTS[pitcherPlayer.pitching?.form] || PITCHING_FORM_EFFECTS.threeQuarter;
     const pitcher = {
-      velocity: (pitcherPlayer.pitching?.velocity || 140) - pitcherFatiguePenalty,
+      velocity: Math.round((pitcherPlayer.pitching?.velocity || 140) * (pitcherFormEffect.velocityMult || 1.0)) - pitcherFatiguePenalty,
       control: (pitcherPlayer.pitching?.control || 50) + pitcherCondMod - pitcherFatiguePenalty,
       throws: pitcherPlayer.physical?.throws || 'right'
     };

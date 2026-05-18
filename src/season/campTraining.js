@@ -4,6 +4,7 @@
 // ============================================================
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
+import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 
 
 /**
@@ -796,8 +797,17 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     if (statPath) {
       const currentValue = getNestedValue(updatedPlayer, statPath) || 50;
 
+      // フォーム別成長補正（オーバー→球速伸びやすい、アンダー→制球伸びやすい）
+      const formEffect = PITCHING_FORM_EFFECTS[updatedPlayer.pitching?.form] || PITCHING_FORM_EFFECTS.threeQuarter;
+      let formAdjustedGrowth = baseGrowth;
+      if (targetStat === 'velocity' && formEffect.velocityGrowthMult !== 1.0) {
+        formAdjustedGrowth = Math.round(baseGrowth * formEffect.velocityGrowthMult);
+      } else if (targetStat === 'control' && formEffect.controlGrowthMult !== 1.0) {
+        formAdjustedGrowth = Math.round(baseGrowth * formEffect.controlGrowthMult);
+      }
+
       // 高能力値の成長減衰（覚醒分は減衰しない）
-      let adjustedBaseGrowth = baseGrowth;
+      let adjustedBaseGrowth = formAdjustedGrowth;
       if (targetStat === 'velocity') {
         // 球速155km以上は伸びにくくなる（超過1kmごとに成長量20%減衰）
         if (currentValue >= 155) {
