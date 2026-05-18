@@ -138,7 +138,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const SortHeader = ({ label, sortKeyVal, className = '' }) => (
     <th
-      className={`py-2 px-2 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
+      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
       onClick={(e) => { e.stopPropagation(); handleSort(sortKeyVal); }}
     >
       {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
@@ -201,41 +201,41 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     .reduce((sum, [, arr]) => sum + arr.length, 0);
 
   return (
-    <div className="p-6 bg-gray-900 min-h-screen">
-      <h1 className="text-2xl font-bold text-white mb-2">契約更改 - {seasonData?.year || 1}年目</h1>
-      <p className="text-gray-400 mb-2">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
+    <div className="p-3 bg-gray-900 min-h-screen">
+      <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
+      <p className="text-gray-400 text-xs mb-1">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
       {aiReleasedCount > 0 && (
-        <p className="text-yellow-400 text-sm mb-4">AIチームは{aiReleasedCount}人の選手を自動解雇します。</p>
+        <p className="text-yellow-400 text-xs mb-2">AIチームは{aiReleasedCount}人の選手を自動解雇します。</p>
       )}
 
       {!confirmed ? (
         <>
-          <div className="flex items-center gap-4 mb-4">
-            <span className="text-white font-bold text-lg">{userTeamName}</span>
-            <span className="text-gray-300">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-white font-bold">{userTeamName}</span>
+            <span className="text-gray-300 text-sm">
               現在 {players.length}人 / 解雇予定 {userReleased.length}人 → 残り {players.length - userReleased.length}人
             </span>
           </div>
 
-          <div className="overflow-auto max-h-[500px] mb-4">
-            <table className="w-full text-left min-w-[900px]">
-              <thead className="sticky top-0 bg-gray-800 z-10">
-                <tr className="border-b border-gray-600 text-xs text-gray-400">
-                  <th className="py-2 px-2">契約</th>
+          <div className="mb-3">
+            <table className="w-full text-left">
+              <thead className="bg-gray-800">
+                <tr className="border-b border-gray-600 text-[10px] text-gray-400">
+                  <th className="py-1 px-1">状態</th>
                   <SortHeader label="名前" sortKeyVal="name" />
                   <SortHeader label="齢" sortKeyVal="age" />
                   <SortHeader label="成長" sortKeyVal="growth" className="text-center" />
-                  <SortHeader label="守備" sortKeyVal="position" />
+                  <SortHeader label="位" sortKeyVal="position" />
                   <SortHeader label="ミ" sortKeyVal="meet" className="text-center" />
                   <SortHeader label="パ" sortKeyVal="power" className="text-center" />
                   <SortHeader label="走" sortKeyVal="speed" className="text-center" />
                   <SortHeader label="肩" sortKeyVal="arm" className="text-center" />
                   <SortHeader label="守" sortKeyVal="defense" className="text-center" />
-                  <SortHeader label="球速" sortKeyVal="velocity" className="text-center" />
-                  <SortHeader label="制球" sortKeyVal="control" className="text-center" />
-                  <SortHeader label="スタ" sortKeyVal="stamina" className="text-center" />
-                  <SortHeader label="試合" sortKeyVal="games" className="text-center" />
-                  <SortHeader label="総合" sortKeyVal="overall" className="text-center" />
+                  <SortHeader label="速" sortKeyVal="velocity" className="text-center" />
+                  <SortHeader label="制" sortKeyVal="control" className="text-center" />
+                  <SortHeader label="ス" sortKeyVal="stamina" className="text-center" />
+                  <SortHeader label="試" sortKeyVal="games" className="text-center" />
+                  <SortHeader label="成績" sortKeyVal="overall" className="text-center" />
                 </tr>
               </thead>
               <tbody>
@@ -256,18 +256,18 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                   return (
                     <tr
                       key={player.id}
-                      className={`border-b border-gray-700 cursor-pointer transition ${isReleased ? 'bg-red-900/30 opacity-60' : 'hover:bg-gray-700'}`}
+                      className={`border-b border-gray-700/50 cursor-pointer transition ${isReleased ? 'bg-red-900/30 opacity-60' : 'hover:bg-gray-700/50'}`}
                       onClick={() => toggleRelease(player.id)}
                     >
-                      <td className="py-2 px-2">
+                      <td className="py-0.5 px-1">
                         {isReleased
-                          ? <span className="text-red-400 font-bold">解雇</span>
-                          : <span className="text-green-400">契約</span>
+                          ? <span className="text-red-400 font-bold text-[10px]">解雇</span>
+                          : <span className="text-green-400 text-[10px]">契約</span>
                         }
                       </td>
-                      <td className="py-2 px-2 text-sm text-white font-bold">{player.name}</td>
-                      <td className="py-2 px-2 text-xs text-gray-300">{player.age || '?'}</td>
-                      <td className="py-2 px-2 text-xs text-center">
+                      <td className="py-0.5 px-1 text-xs text-white font-bold">{player.name}</td>
+                      <td className="py-0.5 px-1 text-[10px] text-gray-300 text-center">{player.age || '?'}</td>
+                      <td className="py-0.5 px-1 text-[10px] text-center">
                         {(() => {
                           const base = player.growthPotential ?? 1.0;
                           const mod = player.growthModifier || 0;
@@ -280,17 +280,17 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                           );
                         })()}
                       </td>
-                      <td className="py-2 px-2 text-xs text-gray-300">{POSITION_NAMES[player.position] || player.position}</td>
-                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.batting?.meet || 0)}`}>{player.batting?.meet || 0}</td>
-                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.batting?.power || 0)}`}>{player.batting?.power || 0}</td>
-                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.physical?.speed || 0)}`}>{player.physical?.speed || 0}</td>
-                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.physical?.arm || 0)}`}>{player.physical?.arm || 0}</td>
-                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.fielding?.defense || 0)}`}>{player.fielding?.defense || 0}</td>
-                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.pitching?.velocity || 0)}`}>{player.pitching?.velocity || 0}</td>
-                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
-                      <td className={`py-2 px-2 text-xs text-center ${getAbilityColor(player.pitching?.stamina || 0)}`}>{player.pitching?.stamina || 0}</td>
-                      <td className="py-2 px-2 text-xs text-center text-gray-300">{games}</td>
-                      <td className="py-2 px-2 text-xs text-gray-300 whitespace-nowrap">{statsStr}</td>
+                      <td className="py-0.5 px-1 text-[10px] text-gray-300 text-center">{POSITION_NAMES[player.position] || player.position}</td>
+                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.batting?.meet || 0)}`}>{player.batting?.meet || 0}</td>
+                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.batting?.power || 0)}`}>{player.batting?.power || 0}</td>
+                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.physical?.speed || 0)}`}>{player.physical?.speed || 0}</td>
+                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.physical?.arm || 0)}`}>{player.physical?.arm || 0}</td>
+                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.fielding?.defense || 0)}`}>{player.fielding?.defense || 0}</td>
+                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.pitching?.velocity || 0)}`}>{player.pitching?.velocity || 0}</td>
+                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
+                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.pitching?.stamina || 0)}`}>{player.pitching?.stamina || 0}</td>
+                      <td className="py-0.5 px-1 text-[10px] text-center text-gray-300">{games}</td>
+                      <td className="py-0.5 px-1 text-[10px] text-gray-300 whitespace-nowrap">{statsStr}</td>
                     </tr>
                   );
                 })}
@@ -298,18 +298,20 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
             </table>
           </div>
 
-          <button
-            onClick={handleConfirm}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded font-bold mr-4"
-          >
-            契約更改を確定する
-          </button>
-          <button
-            onClick={() => { handleConfirm(); }}
-            className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded"
-          >
-            解雇せずに確定
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleConfirm}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded font-bold text-sm"
+            >
+              契約更改を確定する
+            </button>
+            <button
+              onClick={() => { handleConfirm(); }}
+              className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-1.5 rounded text-sm"
+            >
+              解雇せずに確定
+            </button>
+          </div>
         </>
       ) : (
         <div className="text-center py-10">
