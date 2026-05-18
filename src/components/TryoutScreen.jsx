@@ -622,26 +622,26 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               <div className="text-gray-400 text-sm ml-auto">候補者: {filteredCandidates.length} 人</div>
             </div>
 
-            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-x-auto mb-5">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-800 text-gray-400 text-xs sticky top-0 border-b border-gray-700/50">
+            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 mb-5">
+              <table className="w-full text-[11px] text-left table-fixed">
+                <thead className="bg-gray-800 text-gray-400 text-[10px] sticky top-0 border-b border-gray-700/50">
                   <tr>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('name')}>名前{getSortIndicator('name')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('age')}>年齢{getSortIndicator('age')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('position')}>守備{getSortIndicator('position')}</th>
-                    <th className="px-2 py-2 whitespace-nowrap">投打</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('meet')}>ミート{getSortIndicator('meet')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('power')}>パワー{getSortIndicator('power')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('speed')}>走力{getSortIndicator('speed')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('arm')}>肩{getSortIndicator('arm')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('defense')}>守備{getSortIndicator('defense')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('velocity')}>球速{getSortIndicator('velocity')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('control')}>制球{getSortIndicator('control')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('stamina')}>スタミナ{getSortIndicator('stamina')}</th>
-                    <th className="px-2 py-2 whitespace-nowrap">変化球</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野手総合{getSortIndicator('fielderOverall')}</th>
-                    <th className="px-2 py-2 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投手総合{getSortIndicator('pitcherOverall')}</th>
-                    <th className="px-2 py-2 whitespace-nowrap">スカウト評価</th>
+                    <th className="px-1 py-1.5 w-[60px] cursor-pointer hover:text-white" onClick={() => handleSort('name')}>名前{getSortIndicator('name')}</th>
+                    <th className="px-1 py-1.5 w-[30px] cursor-pointer hover:text-white" onClick={() => handleSort('age')}>齢{getSortIndicator('age')}</th>
+                    <th className="px-1 py-1.5 w-[28px] cursor-pointer hover:text-white" onClick={() => handleSort('position')}>守{getSortIndicator('position')}</th>
+                    <th className="px-1 py-1.5 w-[36px]">投打</th>
+                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('meet')}>ミ{getSortIndicator('meet')}</th>
+                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('power')}>パ{getSortIndicator('power')}</th>
+                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('speed')}>走{getSortIndicator('speed')}</th>
+                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('arm')}>肩{getSortIndicator('arm')}</th>
+                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('defense')}>守{getSortIndicator('defense')}</th>
+                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('velocity')}>速{getSortIndicator('velocity')}</th>
+                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('control')}>制{getSortIndicator('control')}</th>
+                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('stamina')}>ス{getSortIndicator('stamina')}</th>
+                    <th className="px-1 py-1.5 w-[80px]">変化球</th>
+                    <th className="px-1 py-1.5 w-[24px] cursor-pointer hover:text-white" onClick={() => handleSort('fielderOverall')}>野{getSortIndicator('fielderOverall')}</th>
+                    <th className="px-1 py-1.5 w-[24px] cursor-pointer hover:text-white" onClick={() => handleSort('pitcherOverall')}>投{getSortIndicator('pitcherOverall')}</th>
+                    <th className="px-1 py-1.5">スカウト評価</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -658,31 +658,29 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition ${player.isReleasedCandidate ? 'bg-amber-950/30' : ''}`}
                         onClick={() => isUserTurn && handleSelectPlayer(player)}
                       >
-                        <td className="px-2 py-1.5 text-white font-bold whitespace-nowrap">
+                        <td className="px-1 py-1 text-white font-bold truncate">
                           {player.name}
                           {player.isReleasedCandidate && (
                             <span
-                              className="ml-1 inline-block px-1 py-0.5 text-[10px] bg-amber-700 text-amber-100 rounded align-middle"
+                              className="ml-0.5 inline-block px-0.5 text-[9px] bg-amber-700 text-amber-100 rounded align-middle"
                               title={`前所属: ${player.previousTeam || '不明'} / 解雇 ${player.releasedYear || '?'}年目`}
                             >
                               FA
                             </span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 text-gray-300 whitespace-nowrap">
-                          {player.age}
-                        </td>
-                        <td className="px-2 py-1.5 text-gray-300 whitespace-nowrap">{getPositionName(player.position)}</td>
-                        <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{throwLabel}{batLabel}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.batting?.meet||0))}`}>{getAbilityRank(player.batting?.meet||0)}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.batting?.power||0))}`}>{getAbilityRank(player.batting?.power||0)}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.physical?.speed||0))}`}>{getAbilityRank(player.physical?.speed||0)}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.physical?.arm||0))}`}>{getAbilityRank(player.physical?.arm||0)}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.fielding?.defense||0))}`}>{getAbilityRank(player.fielding?.defense||0)}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
-                        <td className="px-2 py-1.5 text-xs whitespace-nowrap max-w-[160px] truncate">
+                        <td className="px-1 py-1 text-gray-300 text-center">{player.age}</td>
+                        <td className="px-1 py-1 text-gray-300 text-center">{getPositionName(player.position).charAt(0)}</td>
+                        <td className="px-1 py-1 text-gray-400 text-center">{throwLabel}{batLabel}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.batting?.meet||0))}`}>{getAbilityRank(player.batting?.meet||0)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.batting?.power||0))}`}>{getAbilityRank(player.batting?.power||0)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.physical?.speed||0))}`}>{getAbilityRank(player.physical?.speed||0)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.physical?.arm||0))}`}>{getAbilityRank(player.physical?.arm||0)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.fielding?.defense||0))}`}>{getAbilityRank(player.fielding?.defense||0)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
+                        <td className="px-1 py-1 text-[10px] truncate">
                           {(() => {
                             const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
                             if (arsenal.length === 0) return <span className="text-gray-500">-</span>;
@@ -692,10 +690,24 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                             });
                           })()}
                         </td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(fRank)}`}>{fRank}</td>
-                        <td className={`px-2 py-1.5 font-bold ${getRankColor(pRank)}`}>{pRank}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-400 max-w-[220px]" title={player.scoutComment || generateScoutComment(player)}>
-                          <span className="line-clamp-2">{player.scoutComment || generateScoutComment(player)}</span>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(fRank)}`}>{fRank}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(pRank)}`}>{pRank}</td>
+                        <td className="px-1 py-1 text-[10px] leading-tight">
+                          {(() => {
+                            const comment = player.scoutComment || generateScoutComment(player);
+                            const sc = typeof comment === 'string' ? { text: comment, potentialHint: '', potentialLevel: 3 } : comment;
+                            const hintColor = sc.potentialLevel >= 5 ? 'text-red-400 font-bold'
+                              : sc.potentialLevel >= 4 ? 'text-orange-400 font-bold'
+                              : sc.potentialLevel <= 1 ? 'text-blue-400'
+                              : sc.potentialLevel <= 2 ? 'text-gray-500'
+                              : '';
+                            return (
+                              <span>
+                                <span className="text-gray-300">{sc.text}</span>
+                                {sc.potentialHint && <span className={`ml-0.5 ${hintColor}`}>{sc.potentialHint}</span>}
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );
