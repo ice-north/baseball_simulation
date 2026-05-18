@@ -514,12 +514,12 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   };
 
   // 肩力から球速を導出（全選手共通）
-  // 肩の強さが球速を決める統一システム
-  // arm 30→108, 50→121, 60→127, 70→134, 80→140, 90→147, 95→150, 99→152
+  // べき乗カーブで高肩力帯ほど球速が伸びる
+  // arm 30→111, 50→125, 60→132, 70→140, 80→148, 90→156, 95→160, 99→163
   const velocityFromArm = (arm) => {
-    const base = Math.round(88 + arm * 0.65);
+    const base = Math.round(95 + Math.pow(arm / 100, 1.2) * 69);
     const variance = Math.floor(Math.random() * 5) - 2; // -2 ~ +2
-    return Math.max(100, Math.min(158, base + variance));
+    return Math.max(100, Math.min(165, base + variance));
   };
 
   // 全生成選手の平均能力を-3する調整関数
