@@ -107,7 +107,7 @@ export const createDefaultPlayers = () => {
       fielding: { defense: 70 },
       catching: { lead: 40 },
       pitching: {
-        velocity: 125, control: 45, stamina: 80,
+        velocity: 121, control: 45, stamina: 80,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -127,7 +127,7 @@ export const createDefaultPlayers = () => {
       fielding: { defense: 75 },
       catching: { lead: 45 },
       pitching: {
-        velocity: 130, control: 50, stamina: 90,
+        velocity: 123, control: 50, stamina: 90,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -146,7 +146,7 @@ export const createDefaultPlayers = () => {
       fielding: { defense: 70 },
       catching: { lead: 50 },
       pitching: {
-        velocity: 135, control: 45, stamina: 100,
+        velocity: 126, control: 45, stamina: 100,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -165,7 +165,7 @@ export const createDefaultPlayers = () => {
       fielding: { defense: 65 },
       catching: { lead: 40 },
       pitching: {
-        velocity: 130, control: 40, stamina: 90,
+        velocity: 121, control: 40, stamina: 90,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -184,7 +184,7 @@ export const createDefaultPlayers = () => {
       fielding: { defense: 65 },
       catching: { lead: 45 },
       pitching: {
-        velocity: 132, control: 48, stamina: 95,
+        velocity: 125, control: 48, stamina: 95,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -203,7 +203,7 @@ export const createDefaultPlayers = () => {
       fielding: { defense: 60 },
       catching: { lead: 50 },
       pitching: {
-        velocity: 128, control: 50, stamina: 85,
+        velocity: 123, control: 50, stamina: 85,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -222,7 +222,7 @@ export const createDefaultPlayers = () => {
       fielding: { defense: 75 },
       catching: { lead: 48 },
       pitching: {
-        velocity: 135, control: 52, stamina: 100,
+        velocity: 128, control: 52, stamina: 100,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -241,7 +241,7 @@ export const createDefaultPlayers = () => {
       fielding: { defense: 70 },
       catching: { lead: 70 },
       pitching: {
-        velocity: 120, control: 45, stamina: 70,
+        velocity: 126, control: 45, stamina: 70,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -289,7 +289,7 @@ export const createAwayPlayers = () => {
       fielding: { defense: 75 },
       catching: { lead: 35 },
       pitching: {
-        velocity: 130, control: 40, stamina: 75,
+        velocity: 119, control: 40, stamina: 75,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -307,7 +307,7 @@ export const createAwayPlayers = () => {
       fielding: { defense: 80 },
       catching: { lead: 50 },
       pitching: {
-        velocity: 125, control: 55, stamina: 85,
+        velocity: 121, control: 55, stamina: 85,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -326,7 +326,7 @@ export const createAwayPlayers = () => {
       fielding: { defense: 85 },
       catching: { lead: 45 },
       pitching: {
-        velocity: 140, control: 50, stamina: 95,
+        velocity: 128, control: 50, stamina: 95,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -345,7 +345,7 @@ export const createAwayPlayers = () => {
       fielding: { defense: 60 },
       catching: { lead: 35 },
       pitching: {
-        velocity: 125, control: 35, stamina: 80,
+        velocity: 119, control: 35, stamina: 80,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -364,7 +364,7 @@ export const createAwayPlayers = () => {
       fielding: { defense: 70 },
       catching: { lead: 50 },
       pitching: {
-        velocity: 138, control: 45, stamina: 90,
+        velocity: 126, control: 45, stamina: 90,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -383,7 +383,7 @@ export const createAwayPlayers = () => {
       fielding: { defense: 65 },
       catching: { lead: 55 },
       pitching: {
-        velocity: 132, control: 52, stamina: 88,
+        velocity: 121, control: 52, stamina: 88,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -402,7 +402,7 @@ export const createAwayPlayers = () => {
       fielding: { defense: 80 },
       catching: { lead: 40 },
       pitching: {
-        velocity: 142, control: 48, stamina: 95,
+        velocity: 131, control: 48, stamina: 95,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -421,7 +421,7 @@ export const createAwayPlayers = () => {
       fielding: { defense: 75 },
       catching: { lead: 80 },
       pitching: {
-        velocity: 115, control: 50, stamina: 65,
+        velocity: 128, control: 50, stamina: 65,
         form: 'threeQuarter',
         arsenal: [
           { id: 1, type: 'straight', level: 100 },
@@ -463,13 +463,13 @@ export const createHomeBench = () => {
     { id: 10, name: '代打の切り札', position: 'first', isStarter: false, battingOrder: 0,
       batting: { meet: 65, power: 75, eye: 55, bats: 'right', steal: 30 },
       physical: { speed: 50, arm: 55, throws: 'right', bodyStamina: 70, recovery: 72 }, fielding: { defense: 60 }, catching: { lead: 35 },
-      pitching: { velocity: 120, control: 40, stamina: 70, form: 'threeQuarter',
+      pitching: { velocity: 119, control: 40, stamina: 70, form: 'threeQuarter',
         arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'sinker', level: 25 }] },
       positionFitness: { pitcher: 25, catcher: 30, first: 100, second: 55, third: 50, short: 50, left: 40, center: 30, right: 40 } },
     { id: 11, name: '守備固め', position: 'second', isStarter: false, battingOrder: 0,
       batting: { meet: 55, power: 35, eye: 60, bats: 'right', steal: 55 },
       physical: { speed: 65, arm: 65, throws: 'right', bodyStamina: 45, recovery: 69 }, fielding: { defense: 80 }, catching: { lead: 40 },
-      pitching: { velocity: 125, control: 45, stamina: 75, form: 'threeQuarter',
+      pitching: { velocity: 123, control: 45, stamina: 75, form: 'threeQuarter',
         arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'curve', level: 25 }] },
       positionFitness: { pitcher: 25, catcher: 30, first: 55, second: 100, third: 55, short: 65, left: 40, center: 35, right: 40 } },
     { id: 12, name: '代走要員', position: 'center', isStarter: false, battingOrder: 0,
@@ -481,31 +481,31 @@ export const createHomeBench = () => {
     { id: 13, name: 'ユーティリティ', position: 'short', isStarter: false, battingOrder: 0,
       batting: { meet: 60, power: 55, eye: 60, bats: 'right', steal: 50 },
       physical: { speed: 60, arm: 70, throws: 'right', bodyStamina: 67, recovery: 58 }, fielding: { defense: 65 }, catching: { lead: 45 },
-      pitching: { velocity: 128, control: 48, stamina: 80, form: 'threeQuarter',
+      pitching: { velocity: 125, control: 48, stamina: 80, form: 'threeQuarter',
         arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'slider', level: 30 }] },
       positionFitness: { pitcher: 25, catcher: 30, first: 50, second: 65, third: 60, short: 100, left: 40, center: 35, right: 40 } },
     { id: 14, name: '若手有望株', position: 'third', isStarter: false, battingOrder: 0,
       batting: { meet: 58, power: 62, eye: 52, bats: 'right', steal: 45 },
       physical: { speed: 58, arm: 68, throws: 'right', bodyStamina: 55, recovery: 53 }, fielding: { defense: 62 }, catching: { lead: 40 },
-      pitching: { velocity: 130, control: 42, stamina: 85, form: 'threeQuarter',
+      pitching: { velocity: 124, control: 42, stamina: 85, form: 'threeQuarter',
         arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'fork', level: 28 }] },
       positionFitness: { pitcher: 25, catcher: 30, first: 50, second: 55, third: 100, short: 60, left: 45, center: 35, right: 45 } },
     { id: 15, name: 'ベテラン控え', position: 'left', isStarter: false, battingOrder: 0,
       batting: { meet: 65, power: 50, eye: 68, bats: 'left', steal: 35 },
       physical: { speed: 45, arm: 55, throws: 'left', bodyStamina: 49, recovery: 51 }, fielding: { defense: 58 }, catching: { lead: 55 },
-      pitching: { velocity: 122, control: 50, stamina: 70, form: 'threeQuarter',
+      pitching: { velocity: 119, control: 50, stamina: 70, form: 'threeQuarter',
         arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'changeup', level: 32 }] },
       positionFitness: { pitcher: 20, catcher: 20, first: 40, second: 35, third: 40, short: 35, left: 100, center: 85, right: 80 } },
     { id: 16, name: '外野手控え', position: 'right', isStarter: false, battingOrder: 0,
       batting: { meet: 52, power: 58, eye: 50, bats: 'right', steal: 48 },
       physical: { speed: 62, arm: 75, throws: 'right', bodyStamina: 75, recovery: 69 }, fielding: { defense: 68 }, catching: { lead: 38 },
-      pitching: { velocity: 135, control: 45, stamina: 90, form: 'threeQuarter',
+      pitching: { velocity: 126, control: 45, stamina: 90, form: 'threeQuarter',
         arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'cutter', level: 35 }] },
       positionFitness: { pitcher: 20, catcher: 20, first: 40, second: 35, third: 40, short: 35, left: 80, center: 85, right: 100 } },
     { id: 17, name: '控え捕手', position: 'catcher', isStarter: false, battingOrder: 0,
       batting: { meet: 50, power: 48, eye: 58, bats: 'right', steal: 20 },
       physical: { speed: 35, arm: 70, throws: 'right', bodyStamina: 55, recovery: 48 }, fielding: { defense: 65 }, catching: { lead: 65 },
-      pitching: { velocity: 115, control: 48, stamina: 60, form: 'threeQuarter',
+      pitching: { velocity: 125, control: 48, stamina: 60, form: 'threeQuarter',
         arsenal: [{ id: 1, type: 'straight', level: 100 }, { id: 2, type: 'sinker', level: 28 }] },
       positionFitness: { pitcher: 30, catcher: 100, first: 25, second: 25, third: 25, short: 25, left: 20, center: 20, right: 20 } },
     // 控え投手（9-17番）
