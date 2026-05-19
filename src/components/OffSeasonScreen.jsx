@@ -262,35 +262,6 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           </div>
         )}
 
-        {/* 次シーズンへ進む手順 */}
-        <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-5 mb-5">
-          <h3 className="text-base font-black text-white mb-4">シーズン終了処理</h3>
-          <div className="space-y-3">
-            {[
-              { icon: '🏅', label: '表彰（首位打者・本塁打王・防御率王など）' },
-              ...(gameMode === 'sandbox' ? [
-                { icon: '📊', label: 'シーズン成績を通算成績に加算' },
-                { icon: '📅', label: `次年度（${seasonData.year + 1}年目）へ移行` },
-              ] : [
-                { icon: '🎂', label: '選手の年齢 +1 / 引退処理' },
-                { icon: '📊', label: 'シーズン成績を通算成績に加算' },
-                { icon: '📅', label: `次年度（${seasonData.year + 1}年目）へ移行` },
-              ]),
-            ].map((step, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-full bg-gray-700 border border-gray-600 flex items-center justify-center text-xs font-black text-gray-300 shrink-0">
-                  {i + 1}
-                </div>
-                <span className="text-sm">{step.icon}</span>
-                <span className="text-gray-200 text-base">{step.label}</span>
-              </div>
-            ))}
-            {gameMode === 'sandbox' && (
-              <p className="text-orange-400/80 text-sm mt-2 pl-10">※ 箱庭モード: 加齢・成長・引退はありません</p>
-            )}
-          </div>
-        </div>
-
         <SaveSlotSelector />
 
         <div className="text-center">
