@@ -1088,7 +1088,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
-                        <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono truncate max-w-[100px]">{getArsenalDisplay(player)}</td>
+                        <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
                         <td className="py-1 px-2 text-[10px] font-mono text-gray-400 whitespace-nowrap">
                           {(() => {
                             const prev = player.previousSeasonStats;

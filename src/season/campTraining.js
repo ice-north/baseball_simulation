@@ -785,6 +785,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
       baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * potential * aptitudeFactor);
+      if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
       const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
       isAwakening = Math.random() * 100 < awakeningChance;
@@ -832,7 +833,8 @@ export function executeCampTraining(player, trainingType, newPitchType) {
         }
       }
 
-      const totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
+      let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
+      if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
       // 球速は175、スタミナは200、その他の能力値は100が上限
       const maxValue = targetStat === 'velocity' ? 175 : targetStat === 'stamina' ? 200 : 100;
       const newValue = Math.min(maxValue, currentValue + totalGrowth);
