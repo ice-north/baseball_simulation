@@ -513,7 +513,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const pitcher = {
       velocity: Math.round((pitcherPlayer.pitching?.velocity || 140) * (pitcherFormEffect.velocityMult || 1.0)) - pitcherFatiguePenalty,
       control: (pitcherPlayer.pitching?.control || 50) + pitcherCondMod - pitcherFatiguePenalty,
-      throws: pitcherPlayer.physical?.throws || 'right'
+      throws: pitcherPlayer.physical?.throws || 'right',
+      spinRate: pitcherPlayer.pitching?.spinRate ?? 50
     };
 
     // スタミナによる能力低下（2次曲線: スタミナ50%以下で急激に低下）
@@ -592,7 +593,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
           // 物理コンタクト計算
           const physicsResult = calculatePhysicsContact(
-            { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter' },
+            { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50 },
             batter,
             Math.random() < (selectedPitch.type === 'straight' ? 0.3 : 0.2),
             pitchData,

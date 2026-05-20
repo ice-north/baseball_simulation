@@ -323,7 +323,9 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         arm: abilities.arm,
         throws: throws,
         bodyStamina: abilities.bodyStamina || 50,
-        recovery: abilities.recovery || 50
+        recovery: abilities.recovery || 50,
+        muscle: abilities.muscle || 50,
+        dexterity: abilities.dexterity || 50
       },
       fielding: {
         defense: abilities.defense
@@ -335,6 +337,7 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         velocity: abilities.velocity,
         control: abilities.control,
         stamina: abilities.stamina,
+        spinRate: abilities.spinRate || 50,
         form: pitchingForm,
         arsenal: (isPitcher || isTwoWay)
           ? generateRandomArsenal(
@@ -541,9 +544,12 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
         defense: randRangeWithVariance(45, 70),
         bodyStamina: randRangeWithVariance(45, 75),
         recovery: randRangeWithVariance(45, 75),
+        muscle: randRangeWithVariance(45, 70),
+        dexterity: randRangeWithVariance(40, 65),
         velocity: velocityFromArm(twoWayArm),
         control: Math.min(randRangeWithVariance(40, 68) + controlAdjust, 85),
-        stamina: randStamina(80, 110)
+        stamina: randStamina(80, 110),
+        spinRate: randRangeWithVariance(30, 60)
       });
     } else {
       // 野手登録の二刀流: 野手能力メイン、肩が強めで投手もそこそこ
@@ -558,9 +564,12 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
         defense: randRangeWithVariance(40, 65),
         bodyStamina: randRangeWithVariance(40, 70),
         recovery: randRangeWithVariance(40, 70),
+        muscle: randRangeWithVariance(45, 70),
+        dexterity: randRangeWithVariance(40, 65),
         velocity: velocityFromArm(twoWayArm),
         control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
-        stamina: randStamina(67, 100)
+        stamina: randStamina(67, 100),
+        spinRate: randRangeWithVariance(30, 60)
       });
     }
   }
@@ -580,9 +589,12 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       defense: randRangeWithVariance(40, 65),
       bodyStamina: randRangeWithVariance(40, 70),
       recovery: randRangeWithVariance(40, 70),
+      muscle: randRangeWithVariance(35, 65),
+      dexterity: randRangeWithVariance(35, 65),
       velocity: velocityFromArm(pitcherArm),
       control: Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85),
-      stamina: randStamina(73, 113, ageBonus)
+      stamina: randStamina(73, 113, ageBonus),
+      spinRate: randRangeWithVariance(35, 70)
     };
   } else {
     // 野手アーキタイプ: 特性なしの選手にも個性を持たせる
@@ -603,8 +615,29 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       // 肩力タイプ: 肩力高、ミート低
       { meet: [30, 50], power: [30, 50], eye: [30, 53], steal: [26, 50], speed: [36, 60], arm: [58, 76], defense: [43, 66] },
     ];
-    const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
+    const archIndex = Math.floor(Math.random() * archetypes.length);
+    const arch = archetypes[archIndex];
     const fielderArm = randRangeWithVariance(arch.arm[0], arch.arm[1]);
+    // アーキタイプ別のmuscle/dexterity範囲
+    // 0:巧打→dex高, 1:強打→muscle高, 2:俊足→muscle中, 3:守備→dex高, 4:バランス→両方中, 5:打撃特化→dex高, 6:肩力→muscle中
+    const archMuscle = [
+      [30, 55], // 巧打
+      [55, 80], // 強打
+      [40, 65], // 俊足
+      [35, 55], // 守備
+      [35, 60], // バランス
+      [45, 70], // 打撃特化
+      [40, 65], // 肩力
+    ][archIndex];
+    const archDexterity = [
+      [50, 75], // 巧打
+      [25, 50], // 強打
+      [35, 60], // 俊足
+      [55, 80], // 守備
+      [35, 60], // バランス
+      [50, 75], // 打撃特化
+      [30, 55], // 肩力
+    ][archIndex];
     normalAbilities = {
       meet: randRangeWithVariance(arch.meet[0], arch.meet[1], battingAgeBonus),
       power: randRangeWithVariance(arch.power[0], arch.power[1], battingAgeBonus),
@@ -615,9 +648,12 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       defense: randRangeWithVariance(arch.defense[0], arch.defense[1]),
       bodyStamina: randRangeWithVariance(40, 75),
       recovery: randRangeWithVariance(40, 75),
+      muscle: randRangeWithVariance(archMuscle[0], archMuscle[1]),
+      dexterity: randRangeWithVariance(archDexterity[0], archDexterity[1]),
       velocity: velocityFromArm(fielderArm),
       control: randRange(30, 55),
-      stamina: randRange(40, 67)
+      stamina: randRange(40, 67),
+      spinRate: randRangeWithVariance(20, 45)
     };
   }
 
@@ -642,7 +678,9 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       steal: () => randRange(68, 85),
       meet: () => randRange(30, 47),
       power: () => randRange(17, 33),
-      defense: () => randRange(43, 63)
+      defense: () => randRange(43, 63),
+      muscle: () => randRange(55, 75),
+      dexterity: () => randRange(30, 50)
     },
     slugger: {
       // パワーが魅力だが粗削り → ミート・選球眼を磨く余地
@@ -652,7 +690,9 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       speed: () => randRange(23, 40),
       steal: () => randRange(13, 27),
       defense: () => randRange(27, 47),
-      arm: () => randRange(37, 57)
+      arm: () => randRange(37, 57),
+      muscle: () => randRange(65, 85),
+      dexterity: () => randRange(25, 45)
     },
     defender: {
       // 守備センスは光るが打撃は弱い → 守備固めから育成
@@ -660,21 +700,26 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       arm: () => randRange(67, 83),
       meet: () => randRange(30, 47),
       power: () => randRange(20, 37),
-      speed: () => randRange(43, 63)
+      speed: () => randRange(43, 63),
+      muscle: () => randRange(35, 55),
+      dexterity: () => randRange(60, 80)
     },
     contactHitter: {
       // 当てる感覚はあるが一発は期待薄 → 長打力を磨く余地
       meet: () => randRange(65, 80),
       eye: () => randRange(58, 75),
       power: () => randRange(23, 40),
-      speed: () => randRange(43, 60)
+      speed: () => randRange(43, 60),
+      dexterity: () => randRange(60, 80),
+      muscle: () => randRange(30, 50)
     },
     eyeMaster: {
       // 選球眼が光る → 四球選べるがミート/パワーに伸びしろ
       eye: () => randRange(68, 83),
       meet: () => randRange(40, 57),
       power: () => randRange(23, 40),
-      steal: () => randRange(30, 50)
+      steal: () => randRange(30, 50),
+      dexterity: () => randRange(55, 75)
     },
     baserunner: {
       // 走塁勘が抜群 → バッティングに成長余地
@@ -715,19 +760,23 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       // 剛腕が魅力。制球や変化球を磨けば戦力に
       arm: () => randRange(88, 96),
       control: () => Math.min(randRange(28, 45) + controlAdjust, 58),
-      stamina: () => randStamina(55, 82)
+      stamina: () => randStamina(55, 82),
+      muscle: () => randRange(65, 85),
+      spinRate: () => randRange(55, 80)
     },
     controlPitcher: {
       // 制球派の素材。肩はそこそこだが制球が光る
       arm: () => randRange(58, 72),
       control: () => Math.min(randRange(58, 73) + controlAdjust, 80),
-      stamina: () => randStamina(72, 100)
+      stamina: () => randStamina(72, 100),
+      dexterity: () => randRange(60, 80)
     },
     ironman: {
       // タフネス型。技術は粗いが練習で伸びる
       arm: () => randRange(60, 73),
       control: () => Math.min(randRange(35, 52) + controlAdjust, 65),
-      stamina: () => randStamina(95, 125)
+      stamina: () => randStamina(95, 125),
+      muscle: () => randRange(55, 75)
     },
     breakingBall: {
       // 変化球派（arsenalで+2球種、早熟型）
@@ -745,7 +794,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       // 空振り奪取型。肩が強く粗削り
       arm: () => randRange(82, 93),
       control: () => Math.min(randRange(30, 48) + controlAdjust, 60),
-      stamina: () => randStamina(55, 80)
+      stamina: () => randStamina(55, 80),
+      spinRate: () => randRange(60, 85)
     }
   };
 
@@ -1161,7 +1211,7 @@ function traitCommentMatches(trait, player) {
 /**
  * スカウトコメントを生成
  * @param {Object} player - 選手データ（traits, position, batting, pitching, physical, fielding を含む）
- * @returns {{text: string, potentialHint: string, potentialLevel: number}} スカウトコメント（構造化）
+ * @returns {{text: string, potentialHint: string, potentialLevel: number, talentHint: string}} スカウトコメント（構造化）
  *   potentialLevel: 5=最高, 4=高, 3=普通(表示なし), 2=低, 1=最低
  */
 export function generateScoutComment(player) {
@@ -1184,7 +1234,23 @@ export function generateScoutComment(player) {
     potentialLevel = 2;
   }
 
-  const buildResult = (comment) => ({ text: comment, potentialHint, potentialLevel });
+  // 才能タイプのヒント（muscle/dexterityが高い場合のみ）
+  const muscle = player.physical?.muscle || 50;
+  const dext = player.physical?.dexterity || 50;
+  let talentHint = '';
+  if (muscle >= 70 && dext >= 70) {
+    talentHint = '恵まれた体格に加え、手先の器用さも兼ね備えている。';
+  } else if (muscle >= 70) {
+    talentHint = ['恵まれた体格が目を引く。フィジカル面の成長が期待できる。', '体の強さは十分。パワー系の練習で大きく伸びる素材だ。'][Math.floor(Math.random() * 2)];
+  } else if (dext >= 70) {
+    talentHint = ['手先の器用さが光る。技術系の練習で伸びるタイプだ。', 'センスの良さを感じる。技術的な成長が早いだろう。'][Math.floor(Math.random() * 2)];
+  } else if (muscle <= 35) {
+    talentHint = Math.random() < 0.5 ? '線が細く、フィジカル面の上積みは厳しいかもしれない。' : '';
+  } else if (dext <= 35) {
+    talentHint = Math.random() < 0.5 ? '不器用な面があり、技術の習得に時間がかかるかもしれない。' : '';
+  }
+
+  const buildResult = (comment) => ({ text: comment, potentialHint, potentialLevel, talentHint });
 
   // 二刀流選手は専用コメントを生成
   if (player.isTwoWay) {

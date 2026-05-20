@@ -935,15 +935,27 @@ export function applyAgeCurveChanges(allTeams) {
           const AGE_TALENT_MULT = { arm: 0.5, speed: 0.6, power: 0.8, velocity: 0.8 };
           const ageTalentMult = AGE_TALENT_MULT[stat] ?? 1.0;
 
+          // 筋力/器用さによる成長方向の補正（成長方向のみ適用、衰退には影響しない）
+          const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
+          const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal'];
+          const muscle = player.physical?.muscle ?? 50;
+          const dexterity = player.physical?.dexterity ?? 50;
+          let physiqueMult = 1.0;
+          if (MUSCLE_STATS.includes(stat)) {
+            physiqueMult = 0.5 + (muscle / 100) * 1.0;
+          } else if (DEXTERITY_STATS.includes(stat)) {
+            physiqueMult = 0.5 + (dexterity / 100) * 1.0;
+          }
+
           const effectiveRaw = (player.growthPotential ?? 1.0) + (player.growthModifier || 0);
           const growthPotential = Math.max(0, Math.min(1.8, effectiveRaw));
           const decayMult = effectiveRaw < 0 ? 1 + Math.abs(effectiveRaw) * 0.5 : 1.0;
           // 最終変動値（四捨五入、±0の場合もある）
           let rawChange = base + variance;
-          // 成長方向: ポテンシャル適用（0以下なら成長なし）
-          // 衰退方向: マイナスポテンシャルで加速
+          // 成長方向: ポテンシャル適用（0以下なら成長なし）+ 筋力/器用さ補正
+          // 衰退方向: マイナスポテンシャルで加速（筋力/器用さは影響しない）
           let change = rawChange > 0
-            ? Math.round(rawChange * ageTalentMult * growthPotential)
+            ? Math.round(rawChange * ageTalentMult * growthPotential * physiqueMult)
             : Math.round(rawChange * decayMult);
 
           // 能力値を取得・更新
@@ -958,11 +970,11 @@ export function applyAgeCurveChanges(allTeams) {
           const formVelMult = stat === 'velocity' ? (formEff.velocityGrowthMult || 1.0) : 1.0;
           const formCtrlMult = stat === 'control' ? (formEff.controlGrowthMult || 1.0) : 1.0;
 
-          // 球速は変動幅を1.2倍に（スケールが大きいため）+ フォーム補正
+          // 球速は変動幅を1.2倍に（スケールが大きいため）+ フォーム補正 + 筋力補正
           if (stat === 'velocity') change = rawChange > 0
-            ? Math.round(rawChange * 1.2 * ageTalentMult * growthPotential * formVelMult)
+            ? Math.round(rawChange * 1.2 * ageTalentMult * growthPotential * formVelMult * physiqueMult)
             : Math.round(rawChange * 1.2 * decayMult);
-          // 制球はフォーム補正適用
+          // 制球はフォーム補正適用（器用さ補正は既にchangeに適用済み）
           if (stat === 'control' && rawChange > 0) change = Math.round(change * formCtrlMult);
           // スタミナも変動幅を1.2倍（成長方向のみポテンシャル適用）
           if (stat === 'stamina') change = rawChange > 0

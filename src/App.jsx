@@ -1236,9 +1236,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
           pitches: currentPitcher.pitching.arsenal,
-          form: currentPitcher.pitching.form
+          form: currentPitcher.pitching.form,
+          spinRate: currentPitcher.pitching.spinRate ?? 50
         };
-        
+
         const catcher = {
           name: currentCatcher.name,
           lead: currentCatcher.catching.lead,
@@ -1351,7 +1352,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
           pitches: currentPitcher.pitching.arsenal,
-          form: currentPitcher.pitching.form
+          form: currentPitcher.pitching.form,
+          spinRate: currentPitcher.pitching.spinRate ?? 50
         };
         
         const catcher = {

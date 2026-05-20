@@ -424,8 +424,10 @@ export function executeSubTraining(player, subType, options = {}) {
             const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
             const formAff = getFormPitchAffinity(playerForm, pitch.type);
             const formMult = formAff ? formAff.growth : 1.0;
+            const dext = player.physical?.dexterity ?? 50;
+            const dextMult = 0.5 + (dext / 100) * 1.0;
             const rawGrowth = (Math.floor(Math.random() * 3) + 1 + Math.floor(Math.random() * 4) + 1) * ageMultiplier;
-            const growth = Math.max(1, Math.round(rawGrowth * 0.167 * formMult));
+            const growth = Math.max(1, Math.round(rawGrowth * 0.167 * formMult * dextMult));
             const before = pitch.level;
             pitch.level = before + growth;
             const affinityTag = formAff ? ' [適性]' : '';
@@ -770,6 +772,18 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
     };
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
+
+    // 筋力/器用さによる成長方向の補正（0.5〜1.5倍）
+    const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
+    const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal'];
+    const muscle = player.physical?.muscle ?? 50;
+    const dexterity = player.physical?.dexterity ?? 50;
+    let physiqueMult = 1.0;
+    if (MUSCLE_STATS.includes(targetStat)) {
+      physiqueMult = 0.5 + (muscle / 100) * 1.0;
+    } else if (DEXTERITY_STATS.includes(targetStat)) {
+      physiqueMult = 0.5 + (dexterity / 100) * 1.0;
+    }
     const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
 
     let baseGrowth, isAwakening, awakeningGrowth;
@@ -784,7 +798,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * potential * aptitudeFactor);
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * potential * aptitudeFactor * physiqueMult);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
       const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;

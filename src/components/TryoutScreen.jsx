@@ -663,9 +663,12 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                               : sc.potentialLevel <= 1 ? 'text-blue-400'
                               : sc.potentialLevel <= 2 ? 'text-gray-500'
                               : '';
+                            const talentColor = (sc.talentHint || '').includes('線が細') || (sc.talentHint || '').includes('不器用')
+                              ? 'text-gray-500' : 'text-emerald-400';
                             return (
                               <span>
                                 <span className="text-gray-300">{sc.text}</span>
+                                {sc.talentHint && <span className={`ml-0.5 ${talentColor}`}>{sc.talentHint}</span>}
                                 {sc.potentialHint && <span className={`ml-0.5 ${hintColor}`}>{sc.potentialHint}</span>}
                               </span>
                             );

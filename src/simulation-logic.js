@@ -67,6 +67,13 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     timingWindow *= (1 - breakingBallPenalty);
   }
 
+  // 回転数による変化球の切れ補正（spinRate 50基準、高回転ほど変化球が切れる）
+  const spinRate = pitcher.spinRate ?? 50;
+  if (pitch.type !== 'straight' && spinRate !== 50) {
+    const spinEffect = ((spinRate - 50) / 100) * 0.08;
+    timingWindow *= (1 - spinEffect * (1 - meetDeceptionResistance));
+  }
+
   // 投球フォームの効果を適用（サイドスロー・アンダースローは同じ利き腕の打者に強い）
   const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
   if (pitchingFormEffect.whiffBonus > 0) {
@@ -198,13 +205,28 @@ export const calculateLaunchAngle = (meetQuality, batter) => {
 };
 
 /**
+ * 回転数による打球角度補正を計算
+ * 高回転ストレート → フライ傾向（+角度）、低回転 → ゴロ傾向（-角度）
+ * 変化球は回転数が高いほど打ち損じやすい（角度が極端になる）
+ */
+export const getSpinRateAngleAdjust = (pitchType, spinRate) => {
+  if (spinRate == null) return 0;
+  const deviation = (spinRate - 50) / 100;
+  if (pitchType === 'straight' || pitchType === 'twoSeam' || pitchType === 'cutter') {
+    return deviation * 6;
+  }
+  return deviation * -3;
+};
+
+/**
  * 物理エンジン：打球パラメータの計算
  */
 export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult) => {
   const { exitVelocity, meetQuality } = physicsResult;
 
-  // 打出し角度
-  const launchAngle = calculateLaunchAngle(meetQuality, batter);
+  // 打出し角度（投手の回転数で補正）
+  const spinAngleAdj = getSpinRateAngleAdjust(pitch.type, pitcher.spinRate);
+  const launchAngle = calculateLaunchAngle(meetQuality, batter) + spinAngleAdj;
 
   // 物理シミュレーション（飛距離・滞空時間）
   const rad = launchAngle * Math.PI / 180;
