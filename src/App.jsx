@@ -2698,6 +2698,9 @@ if (newOuts === 3) {
                               <span className="text-xs text-gray-400">球速:</span>
                               <span className={`text-lg font-bold ${getValueColor(velocityScore)}`}>{pitcher.pitching.velocity}</span>
                               <span className="text-xs text-gray-500">km/h</span>
+                              <span className="text-gray-600">|</span>
+                              <span className="text-xs text-gray-400">回転:</span>
+                              <span className={`text-sm font-bold ${getValueColor(pitcher.pitching.spinRate ?? 50)}`}>{pitcher.pitching.spinRate ?? 50}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-400 w-12">制球</span>
@@ -2974,8 +2977,9 @@ if (newOuts === 3) {
                     <div className="text-xs text-gray-500">投手 ({isTopInning ? homeTeam.name : awayTeam.name})</div>
                     <div className="font-bold text-xl text-blue-600">{getCurrentPitcher().name}</div>
                     <div className="text-sm text-gray-600">
-                      {getCurrentPitcher().physical.throws === 'right' ? '右投' : '左投'} | 
-                      {getCurrentPitcher().pitching.velocity}km/h
+                      {getCurrentPitcher().physical.throws === 'right' ? '右投' : '左投'} |
+                      {getCurrentPitcher().pitching.velocity}km/h |
+                      回転<span className="font-bold">{getCurrentPitcher().pitching.spinRate ?? 50}</span>
                     </div>
                     <div className="text-sm font-bold text-blue-700">
                       防御率 {(() => {
@@ -3957,6 +3961,9 @@ if (newOuts === 3) {
                               <span className="text-xs text-gray-400">球速:</span>
                               <span className={`text-lg font-bold ${getValueColor(velocityScore)}`}>{pitcher.pitching.velocity}</span>
                               <span className="text-xs text-gray-500">km/h</span>
+                              <span className="text-gray-600">|</span>
+                              <span className="text-xs text-gray-400">回転:</span>
+                              <span className={`text-sm font-bold ${getValueColor(pitcher.pitching.spinRate ?? 50)}`}>{pitcher.pitching.spinRate ?? 50}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-400 w-12">制球</span>

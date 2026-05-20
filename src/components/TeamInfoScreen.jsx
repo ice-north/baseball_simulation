@@ -39,6 +39,7 @@ const TeamInfoScreen = () => {
     if (key === 'velocity') return player.pitching?.velocity || 0;
     if (key === 'control') return player.pitching?.control || 0;
     if (key === 'stamina') return player.pitching?.stamina || 0;
+    if (key === 'spinRate') return player.pitching?.spinRate ?? 50;
     if (key === 'bodyStamina') return player.physical?.bodyStamina || 50;
     if (key === 'age') return player.age || 0;
     if (key === 'name') return player.name || '';
@@ -169,6 +170,7 @@ const TeamInfoScreen = () => {
               <StatBar label="球速" value={player.pitching?.velocity || 0} max={165} />
               <StatBar label="制球" value={player.pitching?.control || 0} />
               <StatBar label="スタミナ" value={player.pitching?.stamina || 0} />
+              <StatBar label="回転" value={player.pitching?.spinRate ?? 50} />
               <div className="mt-2 text-xs text-gray-400">
                 フォーム: <span className="text-white">{formName}</span>
               </div>
@@ -548,6 +550,7 @@ const TeamInfoScreen = () => {
                     <SortableHeader label="球速" sortKey="velocity" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="制球" sortKey="control" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="スタミナ" sortKey="stamina" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
+                    <SortableHeader label="回転" sortKey="spinRate" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="体力" sortKey="bodyStamina" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="試合" sortKey="games" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="勝" sortKey="wins" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
@@ -573,6 +576,7 @@ const TeamInfoScreen = () => {
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.velocity)}`}>{player.pitching?.velocity || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.control)}`}>{player.pitching?.control || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(Math.min(99, Math.floor((player.pitching?.stamina || 0) / 2)))}`}>{player.pitching?.stamina || '-'}</td>
+                        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.spinRate ?? 50)}`}>{player.pitching?.spinRate ?? 50}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.bodyStamina || 50)}`}>{player.physical?.bodyStamina || 50}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.games || 0}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.wins || 0}</td>

@@ -216,6 +216,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       case 'velocity': return p.pitching?.velocity || 0;
       case 'control': return p.pitching?.control || 0;
       case 'stamina': return p.pitching?.stamina || 0;
+      case 'spinRate': return p.pitching?.spinRate ?? 50;
       case 'fielderOverall': return getFielderOverall(p);
       case 'pitcherOverall': return getPitcherOverall(p);
       case 'overall': default: {
@@ -428,6 +429,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                                     <th className="px-2 py-1">球速</th>
                                     <th className="px-2 py-1">制球</th>
                                     <th className="px-2 py-1">スタ</th>
+                                    <th className="px-2 py-1">回転</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -444,6 +446,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                                       <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
                                       <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
                                       <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
+                                      <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.spinRate??50))}`}>{getAbilityRank(player.pitching?.spinRate??50)}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -600,6 +603,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('velocity')}>速{getSortIndicator('velocity')}</th>
                     <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('control')}>制{getSortIndicator('control')}</th>
                     <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('stamina')}>ス{getSortIndicator('stamina')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('spinRate')}>回{getSortIndicator('spinRate')}</th>
                     <th className="px-1 py-1.5 whitespace-nowrap">変化球</th>
                     <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野{getSortIndicator('fielderOverall')}</th>
                     <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投{getSortIndicator('pitcherOverall')}</th>
@@ -642,6 +646,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.spinRate??50))}`}>{getAbilityRank(player.pitching?.spinRate??50)}</td>
                         <td className="px-1 py-1 text-[10px] whitespace-nowrap">
                           {(() => {
                             const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
