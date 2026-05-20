@@ -54,6 +54,7 @@ const TeamInfoScreen = () => {
     if (key === 'velocity') return player.pitching?.velocity || 0;
     if (key === 'control') return player.pitching?.control || 0;
     if (key === 'stamina') return player.pitching?.stamina || 0;
+    if (key === 'bodyStamina') return player.physical?.bodyStamina || 50;
     if (key === 'age') return player.age || 0;
     if (key === 'name') return player.name || '';
     return stats[key] || 0;
@@ -68,6 +69,7 @@ const TeamInfoScreen = () => {
     if (key === 'speed') return player.physical?.speed || 0;
     if (key === 'defense') return player.fielding?.defense || 0;
     if (key === 'arm') return player.physical?.arm || 0;
+    if (key === 'bodyStamina') return player.physical?.bodyStamina || 50;
     if (key === 'age') return player.age || 0;
     if (key === 'name') return player.name || '';
     return stats[key] || 0;
@@ -173,6 +175,7 @@ const TeamInfoScreen = () => {
               <StatBar label="守備" value={player.fielding?.defense || 0} />
               <StatBar label="選球眼" value={player.batting?.eye || 0} />
               <StatBar label="盗塁" value={player.batting?.steal || 0} />
+              <StatBar label="体力" value={player.physical?.bodyStamina || 50} />
             </div>
 
             {/* 投手能力 */}
@@ -560,6 +563,7 @@ const TeamInfoScreen = () => {
                     <SortableHeader label="球速" sortKey="velocity" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="制球" sortKey="control" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="スタミナ" sortKey="stamina" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
+                    <SortableHeader label="体力" sortKey="bodyStamina" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="試合" sortKey="games" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="勝" sortKey="wins" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="敗" sortKey="losses" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
@@ -584,6 +588,7 @@ const TeamInfoScreen = () => {
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.velocity)}`}>{player.pitching?.velocity || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.control)}`}>{player.pitching?.control || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(Math.min(99, Math.floor((player.pitching?.stamina || 0) / 2)))}`}>{player.pitching?.stamina || '-'}</td>
+                        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.bodyStamina || 50)}`}>{player.physical?.bodyStamina || 50}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.games || 0}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.wins || 0}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.losses || 0}</td>
@@ -625,6 +630,7 @@ const TeamInfoScreen = () => {
                     <SortableHeader label="走力" sortKey="speed" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="守備" sortKey="defense" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="肩" sortKey="arm" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
+                    <SortableHeader label="体力" sortKey="bodyStamina" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="試合" sortKey="games" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="打席" sortKey="atBats" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="安打" sortKey="hits" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
@@ -651,6 +657,7 @@ const TeamInfoScreen = () => {
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.speed)}`}>{player.physical?.speed || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.fielding?.defense)}`}>{player.fielding?.defense || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.arm)}`}>{player.physical?.arm || '-'}</td>
+                        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.bodyStamina || 50)}`}>{player.physical?.bodyStamina || 50}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.games || 0}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.atBats || 0}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.hits || 0}</td>
