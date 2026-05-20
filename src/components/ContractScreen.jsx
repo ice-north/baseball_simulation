@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import { finalizePlayerSeason } from '../season/yearProgressionSystem.js';
 
 // AI自動解雇のロスター調整パラメータ
@@ -185,15 +185,6 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     setConfirmed(true);
   };
 
-  const getAbilityColor = (val) => {
-    if (val >= 90) return 'text-pink-400';
-    if (val >= 80) return 'text-red-400';
-    if (val >= 70) return 'text-orange-400';
-    if (val >= 60) return 'text-yellow-400';
-    if (val >= 50) return 'text-green-400';
-    if (val >= 40) return 'text-blue-400';
-    return 'text-gray-400';
-  };
 
   const totalReleased = Object.values(releasedPlayers).reduce((sum, arr) => sum + arr.length, 0);
   const aiReleasedCount = Object.entries(releasedPlayers)

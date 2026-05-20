@@ -1,31 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
 
-const getAbilityRank = (value) => {
-  if (value >= 90) return 'S';
-  if (value >= 80) return 'A';
-  if (value >= 70) return 'B';
-  if (value >= 60) return 'C';
-  if (value >= 50) return 'D';
-  if (value >= 40) return 'E';
-  return 'F';
-};
-
-const getRankColor = (rank) => ({
-  S: 'text-pink-400', A: 'text-red-400', B: 'text-orange-400',
-  C: 'text-yellow-400', D: 'text-green-400', E: 'text-blue-400', F: 'text-gray-600'
-}[rank] || 'text-gray-600');
-
 const StatVal = ({ value, isPitcherVelocity }) => {
-  let rank;
-  if (isPitcherVelocity) {
-    const adj = (value - 115) * 2.5;
-    rank = getAbilityRank(adj);
-  } else {
-    rank = getAbilityRank(value);
-  }
+  const rank = getAbilityRank(value, isPitcherVelocity);
   return <span className={`font-semibold ${getRankColor(rank)}`}>{value}</span>;
 };
 

@@ -105,18 +105,6 @@ function getPlayerTraits(isPitcher) {
   return traits;
 }
 
-/**
- * 一芸に秀でた選手タイプを生成（後方互換）
- */
-function getSpecialistType() {
-  const types = [
-    'speedster', 'slugger', 'defender', 'contactHitter',
-    'eyeMaster', 'baserunner', 'armStrong', 'speedContact', 'powerArm',
-    'fireballer', 'controlPitcher', 'ironman', 'breakingBall',
-    'sinkerballer', 'strikeoutArtist',
-  ];
-  return types[Math.floor(Math.random() * types.length)];
-}
 
 /**
  * 解雇プールから再トライアウト参加者を取り出し、候補者形式に整形

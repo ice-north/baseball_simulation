@@ -1,11 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { exportDraftedPlayers } from '../game/saveSystem.js';
-
-const FULL_POSITION_NAMES = {
-  pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手',
-  third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手'
-};
+import { POSITION_NAMES } from '../utils/constants.js';
 
 const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory = [], seasonData, onClose }) => {
   const [activeTab, setActiveTab] = useState('draft');
@@ -26,13 +22,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
     });
   };
 
-  const getPositionName = (pos) => {
-    const names = {
-      pitcher: '投', catcher: '捕', first: '一', second: '二',
-      third: '三', short: '遊', left: '左', center: '中', right: '右'
-    };
-    return names[pos] || pos;
-  };
+  const getPositionName = (pos) => POSITION_NAMES[pos] || pos;
 
   const draftedPlayers = useMemo(() =>
     hallOfFamePlayers.filter(p =>

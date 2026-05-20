@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, generateScoutComment } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
+import { POSITION_NAMES_FULL, getAbilityRank, getRankColor } from '../utils/constants.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
   const [tryoutCandidates, setTryoutCandidates] = useState([]);
@@ -18,36 +19,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   const draftFinalizedRef = useRef(false);
   const candidatesGeneratedRef = useRef(false);
 
-  const getPositionName = (position) => {
-    const positionNames = {
-      pitcher: 'ピッチャー',
-      catcher: 'キャッチャー',
-      first: 'ファースト',
-      second: 'セカンド',
-      third: 'サード',
-      short: 'ショート',
-      left: 'レフト',
-      center: 'センター',
-      right: 'ライト'
-    };
-    return positionNames[position] || position;
-  };
-
-  const getAbilityRank = (value, isPitcherVelocity = false, isStamina = false) => {
-    let adjustedValue = value;
-    if (isPitcherVelocity) {
-      adjustedValue = (value - 115) * 2.5;
-    } else if (isStamina) {
-      adjustedValue = value / 2;
-    }
-    if (adjustedValue >= 90) return 'S';
-    if (adjustedValue >= 80) return 'A';
-    if (adjustedValue >= 70) return 'B';
-    if (adjustedValue >= 60) return 'C';
-    if (adjustedValue >= 50) return 'D';
-    if (adjustedValue >= 40) return 'E';
-    return 'F';
-  };
+  const getPositionName = (position) => POSITION_NAMES_FULL[position] || position;
 
   const getPositionCategory = (position) => {
     if (position === 'pitcher') return 'pitcher';
@@ -271,16 +243,6 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
   const currentTeam = currentPick < draftOrder.length ? draftOrder[currentPick].team : null;
   const isUserTurn = currentTeam === 'ユーザー';
-
-  const getRankColor = (rank) => ({
-    S: 'text-pink-400',
-    A: 'text-red-400',
-    B: 'text-orange-400',
-    C: 'text-yellow-400',
-    D: 'text-green-400',
-    E: 'text-blue-400',
-    F: 'text-gray-400'
-  }[rank]);
 
   return (
     <div className="p-6 bg-gray-900 min-h-screen">

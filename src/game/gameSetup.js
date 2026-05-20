@@ -6,6 +6,7 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { autoSimulateGame, generateAILineup, POSITION_PLAYER_RECOVERY_BASE } from './autoSimulation.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
+import { adjustGrowthModifier } from '../utils/constants.js';
 
 /**
  * setupManagedGame - 采配モードの試合セットアップ
@@ -297,12 +298,8 @@ export function executeHandleManagedGameEnd(ctx) {
         season.walks = (season.walks || 0) + (gs.walks || 0);
 
         // 成長率変動: 疲労50超で出場なら-0.01、10試合ごとに+0.01
-        if ((playerData.fatigue || 0) > 50) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
-        }
-        if (season.games % 10 === 0) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
-        }
+        if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
+        if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
 
         // 野手疲労蓄積: スタメン出場(3打席以上)のみ
         if ((gs.atBats || 0) >= 3) {
@@ -331,9 +328,7 @@ export function executeHandleManagedGameEnd(ctx) {
         sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
 
         // 成長率変動: 疲労50超で登板なら-0.01
-        if ((playerData.fatigue || 0) > 50) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
-        }
+        if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
 
         // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
         const bodyStamina = playerData.physical?.bodyStamina || 50;
@@ -348,7 +343,7 @@ export function executeHandleManagedGameEnd(ctx) {
         if (isStarter) {
           // 先発: 15イニング(45アウト)ごとに+0.01
           if (Math.floor(sp.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {
-            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+            adjustGrowthModifier(playerData, 0.01);
           }
         } else {
           // リリーフ: 登板数ベース（守護神/セットアッパー/中継ぎエースは4登板、その他は5登板ごと）
@@ -356,7 +351,7 @@ export function executeHandleManagedGameEnd(ctx) {
           const highPressureRoles = ['closer', 'setup', 'ace_relief'];
           const threshold = highPressureRoles.includes(role) ? 4 : 5;
           if (sp.games % threshold === 0) {
-            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+            adjustGrowthModifier(playerData, 0.01);
           }
         }
       }

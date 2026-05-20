@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 
@@ -29,25 +29,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     return 'bg-red-500';
   };
 
-  const getAbilityRank = (value) => {
-    if (value >= 90) return 'S';
-    if (value >= 80) return 'A';
-    if (value >= 70) return 'B';
-    if (value >= 60) return 'C';
-    if (value >= 50) return 'D';
-    if (value >= 40) return 'E';
-    return 'F';
-  };
-
-  const getRankColor = (rank) => {
-    const colors = { S: 'text-pink-400', A: 'text-red-400', B: 'text-orange-400', C: 'text-yellow-400', D: 'text-green-400', E: 'text-blue-400', F: 'text-gray-400' };
-    return colors[rank] || 'text-gray-400';
-  };
-
-  const getVelocityRank = (velocity) => {
-    const adjusted = (velocity - 115) * 2.5;
-    return getAbilityRank(adjusted);
-  };
+  const getVelocityRank = (velocity) => getAbilityRank(velocity, true);
 
   const getThrowsLabel = (throws) => throws === 'left' ? '左投' : '右投';
   const getBatsLabel = (bats) => bats === 'left' ? '左打' : bats === 'switch' ? '両打' : '右打';

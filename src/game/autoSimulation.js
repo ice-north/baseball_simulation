@@ -1,8 +1,20 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect } from '../simulation-logic.js';
-import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, adjustGrowthModifier } from '../utils/constants.js';
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
+
+// ロール別球数制限
+const PITCH_LIMITS = {
+  // 先発
+  complete: 120, ace: 110, quality: 100, short: 65, auto_s: 100,
+  // リリーフ
+  closer: 40, setup: 35, ace_relief: 40, long: 60,
+  onepoint: 15, behind: 50, mopup: 50, auto_r: 35
+};
+
+// イニング別ダメージ閾値: 1回=45, 2回=40, ..., 9回=5
+const INNING_DAMAGE_THRESHOLDS = [45, 40, 35, 30, 25, 20, 15, 10, 5];
 
 // 選手が投手かどうかを判定（positionだけでなく能力値も確認）
 export const isPitcherPlayer = (player) => {
@@ -968,11 +980,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     // 条件1: 球数制限（ロール別）
     if (!shouldChange) {
-      const PITCH_LIMITS = {
-        complete: 120, ace: 110, quality: 100, short: 65, auto_s: 100,
-        closer: 40, setup: 35, ace_relief: 40, long: 60,
-        onepoint: 15, behind: 50, mopup: 50, auto_r: 35
-      };
       const pitchLimit = PITCH_LIMITS[currentPitcherRole] || (isRelieverMid ? 35 : 100);
       if (totalPitchesMid >= pitchLimit) {
         shouldChange = true;
@@ -990,7 +997,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     // 条件3: ダメージポイント制（先発のみ）
     if (!shouldChange && !isRelieverMid) {
-      const INNING_DAMAGE_THRESHOLDS = [45, 40, 35, 30, 25, 20, 15, 10, 5];
       const inningIdx = Math.min(gs.inning - 1, 8);
       const threshold = INNING_DAMAGE_THRESHOLDS[inningIdx] || 5;
       const currentDamage = gs.starterDamagePoints[teamKey];
@@ -1612,13 +1618,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
           // --- 条件1: 球数制限（先発・リリーフ共通） ---
           if (!shouldChange) {
-            const PITCH_LIMITS = {
-              // 先発
-              complete: 120, ace: 110, quality: 100, short: 65, auto_s: 100,
-              // リリーフ
-              closer: 40, setup: 35, ace_relief: 40, long: 60,
-              onepoint: 15, behind: 50, mopup: 50, auto_r: 35
-            };
             const pitchLimit = PITCH_LIMITS[currentRole] || (isReliever ? 35 : 100);
             if (totalPitches >= pitchLimit) {
               shouldChange = true;
@@ -1642,8 +1641,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
           // --- 条件3: ダメージポイント制（先発のみ） ---
           if (!shouldChange && !isReliever && defendedThisInning) {
-            // イニング別閾値: 1回=45, 2回=40, ..., 9回=5
-            const INNING_DAMAGE_THRESHOLDS = [45, 40, 35, 30, 25, 20, 15, 10, 5];
             const inningIdx = Math.min(gameState.inning - 1, 8); // 0-indexed, 延長は9回の閾値(5)を使用
             const threshold = INNING_DAMAGE_THRESHOLDS[inningIdx] || 5;
             const currentDamage = gameState.starterDamagePoints[teamKey];
@@ -1965,12 +1962,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         }
 
         // 成長率変動: 10試合出場ごとに+0.01、疲労50超で出場なら-0.01
-        if ((playerData.fatigue || 0) > 50) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
-        }
-        if (season.games % 10 === 0) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
-        }
+        if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
+        if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
       }
 
       // 投手成績の集計
@@ -1989,9 +1982,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         season.pitches += p.pitches;
 
         // 成長率変動: 疲労50超で登板なら-0.01
-        if ((playerData.fatigue || 0) > 50) {
-          playerData.growthModifier = Math.round(((playerData.growthModifier || 0) - 0.01) * 100) / 100;
-        }
+        if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
 
         // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
         const isStarterPitcher = p.outs >= 15;
@@ -2008,7 +1999,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           // 先発: 15イニング(45アウト)ごとに+0.01
           const prevTotalOuts = season.inningsPitched - p.outs;
           if (Math.floor(season.inningsPitched / 45) > Math.floor(prevTotalOuts / 45)) {
-            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+            adjustGrowthModifier(playerData, 0.01);
           }
         } else {
           // リリーフ: 登板数ベース（守護神/セットアッパー/中継ぎエースは4登板、その他は5登板ごと）
@@ -2017,7 +2008,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
           const highPressureRoles = ['closer', 'setup', 'ace_relief'];
           const threshold = highPressureRoles.includes(role) ? 4 : 5;
           if (season.games % threshold === 0) {
-            playerData.growthModifier = Math.round(((playerData.growthModifier || 0) + 0.01) * 100) / 100;
+            adjustGrowthModifier(playerData, 0.01);
           }
         }
 
@@ -2071,114 +2062,3 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   };
 };
 
-// その日の全試合を自動実行
-export const autoSimulateDailyGames = (currentDate, allGames, setAllGames, setCalendar, setLeagueStandings) => {
-  const currentDateStr = `${currentDate.month}/${currentDate.day}`;
-  const todaysGames = allGames[currentDateStr];
-
-  if (!todaysGames || todaysGames.length === 0) {
-    return; // 試合がない日
-  }
-
-
-  // 各試合をシミュレート
-  const updatedGames = todaysGames.map(game => {
-    const gameResult = autoSimulateGame(game.home, game.away);
-    return {
-      ...game,
-      result: gameResult.result,
-      homeScore: gameResult.homeScore,
-      awayScore: gameResult.awayScore
-    };
-  });
-
-  // allGamesを更新
-  setAllGames(prev => ({
-    ...prev,
-    [currentDateStr]: updatedGames
-  }));
-
-  // カレンダーの結果も更新
-  setCalendar(prev => prev.map(day => {
-    if (day.date === currentDateStr) {
-      // この日の自チームの試合を探す
-      const myGame = updatedGames.find(g => g.home === 'チームA' || g.away === 'チームA');
-      if (myGame) {
-        const isHome = myGame.home === 'チームA';
-        const won = (isHome && myGame.homeScore > myGame.awayScore) ||
-                    (!isHome && myGame.awayScore > myGame.homeScore);
-        const draw = myGame.homeScore === myGame.awayScore;
-        return {
-          ...day,
-          result: won ? '○' : draw ? '引' : '●'
-        };
-      }
-    }
-    return day;
-  }));
-
-  // リーグ順位表を更新
-  setLeagueStandings(prev => {
-    const updated = [...prev];
-    updatedGames.forEach(game => {
-      const homeTeam = updated.find(t => t.team === game.home);
-      const awayTeam = updated.find(t => t.team === game.away);
-
-      if (homeTeam && awayTeam) {
-        homeTeam.gamesPlayed = (homeTeam.gamesPlayed || 0) + 1;
-        awayTeam.gamesPlayed = (awayTeam.gamesPlayed || 0) + 1;
-        if (game.homeScore > game.awayScore) {
-          homeTeam.wins++;
-          awayTeam.losses++;
-        } else if (game.awayScore > game.homeScore) {
-          awayTeam.wins++;
-          homeTeam.losses++;
-        } else {
-          homeTeam.draws++;
-          awayTeam.draws++;
-        }
-      }
-    });
-
-    // 勝率で並び替え
-    updated.sort((a, b) => {
-      const winPctA = a.wins + a.losses > 0 ? a.wins / (a.wins + a.losses) : 0;
-      const winPctB = b.wins + b.losses > 0 ? b.wins / (b.wins + b.losses) : 0;
-      return winPctB - winPctA;
-    });
-
-    return updated;
-  });
-};
-
-// 日程進行処理
-export const advanceDate = (currentDate, calendar, setCurrentDate, setCalendar, allGames, setAllGames, setLeagueStandings) => {
-  const currentDateStr = `${currentDate.month}/${currentDate.day}`;
-  const currentIndex = calendar.findIndex(day => day.date === currentDateStr);
-
-  // 現在の日の試合を全て自動実行
-  autoSimulateDailyGames(currentDate, allGames, setAllGames, setCalendar, setLeagueStandings);
-
-  if (currentIndex < calendar.length - 1) {
-    // 次の日へ
-    const nextDay = calendar[currentIndex + 1];
-    const [month, day] = nextDay.date.split('/').map(Number);
-    setCurrentDate({ month, day });
-
-    // 土曜日から日曜日に移動するとき（インデックス6→7, 13→14, 20→21）にカレンダーを1週間分シフト
-    if (currentIndex === 6 || currentIndex === 13 || currentIndex === 20) {
-      // 次の週のデータを生成（ダミー実装）
-      const newWeek = Array.from({ length: 7 }, (_, i) => {
-        const newDay = calendar[calendar.length - 7 + i].date.split('/');
-        const newDate = parseInt(newDay[1]) + 7;
-        return {
-          date: `${newDay[0]}/${newDate}`,
-          opponent: i % 3 === 2 ? null : `vs ${['巨人', '阪神', '中日'][i % 3]}`,
-          result: null
-        };
-      });
-
-      setCalendar(prev => [...prev.slice(7), ...newWeek]);
-    }
-  }
-};

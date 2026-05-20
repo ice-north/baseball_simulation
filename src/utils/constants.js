@@ -155,15 +155,6 @@ export const FORM_PITCH_SYNERGY = {
 };
 
 /**
- * 物理計算の定数
- */
-// BABIP校正係数（参考値：現在は直接アウト率を指定）
-export const BABIP_CALIBRATION = 0.32;
-
-// 反発係数（バットとボールの衝突）
-export const COR = 0.45;
-
-/**
  * ポジション名（日本語表記）
  */
 export const POSITION_NAMES = {
@@ -204,4 +195,69 @@ export const HAND_LABELS = {
   switch: '両'
 };
 
-// Already exported as individual named exports above
+/**
+ * ポジション名（フル表記）
+ */
+export const POSITION_NAMES_FULL = {
+  pitcher: 'ピッチャー',
+  catcher: 'キャッチャー',
+  first: 'ファースト',
+  second: 'セカンド',
+  third: 'サード',
+  short: 'ショート',
+  left: 'レフト',
+  center: 'センター',
+  right: 'ライト'
+};
+
+/**
+ * 能力値 → ランク変換（S〜F）
+ */
+export const getAbilityRank = (value, isPitcherVelocity = false, isStamina = false) => {
+  let v = value;
+  if (isPitcherVelocity) v = (value - 115) * 2.5;
+  else if (isStamina) v = value / 2;
+  if (v >= 90) return 'S';
+  if (v >= 80) return 'A';
+  if (v >= 70) return 'B';
+  if (v >= 60) return 'C';
+  if (v >= 50) return 'D';
+  if (v >= 40) return 'E';
+  return 'F';
+};
+
+/**
+ * ランク → テキスト色クラス
+ */
+export const getRankColor = (rank) => ({
+  S: 'text-pink-400',
+  A: 'text-red-400',
+  B: 'text-orange-400',
+  C: 'text-yellow-400',
+  D: 'text-green-400',
+  E: 'text-blue-400',
+  F: 'text-gray-400'
+}[rank] || 'text-gray-400');
+
+/**
+ * 能力値 → 色クラス（数値表示用）
+ */
+/**
+ * growthModifier を安全に加減算するユーティリティ
+ */
+export const adjustGrowthModifier = (player, delta) => {
+  player.growthModifier = Math.round(((player.growthModifier || 0) + delta) * 100) / 100;
+};
+
+/**
+ * 能力値 → 色クラス（数値表示用）
+ */
+export const getAbilityColor = (value) => {
+  if (value >= 90) return 'text-pink-400';
+  if (value >= 80) return 'text-red-400';
+  if (value >= 70) return 'text-orange-400';
+  if (value >= 60) return 'text-yellow-400';
+  if (value >= 50) return 'text-green-400';
+  if (value >= 40) return 'text-blue-400';
+  return 'text-gray-400';
+};

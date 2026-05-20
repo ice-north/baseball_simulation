@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES } from '../utils/constants.js';
-import { BALL_EFFECTS, PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { POSITION_NAMES, BALL_EFFECTS, PITCHING_FORM_EFFECTS, getAbilityColor } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
 
 const TeamInfoScreen = () => {
@@ -13,20 +12,6 @@ const TeamInfoScreen = () => {
   const [fielderSortDir, setFielderSortDir] = useState('desc');
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [detailTab, setDetailTab] = useState('ability');
-
-  const allTeamsData = TEAMS_DATA || {};
-  const team = allTeamsData[selectedTeam];
-  if (!team) return <div className="p-8 text-white">チームが見つかりません。NEW GAMEからゲームを開始してください。</div>;
-
-  const getAbilityColor = (value) => {
-    if (value >= 90) return 'text-pink-400';
-    if (value >= 80) return 'text-red-400';
-    if (value >= 70) return 'text-orange-400';
-    if (value >= 60) return 'text-yellow-400';
-    if (value >= 50) return 'text-green-400';
-    if (value >= 40) return 'text-blue-400';
-    return 'text-gray-400';
-  };
 
   const handlePitcherSort = (key) => {
     if (pitcherSortKey === key) setPitcherSortDir(pitcherSortDir === 'asc' ? 'desc' : 'asc');

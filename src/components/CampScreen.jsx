@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 
 const MAX_CAMP_ROUNDS = 4;
 
@@ -687,21 +687,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
 
   const isPitcher = (player) => player.position === 'pitcher';
 
-  const getAbilityRank = (value, isVelocity = false, isStamina = false) => {
-    let v = value;
-    if (isVelocity) v = (value - 115) * 2.5;
-    else if (isStamina) v = value / 2;
-    if (v >= 90) return { rank: 'S', color: 'text-pink-400' };
-    if (v >= 80) return { rank: 'A', color: 'text-red-400' };
-    if (v >= 70) return { rank: 'B', color: 'text-orange-400' };
-    if (v >= 60) return { rank: 'C', color: 'text-yellow-400' };
-    if (v >= 50) return { rank: 'D', color: 'text-green-400' };
-    if (v >= 40) return { rank: 'E', color: 'text-blue-400' };
-    return { rank: 'F', color: 'text-gray-400' };
-  };
-
   const StatValue = ({ value, label, isVelocity = false, isStamina = false }) => {
-    const { color } = getAbilityRank(value, isVelocity, isStamina);
+    const rank = getAbilityRank(value, isVelocity, isStamina);
+    const color = getRankColor(rank);
     return <span className={`${color} font-bold`} title={`${label}: ${value}`}>{value}</span>;
   };
 
