@@ -67,10 +67,18 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     timingWindow *= (1 - breakingBallPenalty);
   }
 
-  // 回転数による変化球の切れ補正（spinRate 50基準、高回転ほど変化球が切れる）
+  // 回転数によるタイミング窓補正（MLB Statcast準拠）
+  // 高回転ストレート: ホップ成分が大きく打者の予測軌道とズレる → 空振り増
+  // 高回転変化球: 変化量が大きく軌道予測が困難 → 空振り増
   const spinRate = pitcher.spinRate ?? 50;
-  if (pitch.type !== 'straight' && spinRate !== 50) {
-    const spinEffect = ((spinRate - 50) / 100) * 0.08;
+  if (spinRate !== 50) {
+    const spinDeviation = (spinRate - 50) / 100;
+    let spinEffect;
+    if (pitch.type === 'straight' || pitch.type === 'twoSeam') {
+      spinEffect = spinDeviation * 0.36;
+    } else {
+      spinEffect = spinDeviation * 0.38;
+    }
     timingWindow *= (1 - spinEffect * (1 - meetDeceptionResistance));
   }
 
@@ -213,9 +221,9 @@ export const getSpinRateAngleAdjust = (pitchType, spinRate) => {
   if (spinRate == null) return 0;
   const deviation = (spinRate - 50) / 100;
   if (pitchType === 'straight' || pitchType === 'twoSeam' || pitchType === 'cutter') {
-    return deviation * 6;
+    return deviation * 26;
   }
-  return deviation * -3;
+  return deviation * -13;
 };
 
 /**
