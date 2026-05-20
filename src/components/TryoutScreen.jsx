@@ -623,25 +623,25 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
             </div>
 
             <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 mb-5">
-              <table className="w-full text-[11px] text-left table-fixed">
+              <table className="w-full text-[11px] text-left">
                 <thead className="bg-gray-800 text-gray-400 text-[10px] sticky top-0 border-b border-gray-700/50">
                   <tr>
-                    <th className="px-1 py-1.5 w-[60px] cursor-pointer hover:text-white" onClick={() => handleSort('name')}>名前{getSortIndicator('name')}</th>
-                    <th className="px-1 py-1.5 w-[30px] cursor-pointer hover:text-white" onClick={() => handleSort('age')}>齢{getSortIndicator('age')}</th>
-                    <th className="px-1 py-1.5 w-[28px] cursor-pointer hover:text-white" onClick={() => handleSort('position')}>守{getSortIndicator('position')}</th>
-                    <th className="px-1 py-1.5 w-[36px]">投打</th>
-                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('meet')}>ミ{getSortIndicator('meet')}</th>
-                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('power')}>パ{getSortIndicator('power')}</th>
-                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('speed')}>走{getSortIndicator('speed')}</th>
-                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('arm')}>肩{getSortIndicator('arm')}</th>
-                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('defense')}>守{getSortIndicator('defense')}</th>
-                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('velocity')}>速{getSortIndicator('velocity')}</th>
-                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('control')}>制{getSortIndicator('control')}</th>
-                    <th className="px-1 py-1.5 w-[22px] cursor-pointer hover:text-white" onClick={() => handleSort('stamina')}>ス{getSortIndicator('stamina')}</th>
-                    <th className="px-1 py-1.5 w-[80px]">変化球</th>
-                    <th className="px-1 py-1.5 w-[24px] cursor-pointer hover:text-white" onClick={() => handleSort('fielderOverall')}>野{getSortIndicator('fielderOverall')}</th>
-                    <th className="px-1 py-1.5 w-[24px] cursor-pointer hover:text-white" onClick={() => handleSort('pitcherOverall')}>投{getSortIndicator('pitcherOverall')}</th>
-                    <th className="px-1 py-1.5">スカウト評価</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('name')}>名前{getSortIndicator('name')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('age')}>齢{getSortIndicator('age')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('position')}>守{getSortIndicator('position')}</th>
+                    <th className="px-1 py-1.5 whitespace-nowrap">投打</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('meet')}>ミ{getSortIndicator('meet')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('power')}>パ{getSortIndicator('power')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('speed')}>走{getSortIndicator('speed')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('arm')}>肩{getSortIndicator('arm')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('defense')}>守{getSortIndicator('defense')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('velocity')}>速{getSortIndicator('velocity')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('control')}>制{getSortIndicator('control')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('stamina')}>ス{getSortIndicator('stamina')}</th>
+                    <th className="px-1 py-1.5 whitespace-nowrap">変化球</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野{getSortIndicator('fielderOverall')}</th>
+                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投{getSortIndicator('pitcherOverall')}</th>
+                    <th className="px-1 py-1.5 whitespace-nowrap">スカウト評価</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -658,7 +658,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         className={`border-b border-gray-700 ${isUserTurn ? 'cursor-pointer hover:bg-gray-700' : 'opacity-60'} transition ${player.isReleasedCandidate ? 'bg-amber-950/30' : ''}`}
                         onClick={() => isUserTurn && handleSelectPlayer(player)}
                       >
-                        <td className="px-1 py-1 text-white font-bold truncate">
+                        <td className="px-1 py-1 text-white font-bold whitespace-nowrap">
                           {player.name}
                           {player.isReleasedCandidate && (
                             <span
@@ -669,9 +669,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                             </span>
                           )}
                         </td>
-                        <td className="px-1 py-1 text-gray-300 text-center">{player.age}</td>
-                        <td className="px-1 py-1 text-gray-300 text-center">{getPositionName(player.position).charAt(0)}</td>
-                        <td className="px-1 py-1 text-gray-400 text-center">{throwLabel}{batLabel}</td>
+                        <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{player.age}</td>
+                        <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{getPositionName(player.position).charAt(0)}</td>
+                        <td className="px-1 py-1 text-gray-400 text-center whitespace-nowrap">{throwLabel}{batLabel}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.batting?.meet||0))}`}>{getAbilityRank(player.batting?.meet||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.batting?.power||0))}`}>{getAbilityRank(player.batting?.power||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.physical?.speed||0))}`}>{getAbilityRank(player.physical?.speed||0)}</td>
@@ -680,7 +680,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.velocity||0, true))}`}>{getAbilityRank(player.pitching?.velocity||0, true)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
-                        <td className="px-1 py-1 text-[10px] truncate">
+                        <td className="px-1 py-1 text-[10px] whitespace-nowrap">
                           {(() => {
                             const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
                             if (arsenal.length === 0) return <span className="text-gray-500">-</span>;
