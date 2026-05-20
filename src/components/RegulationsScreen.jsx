@@ -17,7 +17,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
   const defaultAbbr = (i) => String.fromCharCode(0xFF21 + i);
 
   const handleTeamsCountChange = (newCount) => {
-    if (isNaN(newCount) || newCount < 2 || newCount > 12) return;
+    if (isNaN(newCount) || newCount < 2 || newCount > 12 || newCount % 2 !== 0) return;
     const currentNames = tempSettings.teamNames || [];
     const currentAbbrs = tempSettings.teamAbbreviations || [];
     const newNames = [];
@@ -92,7 +92,9 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
             <input type="checkbox" checked={tempSettings.useDH} onChange={(e) => setTempSettings({ ...tempSettings, useDH: e.target.checked })} disabled={!canModify} className="w-5 h-5 rounded" />
           </SettingRow>
           <SettingRow label="チーム数">
-            <input type="number" value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value))} disabled={!canModify} min="2" max="12" className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-20" />
+            <select value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value))} disabled={!canModify} className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-24">
+              {[2, 4, 6, 8, 10, 12].map(n => <option key={n} value={n}>{n}チーム</option>)}
+            </select>
           </SettingRow>
           <SettingRow label="リーグ形式">
             <select
