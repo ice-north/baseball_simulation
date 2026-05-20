@@ -765,6 +765,7 @@ export function recordAwardsToPlayers(allTeams, awards) {
 
 /**
  * 成長率変動の更新（シーズン終了時に呼び出し）
+ * - 年齢減衰: 24歳以降、毎年growthPotentialが減少（加齢による衰え）
  * - 疲労酷使: 高疲労で出場し続けた選手は成長率ダウン
  * - 優勝経験: 優勝チーム全員+0.05
  */
@@ -776,6 +777,13 @@ export function updateGrowthModifiers(allTeams, awards) {
     const isChampion = teamName === championTeam;
 
     team.players.forEach(player => {
+      // 年齢による成長ポテンシャル減衰: 24歳から(age-23)*0.05ずつ加速
+      const age = player.age || 18;
+      if (age >= 24) {
+        const agePenalty = (age - 23) * 0.05;
+        player.growthPotential = Math.round(((player.growthPotential || 1.0) - agePenalty) * 100) / 100;
+      }
+
       // シーズン中に蓄積された変動を半減して次年度に引き継ぎ（徐々にゼロに戻る）
       let modifier = (player.growthModifier || 0) * 0.5;
 
