@@ -232,7 +232,8 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
         // 回復量 = ベース回復 × (0.7〜1.3)（回復能力50で1.0倍）
         const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
         // 野手は回復が遅い（投手は登板間隔があるため高回復を維持）
-        const baseRecov = isPitcherPlayer(player) ? recoveryAmount : POSITION_PLAYER_RECOVERY_BASE;
+        // 現在のポジションで判定（投手→野手変更時に正しく野手回復が適用されるように）
+        const baseRecov = player.position === 'pitcher' ? recoveryAmount : POSITION_PLAYER_RECOVERY_BASE;
         const actualRecovery = Math.round(baseRecov * recoveryMult);
         player.fatigue = Math.max(0, player.fatigue - actualRecovery);
       }
