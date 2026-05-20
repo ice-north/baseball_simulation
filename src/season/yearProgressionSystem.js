@@ -935,13 +935,16 @@ export function applyAgeCurveChanges(allTeams) {
           const AGE_TALENT_MULT = { arm: 0.5, speed: 0.6, power: 0.8, velocity: 0.8 };
           const ageTalentMult = AGE_TALENT_MULT[stat] ?? 1.0;
 
-          const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
+          const effectiveRaw = (player.growthPotential ?? 1.0) + (player.growthModifier || 0);
+          const growthPotential = Math.max(0, Math.min(1.8, effectiveRaw));
+          const decayMult = effectiveRaw < 0 ? 1 + Math.abs(effectiveRaw) * 0.5 : 1.0;
           // 最終変動値（四捨五入、±0の場合もある）
           let rawChange = base + variance;
-          // 成長方向のみ才能補正+成長ポテンシャル（衰退はそのまま）
+          // 成長方向: ポテンシャル適用（0以下なら成長なし）
+          // 衰退方向: マイナスポテンシャルで加速
           let change = rawChange > 0
-            ? Math.round(rawChange * ageTalentMult * potential)
-            : Math.round(rawChange);
+            ? Math.round(rawChange * ageTalentMult * growthPotential)
+            : Math.round(rawChange * decayMult);
 
           // 能力値を取得・更新
           const statPath = getStatPath(stat);
@@ -957,14 +960,14 @@ export function applyAgeCurveChanges(allTeams) {
 
           // 球速は変動幅を1.2倍に（スケールが大きいため）+ フォーム補正
           if (stat === 'velocity') change = rawChange > 0
-            ? Math.round(rawChange * 1.2 * ageTalentMult * potential * formVelMult)
-            : Math.round(rawChange * 1.2);
+            ? Math.round(rawChange * 1.2 * ageTalentMult * growthPotential * formVelMult)
+            : Math.round(rawChange * 1.2 * decayMult);
           // 制球はフォーム補正適用
           if (stat === 'control' && rawChange > 0) change = Math.round(change * formCtrlMult);
           // スタミナも変動幅を1.2倍（成長方向のみポテンシャル適用）
           if (stat === 'stamina') change = rawChange > 0
-            ? Math.round(rawChange * 1.2 * potential)
-            : Math.round(rawChange * 1.2);
+            ? Math.round(rawChange * 1.2 * growthPotential)
+            : Math.round(rawChange * 1.2 * decayMult);
 
           const newValue = Math.max(1, currentValue + change);
 
