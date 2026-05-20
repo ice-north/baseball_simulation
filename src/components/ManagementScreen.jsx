@@ -201,8 +201,8 @@ const ManagementScreen = ({
   if (managementView === 'sandbox_next_regulations') return <RegulationsScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
-    onConfirm={() => {
-      const settings = seasonData.settings || {};
+    onConfirm={(confirmedSettings) => {
+      const settings = confirmedSettings || seasonData.settings || {};
       const calendarYear = 2024 + seasonData.year - 1;
       const configuredTeams = settings.teamNames || [];
 
@@ -310,8 +310,8 @@ const ManagementScreen = ({
   if (managementView === 'regulations_next') return <RegulationsScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
-    onConfirm={() => {
-      const settings = seasonData.settings || {};
+    onConfirm={(confirmedSettings) => {
+      const settings = confirmedSettings || seasonData.settings || {};
       const calendarYear = 2024 + seasonData.year - 1;
 
       // 新チーム検出: settings.teamNamesにあるがTEAMS_DATAに存在しないチーム

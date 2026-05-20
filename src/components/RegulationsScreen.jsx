@@ -269,7 +269,15 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
       {onConfirm && (
         <div className="mt-4 text-center">
           <button
-            onClick={() => { handleSaveSettings(); onConfirm(); }}
+            onClick={() => {
+              const validation = validateRegulations(tempSettings);
+              if (!validation.valid) {
+                alert('設定エラー:\n' + validation.errors.join('\n'));
+                return;
+              }
+              setSeasonData(prev => ({ ...prev, settings: tempSettings }));
+              onConfirm(tempSettings);
+            }}
             className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold text-base transition shadow"
           >
             確定 → キャンプへ進む
