@@ -275,8 +275,9 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
     : batter.bats === 'switch' ? (pitcher.throwingArm === 'left' ? -1 : 1)
     : 1;
   const pullBias = -6 * batSide;
-  // 振り遅れ効果: 速球→逆方向、遅球→引っ張り（NPBデータ準拠）
-  const velShift = ((pitchVelocity - 142) / 20) * 12 * (1 - meetQuality * 0.4);
+  // 振り遅れ効果: 速球→逆方向、遅球→引っ張り（2次曲線で速球域ほど急激に効く）
+  const velNorm = (pitchVelocity - 142) / 20;
+  const velShift = Math.sign(velNorm) * velNorm * velNorm * 20 * (1 - meetQuality * 0.4);
   let direction = Math.random() * 90 - 45 + pullBias + velShift * batSide;
   direction = Math.max(-45, Math.min(45, direction));
 
