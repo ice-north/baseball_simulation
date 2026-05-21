@@ -1194,6 +1194,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
 
         if (!isInStrikeZone) {
+          // ボール球でもバットに当たることがある（引っ掛けゴロ、泳いでフライ等）
+          // 選球眼が低い打者ほどボール球に手を出しやすく、当てやすい
+          const ballContactRate = 0.25 + ((100 - batter.eye) / 100) * 0.15;
+          if (Math.random() < ballContactRate) {
+            const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
+            const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher, lastPitch);
+            return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true }, newStamina };
+          }
           return {
             result: { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity },
             newStamina
@@ -1635,7 +1643,35 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             }
             
             newOuts++;
-            
+
+            // 併殺打判定（一塁ランナーがいて内野ゴロの場合）
+            let isDoublePlay = false;
+            if (newBases[0] && result.launchAngle != null && result.launchAngle < 10
+                && result.distance != null && result.distance < 40 && newOuts < 3) {
+              const ssDefense = defense.short?.defense || 50;
+              const sbDefense = defense.second?.defense || 50;
+              const ifAvg = (ssDefense + sbDefense) / 2;
+              const dpBase = 15 + (ifAvg - 50) * 0.35;
+              if (Math.random() * 100 < dpBase) {
+                isDoublePlay = true;
+                newOuts++;
+                newBases[0] = false;
+                setPitcherStats(prev => ({
+                  ...prev,
+                  outs: prev.outs + 1,
+                  doublePlay: (prev.doublePlay || 0) + 1
+                }));
+                {
+                  const currentPitcherPlayer = getCurrentPitcher();
+                  const defenseTeamType = isTopInning ? 'home' : 'away';
+                  updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
+                    outs: (currentPitcherPlayer.stats?.pitching?.outs || 0) + 1
+                  });
+                }
+                setLastResult({ ...result, description: result.description + '（併殺打）' });
+              }
+            }
+
             // タッチアップ判定（外野フライのみ）
         if (result.isOutfieldFly && newOuts < 3) {
           const throwbackChance = result.tagupThrowbackChance || 0;
@@ -1676,7 +1712,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
         
         atBatOver = true;
-        {
+        if (isDoublePlay) {
+          addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '併殺');
+        } else {
           const desc = result.description || '';
           const outLabel = desc.replace('アウト', '').replace('（ポップフライ）', '') || 'アウト';
           addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', outLabel);
