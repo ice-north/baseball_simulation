@@ -387,7 +387,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     fielder = safeDefense[position] || { defense: 70, speed: 65, arm: 70 };
   }
 
-  // ポジション別守備重要度係数（SS/CF > 2B/RF > LF/3B > 1B）
+  // ポジション別守備重要度係数（ライナー・フライ用の総合係数）
   const positionWeight = {
     short: 1.5, center: 1.5,
     second: 1.2, right: 1.2,
@@ -396,14 +396,25 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   };
   const weight = positionWeight[position] || 1.0;
 
+  // ポジション別・能力別の重み（内野ゴロ用）
+  const posStatWeights = {
+    short:   { defense: 1.3, speed: 1.5, arm: 1.5 },  // 広範囲+長い送球
+    second:  { defense: 1.2, speed: 1.4, arm: 0.8 },  // 広範囲、送球距離は短い
+    third:   { defense: 1.0, speed: 0.7, arm: 1.5 },  // 強肩が最重要
+    first:   { defense: 1.3, speed: 0.5, arm: 0.3 },  // 捕球が最重要
+    pitcher: { defense: 0.5, speed: 0.3, arm: 0.3 },
+    catcher: { defense: 0.8, speed: 0.3, arm: 0.5 },
+  };
+
   // ===== ゴロの場合 =====
   if (launchAngle < 10) {
     if (distance < 40) {
-      // 内野ゴロ - 守備力・走力・肩力の総合判定
+      // 内野ゴロ - ポジション別に守備力・走力・肩力を重み付け
+      const pw = posStatWeights[position] || { defense: 1.0, speed: 1.0, arm: 1.0 };
       const baseOutRate = 0.94;
-      const defenseBonus = (fielder.defense - 60) / 100 * 0.10 * weight;
-      const speedBonus = (fielder.speed - 60) / 100 * 0.08 * weight;
-      const armBonus = ((fielder.arm || 60) - 60) / 100 * 0.06 * weight;
+      const defenseBonus = (fielder.defense - 60) / 100 * 0.10 * pw.defense;
+      const speedBonus = (fielder.speed - 60) / 100 * 0.08 * pw.speed;
+      const armBonus = ((fielder.arm || 60) - 60) / 100 * 0.06 * pw.arm;
       const batterSpeedPenalty = (batter.speed - 60) / 100 * 0.10;
       const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.12;
       const catchProb = Math.min(0.995, Math.max(0.78, baseOutRate + defenseBonus + speedBonus + armBonus - batterSpeedPenalty - meetPlacementBonus));
