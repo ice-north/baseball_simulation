@@ -26,18 +26,10 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // 【2】タイミング・ウィンドウ (ms)
   const pitchVelocity = pitch.velocity || pitcher.velocity;
 
-  // ★修正: 係数は投手の「素の球速」で決定（変化球の減速を無視）
+  // ★修正: 係数は投手の「素の球速」で連続的に決定
   const basePitcherVelocity = pitcher.velocity;
-  let windowCoef;
-  if (basePitcherVelocity >= 155) {
-    windowCoef = 0.20;
-  } else if (basePitcherVelocity >= 150) {
-    windowCoef = 0.26;
-  } else if (basePitcherVelocity >= 145) {
-    windowCoef = 0.32;
-  } else {
-    windowCoef = 0.38;
-  }
+  const clampedVel = Math.max(120, Math.min(165, basePitcherVelocity));
+  const windowCoef = 0.40 - (clampedVel - 120) * 0.00511;
 
   // 窓の計算は実際の球速で（速い変化球は打ちにくい）
   let timingWindow = (1000 / (pitchVelocity / 3.6)) * windowCoef;
@@ -79,6 +71,9 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     } else {
       spinEffect = spinDeviation * 0.38;
     }
+    // 遅い球は滞空時間が長く、回転による変化量が増幅される
+    const spinVelocityBoost = 1 + Math.max(0, (150 - pitchVelocity) / 50);
+    spinEffect *= spinVelocityBoost;
     timingWindow *= (1 - spinEffect * (1 - meetDeceptionResistance));
   }
 
