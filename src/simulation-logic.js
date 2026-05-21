@@ -409,28 +409,48 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     catcher: { defense: 0.8, speed: 0.3, arm: 0.5 },
   };
 
+  // 内野手の定位置角度（ホームから見た方向）
+  const fielderHomeAngles = {
+    pitcher: 0, catcher: 0,
+    third: -30, short: -8, second: 12, first: 30,
+  };
+
   // ===== ゴロの場合 =====
   if (launchAngle < 10) {
     if (distance < 40) {
-      // 内野ゴロ - ポジション別に守備力・走力・肩力を重み付け
+      // 内野ゴロ - 打球方向と野手定位置の角度差で正面/横を判定
       const pw = posStatWeights[position] || { defense: 1.0, speed: 1.0, arm: 1.0 };
-      const baseOutRate = 0.94;
-      const defenseBonus = (fielder.defense - 60) / 100 * 0.10 * pw.defense;
-      const speedBonus = (fielder.speed - 60) / 100 * 0.08 * pw.speed;
-      const armBonus = ((fielder.arm || 60) - 60) / 100 * 0.06 * pw.arm;
-      const batterSpeedPenalty = (batter.speed - 60) / 100 * 0.10;
-      const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.12;
-      const catchProb = Math.min(0.995, Math.max(0.78, baseOutRate + defenseBonus + speedBonus + armBonus - batterSpeedPenalty - meetPlacementBonus));
+      const homeAngle = fielderHomeAngles[position] || 0;
+      const offset = Math.abs(direction - homeAngle);
+
+      // 正面ゾーン: 足が速いほど広い（多くの打球をルーティンで処理）
+      const frontZone = 5 + (fielder.speed - 50) / 100 * 5 * pw.speed;
+
+      let catchProb;
+      if (offset <= frontZone) {
+        // 正面: ルーティンプレー（守備力で微調整）
+        catchProb = 0.97 + (fielder.defense - 50) / 100 * 0.02;
+        catchProb -= (batter.speed - 60) / 100 * 0.04;
+      } else {
+        // 横の打球: 距離に応じて難易度が上がり、守備力が重要になる
+        const difficulty = Math.min(1.0, (offset - frontZone) / 14);
+        catchProb = 0.88 - difficulty * 0.30;
+        catchProb += (fielder.defense - 50) / 100 * 0.20 * pw.defense * (1 + difficulty * 0.5);
+        catchProb += (fielder.speed - 50) / 100 * 0.06 * pw.speed;
+        catchProb += ((fielder.arm || 60) - 50) / 100 * 0.05 * pw.arm;
+        catchProb -= (batter.speed - 60) / 100 * 0.12;
+        catchProb -= Math.max(0, (batter.meet || 50) - 30) / 100 * 0.10;
+      }
+      catchProb = Math.min(0.995, Math.max(0.40, catchProb));
 
       if (Math.random() < catchProb) {
-        // エラー判定（守備力＋肩力＝捕球ミス＋送球ミス）
         const errorRate = 0.002 + (100 - fielder.defense) / 1500 + (100 - (fielder.arm || 60)) / 3000;
         if (Math.random() < errorRate) {
           return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
         }
         return { result: 'out', bases: 0, description: `${position === 'pitcher' ? '投' : position === 'first' ? '一' : position === 'second' ? '二' : position === 'short' ? '遊' : '三'}ゴロ`, isOutfieldFly: false, fieldingPosition: position };
       }
-      return { result: 'single', bases: 1, description: '内野安打' };
+      return { result: 'single', bases: 1, description: '内野安打', fieldingPosition: position };
     } else {
       // 外野への速いゴロ - 足と守備で大きく変動
       const catchProb = 0.25 + (fielder.speed / 100) * 0.25 * weight + (fielder.defense / 100) * 0.15 * weight;
