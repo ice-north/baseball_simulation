@@ -111,6 +111,19 @@ export const loadGameFromSlot = (slotIndex) => {
       return { success: false, error: 'データの復元中にエラーが発生しました。元の状態に戻しました。' };
     }
 
+    // バント能力値の移行（旧セーブデータ互換）
+    Object.values(TEAMS_DATA).forEach(team => {
+      if (team?.players) {
+        team.players.forEach(p => {
+          if (p.batting && p.batting.bunt === undefined) {
+            p.batting.bunt = Math.min(99, Math.max(1, Math.round(
+              (p.batting.meet || 50) * 0.4 + (p.physical?.speed || 50) * 0.3 + Math.random() * 20
+            )));
+          }
+        });
+      }
+    });
+
     return { success: true, data: saveData };
   } catch (error) {
     console.error('ロード失敗:', error);

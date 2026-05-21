@@ -316,7 +316,8 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         power: abilities.power,
         eye: abilities.eye,
         bats: bats,
-        steal: abilities.steal
+        steal: abilities.steal,
+        bunt: abilities.bunt || 30
       },
       physical: {
         speed: abilities.speed,
@@ -369,11 +370,11 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
       fatigue: 0, // 疲労度（投げた球数分蓄積、1日20回復）
       experience: 0, // 経験値（シーズン中に蓄積、キャンプで消費）
       seasonStats: {
-        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
+        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
         pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
       },
       careerStats: {
-        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
+        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
         pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
       }
     };
@@ -539,6 +540,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
         power: randRangeWithVariance(30, 55, battingAgeBonus),
         eye: randRangeWithVariance(30, 55, battingAgeBonus),
         steal: randRangeWithVariance(30, 55),
+        bunt: randRangeWithVariance(30, 55),
         speed: randRangeWithVariance(45, 75),
         arm: twoWayArm,
         defense: randRangeWithVariance(45, 70),
@@ -559,6 +561,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
         power: randRangeWithVariance(32, 57, battingAgeBonus),
         eye: randRangeWithVariance(35, 65, battingAgeBonus),
         steal: randRangeWithVariance(30, 60),
+        bunt: randRangeWithVariance(30, 55),
         speed: randRangeWithVariance(43, 73),
         arm: twoWayArm,
         defense: randRangeWithVariance(40, 65),
@@ -584,6 +587,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       power: randRangeWithVariance(5, 29, battingAgeBonus),
       eye: randRangeWithVariance(25, 50, battingAgeBonus),
       steal: randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
+      bunt: randRangeWithVariance(20, 50),
       speed: randRangeWithVariance(33, 58, Math.max(0, Math.floor(ageBonus * 0.5))),
       arm: pitcherArm,
       defense: randRangeWithVariance(40, 65),
@@ -601,19 +605,19 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     // 【設計思想】原石段階。長所は光るが伸びしろを残す
     const archetypes = [
       // 巧打タイプ: ミート高、パワー低
-      { meet: [50, 70], power: [18, 38], eye: [46, 66], steal: [30, 56], speed: [38, 63], arm: [30, 56], defense: [36, 60] },
+      { meet: [50, 70], power: [18, 38], eye: [46, 66], steal: [30, 56], bunt: [45, 65], speed: [38, 63], arm: [30, 56], defense: [36, 60] },
       // 強打タイプ: パワー高、走力低
-      { meet: [33, 53], power: [43, 63], eye: [30, 53], steal: [20, 40], speed: [28, 50], arm: [40, 63], defense: [30, 53] },
+      { meet: [33, 53], power: [43, 63], eye: [30, 53], steal: [20, 40], bunt: [10, 30], speed: [28, 50], arm: [40, 63], defense: [30, 53] },
       // 俊足タイプ: 走力高、パワー低
-      { meet: [36, 56], power: [18, 38], eye: [33, 56], steal: [56, 76], speed: [58, 76], arm: [30, 56], defense: [40, 63] },
+      { meet: [36, 56], power: [18, 38], eye: [33, 56], steal: [56, 76], bunt: [50, 70], speed: [58, 76], arm: [30, 56], defense: [40, 63] },
       // 守備タイプ: 守備高、打撃低
-      { meet: [30, 50], power: [18, 38], eye: [33, 56], steal: [30, 56], speed: [43, 66], arm: [50, 70], defense: [56, 76] },
+      { meet: [30, 50], power: [18, 38], eye: [33, 56], steal: [30, 56], bunt: [35, 55], speed: [43, 66], arm: [50, 70], defense: [56, 76] },
       // バランスタイプ: 平均的
-      { meet: [36, 60], power: [26, 50], eye: [33, 60], steal: [30, 58], speed: [36, 63], arm: [33, 58], defense: [33, 60] },
+      { meet: [36, 60], power: [26, 50], eye: [33, 60], steal: [30, 58], bunt: [30, 55], speed: [36, 63], arm: [33, 58], defense: [33, 60] },
       // 打撃特化タイプ: 打撃全般高、守備走力低
-      { meet: [46, 66], power: [38, 60], eye: [40, 63], steal: [20, 40], speed: [28, 50], arm: [30, 53], defense: [26, 48] },
+      { meet: [46, 66], power: [38, 60], eye: [40, 63], steal: [20, 40], bunt: [20, 40], speed: [28, 50], arm: [30, 53], defense: [26, 48] },
       // 肩力タイプ: 肩力高、ミート低
-      { meet: [30, 50], power: [30, 50], eye: [30, 53], steal: [26, 50], speed: [36, 60], arm: [58, 76], defense: [43, 66] },
+      { meet: [30, 50], power: [30, 50], eye: [30, 53], steal: [26, 50], bunt: [25, 45], speed: [36, 60], arm: [58, 76], defense: [43, 66] },
     ];
     const archIndex = Math.floor(Math.random() * archetypes.length);
     const arch = archetypes[archIndex];
@@ -643,6 +647,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       power: randRangeWithVariance(arch.power[0], arch.power[1], battingAgeBonus),
       eye: randRangeWithVariance(arch.eye[0], arch.eye[1], battingAgeBonus),
       steal: randRangeWithVariance(arch.steal[0], arch.steal[1], Math.max(0, Math.floor(ageBonus * 0.7))),
+      bunt: randRangeWithVariance(arch.bunt[0], arch.bunt[1], Math.max(0, Math.floor(battingAgeBonus * 0.5))),
       speed: randRangeWithVariance(arch.speed[0], arch.speed[1], Math.max(0, Math.floor(ageBonus * 0.7))),
       arm: fielderArm,
       defense: randRangeWithVariance(arch.defense[0], arch.defense[1]),
@@ -676,6 +681,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       // 足は光るが打撃・守備は未熟 → 外野・代走から育成
       speed: () => randRange(73, 88),
       steal: () => randRange(68, 85),
+      bunt: () => randRange(55, 75),
       meet: () => randRange(30, 47),
       power: () => randRange(17, 33),
       defense: () => randRange(43, 63),
@@ -708,6 +714,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       // 当てる感覚はあるが一発は期待薄 → 長打力を磨く余地
       meet: () => randRange(65, 80),
       eye: () => randRange(58, 75),
+      bunt: () => randRange(50, 70),
       power: () => randRange(23, 40),
       speed: () => randRange(43, 60),
       dexterity: () => randRange(60, 80),

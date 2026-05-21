@@ -25,8 +25,9 @@ export const TRAINING_MENUS = {
   baserunning: {
     name: '走塁練習',
     icon: '🏃',
-    description: '走力・盗塁を強化',
-    targets: ['speed', 'steal'],
+    description: '走力・盗塁・バントを強化',
+    targets: ['speed', 'steal', 'bunt'],
+    growthMultipliers: { bunt: 0.5 },
     category: 'batting'
   },
   fielding: {
@@ -775,7 +776,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
 
     // 筋力/器用さによる成長方向の補正（0.5〜1.5倍）
     const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
-    const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal'];
+    const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal', 'bunt'];
     const muscle = player.physical?.muscle ?? 50;
     const dexterity = player.physical?.dexterity ?? 50;
     let physiqueMult = 1.0;

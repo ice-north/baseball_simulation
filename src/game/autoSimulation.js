@@ -767,6 +767,100 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     return null;
   };
 
+  // バント実行（結果判定）
+  const executeBunt = (buntType, batterPlayer, pitcherPlayer, catcherPlayer, defense, bases, outs) => {
+    const buntSkill = batterPlayer.batting?.bunt || 30;
+    const meet = batterPlayer.batting?.meet || 50;
+    const speed = batterPlayer.physical?.speed || 50;
+
+    // Step 1: フェア/ファウル/フライ判定
+    const fairRate = Math.min(85, 40 + buntSkill * 0.40 + meet * 0.10);
+    const popupRate = Math.max(2, 15 - buntSkill * 0.12);
+    const roll = Math.random() * 100;
+
+    if (roll < popupRate) {
+      return { type: 'bunt_popup' };
+    }
+    if (roll >= popupRate + fairRate) {
+      return { type: 'bunt_foul' };
+    }
+
+    // Step 2: バントの質
+    const qualityScore = buntSkill * 0.5 + meet * 0.2 + (Math.random() * 20 - 10);
+    const quality = qualityScore >= 70 ? 'dead' : qualityScore >= 40 ? 'normal' : 'hard';
+
+    // Step 3: 守備の送球アウト判定
+    const pitcherDef = defense.pitcher?.defense || 50;
+    const firstDef = defense.first?.defense || 50;
+    const thirdDef = defense.third?.defense || 50;
+    const catcherDef = catcherPlayer?.fielding?.defense || 50;
+    const avgFieldDef = (pitcherDef + firstDef + thirdDef + catcherDef) / 4;
+
+    let baseThrowout;
+    if (buntType === 'sacrifice') baseThrowout = 75;
+    else if (buntType === 'squeeze') baseThrowout = 85;
+    else baseThrowout = 60;
+
+    const speedReduction = speed * (buntType === 'safety' ? 0.35 : 0.15);
+    const qualityMod = quality === 'dead' ? (buntType === 'safety' ? -20 : -15) : quality === 'hard' ? (buntType === 'safety' ? 15 : 10) : 0;
+    const fieldingMod = (avgFieldDef - 50) * 0.3;
+    const throwOutChance = Math.max(5, Math.min(95, baseThrowout - speedReduction + qualityMod + fieldingMod));
+
+    const batterOut = Math.random() * 100 < throwOutChance;
+
+    // スクイズ時の本塁送球判定（3塁走者のセーフ/アウト）
+    let squeezeRunnerSafe = true;
+    if (buntType === 'squeeze' && bases[2]) {
+      const homeThrowChance = Math.max(5, 15 + (avgFieldDef - 50) * 0.4 - (quality === 'dead' ? 15 : quality === 'hard' ? -5 : 0));
+      squeezeRunnerSafe = Math.random() * 100 >= homeThrowChance;
+    }
+
+    return { type: 'bunt_fair', batterOut, quality, buntType, squeezeRunnerSafe };
+  };
+
+  // バントAI判定
+  const decideBunt = (batter, offenseTeam, gameState) => {
+    const { bases, outs } = gameState;
+    const myScore = gameState.isTopInning ? gameState.score.away : gameState.score.home;
+    const oppScore = gameState.isTopInning ? gameState.score.home : gameState.score.away;
+    const scoreDiff = myScore - oppScore;
+    const isCloseGame = Math.abs(scoreDiff) <= 2;
+    const buntSkill = batter.batting?.bunt || 30;
+    const batterTotal = (batter.batting?.meet || 0) + (batter.batting?.power || 0);
+    const batterSpeed = batter.physical?.speed || 50;
+    const isPitcherBatter = batter.position === 'pitcher' || isPitcher(batter);
+
+    // スクイズ: 3塁ランナー、1アウト、接戦、バント能力40以上
+    if (bases[2] && outs === 1 && isCloseGame && buntSkill >= 40) {
+      const squeezeChance = isPitcherBatter ? 0.60 :
+                            (buntSkill >= 60 && batterTotal < 110) ? 0.40 :
+                            (buntSkill >= 50) ? 0.25 : 0.10;
+      if (Math.random() < squeezeChance) return 'squeeze';
+    }
+
+    // 犠打: 1塁or2塁ランナー、0-1アウト、弱打者or投手
+    if ((bases[0] || bases[1]) && !bases[2] && outs <= 1) {
+      const shouldSacrifice = isPitcherBatter ||
+                              (batterTotal < 100 && buntSkill >= 35) ||
+                              (buntSkill >= 60 && batterTotal < 120);
+      if (shouldSacrifice) {
+        const sacChance = isPitcherBatter ? 0.70 :
+                          (gameState.inning >= 7 && isCloseGame) ? 0.50 : 0.35;
+        if (Math.random() < sacChance) return 'sacrifice';
+      }
+    }
+
+    // セーフティ: 俊足+バント巧者、0-1アウト
+    if (batterSpeed >= 75 && buntSkill >= 55 && outs <= 1) {
+      if (!bases[0] || (bases[0] && !bases[1] && !bases[2])) {
+        const safetyChance = 0.05 + (batterSpeed - 75) * 0.003 + (buntSkill - 55) * 0.002;
+        if (Math.random() < safetyChance) return 'safety';
+      }
+    }
+
+    return null;
+  };
+
   // 代打判定（AI監督）- 状況判断・理由付き版
   const considerPinchHitter = (offenseTeam, batter) => {
     const benchFielders = offenseTeam.players.filter(p =>
@@ -1255,6 +1349,95 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     let lastPitch = null;
     gameState._stolenAttempted = false;
     let atBatDamagePoints = 0; // この打席で先発に蓄積するダメージポイント
+
+    // AI監督: バント判定（投球ループ前に決定）
+    const buntDecision = decideBunt(batter, offenseTeam, gameState);
+    if (buntDecision) {
+      const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
+      pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);
+      pitcherData.gameStats.pitching.pitches++;
+
+      const buntResult = executeBunt(buntDecision, batter, pitcher, catcher, defense, gameState.bases, gameState.outs);
+
+      if (buntResult.type === 'bunt_popup') {
+        batter.gameStats.batting.atBats++;
+        pitcher.gameStats.pitching.outs++;
+        gameState.outs++;
+        atBatOver = true;
+      } else if (buntResult.type === 'bunt_foul') {
+        // ファウル → 0-1カウントで通常打席へ
+        gameState.count = { balls: 0, strikes: 1 };
+      } else if (buntResult.type === 'bunt_fair') {
+        if (buntDecision === 'squeeze') {
+          if (buntResult.squeezeRunnerSafe && gameState.bases[2]) {
+            if (gameState.isTopInning) gameState.score.away++;
+            else gameState.score.home++;
+            batter.gameStats.batting.rbis++;
+            pitcher.gameStats.pitching.runsAllowed++;
+            atBatDamagePoints += 10;
+            gameState.bases[2] = false;
+          } else if (!buntResult.squeezeRunnerSafe && gameState.bases[2]) {
+            gameState.outs++;
+            pitcher.gameStats.pitching.outs++;
+            gameState.bases[2] = false;
+          }
+          if (buntResult.batterOut) {
+            pitcher.gameStats.pitching.outs++;
+            gameState.outs++;
+            batter.gameStats.batting.sacrificeBunts = (batter.gameStats.batting.sacrificeBunts || 0) + 1;
+          } else {
+            batter.gameStats.batting.atBats++;
+            batter.gameStats.batting.hits++;
+            // 走者進塁 + 打者1塁
+            if (gameState.bases[1]) { gameState.bases[2] = gameState.bases[1]; }
+            if (gameState.bases[0]) { gameState.bases[1] = gameState.bases[0]; }
+            gameState.bases[0] = batter;
+          }
+          atBatDamagePoints += 4;
+          atBatOver = true;
+        } else if (buntDecision === 'sacrifice') {
+          if (buntResult.batterOut) {
+            pitcher.gameStats.pitching.outs++;
+            gameState.outs++;
+            batter.gameStats.batting.sacrificeBunts = (batter.gameStats.batting.sacrificeBunts || 0) + 1;
+            // 走者進塁（アウト3未満の場合）
+            if (gameState.outs < 3) {
+              if (gameState.bases[1]) {
+                gameState.bases[2] = gameState.bases[1];
+                gameState.bases[1] = false;
+              }
+              if (gameState.bases[0]) {
+                gameState.bases[1] = gameState.bases[0];
+                gameState.bases[0] = false;
+              }
+            }
+          } else {
+            batter.gameStats.batting.atBats++;
+            batter.gameStats.batting.hits++;
+            if (gameState.bases[1]) { gameState.bases[2] = gameState.bases[1]; }
+            if (gameState.bases[0]) { gameState.bases[1] = gameState.bases[0]; }
+            gameState.bases[0] = batter;
+          }
+          atBatDamagePoints += 4;
+          atBatOver = true;
+        } else {
+          // セーフティバント
+          if (buntResult.batterOut) {
+            batter.gameStats.batting.atBats++;
+            pitcher.gameStats.pitching.outs++;
+            gameState.outs++;
+          } else {
+            batter.gameStats.batting.atBats++;
+            batter.gameStats.batting.hits++;
+            if (gameState.bases[1]) { gameState.bases[2] = gameState.bases[1]; }
+            if (gameState.bases[0]) { gameState.bases[1] = gameState.bases[0]; }
+            gameState.bases[0] = batter;
+            atBatDamagePoints += 4;
+          }
+          atBatOver = true;
+        }
+      }
+    }
 
     while (!atBatOver && pitchCount < maxPitches) {
       pitchCount++;
@@ -1932,6 +2115,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         season.walks += b.walks;
         season.strikeouts += b.strikeouts;
         season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
+        season.sacrificeBunts = (season.sacrificeBunts || 0) + (b.sacrificeBunts || 0);
 
         // 経験値蓄積（出場1 + 打席数/3）
         const expGained = 1 + Math.floor(b.atBats / 3);

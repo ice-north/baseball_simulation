@@ -189,6 +189,12 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
                       className="w-full bg-gray-600 text-white px-3 py-2 rounded" />
                   </div>
                   <div>
+                    <label className="block text-sm text-gray-300 mb-1">バント (0-100)</label>
+                    <input type="number" min="0" max="100" value={editFormData.batting?.bunt || 0}
+                      onChange={(e) => updateAbility('batting', 'bunt', e.target.value)}
+                      className="w-full bg-gray-600 text-white px-3 py-2 rounded" />
+                  </div>
+                  <div>
                     <label className="block text-sm text-gray-300 mb-1">打席</label>
                     <select value={editFormData.batting?.bats || 'right'}
                       onChange={(e) => updateHand('batting', e.target.value)}

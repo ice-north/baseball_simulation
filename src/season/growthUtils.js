@@ -3,7 +3,7 @@
 // ============================================================
 
 export const PHYSICAL_STATS = ['speed', 'arm', 'stamina', 'velocity', 'bodyStamina', 'recovery'];
-export const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 'steal'];
+export const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 'steal', 'bunt'];
 
 export function getAgeGrowthBase(age, isPhysical) {
   if (isPhysical) {
@@ -40,6 +40,7 @@ export function getStatPath(statKey) {
     velocity: 'pitching.velocity',
     control: 'pitching.control',
     stamina: 'pitching.stamina',
+    bunt: 'batting.bunt',
   };
   return pathMap[statKey] || null;
 }
@@ -57,7 +58,8 @@ export function getStatName(statKey) {
     control: '制球',
     stamina: 'スタミナ',
     bodyStamina: '体力',
-    recovery: '回復'
+    recovery: '回復',
+    bunt: 'バント'
   };
   return nameMap[statKey] || statKey;
 }

@@ -1206,12 +1206,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     {/* 打撃能力 */}
                     <div>
                       <h4 className="text-orange-400 text-[10px] font-bold uppercase tracking-wider mb-1.5">打撃能力</h4>
-                      <div className="grid grid-cols-5 gap-2 bg-gray-700/40 rounded-lg p-2">
+                      <div className="grid grid-cols-6 gap-2 bg-gray-700/40 rounded-lg p-2">
                         <StatBox label="ミート" value={b.meet || 0} />
                         <StatBox label="パワー" value={b.power || 0} />
                         <StatBox label="選球眼" value={b.eye || 0} />
                         <StatBox label="走力" value={ph.speed || 0} />
                         <StatBox label="盗塁" value={b.steal || 0} />
+                        <StatBox label="バント" value={b.bunt || 0} />
                       </div>
                     </div>
 
