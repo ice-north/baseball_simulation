@@ -399,18 +399,18 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   // ===== ゴロの場合 =====
   if (launchAngle < 10) {
     if (distance < 40) {
-      // 内野ゴロ - 守備重要度で係数を強化
-      const baseOutRate = 0.975;
-      const defenseBonus = (fielder.defense - 70) / 100 * 0.07 * weight;  // 重要ポジションほど守備力が効く
-      const speedBonus = (fielder.speed - 60) / 100 * 0.07 * weight;     // 足で守備範囲拡大（走力強化）
-      const batterSpeedPenalty = (batter.speed - 60) / 100 * 0.04;
-      // ミートが高い打者は打球方向の制御が良く、野手の間を抜きやすい（ミート30以上から段階的に効果）
-      const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.15;
-      const catchProb = Math.min(0.995, Math.max(0.85, baseOutRate + defenseBonus + speedBonus - batterSpeedPenalty - meetPlacementBonus));
+      // 内野ゴロ - 守備力・走力・肩力の総合判定
+      const baseOutRate = 0.94;
+      const defenseBonus = (fielder.defense - 60) / 100 * 0.10 * weight;
+      const speedBonus = (fielder.speed - 60) / 100 * 0.08 * weight;
+      const armBonus = ((fielder.arm || 60) - 60) / 100 * 0.06 * weight;
+      const batterSpeedPenalty = (batter.speed - 60) / 100 * 0.10;
+      const meetPlacementBonus = Math.max(0, (batter.meet || 50) - 30) / 100 * 0.12;
+      const catchProb = Math.min(0.995, Math.max(0.78, baseOutRate + defenseBonus + speedBonus + armBonus - batterSpeedPenalty - meetPlacementBonus));
 
       if (Math.random() < catchProb) {
-        // エラー判定
-        const errorRate = 0.002 + (100 - fielder.defense) / 1200;
+        // エラー判定（守備力＋肩力＝捕球ミス＋送球ミス）
+        const errorRate = 0.002 + (100 - fielder.defense) / 1500 + (100 - (fielder.arm || 60)) / 3000;
         if (Math.random() < errorRate) {
           return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
         }
