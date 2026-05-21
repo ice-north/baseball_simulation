@@ -270,11 +270,19 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
     distance *= (0.95 + batter.power / 1000);
   }
 
-  // 打球方向（-45〜45度）- 中央（遊撃・二塁・中堅方向）に偏る分布
-  // 正規分布的に中央を重くする（実際の打球分布に近い）
+  // 打球方向（-45〜45度）- 中央寄り分布 + 振り遅れ効果
   const r1 = Math.random(), r2 = Math.random();
-  const normalish = (r1 + r2 + Math.random()) / 3; // 0-1の中央寄り分布
-  const direction = (normalish * 90) - 45;
+  const normalish = (r1 + r2 + Math.random()) / 3;
+  let direction = (normalish * 90) - 45;
+
+  // 振り遅れ効果: 速球→逆方向、遅球→引っ張り（NPBデータ準拠）
+  const velRef = 142;
+  const velShift = ((pitchVelocity - velRef) / 20) * 12 * (1 - meetQuality * 0.4);
+  const batSide = batter.bats === 'left' ? -1
+    : batter.bats === 'switch' ? (pitcher.throwingArm === 'left' ? -1 : 1)
+    : 1;
+  direction += velShift * batSide;
+  direction = Math.max(-45, Math.min(45, direction));
 
   return {
     exitVelocity,
