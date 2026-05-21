@@ -187,11 +187,15 @@ export const calculateLaunchAngle = (meetQuality, batter) => {
     // 完璧なコンタクト: バレルゾーン（25-35度）
     baseLaunchAngle = 25 + Math.random() * 10;
   } else if (meetQuality > 0.6) {
-    // 高品質: ライナー〜適正フライ（10-40度）
-    baseLaunchAngle = 10 + Math.random() * 30;
+    // 高品質: ライナー中心だが硬いゴロも出る（NPB準拠）
+    if (Math.random() < 0.30) {
+      baseLaunchAngle = -5 + Math.random() * 15;  // 硬いゴロ〜低いライナー
+    } else {
+      baseLaunchAngle = 10 + Math.random() * 30;  // ライナー〜フライ
+    }
   } else if (meetQuality > 0.4) {
-    // 中品質: 幅広い分布（-5〜50度）
-    baseLaunchAngle = -5 + Math.random() * 55;
+    // 中品質: 幅広い分布（-10〜50度、ゴロ寄り）
+    baseLaunchAngle = -10 + Math.random() * 60;
   } else {
     // 低品質: ポップフライかボテボテ
     if (Math.random() < 0.5) {
@@ -229,7 +233,18 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
 
   // 打出し角度（投手の回転数で補正）
   const spinAngleAdj = getSpinRateAngleAdjust(pitch.type, pitcher.spinRate);
-  const launchAngle = calculateLaunchAngle(meetQuality, batter) + spinAngleAdj;
+  // 速球で差し込まれるとゴロになりやすい（NPBデータ: 160+で50.7%GB）
+  const pitchVelocity = pitch.velocity || pitcher.velocity;
+  let velocityAngleAdj = 0;
+  if (meetQuality < 0.75) {
+    const deficit = 1 - meetQuality;
+    if (pitchVelocity > 140) {
+      velocityAngleAdj = -((pitchVelocity - 140) / 20) * deficit * 22;
+    } else if (pitchVelocity < 135) {
+      velocityAngleAdj = -((135 - pitchVelocity) / 15) * deficit * 8;
+    }
+  }
+  const launchAngle = calculateLaunchAngle(meetQuality, batter) + spinAngleAdj + velocityAngleAdj;
 
   // 物理シミュレーション（飛距離・滞空時間）
   const rad = launchAngle * Math.PI / 180;
