@@ -254,6 +254,15 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   // 滞空時間（秒）
   const hangTime = Math.max(0.5, (2 * v * Math.sin(Math.max(0, rad))) / g);
 
+  // 打球方向（-45〜45度）- NPBデータ準拠（振り遅れ効果含む）
+  const batSide = batter.bats === 'left' ? -1
+    : batter.bats === 'switch' ? (pitcher.throwingArm === 'left' ? -1 : 1)
+    : 1;
+  const velDiff = pitchVelocity - 142;
+  const velShift = (velDiff >= 0 ? velDiff * 0.67 : velDiff * 0.50) * batSide;
+  let direction = Math.random() * 90 - 45 + 2 * batSide + velShift;
+  direction = Math.max(-45, Math.min(45, direction));
+
   // 飛距離（メートル）- MLB実測値ベース（空気抵抗込み）
   // EV155→112m, EV145→102m, EV135→91m, EV125→80m, EV115→69m
   let distance;
@@ -268,16 +277,20 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
     distance = carryBase * angleFactor;
     // パワーボーナス（スイングの強さ分の微調整）
     distance *= (0.95 + batter.power / 1000);
-  }
 
-  // 打球方向（-45〜45度）- NPBデータ準拠（振り遅れ効果含む）
-  const batSide = batter.bats === 'left' ? -1
-    : batter.bats === 'switch' ? (pitcher.throwingArm === 'left' ? -1 : 1)
-    : 1;
-  const velDiff = pitchVelocity - 142;
-  const velShift = (velDiff >= 0 ? velDiff * 0.67 : velDiff * 0.50) * batSide;
-  let direction = Math.random() * 90 - 45 + 2 * batSide + velShift;
-  direction = Math.max(-45, Math.min(45, direction));
+    // 引っ張り/流し打ちによる飛距離補正
+    // 引っ張り: フルスイングでジャストミート → 飛距離+5%
+    // 流し打ち: バットの先端で当てる → 飛距離-8%
+    // RHB: pull=負方向(左), oppo=正方向(右) / LHB: pull=正方向(右), oppo=負方向(左)
+    const pullDirection = direction * batSide; // 負=引っ張り、正=流し
+    if (pullDirection < -15) {
+      // 強い引っ張り: +3〜5%
+      distance *= 1.03 + Math.min(0.02, (-pullDirection - 15) / 30 * 0.02);
+    } else if (pullDirection > 15) {
+      // 流し打ち: -4〜8%
+      distance *= 1.0 - Math.min(0.08, (pullDirection - 15) / 30 * 0.08);
+    }
+  }
 
   return {
     exitVelocity,
