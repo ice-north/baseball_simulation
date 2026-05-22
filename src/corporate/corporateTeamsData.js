@@ -169,15 +169,79 @@ export const REGION_SLOTS = {
   kyushu: 3,
 };
 
+// ============================================================
+// チーム名オーバーライド（マスター設定、セーブデータに含めない）
+// localStorage 'corpTeamNames' に { id: 表示名 } のマップを保存
+// ============================================================
+
+const NAMES_STORAGE_KEY = 'corpTeamNames';
+
+const loadNameOverrides = () => {
+  try {
+    const raw = localStorage.getItem(NAMES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+};
+
+const saveNameOverrides = (overrides) => {
+  try {
+    localStorage.setItem(NAMES_STORAGE_KEY, JSON.stringify(overrides));
+  } catch { /* ignore */ }
+};
+
+// チームの表示名を取得（オーバーライドがあればそちら、なければデフォルト）
+export const getTeamDisplayName = (teamId) => {
+  const overrides = loadNameOverrides();
+  if (overrides[teamId]) return overrides[teamId];
+  const team = CORPORATE_TEAMS.find(t => t.id === teamId);
+  return team ? team.name : '';
+};
+
+// チーム名を変更（マスター設定に保存）
+export const setTeamDisplayName = (teamId, newName) => {
+  const overrides = loadNameOverrides();
+  const team = CORPORATE_TEAMS.find(t => t.id === teamId);
+  if (team && newName.trim() === team.name) {
+    delete overrides[teamId];
+  } else {
+    overrides[teamId] = newName.trim();
+  }
+  saveNameOverrides(overrides);
+};
+
+// チーム名をデフォルトにリセット
+export const resetTeamDisplayName = (teamId) => {
+  const overrides = loadNameOverrides();
+  delete overrides[teamId];
+  saveNameOverrides(overrides);
+};
+
+// 全チーム名をデフォルトにリセット
+export const resetAllTeamDisplayNames = () => {
+  localStorage.removeItem(NAMES_STORAGE_KEY);
+};
+
+// 全オーバーライドを取得（設定画面用）
+export const getAllNameOverrides = () => loadNameOverrides();
+
+// ============================================================
 // ヘルパー関数
+// ============================================================
+
 export const getTeamsByRegion = (regionId) =>
-  CORPORATE_TEAMS.filter(t => t.region === regionId);
+  CORPORATE_TEAMS.filter(t => t.region === regionId).map(t => ({
+    ...t,
+    displayName: getTeamDisplayName(t.id),
+  }));
 
 export const getRegionName = (regionId) =>
   REGIONS.find(r => r.id === regionId)?.name || regionId;
 
-export const getTeamById = (teamId) =>
-  CORPORATE_TEAMS.find(t => t.id === teamId);
+export const getTeamById = (teamId) => {
+  const team = CORPORATE_TEAMS.find(t => t.id === teamId);
+  if (!team) return null;
+  return { ...team, displayName: getTeamDisplayName(teamId) };
+};
 
 export const getRegionSlots = (regionId) =>
   REGION_SLOTS[regionId] || 1;

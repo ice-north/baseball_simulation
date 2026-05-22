@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE } from '../corporate/corporateTeamsData.js';
+import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName } from '../corporate/corporateTeamsData.js';
 
 const RANK_COLORS = {
   S: 'text-yellow-400',
@@ -52,8 +52,31 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onBack }) =>
 const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
+  const [editingNameId, setEditingNameId] = useState(null);
+  const [editNameValue, setEditNameValue] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const regionTeams = selectedRegion ? getTeamsByRegion(selectedRegion) : [];
+
+  const startEditName = (e, team) => {
+    e.stopPropagation();
+    setEditingNameId(team.id);
+    setEditNameValue(team.displayName);
+  };
+
+  const saveEditName = (teamId) => {
+    if (editNameValue.trim()) {
+      setTeamDisplayName(teamId, editNameValue.trim());
+    }
+    setEditingNameId(null);
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const handleResetName = (e, teamId) => {
+    e.stopPropagation();
+    resetTeamDisplayName(teamId);
+    setRefreshKey(prev => prev + 1);
+  };
 
   const handleConfirm = () => {
     if (selectedTeam) {
@@ -111,10 +134,10 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
 
         <div className="space-y-2">
           {regionTeams.map(team => (
-            <button
+            <div
               key={team.id}
-              onClick={() => setSelectedTeam(team)}
-              className={`w-full flex items-center justify-between p-4 rounded-lg border transition ${
+              onClick={() => { if (editingNameId !== team.id) setSelectedTeam(team); }}
+              className={`w-full flex items-center justify-between p-4 rounded-lg border transition cursor-pointer ${
                 selectedTeam?.id === team.id
                   ? 'bg-blue-900/50 border-blue-500'
                   : 'bg-gray-800 border-gray-700 hover:border-gray-500'
@@ -123,7 +146,31 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
               <div className="flex items-center gap-4">
                 <span className={`font-bold text-xl w-8 ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
                 <div className="text-left">
-                  <div className="text-white font-bold text-lg">{team.name}</div>
+                  {editingNameId === team.id ? (
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveEditName(team.id); if (e.key === 'Escape') setEditingNameId(null); }}
+                        className="bg-gray-700 border border-gray-500 text-white px-2 py-1 rounded w-48 focus:border-blue-400 focus:outline-none"
+                        autoFocus
+                      />
+                      <button onClick={() => saveEditName(team.id)} className="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs">保存</button>
+                      <button onClick={() => setEditingNameId(null)} className="text-gray-400 hover:text-white text-xs">取消</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold text-lg">{team.displayName}</span>
+                      {team.displayName !== team.name && (
+                        <span className="text-gray-500 text-xs">({team.name})</span>
+                      )}
+                      <button onClick={(e) => startEditName(e, team)} className="text-gray-500 hover:text-blue-400 text-xs ml-1">名前変更</button>
+                      {team.displayName !== team.name && (
+                        <button onClick={(e) => handleResetName(e, team.id)} className="text-gray-500 hover:text-yellow-400 text-xs">リセット</button>
+                      )}
+                    </div>
+                  )}
                   <div className="text-gray-400 text-sm">予算: {team.budget * 100}万円</div>
                 </div>
               </div>
@@ -134,7 +181,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                 {team.rank === 'C' && '育成型'}
                 {team.rank === 'D' && '新興'}
               </div>
-            </button>
+            </div>
           ))}
         </div>
 
@@ -151,7 +198,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
               onClick={handleConfirm}
               className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-3 rounded-lg transition"
             >
-              {selectedTeam.name} で開始
+              {selectedTeam.displayName} で開始
             </button>
           )}
         </div>
