@@ -288,15 +288,8 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
     if (pullDirection < -15) {
       distance *= 1.03 + Math.min(0.02, (-pullDirection - 15) / 30 * 0.02);
     } else if (pullDirection > 15) {
-      const m = batter.meet || 50;
-      const oppoPenaltyTable = [[30,10],[40,8],[50,6.5],[60,5],[70,3.5],[80,2],[90,1],[99,0]];
-      let oppoMaxPenalty = 0.10;
-      for (let i = 0; i < oppoPenaltyTable.length - 1; i++) {
-        const [m0,p0] = oppoPenaltyTable[i], [m1,p1] = oppoPenaltyTable[i+1];
-        if (m >= m0 && m <= m1) { oppoMaxPenalty = (p0 + (p1-p0) * (m-m0) / (m1-m0)) / 100; break; }
-        if (m < m0) break;
-        if (m > oppoPenaltyTable[oppoPenaltyTable.length-1][0]) { oppoMaxPenalty = 0; break; }
-      }
+      const m = Math.min(99, Math.max(30, batter.meet || 50));
+      const oppoMaxPenalty = 0.10 * (1 - (m - 30) / 69);
       distance *= 1.0 - Math.min(oppoMaxPenalty, (pullDirection - 15) / 30 * oppoMaxPenalty);
     }
   }
