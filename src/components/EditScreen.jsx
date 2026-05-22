@@ -6,6 +6,11 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
   const [editingTeam, setEditingTeam] = useState(allTeams[0] || 'チームA');
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editFormData, setEditFormData] = useState(null);
+  const [editingTeamName, setEditingTeamName] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [localTrigger, setLocalTrigger] = useState(0);
+
+  const currentTeams = Object.keys(TEAMS_DATA);
 
   const getTeamData = (teamName) => {
     if (TEAMS_DATA && TEAMS_DATA[teamName]) {
@@ -17,7 +22,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
   const team = getTeamData(editingTeam);
   const teamColorList = ['bg-blue-600', 'bg-red-600', 'bg-green-600', 'bg-yellow-600', 'bg-purple-600', 'bg-pink-600', 'bg-indigo-600', 'bg-teal-600', 'bg-orange-600', 'bg-cyan-600', 'bg-lime-600', 'bg-amber-600'];
   const teamColors = {};
-  allTeams.forEach((name, idx) => {
+  currentTeams.forEach((name, idx) => {
     teamColors[name] = teamColorList[idx % teamColorList.length];
   });
 
@@ -76,12 +81,35 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
     }
   };
 
+  const startEditTeamName = () => {
+    setNewTeamName(editingTeam);
+    setEditingTeamName(true);
+  };
+
+  const saveTeamName = () => {
+    const trimmed = newTeamName.trim();
+    if (!trimmed || trimmed === editingTeam) {
+      setEditingTeamName(false);
+      return;
+    }
+    if (TEAMS_DATA[trimmed]) {
+      alert('その名前は既に使われています');
+      return;
+    }
+    TEAMS_DATA[trimmed] = TEAMS_DATA[editingTeam];
+    TEAMS_DATA[trimmed].name = trimmed;
+    delete TEAMS_DATA[editingTeam];
+    setEditingTeam(trimmed);
+    setEditingTeamName(false);
+    setLocalTrigger(prev => prev + 1);
+  };
+
   return (
     <div className="p-8">
       <h1 className="text-3xl font-bold mb-6 text-white">エディット画面（開発用）</h1>
 
       <div className="mb-6 flex gap-4 flex-wrap">
-        {allTeams.map((teamName) => (
+        {currentTeams.map((teamName) => (
           <button
             key={teamName}
             onClick={() => setEditingTeam(teamName)}
@@ -99,7 +127,26 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
       <div className="bg-gray-800 rounded-lg p-6 mb-6">
         <h2 className="text-xl font-bold mb-4 text-white">チーム情報</h2>
         <div className="text-white">
-          <div className="mb-2">チーム名: <span className="font-bold">{team.name}</span></div>
+          {editingTeamName ? (
+            <div className="mb-2 flex items-center gap-2">
+              <span>チーム名:</span>
+              <input
+                type="text"
+                value={newTeamName}
+                onChange={(e) => setNewTeamName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveTeamName(); if (e.key === 'Escape') setEditingTeamName(false); }}
+                className="bg-gray-700 border border-gray-500 text-white px-3 py-1 rounded w-48 focus:border-blue-400 focus:outline-none"
+                autoFocus
+              />
+              <button onClick={saveTeamName} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-sm">保存</button>
+              <button onClick={() => setEditingTeamName(false)} className="text-gray-400 hover:text-white px-2 py-1 text-sm">取消</button>
+            </div>
+          ) : (
+            <div className="mb-2 flex items-center gap-2">
+              <span>チーム名: <span className="font-bold">{team.name}</span></span>
+              <button onClick={startEditTeamName} className="text-blue-400 hover:text-blue-300 text-sm ml-2">変更</button>
+            </div>
+          )}
           <div className="text-sm text-gray-400">選手数: {team.players.length}人</div>
         </div>
         <div className="mt-4 flex gap-3">
