@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, addCustomTeam, deleteTeam, restoreTeam, getDeletedTeams } from '../corporate/corporateTeamsData.js';
+import React, { useState, useEffect } from 'react';
+import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, addCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam, deleteGameSessionTeam } from '../corporate/corporateTeamsData.js';
 
 const RANK_COLORS = {
   S: 'text-yellow-400',
@@ -68,6 +68,8 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', city: '' });
 
+  useEffect(() => { clearGameSessionTeams(); }, []);
+
   const regionTeams = selectedRegion
     ? getTeamsByRegion(selectedRegion)
     : [];
@@ -110,8 +112,8 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
       alert('この地域にDランクのクラブチームがないため作成できません');
       return;
     }
-    deleteTeam(dClubs[dClubs.length - 1].id);
-    const newTeam = addCustomTeam({
+    deleteGameSessionTeam(dClubs[dClubs.length - 1].id);
+    const newTeam = addGameSessionCustomTeam({
       name: createForm.name.trim(),
       city: createForm.city.trim(),
       region: selectedRegion,

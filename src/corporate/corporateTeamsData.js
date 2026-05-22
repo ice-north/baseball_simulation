@@ -442,6 +442,63 @@ export const getDeletedTeams = () => {
   return CORPORATE_TEAMS.filter(t => deletedIds.includes(t.id));
 };
 
+// ============================================================
+// ゲームセッション用チーム追加・削除（NEW GAMEごとにリセット）
+// CorporateNameEditScreen の永続編集とは別管理
+// ============================================================
+
+const SESSION_CUSTOM_KEY = 'corpSessionCustomTeams';
+const SESSION_DELETED_KEY = 'corpSessionDeletedTeams';
+
+const loadSessionCustomTeams = () => {
+  try {
+    const raw = localStorage.getItem(SESSION_CUSTOM_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+const loadSessionDeletedIds = () => {
+  try {
+    const raw = localStorage.getItem(SESSION_DELETED_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+export const clearGameSessionTeams = () => {
+  localStorage.removeItem(SESSION_CUSTOM_KEY);
+  localStorage.removeItem(SESSION_DELETED_KEY);
+};
+
+export const addGameSessionCustomTeam = (teamData) => {
+  const customs = loadSessionCustomTeams();
+  const allBase = [...CORPORATE_TEAMS, ...loadCustomTeams(), ...customs];
+  const allIds = allBase.map(t => t.id);
+  const newId = Math.max(0, ...allIds) + 1;
+  const budgetByRank = { S: 90, A: 70, B: 50, C: 35, D: 20 };
+  const newTeam = {
+    id: newId,
+    name: teamData.name,
+    city: teamData.city,
+    region: teamData.region,
+    type: teamData.type || 'club',
+    rank: teamData.rank || 'C',
+    budget: budgetByRank[teamData.rank] || 35,
+    isCustom: true,
+    isSessionTeam: true,
+  };
+  customs.push(newTeam);
+  try { localStorage.setItem(SESSION_CUSTOM_KEY, JSON.stringify(customs)); } catch {}
+  return newTeam;
+};
+
+export const deleteGameSessionTeam = (teamId) => {
+  const deleted = loadSessionDeletedIds();
+  if (!deleted.includes(teamId)) {
+    deleted.push(teamId);
+    try { localStorage.setItem(SESSION_DELETED_KEY, JSON.stringify(deleted)); } catch {}
+  }
+};
+
 // オーバーライド適用済みのチームデータを取得
 const getEffectiveTeam = (team) => {
   const overrides = loadOverrides();
@@ -463,12 +520,13 @@ const getEffectiveTeam = (team) => {
   };
 };
 
-// 全チームを統合して返す（既存 + カスタム - 削除済み）
+// 全チームを統合して返す（既存 + 永続カスタム + セッションカスタム - 永続削除 - セッション削除）
 const getMergedTeams = () => {
-  const deletedIds = new Set(loadDeletedTeamIds());
+  const deletedIds = new Set([...loadDeletedTeamIds(), ...loadSessionDeletedIds()]);
   const base = CORPORATE_TEAMS.filter(t => !deletedIds.has(t.id));
-  const customs = loadCustomTeams();
-  return [...base, ...customs];
+  const customs = loadCustomTeams().filter(t => !deletedIds.has(t.id));
+  const sessionCustoms = loadSessionCustomTeams();
+  return [...base, ...customs, ...sessionCustoms];
 };
 
 // ============================================================

@@ -30,8 +30,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
       <div className="text-center">
-        <h1 className="text-6xl font-bold text-white mb-1">⚾ NEXT STAGE</h1>
-        <p className="text-2xl text-gray-300 mb-10">～独立リーグシミュレーター～</p>
+        <h1 className="text-6xl font-bold text-white mb-10">⚾ NEXT STAGE</h1>
 
         {showSlotSelect ? (
           <div className="flex flex-col items-center space-y-3">
