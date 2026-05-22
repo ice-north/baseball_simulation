@@ -66,11 +66,13 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   const [editNameValue, setEditNameValue] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [createForm, setCreateForm] = useState({ name: '', city: '', type: 'club', rank: 'C' });
+  const [createForm, setCreateForm] = useState({ name: '', city: '' });
 
   const regionTeams = selectedRegion
     ? getTeamsByRegion(selectedRegion)
     : [];
+  // 企業チームのみ選択可能（クラブチームは対戦相手として表示のみ）
+  const selectableTeams = regionTeams.filter(t => t.type === 'corporate' || t.isCustom);
 
   const startEditName = (e, team) => {
     e.stopPropagation();
@@ -107,12 +109,12 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
       name: createForm.name.trim(),
       city: createForm.city.trim(),
       region: selectedRegion,
-      type: createForm.type || 'club',
-      rank: createForm.rank,
+      type: 'corporate',
+      rank: 'D',
     });
     newTeam.displayName = newTeam.name;
     setShowCreateForm(false);
-    setCreateForm({ name: '', city: '', type: 'club', rank: 'C' });
+    setCreateForm({ name: '', city: '' });
     setRefreshKey(prev => prev + 1);
     setSelectedTeam(newTeam);
   };
@@ -169,21 +171,25 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
         <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
           {regionTeams.map(team => {
             const typeInfo = TYPE_LABELS[team.type] || TYPE_LABELS.club;
+            const isClub = team.type === 'club';
+            const isSelected = selectedTeam?.id === team.id;
             return (
               <div
                 key={team.id}
-                onClick={() => { if (editingNameId !== team.id) setSelectedTeam(team); }}
-                className={`w-full flex items-center justify-between p-3 rounded-lg border transition cursor-pointer ${
-                  selectedTeam?.id === team.id
-                    ? 'bg-blue-900/50 border-blue-500'
-                    : 'bg-gray-800 border-gray-700 hover:border-gray-500'
+                onClick={() => { if (!isClub && editingNameId !== team.id) setSelectedTeam(team); }}
+                className={`w-full flex items-center justify-between p-3 rounded-lg border transition ${
+                  isClub
+                    ? 'bg-gray-800/50 border-gray-800 opacity-50 cursor-default'
+                    : isSelected
+                      ? 'bg-blue-900/50 border-blue-500 cursor-pointer'
+                      : 'bg-gray-800 border-gray-700 hover:border-gray-500 cursor-pointer'
                 }`}
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <span className={`font-bold text-lg w-6 shrink-0 ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${typeInfo.color}`}>{typeInfo.label}</span>
                   <div className="text-left min-w-0">
-                    {editingNameId === team.id ? (
+                    {editingNameId === team.id && !isClub ? (
                       <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                         <input
                           type="text"
@@ -198,7 +204,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-white font-bold">{team.displayName}</span>
+                        <span className={isClub ? 'text-gray-500' : 'text-white font-bold'}>{team.displayName}</span>
                         <span className="text-gray-500 text-xs">({team.city})</span>
                         {team.displayName !== team.name && (
                           <span className="text-gray-600 text-xs">元:{team.name}</span>
@@ -208,23 +214,26 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  {editingNameId !== team.id && !team.type?.startsWith('custom') && (
+                  {!isClub && editingNameId !== team.id && !team.isCustom && (
                     <button onClick={(e) => startEditName(e, team)} className="text-gray-600 hover:text-blue-400 text-xs">名前変更</button>
                   )}
                   {team.displayName !== team.name && editingNameId !== team.id && (
                     <button onClick={(e) => handleResetName(e, team.id)} className="text-gray-600 hover:text-yellow-400 text-xs">リセット</button>
                   )}
-                  <span className="text-gray-500 text-xs w-16 text-right">{RANK_LABELS[team.rank]}</span>
+                  <span className="text-gray-500 text-xs w-16 text-right">
+                    {isClub ? '対戦相手' : RANK_LABELS[team.rank]}
+                  </span>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* チーム作成 */}
+        {/* チーム作成（企業チーム・Dランク固定） */}
         {showCreateForm ? (
           <div className="mt-4 bg-gray-800 border border-purple-600 rounded-lg p-4">
-            <h3 className="text-white font-bold mb-3">チームを作成</h3>
+            <h3 className="text-white font-bold mb-1">企業チームを立ち上げる</h3>
+            <p className="text-gray-400 text-xs mb-3">Dランクからのスタート。チームを育て上げましょう。</p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="text-gray-400 text-xs">チーム名</label>
@@ -234,6 +243,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                   onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded focus:border-purple-400 focus:outline-none"
                   placeholder="例: 札幌ベアーズ"
+                  autoFocus
                 />
               </div>
               <div>
@@ -247,42 +257,8 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="text-gray-400 text-xs">種別</label>
-                <div className="flex gap-2 mt-1">
-                  {[['corporate', '企業'], ['club', 'クラブ']].map(([val, label]) => (
-                    <button
-                      key={val}
-                      onClick={() => setCreateForm(prev => ({ ...prev, type: val }))}
-                      className={`px-3 py-1 rounded font-bold text-sm transition ${
-                        createForm.type === val
-                          ? val === 'corporate' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                      }`}
-                    >{label}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-gray-400 text-xs">強さ</label>
-                <div className="flex gap-2 mt-1">
-                  {['S', 'A', 'B', 'C', 'D'].map(r => (
-                    <button
-                      key={r}
-                      onClick={() => setCreateForm(prev => ({ ...prev, rank: r }))}
-                      className={`px-3 py-1 rounded font-bold text-sm transition ${
-                        createForm.rank === r
-                          ? `${RANK_COLORS[r].replace('text-', 'bg-').replace('-400', '-600')} text-white`
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                      }`}
-                    >{r}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
             <div className="flex gap-2">
-              <button onClick={handleCreateTeam} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2 rounded transition">作成</button>
+              <button onClick={handleCreateTeam} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2 rounded transition">作成してゲーム開始</button>
               <button onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-white px-4 py-2">取消</button>
             </div>
           </div>
@@ -291,7 +267,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
             onClick={() => setShowCreateForm(true)}
             className="mt-4 w-full border-2 border-dashed border-gray-600 hover:border-purple-500 text-gray-400 hover:text-purple-400 rounded-lg py-3 transition text-sm"
           >
-            + この地区にチームを作成
+            + 企業チームを立ち上げる（Dランクスタート）
           </button>
         )}
 

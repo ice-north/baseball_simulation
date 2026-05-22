@@ -85,6 +85,10 @@ const RANK_STAFF_CONFIG = {
 
 const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
 
+// ランク別の初期注目度（0-100）
+// 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
+const RANK_INITIAL_REPUTATION = { S: 85, A: 65, B: 40, C: 20, D: 5 };
+
 let corporatePlayerIdBase = 20000;
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -285,6 +289,10 @@ export const initializeCorporateGame = (teamDef) => {
       type: teamDef.type,
       budget: teamDef.budget || BUDGET_BY_RANK[teamDef.rank] || 35,
       staff: userStaff,
+      reputation: RANK_INITIAL_REPUTATION[teamDef.rank] || 5,
+      proDraftCount: 0,        // 累計プロ輩出数
+      tournamentWins: 0,       // 累計大会優勝数
+      yearlyBudgetBonus: 0,    // 注目度による年間追加資金
     },
   };
 
@@ -311,6 +319,10 @@ export const initializeCorporateGame = (teamDef) => {
         type: aiDef.type,
         budget: aiDef.budget || BUDGET_BY_RANK[aiDef.rank] || 35,
         staff: aiStaff,
+        reputation: RANK_INITIAL_REPUTATION[aiDef.rank] || 5,
+        proDraftCount: 0,
+        tournamentWins: 0,
+        yearlyBudgetBonus: 0,
       },
     };
 
@@ -326,4 +338,57 @@ export const initializeCorporateGame = (teamDef) => {
   }
 
   return { userTeamName, allTeamNames, roster: userRoster, staff: userStaff };
+};
+
+// ============================================================
+// 注目度システム
+// 勝つ → 注目度UP → 資金UP → 良いスタッフ → 良い選手 → 勝つ
+// ============================================================
+
+// 注目度の変動要因
+const REPUTATION_GAINS = {
+  win: 0.3,                // 1勝ごと
+  tournamentWin: 8,        // 大会優勝
+  tournamentRunnerUp: 4,   // 大会準優勝
+  proDrafted: 12,          // プロ選手輩出
+  seasonChampion: 15,      // リーグ優勝
+};
+
+const REPUTATION_DECAY = 2; // 年間自然減衰（実績なしなら忘れられる）
+
+// 注目度 → 企業の年間追加資金（万円）
+export const getReputationBudgetBonus = (reputation) => {
+  if (reputation >= 80) return 50;  // 超有名 → +5000万
+  if (reputation >= 60) return 35;
+  if (reputation >= 40) return 20;
+  if (reputation >= 20) return 10;
+  return 0;
+};
+
+// 注目度 → スカウト成功率補正（1.0基準）
+export const getReputationScoutBonus = (reputation) => {
+  return 0.6 + (reputation / 100) * 0.8; // 0→0.6倍、50→1.0倍、100→1.4倍
+};
+
+// 注目度 → 入団希望選手の質補正
+export const getReputationRecruitBonus = (reputation) => {
+  return Math.floor(reputation / 10) - 2; // 0→-2、50→3、100→8
+};
+
+// シーズン終了時の注目度更新
+export const updateReputation = (teamData, seasonResults) => {
+  const cd = teamData.corporateData;
+  if (!cd) return;
+
+  let gain = 0;
+  gain += (seasonResults.wins || 0) * REPUTATION_GAINS.win;
+  if (seasonResults.isChampion) gain += REPUTATION_GAINS.seasonChampion;
+  if (seasonResults.tournamentWin) gain += REPUTATION_GAINS.tournamentWin;
+  if (seasonResults.tournamentRunnerUp) gain += REPUTATION_GAINS.tournamentRunnerUp;
+  if (seasonResults.proDraftedCount) gain += seasonResults.proDraftedCount * REPUTATION_GAINS.proDrafted;
+
+  cd.reputation = clamp(cd.reputation + gain - REPUTATION_DECAY, 0, 100);
+  cd.yearlyBudgetBonus = getReputationBudgetBonus(cd.reputation);
+  cd.proDraftCount += seasonResults.proDraftedCount || 0;
+  cd.tournamentWins += seasonResults.tournamentWin ? 1 : 0;
 };

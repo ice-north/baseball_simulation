@@ -76,7 +76,6 @@ const GameFlowScreens = ({
         const result = initializeCorporateGame(team);
         const teamNames = result.allTeamNames;
         const teamCount = teamNames.length;
-        // チーム数に応じた試合数（各チームと5-6試合ずつ）
         const gamesPerSeason = Math.min(60, (teamCount - 1) * 6);
 
         setLeagueConfig({
@@ -107,17 +106,26 @@ const GameFlowScreens = ({
         });
         newSeasonData.schedule = schedule;
         newSeasonData.standings = initializeStandings(teamNames);
-        newSeasonData.currentDate = { year: calYear, month: 4, day: 1 };
-        newSeasonData.phase = SEASON_PHASES.REGULAR_SEASON;
         setSeasonData(newSeasonData);
 
-        // ラインナップ自動設定
-        initializeAllPitchingRotations();
+        // キャンプへ進む（独立リーグと同じ流れ）
+        setGameFlowState('corporate_camp');
+      }}
+      onBack={() => setGameFlowState('newgame_mode_select')}
+    />;
+  }
+
+  // CORPORATE: キャンプ
+  if (gameFlowState === 'corporate_camp') {
+    return <CampScreen
+      seasonData={seasonData}
+      allTeams={allTeams}
+      onComplete={() => {
         initializeAllPlayersCondition();
         Object.keys(TEAMS_DATA).forEach(teamName => {
           const teamData = TEAMS_DATA[teamName];
           if (teamData && teamData.players && teamData.players.length > 0) {
-            if (teamName === result.userTeamName) {
+            if (teamName === userTeamName) {
               setRecommendedLineup(teamData, teamName);
             } else {
               generateAILineup(teamData, teamName);
@@ -125,12 +133,17 @@ const GameFlowScreens = ({
           }
         });
 
+        const calYear = 2024 + (seasonData?.year || 1) - 1;
+        setSeasonData(prev => ({
+          ...prev,
+          currentDate: { year: calYear, month: 4, day: 1 },
+          phase: SEASON_PHASES.REGULAR_SEASON
+        }));
         setSelectedMonth(4);
         setManagementView('dateprogress');
         setScreenMode('management');
         setGameFlowState('season');
       }}
-      onBack={() => setGameFlowState('newgame_mode_select')}
     />;
   }
 
