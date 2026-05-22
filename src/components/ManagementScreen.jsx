@@ -25,6 +25,7 @@ import PlayerStatsScreen from './PlayerStatsScreen.jsx';
 import HallOfFameScreen from './HallOfFameScreen.jsx';
 import SaveLoadScreen from './SaveLoadScreen.jsx';
 import EditScreen from './EditScreen.jsx';
+import { ToshitaikouQualifierScreen, ToshitaikouMainScreen } from './ToshitaikouScreen.jsx';
 
 const ManagementScreen = ({
   managementView,
@@ -441,6 +442,16 @@ const ManagementScreen = ({
   if (managementView === 'regulations') return <RegulationsScreen
     seasonData={seasonData}
     setSeasonData={setSeasonData}
+  />;
+  if (managementView === 'toshitaikou_qualifier') return <ToshitaikouQualifierScreen
+    toshitaikou={seasonData?.toshitaikou}
+    userTeamName={userTeamName}
+    onContinue={() => setManagementView('dateprogress')}
+  />;
+  if (managementView === 'toshitaikou_main') return <ToshitaikouMainScreen
+    toshitaikou={seasonData?.toshitaikou}
+    userTeamName={userTeamName}
+    onContinue={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'edit') return <EditScreen
     generateOptimalLineup={generateOptimalLineup}

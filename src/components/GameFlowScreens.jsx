@@ -5,7 +5,6 @@ import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
 import { initializeCorporateGame } from '../corporate/corporateInit.js';
-import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 
 import StartScreen from './StartScreen.jsx';
 import ManualScreen from './ManualScreen.jsx';
@@ -76,7 +75,6 @@ const GameFlowScreens = ({
         const result = initializeCorporateGame(team);
         const teamNames = result.allTeamNames;
         const teamCount = teamNames.length;
-        const gamesPerSeason = Math.min(60, (teamCount - 1) * 6);
 
         setLeagueConfig({
           format: 'single',
@@ -89,22 +87,14 @@ const GameFlowScreens = ({
           teamsCount: teamCount,
           teamNames: teamNames,
           teamAbbreviations: teamNames.map(n => n.length <= 3 ? n : (/^[A-Za-z]/.test(n) ? n.slice(0, 3).toUpperCase() : n.slice(0, 3))),
-          gamesPerSeason,
+          gamesPerSeason: 0,
           useDH: true,
           leagueFormat: 'single',
           corporateMode: true,
           corporateTeamId: team.id,
         };
 
-        const calYear = 2024;
-        const schedule = generateFullSeasonSchedule({
-          teams: teamNames,
-          gamesPerSeason,
-          startDate: { year: calYear, month: 4, day: 1 },
-          endDate: { year: calYear, month: 10, day: 31 },
-          leagueFormat: 'single',
-        });
-        newSeasonData.schedule = schedule;
+        newSeasonData.schedule = [];
         newSeasonData.standings = initializeStandings(teamNames);
         setSeasonData(newSeasonData);
 

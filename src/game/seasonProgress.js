@@ -3,6 +3,7 @@ import { SEASON_PHASES, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from './autoSimulation.js';
+import { generateToshitaikou, createMainTournament, autoPlayMainTournament } from '../corporate/toshitaikou.js';
 
 // フェーズ遷移検出＆自動画面遷移
 export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { setSeasonData, setScreenMode, setManagementView }) => {
@@ -14,6 +15,46 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
   }
 
   const { month, day } = newSeasonData.currentDate;
+  const isCorporate = newSeasonData.settings?.corporateMode;
+
+  // 社会人モード: 都市対抗予選（6月）
+  if (isCorporate && month === 6 && day === 1 && !newSeasonData.toshitaikou?.qualifiersDone) {
+    const tournament = generateToshitaikou({ autoSimulate: true });
+    newSeasonData = {
+      ...newSeasonData,
+      toshitaikou: {
+        ...tournament,
+        qualifiersDone: true,
+        mainDone: false,
+      },
+    };
+    setSeasonData(newSeasonData);
+    setScreenMode('management');
+    setManagementView('toshitaikou_qualifier');
+    return null;
+  }
+
+  // 社会人モード: 都市対抗本戦（8月）
+  if (isCorporate && month === 8 && day === 1 && newSeasonData.toshitaikou?.qualifiersDone && !newSeasonData.toshitaikou?.mainDone) {
+    const td = newSeasonData.toshitaikou;
+    const prevChamp = newSeasonData.toshitaikou?.prevChampion || null;
+    const mainTournament = createMainTournament(td.qualifiers, prevChamp);
+    autoPlayMainTournament(mainTournament);
+    newSeasonData = {
+      ...newSeasonData,
+      toshitaikou: {
+        ...td,
+        mainTournament,
+        champion: mainTournament.champion,
+        runnerUp: mainTournament.runnerUp,
+        mainDone: true,
+      },
+    };
+    setSeasonData(newSeasonData);
+    setScreenMode('management');
+    setManagementView('toshitaikou_main');
+    return null;
+  }
 
   // 11月9日: 契約更改強制
   if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
