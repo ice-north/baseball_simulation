@@ -2484,6 +2484,7 @@ if (newOuts === 3) {
           setScreenMode={setScreenMode}
           setManagementView={setManagementView}
           setSelectedMonth={setSelectedMonth}
+          setLeagueConfig={setLeagueConfig}
         />;
         if (flowScreen) return flowScreen;
       }

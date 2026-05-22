@@ -1,9 +1,11 @@
 import React from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
-import { SEASON_PHASES } from '../season/seasonManager.js';
+import { SEASON_PHASES, createSeasonData, initializeStandings } from '../season/seasonManager.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
+import { initializeCorporateGame } from '../corporate/corporateInit.js';
+import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 
 import StartScreen from './StartScreen.jsx';
 import ManualScreen from './ManualScreen.jsx';
@@ -29,7 +31,8 @@ const GameFlowScreens = ({
   initializeNewGame,
   setScreenMode,
   setManagementView,
-  setSelectedMonth
+  setSelectedMonth,
+  setLeagueConfig
 }) => {
   // TITLE: スタート画面
   if (gameFlowState === 'title') {
@@ -68,10 +71,58 @@ const GameFlowScreens = ({
   if (gameFlowState === 'newgame_corporate_select') {
     return <CorporateTeamSelectScreen
       onSelect={(team) => {
-        // TODO: 社会人モードの初期化処理を実装
-        // 選手自動生成 → ゲーム開始
-        console.log('Selected corporate team:', team);
-        alert(`${team.name}を選択しました。\n（社会人モードの初期化は次のステップで実装します）`);
+        setGameMode('corporate');
+
+        const result = initializeCorporateGame(team);
+        const teamNames = result.allTeamNames;
+
+        setLeagueConfig({
+          format: 'single',
+          teamsPerLeague: teamNames.length,
+          leagues: [{ name: '社会人リーグ', teams: teamNames }]
+        });
+
+        const newSeasonData = createSeasonData(1);
+        newSeasonData.settings = {
+          teamsCount: teamNames.length,
+          teamNames: teamNames,
+          teamAbbreviations: teamNames.map(n => n.slice(0, 3)),
+          gamesPerSeason: 40,
+          useDH: true,
+          leagueFormat: 'single',
+          corporateMode: true,
+          corporateTeamId: team.id,
+        };
+
+        const schedule = generateFullSeasonSchedule({
+          teams: teamNames,
+          gamesPerSeason: 40,
+          startDate: { year: 2024, month: 4, day: 1 },
+          endDate: { year: 2024, month: 9, day: 30 },
+          leagueFormat: 'single',
+        });
+        newSeasonData.schedule = schedule;
+        newSeasonData.standings = initializeStandings(teamNames);
+        setSeasonData(newSeasonData);
+
+        // ラインナップ自動設定
+        initializeAllPitchingRotations();
+        initializeAllPlayersCondition();
+        Object.keys(TEAMS_DATA).forEach(teamName => {
+          const teamData = TEAMS_DATA[teamName];
+          if (teamData && teamData.players && teamData.players.length > 0) {
+            if (teamName === result.userTeamName) {
+              setRecommendedLineup(teamData, teamName);
+            } else {
+              generateAILineup(teamData, teamName);
+            }
+          }
+        });
+
+        setSelectedMonth(4);
+        setManagementView('dateprogress');
+        setScreenMode('management');
+        setGameFlowState('season');
       }}
       onBack={() => setGameFlowState('newgame_mode_select')}
     />;
