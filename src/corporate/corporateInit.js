@@ -2,6 +2,23 @@
 // 社会人野球 初期化システム
 // チーム選択後の選手生成・スタッフ生成・ゲーム開始処理
 // ============================================================
+//
+// ドラフト指名バランス設計:
+//   NPBドラフト全体 ~120名/年、うち社会人出身 ~15%(18名)
+//   全179チーム(S:11 A:24 B:32 C:38 D:74)から18名前後
+//
+//   2段階構造:
+//   ① プロ注目（スカウトが視察）= 各チームのスター枠
+//   ② ドラフト指名級（実際にNPBが獲る）= スターの中で更にエリート
+//
+//   期待値:
+//     S 11×4.5星 ×20%エリート = ~10名
+//     A 24×2.5星 ×12%         = ~7名
+//     B 32×0.5星 ×6%          = ~1名
+//     C 38チーム  確率覚醒      = ~1名
+//     D 74チーム  確率覚醒      = ~0名
+//     合計 ≒ 19名 → 15-20名の範囲
+// ============================================================
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
 import { generateStaff } from './staffData.js';
@@ -12,44 +29,49 @@ import { TEAMS_DATA, clearReleasedPlayersPool } from '../teams-data.js';
 // ============================================================
 // ランク別チーム構成
 // 独立リーグ ≒ A～Cの範囲
-// S: プロ注目4-5人 / A: プロ注目2-3人 / B: プロ注目1人程度
-// C: たまにプロ輩出 / D: ごく稀にプロが出る
 // ============================================================
 
 const RANK_CONFIG = {
   S: {
-    teamOffset: 5,       // チーム全体の底上げ（独立リーグより少し上）
-    starCount: [4, 5],   // プロ注目選手の人数
-    starBoost: [20, 28], // スター選手の能力追加幅
-    starGrowth: 0.15,    // スター選手のgrowthPotential追加
+    teamOffset: 5,         // チーム全体の底上げ
+    starCount: [4, 5],     // プロ注目選手（スカウトが視察するレベル）
+    starBoost: [12, 18],   // 注目選手の能力追加（確実に頭一つ抜ける）
+    starGrowth: 0.10,
+    eliteChance: 0.20,     // 注目選手のうち20%が真のドラフト候補
+    eliteBoost: [10, 15],  // エリートへの追加ブースト
+    eliteGrowth: 0.15,
   },
   A: {
     teamOffset: 3,
     starCount: [2, 3],
-    starBoost: [18, 25],
-    starGrowth: 0.12,
+    starBoost: [10, 16],
+    starGrowth: 0.08,
+    eliteChance: 0.12,
+    eliteBoost: [10, 15],
+    eliteGrowth: 0.13,
   },
   B: {
-    teamOffset: 0,       // 独立リーグ平均レベル
-    starCount: [0, 1],   // 0-1人（80%で1人）
-    starBoost: [15, 22],
-    starGrowth: 0.10,
+    teamOffset: 0,         // 独立リーグ平均
+    starCount: [0, 1],
+    starBoost: [8, 14],
+    starGrowth: 0.06,
+    eliteChance: 0.06,
+    eliteBoost: [10, 15],
+    eliteGrowth: 0.10,
   },
   C: {
-    teamOffset: -3,      // 独立リーグ下位レベル
-    starCount: [0, 0],   // スター枠なし
-    starBoost: [0, 0],
-    starGrowth: 0,
-    proChance: 0.06,     // 各選手6%でプロ候補レベルに覚醒（25人中1-2人程度）
-    proBoost: [10, 16],
+    teamOffset: -3,
+    starCount: [0, 0],
+    proChance: 0.04,       // 25人×4% ≈ 1人/チーム がプロ注目レベルに
+    proBoost: [8, 13],
+    proGrowth: 0.08,
   },
   D: {
     teamOffset: -6,
     starCount: [0, 0],
-    starBoost: [0, 0],
-    starGrowth: 0,
-    proChance: 0.02,     // 各選手2%（25人中0-1人、大半は0人）
-    proBoost: [8, 13],
+    proChance: 0.012,      // 25人×1.2% ≈ 0.3人/チーム（3チームに1人程度）
+    proBoost: [6, 10],
+    proGrowth: 0.06,
   },
 };
 
@@ -68,47 +90,40 @@ let corporatePlayerIdBase = 20000;
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const randInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
-// チーム全体のベース補正（独立リーグとの差）
+// チーム全体のベース補正
 const applyTeamOffset = (player, offset) => {
   if (offset === 0) return;
-
   player.batting.meet = clamp(player.batting.meet + offset, 1, 99);
   player.batting.power = clamp(player.batting.power + offset, 1, 99);
   player.batting.eye = clamp(player.batting.eye + offset, 1, 99);
   player.batting.steal = clamp(player.batting.steal + Math.floor(offset * 0.5), 1, 99);
   player.batting.bunt = clamp(player.batting.bunt + Math.floor(offset * 0.3), 1, 99);
-
   player.physical.speed = clamp(player.physical.speed + Math.floor(offset * 0.7), 1, 99);
   player.physical.arm = clamp(player.physical.arm + Math.floor(offset * 0.7), 1, 99);
-
   player.fielding.defense = clamp(player.fielding.defense + Math.floor(offset * 0.8), 1, 99);
-
   player.pitching.velocity = clamp(player.pitching.velocity + Math.floor(offset * 0.3), 100, 165);
   player.pitching.control = clamp(player.pitching.control + Math.floor(offset * 0.8), 1, 99);
   player.pitching.stamina = clamp(player.pitching.stamina + Math.floor(offset * 0.5), 30, 150);
 };
 
-// プロ注目選手への個別ブースト
-const applyStarBoost = (player, boostRange, growthBonus) => {
+// プロ注目/エリートのブースト（投手・野手で異なる）
+const applyBoost = (player, boostRange, growthBonus) => {
   const isPitcher = player.position === 'pitcher';
   const boost = randInt(boostRange[0], boostRange[1]);
 
   if (isPitcher) {
-    // 投手スター: 球速・制球・変化球が突出
-    player.pitching.velocity = clamp(player.pitching.velocity + randInt(3, 8), 100, 160);
+    player.pitching.velocity = clamp(player.pitching.velocity + randInt(2, 6), 100, 160);
     player.pitching.control = clamp(player.pitching.control + boost, 1, 99);
     player.pitching.stamina = clamp(player.pitching.stamina + Math.floor(boost * 0.6), 30, 150);
     player.physical.arm = clamp(player.physical.arm + Math.floor(boost * 0.7), 1, 99);
-    // 変化球も強化
     if (player.pitching.arsenal) {
       for (const pitch of player.pitching.arsenal) {
         if (pitch.name !== 'ストレート') {
-          pitch.level = clamp((pitch.level || 30) + randInt(10, 25), 1, 99);
+          pitch.level = clamp((pitch.level || 30) + randInt(8, 20), 1, 99);
         }
       }
     }
   } else {
-    // 野手スター: 打撃の主要能力が突出
     player.batting.meet = clamp(player.batting.meet + boost, 1, 99);
     player.batting.power = clamp(player.batting.power + Math.floor(boost * 0.85), 1, 99);
     player.batting.eye = clamp(player.batting.eye + Math.floor(boost * 0.8), 1, 99);
@@ -120,7 +135,6 @@ const applyStarBoost = (player, boostRange, growthBonus) => {
   player.growthPotential = clamp((player.growthPotential || 1.0) + growthBonus, 0.5, 1.5);
 };
 
-// 社会人なので年齢を調整（22-30歳、独立リーグより高め）
 const adjustCorporateAge = (player) => {
   if (player.age < 22) {
     player.age += 22 - player.age + Math.floor(Math.random() * 6);
@@ -133,20 +147,16 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   const cfg = RANK_CONFIG[rank] || RANK_CONFIG.C;
   const rosterSize = 25;
 
-  // 独立リーグと同じ生成システムで候補を作る（これがA～Cレベル）
   const candidates = generateTryoutCandidates(year, 2, true);
 
-  // ID衝突回避
   corporatePlayerIdBase += 1000;
   candidates.forEach((p, i) => { p.id = corporatePlayerIdBase + i; });
 
-  // チーム全体のベース補正
   candidates.forEach(p => {
     applyTeamOffset(p, cfg.teamOffset);
     adjustCorporateAge(p);
   });
 
-  // AIドラフトでバランスの良い25名を選出
   const roster = [];
   const remaining = [...candidates];
   for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
@@ -157,32 +167,42 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     roster.push(pick);
   }
 
-  // スター選手を選出してブースト
+  // S/A/Bランク: スター選手を選出してブースト
   const starCount = randInt(cfg.starCount[0], cfg.starCount[1]);
   if (starCount > 0) {
-    // 投手と野手バランスよくスターを配置
     const pitchers = roster.filter(p => p.position === 'pitcher');
     const fielders = roster.filter(p => p.position !== 'pitcher');
     const starPitcherCount = Math.min(pitchers.length, Math.max(1, Math.floor(starCount * 0.4)));
     const starFielderCount = starCount - starPitcherCount;
 
-    // 能力の高い順にスター候補をソート
     pitchers.sort((a, b) => (b.pitching.velocity + b.pitching.control) - (a.pitching.velocity + a.pitching.control));
     fielders.sort((a, b) => (b.batting.meet + b.batting.power) - (a.batting.meet + a.batting.power));
 
+    const stars = [];
     for (let i = 0; i < starPitcherCount && i < pitchers.length; i++) {
-      applyStarBoost(pitchers[i], cfg.starBoost, cfg.starGrowth);
+      applyBoost(pitchers[i], cfg.starBoost, cfg.starGrowth);
+      stars.push(pitchers[i]);
     }
     for (let i = 0; i < starFielderCount && i < fielders.length; i++) {
-      applyStarBoost(fielders[i], cfg.starBoost, cfg.starGrowth);
+      applyBoost(fielders[i], cfg.starBoost, cfg.starGrowth);
+      stars.push(fielders[i]);
+    }
+
+    // スターの中からエリート（真のドラフト候補）を抽選
+    if (cfg.eliteChance) {
+      for (const star of stars) {
+        if (Math.random() < cfg.eliteChance) {
+          applyBoost(star, cfg.eliteBoost, cfg.eliteGrowth);
+        }
+      }
     }
   }
 
-  // C/Dランク: 確率でプロ候補レベルが出現
+  // C/Dランク: 低確率でプロ注目レベルが出現
   if (cfg.proChance && cfg.proBoost) {
     for (const p of roster) {
       if (Math.random() < cfg.proChance) {
-        applyStarBoost(p, cfg.proBoost, 0.08);
+        applyBoost(p, cfg.proBoost, cfg.proGrowth || 0.06);
       }
     }
   }
