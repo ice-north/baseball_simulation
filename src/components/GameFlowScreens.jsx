@@ -75,34 +75,40 @@ const GameFlowScreens = ({
 
         const result = initializeCorporateGame(team);
         const teamNames = result.allTeamNames;
+        const teamCount = teamNames.length;
+        // チーム数に応じた試合数（各チームと5-6試合ずつ）
+        const gamesPerSeason = Math.min(60, (teamCount - 1) * 6);
 
         setLeagueConfig({
           format: 'single',
-          teamsPerLeague: teamNames.length,
+          teamsPerLeague: teamCount,
           leagues: [{ name: '社会人リーグ', teams: teamNames }]
         });
 
         const newSeasonData = createSeasonData(1);
         newSeasonData.settings = {
-          teamsCount: teamNames.length,
+          teamsCount: teamCount,
           teamNames: teamNames,
-          teamAbbreviations: teamNames.map(n => n.slice(0, 3)),
-          gamesPerSeason: 40,
+          teamAbbreviations: teamNames.map(n => n.length <= 3 ? n : (/^[A-Za-z]/.test(n) ? n.slice(0, 3).toUpperCase() : n.slice(0, 3))),
+          gamesPerSeason,
           useDH: true,
           leagueFormat: 'single',
           corporateMode: true,
           corporateTeamId: team.id,
         };
 
+        const calYear = 2024;
         const schedule = generateFullSeasonSchedule({
           teams: teamNames,
-          gamesPerSeason: 40,
-          startDate: { year: 2024, month: 4, day: 1 },
-          endDate: { year: 2024, month: 9, day: 30 },
+          gamesPerSeason,
+          startDate: { year: calYear, month: 4, day: 1 },
+          endDate: { year: calYear, month: 10, day: 31 },
           leagueFormat: 'single',
         });
         newSeasonData.schedule = schedule;
         newSeasonData.standings = initializeStandings(teamNames);
+        newSeasonData.currentDate = { year: calYear, month: 4, day: 1 };
+        newSeasonData.phase = SEASON_PHASES.REGULAR_SEASON;
         setSeasonData(newSeasonData);
 
         // ラインナップ自動設定

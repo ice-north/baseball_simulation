@@ -5,29 +5,18 @@
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
 import { generateStaff } from './staffData.js';
-import { RANK_ABILITY_RANGE } from './corporateTeamsData.js';
+import { getTeamsByRegion, getAllTeamsEffective, REGIONS } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA, clearReleasedPlayersPool } from '../teams-data.js';
 
-// ランク別の選手能力調整値（generateTryoutCandidatesで生成後に適用）
 const RANK_ABILITY_OFFSET = {
-  S: 18,
-  A: 10,
-  B: 3,
-  C: -3,
-  D: -8,
+  S: 18, A: 10, B: 3, C: -3, D: -8,
 };
 
-// ランク別のgrowthPotential調整
 const RANK_GROWTH_OFFSET = {
-  S: 0.12,
-  A: 0.06,
-  B: 0.0,
-  C: -0.03,
-  D: -0.06,
+  S: 0.12, A: 0.06, B: 0.0, C: -0.03, D: -0.06,
 };
 
-// ランク別の初期スタッフ構成
 const RANK_STAFF_CONFIG = {
   S: { coach: 3, manager: 1, trainer: 1 },
   A: { coach: 2, manager: 1, trainer: 1 },
@@ -35,6 +24,10 @@ const RANK_STAFF_CONFIG = {
   C: { coach: 1, manager: 1, trainer: 0 },
   D: { coach: 1, manager: 0, trainer: 0 },
 };
+
+const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
+
+let corporatePlayerIdBase = 20000;
 
 const applyRankOffset = (player, rank) => {
   const offset = RANK_ABILITY_OFFSET[rank] || 0;
@@ -58,10 +51,8 @@ const applyRankOffset = (player, rank) => {
 
   player.growthPotential = clamp(player.growthPotential + growthOffset, 0.5, 1.5);
 
-  // 社会人なので平均年齢を上げる（22-30歳くらい）
   if (player.age < 22) {
-    const ageUp = 22 - player.age + Math.floor(Math.random() * 6);
-    player.age += ageUp;
+    player.age += 22 - player.age + Math.floor(Math.random() * 6);
   }
 };
 
@@ -70,16 +61,16 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   const rank = teamDef.rank || 'C';
   const rosterSize = 25;
 
-  // まずトライアウトシステムで候補選手を生成
   const candidates = generateTryoutCandidates(year, 2, true);
 
-  // ランクに応じて能力値を調整
+  // ID衝突回避: チームごとにユニークなオフセットを付与
+  corporatePlayerIdBase += 1000;
+  candidates.forEach((p, i) => { p.id = corporatePlayerIdBase + i; });
+
   candidates.forEach(p => applyRankOffset(p, rank));
 
-  // AIドラフト方式でバランスの良い25名を選出
   const roster = [];
   const remaining = [...candidates];
-
   for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
     const pick = selectPlayerForAI(remaining, roster);
     if (!pick) break;
@@ -88,48 +79,88 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     roster.push(pick);
   }
 
-  // スカウトコメントを再生成（ランク補正後の能力で）
-  roster.forEach(p => {
-    p.scoutComment = generateScoutComment(p);
-  });
-
+  roster.forEach(p => { p.scoutComment = generateScoutComment(p); });
   return roster;
 };
 
-// 初期スタッフを生成
 export const generateInitialStaff = (rank) => {
   const config = RANK_STAFF_CONFIG[rank] || RANK_STAFF_CONFIG.C;
   const staff = [];
-
   for (const [role, count] of Object.entries(config)) {
     for (let i = 0; i < count; i++) {
       const grade = rank === 'S' || rank === 'A' ? null : (rank === 'D' ? 'D' : null);
       staff.push(generateStaff(role, grade));
     }
   }
-
   return staff;
+};
+
+// 同地区＋近隣地区からリーグ参加チームを選出
+const selectLeagueTeams = (userTeamDef, targetCount) => {
+  const userRegion = userTeamDef.region;
+  const userId = userTeamDef.id;
+
+  // 同地区チーム（自分以外）
+  let pool = getTeamsByRegion(userRegion).filter(t => t.id !== userId);
+
+  // 足りなければ隣接地区から補充
+  if (pool.length < targetCount) {
+    const regionIds = REGIONS.map(r => r.id);
+    const idx = regionIds.indexOf(userRegion);
+    const neighbors = [
+      regionIds[idx - 1], regionIds[idx + 1],
+      regionIds[idx - 2], regionIds[idx + 2],
+    ].filter(Boolean);
+
+    for (const nRegion of neighbors) {
+      if (pool.length >= targetCount) break;
+      const extras = getTeamsByRegion(nRegion);
+      pool = pool.concat(extras);
+    }
+  }
+
+  // 強さ順でソートして、S/A/B/C/Dをバランスよく選ぶ
+  pool.sort((a, b) => {
+    const order = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+    return (order[a.rank] || 3) - (order[b.rank] || 3);
+  });
+
+  // ユーザーランクに近いチームを優先的に選出
+  const userRankOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 }[userTeamDef.rank] ?? 2;
+  pool.sort((a, b) => {
+    const aOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 }[a.rank] ?? 3;
+    const bOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 }[b.rank] ?? 3;
+    return Math.abs(aOrder - userRankOrder) - Math.abs(bOrder - userRankOrder);
+  });
+
+  return pool.slice(0, targetCount);
+};
+
+// チーム名の略称を生成
+const makeAbbreviation = (name) => {
+  if (name.length <= 3) return name;
+  // 英字チーム名は先頭3文字大文字
+  if (/^[A-Za-z]/.test(name)) return name.slice(0, 3).toUpperCase();
+  return name.slice(0, 3);
 };
 
 // 社会人モードの完全初期化
 export const initializeCorporateGame = (teamDef) => {
-  // ワールドデータ初期化
-  initializeWorld('corporate');
+  corporatePlayerIdBase = 20000;
 
-  // TEAMS_DATAをクリア
+  initializeWorld('corporate');
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
   clearReleasedPlayersPool();
 
-  // ユーザーチームの選手を生成
-  const roster = generateCorporateRoster(teamDef, 1);
-  const staff = generateInitialStaff(teamDef.rank);
+  // ユーザーチーム
+  const userTeamName = teamDef.displayName || teamDef.name;
+  const userRoster = generateCorporateRoster(teamDef, 1);
+  const userStaff = generateInitialStaff(teamDef.rank);
 
-  // TEAMS_DATAにユーザーチームを登録
-  const teamName = teamDef.displayName || teamDef.name;
-  TEAMS_DATA[teamName] = {
-    name: teamName,
-    abbreviation: teamName.slice(0, 3),
-    players: roster,
+  TEAMS_DATA[userTeamName] = {
+    name: userTeamName,
+    abbreviation: makeAbbreviation(userTeamName),
+    players: userRoster,
     pitchingRotation: null,
     corporateTeamId: teamDef.id,
     corporateData: {
@@ -137,51 +168,54 @@ export const initializeCorporateGame = (teamDef) => {
       region: teamDef.region,
       city: teamDef.city,
       type: teamDef.type,
-      budget: teamDef.budget || 50,
-      staff: staff,
+      budget: teamDef.budget || BUDGET_BY_RANK[teamDef.rank] || 35,
+      staff: userStaff,
     },
   };
 
-  // 対戦相手用のAIチームを3チーム生成（同地区の他チーム or ランダム）
-  const aiTeamNames = generateAIOpponentTeams(teamDef, 3);
+  // 同地区の実在チームから対戦相手を選出
+  const aiTeamDefs = selectLeagueTeams(teamDef, 7);
+  const aiTeamNames = [];
 
-  // WORLD_DATAにチーム情報を保存
-  WORLD_DATA.corporateLeague.userTeam = teamName;
-  WORLD_DATA.corporateLeague.teams = { [teamName]: TEAMS_DATA[teamName] };
+  for (const aiDef of aiTeamDefs) {
+    const aiName = aiDef.displayName || aiDef.name;
+    // 同名チーム回避
+    if (TEAMS_DATA[aiName]) continue;
 
-  return {
-    userTeamName: teamName,
-    allTeamNames: [teamName, ...aiTeamNames],
-    roster,
-    staff,
-  };
-};
-
-// AI対戦相手チームを生成
-const generateAIOpponentTeams = (userTeamDef, count) => {
-  const names = [];
-  const ranks = ['B', 'C', 'A', 'D', 'B', 'C'];
-
-  for (let i = 0; i < count; i++) {
-    const aiRank = ranks[i % ranks.length];
-    const aiName = `対戦チーム${String.fromCharCode(65 + i)}`;
-    const aiRoster = generateCorporateRoster({ rank: aiRank }, 1);
+    const aiRoster = generateCorporateRoster(aiDef, 1);
+    const aiStaff = generateInitialStaff(aiDef.rank);
 
     TEAMS_DATA[aiName] = {
       name: aiName,
-      abbreviation: String.fromCharCode(0xFF21 + i),
+      abbreviation: makeAbbreviation(aiName),
       players: aiRoster,
       pitchingRotation: null,
+      corporateTeamId: aiDef.id,
       corporateData: {
-        rank: aiRank,
-        region: userTeamDef.region,
-        budget: { S: 90, A: 70, B: 50, C: 35, D: 20 }[aiRank] || 35,
-        staff: generateInitialStaff(aiRank),
+        rank: aiDef.rank,
+        region: aiDef.region,
+        city: aiDef.city,
+        type: aiDef.type,
+        budget: aiDef.budget || BUDGET_BY_RANK[aiDef.rank] || 35,
+        staff: aiStaff,
       },
     };
 
-    names.push(aiName);
+    aiTeamNames.push(aiName);
   }
 
-  return names;
+  const allTeamNames = [userTeamName, ...aiTeamNames];
+
+  WORLD_DATA.corporateLeague.userTeam = userTeamName;
+  WORLD_DATA.corporateLeague.teams = {};
+  for (const name of allTeamNames) {
+    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
+  }
+
+  return {
+    userTeamName,
+    allTeamNames,
+    roster: userRoster,
+    staff: userStaff,
+  };
 };
