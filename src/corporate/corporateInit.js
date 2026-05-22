@@ -5,16 +5,52 @@
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
 import { generateStaff } from './staffData.js';
-import { getTeamsByRegion, getAllTeamsEffective, REGIONS } from './corporateTeamsData.js';
+import { getTeamsByRegion, REGIONS } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA, clearReleasedPlayersPool } from '../teams-data.js';
 
-const RANK_ABILITY_OFFSET = {
-  S: 18, A: 10, B: 3, C: -3, D: -8,
-};
+// ============================================================
+// ランク別チーム構成
+// 独立リーグ ≒ A～Cの範囲
+// S: プロ注目4-5人 / A: プロ注目2-3人 / B: プロ注目1人程度
+// C: たまにプロ輩出 / D: ごく稀にプロが出る
+// ============================================================
 
-const RANK_GROWTH_OFFSET = {
-  S: 0.12, A: 0.06, B: 0.0, C: -0.03, D: -0.06,
+const RANK_CONFIG = {
+  S: {
+    teamOffset: 5,       // チーム全体の底上げ（独立リーグより少し上）
+    starCount: [4, 5],   // プロ注目選手の人数
+    starBoost: [20, 28], // スター選手の能力追加幅
+    starGrowth: 0.15,    // スター選手のgrowthPotential追加
+  },
+  A: {
+    teamOffset: 3,
+    starCount: [2, 3],
+    starBoost: [18, 25],
+    starGrowth: 0.12,
+  },
+  B: {
+    teamOffset: 0,       // 独立リーグ平均レベル
+    starCount: [0, 1],   // 0-1人（80%で1人）
+    starBoost: [15, 22],
+    starGrowth: 0.10,
+  },
+  C: {
+    teamOffset: -3,      // 独立リーグ下位レベル
+    starCount: [0, 0],   // スター枠なし
+    starBoost: [0, 0],
+    starGrowth: 0,
+    proChance: 0.06,     // 各選手6%でプロ候補レベルに覚醒（25人中1-2人程度）
+    proBoost: [10, 16],
+  },
+  D: {
+    teamOffset: -6,
+    starCount: [0, 0],
+    starBoost: [0, 0],
+    starGrowth: 0,
+    proChance: 0.02,     // 各選手2%（25人中0-1人、大半は0人）
+    proBoost: [8, 13],
+  },
 };
 
 const RANK_STAFF_CONFIG = {
@@ -29,10 +65,12 @@ const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
 
 let corporatePlayerIdBase = 20000;
 
-const applyRankOffset = (player, rank) => {
-  const offset = RANK_ABILITY_OFFSET[rank] || 0;
-  const growthOffset = RANK_GROWTH_OFFSET[rank] || 0;
-  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const randInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+
+// チーム全体のベース補正（独立リーグとの差）
+const applyTeamOffset = (player, offset) => {
+  if (offset === 0) return;
 
   player.batting.meet = clamp(player.batting.meet + offset, 1, 99);
   player.batting.power = clamp(player.batting.power + offset, 1, 99);
@@ -45,12 +83,45 @@ const applyRankOffset = (player, rank) => {
 
   player.fielding.defense = clamp(player.fielding.defense + Math.floor(offset * 0.8), 1, 99);
 
-  player.pitching.velocity = clamp(player.pitching.velocity + Math.floor(offset * 0.4), 100, 165);
+  player.pitching.velocity = clamp(player.pitching.velocity + Math.floor(offset * 0.3), 100, 165);
   player.pitching.control = clamp(player.pitching.control + Math.floor(offset * 0.8), 1, 99);
   player.pitching.stamina = clamp(player.pitching.stamina + Math.floor(offset * 0.5), 30, 150);
+};
 
-  player.growthPotential = clamp(player.growthPotential + growthOffset, 0.5, 1.5);
+// プロ注目選手への個別ブースト
+const applyStarBoost = (player, boostRange, growthBonus) => {
+  const isPitcher = player.position === 'pitcher';
+  const boost = randInt(boostRange[0], boostRange[1]);
 
+  if (isPitcher) {
+    // 投手スター: 球速・制球・変化球が突出
+    player.pitching.velocity = clamp(player.pitching.velocity + randInt(3, 8), 100, 160);
+    player.pitching.control = clamp(player.pitching.control + boost, 1, 99);
+    player.pitching.stamina = clamp(player.pitching.stamina + Math.floor(boost * 0.6), 30, 150);
+    player.physical.arm = clamp(player.physical.arm + Math.floor(boost * 0.7), 1, 99);
+    // 変化球も強化
+    if (player.pitching.arsenal) {
+      for (const pitch of player.pitching.arsenal) {
+        if (pitch.name !== 'ストレート') {
+          pitch.level = clamp((pitch.level || 30) + randInt(10, 25), 1, 99);
+        }
+      }
+    }
+  } else {
+    // 野手スター: 打撃の主要能力が突出
+    player.batting.meet = clamp(player.batting.meet + boost, 1, 99);
+    player.batting.power = clamp(player.batting.power + Math.floor(boost * 0.85), 1, 99);
+    player.batting.eye = clamp(player.batting.eye + Math.floor(boost * 0.8), 1, 99);
+    player.physical.speed = clamp(player.physical.speed + Math.floor(boost * 0.5), 1, 99);
+    player.fielding.defense = clamp(player.fielding.defense + Math.floor(boost * 0.6), 1, 99);
+    player.physical.arm = clamp(player.physical.arm + Math.floor(boost * 0.5), 1, 99);
+  }
+
+  player.growthPotential = clamp((player.growthPotential || 1.0) + growthBonus, 0.5, 1.5);
+};
+
+// 社会人なので年齢を調整（22-30歳、独立リーグより高め）
+const adjustCorporateAge = (player) => {
   if (player.age < 22) {
     player.age += 22 - player.age + Math.floor(Math.random() * 6);
   }
@@ -59,16 +130,23 @@ const applyRankOffset = (player, rank) => {
 // 社会人チームの選手25名を生成
 export const generateCorporateRoster = (teamDef, year = 1) => {
   const rank = teamDef.rank || 'C';
+  const cfg = RANK_CONFIG[rank] || RANK_CONFIG.C;
   const rosterSize = 25;
 
+  // 独立リーグと同じ生成システムで候補を作る（これがA～Cレベル）
   const candidates = generateTryoutCandidates(year, 2, true);
 
-  // ID衝突回避: チームごとにユニークなオフセットを付与
+  // ID衝突回避
   corporatePlayerIdBase += 1000;
   candidates.forEach((p, i) => { p.id = corporatePlayerIdBase + i; });
 
-  candidates.forEach(p => applyRankOffset(p, rank));
+  // チーム全体のベース補正
+  candidates.forEach(p => {
+    applyTeamOffset(p, cfg.teamOffset);
+    adjustCorporateAge(p);
+  });
 
+  // AIドラフトでバランスの良い25名を選出
   const roster = [];
   const remaining = [...candidates];
   for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
@@ -77,6 +155,36 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     const idx = remaining.findIndex(c => c.id === pick.id);
     if (idx >= 0) remaining.splice(idx, 1);
     roster.push(pick);
+  }
+
+  // スター選手を選出してブースト
+  const starCount = randInt(cfg.starCount[0], cfg.starCount[1]);
+  if (starCount > 0) {
+    // 投手と野手バランスよくスターを配置
+    const pitchers = roster.filter(p => p.position === 'pitcher');
+    const fielders = roster.filter(p => p.position !== 'pitcher');
+    const starPitcherCount = Math.min(pitchers.length, Math.max(1, Math.floor(starCount * 0.4)));
+    const starFielderCount = starCount - starPitcherCount;
+
+    // 能力の高い順にスター候補をソート
+    pitchers.sort((a, b) => (b.pitching.velocity + b.pitching.control) - (a.pitching.velocity + a.pitching.control));
+    fielders.sort((a, b) => (b.batting.meet + b.batting.power) - (a.batting.meet + a.batting.power));
+
+    for (let i = 0; i < starPitcherCount && i < pitchers.length; i++) {
+      applyStarBoost(pitchers[i], cfg.starBoost, cfg.starGrowth);
+    }
+    for (let i = 0; i < starFielderCount && i < fielders.length; i++) {
+      applyStarBoost(fielders[i], cfg.starBoost, cfg.starGrowth);
+    }
+  }
+
+  // C/Dランク: 確率でプロ候補レベルが出現
+  if (cfg.proChance && cfg.proBoost) {
+    for (const p of roster) {
+      if (Math.random() < cfg.proChance) {
+        applyStarBoost(p, cfg.proBoost, 0.08);
+      }
+    }
   }
 
   roster.forEach(p => { p.scoutComment = generateScoutComment(p); });
@@ -100,10 +208,8 @@ const selectLeagueTeams = (userTeamDef, targetCount) => {
   const userRegion = userTeamDef.region;
   const userId = userTeamDef.id;
 
-  // 同地区チーム（自分以外）
   let pool = getTeamsByRegion(userRegion).filter(t => t.id !== userId);
 
-  // 足りなければ隣接地区から補充
   if (pool.length < targetCount) {
     const regionIds = REGIONS.map(r => r.id);
     const idx = regionIds.indexOf(userRegion);
@@ -114,18 +220,10 @@ const selectLeagueTeams = (userTeamDef, targetCount) => {
 
     for (const nRegion of neighbors) {
       if (pool.length >= targetCount) break;
-      const extras = getTeamsByRegion(nRegion);
-      pool = pool.concat(extras);
+      pool = pool.concat(getTeamsByRegion(nRegion));
     }
   }
 
-  // 強さ順でソートして、S/A/B/C/Dをバランスよく選ぶ
-  pool.sort((a, b) => {
-    const order = { S: 0, A: 1, B: 2, C: 3, D: 4 };
-    return (order[a.rank] || 3) - (order[b.rank] || 3);
-  });
-
-  // ユーザーランクに近いチームを優先的に選出
   const userRankOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 }[userTeamDef.rank] ?? 2;
   pool.sort((a, b) => {
     const aOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 }[a.rank] ?? 3;
@@ -136,10 +234,8 @@ const selectLeagueTeams = (userTeamDef, targetCount) => {
   return pool.slice(0, targetCount);
 };
 
-// チーム名の略称を生成
 const makeAbbreviation = (name) => {
   if (name.length <= 3) return name;
-  // 英字チーム名は先頭3文字大文字
   if (/^[A-Za-z]/.test(name)) return name.slice(0, 3).toUpperCase();
   return name.slice(0, 3);
 };
@@ -152,7 +248,6 @@ export const initializeCorporateGame = (teamDef) => {
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
   clearReleasedPlayersPool();
 
-  // ユーザーチーム
   const userTeamName = teamDef.displayName || teamDef.name;
   const userRoster = generateCorporateRoster(teamDef, 1);
   const userStaff = generateInitialStaff(teamDef.rank);
@@ -173,13 +268,11 @@ export const initializeCorporateGame = (teamDef) => {
     },
   };
 
-  // 同地区の実在チームから対戦相手を選出
   const aiTeamDefs = selectLeagueTeams(teamDef, 7);
   const aiTeamNames = [];
 
   for (const aiDef of aiTeamDefs) {
     const aiName = aiDef.displayName || aiDef.name;
-    // 同名チーム回避
     if (TEAMS_DATA[aiName]) continue;
 
     const aiRoster = generateCorporateRoster(aiDef, 1);
@@ -212,10 +305,5 @@ export const initializeCorporateGame = (teamDef) => {
     WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
   }
 
-  return {
-    userTeamName,
-    allTeamNames,
-    roster: userRoster,
-    staff: userStaff,
-  };
+  return { userTeamName, allTeamNames, roster: userRoster, staff: userStaff };
 };
