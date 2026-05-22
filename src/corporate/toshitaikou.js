@@ -49,12 +49,23 @@ const nextPowerOf2 = (n) => {
   return p;
 };
 
-// 標準シード配置: #1 vs #N, #N/2 vs #N/2+1, ...
+// 標準シード配置: #1が最上段、#2が最下段、#3・#4が中央
 // 全てのフェイバリットが勝てば#1 vs #2が決勝になる配置
 function generateSeedOrder(n) {
-  if (n === 1) return [0];
-  const half = generateSeedOrder(n / 2);
-  return half.flatMap(s => [s, n - 1 - s]);
+  if (n === 2) return [0, 1];
+  const half = n / 2;
+  const subOrder = generateSeedOrder(half);
+  const result = [];
+  for (let i = 0; i < half; i++) {
+    const seed = subOrder[i];
+    const complement = n - 1 - seed;
+    if (i < half - 1) {
+      result.push(seed, complement);
+    } else {
+      result.push(complement, seed);
+    }
+  }
+  return result;
 }
 
 // ============================================================
