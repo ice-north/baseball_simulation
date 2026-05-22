@@ -260,7 +260,10 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
     : 1;
   const velDiff = pitchVelocity - 142;
   const velShift = (velDiff >= 0 ? velDiff * 0.67 : velDiff * 0.50) * batSide;
-  let direction = Math.random() * 90 - 45 + 2 * batSide + velShift;
+  // 打者傾向: power>meetなら引っ張り、meet>powerなら広角（逆方向に打てる）
+  // RHBの引っ張り=負方向なのでpower優位で負にシフト
+  const pullTendency = ((batter.power || 50) - (batter.meet || 50)) * -0.08 * batSide;
+  let direction = Math.random() * 90 - 45 + pullTendency + velShift;
   direction = Math.max(-45, Math.min(45, direction));
 
   // 飛距離（メートル）- MLB実測値ベース（空気抵抗込み）
