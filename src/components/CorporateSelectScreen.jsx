@@ -67,6 +67,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', city: '' });
+  const [replaceTeamId, setReplaceTeamId] = useState(null);
 
   const regionTeams = selectedRegion
     ? getTeamsByRegion(selectedRegion)
@@ -105,6 +106,11 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
       alert('チーム名と都市名を入力してください');
       return;
     }
+    if (!replaceTeamId) {
+      alert('入れ替えるチームを選んでください');
+      return;
+    }
+    deleteTeam(replaceTeamId);
     const newTeam = addCustomTeam({
       name: createForm.name.trim(),
       city: createForm.city.trim(),
@@ -115,6 +121,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
     newTeam.displayName = newTeam.name;
     setShowCreateForm(false);
     setCreateForm({ name: '', city: '' });
+    setReplaceTeamId(null);
     setRefreshKey(prev => prev + 1);
     setSelectedTeam(newTeam);
   };
@@ -229,11 +236,11 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
           })}
         </div>
 
-        {/* チーム作成（企業チーム・Dランク固定） */}
+        {/* チーム作成（企業チーム・Dランク固定・1チーム入れ替え） */}
         {showCreateForm ? (
           <div className="mt-4 bg-gray-800 border border-purple-600 rounded-lg p-4">
             <h3 className="text-white font-bold mb-1">企業チームを立ち上げる</h3>
-            <p className="text-gray-400 text-xs mb-3">Dランクからのスタート。チームを育て上げましょう。</p>
+            <p className="text-gray-400 text-xs mb-3">Dランクからのスタート。既存チーム1つと入れ替えてリーグに参加します。</p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="text-gray-400 text-xs">チーム名</label>
@@ -257,9 +264,50 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                 />
               </div>
             </div>
+
+            <div className="mb-3">
+              <label className="text-gray-400 text-xs">入れ替えるチームを選択（弱い順）</label>
+              <div className="mt-1 max-h-40 overflow-y-auto space-y-1 border border-gray-700 rounded p-2 bg-gray-900/50">
+                {[...regionTeams]
+                  .filter(t => t.type !== 'club' || true)
+                  .sort((a, b) => {
+                    const ro = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+                    return (ro[b.rank] ?? 3) - (ro[a.rank] ?? 3);
+                  })
+                  .map(t => {
+                    const typeInfo = TYPE_LABELS[t.type] || TYPE_LABELS.club;
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => setReplaceTeamId(t.id)}
+                        className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-sm transition ${
+                          replaceTeamId === t.id
+                            ? 'bg-red-900/50 border border-red-500'
+                            : 'hover:bg-gray-700/50 border border-transparent'
+                        }`}
+                      >
+                        <span className={`font-bold w-4 ${RANK_COLORS[t.rank]}`}>{t.rank}</span>
+                        <span className={`text-xs px-1 rounded ${typeInfo.color}`}>{typeInfo.label}</span>
+                        <span className={replaceTeamId === t.id ? 'text-red-300' : 'text-gray-300'}>{t.displayName || t.name}</span>
+                        <span className="text-gray-600 text-xs">({t.city})</span>
+                        {replaceTeamId === t.id && <span className="text-red-400 text-xs ml-auto">← 入れ替え</span>}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
             <div className="flex gap-2">
-              <button onClick={handleCreateTeam} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2 rounded transition">作成してゲーム開始</button>
-              <button onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-white px-4 py-2">取消</button>
+              <button
+                onClick={handleCreateTeam}
+                disabled={!replaceTeamId}
+                className={`font-bold px-4 py-2 rounded transition ${
+                  replaceTeamId
+                    ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                }`}
+              >作成してゲーム開始</button>
+              <button onClick={() => { setShowCreateForm(false); setReplaceTeamId(null); }} className="text-gray-400 hover:text-white px-4 py-2">取消</button>
             </div>
           </div>
         ) : (
