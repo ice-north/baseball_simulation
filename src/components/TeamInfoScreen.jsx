@@ -13,6 +13,11 @@ const TeamInfoScreen = () => {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [detailTab, setDetailTab] = useState('ability');
 
+  const team = TEAMS_DATA[selectedTeam];
+  if (!team || !team.players) {
+    return <div className="text-gray-400 text-center p-8">チームデータがありません</div>;
+  }
+
   const handlePitcherSort = (key) => {
     if (pitcherSortKey === key) setPitcherSortDir(pitcherSortDir === 'asc' ? 'desc' : 'asc');
     else { setPitcherSortKey(key); setPitcherSortDir(['era', 'losses'].includes(key) ? 'asc' : 'desc'); }
