@@ -207,4 +207,105 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   );
 };
 
-export { ModeSelectScreen, CorporateTeamSelectScreen };
+const CorporateNameEditScreen = ({ onBack }) => {
+  const [selectedRegion, setSelectedRegion] = useState(null);
+  const [editingNameId, setEditingNameId] = useState(null);
+  const [editNameValue, setEditNameValue] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const regionTeams = selectedRegion ? getTeamsByRegion(selectedRegion) : [];
+
+  const startEdit = (team) => {
+    setEditingNameId(team.id);
+    setEditNameValue(team.displayName);
+  };
+
+  const saveEdit = (teamId) => {
+    if (editNameValue.trim()) {
+      setTeamDisplayName(teamId, editNameValue.trim());
+    }
+    setEditingNameId(null);
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const resetName = (teamId) => {
+    resetTeamDisplayName(teamId);
+    setRefreshKey(prev => prev + 1);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-2 text-center">社会人チーム名設定</h1>
+        <p className="text-gray-400 mb-6 text-center">チーム名を自由に変更できます（全セーブ共通）</p>
+
+        {!selectedRegion ? (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              {REGIONS.map(region => {
+                const teams = getTeamsByRegion(region.id);
+                const customCount = teams.filter(t => t.displayName !== t.name).length;
+                return (
+                  <button
+                    key={region.id}
+                    onClick={() => setSelectedRegion(region.id)}
+                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-indigo-500 rounded-lg p-4 text-left transition"
+                  >
+                    <div className="text-white font-bold">{region.name}</div>
+                    <div className="text-gray-400 text-sm">{region.teamCount}チーム</div>
+                    {customCount > 0 && <div className="text-indigo-400 text-xs mt-1">{customCount}件変更済</div>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-center mt-6">
+              <button onClick={onBack} className="text-gray-400 hover:text-white px-4 py-2">タイトルに戻る</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {regionTeams.map(team => (
+                <div key={team.id} className="flex items-center gap-3 bg-gray-800 border border-gray-700 rounded-lg p-3">
+                  <span className={`font-bold text-lg w-6 ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
+                  {editingNameId === team.id ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="text"
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(team.id); if (e.key === 'Escape') setEditingNameId(null); }}
+                        className="bg-gray-700 border border-gray-500 text-white px-3 py-1 rounded flex-1 focus:border-indigo-400 focus:outline-none"
+                        autoFocus
+                      />
+                      <button onClick={() => saveEdit(team.id)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-sm">保存</button>
+                      <button onClick={() => setEditingNameId(null)} className="text-gray-400 hover:text-white text-sm">取消</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="text-white font-bold">{team.displayName}</span>
+                      {team.displayName !== team.name && (
+                        <span className="text-gray-500 text-xs">( 元: {team.name})</span>
+                      )}
+                      <div className="ml-auto flex gap-2">
+                        <button onClick={() => startEdit(team)} className="text-indigo-400 hover:text-indigo-300 text-sm">変更</button>
+                        {team.displayName !== team.name && (
+                          <button onClick={() => resetName(team.id)} className="text-yellow-500 hover:text-yellow-400 text-sm">リセット</button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="text-center mt-6">
+              <button onClick={() => setSelectedRegion(null)} className="text-gray-400 hover:text-white px-4 py-2">地区選択に戻る</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export { ModeSelectScreen, CorporateTeamSelectScreen, CorporateNameEditScreen };

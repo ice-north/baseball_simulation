@@ -9,7 +9,7 @@ const PHASE_NAMES = {
   tryout: 'トライアウト',
 };
 
-const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onManual, hasSaveData, saveSlots = [] }) => {
+const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporateNames, onManual, hasSaveData, saveSlots = [] }) => {
   const [showSlotSelect, setShowSlotSelect] = useState(false);
   const [showEditSlotSelect, setShowEditSlotSelect] = useState(false);
 
@@ -24,15 +24,6 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onManual, hasSa
   };
 
   const handleEdit = () => {
-    const filledSlots = saveSlots.map((s, i) => s ? i : -1).filter(i => i >= 0);
-    if (filledSlots.length === 0) {
-      alert('セーブデータがありません。先にゲームを開始してセーブしてください。');
-      return;
-    }
-    if (filledSlots.length === 1) {
-      onEdit(filledSlots[0]);
-      return;
-    }
     setShowEditSlotSelect(true);
   };
 
@@ -107,6 +98,17 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onManual, hasSa
                 )}
               </button>
             ))}
+
+            <div className="border-t border-gray-700 w-80 my-2"></div>
+
+            <button
+              onClick={onEditCorporateNames}
+              className="block w-80 px-6 py-3 rounded-lg font-bold text-lg transition shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              <div>社会人チーム名設定</div>
+              <div className="text-sm font-normal text-indigo-200">セーブ不要・全データ共通</div>
+            </button>
+
             <button
               onClick={() => setShowEditSlotSelect(false)}
               className="block w-80 px-6 py-2 rounded-lg text-gray-400 hover:text-white transition text-sm mt-2"
@@ -147,11 +149,8 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onManual, hasSa
 
             <button
               onClick={handleEdit}
-              disabled={!hasSaveData}
               className={`group w-80 px-8 py-4 rounded-xl font-bold text-2xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-3 ${
-                hasSaveData
-                  ? 'bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white shadow-purple-900/30'
-                  : 'bg-gray-700/50 text-gray-500 cursor-not-allowed shadow-none'
+                'bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white shadow-purple-900/30'
               }`}
             >
               <span className="text-3xl group-hover:scale-110 transition-transform">✏️</span>

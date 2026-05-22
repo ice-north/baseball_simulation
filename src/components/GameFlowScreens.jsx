@@ -11,7 +11,7 @@ import NewGameRegulationsScreen from './NewGameRegulationsScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
 import CampScreen from './CampScreen.jsx';
 import SandboxSetupScreen from './SandboxSetupScreen.jsx';
-import { ModeSelectScreen, CorporateTeamSelectScreen } from './CorporateSelectScreen.jsx';
+import { ModeSelectScreen, CorporateTeamSelectScreen, CorporateNameEditScreen } from './CorporateSelectScreen.jsx';
 
 // ゲームフロースタート画面群
 const GameFlowScreens = ({
@@ -48,6 +48,7 @@ const GameFlowScreens = ({
           alert(result?.error || 'ロードに失敗しました');
         }
       }}
+      onEditCorporateNames={() => setGameFlowState('edit_corporate_names')}
       onManual={() => setGameFlowState('manual')}
       hasSaveData={hasSaveData}
       saveSlots={saveSlots}
@@ -79,6 +80,11 @@ const GameFlowScreens = ({
   // MANUAL: ゲーム辞典
   if (gameFlowState === 'manual') {
     return <ManualScreen onBack={() => setGameFlowState('title')} />;
+  }
+
+  // EDIT CORPORATE NAMES: 社会人チーム名編集（セーブ不要）
+  if (gameFlowState === 'edit_corporate_names') {
+    return <CorporateNameEditScreen onBack={() => setGameFlowState('title')} />;
   }
 
   // NEW GAME: レギュレーション設定
