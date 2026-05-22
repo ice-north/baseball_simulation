@@ -15,11 +15,11 @@ export const TRAINING_MENUS = {
   batting: {
     name: '打撃練習',
     icon: '🏏',
-    description: 'ミートを強化、パワー・選球眼を微増',
-    targets: ['meet', 'power', 'eye'],
+    description: 'ミートを強化、パワー・選球眼・バントを微増',
+    targets: ['meet', 'power', 'eye', 'bunt'],
     // 能力ごとの成長倍率: パワーは才能依存のため半減、選球眼は副次効果として半減
-    // ミートは1.0倍維持（+0〜2）、パワー/選球眼は0.5倍（+0〜1）
-    growthMultipliers: { power: 0.5, eye: 0.5 },
+    // ミートは1.0倍維持（+0〜2）、パワー/選球眼/バントは0.3〜0.5倍（+0〜1）
+    growthMultipliers: { power: 0.5, eye: 0.5, bunt: 0.3 },
     category: 'batting'
   },
   baserunning: {
@@ -156,8 +156,9 @@ export const SUB_TRAINING_MENUS = {
   defense_sub: {
     name: '守備補強',
     icon: '🧤',
-    description: '非適正ポジションの守備練習',
-    targets: ['defense', 'fitness'],
+    description: '非適正ポジションの守備練習・バント微増',
+    targets: ['defense', 'fitness', 'bunt'],
+    growthMultipliers: { bunt: 0.3 },
   },
   form_change: {
     name: 'フォーム改造',
@@ -319,6 +320,15 @@ export function executeSubTraining(player, subType, options = {}) {
         if (def > 0) {
           player.fielding.defense = Math.min(100, oldDef + def);
           growthReport.push({ statName: '守備', before: oldDef, after: player.fielding.defense, growth: def });
+        }
+      }
+      // バント微増（30%で+1）
+      if (player.batting && Math.random() < 0.3) {
+        const oldBunt = player.batting.bunt || 30;
+        const buntGrowth = applyTechStatDecay(oldBunt, 1);
+        if (buntGrowth > 0) {
+          player.batting.bunt = Math.min(100, oldBunt + buntGrowth);
+          growthReport.push({ statName: 'バント', before: oldBunt, after: player.batting.bunt, growth: buntGrowth });
         }
       }
       // 守備適正も微増
@@ -572,17 +582,17 @@ function getPositionGrowthBonus(player, targetStat) {
   // 各ポジションの成長傾向（stat → bonus倍率）
   const positionBonusMap = {
     // 二塁・遊撃: 走力、守備が伸びやすい
-    second:  { speed: 1.4, defense: 1.4, steal: 1.3, arm: 1.1, meet: 1.0, power: 0.9 },
-    short:   { speed: 1.4, defense: 1.4, steal: 1.3, arm: 1.2, meet: 1.0, power: 0.9 },
+    second:  { speed: 1.4, defense: 1.4, steal: 1.3, bunt: 1.2, arm: 1.1, meet: 1.0, power: 0.9 },
+    short:   { speed: 1.4, defense: 1.4, steal: 1.3, bunt: 1.2, arm: 1.2, meet: 1.0, power: 0.9 },
     // 三塁・一塁: 打撃が伸びやすい
-    third:   { power: 1.4, meet: 1.3, arm: 1.2, defense: 1.0, speed: 0.9, steal: 0.9 },
-    first:   { power: 1.5, meet: 1.4, eye: 1.2, defense: 0.9, speed: 0.9, steal: 0.8 },
+    third:   { power: 1.4, meet: 1.3, arm: 1.2, defense: 1.0, speed: 0.9, steal: 0.9, bunt: 0.9 },
+    first:   { power: 1.5, meet: 1.4, eye: 1.2, defense: 0.9, speed: 0.9, steal: 0.8, bunt: 0.8 },
     // 外野: バランス成長
-    left:    { speed: 1.2, meet: 1.1, power: 1.1, arm: 1.1, defense: 1.1, steal: 1.1 },
-    center:  { speed: 1.3, defense: 1.2, meet: 1.1, steal: 1.2, arm: 1.0, power: 1.0 },
-    right:   { arm: 1.3, power: 1.2, meet: 1.1, speed: 1.1, defense: 1.1, steal: 1.0 },
+    left:    { speed: 1.2, meet: 1.1, power: 1.1, arm: 1.1, defense: 1.1, steal: 1.1, bunt: 1.0 },
+    center:  { speed: 1.3, defense: 1.2, meet: 1.1, steal: 1.2, bunt: 1.1, arm: 1.0, power: 1.0 },
+    right:   { arm: 1.3, power: 1.2, meet: 1.1, speed: 1.1, defense: 1.1, steal: 1.0, bunt: 0.9 },
     // 捕手: 守備・肩が伸びやすい
-    catcher: { defense: 1.5, arm: 1.4, meet: 1.0, power: 0.9, speed: 0.8, steal: 0.8 },
+    catcher: { defense: 1.5, arm: 1.4, meet: 1.0, bunt: 1.0, power: 0.9, speed: 0.8, steal: 0.8 },
   };
 
   // 加重平均でボーナスを計算
@@ -606,15 +616,15 @@ function getBattingOrderGrowthBonus(player, targetStat) {
   if (totalGames === 0) return 1.0;
 
   const orderBonusMap = {
-    1: { speed: 1.4, steal: 1.4, meet: 1.2, eye: 1.2, power: 0.9 },
-    2: { meet: 1.3, speed: 1.2, eye: 1.2, steal: 1.1, power: 1.0, defense: 1.0 },
-    3: { meet: 1.3, power: 1.2, eye: 1.1, speed: 1.1, defense: 1.0 },
-    4: { power: 1.5, meet: 1.2, eye: 1.1, speed: 0.9, steal: 0.8 },
-    5: { power: 1.3, meet: 1.2, eye: 1.1, arm: 1.0 },
-    6: { defense: 1.2, meet: 1.1, power: 1.1, arm: 1.1 },
-    7: { defense: 1.2, arm: 1.1, meet: 1.0, speed: 1.1 },
-    8: { defense: 1.3, arm: 1.2, speed: 1.1 },
-    9: { /* 投手枠: ボーナスなし */ },
+    1: { speed: 1.4, steal: 1.4, bunt: 1.3, meet: 1.2, eye: 1.2, power: 0.9 },
+    2: { meet: 1.3, bunt: 1.3, speed: 1.2, eye: 1.2, steal: 1.1, power: 1.0, defense: 1.0 },
+    3: { meet: 1.3, power: 1.2, eye: 1.1, speed: 1.1, defense: 1.0, bunt: 0.9 },
+    4: { power: 1.5, meet: 1.2, eye: 1.1, speed: 0.9, steal: 0.8, bunt: 0.7 },
+    5: { power: 1.3, meet: 1.2, eye: 1.1, arm: 1.0, bunt: 0.8 },
+    6: { defense: 1.2, meet: 1.1, power: 1.1, arm: 1.1, bunt: 1.0 },
+    7: { defense: 1.2, arm: 1.1, bunt: 1.1, meet: 1.0, speed: 1.1 },
+    8: { defense: 1.3, arm: 1.2, bunt: 1.2, speed: 1.1 },
+    9: { bunt: 1.2 },
   };
 
   let weightedBonus = 0;
