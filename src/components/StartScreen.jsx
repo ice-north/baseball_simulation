@@ -105,8 +105,8 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               onClick={onEditCorporateNames}
               className="block w-80 px-6 py-3 rounded-lg font-bold text-lg transition shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white"
             >
-              <div>社会人チーム名設定</div>
-              <div className="text-sm font-normal text-indigo-200">セーブ不要・全データ共通</div>
+              <div>社会人チーム設定</div>
+              <div className="text-sm font-normal text-indigo-200">地域・強さ・種別・名前を編集（全セーブ共通）</div>
             </button>
 
             <button

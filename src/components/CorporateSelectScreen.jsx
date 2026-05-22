@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName } from '../corporate/corporateTeamsData.js';
+import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective } from '../corporate/corporateTeamsData.js';
 
 const RANK_COLORS = {
   S: 'text-yellow-400',
@@ -313,42 +313,213 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
 
 const CorporateNameEditScreen = ({ onBack }) => {
   const [selectedRegion, setSelectedRegion] = useState(null);
-  const [editingNameId, setEditingNameId] = useState(null);
-  const [editNameValue, setEditNameValue] = useState('');
+  const [editingTeamId, setEditingTeamId] = useState(null);
+  const [editForm, setEditForm] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const regionTeams = selectedRegion ? getTeamsByRegion(selectedRegion) : [];
+  const allTeams = getAllTeamsEffective();
+  const regionTeams = selectedRegion ? allTeams.filter(t => t.region === selectedRegion) : [];
+
+  const filteredTeams = searchQuery.trim()
+    ? allTeams.filter(t =>
+        t.name.includes(searchQuery) ||
+        t.city.includes(searchQuery) ||
+        t.originalName?.includes(searchQuery)
+      )
+    : null;
 
   const startEdit = (team) => {
-    setEditingNameId(team.id);
-    setEditNameValue(team.displayName);
+    setEditingTeamId(team.id);
+    setEditForm({
+      name: team.name,
+      city: team.city,
+      region: team.region,
+      type: team.type,
+      rank: team.rank,
+    });
   };
 
   const saveEdit = (teamId) => {
-    if (editNameValue.trim()) {
-      setTeamDisplayName(teamId, editNameValue.trim());
+    const orig = CORPORATE_TEAMS.find(t => t.id === teamId);
+    if (!orig) return;
+    for (const field of ['name', 'city', 'region', 'type', 'rank']) {
+      if (editForm[field] !== undefined && editForm[field] !== orig[field]) {
+        setTeamOverride(teamId, field, editForm[field]);
+      } else {
+        setTeamOverride(teamId, field, orig[field]);
+      }
     }
-    setEditingNameId(null);
+    setEditingTeamId(null);
     setRefreshKey(prev => prev + 1);
   };
 
-  const resetName = (teamId) => {
-    resetTeamDisplayName(teamId);
+  const resetAll = (teamId) => {
+    resetTeamOverrides(teamId);
+    setEditingTeamId(null);
     setRefreshKey(prev => prev + 1);
   };
+
+  const renderTeamRow = (team) => {
+    const typeInfo = TYPE_LABELS[team.type] || TYPE_LABELS.club;
+    const isEditing = editingTeamId === team.id;
+
+    if (isEditing) {
+      return (
+        <div key={`${team.id}-${refreshKey}`} className="bg-gray-800 border-2 border-indigo-500 rounded-lg p-4">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-gray-400 text-xs block mb-1">チーム名</label>
+              <input
+                type="text"
+                value={editForm.name}
+                onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full bg-gray-700 border border-gray-500 text-white px-3 py-1.5 rounded focus:border-indigo-400 focus:outline-none text-sm"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-gray-400 text-xs block mb-1">都市</label>
+              <input
+                type="text"
+                value={editForm.city}
+                onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))}
+                className="w-full bg-gray-700 border border-gray-500 text-white px-3 py-1.5 rounded focus:border-indigo-400 focus:outline-none text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="text-gray-400 text-xs block mb-1">地域</label>
+              <select
+                value={editForm.region}
+                onChange={e => setEditForm(f => ({ ...f, region: e.target.value }))}
+                className="w-full bg-gray-700 border border-gray-500 text-white px-2 py-1.5 rounded focus:border-indigo-400 focus:outline-none text-sm"
+              >
+                {REGIONS.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-gray-400 text-xs block mb-1">種別</label>
+              <div className="flex gap-1">
+                {[['corporate', '企業'], ['club', 'クラブ']].map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setEditForm(f => ({ ...f, type: val }))}
+                    className={`flex-1 px-2 py-1.5 rounded text-sm font-bold transition ${
+                      editForm.type === val
+                        ? val === 'corporate' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    }`}
+                  >{label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-gray-400 text-xs block mb-1">強さ</label>
+              <div className="flex gap-1">
+                {['S', 'A', 'B', 'C', 'D'].map(r => (
+                  <button
+                    key={r}
+                    onClick={() => setEditForm(f => ({ ...f, rank: r }))}
+                    className={`flex-1 px-1 py-1.5 rounded text-sm font-bold transition ${
+                      editForm.rank === r
+                        ? `${RANK_COLORS[r].replace('text-', 'bg-').replace('-400', '-600')} text-white`
+                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    }`}
+                  >{r}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 items-center">
+            <button onClick={() => saveEdit(team.id)} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-1.5 rounded text-sm transition">保存</button>
+            <button onClick={() => setEditingTeamId(null)} className="text-gray-400 hover:text-white text-sm px-3 py-1.5">取消</button>
+            {team.hasOverrides && (
+              <button onClick={() => resetAll(team.id)} className="ml-auto text-yellow-500 hover:text-yellow-400 text-sm px-3 py-1.5">初期値に戻す</button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={`${team.id}-${refreshKey}`}
+        onClick={() => startEdit(team)}
+        className="flex items-center gap-3 bg-gray-800 border border-gray-700 hover:border-indigo-500 rounded-lg p-3 cursor-pointer transition group"
+      >
+        <span className={`font-bold text-lg w-6 shrink-0 ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
+        <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${typeInfo.color}`}>{typeInfo.label}</span>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-white font-bold truncate">{team.name}</span>
+          <span className="text-gray-500 text-xs shrink-0">({team.city})</span>
+          {team.hasOverrides && (
+            <span className="text-indigo-400 text-xs shrink-0">変更済</span>
+          )}
+        </div>
+        <span className="text-gray-600 text-xs opacity-0 group-hover:opacity-100 transition shrink-0">クリックで編集</span>
+      </div>
+    );
+  };
+
+  // 検索結果表示
+  if (filteredTeams) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-2 text-center">社会人チーム設定</h1>
+          <p className="text-gray-400 mb-4 text-center">地域・強さ・種別・チーム名を編集（全セーブ共通）</p>
+
+          <div className="mb-4">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="チーム名・都市名で検索..."
+              className="w-full bg-gray-700 border border-gray-600 text-white px-4 py-2 rounded-lg focus:border-indigo-400 focus:outline-none"
+            />
+          </div>
+
+          <p className="text-gray-400 text-sm mb-3">{filteredTeams.length}件の結果</p>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+            {filteredTeams.map(team => renderTeamRow(team))}
+          </div>
+
+          <div className="text-center mt-4">
+            <button onClick={() => setSearchQuery('')} className="text-gray-400 hover:text-white px-4 py-2 text-sm">検索をクリア</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-2 text-center">社会人チーム名設定</h1>
-        <p className="text-gray-400 mb-6 text-center">チーム名を自由に変更できます（全セーブ共通）</p>
+        <h1 className="text-3xl font-bold text-white mb-2 text-center">社会人チーム設定</h1>
+        <p className="text-gray-400 mb-4 text-center">地域・強さ・種別・チーム名を編集（全セーブ共通）</p>
+
+        <div className="mb-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="チーム名・都市名で検索..."
+            className="w-full bg-gray-700 border border-gray-600 text-white px-4 py-2 rounded-lg focus:border-indigo-400 focus:outline-none"
+          />
+        </div>
 
         {!selectedRegion ? (
           <>
             <div className="grid grid-cols-3 gap-3">
               {REGIONS.map(region => {
-                const teams = getTeamsByRegion(region.id);
-                const customCount = teams.filter(t => t.displayName !== t.name).length;
+                const teams = allTeams.filter(t => t.region === region.id);
+                const customCount = teams.filter(t => t.hasOverrides).length;
+                const corpCount = teams.filter(t => t.type === 'corporate').length;
+                const clubCount = teams.filter(t => t.type === 'club').length;
                 return (
                   <button
                     key={region.id}
@@ -356,7 +527,11 @@ const CorporateNameEditScreen = ({ onBack }) => {
                     className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-indigo-500 rounded-lg p-4 text-left transition"
                   >
                     <div className="text-white font-bold">{region.name}</div>
-                    <div className="text-gray-400 text-sm">{region.teamCount}チーム</div>
+                    <div className="text-gray-400 text-sm">{teams.length}チーム</div>
+                    <div className="text-xs mt-1 space-x-2">
+                      <span className="text-blue-400">企業:{corpCount}</span>
+                      <span className="text-green-400">クラブ:{clubCount}</span>
+                    </div>
                     {customCount > 0 && <div className="text-indigo-400 text-xs mt-1">{customCount}件変更済</div>}
                   </button>
                 );
@@ -368,47 +543,17 @@ const CorporateNameEditScreen = ({ onBack }) => {
           </>
         ) : (
           <>
-            <div className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
-              {regionTeams.map(team => {
-                const typeInfo = TYPE_LABELS[team.type] || TYPE_LABELS.club;
-                return (
-                  <div key={team.id} className="flex items-center gap-3 bg-gray-800 border border-gray-700 rounded-lg p-3">
-                    <span className={`font-bold text-lg w-6 ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${typeInfo.color}`}>{typeInfo.label}</span>
-                    {editingNameId === team.id ? (
-                      <div className="flex items-center gap-2 flex-1">
-                        <input
-                          type="text"
-                          value={editNameValue}
-                          onChange={(e) => setEditNameValue(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(team.id); if (e.key === 'Escape') setEditingNameId(null); }}
-                          className="bg-gray-700 border border-gray-500 text-white px-3 py-1 rounded flex-1 focus:border-indigo-400 focus:outline-none"
-                          autoFocus
-                        />
-                        <button onClick={() => saveEdit(team.id)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-sm">保存</button>
-                        <button onClick={() => setEditingNameId(null)} className="text-gray-400 hover:text-white text-sm">取消</button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-1">
-                        <span className="text-white font-bold">{team.displayName}</span>
-                        <span className="text-gray-500 text-xs">({team.city})</span>
-                        {team.displayName !== team.name && (
-                          <span className="text-gray-600 text-xs">元:{team.name}</span>
-                        )}
-                        <div className="ml-auto flex gap-2">
-                          <button onClick={() => startEdit(team)} className="text-indigo-400 hover:text-indigo-300 text-sm">変更</button>
-                          {team.displayName !== team.name && (
-                            <button onClick={() => resetName(team.id)} className="text-yellow-500 hover:text-yellow-400 text-sm">リセット</button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl font-bold text-white">
+                {REGIONS.find(r => r.id === selectedRegion)?.name}
+                <span className="text-gray-400 text-sm font-normal ml-2">{regionTeams.length}チーム</span>
+              </h2>
             </div>
-            <div className="text-center mt-6">
-              <button onClick={() => setSelectedRegion(null)} className="text-gray-400 hover:text-white px-4 py-2">地区選択に戻る</button>
+            <div className="space-y-2 max-h-[58vh] overflow-y-auto pr-1">
+              {regionTeams.map(team => renderTeamRow(team))}
+            </div>
+            <div className="text-center mt-4">
+              <button onClick={() => { setSelectedRegion(null); setEditingTeamId(null); }} className="text-gray-400 hover:text-white px-4 py-2">地区選択に戻る</button>
             </div>
           </>
         )}

@@ -257,63 +257,131 @@ export const REGION_SLOTS = {
 };
 
 // ============================================================
-// チーム名オーバーライド（マスター設定、セーブデータに含めない）
+// チームオーバーライド（マスター設定、セーブデータに含めない）
 // ============================================================
 
-const NAMES_STORAGE_KEY = 'corpTeamNames';
+const OVERRIDES_STORAGE_KEY = 'corpTeamOverrides';
+const NAMES_STORAGE_KEY = 'corpTeamNames'; // 後方互換用
 
-const loadNameOverrides = () => {
+const loadOverrides = () => {
   try {
-    const raw = localStorage.getItem(NAMES_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const raw = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+    // 旧形式からの移行
+    const oldNames = localStorage.getItem(NAMES_STORAGE_KEY);
+    if (oldNames) {
+      const names = JSON.parse(oldNames);
+      const migrated = {};
+      for (const [id, name] of Object.entries(names)) {
+        migrated[id] = { name };
+      }
+      localStorage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify(migrated));
+      localStorage.removeItem(NAMES_STORAGE_KEY);
+      return migrated;
+    }
+    return {};
   } catch { return {}; }
 };
 
-const saveNameOverrides = (overrides) => {
+const saveOverrides = (overrides) => {
   try {
-    localStorage.setItem(NAMES_STORAGE_KEY, JSON.stringify(overrides));
+    localStorage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify(overrides));
   } catch { /* ignore */ }
 };
 
-export const getTeamDisplayName = (teamId) => {
-  const overrides = loadNameOverrides();
-  if (overrides[teamId]) return overrides[teamId];
-  const team = CORPORATE_TEAMS.find(t => t.id === teamId);
-  return team ? team.name : '';
+// オーバーライド可能フィールド: name, region, type, rank, city
+export const getTeamOverride = (teamId, field) => {
+  const overrides = loadOverrides();
+  return overrides[teamId]?.[field] ?? null;
 };
 
-export const setTeamDisplayName = (teamId, newName) => {
-  const overrides = loadNameOverrides();
+export const setTeamOverride = (teamId, field, value) => {
+  const overrides = loadOverrides();
   const team = CORPORATE_TEAMS.find(t => t.id === teamId);
-  if (team && newName.trim() === team.name) {
-    delete overrides[teamId];
+  if (!overrides[teamId]) overrides[teamId] = {};
+
+  if (team && value === team[field]) {
+    delete overrides[teamId][field];
+    if (Object.keys(overrides[teamId]).length === 0) delete overrides[teamId];
   } else {
-    overrides[teamId] = newName.trim();
+    overrides[teamId][field] = value;
   }
-  saveNameOverrides(overrides);
+  saveOverrides(overrides);
 };
 
-export const resetTeamDisplayName = (teamId) => {
-  const overrides = loadNameOverrides();
+export const resetTeamOverrides = (teamId) => {
+  const overrides = loadOverrides();
   delete overrides[teamId];
-  saveNameOverrides(overrides);
+  saveOverrides(overrides);
 };
 
-export const resetAllTeamDisplayNames = () => {
+export const resetAllOverrides = () => {
+  localStorage.removeItem(OVERRIDES_STORAGE_KEY);
   localStorage.removeItem(NAMES_STORAGE_KEY);
 };
 
-export const getAllNameOverrides = () => loadNameOverrides();
+export const getAllOverrides = () => loadOverrides();
+
+// 後方互換: getTeamDisplayName / setTeamDisplayName
+export const getTeamDisplayName = (teamId) => {
+  return getTeamOverride(teamId, 'name') || CORPORATE_TEAMS.find(t => t.id === teamId)?.name || '';
+};
+
+export const setTeamDisplayName = (teamId, newName) => {
+  setTeamOverride(teamId, 'name', newName.trim());
+};
+
+export const resetTeamDisplayName = (teamId) => {
+  const overrides = loadOverrides();
+  if (overrides[teamId]) {
+    delete overrides[teamId].name;
+    if (Object.keys(overrides[teamId]).length === 0) delete overrides[teamId];
+    saveOverrides(overrides);
+  }
+};
+
+export const resetAllTeamDisplayNames = () => resetAllOverrides();
+export const getAllNameOverrides = () => {
+  const all = loadOverrides();
+  const names = {};
+  for (const [id, o] of Object.entries(all)) {
+    if (o.name) names[id] = o.name;
+  }
+  return names;
+};
+
+// オーバーライド適用済みのチームデータを取得
+const getEffectiveTeam = (team) => {
+  const overrides = loadOverrides();
+  const o = overrides[team.id] || {};
+  return {
+    ...team,
+    name: o.name || team.name,
+    displayName: o.name || team.name,
+    region: o.region || team.region,
+    type: o.type || team.type,
+    rank: o.rank || team.rank,
+    city: o.city || team.city,
+    hasOverrides: Object.keys(o).length > 0,
+    originalName: team.name,
+    originalRegion: team.region,
+    originalType: team.type,
+    originalRank: team.rank,
+    originalCity: team.city,
+  };
+};
 
 // ============================================================
 // ヘルパー関数
 // ============================================================
 
 export const getTeamsByRegion = (regionId) =>
-  CORPORATE_TEAMS.filter(t => t.region === regionId).map(t => ({
-    ...t,
-    displayName: getTeamDisplayName(t.id),
-  }));
+  CORPORATE_TEAMS
+    .map(t => getEffectiveTeam(t))
+    .filter(t => t.region === regionId);
+
+export const getAllTeamsEffective = () =>
+  CORPORATE_TEAMS.map(t => getEffectiveTeam(t));
 
 export const getRegionName = (regionId) =>
   REGIONS.find(r => r.id === regionId)?.name || regionId;
@@ -321,7 +389,7 @@ export const getRegionName = (regionId) =>
 export const getTeamById = (teamId) => {
   const team = CORPORATE_TEAMS.find(t => t.id === teamId);
   if (!team) return null;
-  return { ...team, displayName: getTeamDisplayName(teamId) };
+  return getEffectiveTeam(team);
 };
 
 export const getRegionSlots = (regionId) =>
