@@ -283,14 +283,20 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
 
     // 引っ張り/流し打ちによる飛距離補正
     // 引っ張り: フルスイングでジャストミート → 飛距離+5%
-    // 流し打ち: バットの先端で当てる → 飛距離-8%（ミートが高いほど軽減）
+    // 流し打ち: ミートが低いほどペナルティ大（meet30以下=-10%, meet99=0%）
     const pullDirection = direction * batSide; // 負=引っ張り、正=流し
     if (pullDirection < -15) {
       distance *= 1.03 + Math.min(0.02, (-pullDirection - 15) / 30 * 0.02);
     } else if (pullDirection > 15) {
-      // ミートが高いほど流し打ちの減衰を軽減（meet50→1.0倍, meet80→0.4倍に軽減）
-      const meetReduction = 1.0 - Math.min(0.6, Math.max(0, (batter.meet || 50) - 50) / 50 * 0.6);
-      const oppoMaxPenalty = 0.08 * meetReduction;
+      const m = batter.meet || 50;
+      const oppoPenaltyTable = [[30,10],[40,8],[50,6.5],[60,5],[70,3.5],[80,2],[90,1],[99,0]];
+      let oppoMaxPenalty = 0.10;
+      for (let i = 0; i < oppoPenaltyTable.length - 1; i++) {
+        const [m0,p0] = oppoPenaltyTable[i], [m1,p1] = oppoPenaltyTable[i+1];
+        if (m >= m0 && m <= m1) { oppoMaxPenalty = (p0 + (p1-p0) * (m-m0) / (m1-m0)) / 100; break; }
+        if (m < m0) break;
+        if (m > oppoPenaltyTable[oppoPenaltyTable.length-1][0]) { oppoMaxPenalty = 0; break; }
+      }
       distance *= 1.0 - Math.min(oppoMaxPenalty, (pullDirection - 15) / 30 * oppoMaxPenalty);
     }
   }
