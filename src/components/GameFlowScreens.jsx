@@ -11,6 +11,7 @@ import NewGameRegulationsScreen from './NewGameRegulationsScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
 import CampScreen from './CampScreen.jsx';
 import SandboxSetupScreen from './SandboxSetupScreen.jsx';
+import { ModeSelectScreen, CorporateTeamSelectScreen } from './CorporateSelectScreen.jsx';
 
 // ゲームフロースタート画面群
 const GameFlowScreens = ({
@@ -33,7 +34,7 @@ const GameFlowScreens = ({
   // TITLE: スタート画面
   if (gameFlowState === 'title') {
     return <StartScreen
-      onNewGame={() => { setGameMode('normal'); setGameFlowState('newgame_regulations'); }}
+      onNewGame={() => { setGameMode('normal'); setGameFlowState('newgame_mode_select'); }}
       onSandbox={() => { setGameMode('sandbox'); setGameFlowState('sandbox_regulations'); }}
       onContinue={(slotIndex) => {
         const result = loadGame(slotIndex);
@@ -50,6 +51,28 @@ const GameFlowScreens = ({
       onManual={() => setGameFlowState('manual')}
       hasSaveData={hasSaveData}
       saveSlots={saveSlots}
+    />;
+  }
+
+  // MODE SELECT: 独立リーグ / 社会人野球 選択
+  if (gameFlowState === 'newgame_mode_select') {
+    return <ModeSelectScreen
+      onSelectIndependent={() => setGameFlowState('newgame_regulations')}
+      onSelectCorporate={() => setGameFlowState('newgame_corporate_select')}
+      onBack={() => setGameFlowState('title')}
+    />;
+  }
+
+  // CORPORATE: 地区・チーム選択
+  if (gameFlowState === 'newgame_corporate_select') {
+    return <CorporateTeamSelectScreen
+      onSelect={(team) => {
+        // TODO: 社会人モードの初期化処理を実装
+        // 選手自動生成 → ゲーム開始
+        console.log('Selected corporate team:', team);
+        alert(`${team.name}を選択しました。\n（社会人モードの初期化は次のステップで実装します）`);
+      }}
+      onBack={() => setGameFlowState('newgame_mode_select')}
     />;
   }
 
