@@ -262,7 +262,7 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   const velShift = (velDiff >= 0 ? velDiff * 0.67 : velDiff * 0.50) * batSide;
   // 打者傾向: power>meetなら引っ張り、meet>powerなら広角（逆方向に打てる）
   // RHBの引っ張り=負方向なのでpower優位で負にシフト
-  const pullTendency = ((batter.power || 50) - (batter.meet || 50)) * -0.08 * batSide;
+  const pullTendency = ((batter.power || 50) - (batter.meet || 50)) * -0.12 * batSide;
   let direction = Math.random() * 90 - 45 + pullTendency + velShift;
   direction = Math.max(-45, Math.min(45, direction));
 
