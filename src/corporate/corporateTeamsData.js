@@ -146,7 +146,7 @@ export const CORPORATE_TEAMS = [
   { id: 212, name: '石川ミリオンスターズ', city: '白山', region: 'hokushinetsu', type: 'club', rank: 'C', budget: 18 },
   { id: 213, name: '砺波チューリップス', city: '砺波', region: 'hokushinetsu', type: 'club', rank: 'D', budget: 10 },
 
-  // ========== 東海 (企業13 + クラブ3 = 16) ==========
+  // ========== 東海 (企業13 + クラブ7 = 20) ==========
   { id: 79, name: 'トヨタ自動車', city: '豊田', region: 'tokai', type: 'corporate', rank: 'S', budget: 100 },
   { id: 80, name: 'ヤマハ', city: '浜松', region: 'tokai', type: 'corporate', rank: 'S', budget: 90 },
   { id: 81, name: 'JR東海', city: '名古屋', region: 'tokai', type: 'corporate', rank: 'A', budget: 75 },
@@ -161,10 +161,14 @@ export const CORPORATE_TEAMS = [
   { id: 90, name: '浜松ホトニクス', city: '浜松', region: 'tokai', type: 'corporate', rank: 'C', budget: 40 },
   { id: 91, name: '静岡ガス', city: '静岡', region: 'tokai', type: 'corporate', rank: 'C', budget: 35 },
   { id: 92, name: '岐阜クラブ', city: '岐阜', region: 'tokai', type: 'club', rank: 'C', budget: 20 },
+  { id: 93, name: '四日市サンダーボルト', city: '四日市', region: 'tokai', type: 'club', rank: 'D', budget: 15 },
+  { id: 94, name: '豊橋ブレイブス', city: '豊橋', region: 'tokai', type: 'club', rank: 'D', budget: 15 },
+  { id: 95, name: '三河クラブ', city: '安城', region: 'tokai', type: 'club', rank: 'D', budget: 12 },
+  { id: 96, name: '津レボリューション', city: '津', region: 'tokai', type: 'club', rank: 'D', budget: 12 },
   { id: 97, name: '沼津マリナーズ', city: '沼津', region: 'tokai', type: 'club', rank: 'D', budget: 12 },
   { id: 98, name: '永和商事ウイング', city: '刈谷', region: 'tokai', type: 'club', rank: 'D', budget: 10 },
 
-  // ========== 近畿 (企業13 + クラブ3 = 16) ==========
+  // ========== 近畿 (企業13 + クラブ7 = 20) ==========
   { id: 99, name: 'パナソニック', city: '門真', region: 'kinki', type: 'corporate', rank: 'S', budget: 90 },
   { id: 100, name: '大阪ガス', city: '大阪', region: 'kinki', type: 'corporate', rank: 'S', budget: 85 },
   { id: 101, name: '日本生命', city: '大阪', region: 'kinki', type: 'corporate', rank: 'S', budget: 90 },
@@ -179,6 +183,10 @@ export const CORPORATE_TEAMS = [
   { id: 110, name: '神戸製鋼所', city: '神戸', region: 'kinki', type: 'corporate', rank: 'B', budget: 50 },
   { id: 111, name: '和歌山箕島球友会', city: '和歌山', region: 'kinki', type: 'corporate', rank: 'C', budget: 35 },
   { id: 112, name: '堺ブレイザーズ', city: '堺', region: 'kinki', type: 'club', rank: 'C', budget: 20 },
+  { id: 113, name: '奈良クラブナインズ', city: '奈良', region: 'kinki', type: 'club', rank: 'D', budget: 15 },
+  { id: 114, name: '姫路ブルーキャッスルズ', city: '姫路', region: 'kinki', type: 'club', rank: 'D', budget: 15 },
+  { id: 115, name: '枚方ネクスターズ', city: '枚方', region: 'kinki', type: 'club', rank: 'D', budget: 12 },
+  { id: 116, name: '滋賀ユナイテッド', city: '大津', region: 'kinki', type: 'club', rank: 'D', budget: 12 },
   { id: 117, name: '伊丹スカイウイング', city: '伊丹', region: 'kinki', type: 'club', rank: 'D', budget: 12 },
   { id: 118, name: '豊中クラブ', city: '豊中', region: 'kinki', type: 'club', rank: 'D', budget: 10 },
 
@@ -200,15 +208,19 @@ export const CORPORATE_TEAMS = [
   { id: 133, name: '倉敷マスカッツBC', city: '倉敷', region: 'chugoku', type: 'club', rank: 'D', budget: 12 },
   { id: 134, name: '山口ウォリアーズ', city: '山口', region: 'chugoku', type: 'club', rank: 'D', budget: 10 },
 
-  // ========== 四国 (企業1 + クラブ5 = 6) ==========
+  // ========== 四国 (企業1 + クラブ9 = 10) ==========
   { id: 135, name: '四国銀行', city: '高知', region: 'shikoku', type: 'corporate', rank: 'B', budget: 45 },
   { id: 136, name: '松山フェニックス', city: '松山', region: 'shikoku', type: 'club', rank: 'C', budget: 20 },
   { id: 137, name: '高松クラブ', city: '高松', region: 'shikoku', type: 'club', rank: 'C', budget: 18 },
+  { id: 138, name: '徳島インディゴソックス', city: '徳島', region: 'shikoku', type: 'club', rank: 'D', budget: 15 },
+  { id: 139, name: '今治造船', city: '今治', region: 'shikoku', type: 'club', rank: 'D', budget: 15 },
+  { id: 140, name: '新居浜マイニングBC', city: '新居浜', region: 'shikoku', type: 'club', rank: 'D', budget: 12 },
+  { id: 141, name: '高知ファイティングドッグス', city: '高知', region: 'shikoku', type: 'club', rank: 'D', budget: 12 },
   { id: 142, name: '丸亀クラブ', city: '丸亀', region: 'shikoku', type: 'club', rank: 'D', budget: 10 },
   { id: 143, name: '西条ブルーウイングス', city: '西条', region: 'shikoku', type: 'club', rank: 'D', budget: 10 },
   { id: 144, name: '宇和島パールズ', city: '宇和島', region: 'shikoku', type: 'club', rank: 'D', budget: 10 },
 
-  // ========== 九州 (企業16 + クラブ0 = 16) ==========
+  // ========== 九州 (企業25 + クラブ10 = 35) ==========
   { id: 145, name: 'Honda熊本', city: '大津', region: 'kyushu', type: 'corporate', rank: 'A', budget: 75 },
   { id: 146, name: 'JR九州', city: '北九州', region: 'kyushu', type: 'corporate', rank: 'A', budget: 70 },
   { id: 147, name: '西部ガス', city: '福岡', region: 'kyushu', type: 'corporate', rank: 'A', budget: 70 },
@@ -221,10 +233,29 @@ export const CORPORATE_TEAMS = [
   { id: 154, name: '大分石油', city: '大分', region: 'kyushu', type: 'corporate', rank: 'C', budget: 40 },
   { id: 155, name: '三菱重工長崎', city: '長崎', region: 'kyushu', type: 'corporate', rank: 'B', budget: 50 },
   { id: 156, name: '鹿児島銀行', city: '鹿児島', region: 'kyushu', type: 'corporate', rank: 'C', budget: 35 },
+  { id: 157, name: '熊本運輸', city: '熊本', region: 'kyushu', type: 'corporate', rank: 'C', budget: 35 },
   { id: 158, name: '沖縄電力', city: '那覇', region: 'kyushu', type: 'corporate', rank: 'C', budget: 30 },
+  { id: 159, name: '宮崎食品工業', city: '宮崎', region: 'kyushu', type: 'corporate', rank: 'D', budget: 25 },
   { id: 160, name: '佐賀セラミクス', city: '佐賀', region: 'kyushu', type: 'corporate', rank: 'C', budget: 35 },
   { id: 161, name: '博多運輸', city: '福岡', region: 'kyushu', type: 'corporate', rank: 'C', budget: 35 },
   { id: 162, name: '九州旅客鉄道', city: '福岡', region: 'kyushu', type: 'corporate', rank: 'B', budget: 50 },
+  { id: 163, name: '沖縄エナジー', city: '那覇', region: 'kyushu', type: 'corporate', rank: 'D', budget: 20 },
+  { id: 164, name: '南九州化成', city: '鹿児島', region: 'kyushu', type: 'corporate', rank: 'D', budget: 25 },
+  { id: 165, name: '福岡建設', city: '福岡', region: 'kyushu', type: 'corporate', rank: 'C', budget: 35 },
+  { id: 166, name: '大牟田製鉄', city: '大牟田', region: 'kyushu', type: 'corporate', rank: 'C', budget: 30 },
+  { id: 167, name: '久留米通商', city: '久留米', region: 'kyushu', type: 'corporate', rank: 'D', budget: 25 },
+  { id: 168, name: '別府観光開発', city: '別府', region: 'kyushu', type: 'corporate', rank: 'D', budget: 20 },
+  { id: 169, name: '那覇ロジスティクス', city: '那覇', region: 'kyushu', type: 'corporate', rank: 'D', budget: 20 },
+  { id: 170, name: '鹿児島ドリームウェーブ', city: '鹿児島', region: 'kyushu', type: 'club', rank: 'C', budget: 20 },
+  { id: 171, name: '大分バンカーズ', city: '大分', region: 'kyushu', type: 'club', rank: 'D', budget: 15 },
+  { id: 172, name: '長崎セインツ', city: '長崎', region: 'kyushu', type: 'club', rank: 'D', budget: 15 },
+  { id: 173, name: '佐世保マリナーズ', city: '佐世保', region: 'kyushu', type: 'club', rank: 'D', budget: 12 },
+  { id: 174, name: '沖縄ゴールデンイーグルス', city: '沖縄', region: 'kyushu', type: 'club', rank: 'D', budget: 12 },
+  { id: 175, name: '熊本ゴールドラッシュ', city: '熊本', region: 'kyushu', type: 'club', rank: 'D', budget: 12 },
+  { id: 176, name: '都城フューチャーズ', city: '都城', region: 'kyushu', type: 'club', rank: 'D', budget: 10 },
+  { id: 177, name: '日向マリンズ', city: '日向', region: 'kyushu', type: 'club', rank: 'D', budget: 10 },
+  { id: 178, name: '延岡サンシャインズ', city: '延岡', region: 'kyushu', type: 'club', rank: 'D', budget: 10 },
+  { id: 179, name: '唐津レッドフェニックス', city: '唐津', region: 'kyushu', type: 'club', rank: 'D', budget: 10 },
 
 ];
 
