@@ -18,31 +18,25 @@ export const STAFF_ABILITIES = {
 
 export const STAFF_ABILITY_KEYS = Object.keys(STAFF_ABILITIES);
 
-// スタッフの役職別・能力傾向
+// スタッフの役職別・得意になりやすい能力プール
+// 実際の個人差は生成時にランダムで決まる
 export const STAFF_ROLE_PROFILES = {
   coach: {
     name: 'コーチ',
-    weights: {
-      battingCoach: 1.5, fieldRunCoach: 1.4, pitchingCoach: 1.5, batteryCoach: 1.3,
-      motivation: 1.0, scoutingEye: 1.0, fitness: 0.7, bodyCare: 0.5,
-      managing: 0.5, negotiation: 0.5,
-    },
+    // この中から2〜3個がランダムに強みになる
+    strongPool: ['battingCoach', 'fieldRunCoach', 'pitchingCoach', 'batteryCoach', 'motivation', 'fitness'],
+    // これらは低めになりやすい（ただし個人差あり）
+    weakPool: ['managing', 'negotiation'],
   },
   manager: {
     name: 'マネージャー',
-    weights: {
-      battingCoach: 0.5, fieldRunCoach: 0.5, pitchingCoach: 0.5, batteryCoach: 0.5,
-      motivation: 1.3, scoutingEye: 1.2, fitness: 0.7, bodyCare: 0.7,
-      managing: 1.5, negotiation: 1.5,
-    },
+    strongPool: ['motivation', 'scoutingEye', 'managing', 'negotiation', 'bodyCare'],
+    weakPool: ['battingCoach', 'pitchingCoach'],
   },
   trainer: {
     name: 'トレーナー',
-    weights: {
-      battingCoach: 0.5, fieldRunCoach: 0.7, pitchingCoach: 0.5, batteryCoach: 0.5,
-      motivation: 0.8, scoutingEye: 0.5, fitness: 1.5, bodyCare: 1.5,
-      managing: 0.5, negotiation: 0.5,
-    },
+    strongPool: ['fitness', 'bodyCare', 'motivation', 'fieldRunCoach', 'scoutingEye'],
+    weakPool: ['battingCoach', 'pitchingCoach', 'managing'],
   },
 };
 
@@ -85,14 +79,31 @@ export const generateStaff = (role, grade = null) => {
   const g = STAFF_GRADES[grade];
   const abilities = {};
 
+  // 個人の強み: strongPoolから2〜3個ランダムに選出
+  const strongCount = 2 + (Math.random() < 0.5 ? 1 : 0);
+  const shuffledStrong = [...profile.strongPool].sort(() => Math.random() - 0.5);
+  const personalStrengths = new Set(shuffledStrong.slice(0, strongCount));
+
+  // 個人の弱み: weakPoolから0〜1個（weakPoolに入っていても得意な人もいる）
+  const weakCount = Math.random() < 0.7 ? 1 : 0;
+  const shuffledWeak = [...profile.weakPool].sort(() => Math.random() - 0.5);
+  const personalWeaknesses = new Set(shuffledWeak.slice(0, weakCount));
+
   for (const key of STAFF_ABILITY_KEYS) {
-    const weight = profile.weights[key] || 1.0;
-    const base = g.baseMin + Math.floor(Math.random() * (g.baseMax - g.baseMin + 1));
-    const weighted = Math.round(base * weight);
-    abilities[key] = Math.min(99, Math.max(1, weighted));
+    let base = g.baseMin + Math.floor(Math.random() * (g.baseMax - g.baseMin + 1));
+
+    if (personalStrengths.has(key)) {
+      // 強み: +15〜30のブースト
+      base += 15 + Math.floor(Math.random() * 16);
+    } else if (personalWeaknesses.has(key)) {
+      // 弱み: -10〜20のペナルティ
+      base -= 10 + Math.floor(Math.random() * 11);
+    }
+
+    abilities[key] = Math.min(99, Math.max(1, base));
   }
 
-  const experience = Math.floor(Math.random() * 10); // 0〜9年の経験
+  const experience = Math.floor(Math.random() * 10);
 
   return {
     id,
@@ -101,6 +112,7 @@ export const generateStaff = (role, grade = null) => {
     grade,
     age: role === 'trainer' ? 28 + Math.floor(Math.random() * 20) : 35 + Math.floor(Math.random() * 20),
     abilities,
+    strengths: [...personalStrengths], // UIで「得意」表示用
     experience,
     personality: randomPersonality(),
   };
