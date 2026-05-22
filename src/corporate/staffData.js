@@ -2,11 +2,11 @@
 // 社会人野球 スタッフデータ（コーチ・マネージャー・トレーナー）
 // ============================================================
 
-// スタッフ能力項目
+// スタッフ能力項目（10項目）
 export const STAFF_ABILITIES = {
   battingCoach:    { name: '打撃指導', category: 'coaching' },
-  fieldingCoach:   { name: '守備指導', category: 'coaching' },
-  baserunCoach:    { name: '走塁指導', category: 'coaching' },
+  fieldRunCoach:   { name: '守備走塁指導', category: 'coaching' },
+  pitchingCoach:   { name: '投手指導', category: 'coaching' },
   batteryCoach:    { name: 'バッテリー指導', category: 'coaching' },
   motivation:      { name: 'モチベーション管理', category: 'management' },
   scoutingEye:     { name: 'スカウト眼', category: 'scouting' },
@@ -19,45 +19,48 @@ export const STAFF_ABILITIES = {
 export const STAFF_ABILITY_KEYS = Object.keys(STAFF_ABILITIES);
 
 // スタッフの役職別・能力傾向
-// weights: 各能力の「得意度」。高いほどその能力が高く生成されやすい
 export const STAFF_ROLE_PROFILES = {
   coach: {
     name: 'コーチ',
     weights: {
-      battingCoach: 1.5, fieldingCoach: 1.5, baserunCoach: 1.3, batteryCoach: 1.3,
+      battingCoach: 1.5, fieldRunCoach: 1.4, pitchingCoach: 1.5, batteryCoach: 1.3,
       motivation: 1.0, scoutingEye: 1.0, fitness: 0.7, bodyCare: 0.5,
       managing: 0.5, negotiation: 0.5,
     },
-    salaryBase: 300,
   },
   manager: {
     name: 'マネージャー',
     weights: {
-      battingCoach: 0.5, fieldingCoach: 0.5, baserunCoach: 0.5, batteryCoach: 0.5,
+      battingCoach: 0.5, fieldRunCoach: 0.5, pitchingCoach: 0.5, batteryCoach: 0.5,
       motivation: 1.3, scoutingEye: 1.2, fitness: 0.7, bodyCare: 0.7,
       managing: 1.5, negotiation: 1.5,
     },
-    salaryBase: 250,
   },
   trainer: {
     name: 'トレーナー',
     weights: {
-      battingCoach: 0.5, fieldingCoach: 0.5, baserunCoach: 0.8, batteryCoach: 0.5,
+      battingCoach: 0.5, fieldRunCoach: 0.7, pitchingCoach: 0.5, batteryCoach: 0.5,
       motivation: 0.8, scoutingEye: 0.5, fitness: 1.5, bodyCare: 1.5,
       managing: 0.5, negotiation: 0.5,
     },
-    salaryBase: 200,
   },
 };
 
 // スタッフのグレード（能力の基準値）
 export const STAFF_GRADES = {
-  S: { label: 'S級', baseMin: 70, baseMax: 95, salaryMult: 3.0 },
-  A: { label: 'A級', baseMin: 55, baseMax: 80, salaryMult: 2.0 },
-  B: { label: 'B級', baseMin: 40, baseMax: 65, salaryMult: 1.3 },
-  C: { label: 'C級', baseMin: 25, baseMax: 50, salaryMult: 0.8 },
-  D: { label: 'D級', baseMin: 10, baseMax: 35, salaryMult: 0.5 },
+  S: { label: 'S級', baseMin: 70, baseMax: 95 },
+  A: { label: 'A級', baseMin: 55, baseMax: 80 },
+  B: { label: 'B級', baseMin: 40, baseMax: 65 },
+  C: { label: 'C級', baseMin: 25, baseMax: 50 },
+  D: { label: 'D級', baseMin: 10, baseMax: 35 },
 };
+
+// 給料: 全員400万スタート、経験年数で昇給
+const BASE_SALARY = 400; // 万円/年
+const SALARY_PER_YEAR = 30; // 1年あたりの昇給額（万円）
+
+export const getStaffSalary = (staff) =>
+  BASE_SALARY + (staff.experience || 0) * SALARY_PER_YEAR;
 
 // ============================================================
 // スタッフ生成
@@ -89,7 +92,7 @@ export const generateStaff = (role, grade = null) => {
     abilities[key] = Math.min(99, Math.max(1, weighted));
   }
 
-  const salary = Math.round(profile.salaryBase * g.salaryMult / 10) * 10;
+  const experience = Math.floor(Math.random() * 10); // 0〜9年の経験
 
   return {
     id,
@@ -98,8 +101,7 @@ export const generateStaff = (role, grade = null) => {
     grade,
     age: role === 'trainer' ? 28 + Math.floor(Math.random() * 20) : 35 + Math.floor(Math.random() * 20),
     abilities,
-    salary, // 万円/年
-    experience: 0,
+    experience,
     personality: randomPersonality(),
   };
 };
@@ -150,8 +152,9 @@ export const getTeamStaffBonus = (staffList) => {
 export const getTrainingEfficiency = (staffBonus, type) => {
   const abilityMap = {
     batting: 'battingCoach',
-    fielding: 'fieldingCoach',
-    baserunning: 'baserunCoach',
+    fielding: 'fieldRunCoach',
+    baserunning: 'fieldRunCoach',
+    pitching: 'pitchingCoach',
     battery: 'batteryCoach',
     physical: 'fitness',
   };
@@ -170,6 +173,15 @@ export const getScoutAccuracyGain = (staffBonus) => {
 export const getNegotiationBonus = (staffBonus) => {
   const neg = staffBonus.negotiation || 50;
   return neg / 100; // 0〜1.0
+};
+
+// 年次更新: 全スタッフの経験を+1
+export const advanceStaffYear = (staffList) => {
+  if (!staffList) return;
+  for (const staff of staffList) {
+    staff.experience = (staff.experience || 0) + 1;
+    staff.age = (staff.age || 35) + 1;
+  }
 };
 
 // ============================================================
