@@ -350,6 +350,98 @@ export const getAllNameOverrides = () => {
   return names;
 };
 
+// ============================================================
+// カスタムチーム追加・削除（マスター設定、セーブデータに含めない）
+// ============================================================
+
+const CUSTOM_TEAMS_KEY = 'corpCustomTeams';
+const DELETED_TEAMS_KEY = 'corpDeletedTeams';
+
+const loadCustomTeams = () => {
+  try {
+    const raw = localStorage.getItem(CUSTOM_TEAMS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+const saveCustomTeams = (teams) => {
+  try {
+    localStorage.setItem(CUSTOM_TEAMS_KEY, JSON.stringify(teams));
+  } catch { /* ignore */ }
+};
+
+const loadDeletedTeamIds = () => {
+  try {
+    const raw = localStorage.getItem(DELETED_TEAMS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+const saveDeletedTeamIds = (ids) => {
+  try {
+    localStorage.setItem(DELETED_TEAMS_KEY, JSON.stringify(ids));
+  } catch { /* ignore */ }
+};
+
+export const addCustomTeam = (teamData) => {
+  const customs = loadCustomTeams();
+  const allIds = [...CORPORATE_TEAMS.map(t => t.id), ...customs.map(t => t.id)];
+  const newId = Math.max(0, ...allIds) + 1;
+  const budgetByRank = { S: 90, A: 70, B: 50, C: 35, D: 20 };
+  const newTeam = {
+    id: newId,
+    name: teamData.name,
+    city: teamData.city,
+    region: teamData.region,
+    type: teamData.type || 'club',
+    rank: teamData.rank || 'C',
+    budget: budgetByRank[teamData.rank] || 35,
+    isCustom: true,
+  };
+  customs.push(newTeam);
+  saveCustomTeams(customs);
+  return newTeam;
+};
+
+export const deleteTeam = (teamId) => {
+  // カスタムチームの場合は完全削除
+  const customs = loadCustomTeams();
+  const customIdx = customs.findIndex(t => t.id === teamId);
+  if (customIdx >= 0) {
+    customs.splice(customIdx, 1);
+    saveCustomTeams(customs);
+    // オーバーライドも削除
+    const overrides = loadOverrides();
+    delete overrides[teamId];
+    saveOverrides(overrides);
+    return;
+  }
+  // 既存チームの場合は削除済みリストに追加
+  const deleted = loadDeletedTeamIds();
+  if (!deleted.includes(teamId)) {
+    deleted.push(teamId);
+    saveDeletedTeamIds(deleted);
+  }
+  // オーバーライドも削除
+  const overrides = loadOverrides();
+  delete overrides[teamId];
+  saveOverrides(overrides);
+};
+
+export const restoreTeam = (teamId) => {
+  const deleted = loadDeletedTeamIds();
+  const idx = deleted.indexOf(teamId);
+  if (idx >= 0) {
+    deleted.splice(idx, 1);
+    saveDeletedTeamIds(deleted);
+  }
+};
+
+export const getDeletedTeams = () => {
+  const deletedIds = loadDeletedTeamIds();
+  return CORPORATE_TEAMS.filter(t => deletedIds.includes(t.id));
+};
+
 // オーバーライド適用済みのチームデータを取得
 const getEffectiveTeam = (team) => {
   const overrides = loadOverrides();
@@ -371,23 +463,32 @@ const getEffectiveTeam = (team) => {
   };
 };
 
+// 全チームを統合して返す（既存 + カスタム - 削除済み）
+const getMergedTeams = () => {
+  const deletedIds = new Set(loadDeletedTeamIds());
+  const base = CORPORATE_TEAMS.filter(t => !deletedIds.has(t.id));
+  const customs = loadCustomTeams();
+  return [...base, ...customs];
+};
+
 // ============================================================
 // ヘルパー関数
 // ============================================================
 
 export const getTeamsByRegion = (regionId) =>
-  CORPORATE_TEAMS
+  getMergedTeams()
     .map(t => getEffectiveTeam(t))
     .filter(t => t.region === regionId);
 
 export const getAllTeamsEffective = () =>
-  CORPORATE_TEAMS.map(t => getEffectiveTeam(t));
+  getMergedTeams().map(t => getEffectiveTeam(t));
 
 export const getRegionName = (regionId) =>
   REGIONS.find(r => r.id === regionId)?.name || regionId;
 
 export const getTeamById = (teamId) => {
-  const team = CORPORATE_TEAMS.find(t => t.id === teamId);
+  const all = getMergedTeams();
+  const team = all.find(t => t.id === teamId);
   if (!team) return null;
   return getEffectiveTeam(team);
 };
