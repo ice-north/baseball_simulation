@@ -283,15 +283,15 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
 
     // 引っ張り/流し打ちによる飛距離補正
     // 引っ張り: フルスイングでジャストミート → 飛距離+5%
-    // 流し打ち: バットの先端で当てる → 飛距離-8%
-    // RHB: pull=負方向(左), oppo=正方向(右) / LHB: pull=正方向(右), oppo=負方向(左)
+    // 流し打ち: バットの先端で当てる → 飛距離-8%（ミートが高いほど軽減）
     const pullDirection = direction * batSide; // 負=引っ張り、正=流し
     if (pullDirection < -15) {
-      // 強い引っ張り: +3〜5%
       distance *= 1.03 + Math.min(0.02, (-pullDirection - 15) / 30 * 0.02);
     } else if (pullDirection > 15) {
-      // 流し打ち: -4〜8%
-      distance *= 1.0 - Math.min(0.08, (pullDirection - 15) / 30 * 0.08);
+      // ミートが高いほど流し打ちの減衰を軽減（meet50→1.0倍, meet80→0.4倍に軽減）
+      const meetReduction = 1.0 - Math.min(0.6, Math.max(0, (batter.meet || 50) - 50) / 50 * 0.6);
+      const oppoMaxPenalty = 0.08 * meetReduction;
+      distance *= 1.0 - Math.min(oppoMaxPenalty, (pullDirection - 15) / 30 * oppoMaxPenalty);
     }
   }
 
