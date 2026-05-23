@@ -7,7 +7,7 @@ import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { autoSimulateGame, generateAILineup, POSITION_PLAYER_RECOVERY_BASE } from './autoSimulation.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { adjustGrowthModifier } from '../utils/constants.js';
-import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket } from '../corporate/toshitaikou.js';
+import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
 
 /**
  * setupManagedGame - 采配モードの試合セットアップ
@@ -489,22 +489,34 @@ export function executeHandleManagedGameEnd(ctx) {
   const pendingMatch = updatedSeasonData.toshitaikou?.pendingMatch;
   if (pendingMatch && info.isTournament) {
     const td = { ...updatedSeasonData.toshitaikou };
-    const qualifier = td.qualifiers[pendingMatch.regionId];
-    if (qualifier) {
-      const userWon = finalScore.home > finalScore.away;
-      const winnerName = userWon ? htn : atn;
-      const scoreArr = [finalScore.home, finalScore.away];
+    const userWon = finalScore.home > finalScore.away;
+    const winnerName = userWon ? htn : atn;
+    const scoreArr = [finalScore.home, finalScore.away];
 
-      advanceQualifierWithResult(qualifier, pendingMatch.roundIdx, pendingMatch.matchIdx, winnerName, scoreArr, htn);
-
-      // 予選が全て完了したかチェック
-      const allDone = Object.values(td.qualifiers).every(q => q.phase === 'done');
-      td.qualifiersDone = allDone;
-      td.userQualifierDone = qualifier.phase === 'done';
+    if (pendingMatch.bracketType === 'main_tournament' && td.mainTournament) {
+      // 本戦の結果記録
+      recordResult(td.mainTournament.bracket, pendingMatch.roundIdx, pendingMatch.matchIdx, winnerName, scoreArr);
+      if (isBracketComplete(td.mainTournament.bracket)) {
+        const rankings = getBracketRankings(td.mainTournament.bracket);
+        td.mainTournament.champion = rankings[0] || null;
+        td.mainTournament.runnerUp = rankings[1] || null;
+        td.mainTournament.phase = 'done';
+        td.champion = td.mainTournament.champion;
+        td.runnerUp = td.mainTournament.runnerUp;
+        td.mainDone = true;
+      }
+    } else if (pendingMatch.regionId) {
+      // 予選の結果記録
+      const qualifier = td.qualifiers[pendingMatch.regionId];
+      if (qualifier) {
+        advanceQualifierWithResult(qualifier, pendingMatch.roundIdx, pendingMatch.matchIdx, winnerName, scoreArr, htn);
+        const allDone = Object.values(td.qualifiers).every(q => q.phase === 'done');
+        td.qualifiersDone = allDone;
+        td.userQualifierDone = qualifier.phase === 'done';
+      }
     }
     td.pendingMatch = null;
     updatedSeasonData = { ...updatedSeasonData, toshitaikou: td };
-    // トーナメント試合では日付を進めない
     setSeasonData(updatedSeasonData);
     setManagedGameInfo(null);
     managedGameInfoRef.current = null;

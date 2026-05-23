@@ -332,19 +332,32 @@ export function autoPlayQualifier(qualifier, userTeamName = null) {
   return qualifier;
 }
 
-// ユーザーの試合結果を記録し、残りの自動消化を進める
+// ユーザーの試合結果を記録（同ラウンドの他AI試合も消化）
 export function advanceQualifierWithResult(qualifier, roundIdx, matchIdx, winnerName, score, userTeamName) {
   recordResult(qualifier.mainBracket, roundIdx, matchIdx, winnerName, score);
-  // ユーザーが敗退したか判定
+  // 同じラウンドの残りAI試合を消化
+  const round = qualifier.mainBracket.rounds[roundIdx];
+  for (let m = 0; m < round.length; m++) {
+    const match = round[m];
+    if (match.winner || match.isBye || !match.team1 || !match.team2) continue;
+    if (match.team1 === userTeamName || match.team2 === userTeamName) continue;
+    const def1 = qualifier.teamDefsMap[match.team1];
+    const def2 = qualifier.teamDefsMap[match.team2];
+    if (!def1 || !def2) continue;
+    const result = simulateQuickMatch(def1, def2);
+    recordResult(qualifier.mainBracket, roundIdx, m, result.winner, result.score);
+  }
+
+  // ユーザーが敗退した場合、以降の全ラウンドを自動消化
   const userLost = winnerName !== userTeamName;
-  // ユーザーの次の試合の前まで自動消化（敗退時は全消化）
-  autoPlayBracket(qualifier.mainBracket, qualifier.teamDefsMap, userLost ? null : userTeamName);
+  if (userLost) {
+    autoPlayBracket(qualifier.mainBracket, qualifier.teamDefsMap);
+  }
 
   if (isBracketComplete(qualifier.mainBracket)) {
     qualifier.qualifiedTeams = [qualifier.mainBracket.champion];
     if (qualifier.slots > 1) {
       if (!qualifier.losersBracket) buildLosersBracket(qualifier);
-      // 敗者復活はAI同士で自動消化
       autoPlayBracket(qualifier.losersBracket, qualifier.teamDefsMap);
       if (isBracketComplete(qualifier.losersBracket)) {
         const losersRankings = getBracketRankings(qualifier.losersBracket);
@@ -360,7 +373,7 @@ export function advanceQualifierWithResult(qualifier, roundIdx, matchIdx, winner
 // 本戦（32チームトーナメント）
 // ============================================================
 
-export function createMainTournament(qualifiedByRegion, defendingChampionName) {
+export function createMainTournament(qualifiedByRegion, defendingChampionName, calendarYear = 2024) {
   const allQualified = [];
   const teamDefsMap = {};
 
@@ -400,14 +413,18 @@ export function createMainTournament(qualifiedByRegion, defendingChampionName) {
 
   const teamNames = allQualified.slice(0, 32).map(t => t.name);
 
+  const bracket = createBracket(teamNames);
+  // 本戦は8月1日から2日おきにラウンド進行
+  assignBracketDates(bracket, { year: calendarYear, month: 8, day: 1 }, 2);
+
   return {
-    bracket: createBracket(teamNames),
+    bracket,
     teams: allQualified.slice(0, 32),
     teamDefsMap,
     defendingChampion: defendingChampionName || null,
     champion: null,
     runnerUp: null,
-    phase: 'playing', // 'playing' → 'done'
+    phase: 'playing',
   };
 }
 
@@ -424,12 +441,203 @@ export function autoPlayMainTournament(tournament) {
 // 統合: 都市対抗大会の全工程を生成
 // ============================================================
 
-// 全12地域の予選＋本戦を生成（自動消化あり/なし選択可）
+// ブラケットの各ラウンドに日付を割り当て
+// startDate: {year, month, day}, intervalDays: ラウンド間の日数
+export function assignBracketDates(bracket, startDate, intervalDays = 2) {
+  if (!bracket) return;
+  bracket.roundDates = [];
+  let currentDay = startDate.day;
+  for (let r = 0; r < bracket.rounds.length; r++) {
+    bracket.roundDates.push({ year: startDate.year, month: startDate.month, day: currentDay });
+    currentDay += intervalDays;
+  }
+}
+
+// 予選ブラケットに日程を割り当て（勝者側+敗者復活）
+export function assignQualifierDates(qualifier, startDate, intervalDays = 2) {
+  assignBracketDates(qualifier.mainBracket, startDate, intervalDays);
+  // 敗者復活は勝者側の全ラウンド完了翌日から
+  const mainRounds = qualifier.mainBracket.rounds.length;
+  const losersStartDay = startDate.day + mainRounds * intervalDays;
+  qualifier.losersStartDate = { year: startDate.year, month: startDate.month, day: losersStartDay };
+}
+
+// 指定日に該当するラウンドのAI試合を消化
+// 戻り値: そのラウンドで試合が行われたか
+export function simulateBracketRoundOnDate(bracket, teamDefsMap, dateObj, userTeamName = null) {
+  if (!bracket || !bracket.roundDates) return false;
+  let played = false;
+  for (let r = 0; r < bracket.rounds.length; r++) {
+    const rd = bracket.roundDates[r];
+    if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
+    // このラウンドの試合を消化
+    for (let m = 0; m < bracket.rounds[r].length; m++) {
+      const match = bracket.rounds[r][m];
+      if (match.winner || match.isBye || !match.team1 || !match.team2) continue;
+      if (userTeamName && (match.team1 === userTeamName || match.team2 === userTeamName)) continue;
+      const def1 = teamDefsMap[match.team1];
+      const def2 = teamDefsMap[match.team2];
+      if (!def1 || !def2) continue;
+      const result = simulateQuickMatch(def1, def2);
+      recordResult(bracket, r, m, result.winner, result.score);
+      played = true;
+    }
+  }
+  return played;
+}
+
+// 予選を日付ベースで進行（勝者側＋敗者復活）
+export function simulateQualifierOnDate(qualifier, dateObj, userTeamName = null) {
+  const isUserRegion = userTeamName && qualifier.teamDefsMap[userTeamName];
+  const utn = isUserRegion ? userTeamName : null;
+
+  simulateBracketRoundOnDate(qualifier.mainBracket, qualifier.teamDefsMap, dateObj, utn);
+
+  // 勝者側が完了したら代表1人目を確定＋敗者復活を生成
+  if (isBracketComplete(qualifier.mainBracket) && qualifier.phase === 'main') {
+    qualifier.qualifiedTeams = [qualifier.mainBracket.champion];
+    if (qualifier.slots > 1) {
+      buildLosersBracket(qualifier);
+      // 敗者復活に日程を割り当て
+      if (qualifier.losersStartDate) {
+        assignBracketDates(qualifier.losersBracket, qualifier.losersStartDate, 2);
+      }
+    } else {
+      qualifier.phase = 'done';
+    }
+  }
+
+  // 敗者復活の消化
+  if (qualifier.losersBracket && qualifier.phase === 'losers') {
+    simulateBracketRoundOnDate(qualifier.losersBracket, qualifier.teamDefsMap, dateObj);
+    if (isBracketComplete(qualifier.losersBracket)) {
+      const losersRankings = getBracketRankings(qualifier.losersBracket);
+      qualifier.qualifiedTeams.push(...losersRankings.slice(0, qualifier.slots - 1));
+      qualifier.phase = 'done';
+    }
+  }
+}
+
+// 本戦ブラケットを日付ベースで進行
+export function simulateMainTournamentOnDate(tournament, dateObj, userTeamName = null) {
+  if (!tournament || tournament.phase === 'done') return;
+  simulateBracketRoundOnDate(tournament.bracket, tournament.teamDefsMap, dateObj, userTeamName);
+  if (isBracketComplete(tournament.bracket)) {
+    const rankings = getBracketRankings(tournament.bracket);
+    tournament.champion = rankings[0] || null;
+    tournament.runnerUp = rankings[1] || null;
+    tournament.phase = 'done';
+  }
+}
+
+// 指定日にユーザーのトーナメント試合があるかチェック
+export function getUserMatchOnDate(toshitaikou, dateObj, userTeamName) {
+  if (!toshitaikou || !userTeamName) return null;
+
+  // 予選チェック
+  if (!toshitaikou.qualifiersDone && toshitaikou.userRegionId) {
+    const q = toshitaikou.qualifiers[toshitaikou.userRegionId];
+    if (q && q.mainBracket?.roundDates) {
+      for (let r = 0; r < q.mainBracket.rounds.length; r++) {
+        const rd = q.mainBracket.roundDates[r];
+        if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
+        for (let m = 0; m < q.mainBracket.rounds[r].length; m++) {
+          const match = q.mainBracket.rounds[r][m];
+          if (!match.winner && !match.isBye && match.team1 && match.team2) {
+            if (match.team1 === userTeamName || match.team2 === userTeamName) {
+              return { type: 'qualifier', regionId: toshitaikou.userRegionId, roundIdx: r, matchIdx: m, match, bracketType: 'main' };
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 本戦チェック
+  if (toshitaikou.mainTournament && toshitaikou.mainTournament.phase !== 'done') {
+    const mt = toshitaikou.mainTournament;
+    if (mt.bracket?.roundDates) {
+      for (let r = 0; r < mt.bracket.rounds.length; r++) {
+        const rd = mt.bracket.roundDates[r];
+        if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
+        for (let m = 0; m < mt.bracket.rounds[r].length; m++) {
+          const match = mt.bracket.rounds[r][m];
+          if (!match.winner && !match.isBye && match.team1 && match.team2) {
+            if (match.team1 === userTeamName || match.team2 === userTeamName) {
+              return { type: 'main', roundIdx: r, matchIdx: m, match, bracketType: 'main_tournament' };
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+// トーナメント日程をカレンダー表示用に取得
+// 戻り値: [{date, label, isUserMatch, type}]
+export function getTournamentDatesForCalendar(toshitaikou, userTeamName) {
+  if (!toshitaikou) return [];
+  const dates = [];
+
+  // 予選日程
+  if (toshitaikou.qualifiers) {
+    for (const regionId of Object.keys(toshitaikou.qualifiers)) {
+      const q = toshitaikou.qualifiers[regionId];
+      const isUserRegion = regionId === toshitaikou.userRegionId;
+      if (q.mainBracket?.roundDates) {
+        q.mainBracket.roundDates.forEach((rd, ri) => {
+          const matches = q.mainBracket.rounds[ri]?.filter(m => !m.isBye && (m.team1 || m.team2));
+          if (!matches || matches.length === 0) return;
+          const hasUserMatch = isUserRegion && matches.some(m =>
+            !m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)
+          );
+          const allDone = matches.every(m => m.winner || m.isBye);
+          dates.push({
+            date: rd,
+            label: isUserRegion ? '予選' : null,
+            isUserMatch: hasUserMatch,
+            isUserRegion,
+            type: 'qualifier',
+            regionId,
+            done: allDone,
+          });
+        });
+      }
+    }
+  }
+
+  // 本戦日程
+  if (toshitaikou.mainTournament?.bracket?.roundDates) {
+    const mt = toshitaikou.mainTournament;
+    mt.bracket.roundDates.forEach((rd, ri) => {
+      const roundName = getRoundName(mt.bracket, ri);
+      const matches = mt.bracket.rounds[ri]?.filter(m => !m.isBye && (m.team1 || m.team2));
+      if (!matches || matches.length === 0) return;
+      const hasUserMatch = matches.some(m =>
+        !m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)
+      );
+      const allDone = matches.every(m => m.winner || m.isBye);
+      dates.push({
+        date: rd,
+        label: roundName,
+        isUserMatch: hasUserMatch,
+        type: 'main',
+        done: allDone,
+      });
+    });
+  }
+
+  return dates;
+}
+
+// 全12地域の予選＋本戦を生成（日付ベース進行対応版）
 export function generateToshitaikou(options = {}) {
   const {
     defendingChampionName = null,
     userTeamName = null,
-    autoSimulate = true,
+    calendarYear = 2024,
   } = options;
 
   const qualifiers = {};
@@ -439,7 +647,6 @@ export function generateToshitaikou(options = {}) {
   for (const regionId of Object.keys(REGIONAL_SLOTS)) {
     const qualifier = createRegionalQualifier(regionId);
 
-    // ユーザーチームの地域を特定
     if (userTeamName && qualifier.teamDefsMap[userTeamName]) {
       userRegionId = regionId;
     }
@@ -447,13 +654,18 @@ export function generateToshitaikou(options = {}) {
     qualifiers[regionId] = qualifier;
   }
 
-  // 全予選を自動消化（ユーザーチームの試合のみスキップ）
+  // 予選に日程を割り当て（6月1日から2日おきにラウンド進行）
   for (const regionId of Object.keys(qualifiers)) {
-    const isUserRegion = regionId === userRegionId;
-    autoPlayQualifier(qualifiers[regionId], isUserRegion ? userTeamName : null);
+    assignQualifierDates(qualifiers[regionId], { year: calendarYear, month: 6, day: 1 }, 2);
   }
 
-  // ユーザーの地域が完了していなければ予選進行中
+  // ユーザー地域以外の予選は即座に全消化（日程表示は残す）
+  for (const regionId of Object.keys(qualifiers)) {
+    if (regionId !== userRegionId) {
+      autoPlayQualifier(qualifiers[regionId], null);
+    }
+  }
+
   const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';
 
   return {
