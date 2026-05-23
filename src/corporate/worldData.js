@@ -6,27 +6,24 @@
 export const WORLD_DATA = {
   initialized: false,
   mode: null,            // 'independent' | 'corporate'
+  userLeagueId: null,    // ユーザーが所属するリーグID ('shikoku','bc','kyushu','hokkaido','corporate')
   year: 1,
 
-  // 選手プール（両リーグ共通）
+  // 選手プール（全リーグ共通）
   playerPools: {
     highSchool: [],      // 高卒候補（18歳）
     college: [],         // 大卒候補（22歳）
     free: [],            // フリー選手（解雇・退団）
   },
 
-  // 独立リーグの状態（社会人モード時はバックグラウンド進行）
-  independentLeague: {
-    teams: {},           // TEAMS_DATAと同じ形式
-    seasonData: null,
-    schedule: [],
-  },
+  // 独立リーグの状態（リーグIDごとに管理）
+  // { shikoku: { teams: [...], schedule: [...], standings: [...] }, bc: {...}, ... }
+  independentLeagues: {},
 
-  // 社会人リーグの状態（独立リーグモード時はバックグラウンド進行）
+  // 社会人リーグの状態
   corporateLeague: {
-    teams: {},           // チームID → { ...corporateTeamDef, players, staff, budget, ... }
-    seasonData: null,
-    tournaments: {},     // 各大会の進行状態
+    teams: {},           // チーム名→TEAMS_DATA参照
+    userTeam: null,
   },
 
   // プロ（NPB）ドラフト関連
@@ -168,15 +165,16 @@ const generatePoolPlayerName = () => {
 // ワールド初期化・リセット
 // ============================================================
 
-export const initializeWorld = (mode) => {
+export const initializeWorld = (mode, userLeagueId = null) => {
   WORLD_DATA.initialized = true;
   WORLD_DATA.mode = mode;
+  WORLD_DATA.userLeagueId = userLeagueId;
   WORLD_DATA.year = 1;
   WORLD_DATA.playerPools.highSchool = [];
   WORLD_DATA.playerPools.college = [];
   WORLD_DATA.playerPools.free = [];
-  WORLD_DATA.independentLeague = { teams: {}, seasonData: null, schedule: [] };
-  WORLD_DATA.corporateLeague = { teams: {}, seasonData: null, tournaments: {} };
+  WORLD_DATA.independentLeagues = {};
+  WORLD_DATA.corporateLeague = { teams: {}, userTeam: null };
   WORLD_DATA.draft = { draftedPlayers: [], history: [] };
   nextPoolPlayerId = 10000;
 };
@@ -184,10 +182,11 @@ export const initializeWorld = (mode) => {
 export const resetWorld = () => {
   WORLD_DATA.initialized = false;
   WORLD_DATA.mode = null;
+  WORLD_DATA.userLeagueId = null;
   WORLD_DATA.year = 1;
   WORLD_DATA.playerPools = { highSchool: [], college: [], free: [] };
-  WORLD_DATA.independentLeague = { teams: {}, seasonData: null, schedule: [] };
-  WORLD_DATA.corporateLeague = { teams: {}, seasonData: null, tournaments: {} };
+  WORLD_DATA.independentLeagues = {};
+  WORLD_DATA.corporateLeague = { teams: {}, userTeam: null };
   WORLD_DATA.draft = { draftedPlayers: [], history: [] };
   nextPoolPlayerId = 10000;
 };

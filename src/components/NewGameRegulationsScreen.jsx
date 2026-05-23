@@ -136,7 +136,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
   };
 
   const handleStart = () => {
-    onComplete(tempSettings);
+    onComplete({ ...tempSettings, preset: selectedPreset });
   };
 
   const presetList = [

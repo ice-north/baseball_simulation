@@ -5,6 +5,9 @@ import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch } from '../corporate/toshitaikou.js';
+import { simulateParallelWorldDate, getAllParallelLeagues } from '../corporate/parallelWorldManager.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
+import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
@@ -188,6 +191,24 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return newData;
     }
 
+    // 独立リーグモード: 社会人都市対抗をバックグラウンドで自動処理
+    if (!isCorporate && WORLD_DATA.initialized && WORLD_DATA.mode === 'independent') {
+      if (month >= 6 && !WORLD_DATA.corporateToshitaikou?.generated) {
+        const tournament = generateToshitaikou({ userTeamName: null });
+        if (!WORLD_DATA.corporateToshitaikou) WORLD_DATA.corporateToshitaikou = {};
+        WORLD_DATA.corporateToshitaikou = { ...tournament, generated: true, qualifiersDone: true, mainDone: false };
+      }
+      if (month >= 8 && WORLD_DATA.corporateToshitaikou?.generated && !WORLD_DATA.corporateToshitaikou?.mainDone) {
+        const td = WORLD_DATA.corporateToshitaikou;
+        const mainTournament = createMainTournament(td.qualifiers, null);
+        autoPlayMainTournament(mainTournament);
+        WORLD_DATA.corporateToshitaikou.mainTournament = mainTournament;
+        WORLD_DATA.corporateToshitaikou.champion = mainTournament.champion;
+        WORLD_DATA.corporateToshitaikou.runnerUp = mainTournament.runnerUp;
+        WORLD_DATA.corporateToshitaikou.mainDone = true;
+      }
+    }
+
     if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('draft');
@@ -305,6 +326,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const { data: afterSimData, results } = simulateGamesOnDate(seasonData);
     let newSeasonData = progressDate(afterSimData, days);
     setLastGameResults(results);
+
+    // 平行世界の試合をシミュレーション
+    if (WORLD_DATA.initialized) {
+      simulateParallelWorldDate(seasonData.currentDate);
+    }
+
     if (newSeasonData.currentDate.month !== selectedMonth) setSelectedMonth(newSeasonData.currentDate.month);
     const finalData = checkAndTriggerEvents(seasonData, newSeasonData);
     if (finalData !== null) setSeasonData(finalData);
@@ -1821,6 +1848,54 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               </div>
             </div>
           )}
+
+          {/* 平行世界リーグ順位表 */}
+          {WORLD_DATA.initialized && (() => {
+            const parallelLeagues = getAllParallelLeagues();
+            const corpToshi = WORLD_DATA.corporateToshitaikou;
+            if (parallelLeagues.length === 0 && !corpToshi?.mainDone) return null;
+            return (
+              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-emerald-700/30 mt-3">
+                <h2 className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-1.5">
+                  <span>🌐</span> 他リーグ状況
+                </h2>
+                <div className="space-y-2">
+                  {parallelLeagues.map(league => (
+                    <div key={league.id} className="bg-gray-800/50 rounded-lg p-2 border border-gray-700/30">
+                      <div className="text-xs font-bold text-gray-300 mb-1 flex items-center justify-between">
+                        <span>{INDEPENDENT_LEAGUES[league.id]?.name || league.name}</span>
+                        <span className="text-[10px] text-gray-500">{Math.round(league.gamesPlayed)}試合消化</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {league.standings.slice(0, 4).map((s, i) => {
+                          const wr = (s.wins + s.losses) > 0 ? (s.wins / (s.wins + s.losses)).toFixed(3) : '.000';
+                          return (
+                            <div key={s.team} className="flex items-center text-[11px] gap-1">
+                              <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-400' : 'text-gray-500'}`}>{i + 1}</span>
+                              <span className="flex-1 text-gray-200 truncate">{s.team}</span>
+                              <span className="text-green-400 w-5 text-right">{s.wins}</span>
+                              <span className="text-gray-600">-</span>
+                              <span className="text-red-400 w-5">{s.losses}</span>
+                              <span className="text-gray-400 w-8 text-right font-mono">{wr}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  {corpToshi?.mainDone && (
+                    <div className="bg-yellow-900/20 rounded-lg p-2 border border-yellow-700/30">
+                      <div className="text-xs font-bold text-yellow-400 mb-1">🏆 都市対抗野球大会</div>
+                      <div className="text-[11px] text-gray-300">
+                        <span className="text-yellow-300 font-bold">優勝: {corpToshi.champion}</span>
+                        <span className="text-gray-500 ml-2">準優勝: {corpToshi.runnerUp}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

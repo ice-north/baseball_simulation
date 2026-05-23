@@ -51,6 +51,7 @@ import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayof
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
 import { generateTryoutCandidates, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining, processNPBDraft } from './season/yearProgressionSystem.js';
+import { initializeParallelWorldForIndependent } from './corporate/corporateInit.js';
 
 // Component imports
 import ManagementScreen from './components/ManagementScreen.jsx';
@@ -128,9 +129,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // チーム名・略称をレギュレーションにも保存（成績表等で使用）
         newSeasonData.settings.teamNames = teamNames;
         newSeasonData.settings.teamAbbreviations = customAbbreviations || teamNames.map((_, i) => String.fromCharCode(0xFF21 + i));
+        newSeasonData.settings.preset = regulations.preset || null;
 
         setLeagueConfig({
-          format: 'single',
+          format: regulations.leagueFormat || 'single',
           teamsPerLeague: teamCount,
           leagues: [{ name: 'リーグ', teams: teamNames }]
         });

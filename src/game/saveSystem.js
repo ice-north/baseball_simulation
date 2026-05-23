@@ -1,6 +1,7 @@
 import { compressData, decompressData, getLocalStorageUsage } from '../utils/compression.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
 
@@ -37,13 +38,30 @@ export const migrateOldSaveData = () => {
 // ゲームデータを保存（スロット指定、圧縮対応）
 export const saveGameToSlot = (slotIndex, gameState) => {
   try {
+    const worldDataSnapshot = WORLD_DATA.initialized ? {
+      initialized: WORLD_DATA.initialized,
+      mode: WORLD_DATA.mode,
+      userLeagueId: WORLD_DATA.userLeagueId,
+      year: WORLD_DATA.year,
+      independentLeagues: JSON.parse(JSON.stringify(WORLD_DATA.independentLeagues)),
+      corporateLeague: { teams: Object.keys(WORLD_DATA.corporateLeague?.teams || {}), userTeam: WORLD_DATA.corporateLeague?.userTeam },
+      draft: JSON.parse(JSON.stringify(WORLD_DATA.draft)),
+      corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
+        generated: WORLD_DATA.corporateToshitaikou.generated,
+        mainDone: WORLD_DATA.corporateToshitaikou.mainDone,
+        champion: WORLD_DATA.corporateToshitaikou.champion,
+        runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
+      } : null,
+    } : null;
+
     const saveData = {
-      version: '2.11.0',
+      version: '2.12.0',
       timestamp: new Date().toISOString(),
       slotIndex,
       seasonData: gameState.seasonData,
       leagueConfig: gameState.leagueConfig,
       teamsData: JSON.parse(JSON.stringify(TEAMS_DATA)),
+      worldData: worldDataSnapshot,
       screenMode: gameState.screenMode,
       managementView: gameState.managementView,
       gameFlowState: gameState.gameFlowState,
@@ -109,6 +127,27 @@ export const loadGameFromSlot = (slotIndex) => {
       Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
       Object.keys(backup).forEach(k => { TEAMS_DATA[k] = backup[k]; });
       return { success: false, error: 'データの復元中にエラーが発生しました。元の状態に戻しました。' };
+    }
+
+    // WORLD_DATA復元
+    if (saveData.worldData && saveData.worldData.initialized) {
+      const wd = saveData.worldData;
+      WORLD_DATA.initialized = true;
+      WORLD_DATA.mode = wd.mode;
+      WORLD_DATA.userLeagueId = wd.userLeagueId;
+      WORLD_DATA.year = wd.year;
+      WORLD_DATA.independentLeagues = wd.independentLeagues || {};
+      WORLD_DATA.corporateLeague = {
+        teams: {},
+        userTeam: wd.corporateLeague?.userTeam || null,
+      };
+      if (wd.corporateLeague?.teams) {
+        for (const name of wd.corporateLeague.teams) {
+          if (TEAMS_DATA[name]) WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
+        }
+      }
+      WORLD_DATA.draft = wd.draft || { draftedPlayers: [], history: [] };
+      WORLD_DATA.corporateToshitaikou = wd.corporateToshitaikou || null;
     }
 
     // バント能力値の移行（旧セーブデータ互換）

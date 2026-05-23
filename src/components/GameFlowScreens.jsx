@@ -4,7 +4,7 @@ import { SEASON_PHASES, createSeasonData, initializeStandings } from '../season/
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
-import { initializeCorporateGame } from '../corporate/corporateInit.js';
+import { initializeCorporateGame, initializeParallelWorldForIndependent } from '../corporate/corporateInit.js';
 
 import StartScreen from './StartScreen.jsx';
 import ManualScreen from './ManualScreen.jsx';
@@ -168,9 +168,37 @@ const GameFlowScreens = ({
     return <NewGameRegulationsScreen
       onComplete={(regulations) => {
         initializeNewGame(regulations);
-        setGameFlowState('newgame_tryout');
+        if (regulations.preset) {
+          setGameFlowState('independent_loading');
+          setTimeout(() => {
+            const teamNames = Object.keys(TEAMS_DATA).filter(name => {
+              const team = TEAMS_DATA[name];
+              return team && !team.corporateTeamId && !team.independentLeagueId;
+            });
+            initializeParallelWorldForIndependent(regulations.preset, teamNames);
+            setGameFlowState('newgame_tryout');
+          }, 50);
+        } else {
+          setGameFlowState('newgame_tryout');
+        }
       }}
     />;
+  }
+
+  // INDEPENDENT: ローディング画面（平行世界の生成）
+  if (gameFlowState === 'independent_loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⚾</div>
+          <div className="text-white text-xl font-bold mb-2">平行世界を初期化中...</div>
+          <div className="text-gray-400 text-sm">社会人チーム179チーム＋独立リーグの選手を生成しています</div>
+          <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
+            <div className="h-full bg-green-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // NEW GAME: 初期トライアウト

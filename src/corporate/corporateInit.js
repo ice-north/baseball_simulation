@@ -25,6 +25,9 @@ import { generateStaff } from './staffData.js';
 import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA, clearReleasedPlayersPool } from '../teams-data.js';
+import { INDEPENDENT_LEAGUES, ALL_INDEPENDENT_LEAGUE_IDS } from './independentLeagueData.js';
+import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
+import { initializeStandings } from '../season/seasonManager.js';
 
 // ============================================================
 // ランク別チーム構成
@@ -255,14 +258,64 @@ const makeAbbreviation = (name) => {
   return name.slice(0, 3);
 };
 
-// 社会人モードの完全初期化（全チームのロスターを生成）
+// ============================================================
+// 独立リーグチームの初期化（全4リーグ、ユーザーリーグは除外可）
+// ============================================================
+
+export const initializeIndependentLeagues = (excludeLeagueId = null, existingTeamNames = []) => {
+  const existingSet = new Set(existingTeamNames);
+
+  for (const leagueId of ALL_INDEPENDENT_LEAGUE_IDS) {
+    if (leagueId === excludeLeagueId) continue;
+
+    const leagueDef = INDEPENDENT_LEAGUES[leagueId];
+    const teamNames = [];
+
+    for (const teamDef of leagueDef.teams) {
+      if (TEAMS_DATA[teamDef.name] || existingSet.has(teamDef.name)) continue;
+
+      const roster = generateCorporateRoster(teamDef, 1);
+      TEAMS_DATA[teamDef.name] = {
+        name: teamDef.name,
+        abbreviation: teamDef.abbreviation || makeAbbreviation(teamDef.name),
+        players: roster,
+        pitchingRotation: null,
+        independentLeagueId: leagueId,
+      };
+      teamNames.push(teamDef.name);
+    }
+
+    const schedule = generateFullSeasonSchedule({
+      teams: teamNames,
+      gamesPerSeason: leagueDef.gamesPerSeason,
+      startDate: { year: 2024, month: 4, day: 1 },
+      endDate: { year: 2024, month: 9, day: 30 },
+      leagueFormat: leagueDef.leagueFormat || 'single',
+      leagueNames: leagueDef.leagueNames,
+    });
+
+    WORLD_DATA.independentLeagues[leagueId] = {
+      name: leagueDef.name,
+      teams: teamNames,
+      schedule,
+      standings: initializeStandings(teamNames),
+      results: [],
+    };
+  }
+};
+
+// ============================================================
+// 社会人モードの完全初期化（全チーム＋独立リーグのロスターを生成）
+// ============================================================
+
 export const initializeCorporateGame = (teamDef) => {
   corporatePlayerIdBase = 20000;
 
-  initializeWorld('corporate');
+  initializeWorld('corporate', 'corporate');
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
   clearReleasedPlayersPool();
 
+  // 社会人179チーム生成
   const allTeamDefs = getAllTeamsEffective();
   const userTeamName = teamDef.displayName || teamDef.name;
   const allTeamNames = [];
@@ -309,7 +362,53 @@ export const initializeCorporateGame = (teamDef) => {
     WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
   }
 
+  // 独立リーグ4つも生成
+  initializeIndependentLeagues(null, allTeamNames);
+
   return { userTeamName, allTeamNames, roster: userRoster, staff: userStaff };
+};
+
+// ============================================================
+// 独立リーグモードの平行世界初期化
+// ユーザーが独立リーグで遊ぶ時に、社会人+他の独立リーグを生成
+// ============================================================
+
+export const initializeParallelWorldForIndependent = (userLeagueId, userTeamNames) => {
+  initializeWorld('independent', userLeagueId);
+  corporatePlayerIdBase = 20000;
+
+  // 社会人チーム全179チーム生成
+  const allCorpDefs = getAllTeamsEffective();
+  const corpTeamNames = [];
+  for (const def of allCorpDefs) {
+    const name = def.displayName || def.name;
+    if (TEAMS_DATA[name]) continue;
+
+    const roster = generateCorporateRoster(def, 1);
+    const staff = generateInitialStaff(def.rank);
+    TEAMS_DATA[name] = {
+      name,
+      abbreviation: makeAbbreviation(name),
+      players: roster,
+      pitchingRotation: null,
+      corporateTeamId: def.id,
+      corporateData: {
+        rank: def.rank, region: def.region, city: def.city, type: def.type,
+        budget: def.budget || BUDGET_BY_RANK[def.rank] || 35,
+        staff,
+        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
+        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
+      },
+    };
+    corpTeamNames.push(name);
+  }
+  WORLD_DATA.corporateLeague.teams = {};
+  for (const name of corpTeamNames) {
+    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
+  }
+
+  // ユーザーのリーグ以外の独立リーグを生成
+  initializeIndependentLeagues(userLeagueId, [...userTeamNames, ...corpTeamNames]);
 };
 
 // ============================================================
