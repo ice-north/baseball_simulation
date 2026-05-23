@@ -4,6 +4,7 @@ import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } 
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
+import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName } from '../corporate/toshitaikou.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
@@ -155,6 +156,25 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       newData = handlePhaseTransition(newData, newPhase);
     }
     const { month, day } = newData.currentDate;
+    const isCorporate = newData.settings?.corporateMode;
+
+    if (isCorporate && month >= 6 && !newData.toshitaikou?.qualifiersDone) {
+      const tournament = generateToshitaikou({ autoSimulate: true });
+      newData = { ...newData, toshitaikou: { ...tournament, qualifiersDone: true, mainDone: false } };
+      setSeasonData(newData);
+      return newData;
+    }
+
+    if (isCorporate && month >= 8 && newData.toshitaikou?.qualifiersDone && !newData.toshitaikou?.mainDone) {
+      const td = newData.toshitaikou;
+      const prevChamp = td.prevChampion || null;
+      const mainTournament = createMainTournament(td.qualifiers, prevChamp);
+      autoPlayMainTournament(mainTournament);
+      newData = { ...newData, toshitaikou: { ...td, mainTournament, champion: mainTournament.champion, runnerUp: mainTournament.runnerUp, mainDone: true } };
+      setSeasonData(newData);
+      return newData;
+    }
+
     if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('draft');
@@ -1255,9 +1275,97 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           })()}
         </div>
 
-        {/* 右カラム: 順位表 */}
+        {/* 右カラム: 順位表 or 都市対抗トーナメント */}
         <div className="w-[420px] shrink-0">
-          {(() => {
+          {seasonData.settings?.corporateMode ? (() => {
+            const td = seasonData.toshitaikou;
+            if (!td) return (
+              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-4 shadow-xl border border-gray-700/30">
+                <h2 className="text-base font-bold text-white flex items-center gap-2 mb-2">
+                  <span>📅</span> 年間スケジュール
+                </h2>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between text-gray-300"><span>4月〜5月</span><span className="text-gray-500">練習期間</span></div>
+                  <div className={`flex justify-between ${seasonData.currentDate.month >= 6 ? 'text-yellow-400 font-bold' : 'text-gray-300'}`}><span>6月</span><span>都市対抗 地区予選</span></div>
+                  <div className="flex justify-between text-gray-300"><span>7月</span><span className="text-gray-500">練習期間</span></div>
+                  <div className={`flex justify-between ${seasonData.currentDate.month >= 8 ? 'text-yellow-400 font-bold' : 'text-gray-300'}`}><span>8月</span><span>都市対抗 本戦</span></div>
+                  <div className="flex justify-between text-gray-300"><span>9月〜10月</span><span className="text-gray-500">練習期間</span></div>
+                  <div className="flex justify-between text-gray-300"><span>11月</span><span>契約更改・オフ</span></div>
+                </div>
+              </div>
+            );
+
+            const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
+
+            if (td.mainDone && td.mainTournament) {
+              const mt = td.mainTournament;
+              const bracket = mt.bracket;
+              return (
+                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-yellow-700/30">
+                  <h2 className="text-base font-bold text-yellow-400 flex items-center gap-2 mb-2">
+                    <span>🏆</span> 都市対抗野球大会 本戦
+                  </h2>
+                  <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2 mb-2 text-center">
+                    <div className="text-yellow-400 font-bold">優勝: {td.champion}</div>
+                    <div className="text-gray-400 text-xs">準優勝: {td.runnerUp}</div>
+                  </div>
+                  {bracket && bracket.rounds.map((round, ri) => {
+                    const realMatches = round.filter(m => !m.isBye && m.winner);
+                    if (realMatches.length === 0) return null;
+                    return (
+                      <div key={ri} className="mb-1.5">
+                        <div className="text-gray-400 text-[10px] font-bold mb-0.5">{getRoundName(bracket, ri)}</div>
+                        <div className="space-y-0.5">
+                          {realMatches.map((m, mi) => (
+                            <div key={mi} className="flex items-center gap-1.5 text-xs">
+                              <span className={m.winner === m.team1 ? 'text-white font-bold' : 'text-gray-500'}>{m.team1}</span>
+                              <span className="text-gray-600 text-[10px]">{m.score?.[0]}-{m.score?.[1]}</span>
+                              <span className={m.winner === m.team2 ? 'text-white font-bold' : 'text-gray-500'}>{m.team2}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            }
+
+            if (td.qualifiersDone) {
+              const qualifiers = td.qualifiers || {};
+              return (
+                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30">
+                  <h2 className="text-base font-bold text-blue-400 flex items-center gap-2 mb-2">
+                    <span>⚾</span> 都市対抗 地区予選結果
+                  </h2>
+                  <div className="space-y-1.5">
+                    {Object.entries(qualifiers).map(([regionId, q]) => (
+                      <div key={regionId} className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-white text-xs font-bold">{q.regionName}</span>
+                          <span className="text-gray-500 text-[10px]">{q.slots}枠</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-2 mt-0.5">
+                          {q.qualifiedTeams.map((name, i) => {
+                            const def = q.teamDefsMap[name];
+                            return (
+                              <span key={i} className="text-[11px]">
+                                <span className={`font-bold ${RANK_COLORS[def?.rank] || ''}`}>{def?.rank}</span>
+                                <span className={name === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}> {name}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-center text-gray-400 text-xs mt-2">8月の本戦に向けて日程を進めてください</div>
+                </div>
+              );
+            }
+
+            return null;
+          })() : (() => {
             const renderStandingsTable = (leagueStandings, title, titleColor) => {
               const lLeader = leagueStandings[0];
               const lLeaderWins = lLeader?.wins || 0;
@@ -1525,7 +1633,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* チーム状況レポート（自チーム専用） */}
+          {/* チーム状況レポート（自チーム専用、独立リーグのみ） */}
           {teamReport.length > 0 && (
             <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30 mt-3">
               <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">

@@ -18,7 +18,7 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
   const isCorporate = newSeasonData.settings?.corporateMode;
 
   // 社会人モード: 都市対抗予選（6月）
-  if (isCorporate && month === 6 && day === 1 && !newSeasonData.toshitaikou?.qualifiersDone) {
+  if (isCorporate && month >= 6 && !newSeasonData.toshitaikou?.qualifiersDone) {
     const tournament = generateToshitaikou({ autoSimulate: true });
     newSeasonData = {
       ...newSeasonData,
@@ -35,7 +35,7 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
   }
 
   // 社会人モード: 都市対抗本戦（8月）
-  if (isCorporate && month === 8 && day === 1 && newSeasonData.toshitaikou?.qualifiersDone && !newSeasonData.toshitaikou?.mainDone) {
+  if (isCorporate && month >= 8 && newSeasonData.toshitaikou?.qualifiersDone && !newSeasonData.toshitaikou?.mainDone) {
     const td = newSeasonData.toshitaikou;
     const prevChamp = newSeasonData.toshitaikou?.prevChampion || null;
     const mainTournament = createMainTournament(td.qualifiers, prevChamp);
