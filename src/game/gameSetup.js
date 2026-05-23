@@ -7,6 +7,7 @@ import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { autoSimulateGame, generateAILineup, POSITION_PLAYER_RECOVERY_BASE } from './autoSimulation.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { adjustGrowthModifier } from '../utils/constants.js';
+import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket } from '../corporate/toshitaikou.js';
 
 /**
  * setupManagedGame - 采配モードの試合セットアップ
@@ -482,6 +483,38 @@ export function executeHandleManagedGameEnd(ctx) {
         });
       }
     });
+  }
+
+  // トーナメント試合の結果処理
+  const pendingMatch = updatedSeasonData.toshitaikou?.pendingMatch;
+  if (pendingMatch && info.isTournament) {
+    const td = { ...updatedSeasonData.toshitaikou };
+    const qualifier = td.qualifiers[pendingMatch.regionId];
+    if (qualifier) {
+      const userWon = finalScore.home > finalScore.away;
+      const winnerName = userWon ? htn : atn;
+      const scoreArr = [finalScore.home, finalScore.away];
+
+      advanceQualifierWithResult(qualifier, pendingMatch.roundIdx, pendingMatch.matchIdx, winnerName, scoreArr, htn);
+
+      // 予選が全て完了したかチェック
+      const allDone = Object.values(td.qualifiers).every(q => q.phase === 'done');
+      td.qualifiersDone = allDone;
+      td.userQualifierDone = qualifier.phase === 'done';
+    }
+    // 一時生成した対戦相手をTEAMS_DATAから削除
+    if (pendingMatch.opponentName && pendingMatch.opponentName !== htn) {
+      delete TEAMS_DATA[pendingMatch.opponentName];
+    }
+    td.pendingMatch = null;
+    updatedSeasonData = { ...updatedSeasonData, toshitaikou: td };
+    // トーナメント試合では日付を進めない
+    setSeasonData(updatedSeasonData);
+    setManagedGameInfo(null);
+    managedGameInfoRef.current = null;
+    setScreenMode('management');
+    setManagementView('dateprogress');
+    return;
   }
 
   updatedSeasonData = updatePlayoffProgress(updatedSeasonData);

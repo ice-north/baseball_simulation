@@ -197,18 +197,54 @@ export function simulateQuickMatch(team1Def, team2Def) {
 
 // ブラケットを全自動消化
 // teamDefsMap: { [teamName]: teamDef } チーム名→定義のマップ
-export function autoPlayBracket(bracket, teamDefsMap) {
-  let next;
-  while ((next = getNextUnplayedMatch(bracket)) !== null) {
-    const { roundIdx, matchIdx, match } = next;
-    const def1 = teamDefsMap[match.team1];
-    const def2 = teamDefsMap[match.team2];
-    if (!def1 || !def2) break;
-
-    const result = simulateQuickMatch(def1, def2);
-    recordResult(bracket, roundIdx, matchIdx, result.winner, result.score);
+// excludeTeam: このチーム名が含まれる試合はスキップ
+export function autoPlayBracket(bracket, teamDefsMap, excludeTeam = null) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let r = 0; r < bracket.rounds.length; r++) {
+      for (let m = 0; m < bracket.rounds[r].length; m++) {
+        const match = bracket.rounds[r][m];
+        if (match.winner || match.isBye || !match.team1 || !match.team2) continue;
+        if (excludeTeam && (match.team1 === excludeTeam || match.team2 === excludeTeam)) continue;
+        const def1 = teamDefsMap[match.team1];
+        const def2 = teamDefsMap[match.team2];
+        if (!def1 || !def2) continue;
+        const result = simulateQuickMatch(def1, def2);
+        recordResult(bracket, r, m, result.winner, result.score);
+        changed = true;
+      }
+    }
   }
   return bracket;
+}
+
+// ユーザーチームの次の未消化試合を取得
+export function getUserNextMatch(bracket, userTeamName) {
+  if (!bracket || !userTeamName) return null;
+  for (let r = 0; r < bracket.rounds.length; r++) {
+    for (let m = 0; m < bracket.rounds[r].length; m++) {
+      const match = bracket.rounds[r][m];
+      if (!match.winner && !match.isBye && match.team1 && match.team2) {
+        if (match.team1 === userTeamName || match.team2 === userTeamName) {
+          return { roundIdx: r, matchIdx: m, match };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ユーザーチームがまだブラケットに残っているか
+export function isUserEliminated(bracket, userTeamName) {
+  if (!bracket || !userTeamName) return true;
+  for (const round of bracket.rounds) {
+    for (const match of round) {
+      if (match.loser === userTeamName) return true;
+    }
+  }
+  // まだ試合が残っているか
+  return getUserNextMatch(bracket, userTeamName) === null && bracket.champion !== userTeamName;
 }
 
 // ブラケットの順位を取得
@@ -271,27 +307,47 @@ export function buildLosersBracket(qualifier) {
   return qualifier;
 }
 
-// 地域予選を全自動消化
-// userTeamName が指定されていれば、そのチームは必ず予選通過する
+// 地域予選を全自動消化（ユーザーチームの試合はスキップ）
 export function autoPlayQualifier(qualifier, userTeamName = null) {
-  autoPlayBracket(qualifier.mainBracket, qualifier.teamDefsMap);
-  qualifier.qualifiedTeams = [qualifier.mainBracket.champion];
-
-  if (qualifier.slots > 1) {
-    buildLosersBracket(qualifier);
-    autoPlayBracket(qualifier.losersBracket, qualifier.teamDefsMap);
-    const losersRankings = getBracketRankings(qualifier.losersBracket);
-    const additionalSlots = qualifier.slots - 1;
-    qualifier.qualifiedTeams.push(...losersRankings.slice(0, additionalSlots));
+  autoPlayBracket(qualifier.mainBracket, qualifier.teamDefsMap, userTeamName);
+  if (isBracketComplete(qualifier.mainBracket)) {
+    qualifier.qualifiedTeams = [qualifier.mainBracket.champion];
+    if (qualifier.slots > 1) {
+      buildLosersBracket(qualifier);
+      autoPlayBracket(qualifier.losersBracket, qualifier.teamDefsMap, userTeamName);
+      if (isBracketComplete(qualifier.losersBracket)) {
+        const losersRankings = getBracketRankings(qualifier.losersBracket);
+        qualifier.qualifiedTeams.push(...losersRankings.slice(0, qualifier.slots - 1));
+        qualifier.phase = 'done';
+      }
+    } else {
+      qualifier.phase = 'done';
+    }
   }
+  return qualifier;
+}
 
-  // ユーザーチームがこの地域にいるのに予選通過していない場合、最後の枠と入れ替え
-  if (userTeamName && qualifier.teamDefsMap[userTeamName] && !qualifier.qualifiedTeams.includes(userTeamName)) {
-    const lastIdx = qualifier.qualifiedTeams.length - 1;
-    qualifier.qualifiedTeams[lastIdx] = userTeamName;
+// ユーザーの試合結果を記録し、残りの自動消化を進める
+export function advanceQualifierWithResult(qualifier, roundIdx, matchIdx, winnerName, score, userTeamName) {
+  recordResult(qualifier.mainBracket, roundIdx, matchIdx, winnerName, score);
+  // ユーザーが敗退したか判定
+  const userLost = winnerName !== userTeamName;
+  // ユーザーの次の試合の前まで自動消化（敗退時は全消化）
+  autoPlayBracket(qualifier.mainBracket, qualifier.teamDefsMap, userLost ? null : userTeamName);
+
+  if (isBracketComplete(qualifier.mainBracket)) {
+    qualifier.qualifiedTeams = [qualifier.mainBracket.champion];
+    if (qualifier.slots > 1) {
+      if (!qualifier.losersBracket) buildLosersBracket(qualifier);
+      // 敗者復活はAI同士で自動消化
+      autoPlayBracket(qualifier.losersBracket, qualifier.teamDefsMap);
+      if (isBracketComplete(qualifier.losersBracket)) {
+        const losersRankings = getBracketRankings(qualifier.losersBracket);
+        qualifier.qualifiedTeams.push(...losersRankings.slice(0, qualifier.slots - 1));
+      }
+    }
+    qualifier.phase = 'done';
   }
-
-  qualifier.phase = 'done';
   return qualifier;
 }
 
@@ -386,31 +442,20 @@ export function generateToshitaikou(options = {}) {
     qualifiers[regionId] = qualifier;
   }
 
-  if (autoSimulate) {
-    // 全予選を自動消化
-    for (const regionId of Object.keys(qualifiers)) {
-      const isUserRegion = regionId === userRegionId;
-      autoPlayQualifier(qualifiers[regionId], isUserRegion ? userTeamName : null);
-    }
-
-    // 本戦を生成・自動消化
-    const mainTournament = createMainTournament(qualifiers, defendingChampionName);
-    autoPlayMainTournament(mainTournament);
-
-    return {
-      qualifiers,
-      mainTournament,
-      userRegionId,
-      champion: mainTournament.champion,
-      runnerUp: mainTournament.runnerUp,
-    };
+  // 全予選を自動消化（ユーザーチームの試合のみスキップ）
+  for (const regionId of Object.keys(qualifiers)) {
+    const isUserRegion = regionId === userRegionId;
+    autoPlayQualifier(qualifiers[regionId], isUserRegion ? userTeamName : null);
   }
 
-  // 手動進行モード: 予選ブラケットだけ生成、消化は呼び出し側が制御
+  // ユーザーの地域が完了していなければ予選進行中
+  const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';
+
   return {
     qualifiers,
     mainTournament: null,
     userRegionId,
+    userQualifierDone,
     champion: null,
     runnerUp: null,
   };

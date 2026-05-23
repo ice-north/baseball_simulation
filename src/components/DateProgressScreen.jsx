@@ -4,7 +4,9 @@ import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } 
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
-import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName } from '../corporate/toshitaikou.js';
+import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
+import { generateCorporateRoster } from '../corporate/corporateInit.js';
+import { getTeamsByRegion } from '../corporate/corporateTeamsData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
@@ -15,6 +17,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [lastGameResults, setLastGameResults] = useState([]);
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
   const [rankingLeague, setRankingLeague] = useState('all');
+  const [selectedRegionTab, setSelectedRegionTab] = useState(null);
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -158,9 +161,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const { month, day } = newData.currentDate;
     const isCorporate = newData.settings?.corporateMode;
 
-    if (isCorporate && month >= 6 && !newData.toshitaikou?.qualifiersDone) {
-      const tournament = generateToshitaikou({ autoSimulate: true, userTeamName });
-      newData = { ...newData, toshitaikou: { ...tournament, qualifiersDone: true, mainDone: false } };
+    if (isCorporate && month >= 6 && !newData.toshitaikou?.generated) {
+      const tournament = generateToshitaikou({ userTeamName });
+      newData = { ...newData, toshitaikou: { ...tournament, generated: true, qualifiersDone: false, mainDone: false } };
+      if (tournament.userRegionId) setSelectedRegionTab(tournament.userRegionId);
       setSeasonData(newData);
       return newData;
     }
@@ -318,6 +322,46 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         });
       }
     }
+  };
+
+  // 都市対抗トーナメント: ユーザーの試合を開始
+  const startTournamentMatch = (opponentName, opponentDef, matchInfo) => {
+    if (!opponentDef || !onSetupManagedGame) return;
+
+    // 対戦相手のロスターを一時生成してTEAMS_DATAに追加
+    const oppRoster = generateCorporateRoster(opponentDef, 1);
+    const oppName = opponentDef.displayName || opponentDef.name;
+    TEAMS_DATA[oppName] = {
+      name: oppName,
+      abbreviation: oppName.length <= 3 ? oppName : ((/^[A-Za-z]/.test(oppName)) ? oppName.slice(0, 3).toUpperCase() : oppName.slice(0, 3)),
+      players: oppRoster,
+      pitchingRotation: null,
+      corporateData: { rank: opponentDef.rank, region: opponentDef.region },
+    };
+
+    // トーナメント試合情報をseasonDataに保存
+    const updatedData = {
+      ...seasonData,
+      toshitaikou: {
+        ...seasonData.toshitaikou,
+        pendingMatch: {
+          regionId: matchInfo.regionId,
+          roundIdx: matchInfo.roundIdx,
+          matchIdx: matchInfo.matchIdx,
+          opponentName: oppName,
+          bracketType: matchInfo.bracketType || 'main',
+        },
+      },
+    };
+    setSeasonData(updatedData);
+
+    onSetupManagedGame({
+      gameId: `toshitaikou_${matchInfo.regionId}_${matchInfo.roundIdx}_${matchInfo.matchIdx}`,
+      home: userTeamName,
+      away: oppName,
+      otherGames: [],
+      isTournament: true,
+    });
   };
 
   useEffect(() => {
@@ -1279,24 +1323,25 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         <div className="w-[420px] shrink-0">
           {seasonData.settings?.corporateMode ? (() => {
             const td = seasonData.toshitaikou;
-            if (!td) return (
+            const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
+
+            if (!td || !td.generated) return (
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-4 shadow-xl border border-gray-700/30">
                 <h2 className="text-base font-bold text-white flex items-center gap-2 mb-2">
                   <span>📅</span> 年間スケジュール
                 </h2>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-gray-300"><span>4月〜5月</span><span className="text-gray-500">練習期間</span></div>
-                  <div className={`flex justify-between ${seasonData.currentDate.month >= 6 ? 'text-yellow-400 font-bold' : 'text-gray-300'}`}><span>6月</span><span>都市対抗 地区予選</span></div>
+                  <div className="flex justify-between text-gray-300"><span>6月</span><span>都市対抗 地区予選</span></div>
                   <div className="flex justify-between text-gray-300"><span>7月</span><span className="text-gray-500">練習期間</span></div>
-                  <div className={`flex justify-between ${seasonData.currentDate.month >= 8 ? 'text-yellow-400 font-bold' : 'text-gray-300'}`}><span>8月</span><span>都市対抗 本戦</span></div>
+                  <div className="flex justify-between text-gray-300"><span>8月</span><span>都市対抗 本戦</span></div>
                   <div className="flex justify-between text-gray-300"><span>9月〜10月</span><span className="text-gray-500">練習期間</span></div>
                   <div className="flex justify-between text-gray-300"><span>11月</span><span>契約更改・オフ</span></div>
                 </div>
               </div>
             );
 
-            const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
-
+            // 本戦結果表示
             if (td.mainDone && td.mainTournament) {
               const mt = td.mainTournament;
               const bracket = mt.bracket;
@@ -1331,40 +1376,137 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               );
             }
 
-            if (td.qualifiersDone) {
-              const qualifiers = td.qualifiers || {};
-              return (
-                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30">
-                  <h2 className="text-base font-bold text-blue-400 flex items-center gap-2 mb-2">
-                    <span>⚾</span> 都市対抗 地区予選結果
-                  </h2>
-                  <div className="space-y-1.5">
-                    {Object.entries(qualifiers).map(([regionId, q]) => (
-                      <div key={regionId} className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                        <div className="flex justify-between items-center">
-                          <span className="text-white text-xs font-bold">{q.regionName}</span>
-                          <span className="text-gray-500 text-[10px]">{q.slots}枠</span>
-                        </div>
-                        <div className="flex flex-wrap gap-x-2 mt-0.5">
-                          {q.qualifiedTeams.map((name, i) => {
-                            const def = q.teamDefsMap[name];
-                            return (
-                              <span key={i} className="text-[11px]">
-                                <span className={`font-bold ${RANK_COLORS[def?.rank] || ''}`}>{def?.rank}</span>
-                                <span className={name === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}> {name}</span>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-center text-gray-400 text-xs mt-2">8月の本戦に向けて日程を進めてください</div>
-                </div>
-              );
-            }
+            // 予選トーナメント表示（タブ切り替え）
+            const qualifiers = td.qualifiers || {};
+            const regionIds = Object.keys(qualifiers);
+            const activeRegion = selectedRegionTab || td.userRegionId || regionIds[0];
+            const activeQ = qualifiers[activeRegion];
+            const userNextMatch = activeRegion === td.userRegionId && activeQ
+              ? getUserNextMatch(activeQ.mainBracket, userTeamName)
+              : null;
 
-            return null;
+            return (
+              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30">
+                <h2 className="text-base font-bold text-blue-400 flex items-center gap-2 mb-2">
+                  <span>⚾</span> 都市対抗 地区予選
+                  {td.qualifiersDone && <span className="text-xs text-green-400 ml-auto">予選終了</span>}
+                </h2>
+                {/* 地域タブ */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {regionIds.map(rid => {
+                    const q = qualifiers[rid];
+                    const isUser = rid === td.userRegionId;
+                    const isActive = rid === activeRegion;
+                    return (
+                      <button key={rid} onClick={() => setSelectedRegionTab(rid)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                          isActive ? 'bg-blue-600 text-white' :
+                          isUser ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50' :
+                          q.phase === 'done' ? 'bg-gray-700/50 text-gray-500 hover:text-gray-300' :
+                          'bg-gray-700/50 text-gray-400 hover:text-white'
+                        }`}>
+                        {q.regionName}{isUser ? '*' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* 選択地域のブラケット */}
+                {activeQ && (() => {
+                  const bracket = activeQ.mainBracket;
+                  if (!bracket) return null;
+                  return (
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs text-gray-400">{activeQ.regionName} ({activeQ.slots}枠)</span>
+                        {activeQ.phase === 'done' && (
+                          <span className="text-[10px] text-green-400">予選終了</span>
+                        )}
+                      </div>
+                      {bracket.rounds.map((round, ri) => {
+                        const matches = round.filter(m => !m.isBye);
+                        if (matches.length === 0) return null;
+                        return (
+                          <div key={ri} className="mb-1.5">
+                            <div className="text-gray-500 text-[10px] font-bold mb-0.5">{getRoundName(bracket, ri)}</div>
+                            <div className="space-y-0.5">
+                              {matches.map((m, mi) => {
+                                const isUserMatch = m.team1 === userTeamName || m.team2 === userTeamName;
+                                const isPending = !m.winner && m.team1 && m.team2;
+                                return (
+                                  <div key={mi} className={`flex items-center gap-1.5 text-xs rounded px-1 py-0.5 ${isUserMatch ? 'bg-blue-900/30' : ''}`}>
+                                    <span className={m.winner === m.team1 ? 'text-white font-bold' : m.loser === m.team1 ? 'text-gray-600 line-through' : m.team1 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>
+                                      {m.team1 || 'TBD'}
+                                    </span>
+                                    {m.winner ? (
+                                      <span className="text-gray-600 text-[10px]">{m.score?.[0]}-{m.score?.[1]}</span>
+                                    ) : isPending ? (
+                                      <span className="text-gray-600 text-[10px]">vs</span>
+                                    ) : (
+                                      <span className="text-gray-700 text-[10px]">-</span>
+                                    )}
+                                    <span className={m.winner === m.team2 ? 'text-white font-bold' : m.loser === m.team2 ? 'text-gray-600 line-through' : m.team2 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>
+                                      {m.team2 || 'TBD'}
+                                    </span>
+                                    {isUserMatch && isPending && (
+                                      <span className="text-yellow-400 text-[10px] ml-auto">あなたの試合</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {/* ユーザーの次の試合ボタン */}
+                      {userNextMatch && (
+                        <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
+                          <div className="text-xs text-yellow-400 font-bold mb-1">
+                            {getRoundName(bracket, userNextMatch.roundIdx)} - あなたの試合
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-white font-bold">
+                              {userTeamName} vs {userNextMatch.match.team1 === userTeamName ? userNextMatch.match.team2 : userNextMatch.match.team1}
+                            </span>
+                            <button
+                              onClick={() => {
+                                const oppName = userNextMatch.match.team1 === userTeamName ? userNextMatch.match.team2 : userNextMatch.match.team1;
+                                const oppDef = activeQ.teamDefsMap[oppName];
+                                startTournamentMatch(oppName, oppDef, {
+                                  regionId: activeRegion,
+                                  roundIdx: userNextMatch.roundIdx,
+                                  matchIdx: userNextMatch.matchIdx,
+                                  bracketType: 'main',
+                                });
+                              }}
+                              className="px-3 py-1 bg-yellow-600 hover:bg-yellow-500 text-black font-bold text-xs rounded transition"
+                            >
+                              試合開始
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {/* 予選通過チーム */}
+                      {activeQ.qualifiedTeams.length > 0 && (
+                        <div className="mt-2 bg-green-900/20 border border-green-700/30 rounded-lg p-2">
+                          <div className="text-[10px] text-green-400 font-bold mb-0.5">本戦出場</div>
+                          <div className="flex flex-wrap gap-x-2">
+                            {activeQ.qualifiedTeams.map((name, i) => {
+                              const def = activeQ.teamDefsMap[name];
+                              return (
+                                <span key={i} className="text-[11px]">
+                                  <span className={`font-bold ${RANK_COLORS[def?.rank] || ''}`}>{def?.rank}</span>
+                                  <span className={name === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}> {name}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            );
           })() : (() => {
             const renderStandingsTable = (leagueStandings, title, titleColor) => {
               const lLeader = leagueStandings[0];
