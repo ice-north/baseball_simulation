@@ -446,20 +446,20 @@ export function autoPlayMainTournament(tournament) {
 export function assignBracketDates(bracket, startDate, intervalDays = 2) {
   if (!bracket) return;
   bracket.roundDates = [];
-  let currentDay = startDate.day;
+  let d = new Date(startDate.year, startDate.month - 1, startDate.day);
   for (let r = 0; r < bracket.rounds.length; r++) {
-    bracket.roundDates.push({ year: startDate.year, month: startDate.month, day: currentDay });
-    currentDay += intervalDays;
+    bracket.roundDates.push({ year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
+    d.setDate(d.getDate() + intervalDays);
   }
 }
 
 // 予選ブラケットに日程を割り当て（勝者側+敗者復活）
 export function assignQualifierDates(qualifier, startDate, intervalDays = 2) {
   assignBracketDates(qualifier.mainBracket, startDate, intervalDays);
-  // 敗者復活は勝者側の全ラウンド完了翌日から
+  // 敗者復活は勝者側の最終ラウンドの次の日程
   const mainRounds = qualifier.mainBracket.rounds.length;
-  const losersStartDay = startDate.day + mainRounds * intervalDays;
-  qualifier.losersStartDate = { year: startDate.year, month: startDate.month, day: losersStartDay };
+  const d = new Date(startDate.year, startDate.month - 1, startDate.day + mainRounds * intervalDays);
+  qualifier.losersStartDate = { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
 }
 
 // 指定日に該当するラウンドのAI試合を消化
@@ -507,9 +507,10 @@ export function simulateQualifierOnDate(qualifier, dateObj, userTeamName = null)
     }
   }
 
-  // 敗者復活の消化
+  // 敗者復活の消化（ユーザーが敗者復活にいる場合はその試合をスキップ）
   if (qualifier.losersBracket && qualifier.phase === 'losers') {
-    simulateBracketRoundOnDate(qualifier.losersBracket, qualifier.teamDefsMap, dateObj);
+    const userInLosers = utn && isUserEliminated(qualifier.mainBracket, utn);
+    simulateBracketRoundOnDate(qualifier.losersBracket, qualifier.teamDefsMap, dateObj, userInLosers ? utn : null);
     if (isBracketComplete(qualifier.losersBracket)) {
       const losersRankings = getBracketRankings(qualifier.losersBracket);
       qualifier.qualifiedTeams.push(...losersRankings.slice(0, qualifier.slots - 1));
@@ -534,9 +535,10 @@ export function simulateMainTournamentOnDate(tournament, dateObj, userTeamName =
 export function getUserMatchOnDate(toshitaikou, dateObj, userTeamName) {
   if (!toshitaikou || !userTeamName) return null;
 
-  // 予選チェック
+  // 予選チェック（勝者側＋敗者復活）
   if (!toshitaikou.qualifiersDone && toshitaikou.userRegionId) {
     const q = toshitaikou.qualifiers[toshitaikou.userRegionId];
+    // 勝者側ブラケット
     if (q && q.mainBracket?.roundDates) {
       for (let r = 0; r < q.mainBracket.rounds.length; r++) {
         const rd = q.mainBracket.roundDates[r];
@@ -546,6 +548,21 @@ export function getUserMatchOnDate(toshitaikou, dateObj, userTeamName) {
           if (!match.winner && !match.isBye && match.team1 && match.team2) {
             if (match.team1 === userTeamName || match.team2 === userTeamName) {
               return { type: 'qualifier', regionId: toshitaikou.userRegionId, roundIdx: r, matchIdx: m, match, bracketType: 'main' };
+            }
+          }
+        }
+      }
+    }
+    // 敗者復活ブラケット
+    if (q && q.losersBracket?.roundDates) {
+      for (let r = 0; r < q.losersBracket.rounds.length; r++) {
+        const rd = q.losersBracket.roundDates[r];
+        if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
+        for (let m = 0; m < q.losersBracket.rounds[r].length; m++) {
+          const match = q.losersBracket.rounds[r][m];
+          if (!match.winner && !match.isBye && match.team1 && match.team2) {
+            if (match.team1 === userTeamName || match.team2 === userTeamName) {
+              return { type: 'qualifier', regionId: toshitaikou.userRegionId, roundIdx: r, matchIdx: m, match, bracketType: 'losers' };
             }
           }
         }
@@ -600,6 +617,26 @@ export function getTournamentDatesForCalendar(toshitaikou, userTeamName) {
             isUserMatch: hasUserMatch,
             isUserRegion,
             type: 'qualifier',
+            regionId,
+            done: allDone,
+          });
+        });
+      }
+      // 敗者復活ブラケットの日程
+      if (q.losersBracket?.roundDates) {
+        q.losersBracket.roundDates.forEach((rd, ri) => {
+          const matches = q.losersBracket.rounds[ri]?.filter(m => !m.isBye && (m.team1 || m.team2));
+          if (!matches || matches.length === 0) return;
+          const hasUserMatch = isUserRegion && matches.some(m =>
+            !m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)
+          );
+          const allDone = matches.every(m => m.winner || m.isBye);
+          dates.push({
+            date: rd,
+            label: isUserRegion ? '敗者復活' : null,
+            isUserMatch: hasUserMatch,
+            isUserRegion,
+            type: 'qualifier_losers',
             regionId,
             done: allDone,
           });

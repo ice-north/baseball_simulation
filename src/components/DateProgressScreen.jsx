@@ -346,7 +346,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
     // 都市対抗トーナメントを日付ベースで進行
     if (newSeasonData.toshitaikou?.generated) {
-      const td = { ...newSeasonData.toshitaikou };
+      const td = JSON.parse(JSON.stringify(newSeasonData.toshitaikou));
       const dateObj = seasonData.currentDate;
 
       // 予選を日付ベースで進行
@@ -1513,9 +1513,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const regionIds = Object.keys(qualifiers);
             const activeRegion = selectedRegionTab || td.userRegionId || regionIds[0];
             const activeQ = qualifiers[activeRegion];
-            const userNextMatch = activeRegion === td.userRegionId && activeQ
+            const userNextMatchMain = activeRegion === td.userRegionId && activeQ
               ? getUserNextMatch(activeQ.mainBracket, userTeamName)
               : null;
+            const userNextMatchLosers = activeRegion === td.userRegionId && activeQ?.losersBracket
+              ? getUserNextMatch(activeQ.losersBracket, userTeamName)
+              : null;
+            const userNextMatch = userNextMatchMain || userNextMatchLosers;
+            const userNextMatchBracketType = userNextMatchMain ? 'main' : 'losers';
+            const userNextMatchBracket = userNextMatchMain ? activeQ?.mainBracket : activeQ?.losersBracket;
 
             return (
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30">
@@ -1596,16 +1602,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       })}
                       {/* ユーザーの次の試合ボタン */}
                       {userNextMatch && (() => {
-                        const matchDate = bracket.roundDates?.[userNextMatch.roundIdx];
+                        const nmBracket = userNextMatchBracket;
+                        const matchDate = nmBracket?.roundDates?.[userNextMatch.roundIdx];
                         const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
                         const isMatchDay = matchDate &&
                           seasonData.currentDate.year === matchDate.year &&
                           seasonData.currentDate.month === matchDate.month &&
                           seasonData.currentDate.day === matchDate.day;
+                        const labelPrefix = userNextMatchBracketType === 'losers' ? '敗者復活 ' : '';
                         return (
                           <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
                             <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
-                              <span>{getRoundName(bracket, userNextMatch.roundIdx)} - あなたの試合</span>
+                              <span>{labelPrefix}{nmBracket ? getRoundName(nmBracket, userNextMatch.roundIdx) : ''} - あなたの試合</span>
                               {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
                             </div>
                             <div className="flex items-center justify-between">
@@ -1621,7 +1629,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                       regionId: activeRegion,
                                       roundIdx: userNextMatch.roundIdx,
                                       matchIdx: userNextMatch.matchIdx,
-                                      bracketType: 'main',
+                                      bracketType: userNextMatchBracketType,
                                     });
                                   }}
                                   className="px-3 py-1 bg-yellow-600 hover:bg-yellow-500 text-black font-bold text-xs rounded transition"
@@ -1630,6 +1638,55 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                 <span className="text-xs text-gray-400">試合日まで日程を進めてください</span>
                               )}
                             </div>
+                          </div>
+                        );
+                      })()}
+                      {/* 敗者復活ブラケット */}
+                      {activeQ.losersBracket && (() => {
+                        const lb = activeQ.losersBracket;
+                        return (
+                          <div className="mt-2 border-t border-gray-700/50 pt-2">
+                            <div className="text-[10px] font-bold text-orange-400 mb-1">敗者復活トーナメント</div>
+                            {lb.rounds.map((round, ri) => {
+                              const matches = round.filter(m => !m.isBye);
+                              if (matches.length === 0) return null;
+                              const roundDate = lb.roundDates?.[ri];
+                              const dateStr = roundDate ? `${roundDate.month}/${roundDate.day}` : '';
+                              return (
+                                <div key={ri} className="mb-1">
+                                  <div className="text-gray-500 text-[10px] font-bold mb-0.5 flex items-center gap-1">
+                                    <span>{getRoundName(lb, ri)}</span>
+                                    {dateStr && <span className="text-gray-600 font-normal">({dateStr})</span>}
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    {matches.map((m, mi) => {
+                                      const isUserMatch = m.team1 === userTeamName || m.team2 === userTeamName;
+                                      const isPending = !m.winner && m.team1 && m.team2;
+                                      return (
+                                        <div key={mi} className={`flex items-center gap-1.5 text-xs rounded px-1 py-0.5 ${isUserMatch ? 'bg-orange-900/30' : ''}`}>
+                                          <span className={m.winner === m.team1 ? 'text-white font-bold' : m.loser === m.team1 ? 'text-gray-600 line-through' : m.team1 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>
+                                            {m.team1 || 'TBD'}
+                                          </span>
+                                          {m.winner ? (
+                                            <span className="text-gray-600 text-[10px]">{m.score?.[0]}-{m.score?.[1]}</span>
+                                          ) : isPending ? (
+                                            <span className="text-gray-600 text-[10px]">vs</span>
+                                          ) : (
+                                            <span className="text-gray-700 text-[10px]">-</span>
+                                          )}
+                                          <span className={m.winner === m.team2 ? 'text-white font-bold' : m.loser === m.team2 ? 'text-gray-600 line-through' : m.team2 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>
+                                            {m.team2 || 'TBD'}
+                                          </span>
+                                          {isUserMatch && isPending && (
+                                            <span className="text-yellow-400 text-[10px] ml-auto">あなたの試合</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })()}
@@ -2016,7 +2073,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const oppDef = isQualifier
           ? td.qualifiers[tm.regionId]?.teamDefsMap[oppName]
           : td.mainTournament?.teamDefsMap[oppName];
-        const bracket = isQualifier ? td.qualifiers[tm.regionId]?.mainBracket : td.mainTournament?.bracket;
+        const bracket = isQualifier
+          ? (tm.bracketType === 'losers' ? td.qualifiers[tm.regionId]?.losersBracket : td.qualifiers[tm.regionId]?.mainBracket)
+          : td.mainTournament?.bracket;
         const roundName = bracket ? getRoundName(bracket, tm.roundIdx) : '';
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -2025,7 +2084,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 都市対抗野球大会
               </h2>
               <div className="text-center text-sm text-gray-400 mb-4">
-                {isQualifier ? `地区予選 ${td.qualifiers[tm.regionId]?.regionName}` : '本戦'} - {roundName}
+                {isQualifier ? `地区予選 ${td.qualifiers[tm.regionId]?.regionName}${tm.bracketType === 'losers' ? ' 敗者復活' : ''}` : '本戦'} - {roundName}
               </div>
               <div className="flex items-center justify-center gap-6 mb-5">
                 <div className="text-center">
@@ -2057,11 +2116,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     if (tm.type === 'qualifier' && tm.regionId) {
                       const q = td.qualifiers[tm.regionId];
                       if (q) {
+                        const targetBracket = tm.bracketType === 'losers' ? q.losersBracket : q.mainBracket;
                         const def1 = q.teamDefsMap[tm.match.team1];
                         const def2 = q.teamDefsMap[tm.match.team2];
-                        if (def1 && def2) {
+                        if (targetBracket && def1 && def2) {
                           const result = simulateQuickMatch(def1, def2);
-                          recordTournamentResult(q.mainBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                          recordTournamentResult(targetBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
                         }
                       }
                     } else if (tm.type === 'main' && td.mainTournament) {

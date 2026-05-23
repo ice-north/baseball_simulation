@@ -505,8 +505,26 @@ export function executeHandleManagedGameEnd(ctx) {
         td.runnerUp = td.mainTournament.runnerUp;
         td.mainDone = true;
       }
+    } else if (pendingMatch.bracketType === 'losers' && pendingMatch.regionId) {
+      // 敗者復活の結果記録
+      const qualifier = td.qualifiers[pendingMatch.regionId];
+      if (qualifier?.losersBracket) {
+        recordResult(qualifier.losersBracket, pendingMatch.roundIdx, pendingMatch.matchIdx, winnerName, scoreArr);
+        // ユーザーが負けたら残りの敗者復活を全消化
+        if (!userWon) {
+          autoPlayBracket(qualifier.losersBracket, qualifier.teamDefsMap);
+        }
+        if (isBracketComplete(qualifier.losersBracket)) {
+          const losersRankings = getBracketRankings(qualifier.losersBracket);
+          qualifier.qualifiedTeams.push(...losersRankings.slice(0, qualifier.slots - 1));
+          qualifier.phase = 'done';
+        }
+        const allDone = Object.values(td.qualifiers).every(q => q.phase === 'done');
+        td.qualifiersDone = allDone;
+        td.userQualifierDone = qualifier.phase === 'done';
+      }
     } else if (pendingMatch.regionId) {
-      // 予選の結果記録
+      // 予選(勝者側)の結果記録
       const qualifier = td.qualifiers[pendingMatch.regionId];
       if (qualifier) {
         advanceQualifierWithResult(qualifier, pendingMatch.roundIdx, pendingMatch.matchIdx, winnerName, scoreArr, htn);
