@@ -1,10 +1,14 @@
 import React from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
 import { SEASON_PHASES, createSeasonData, initializeStandings } from '../season/seasonManager.js';
+import { REGULATION_PRESETS } from '../season/regulationSettings.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
 import { initializeCorporateGame, initializeParallelWorldForIndependent } from '../corporate/corporateInit.js';
+import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+
+let selectedIndependentLeague = null;
 
 import StartScreen from './StartScreen.jsx';
 import ManualScreen from './ManualScreen.jsx';
@@ -60,10 +64,59 @@ const GameFlowScreens = ({
   // MODE SELECT: 独立リーグ / 社会人野球 選択
   if (gameFlowState === 'newgame_mode_select') {
     return <ModeSelectScreen
-      onSelectIndependent={() => setGameFlowState('newgame_regulations')}
+      onSelectIndependent={() => setGameFlowState('newgame_league_select')}
       onSelectCorporate={() => setGameFlowState('newgame_corporate_select')}
       onBack={() => setGameFlowState('title')}
     />;
+  }
+
+  // LEAGUE SELECT: どの独立リーグで遊ぶか選択
+  if (gameFlowState === 'newgame_league_select') {
+    const leagueList = [
+      { key: 'shikoku', icon: '🏝️' },
+      { key: 'bc', icon: '⚾' },
+      { key: 'kyushu', icon: '🌸' },
+      { key: 'hokkaido', icon: '🐻' },
+    ];
+    return (
+      <div className="p-8 bg-gray-900 min-h-screen">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
+          <p className="text-gray-400 text-sm mb-6">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {leagueList.map(({ key, icon }) => {
+              const preset = REGULATION_PRESETS[key];
+              const leagueDef = INDEPENDENT_LEAGUES[key];
+              return (
+                <button key={key}
+                  onClick={() => {
+                    selectedIndependentLeague = key;
+                    setGameFlowState('newgame_regulations');
+                  }}
+                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-3xl">{icon}</span>
+                    <div>
+                      <div className="text-lg font-bold text-white group-hover:text-blue-400 transition">{leagueDef?.name || preset?.name}</div>
+                      <div className="text-xs text-gray-400">{preset?.description}</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 text-xs text-gray-500 mt-2">
+                    <span>{preset?.regulations?.teamsCount || 4}チーム</span>
+                    <span>{preset?.regulations?.gamesPerSeason || 60}試合</span>
+                    <span>{preset?.regulations?.leagueFormat === 'two' ? '2リーグ制' : '1リーグ制'}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-6 text-center">
+            <button onClick={() => setGameFlowState('newgame_mode_select')} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // CORPORATE: 地区・チーム選択
@@ -166,16 +219,18 @@ const GameFlowScreens = ({
   // NEW GAME: レギュレーション設定
   if (gameFlowState === 'newgame_regulations') {
     return <NewGameRegulationsScreen
+      selectedLeague={selectedIndependentLeague}
       onComplete={(regulations) => {
-        initializeNewGame(regulations);
-        if (regulations.preset) {
+        const presetKey = selectedIndependentLeague || regulations.preset;
+        initializeNewGame({ ...regulations, preset: presetKey });
+        if (presetKey) {
           setGameFlowState('independent_loading');
           setTimeout(() => {
             const teamNames = Object.keys(TEAMS_DATA).filter(name => {
               const team = TEAMS_DATA[name];
               return team && !team.corporateTeamId && !team.independentLeagueId;
             });
-            initializeParallelWorldForIndependent(regulations.preset, teamNames);
+            initializeParallelWorldForIndependent(presetKey, teamNames);
             setGameFlowState('newgame_tryout');
           }, 50);
         } else {

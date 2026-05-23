@@ -2,19 +2,29 @@ import React, { useState } from 'react';
 import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
 
-const NewGameRegulationsScreen = ({ onComplete }) => {
+const NewGameRegulationsScreen = ({ onComplete, selectedLeague = null }) => {
+  const initialPreset = selectedLeague ? REGULATION_PRESETS[selectedLeague] : null;
+  const initialRegs = initialPreset?.regulations || {};
+  const initialCount = initialRegs.teamsCount || 4;
+  const defaultAbbr_ = (i) => String.fromCharCode(0xFF21 + i);
+  const initialNames = [];
+  const initialAbbrs = [];
+  for (let i = 0; i < initialCount; i++) {
+    initialNames.push(`チーム${String.fromCharCode(65 + i)}`);
+    initialAbbrs.push(defaultAbbr_(i));
+  }
+
   const [tempSettings, setTempSettings] = useState({
-    useDH: false,
-    gamesPerSeason: 75,
-    teamsCount: 4,
-    leagueFormat: 'single',
-    leagueNames: null,
-    playoffFormat: 'short',
-    maxExtraInnings: 12,
-    teamNames: ['チームA', 'チームB', 'チームC', 'チームD'],
-    teamAbbreviations: ['Ａ', 'Ｂ', 'Ｃ', 'Ｄ']
+    useDH: initialRegs.useDH || false,
+    gamesPerSeason: initialRegs.gamesPerSeason || 75,
+    teamsCount: initialCount,
+    leagueFormat: initialRegs.leagueFormat || 'single',
+    leagueNames: initialRegs.leagueNames || null,
+    playoffFormat: initialRegs.playoffFormat || 'short',
+    maxExtraInnings: initialRegs.maxExtraInnings || 12,
+    teamNames: initialNames,
+    teamAbbreviations: initialAbbrs,
   });
-  const [selectedPreset, setSelectedPreset] = useState('shikoku');
 
   // 半角→全角変換（略称用）
   const toFullWidth = (str) => str.replace(/[A-Za-z0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
@@ -116,69 +126,17 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
     setTempSettings({ ...tempSettings, teamAbbreviations: newAbbrs });
   };
 
-  const handleApplyPreset = (presetName) => {
-    const preset = REGULATION_PRESETS[presetName];
-    if (preset) {
-      const newTeamsCount = preset.regulations.teamsCount || 4;
-      const newNames = [];
-      const newAbbrs = [];
-      for (let i = 0; i < newTeamsCount; i++) {
-        newNames.push(`チーム${String.fromCharCode(65 + i)}`);
-        newAbbrs.push(defaultAbbr(i));
-      }
-      setTempSettings({
-        ...preset.regulations,
-        teamNames: newNames,
-        teamAbbreviations: newAbbrs
-      });
-      setSelectedPreset(presetName);
-    }
-  };
-
   const handleStart = () => {
-    onComplete({ ...tempSettings, preset: selectedPreset });
+    onComplete({ ...tempSettings, preset: selectedLeague });
   };
-
-  const presetList = [
-    { key: 'shikoku', name: '四国IL', icon: '🏝️' },
-    { key: 'bc', name: 'BCリーグ', icon: '⚾' },
-    { key: 'kyushu', name: '九州AL', icon: '🌸' },
-    { key: 'hokkaido', name: '北海道FL', icon: '🐻' }
-  ];
 
   return (
     <div className="p-8 bg-gray-900 min-h-screen">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold text-white mb-8">⚙️ レギュレーション設定</h1>
-
-        {/* プリセット選択 */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-2 text-white">プリセット選択</h2>
-          <p className="text-gray-400 text-sm mb-4">※レギュレーションは毎年オフシーズンに変更することができます</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {presetList.map(preset => {
-              const presetData = REGULATION_PRESETS[preset.key];
-              return (
-                <button
-                  key={preset.key}
-                  onClick={() => handleApplyPreset(preset.key)}
-                  className={`p-4 rounded-lg transition ${
-                    selectedPreset === preset.key
-                      ? 'bg-blue-600 text-white ring-2 ring-blue-400'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  <div className="text-3xl mb-2">{preset.icon}</div>
-                  <div className="font-bold">{presetData.name}</div>
-                  {presetData.description && (
-                    <div className="text-xs mt-1 opacity-80">{presetData.description}</div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
+        <h1 className="text-4xl font-bold text-white mb-2">⚙️ レギュレーション設定</h1>
+        {selectedLeague && (
+          <p className="text-gray-400 text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
+        )}
 
         {/* 詳細設定 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
@@ -191,11 +149,11 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                 <option value="false">無効</option>
               </select>
             </div>
-            <div className="flex items-center justify-between">
+            {!selectedLeague && <div className="flex items-center justify-between">
               <label className="font-medium">チーム数</label>
               <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value) || 4)} className="bg-gray-700 rounded px-3 py-2 w-24" />
-            </div>
-            <div className="flex items-center justify-between">
+            </div>}
+            {!selectedLeague && <div className="flex items-center justify-between">
               <label className="font-medium">リーグ形式</label>
               <select value={tempSettings.leagueFormat || 'single'} onChange={(e) => {
                 const newFormat = e.target.value;
@@ -222,7 +180,7 @@ const NewGameRegulationsScreen = ({ onComplete }) => {
                 <option value="single">1リーグ制</option>
                 <option value="two" disabled={tempSettings.teamsCount < 4}>2リーグ制（{Math.floor(tempSettings.teamsCount / 2)}チーム×2）</option>
               </select>
-            </div>
+            </div>}
             <div className="flex items-center justify-between">
               <label className="font-medium">年間試合数</label>
               <div className="flex items-center gap-2">

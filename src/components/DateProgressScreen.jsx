@@ -476,7 +476,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   // トピック生成（試合結果が増えた時だけ再計算 = 試合のある日のみ更新）
   const cachedTopics = useMemo(() => {
     const topics = [];
-    const allTeamNames = Object.keys(TEAMS_DATA || {});
+    const userLeagueTeamSet = new Set(seasonData?.settings?.teamNames || []);
+    const allTeamNames = userLeagueTeamSet.size > 0
+      ? Object.keys(TEAMS_DATA || {}).filter(tn => userLeagueTeamSet.has(tn))
+      : Object.keys(TEAMS_DATA || {});
     const allPlayers = [];
     allTeamNames.forEach(tn => {
       (TEAMS_DATA[tn]?.players || []).forEach(p => allPlayers.push({ ...p, teamName: tn }));
@@ -1222,8 +1225,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           {(() => {
             const allPlayers = [];
             const seenIds = new Set();
+            const userLeagueTeams = new Set(seasonData?.settings?.teamNames || []);
             Object.entries(TEAMS_DATA || {}).forEach(([teamName, team]) => {
               if (!team?.players) return;
+              if (userLeagueTeams.size > 0 && !userLeagueTeams.has(teamName)) return;
               if (isTwoLeague && rankingLeague === 'l1' && !league1Teams.includes(teamName)) return;
               if (isTwoLeague && rankingLeague === 'l2' && !league2Teams.includes(teamName)) return;
               team.players.forEach(p => {
