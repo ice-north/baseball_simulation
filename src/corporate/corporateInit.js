@@ -85,6 +85,15 @@ const RANK_STAFF_CONFIG = {
 
 const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
 
+// ランク別球速キャップ・追加減速（corporateモード用）
+// D: クラブチーム → ほとんど130km台、速い人で138km
+// C: 育成型 → 135-143km
+// B: 中堅（独立リーグ平均） → 138-148km
+// A: 強豪 → 140-152km
+// S: 超強豪 → 145-155km（プロ予備軍レベル）
+const RANK_VELOCITY_CAP = { S: 155, A: 152, B: 148, C: 143, D: 138 };
+const RANK_VELOCITY_REDUCTION = { S: 0, A: -2, B: -5, C: -8, D: -12 };
+
 // ランク別の初期注目度（0-100）
 // 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
 const RANK_INITIAL_REPUTATION = { S: 85, A: 65, B: 40, C: 20, D: 5 };
@@ -156,15 +165,26 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   corporatePlayerIdBase += 1000;
   candidates.forEach((p, i) => { p.id = corporatePlayerIdBase + i; });
 
+  const velReduction = RANK_VELOCITY_REDUCTION[rank] || 0;
+  const velCap = RANK_VELOCITY_CAP[rank] || 155;
+
   candidates.forEach(p => {
     applyTeamOffset(p, cfg.teamOffset);
     adjustCorporateAge(p);
+    p.pitching.velocity = clamp(p.pitching.velocity + velReduction, 100, velCap);
   });
 
   const roster = [];
   const remaining = [...candidates];
+  const maxPitchers = 9;
   for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
-    const pick = selectPlayerForAI(remaining, roster);
+    const pitcherCount = roster.filter(p => p.position === 'pitcher').length;
+    let pool = remaining;
+    if (pitcherCount >= maxPitchers) {
+      pool = remaining.filter(p => p.position !== 'pitcher');
+      if (pool.length === 0) pool = remaining;
+    }
+    const pick = selectPlayerForAI(pool, roster);
     if (!pick) break;
     const idx = remaining.findIndex(c => c.id === pick.id);
     if (idx >= 0) remaining.splice(idx, 1);
