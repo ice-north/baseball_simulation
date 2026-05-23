@@ -159,7 +159,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const isCorporate = newData.settings?.corporateMode;
 
     if (isCorporate && month >= 6 && !newData.toshitaikou?.qualifiersDone) {
-      const tournament = generateToshitaikou({ autoSimulate: true });
+      const tournament = generateToshitaikou({ autoSimulate: true, userTeamName });
       newData = { ...newData, toshitaikou: { ...tournament, qualifiersDone: true, mainDone: false } };
       setSeasonData(newData);
       return newData;

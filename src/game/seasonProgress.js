@@ -19,7 +19,8 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
 
   // 社会人モード: 都市対抗予選（6月）
   if (isCorporate && month >= 6 && !newSeasonData.toshitaikou?.qualifiersDone) {
-    const tournament = generateToshitaikou({ autoSimulate: true });
+    const userTeamName = Object.keys(TEAMS_DATA || {})[0] || null;
+    const tournament = generateToshitaikou({ autoSimulate: true, userTeamName });
     newSeasonData = {
       ...newSeasonData,
       toshitaikou: {

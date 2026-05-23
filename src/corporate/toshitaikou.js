@@ -272,7 +272,8 @@ export function buildLosersBracket(qualifier) {
 }
 
 // 地域予選を全自動消化
-export function autoPlayQualifier(qualifier) {
+// userTeamName が指定されていれば、そのチームは必ず予選通過する
+export function autoPlayQualifier(qualifier, userTeamName = null) {
   autoPlayBracket(qualifier.mainBracket, qualifier.teamDefsMap);
   qualifier.qualifiedTeams = [qualifier.mainBracket.champion];
 
@@ -282,6 +283,12 @@ export function autoPlayQualifier(qualifier) {
     const losersRankings = getBracketRankings(qualifier.losersBracket);
     const additionalSlots = qualifier.slots - 1;
     qualifier.qualifiedTeams.push(...losersRankings.slice(0, additionalSlots));
+  }
+
+  // ユーザーチームがこの地域にいるのに予選通過していない場合、最後の枠と入れ替え
+  if (userTeamName && qualifier.teamDefsMap[userTeamName] && !qualifier.qualifiedTeams.includes(userTeamName)) {
+    const lastIdx = qualifier.qualifiedTeams.length - 1;
+    qualifier.qualifiedTeams[lastIdx] = userTeamName;
   }
 
   qualifier.phase = 'done';
@@ -382,7 +389,8 @@ export function generateToshitaikou(options = {}) {
   if (autoSimulate) {
     // 全予選を自動消化
     for (const regionId of Object.keys(qualifiers)) {
-      autoPlayQualifier(qualifiers[regionId]);
+      const isUserRegion = regionId === userRegionId;
+      autoPlayQualifier(qualifiers[regionId], isUserRegion ? userTeamName : null);
     }
 
     // 本戦を生成・自動消化
