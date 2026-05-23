@@ -7,6 +7,7 @@
 //  3. 全12地域の代表31チーム＋前年優勝(推薦)1 = 32チームで本戦
 
 import { getTeamsByRegion } from './corporateTeamsData.js';
+import { autoSimulateGame } from '../game/autoSimulation.js';
 
 // ============================================================
 // 定数
@@ -168,26 +169,30 @@ export function isBracketComplete(bracket) {
 }
 
 // ============================================================
-// 簡易試合シミュレーション（ランクベース、AI同士用）
+// 試合シミュレーション（autoSimulateGame使用、一球ごとの対戦）
 // ============================================================
 
 export function simulateQuickMatch(team1Def, team2Def) {
-  const str1 = RANK_STRENGTH[team1Def.rank] || 50;
-  const str2 = RANK_STRENGTH[team2Def.rank] || 50;
-  const p1 = str1 / (str1 + str2);
-
-  const t1Wins = Math.random() < p1;
-  const stronger = t1Wins ? str1 : str2;
-  const weaker = t1Wins ? str2 : str1;
-  const gap = stronger - weaker;
-
-  const winRuns = 2 + Math.floor(Math.random() * 5) + (gap > 15 ? Math.floor(Math.random() * 3) : 0);
-  const maxLose = Math.max(0, winRuns - 1);
-  const loseRuns = Math.floor(Math.random() * (maxLose + 1));
-
   const t1Name = team1Def.displayName || team1Def.name;
   const t2Name = team2Def.displayName || team2Def.name;
 
+  const result = autoSimulateGame(t1Name, t2Name);
+  if (result && (result.homeScore !== undefined)) {
+    const homeWon = result.homeScore > result.awayScore;
+    return {
+      winner: homeWon ? t1Name : t2Name,
+      loser: homeWon ? t2Name : t1Name,
+      score: [result.homeScore, result.awayScore],
+    };
+  }
+
+  // フォールバック: TEAMS_DATAにチームがない場合はランクベース
+  const str1 = RANK_STRENGTH[team1Def.rank] || 50;
+  const str2 = RANK_STRENGTH[team2Def.rank] || 50;
+  const p1 = str1 / (str1 + str2);
+  const t1Wins = Math.random() < p1;
+  const winRuns = 2 + Math.floor(Math.random() * 5);
+  const loseRuns = Math.floor(Math.random() * Math.max(1, winRuns));
   return {
     winner: t1Wins ? t1Name : t2Name,
     loser: t1Wins ? t2Name : t1Name,

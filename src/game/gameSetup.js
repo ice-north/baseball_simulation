@@ -502,10 +502,6 @@ export function executeHandleManagedGameEnd(ctx) {
       td.qualifiersDone = allDone;
       td.userQualifierDone = qualifier.phase === 'done';
     }
-    // 一時生成した対戦相手をTEAMS_DATAから削除
-    if (pendingMatch.opponentName && pendingMatch.opponentName !== htn) {
-      delete TEAMS_DATA[pendingMatch.opponentName];
-    }
     td.pendingMatch = null;
     updatedSeasonData = { ...updatedSeasonData, toshitaikou: td };
     // トーナメント試合では日付を進めない

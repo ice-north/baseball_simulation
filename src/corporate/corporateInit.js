@@ -22,7 +22,7 @@
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
 import { generateStaff } from './staffData.js';
-import { getTeamsByRegion, REGIONS } from './corporateTeamsData.js';
+import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA, clearReleasedPlayersPool } from '../teams-data.js';
 
@@ -248,35 +248,6 @@ export const generateInitialStaff = (rank) => {
 };
 
 // 同地区＋近隣地区からリーグ参加チームを選出
-const selectLeagueTeams = (userTeamDef, targetCount) => {
-  const userRegion = userTeamDef.region;
-  const userId = userTeamDef.id;
-
-  let pool = getTeamsByRegion(userRegion).filter(t => t.id !== userId);
-
-  if (pool.length < targetCount) {
-    const regionIds = REGIONS.map(r => r.id);
-    const idx = regionIds.indexOf(userRegion);
-    const neighbors = [
-      regionIds[idx - 1], regionIds[idx + 1],
-      regionIds[idx - 2], regionIds[idx + 2],
-    ].filter(Boolean);
-
-    for (const nRegion of neighbors) {
-      if (pool.length >= targetCount) break;
-      pool = pool.concat(getTeamsByRegion(nRegion));
-    }
-  }
-
-  const userRankOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 }[userTeamDef.rank] ?? 2;
-  pool.sort((a, b) => {
-    const aOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 }[a.rank] ?? 3;
-    const bOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 }[b.rank] ?? 3;
-    return Math.abs(aOrder - userRankOrder) - Math.abs(bOrder - userRankOrder);
-  });
-
-  return pool.slice(0, targetCount);
-};
 
 const makeAbbreviation = (name) => {
   if (name.length <= 3) return name;
@@ -284,7 +255,7 @@ const makeAbbreviation = (name) => {
   return name.slice(0, 3);
 };
 
-// 社会人モードの完全初期化
+// 社会人モードの完全初期化（全チームのロスターを生成）
 export const initializeCorporateGame = (teamDef) => {
   corporatePlayerIdBase = 20000;
 
@@ -292,64 +263,45 @@ export const initializeCorporateGame = (teamDef) => {
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
   clearReleasedPlayersPool();
 
+  const allTeamDefs = getAllTeamsEffective();
   const userTeamName = teamDef.displayName || teamDef.name;
-  const userRoster = generateCorporateRoster(teamDef, 1);
-  const userStaff = generateInitialStaff(teamDef.rank);
+  const allTeamNames = [];
+  let userRoster = null;
+  let userStaff = null;
 
-  TEAMS_DATA[userTeamName] = {
-    name: userTeamName,
-    abbreviation: makeAbbreviation(userTeamName),
-    players: userRoster,
-    pitchingRotation: null,
-    corporateTeamId: teamDef.id,
-    corporateData: {
-      rank: teamDef.rank,
-      region: teamDef.region,
-      city: teamDef.city,
-      type: teamDef.type,
-      budget: teamDef.budget || BUDGET_BY_RANK[teamDef.rank] || 35,
-      staff: userStaff,
-      reputation: RANK_INITIAL_REPUTATION[teamDef.rank] || 5,
-      proDraftCount: 0,        // 累計プロ輩出数
-      tournamentWins: 0,       // 累計大会優勝数
-      yearlyBudgetBonus: 0,    // 注目度による年間追加資金
-    },
-  };
+  for (const def of allTeamDefs) {
+    const name = def.displayName || def.name;
+    if (TEAMS_DATA[name]) continue;
 
-  const aiTeamDefs = selectLeagueTeams(teamDef, 7);
-  const aiTeamNames = [];
+    const roster = generateCorporateRoster(def, 1);
+    const staff = generateInitialStaff(def.rank);
 
-  for (const aiDef of aiTeamDefs) {
-    const aiName = aiDef.displayName || aiDef.name;
-    if (TEAMS_DATA[aiName]) continue;
-
-    const aiRoster = generateCorporateRoster(aiDef, 1);
-    const aiStaff = generateInitialStaff(aiDef.rank);
-
-    TEAMS_DATA[aiName] = {
-      name: aiName,
-      abbreviation: makeAbbreviation(aiName),
-      players: aiRoster,
+    TEAMS_DATA[name] = {
+      name,
+      abbreviation: makeAbbreviation(name),
+      players: roster,
       pitchingRotation: null,
-      corporateTeamId: aiDef.id,
+      corporateTeamId: def.id,
       corporateData: {
-        rank: aiDef.rank,
-        region: aiDef.region,
-        city: aiDef.city,
-        type: aiDef.type,
-        budget: aiDef.budget || BUDGET_BY_RANK[aiDef.rank] || 35,
-        staff: aiStaff,
-        reputation: RANK_INITIAL_REPUTATION[aiDef.rank] || 5,
+        rank: def.rank,
+        region: def.region,
+        city: def.city,
+        type: def.type,
+        budget: def.budget || BUDGET_BY_RANK[def.rank] || 35,
+        staff,
+        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
         proDraftCount: 0,
         tournamentWins: 0,
         yearlyBudgetBonus: 0,
       },
     };
 
-    aiTeamNames.push(aiName);
+    allTeamNames.push(name);
+    if (name === userTeamName) {
+      userRoster = roster;
+      userStaff = staff;
+    }
   }
-
-  const allTeamNames = [userTeamName, ...aiTeamNames];
 
   WORLD_DATA.corporateLeague.userTeam = userTeamName;
   WORLD_DATA.corporateLeague.teams = {};

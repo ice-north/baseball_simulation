@@ -71,38 +71,54 @@ const GameFlowScreens = ({
     return <CorporateTeamSelectScreen
       onSelect={(team) => {
         setGameMode('corporate');
+        setGameFlowState('corporate_loading');
+        setTimeout(() => {
+          const result = initializeCorporateGame(team);
+          const teamNames = result.allTeamNames;
+          const teamCount = teamNames.length;
 
-        const result = initializeCorporateGame(team);
-        const teamNames = result.allTeamNames;
-        const teamCount = teamNames.length;
+          setLeagueConfig({
+            format: 'single',
+            teamsPerLeague: teamCount,
+            leagues: [{ name: '社会人リーグ', teams: teamNames }]
+          });
 
-        setLeagueConfig({
-          format: 'single',
-          teamsPerLeague: teamCount,
-          leagues: [{ name: '社会人リーグ', teams: teamNames }]
-        });
+          const newSeasonData = createSeasonData(1);
+          newSeasonData.settings = {
+            teamsCount: teamCount,
+            teamNames: teamNames,
+            teamAbbreviations: teamNames.map(n => n.length <= 3 ? n : (/^[A-Za-z]/.test(n) ? n.slice(0, 3).toUpperCase() : n.slice(0, 3))),
+            gamesPerSeason: 0,
+            useDH: true,
+            leagueFormat: 'single',
+            corporateMode: true,
+            corporateTeamId: team.id,
+          };
 
-        const newSeasonData = createSeasonData(1);
-        newSeasonData.settings = {
-          teamsCount: teamCount,
-          teamNames: teamNames,
-          teamAbbreviations: teamNames.map(n => n.length <= 3 ? n : (/^[A-Za-z]/.test(n) ? n.slice(0, 3).toUpperCase() : n.slice(0, 3))),
-          gamesPerSeason: 0,
-          useDH: true,
-          leagueFormat: 'single',
-          corporateMode: true,
-          corporateTeamId: team.id,
-        };
-
-        newSeasonData.schedule = [];
-        newSeasonData.standings = initializeStandings(teamNames);
-        setSeasonData(newSeasonData);
-
-        // キャンプへ進む（独立リーグと同じ流れ）
-        setGameFlowState('corporate_camp');
+          newSeasonData.schedule = [];
+          newSeasonData.standings = initializeStandings(teamNames);
+          setSeasonData(newSeasonData);
+          setGameFlowState('corporate_camp');
+        }, 50);
       }}
       onBack={() => setGameFlowState('newgame_mode_select')}
     />;
+  }
+
+  // CORPORATE: ローディング画面
+  if (gameFlowState === 'corporate_loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⚾</div>
+          <div className="text-white text-xl font-bold mb-2">全チームを初期化中...</div>
+          <div className="text-gray-400 text-sm">179チームの選手を生成しています</div>
+          <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // CORPORATE: キャンプ

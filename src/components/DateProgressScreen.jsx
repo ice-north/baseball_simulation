@@ -4,9 +4,7 @@ import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } 
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
-import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
-import { generateCorporateRoster } from '../corporate/corporateInit.js';
-import { getTeamsByRegion } from '../corporate/corporateTeamsData.js';
+import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch } from '../corporate/toshitaikou.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
@@ -18,6 +16,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
   const [rankingLeague, setRankingLeague] = useState('all');
   const [selectedRegionTab, setSelectedRegionTab] = useState(null);
+  const [isGeneratingTournament, setIsGeneratingTournament] = useState(false);
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -162,20 +161,30 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const isCorporate = newData.settings?.corporateMode;
 
     if (isCorporate && month >= 6 && !newData.toshitaikou?.generated) {
-      const tournament = generateToshitaikou({ userTeamName });
-      newData = { ...newData, toshitaikou: { ...tournament, generated: true, qualifiersDone: false, mainDone: false } };
-      if (tournament.userRegionId) setSelectedRegionTab(tournament.userRegionId);
       setSeasonData(newData);
+      setIsGeneratingTournament(true);
+      setTimeout(() => {
+        const tournament = generateToshitaikou({ userTeamName });
+        const updated = { ...newData, toshitaikou: { ...tournament, generated: true, qualifiersDone: false, mainDone: false } };
+        if (tournament.userRegionId) setSelectedRegionTab(tournament.userRegionId);
+        setSeasonData(updated);
+        setIsGeneratingTournament(false);
+      }, 50);
       return newData;
     }
 
     if (isCorporate && month >= 8 && newData.toshitaikou?.qualifiersDone && !newData.toshitaikou?.mainDone) {
-      const td = newData.toshitaikou;
-      const prevChamp = td.prevChampion || null;
-      const mainTournament = createMainTournament(td.qualifiers, prevChamp);
-      autoPlayMainTournament(mainTournament);
-      newData = { ...newData, toshitaikou: { ...td, mainTournament, champion: mainTournament.champion, runnerUp: mainTournament.runnerUp, mainDone: true } };
       setSeasonData(newData);
+      setIsGeneratingTournament(true);
+      setTimeout(() => {
+        const td = newData.toshitaikou;
+        const prevChamp = td.prevChampion || null;
+        const mainTournament = createMainTournament(td.qualifiers, prevChamp);
+        autoPlayMainTournament(mainTournament);
+        const updated = { ...newData, toshitaikou: { ...td, mainTournament, champion: mainTournament.champion, runnerUp: mainTournament.runnerUp, mainDone: true } };
+        setSeasonData(updated);
+        setIsGeneratingTournament(false);
+      }, 50);
       return newData;
     }
 
@@ -326,20 +335,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   // 都市対抗トーナメント: ユーザーの試合を開始
   const startTournamentMatch = (opponentName, opponentDef, matchInfo) => {
-    if (!opponentDef || !onSetupManagedGame) return;
+    if (!onSetupManagedGame) return;
+    const oppName = opponentDef?.displayName || opponentDef?.name || opponentName;
 
-    // 対戦相手のロスターを一時生成してTEAMS_DATAに追加
-    const oppRoster = generateCorporateRoster(opponentDef, 1);
-    const oppName = opponentDef.displayName || opponentDef.name;
-    TEAMS_DATA[oppName] = {
-      name: oppName,
-      abbreviation: oppName.length <= 3 ? oppName : ((/^[A-Za-z]/.test(oppName)) ? oppName.slice(0, 3).toUpperCase() : oppName.slice(0, 3)),
-      players: oppRoster,
-      pitchingRotation: null,
-      corporateData: { rank: opponentDef.rank, region: opponentDef.region },
-    };
-
-    // トーナメント試合情報をseasonDataに保存
     const updatedData = {
       ...seasonData,
       toshitaikou: {
@@ -927,6 +925,21 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   };
 
   // ユーザーチームの成績取得
+  if (isGeneratingTournament) {
+    return (
+      <div className="p-3 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⚾</div>
+          <div className="text-white text-xl font-bold mb-2">都市対抗予選を開催中...</div>
+          <div className="text-gray-400 text-sm">全12地区の予選トーナメントをシミュレーション中</div>
+          <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '70%'}}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 min-h-screen">
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
