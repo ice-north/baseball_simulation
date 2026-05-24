@@ -246,8 +246,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const TEAM_H = compact ? 18 : 24;
     const MATCH_GAP = compact ? 4 : 6;
     const SLOT_H = TEAM_H * 2 + MATCH_GAP;
-    const NAME_W = compact ? 150 : 220;
-    const CONN_W = compact ? 28 : 52;
+    const NAME_W = compact ? 150 : 200;
+    const CONN_W = compact ? 28 : 44;
     const PAD_TOP = 8;
     const PAD_LEFT = 4;
     const PAD_BOTTOM = 18;
@@ -1204,7 +1204,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
-        <div className="w-[580px] shrink-0">
+        <div className="w-[640px] shrink-0">
           <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mb-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
