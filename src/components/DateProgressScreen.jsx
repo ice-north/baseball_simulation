@@ -2108,14 +2108,50 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span>🌐</span> 他リーグ状況
                 </h2>
                 <div className="space-y-2">
-                  {parallelLeagues.map(league => (
+                  {parallelLeagues.map(league => {
+                    const leagueDef = INDEPENDENT_LEAGUES[league.id];
+                    const isTwoLeague = leagueDef?.leagueFormat === 'two';
+                    const leagueNames = leagueDef?.leagueNames;
+                    const halfCount = isTwoLeague ? Math.floor(league.standings.length / 2) : 0;
+                    return (
                     <div key={league.id} className="bg-gray-800/50 rounded-lg p-2 border border-gray-700/30">
                       <div className="text-xs font-bold text-gray-300 mb-1 flex items-center justify-between">
-                        <span>{INDEPENDENT_LEAGUES[league.id]?.name || league.name}</span>
-                        <span className="text-[10px] text-gray-500">{INDEPENDENT_LEAGUES[league.id]?.gamesPerSeason || '?'}試合中{Math.round(league.gamesPlayed)}試合消化</span>
+                        <span>{leagueDef?.name || league.name}</span>
+                        <span className="text-[10px] text-gray-500">{leagueDef?.gamesPerSeason || '?'}試合中{Math.round(league.gamesPlayed)}試合消化</span>
                       </div>
+                      {isTwoLeague && halfCount > 0 ? (
+                        <div className="space-y-1.5">
+                          {[0, 1].map(li => {
+                            const lName = leagueNames?.[li] || `リーグ${li + 1}`;
+                            const lTeams = league.standings.filter((_, idx) => {
+                              const teamIdx = league.teams.indexOf(league.standings[idx]?.team);
+                              return teamIdx >= 0 && Math.floor(teamIdx / halfCount) === li;
+                            }).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+                            return (
+                              <div key={li}>
+                                <div className="text-[9px] text-gray-500 font-bold mb-0.5">{lName}</div>
+                                <div className="space-y-0.5">
+                                  {lTeams.map((s, i) => {
+                                    const wr = (s.wins + s.losses) > 0 ? (s.wins / (s.wins + s.losses)).toFixed(3) : '.000';
+                                    return (
+                                      <div key={s.team} className="flex items-center text-[11px] gap-1">
+                                        <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-400' : 'text-gray-500'}`}>{i + 1}</span>
+                                        <span className="flex-1 text-gray-200 truncate">{s.team}</span>
+                                        <span className="text-green-400 w-5 text-right">{s.wins}</span>
+                                        <span className="text-gray-600">-</span>
+                                        <span className="text-red-400 w-5">{s.losses}</span>
+                                        <span className="text-gray-400 w-8 text-right font-mono">{wr}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
                       <div className="space-y-0.5">
-                        {league.standings.slice(0, 4).map((s, i) => {
+                        {league.standings.map((s, i) => {
                           const wr = (s.wins + s.losses) > 0 ? (s.wins / (s.wins + s.losses)).toFixed(3) : '.000';
                           return (
                             <div key={s.team} className="flex items-center text-[11px] gap-1">
@@ -2129,8 +2165,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           );
                         })}
                       </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                   {corpToshi?.mainDone && (
                     <div className="bg-yellow-900/20 rounded-lg p-2 border border-yellow-700/30">
                       <div className="text-xs font-bold text-yellow-400 mb-1">🏆 都市対抗野球大会</div>
