@@ -260,7 +260,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
     const firstRoundCount = rounds[0].length;
     const svgH = PAD_TOP + firstRoundCount * SLOT_H + PAD_BOTTOM;
-    const svgW = PAD_LEFT + NAME_W + numRounds * CONN_W + (compact ? 60 : 100);
+    const svgW = PAD_LEFT + NAME_W + numRounds * CONN_W + 30;
 
     const getTeamCY = (ri, mi, isTop) => {
       if (ri === 0) {
@@ -311,7 +311,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               <text key={`t${mi}-${isTop}`} x={PAD_LEFT} y={cy + FONT * 0.35}
                 fill={fill} fontSize={FONT} fontWeight={fw}
 >
-                {getLabel(team)}
+                {bracket.champion === team ? `🏆${getLabel(team)}` : getLabel(team)}
               </text>
             );
           })}
@@ -388,19 +388,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             });
           })}
 
-          {/* Champion */}
+          {/* Champion terminal line */}
           {bracket.champion && (() => {
             const lastXMid = PAD_LEFT + NAME_W + (numRounds - 1) * CONN_W + CONN_W / 2;
             const midY = getMatchMidY(numRounds - 1, 0);
             return (
-              <g>
-                <line x1={lastXMid} y1={midY} x2={lastXMid + 20} y2={midY}
-                  stroke={WIN_COLOR} strokeWidth={WIN_W} />
-                <text x={lastXMid + 24} y={midY + FONT * 0.35}
-                  fill="#eab308" fontSize={FONT} fontWeight="bold">
-                  🏆 {bracket.champion}
-                </text>
-              </g>
+              <line x1={lastXMid} y1={midY} x2={lastXMid + 20} y2={midY}
+                stroke={WIN_COLOR} strokeWidth={WIN_W} />
             );
           })()}
 
@@ -1801,7 +1795,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         return (
                           <div className="mt-2 border-t border-gray-700/50 pt-2">
                             <div className="text-[10px] font-bold text-orange-400 mb-1">敗者復活トーナメント</div>
-                            {renderBracketWithLines(lb, activeQ.teamDefsMap, true)}
+                            {renderBracketWithLines(lb, activeQ.teamDefsMap)}
                           </div>
                         );
                       })()}
