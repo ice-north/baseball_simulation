@@ -246,8 +246,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const TEAM_H = compact ? 18 : 24;
     const MATCH_GAP = compact ? 4 : 6;
     const SLOT_H = TEAM_H * 2 + MATCH_GAP;
-    const NAME_W = compact ? 150 : 210;
-    const CONN_W = compact ? 28 : 40;
+    const NAME_W = compact ? 150 : 220;
+    const CONN_W = compact ? 28 : 52;
     const PAD_TOP = 8;
     const PAD_LEFT = 4;
     const PAD_BOTTOM = 18;
@@ -1204,7 +1204,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
-        <div className="flex-1 min-w-0">
+        <div className="w-[580px] shrink-0">
           <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mb-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -1614,7 +1614,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         </div>
 
         {/* 右カラム: 順位表 or 都市対抗トーナメント */}
-        <div className="w-[420px] shrink-0">
+        <div className="flex-1 min-w-[420px]">
           {seasonData.settings?.corporateMode ? (() => {
             const td = seasonData.toshitaikou;
             const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
