@@ -237,50 +237,60 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return newData;
   };
 
-  const renderBracketWithLines = (bracket, compact = false) => {
+  const renderBracketWithLines = (bracket, teamDefsMap = null, compact = false) => {
     if (!bracket || !bracket.rounds || bracket.rounds.length === 0) return null;
     const rounds = bracket.rounds;
     const numRounds = rounds.length;
-    const TEAM_H = compact ? 10 : 12;
-    const MATCH_GAP = compact ? 2 : 4;
+
+    const TEAM_H = compact ? 14 : 18;
+    const MATCH_GAP = compact ? 3 : 5;
     const SLOT_H = TEAM_H * 2 + MATCH_GAP;
-    const NAME_W = compact ? 62 : 72;
-    const CONN_W = compact ? 14 : 18;
-    const PAD_TOP = 4;
-    const PAD_LEFT = 2;
-    const FONT = compact ? 7 : 8;
+    const NAME_W = compact ? 120 : 160;
+    const CONN_W = compact ? 20 : 28;
+    const PAD_TOP = 6;
+    const PAD_LEFT = 4;
+    const PAD_BOTTOM = 14;
+    const FONT = compact ? 9 : 10;
+    const SCORE_FONT = compact ? 7 : 8;
+    const DATE_FONT = compact ? 7 : 8;
 
     const firstRoundCount = rounds[0].length;
-    const svgH = PAD_TOP + firstRoundCount * SLOT_H + 4;
-    const svgW = PAD_LEFT + NAME_W + numRounds * CONN_W + 30;
+    const svgH = PAD_TOP + firstRoundCount * SLOT_H + PAD_BOTTOM;
+    const svgW = PAD_LEFT + NAME_W + numRounds * CONN_W + 50;
 
-    const getSlotY = (ri, mi, isTop) => {
+    const getTeamCenterY = (ri, mi, isTop) => {
       if (ri === 0) {
         const base = PAD_TOP + mi * SLOT_H;
-        return isTop ? base : base + TEAM_H;
+        return isTop ? base + TEAM_H / 2 : base + TEAM_H + TEAM_H / 2;
       }
       const idx1 = mi * 2;
       const idx2 = mi * 2 + 1;
       if (idx2 >= rounds[ri - 1].length) {
-        const prev = getSlotY(ri - 1, idx1, true);
-        const prevB = getSlotY(ri - 1, idx1, false);
-        return isTop ? prev : prevB;
+        return getTeamCenterY(ri - 1, idx1, isTop);
       }
-      const top = (getSlotY(ri - 1, idx1, true) + getSlotY(ri - 1, idx1, false)) / 2;
-      const bot = (getSlotY(ri - 1, idx2, true) + getSlotY(ri - 1, idx2, false)) / 2;
-      return isTop ? top : bot;
+      const childMid1 = getMatchMidY(ri - 1, idx1);
+      const childMid2 = getMatchMidY(ri - 1, idx2);
+      return isTop ? childMid1 : childMid2;
     };
 
-    const getMatchMidY = (ri, mi) => (getSlotY(ri, mi, true) + getSlotY(ri, mi, false)) / 2;
+    const getMatchMidY = (ri, mi) => {
+      const cy1 = getTeamCenterY(ri, mi, true);
+      const cy2 = getTeamCenterY(ri, mi, false);
+      return (cy1 + cy2) / 2;
+    };
 
-    const findFirstAppearance = (teamName) => {
-      for (let r = 0; r < rounds.length; r++) {
-        for (let m = 0; m < rounds[r].length; m++) {
-          const match = rounds[r][m];
-          if (match.team1 === teamName || match.team2 === teamName) return { r, m, isTeam1: match.team1 === teamName };
-        }
-      }
-      return null;
+    const teamEntries = [];
+    for (let mi = 0; mi < rounds[0].length; mi++) {
+      const m = rounds[0][mi];
+      if (m.team1) teamEntries.push({ team: m.team1, mi, isTeam1: true });
+      if (m.team2) teamEntries.push({ team: m.team2, mi, isTeam1: false });
+    }
+
+    const getTeamLabel = (name) => {
+      if (!name) return 'TBD';
+      const city = teamDefsMap?.[name]?.city;
+      if (city) return `${name}(${city})`;
+      return name;
     };
 
     const isWinnerPath = (ri, mi, isTeam1) => {
@@ -289,71 +299,62 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return isTeam1 ? m.winner === m.team1 : m.winner === m.team2;
     };
 
-    const getConnColor = (ri, mi) => {
-      const m = rounds[ri][mi];
-      return m.winner ? '#f97316' : '#4b5563';
-    };
-
-    const getConnWidth = (ri, mi) => {
-      const m = rounds[ri][mi];
-      return m.winner ? 2 : 1;
-    };
-
-    const teamEntries = [];
-    for (let mi = 0; mi < rounds[0].length; mi++) {
-      const m = rounds[0][mi];
-      if (m.team1) teamEntries.push({ team: m.team1, mi, isTeam1: true, isBye: m.isBye && !m.team2 });
-      if (m.team2) teamEntries.push({ team: m.team2, mi, isTeam1: false, isBye: m.isBye && !m.team1 });
-      if (!m.team1 && !m.team2 && m.isBye) continue;
-    }
-
     return (
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: compact ? '200px' : '420px' }}>
-        <svg width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', fontFamily: 'system-ui, sans-serif' }}>
-          {teamEntries.map(({ team, mi, isTeam1, isBye }) => {
-            const y = getSlotY(0, mi, isTeam1) + TEAM_H * 0.7;
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: compact ? '280px' : '600px' }}>
+        <svg width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', fontFamily: "'Hiragino Sans', 'Yu Gothic', 'Meiryo', system-ui, sans-serif" }}>
+          {teamEntries.map(({ team, mi, isTeam1 }) => {
+            const cy = getTeamCenterY(0, mi, isTeam1);
             const isUser = team === userTeamName;
             const m = rounds[0][mi];
             const lost = m.loser === team;
-            const fill = isUser ? '#fde047' : lost ? '#6b7280' : '#d1d5db';
+            const fill = isUser ? '#fde047' : lost ? '#6b7280' : '#e5e7eb';
             const fw = isUser || (!lost && m.winner === team) ? 'bold' : 'normal';
-            const label = team.length > 8 ? team.slice(0, 8) : team;
-            return <text key={`n-${mi}-${isTeam1}`} x={PAD_LEFT} y={y} fill={fill} fontSize={FONT} fontWeight={fw}>{label}</text>;
+            return (
+              <text key={`n-${mi}-${isTeam1}`} x={PAD_LEFT} y={cy + FONT * 0.35} fill={fill} fontSize={FONT} fontWeight={fw}>
+                {getTeamLabel(team)}
+              </text>
+            );
           })}
 
           {rounds.map((round, ri) => {
             const xBase = PAD_LEFT + NAME_W + ri * CONN_W;
             return round.map((m, mi) => {
               if (m.isBye && !(m.team1 && m.team2)) {
-                const slotY = getSlotY(ri, mi, m.team1 ? true : false);
-                const midY = getMatchMidY(ri, mi);
+                const cy = getTeamCenterY(ri, mi, !!m.team1);
                 if (ri < numRounds - 1) {
-                  return <line key={`b${ri}-${mi}`} x1={xBase} y1={midY} x2={xBase + CONN_W} y2={midY} stroke="#4b5563" strokeWidth={1} />;
+                  return <line key={`b${ri}-${mi}`} x1={xBase} y1={cy} x2={xBase + CONN_W} y2={cy} stroke="#4b5563" strokeWidth={1} />;
                 }
                 return null;
               }
 
-              const y1 = getSlotY(ri, mi, true);
-              const y2 = getSlotY(ri, mi, false);
-              const midY = (y1 + y2) / 2;
+              const cy1 = getTeamCenterY(ri, mi, true);
+              const cy2 = getTeamCenterY(ri, mi, false);
+              const midY = (cy1 + cy2) / 2;
               const team1Win = isWinnerPath(ri, mi, true);
               const team2Win = isWinnerPath(ri, mi, false);
               const hasWinner = m.winner != null;
+              const winColor = '#f97316';
+              const defColor = '#4b5563';
 
               return (
                 <g key={`m${ri}-${mi}`}>
-                  <line x1={xBase} y1={y1 + TEAM_H / 2} x2={xBase + CONN_W / 2} y2={y1 + TEAM_H / 2}
-                    stroke={team1Win ? '#f97316' : '#4b5563'} strokeWidth={team1Win ? 2 : 1} />
-                  <line x1={xBase} y1={y2 + TEAM_H / 2} x2={xBase + CONN_W / 2} y2={y2 + TEAM_H / 2}
-                    stroke={team2Win ? '#f97316' : '#4b5563'} strokeWidth={team2Win ? 2 : 1} />
-                  <line x1={xBase + CONN_W / 2} y1={y1 + TEAM_H / 2} x2={xBase + CONN_W / 2} y2={y2 + TEAM_H / 2}
-                    stroke={hasWinner ? '#f97316' : '#4b5563'} strokeWidth={hasWinner ? 2 : 1} />
+                  {/* team1 horizontal */}
+                  <line x1={xBase} y1={cy1} x2={xBase + CONN_W / 2} y2={cy1}
+                    stroke={team1Win ? winColor : defColor} strokeWidth={team1Win ? 2.5 : 1} />
+                  {/* team2 horizontal */}
+                  <line x1={xBase} y1={cy2} x2={xBase + CONN_W / 2} y2={cy2}
+                    stroke={team2Win ? winColor : defColor} strokeWidth={team2Win ? 2.5 : 1} />
+                  {/* vertical connector */}
+                  <line x1={xBase + CONN_W / 2} y1={cy1} x2={xBase + CONN_W / 2} y2={cy2}
+                    stroke={hasWinner ? winColor : defColor} strokeWidth={hasWinner ? 2.5 : 1} />
+                  {/* output horizontal to next round */}
                   {ri < numRounds - 1 && (
                     <line x1={xBase + CONN_W / 2} y1={midY} x2={xBase + CONN_W} y2={midY}
-                      stroke={hasWinner ? '#f97316' : '#4b5563'} strokeWidth={hasWinner ? 2 : 1} />
+                      stroke={hasWinner ? winColor : defColor} strokeWidth={hasWinner ? 2.5 : 1} />
                   )}
+                  {/* score at junction */}
                   {hasWinner && m.score && (
-                    <text x={xBase + CONN_W / 2 + 2} y={midY - 2} fill="#9ca3af" fontSize={compact ? 5 : 6}>
+                    <text x={xBase + CONN_W / 2 + 3} y={midY - 3} fill="#9ca3af" fontSize={SCORE_FONT}>
                       {m.score[0]}-{m.score[1]}
                     </text>
                   )}
@@ -362,22 +363,26 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             });
           })}
 
+          {/* champion marker */}
           {bracket.champion && (() => {
             const lastX = PAD_LEFT + NAME_W + (numRounds - 1) * CONN_W + CONN_W / 2;
-            const midY = getMatchMidY(numRounds - 1, 0);
+            const cy1 = getTeamCenterY(numRounds - 1, 0, true);
+            const cy2 = getTeamCenterY(numRounds - 1, 0, false);
+            const midY = (cy1 + cy2) / 2;
             return (
               <g>
-                <line x1={lastX} y1={midY} x2={lastX + 12} y2={midY} stroke="#f97316" strokeWidth={2} />
-                <text x={lastX + 14} y={midY + 3} fill="#eab308" fontSize={FONT} fontWeight="bold">{'🏆'}{bracket.champion.length > 6 ? bracket.champion.slice(0, 6) : bracket.champion}</text>
+                <line x1={lastX} y1={midY} x2={lastX + 16} y2={midY} stroke="#f97316" strokeWidth={2.5} />
+                <text x={lastX + 19} y={midY + FONT * 0.35} fill="#eab308" fontSize={FONT} fontWeight="bold">🏆 {bracket.champion}</text>
               </g>
             );
           })()}
 
+          {/* round dates at bottom */}
           {rounds.map((_, ri) => {
             const x = PAD_LEFT + NAME_W + ri * CONN_W + CONN_W / 2;
             const rd = bracket.roundDates?.[ri];
             if (!rd) return null;
-            return <text key={`d${ri}`} x={x} y={svgH - 1} textAnchor="middle" fill="#6b7280" fontSize={compact ? 5 : 6}>{rd.month}/{rd.day}</text>;
+            return <text key={`d${ri}`} x={x} y={svgH - 2} textAnchor="middle" fill="#6b7280" fontSize={DATE_FONT}>{rd.month}/{rd.day}</text>;
           })}
         </svg>
       </div>
@@ -1625,7 +1630,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       <div className="text-gray-400 text-xs">準優勝: {td.runnerUp}</div>
                     </div>
                   )}
-                  {bracket && renderBracketWithLines(bracket)}
+                  {bracket && renderBracketWithLines(bracket, mt.teamDefsMap)}
                   {userMainMatch && (() => {
                     const matchDate = bracket?.roundDates?.[userMainMatch.roundIdx];
                     const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
@@ -1721,7 +1726,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           <span className="text-[10px] text-green-400">予選終了</span>
                         )}
                       </div>
-                      {renderBracketWithLines(bracket)}
+                      {renderBracketWithLines(bracket, activeQ.teamDefsMap)}
                       {/* ユーザーの次の試合ボタン */}
                       {userNextMatch && (() => {
                         const nmBracket = userNextMatchBracket;
@@ -1769,7 +1774,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         return (
                           <div className="mt-2 border-t border-gray-700/50 pt-2">
                             <div className="text-[10px] font-bold text-orange-400 mb-1">敗者復活トーナメント</div>
-                            {renderBracketWithLines(lb, true)}
+                            {renderBracketWithLines(lb, activeQ.teamDefsMap, true)}
                           </div>
                         );
                       })()}
