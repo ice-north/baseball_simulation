@@ -696,13 +696,6 @@ export function generateToshitaikou(options = {}) {
     assignQualifierDates(qualifiers[regionId], { year: calendarYear, month: 6, day: 1 }, 2);
   }
 
-  // ユーザー地域以外の予選は即座に全消化（日程表示は残す）
-  for (const regionId of Object.keys(qualifiers)) {
-    if (regionId !== userRegionId) {
-      autoPlayQualifier(qualifiers[regionId], null);
-    }
-  }
-
   const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';
 
   return {

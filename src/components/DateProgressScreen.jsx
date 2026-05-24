@@ -241,115 +241,144 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (!bracket || !bracket.rounds || bracket.rounds.length === 0) return null;
     const rounds = bracket.rounds;
     const numRounds = rounds.length;
-    const TEAM_H = compact ? 11 : 13;
-    const MATCH_PAD = 2;
-    const MATCH_H = TEAM_H * 2 + MATCH_PAD;
+    const TEAM_H = compact ? 10 : 12;
     const MATCH_GAP = compact ? 2 : 4;
-    const COL_W = 72;
-    const CONN_W = 16;
-    const PAD_TOP = 16;
+    const SLOT_H = TEAM_H * 2 + MATCH_GAP;
+    const NAME_W = compact ? 62 : 72;
+    const CONN_W = compact ? 14 : 18;
+    const PAD_TOP = 4;
     const PAD_LEFT = 2;
-    const SLOT_H = MATCH_H + MATCH_GAP;
     const FONT = compact ? 7 : 8;
-    const SCORE_FONT = compact ? 6 : 7;
 
     const firstRoundCount = rounds[0].length;
     const svgH = PAD_TOP + firstRoundCount * SLOT_H + 4;
-    const svgW = PAD_LEFT + numRounds * (COL_W + CONN_W) + 20;
+    const svgW = PAD_LEFT + NAME_W + numRounds * CONN_W + 30;
 
-    const getMatchCY = (ri, mi) => {
-      if (ri === 0) return PAD_TOP + mi * SLOT_H + MATCH_H / 2;
+    const getSlotY = (ri, mi, isTop) => {
+      if (ri === 0) {
+        const base = PAD_TOP + mi * SLOT_H;
+        return isTop ? base : base + TEAM_H;
+      }
       const idx1 = mi * 2;
       const idx2 = mi * 2 + 1;
-      if (idx2 >= rounds[ri - 1].length) return getMatchCY(ri - 1, idx1);
-      return (getMatchCY(ri - 1, idx1) + getMatchCY(ri - 1, idx2)) / 2;
+      if (idx2 >= rounds[ri - 1].length) {
+        const prev = getSlotY(ri - 1, idx1, true);
+        const prevB = getSlotY(ri - 1, idx1, false);
+        return isTop ? prev : prevB;
+      }
+      const top = (getSlotY(ri - 1, idx1, true) + getSlotY(ri - 1, idx1, false)) / 2;
+      const bot = (getSlotY(ri - 1, idx2, true) + getSlotY(ri - 1, idx2, false)) / 2;
+      return isTop ? top : bot;
     };
 
-    const teamFill = (m, team) => {
-      if (!team) return '#374151';
-      if (team === userTeamName) return '#fde047';
-      if (m.winner === team) return '#ffffff';
-      if (m.loser === team) return '#6b7280';
-      return '#d1d5db';
+    const getMatchMidY = (ri, mi) => (getSlotY(ri, mi, true) + getSlotY(ri, mi, false)) / 2;
+
+    const findFirstAppearance = (teamName) => {
+      for (let r = 0; r < rounds.length; r++) {
+        for (let m = 0; m < rounds[r].length; m++) {
+          const match = rounds[r][m];
+          if (match.team1 === teamName || match.team2 === teamName) return { r, m, isTeam1: match.team1 === teamName };
+        }
+      }
+      return null;
     };
-    const teamWeight = (m, team) => (!team ? 'normal' : (team === userTeamName || m.winner === team) ? 'bold' : 'normal');
-    const truncName = (name, len = 7) => { if (!name) return 'TBD'; return name.length > len ? name.slice(0, len) : name; };
+
+    const isWinnerPath = (ri, mi, isTeam1) => {
+      const m = rounds[ri][mi];
+      if (!m.winner) return false;
+      return isTeam1 ? m.winner === m.team1 : m.winner === m.team2;
+    };
+
+    const getConnColor = (ri, mi) => {
+      const m = rounds[ri][mi];
+      return m.winner ? '#f97316' : '#4b5563';
+    };
+
+    const getConnWidth = (ri, mi) => {
+      const m = rounds[ri][mi];
+      return m.winner ? 2 : 1;
+    };
+
+    const teamEntries = [];
+    for (let mi = 0; mi < rounds[0].length; mi++) {
+      const m = rounds[0][mi];
+      if (m.team1) teamEntries.push({ team: m.team1, mi, isTeam1: true, isBye: m.isBye && !m.team2 });
+      if (m.team2) teamEntries.push({ team: m.team2, mi, isTeam1: false, isBye: m.isBye && !m.team1 });
+      if (!m.team1 && !m.team2 && m.isBye) continue;
+    }
 
     return (
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: compact ? '200px' : '420px' }}>
         <svg width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', fontFamily: 'system-ui, sans-serif' }}>
-          {rounds.map((_, ri) => {
-            const x = PAD_LEFT + ri * (COL_W + CONN_W) + COL_W / 2;
-            const rd = bracket.roundDates?.[ri];
-            const label = getRoundName(bracket, ri);
-            const ds = rd ? ` (${rd.month}/${rd.day})` : '';
-            return <text key={`h${ri}`} x={x} y={10} textAnchor="middle" fill="#9ca3af" fontSize={FONT} fontWeight="bold">{label}{ds}</text>;
+          {teamEntries.map(({ team, mi, isTeam1, isBye }) => {
+            const y = getSlotY(0, mi, isTeam1) + TEAM_H * 0.7;
+            const isUser = team === userTeamName;
+            const m = rounds[0][mi];
+            const lost = m.loser === team;
+            const fill = isUser ? '#fde047' : lost ? '#6b7280' : '#d1d5db';
+            const fw = isUser || (!lost && m.winner === team) ? 'bold' : 'normal';
+            const label = team.length > 8 ? team.slice(0, 8) : team;
+            return <text key={`n-${mi}-${isTeam1}`} x={PAD_LEFT} y={y} fill={fill} fontSize={FONT} fontWeight={fw}>{label}</text>;
           })}
-          {rounds.map((round, ri) => {
-            const x = PAD_LEFT + ri * (COL_W + CONN_W);
-            return round.map((m, mi) => {
-              const cy = getMatchCY(ri, mi);
-              const y1 = cy - MATCH_H / 2;
-              const isBye = m.isBye;
-              const isUser = m.team1 === userTeamName || m.team2 === userTeamName;
 
-              if (isBye && !(m.team1 && m.team2)) {
-                const team = m.team1 || m.team2;
-                if (!team) return null;
-                return (
-                  <g key={`m${ri}-${mi}`}>
-                    <text x={x + 3} y={cy + 3} fill={teamFill(m, team)} fontSize={FONT} fontWeight={teamWeight(m, team)}>{truncName(team)}</text>
-                    {ri < numRounds - 1 && <line x1={x + COL_W} y1={cy} x2={x + COL_W + CONN_W / 2} y2={cy} stroke="#4b5563" strokeWidth={0.5} />}
-                  </g>
-                );
+          {rounds.map((round, ri) => {
+            const xBase = PAD_LEFT + NAME_W + ri * CONN_W;
+            return round.map((m, mi) => {
+              if (m.isBye && !(m.team1 && m.team2)) {
+                const slotY = getSlotY(ri, mi, m.team1 ? true : false);
+                const midY = getMatchMidY(ri, mi);
+                if (ri < numRounds - 1) {
+                  return <line key={`b${ri}-${mi}`} x1={xBase} y1={midY} x2={xBase + CONN_W} y2={midY} stroke="#4b5563" strokeWidth={1} />;
+                }
+                return null;
               }
+
+              const y1 = getSlotY(ri, mi, true);
+              const y2 = getSlotY(ri, mi, false);
+              const midY = (y1 + y2) / 2;
+              const team1Win = isWinnerPath(ri, mi, true);
+              const team2Win = isWinnerPath(ri, mi, false);
+              const hasWinner = m.winner != null;
 
               return (
                 <g key={`m${ri}-${mi}`}>
-                  {isUser && <rect x={x} y={y1} width={COL_W} height={MATCH_H} rx={2} fill="rgba(30,58,138,0.3)" />}
-                  <rect x={x} y={y1} width={COL_W} height={MATCH_H} rx={2} fill="none" stroke="#4b5563" strokeWidth={0.5} />
-                  <line x1={x} y1={cy} x2={x + COL_W} y2={cy} stroke="#374151" strokeWidth={0.5} />
-                  <text x={x + 3} y={y1 + TEAM_H - 2} fill={teamFill(m, m.team1)} fontSize={FONT} fontWeight={teamWeight(m, m.team1)}>{truncName(m.team1)}</text>
-                  <text x={x + 3} y={y1 + TEAM_H + MATCH_PAD + TEAM_H - 2} fill={teamFill(m, m.team2)} fontSize={FONT} fontWeight={teamWeight(m, m.team2)}>{truncName(m.team2)}</text>
-                  {m.winner && m.score && (
-                    <text x={x + COL_W - 3} y={y1 + TEAM_H - 2} textAnchor="end" fill="#6b7280" fontSize={SCORE_FONT}>
+                  <line x1={xBase} y1={y1 + TEAM_H / 2} x2={xBase + CONN_W / 2} y2={y1 + TEAM_H / 2}
+                    stroke={team1Win ? '#f97316' : '#4b5563'} strokeWidth={team1Win ? 2 : 1} />
+                  <line x1={xBase} y1={y2 + TEAM_H / 2} x2={xBase + CONN_W / 2} y2={y2 + TEAM_H / 2}
+                    stroke={team2Win ? '#f97316' : '#4b5563'} strokeWidth={team2Win ? 2 : 1} />
+                  <line x1={xBase + CONN_W / 2} y1={y1 + TEAM_H / 2} x2={xBase + CONN_W / 2} y2={y2 + TEAM_H / 2}
+                    stroke={hasWinner ? '#f97316' : '#4b5563'} strokeWidth={hasWinner ? 2 : 1} />
+                  {ri < numRounds - 1 && (
+                    <line x1={xBase + CONN_W / 2} y1={midY} x2={xBase + CONN_W} y2={midY}
+                      stroke={hasWinner ? '#f97316' : '#4b5563'} strokeWidth={hasWinner ? 2 : 1} />
+                  )}
+                  {hasWinner && m.score && (
+                    <text x={xBase + CONN_W / 2 + 2} y={midY - 2} fill="#9ca3af" fontSize={compact ? 5 : 6}>
                       {m.score[0]}-{m.score[1]}
                     </text>
                   )}
-                  {ri < numRounds - 1 && <line x1={x + COL_W} y1={cy} x2={x + COL_W + CONN_W / 2} y2={cy} stroke="#6b7280" strokeWidth={1} />}
                 </g>
               );
             });
           })}
-          {rounds.length > 1 && rounds.slice(1).map((round, riOff) => {
-            const ri = riOff + 1;
-            const prevXEnd = PAD_LEFT + (ri - 1) * (COL_W + CONN_W) + COL_W + CONN_W / 2;
-            const nextX = PAD_LEFT + ri * (COL_W + CONN_W);
-            return round.map((_, mi) => {
-              const idx1 = mi * 2;
-              const idx2 = mi * 2 + 1;
-              if (idx2 >= rounds[ri - 1].length) return null;
-              const c1 = getMatchCY(ri - 1, idx1);
-              const c2 = getMatchCY(ri - 1, idx2);
-              const mid = (c1 + c2) / 2;
-              return (
-                <g key={`vc${ri}-${mi}`}>
-                  <line x1={prevXEnd} y1={c1} x2={prevXEnd} y2={c2} stroke="#6b7280" strokeWidth={1} />
-                  <line x1={prevXEnd} y1={mid} x2={nextX} y2={mid} stroke="#6b7280" strokeWidth={1} />
-                </g>
-              );
-            });
-          })}
+
           {bracket.champion && (() => {
-            const lastX = PAD_LEFT + (numRounds - 1) * (COL_W + CONN_W) + COL_W;
-            const cy = getMatchCY(numRounds - 1, 0);
+            const lastX = PAD_LEFT + NAME_W + (numRounds - 1) * CONN_W + CONN_W / 2;
+            const midY = getMatchMidY(numRounds - 1, 0);
             return (
               <g>
-                <line x1={lastX} y1={cy} x2={lastX + 12} y2={cy} stroke="#eab308" strokeWidth={1} />
-                <text x={lastX + 14} y={cy + 3} fill="#eab308" fontSize={FONT} fontWeight="bold">{'🏆'}</text>
+                <line x1={lastX} y1={midY} x2={lastX + 12} y2={midY} stroke="#f97316" strokeWidth={2} />
+                <text x={lastX + 14} y={midY + 3} fill="#eab308" fontSize={FONT} fontWeight="bold">{'🏆'}{bracket.champion.length > 6 ? bracket.champion.slice(0, 6) : bracket.champion}</text>
               </g>
             );
           })()}
+
+          {rounds.map((_, ri) => {
+            const x = PAD_LEFT + NAME_W + ri * CONN_W + CONN_W / 2;
+            const rd = bracket.roundDates?.[ri];
+            if (!rd) return null;
+            return <text key={`d${ri}`} x={x} y={svgH - 1} textAnchor="middle" fill="#6b7280" fontSize={compact ? 5 : 6}>{rd.month}/{rd.day}</text>;
+          })}
         </svg>
       </div>
     );
@@ -1579,22 +1608,65 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               </div>
             );
 
-            // 本戦結果表示
-            if (td.mainDone && td.mainTournament) {
+            // 本戦表示（進行中 or 終了）
+            if (td.mainTournament) {
               const mt = td.mainTournament;
               const bracket = mt.bracket;
-              return (
+              const userMainMatch = !td.mainDone ? getUserNextMatch(bracket, userTeamName) : null;
+              const mainContent = (
                 <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-yellow-700/30">
                   <h2 className="text-base font-bold text-yellow-400 flex items-center gap-2 mb-2">
                     <span>🏆</span> 都市対抗野球大会 本戦
+                    {!td.mainDone && <span className="text-xs text-blue-400 ml-auto">進行中</span>}
                   </h2>
-                  <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2 mb-2 text-center">
-                    <div className="text-yellow-400 font-bold">優勝: {td.champion}</div>
-                    <div className="text-gray-400 text-xs">準優勝: {td.runnerUp}</div>
-                  </div>
+                  {td.mainDone && (
+                    <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2 mb-2 text-center">
+                      <div className="text-yellow-400 font-bold">優勝: {td.champion}</div>
+                      <div className="text-gray-400 text-xs">準優勝: {td.runnerUp}</div>
+                    </div>
+                  )}
                   {bracket && renderBracketWithLines(bracket)}
+                  {userMainMatch && (() => {
+                    const matchDate = bracket?.roundDates?.[userMainMatch.roundIdx];
+                    const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
+                    const isMatchDay = matchDate &&
+                      seasonData.currentDate.year === matchDate.year &&
+                      seasonData.currentDate.month === matchDate.month &&
+                      seasonData.currentDate.day === matchDate.day;
+                    return (
+                      <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
+                        <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
+                          <span>{getRoundName(bracket, userMainMatch.roundIdx)} - あなたの試合</span>
+                          {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-white font-bold">
+                            {userTeamName} vs {userMainMatch.match.team1 === userTeamName ? userMainMatch.match.team2 : userMainMatch.match.team1}
+                          </span>
+                          {isMatchDay ? (
+                            <button
+                              onClick={() => {
+                                const oppName = userMainMatch.match.team1 === userTeamName ? userMainMatch.match.team2 : userMainMatch.match.team1;
+                                const oppDef = mt.teamDefsMap[oppName];
+                                startTournamentMatch(oppName, oppDef, {
+                                  roundIdx: userMainMatch.roundIdx,
+                                  matchIdx: userMainMatch.matchIdx,
+                                  bracketType: 'main_tournament',
+                                });
+                              }}
+                              className="px-3 py-1 bg-yellow-600 hover:bg-yellow-500 text-black font-bold text-xs rounded transition"
+                            >試合開始</button>
+                          ) : (
+                            <span className="text-xs text-gray-400">試合日まで日程を進めてください</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
+              if (td.mainDone) return mainContent;
+              if (td.qualifiersDone) return mainContent;
             }
 
             // 予選トーナメント表示（タブ切り替え）
@@ -2040,7 +2112,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     <div key={league.id} className="bg-gray-800/50 rounded-lg p-2 border border-gray-700/30">
                       <div className="text-xs font-bold text-gray-300 mb-1 flex items-center justify-between">
                         <span>{INDEPENDENT_LEAGUES[league.id]?.name || league.name}</span>
-                        <span className="text-[10px] text-gray-500">{Math.round(league.gamesPlayed)}試合消化</span>
+                        <span className="text-[10px] text-gray-500">{INDEPENDENT_LEAGUES[league.id]?.gamesPerSeason || '?'}試合中{Math.round(league.gamesPlayed)}試合消化</span>
                       </div>
                       <div className="space-y-0.5">
                         {league.standings.slice(0, 4).map((s, i) => {

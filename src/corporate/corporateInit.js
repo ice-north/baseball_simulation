@@ -322,13 +322,10 @@ export const initializeCorporateGame = (teamDef) => {
   let userRoster = null;
   let userStaff = null;
 
-  for (const def of allTeamDefs) {
+  const createTeamEntry = (def) => {
     const name = def.displayName || def.name;
-    if (TEAMS_DATA[name]) continue;
-
     const roster = generateCorporateRoster(def, 1);
     const staff = generateInitialStaff(def.rank);
-
     TEAMS_DATA[name] = {
       name,
       abbreviation: makeAbbreviation(name),
@@ -336,24 +333,29 @@ export const initializeCorporateGame = (teamDef) => {
       pitchingRotation: null,
       corporateTeamId: def.id,
       corporateData: {
-        rank: def.rank,
-        region: def.region,
-        city: def.city,
-        type: def.type,
+        rank: def.rank, region: def.region, city: def.city, type: def.type,
         budget: def.budget || BUDGET_BY_RANK[def.rank] || 35,
         staff,
         reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
-        proDraftCount: 0,
-        tournamentWins: 0,
-        yearlyBudgetBonus: 0,
+        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
       },
     };
-
     allTeamNames.push(name);
-    if (name === userTeamName) {
-      userRoster = roster;
-      userStaff = staff;
-    }
+    return { roster, staff };
+  };
+
+  // ユーザーチームを最初に追加（Object.keys(TEAMS_DATA)[0]で取得されるため）
+  const userDef = allTeamDefs.find(d => (d.displayName || d.name) === userTeamName);
+  if (userDef) {
+    const { roster, staff } = createTeamEntry(userDef);
+    userRoster = roster;
+    userStaff = staff;
+  }
+
+  for (const def of allTeamDefs) {
+    const name = def.displayName || def.name;
+    if (TEAMS_DATA[name]) continue;
+    createTeamEntry(def);
   }
 
   WORLD_DATA.corporateLeague.userTeam = userTeamName;

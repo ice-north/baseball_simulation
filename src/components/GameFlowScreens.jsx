@@ -126,7 +126,7 @@ const GameFlowScreens = ({
               </div>
               <div className="flex gap-3 text-xs text-gray-500 mt-2">
                 <span>カスタム設定</span>
-                <span>平行世界なし</span>
+                <span>全4リーグ平行世界あり</span>
               </div>
             </button>
           </div>
@@ -242,19 +242,15 @@ const GameFlowScreens = ({
       onComplete={(regulations) => {
         const presetKey = selectedIndependentLeague || regulations.preset;
         initializeNewGame({ ...regulations, preset: presetKey });
-        if (presetKey) {
-          setGameFlowState('independent_loading');
-          setTimeout(() => {
-            const teamNames = Object.keys(TEAMS_DATA).filter(name => {
-              const team = TEAMS_DATA[name];
-              return team && !team.corporateTeamId && !team.independentLeagueId;
-            });
-            initializeParallelWorldForIndependent(presetKey, teamNames);
-            setGameFlowState('newgame_tryout');
-          }, 50);
-        } else {
+        setGameFlowState('independent_loading');
+        setTimeout(() => {
+          const teamNames = Object.keys(TEAMS_DATA).filter(name => {
+            const team = TEAMS_DATA[name];
+            return team && !team.corporateTeamId && !team.independentLeagueId;
+          });
+          initializeParallelWorldForIndependent(presetKey || '__custom__', teamNames);
           setGameFlowState('newgame_tryout');
-        }
+        }, 50);
       }}
     />;
   }
