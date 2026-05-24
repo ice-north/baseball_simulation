@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, addCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam, deleteGameSessionTeam } from '../corporate/corporateTeamsData.js';
+import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, addCustomTeam, updateCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam, deleteGameSessionTeam } from '../corporate/corporateTeamsData.js';
 
 const RANK_COLORS = {
   S: 'text-yellow-400',
@@ -346,6 +346,8 @@ const CorporateNameEditScreen = ({ onBack }) => {
           setTeamOverride(teamId, field, orig[field]);
         }
       }
+    } else {
+      updateCustomTeam(teamId, editForm);
     }
     setEditingTeamId(null);
     setRefreshKey(prev => prev + 1);

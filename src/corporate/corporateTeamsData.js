@@ -403,6 +403,19 @@ export const addCustomTeam = (teamData) => {
   return newTeam;
 };
 
+export const updateCustomTeam = (teamId, fields) => {
+  const customs = loadCustomTeams();
+  const idx = customs.findIndex(t => t.id === teamId);
+  if (idx >= 0) {
+    for (const field of ['name', 'city', 'region', 'type', 'rank']) {
+      if (fields[field] !== undefined) customs[idx][field] = fields[field];
+    }
+    const budgetByRank = { S: 90, A: 70, B: 50, C: 35, D: 20 };
+    customs[idx].budget = budgetByRank[customs[idx].rank] || 35;
+    saveCustomTeams(customs);
+  }
+};
+
 export const deleteTeam = (teamId) => {
   // カスタムチームの場合は完全削除
   const customs = loadCustomTeams();
