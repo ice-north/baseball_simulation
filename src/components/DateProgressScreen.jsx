@@ -310,7 +310,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             return (
               <text key={`t${mi}-${isTop}`} x={PAD_LEFT} y={cy + FONT * 0.35}
                 fill={fill} fontSize={FONT} fontWeight={fw}
-                textDecoration={elim && !isUser ? 'line-through' : 'none'}>
+>
                 {getLabel(team)}
               </text>
             );
