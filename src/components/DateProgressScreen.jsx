@@ -242,147 +242,174 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const rounds = bracket.rounds;
     const numRounds = rounds.length;
 
-    const TEAM_H = compact ? 14 : 18;
-    const MATCH_GAP = compact ? 3 : 5;
+    const TEAM_H = compact ? 18 : 24;
+    const MATCH_GAP = compact ? 4 : 6;
     const SLOT_H = TEAM_H * 2 + MATCH_GAP;
-    const NAME_W = compact ? 120 : 160;
-    const CONN_W = compact ? 20 : 28;
-    const PAD_TOP = 6;
+    const NAME_W = compact ? 150 : 210;
+    const CONN_W = compact ? 28 : 40;
+    const PAD_TOP = 8;
     const PAD_LEFT = 4;
-    const PAD_BOTTOM = 14;
-    const FONT = compact ? 9 : 10;
-    const SCORE_FONT = compact ? 7 : 8;
-    const DATE_FONT = compact ? 7 : 8;
+    const PAD_BOTTOM = 18;
+    const FONT = compact ? 10 : 12;
+    const SCORE_FONT = compact ? 9 : 11;
+    const DATE_FONT = compact ? 8 : 9;
+    const WIN_COLOR = '#f97316';
+    const DEF_COLOR = '#4b5563';
+    const WIN_W = 2.5;
+    const DEF_W = 1;
 
     const firstRoundCount = rounds[0].length;
     const svgH = PAD_TOP + firstRoundCount * SLOT_H + PAD_BOTTOM;
-    const svgW = PAD_LEFT + NAME_W + numRounds * CONN_W + 50;
+    const svgW = PAD_LEFT + NAME_W + numRounds * CONN_W + (compact ? 60 : 100);
 
-    const getTeamCenterY = (ri, mi, isTop) => {
+    const getTeamCY = (ri, mi, isTop) => {
       if (ri === 0) {
         const base = PAD_TOP + mi * SLOT_H;
         return isTop ? base + TEAM_H / 2 : base + TEAM_H + TEAM_H / 2;
       }
-      const idx1 = mi * 2;
-      const idx2 = mi * 2 + 1;
-      if (idx2 >= rounds[ri - 1].length) {
-        return getTeamCenterY(ri - 1, idx1, isTop);
+      const i1 = mi * 2, i2 = mi * 2 + 1;
+      if (i2 >= rounds[ri - 1].length) return getTeamCY(ri - 1, i1, isTop);
+      return isTop ? getMatchMidY(ri - 1, i1) : getMatchMidY(ri - 1, i2);
+    };
+    const getMatchMidY = (ri, mi) => (getTeamCY(ri, mi, true) + getTeamCY(ri, mi, false)) / 2;
+
+    const isEliminated = (teamName) => {
+      for (const round of rounds) {
+        for (const match of round) {
+          if (match.loser === teamName) return true;
+        }
       }
-      const childMid1 = getMatchMidY(ri - 1, idx1);
-      const childMid2 = getMatchMidY(ri - 1, idx2);
-      return isTop ? childMid1 : childMid2;
+      return false;
     };
 
-    const getMatchMidY = (ri, mi) => {
-      const cy1 = getTeamCenterY(ri, mi, true);
-      const cy2 = getTeamCenterY(ri, mi, false);
-      return (cy1 + cy2) / 2;
+    const getLabel = (name) => {
+      if (!name) return 'TBD';
+      const city = teamDefsMap?.[name]?.city;
+      return city ? `${name}(${city})` : name;
     };
 
     const teamEntries = [];
     for (let mi = 0; mi < rounds[0].length; mi++) {
       const m = rounds[0][mi];
-      if (m.team1) teamEntries.push({ team: m.team1, mi, isTeam1: true });
-      if (m.team2) teamEntries.push({ team: m.team2, mi, isTeam1: false });
+      if (m.team1) teamEntries.push({ team: m.team1, mi, isTop: true });
+      if (m.team2) teamEntries.push({ team: m.team2, mi, isTop: false });
     }
 
-    const getTeamLabel = (name) => {
-      if (!name) return 'TBD';
-      const city = teamDefsMap?.[name]?.city;
-      if (city) return `${name}(${city})`;
-      return name;
-    };
-
-    const isWinnerPath = (ri, mi, isTeam1) => {
-      const m = rounds[ri][mi];
-      if (!m.winner) return false;
-      return isTeam1 ? m.winner === m.team1 : m.winner === m.team2;
-    };
-
     return (
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: compact ? '280px' : '600px' }}>
-        <svg width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', fontFamily: "'Hiragino Sans', 'Yu Gothic', 'Meiryo', system-ui, sans-serif" }}>
-          {teamEntries.map(({ team, mi, isTeam1 }) => {
-            const cy = getTeamCenterY(0, mi, isTeam1);
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: compact ? '350px' : '700px' }}>
+        <svg width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg"
+          style={{ display: 'block', fontFamily: "'Hiragino Sans','Yu Gothic','Meiryo',system-ui,sans-serif" }}>
+
+          {/* Team names */}
+          {teamEntries.map(({ team, mi, isTop }) => {
+            const cy = getTeamCY(0, mi, isTop);
             const isUser = team === userTeamName;
-            const m = rounds[0][mi];
-            const lost = m.loser === team;
-            const fill = isUser ? '#fde047' : lost ? '#6b7280' : '#e5e7eb';
-            const fw = isUser || (!lost && m.winner === team) ? 'bold' : 'normal';
+            const elim = isEliminated(team);
+            const fill = isUser ? '#fde047' : elim ? '#6b7280' : '#e5e7eb';
+            const fw = isUser ? 'bold' : 'normal';
             return (
-              <text key={`n-${mi}-${isTeam1}`} x={PAD_LEFT} y={cy + FONT * 0.35} fill={fill} fontSize={FONT} fontWeight={fw}>
-                {getTeamLabel(team)}
+              <text key={`t${mi}-${isTop}`} x={PAD_LEFT} y={cy + FONT * 0.35}
+                fill={fill} fontSize={FONT} fontWeight={fw}
+                textDecoration={elim && !isUser ? 'line-through' : 'none'}>
+                {getLabel(team)}
               </text>
             );
           })}
 
+          {/* Bracket lines */}
           {rounds.map((round, ri) => {
-            const xBase = PAD_LEFT + NAME_W + ri * CONN_W;
+            const xL = PAD_LEFT + NAME_W + ri * CONN_W;
+            const xMid = xL + CONN_W / 2;
+            const xR = xL + CONN_W;
+
             return round.map((m, mi) => {
+              // Bye: single team advances
               if (m.isBye && !(m.team1 && m.team2)) {
-                const cy = getTeamCenterY(ri, mi, !!m.team1);
-                if (ri < numRounds - 1) {
-                  return <line key={`b${ri}-${mi}`} x1={xBase} y1={cy} x2={xBase + CONN_W} y2={cy} stroke="#4b5563" strokeWidth={1} />;
-                }
-                return null;
+                const tcy = getTeamCY(ri, mi, !!m.team1);
+                const midY = getMatchMidY(ri, mi);
+                return (
+                  <g key={`m${ri}-${mi}`}>
+                    <line x1={xL} y1={tcy} x2={xMid} y2={tcy} stroke={DEF_COLOR} strokeWidth={DEF_W} />
+                    {tcy !== midY && <line x1={xMid} y1={tcy} x2={xMid} y2={midY} stroke={DEF_COLOR} strokeWidth={DEF_W} />}
+                    {ri < numRounds - 1 && <line x1={xMid} y1={midY} x2={xR} y2={midY} stroke={DEF_COLOR} strokeWidth={DEF_W} />}
+                  </g>
+                );
               }
 
-              const cy1 = getTeamCenterY(ri, mi, true);
-              const cy2 = getTeamCenterY(ri, mi, false);
+              const cy1 = getTeamCY(ri, mi, true);
+              const cy2 = getTeamCY(ri, mi, false);
               const midY = (cy1 + cy2) / 2;
-              const team1Win = isWinnerPath(ri, mi, true);
-              const team2Win = isWinnerPath(ri, mi, false);
-              const hasWinner = m.winner != null;
-              const winColor = '#f97316';
-              const defColor = '#4b5563';
+              const hasW = m.winner != null;
+              const w1 = hasW && m.winner === m.team1;
+              const w2 = hasW && m.winner === m.team2;
 
               return (
                 <g key={`m${ri}-${mi}`}>
-                  {/* team1 horizontal */}
-                  <line x1={xBase} y1={cy1} x2={xBase + CONN_W / 2} y2={cy1}
-                    stroke={team1Win ? winColor : defColor} strokeWidth={team1Win ? 2.5 : 1} />
-                  {/* team2 horizontal */}
-                  <line x1={xBase} y1={cy2} x2={xBase + CONN_W / 2} y2={cy2}
-                    stroke={team2Win ? winColor : defColor} strokeWidth={team2Win ? 2.5 : 1} />
-                  {/* vertical connector */}
-                  <line x1={xBase + CONN_W / 2} y1={cy1} x2={xBase + CONN_W / 2} y2={cy2}
-                    stroke={hasWinner ? winColor : defColor} strokeWidth={hasWinner ? 2.5 : 1} />
-                  {/* output horizontal to next round */}
-                  {ri < numRounds - 1 && (
-                    <line x1={xBase + CONN_W / 2} y1={midY} x2={xBase + CONN_W} y2={midY}
-                      stroke={hasWinner ? winColor : defColor} strokeWidth={hasWinner ? 2.5 : 1} />
+                  {/* Base vertical bar (gray, full height) */}
+                  <line x1={xMid} y1={cy1} x2={xMid} y2={cy2} stroke={DEF_COLOR} strokeWidth={DEF_W} />
+
+                  {/* Winner's vertical path overlay (winner's Y → midpoint) */}
+                  {hasW && (
+                    <line x1={xMid} y1={w1 ? cy1 : cy2} x2={xMid} y2={midY}
+                      stroke={WIN_COLOR} strokeWidth={WIN_W} />
                   )}
-                  {/* score at junction */}
-                  {hasWinner && m.score && (
-                    <text x={xBase + CONN_W / 2 + 3} y={midY - 3} fill="#9ca3af" fontSize={SCORE_FONT}>
-                      {m.score[0]}-{m.score[1]}
-                    </text>
+
+                  {/* Team1 horizontal */}
+                  <line x1={xL} y1={cy1} x2={xMid} y2={cy1}
+                    stroke={w1 ? WIN_COLOR : DEF_COLOR} strokeWidth={w1 ? WIN_W : DEF_W} />
+
+                  {/* Team2 horizontal */}
+                  <line x1={xL} y1={cy2} x2={xMid} y2={cy2}
+                    stroke={w2 ? WIN_COLOR : DEF_COLOR} strokeWidth={w2 ? WIN_W : DEF_W} />
+
+                  {/* Output horizontal (midpoint → next round) */}
+                  {ri < numRounds - 1 && (
+                    <line x1={xMid} y1={midY} x2={xR} y2={midY}
+                      stroke={hasW ? WIN_COLOR : DEF_COLOR} strokeWidth={hasW ? WIN_W : DEF_W} />
+                  )}
+
+                  {/* Scores straddling the output line */}
+                  {hasW && m.score && (
+                    <>
+                      <text x={xMid + 3} y={midY - 3}
+                        fill={w1 ? '#fbbf24' : '#9ca3af'} fontSize={SCORE_FONT}
+                        fontWeight={w1 ? 'bold' : 'normal'}>
+                        {m.score[0]}
+                      </text>
+                      <text x={xMid + 3} y={midY + SCORE_FONT + 1}
+                        fill={w2 ? '#fbbf24' : '#9ca3af'} fontSize={SCORE_FONT}
+                        fontWeight={w2 ? 'bold' : 'normal'}>
+                        {m.score[1]}
+                      </text>
+                    </>
                   )}
                 </g>
               );
             });
           })}
 
-          {/* champion marker */}
+          {/* Champion */}
           {bracket.champion && (() => {
-            const lastX = PAD_LEFT + NAME_W + (numRounds - 1) * CONN_W + CONN_W / 2;
-            const cy1 = getTeamCenterY(numRounds - 1, 0, true);
-            const cy2 = getTeamCenterY(numRounds - 1, 0, false);
-            const midY = (cy1 + cy2) / 2;
+            const lastXMid = PAD_LEFT + NAME_W + (numRounds - 1) * CONN_W + CONN_W / 2;
+            const midY = getMatchMidY(numRounds - 1, 0);
             return (
               <g>
-                <line x1={lastX} y1={midY} x2={lastX + 16} y2={midY} stroke="#f97316" strokeWidth={2.5} />
-                <text x={lastX + 19} y={midY + FONT * 0.35} fill="#eab308" fontSize={FONT} fontWeight="bold">🏆 {bracket.champion}</text>
+                <line x1={lastXMid} y1={midY} x2={lastXMid + 20} y2={midY}
+                  stroke={WIN_COLOR} strokeWidth={WIN_W} />
+                <text x={lastXMid + 24} y={midY + FONT * 0.35}
+                  fill="#eab308" fontSize={FONT} fontWeight="bold">
+                  🏆 {bracket.champion}
+                </text>
               </g>
             );
           })()}
 
-          {/* round dates at bottom */}
+          {/* Round dates */}
           {rounds.map((_, ri) => {
             const x = PAD_LEFT + NAME_W + ri * CONN_W + CONN_W / 2;
             const rd = bracket.roundDates?.[ri];
             if (!rd) return null;
-            return <text key={`d${ri}`} x={x} y={svgH - 2} textAnchor="middle" fill="#6b7280" fontSize={DATE_FONT}>{rd.month}/{rd.day}</text>;
+            return <text key={`d${ri}`} x={x} y={svgH - 3} textAnchor="middle" fill="#6b7280" fontSize={DATE_FONT}>{rd.month}/{rd.day}</text>;
           })}
         </svg>
       </div>
