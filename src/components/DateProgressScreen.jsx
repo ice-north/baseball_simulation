@@ -19,6 +19,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [showGameChoiceModal, setShowGameChoiceModal] = useState(false);  // 試合選択モーダル
   const [rankingLeague, setRankingLeague] = useState('all');
   const [selectedRegionTab, setSelectedRegionTab] = useState(null);
+  const [selectedBracketTab, setSelectedBracketTab] = useState('main');
   const [isGeneratingTournament, setIsGeneratingTournament] = useState(false);
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
 
@@ -1723,7 +1724,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     const isUser = rid === td.userRegionId;
                     const isActive = rid === activeRegion;
                     return (
-                      <button key={rid} onClick={() => setSelectedRegionTab(rid)}
+                      <button key={rid} onClick={() => { setSelectedRegionTab(rid); setSelectedBracketTab('main'); }}
                         className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
                           isActive ? 'bg-blue-600 text-white' :
                           isUser ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50' :
@@ -1739,6 +1740,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 {activeQ && (() => {
                   const bracket = activeQ.mainBracket;
                   if (!bracket) return null;
+                  const hasLosers = !!activeQ.losersBracket;
+                  const showingLosers = hasLosers && selectedBracketTab === 'losers';
                   return (
                     <div>
                       <div className="flex justify-between items-center mb-1">
@@ -1747,7 +1750,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           <span className="text-[10px] text-green-400">予選終了</span>
                         )}
                       </div>
-                      {renderBracketWithLines(bracket, activeQ.teamDefsMap)}
+                      {/* 地区予選 / 敗者復活 タブ */}
+                      {hasLosers && (
+                        <div className="flex gap-1 mb-2">
+                          <button onClick={() => setSelectedBracketTab('main')}
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
+                              !showingLosers ? 'bg-blue-600 text-white' : 'bg-gray-700/50 text-gray-400 hover:text-white'
+                            }`}>地区予選</button>
+                          <button onClick={() => setSelectedBracketTab('losers')}
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
+                              showingLosers ? 'bg-orange-600 text-white' : 'bg-gray-700/50 text-gray-400 hover:text-white'
+                            }`}>敗者復活</button>
+                        </div>
+                      )}
+                      {showingLosers
+                        ? renderBracketWithLines(activeQ.losersBracket, activeQ.teamDefsMap)
+                        : renderBracketWithLines(bracket, activeQ.teamDefsMap)
+                      }
                       {/* ユーザーの次の試合ボタン */}
                       {userNextMatch && (() => {
                         const nmBracket = userNextMatchBracket;
@@ -1786,16 +1805,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                 <span className="text-xs text-gray-400">試合日まで日程を進めてください</span>
                               )}
                             </div>
-                          </div>
-                        );
-                      })()}
-                      {/* 敗者復活ブラケット */}
-                      {activeQ.losersBracket && (() => {
-                        const lb = activeQ.losersBracket;
-                        return (
-                          <div className="mt-2 border-t border-gray-700/50 pt-2">
-                            <div className="text-[10px] font-bold text-orange-400 mb-1">敗者復活トーナメント</div>
-                            {renderBracketWithLines(lb, activeQ.teamDefsMap)}
                           </div>
                         );
                       })()}
