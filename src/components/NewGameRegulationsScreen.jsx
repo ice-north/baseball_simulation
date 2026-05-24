@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
 import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
+import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 
 const NewGameRegulationsScreen = ({ onComplete, selectedLeague = null }) => {
   const initialPreset = selectedLeague ? REGULATION_PRESETS[selectedLeague] : null;
   const initialRegs = initialPreset?.regulations || {};
   const initialCount = initialRegs.teamsCount || 4;
   const defaultAbbr_ = (i) => String.fromCharCode(0xFF21 + i);
+  const leagueDef = selectedLeague ? INDEPENDENT_LEAGUES[selectedLeague] : null;
   const initialNames = [];
   const initialAbbrs = [];
   for (let i = 0; i < initialCount; i++) {
-    initialNames.push(`チーム${String.fromCharCode(65 + i)}`);
-    initialAbbrs.push(defaultAbbr_(i));
+    if (leagueDef && leagueDef.teams[i]) {
+      initialNames.push(leagueDef.teams[i].name);
+      initialAbbrs.push(leagueDef.teams[i].abbreviation);
+    } else {
+      initialNames.push(`チーム${String.fromCharCode(65 + i)}`);
+      initialAbbrs.push(defaultAbbr_(i));
+    }
   }
 
   const [tempSettings, setTempSettings] = useState({

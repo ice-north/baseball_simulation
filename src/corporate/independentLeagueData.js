@@ -22,7 +22,7 @@ export const INDEPENDENT_LEAGUES = {
     id: 'bc',
     name: 'BCリーグ',
     useDH: false,
-    gamesPerSeason: 50,
+    gamesPerSeason: 54,
     leagueFormat: 'two',
     leagueNames: ['ルートインBC信越', 'ルートインBC北陸'],
     playoffFormat: 'short',
@@ -33,6 +33,8 @@ export const INDEPENDENT_LEAGUES = {
       { id: 'il_bc_4', name: '富山サンダーバーズ', abbreviation: '富山', city: '富山', rank: 'B' },
       { id: 'il_bc_5', name: '石川ミリオンスターズ', abbreviation: '石川', city: '金沢', rank: 'B' },
       { id: 'il_bc_6', name: '福井ワイルドラプターズ', abbreviation: '福井', city: '福井', rank: 'C' },
+      { id: 'il_bc_7', name: '埼玉武蔵ヒートベアーズ', abbreviation: '埼玉', city: 'さいたま', rank: 'C' },
+      { id: 'il_bc_8', name: '茨城アストロプラネッツ', abbreviation: '茨城', city: '水戸', rank: 'C' },
     ],
   },
   kyushu: {

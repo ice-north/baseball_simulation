@@ -110,6 +110,25 @@ const GameFlowScreens = ({
                 </button>
               );
             })}
+            <button
+              onClick={() => {
+                selectedIndependentLeague = null;
+                setGameFlowState('newgame_regulations');
+              }}
+              className="bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-green-500 rounded-xl p-5 text-left transition group"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-3xl">🛠️</span>
+                <div>
+                  <div className="text-lg font-bold text-white group-hover:text-green-400 transition">リーグ作成</div>
+                  <div className="text-xs text-gray-400">チーム数・試合数・ルールを自由に設定</div>
+                </div>
+              </div>
+              <div className="flex gap-3 text-xs text-gray-500 mt-2">
+                <span>カスタム設定</span>
+                <span>平行世界なし</span>
+              </div>
+            </button>
           </div>
           <div className="mt-6 text-center">
             <button onClick={() => setGameFlowState('newgame_mode_select')} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>

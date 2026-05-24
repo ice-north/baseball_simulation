@@ -122,11 +122,11 @@ export const REGULATION_PRESETS = {
   },
   bc: {
     name: 'BCリーグ',
-    description: '2リーグ制（3チーム×2）、両リーグ優勝チームによる決戦',
+    description: '2リーグ制（4チーム×2）、両リーグ優勝チームによる決戦',
     regulations: {
       useDH: false,
-      gamesPerSeason: 50,
-      teamsCount: 6,
+      gamesPerSeason: 54,
+      teamsCount: 8,
       leagueFormat: 'two',
       leagueNames: ['ルートインBC信越', 'ルートインBC北陸'],
       playoffFormat: 'short',

@@ -237,6 +237,124 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return newData;
   };
 
+  const renderBracketWithLines = (bracket, compact = false) => {
+    if (!bracket || !bracket.rounds || bracket.rounds.length === 0) return null;
+    const rounds = bracket.rounds;
+    const numRounds = rounds.length;
+    const TEAM_H = compact ? 11 : 13;
+    const MATCH_PAD = 2;
+    const MATCH_H = TEAM_H * 2 + MATCH_PAD;
+    const MATCH_GAP = compact ? 2 : 4;
+    const COL_W = 72;
+    const CONN_W = 16;
+    const PAD_TOP = 16;
+    const PAD_LEFT = 2;
+    const SLOT_H = MATCH_H + MATCH_GAP;
+    const FONT = compact ? 7 : 8;
+    const SCORE_FONT = compact ? 6 : 7;
+
+    const firstRoundCount = rounds[0].length;
+    const svgH = PAD_TOP + firstRoundCount * SLOT_H + 4;
+    const svgW = PAD_LEFT + numRounds * (COL_W + CONN_W) + 20;
+
+    const getMatchCY = (ri, mi) => {
+      if (ri === 0) return PAD_TOP + mi * SLOT_H + MATCH_H / 2;
+      const idx1 = mi * 2;
+      const idx2 = mi * 2 + 1;
+      if (idx2 >= rounds[ri - 1].length) return getMatchCY(ri - 1, idx1);
+      return (getMatchCY(ri - 1, idx1) + getMatchCY(ri - 1, idx2)) / 2;
+    };
+
+    const teamFill = (m, team) => {
+      if (!team) return '#374151';
+      if (team === userTeamName) return '#fde047';
+      if (m.winner === team) return '#ffffff';
+      if (m.loser === team) return '#6b7280';
+      return '#d1d5db';
+    };
+    const teamWeight = (m, team) => (!team ? 'normal' : (team === userTeamName || m.winner === team) ? 'bold' : 'normal');
+    const truncName = (name, len = 7) => { if (!name) return 'TBD'; return name.length > len ? name.slice(0, len) : name; };
+
+    return (
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: compact ? '200px' : '420px' }}>
+        <svg width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', fontFamily: 'system-ui, sans-serif' }}>
+          {rounds.map((_, ri) => {
+            const x = PAD_LEFT + ri * (COL_W + CONN_W) + COL_W / 2;
+            const rd = bracket.roundDates?.[ri];
+            const label = getRoundName(bracket, ri);
+            const ds = rd ? ` (${rd.month}/${rd.day})` : '';
+            return <text key={`h${ri}`} x={x} y={10} textAnchor="middle" fill="#9ca3af" fontSize={FONT} fontWeight="bold">{label}{ds}</text>;
+          })}
+          {rounds.map((round, ri) => {
+            const x = PAD_LEFT + ri * (COL_W + CONN_W);
+            return round.map((m, mi) => {
+              const cy = getMatchCY(ri, mi);
+              const y1 = cy - MATCH_H / 2;
+              const isBye = m.isBye;
+              const isUser = m.team1 === userTeamName || m.team2 === userTeamName;
+
+              if (isBye && !(m.team1 && m.team2)) {
+                const team = m.team1 || m.team2;
+                if (!team) return null;
+                return (
+                  <g key={`m${ri}-${mi}`}>
+                    <text x={x + 3} y={cy + 3} fill={teamFill(m, team)} fontSize={FONT} fontWeight={teamWeight(m, team)}>{truncName(team)}</text>
+                    {ri < numRounds - 1 && <line x1={x + COL_W} y1={cy} x2={x + COL_W + CONN_W / 2} y2={cy} stroke="#4b5563" strokeWidth={0.5} />}
+                  </g>
+                );
+              }
+
+              return (
+                <g key={`m${ri}-${mi}`}>
+                  {isUser && <rect x={x} y={y1} width={COL_W} height={MATCH_H} rx={2} fill="rgba(30,58,138,0.3)" />}
+                  <rect x={x} y={y1} width={COL_W} height={MATCH_H} rx={2} fill="none" stroke="#4b5563" strokeWidth={0.5} />
+                  <line x1={x} y1={cy} x2={x + COL_W} y2={cy} stroke="#374151" strokeWidth={0.5} />
+                  <text x={x + 3} y={y1 + TEAM_H - 2} fill={teamFill(m, m.team1)} fontSize={FONT} fontWeight={teamWeight(m, m.team1)}>{truncName(m.team1)}</text>
+                  <text x={x + 3} y={y1 + TEAM_H + MATCH_PAD + TEAM_H - 2} fill={teamFill(m, m.team2)} fontSize={FONT} fontWeight={teamWeight(m, m.team2)}>{truncName(m.team2)}</text>
+                  {m.winner && m.score && (
+                    <text x={x + COL_W - 3} y={y1 + TEAM_H - 2} textAnchor="end" fill="#6b7280" fontSize={SCORE_FONT}>
+                      {m.score[0]}-{m.score[1]}
+                    </text>
+                  )}
+                  {ri < numRounds - 1 && <line x1={x + COL_W} y1={cy} x2={x + COL_W + CONN_W / 2} y2={cy} stroke="#6b7280" strokeWidth={1} />}
+                </g>
+              );
+            });
+          })}
+          {rounds.length > 1 && rounds.slice(1).map((round, riOff) => {
+            const ri = riOff + 1;
+            const prevXEnd = PAD_LEFT + (ri - 1) * (COL_W + CONN_W) + COL_W + CONN_W / 2;
+            const nextX = PAD_LEFT + ri * (COL_W + CONN_W);
+            return round.map((_, mi) => {
+              const idx1 = mi * 2;
+              const idx2 = mi * 2 + 1;
+              if (idx2 >= rounds[ri - 1].length) return null;
+              const c1 = getMatchCY(ri - 1, idx1);
+              const c2 = getMatchCY(ri - 1, idx2);
+              const mid = (c1 + c2) / 2;
+              return (
+                <g key={`vc${ri}-${mi}`}>
+                  <line x1={prevXEnd} y1={c1} x2={prevXEnd} y2={c2} stroke="#6b7280" strokeWidth={1} />
+                  <line x1={prevXEnd} y1={mid} x2={nextX} y2={mid} stroke="#6b7280" strokeWidth={1} />
+                </g>
+              );
+            });
+          })}
+          {bracket.champion && (() => {
+            const lastX = PAD_LEFT + (numRounds - 1) * (COL_W + CONN_W) + COL_W;
+            const cy = getMatchCY(numRounds - 1, 0);
+            return (
+              <g>
+                <line x1={lastX} y1={cy} x2={lastX + 12} y2={cy} stroke="#eab308" strokeWidth={1} />
+                <text x={lastX + 14} y={cy + 3} fill="#eab308" fontSize={FONT} fontWeight="bold">{'🏆'}</text>
+              </g>
+            );
+          })()}
+        </svg>
+      </div>
+    );
+  };
+
   const autoFillLineup = () => {
     const team = TEAMS_DATA[userTeamName];
     if (!team) return true;
@@ -1474,36 +1592,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     <div className="text-yellow-400 font-bold">優勝: {td.champion}</div>
                     <div className="text-gray-400 text-xs">準優勝: {td.runnerUp}</div>
                   </div>
-                  {bracket && bracket.rounds.map((round, ri) => {
-                    const realMatches = round.filter(m => !m.isBye && (m.winner || (m.team1 && m.team2)));
-                    if (realMatches.length === 0) return null;
-                    const roundDate = bracket.roundDates?.[ri];
-                    const dateStr = roundDate ? `${roundDate.month}/${roundDate.day}` : '';
-                    return (
-                      <div key={ri} className="mb-1.5">
-                        <div className="text-gray-400 text-[10px] font-bold mb-0.5 flex items-center gap-1">
-                          <span>{getRoundName(bracket, ri)}</span>
-                          {dateStr && <span className="text-gray-600 font-normal">({dateStr})</span>}
-                        </div>
-                        <div className="space-y-0.5">
-                          {realMatches.map((m, mi) => {
-                            const isUserMatch = m.team1 === userTeamName || m.team2 === userTeamName;
-                            return (
-                              <div key={mi} className={`flex items-center gap-1.5 text-xs ${isUserMatch ? 'bg-blue-900/20 rounded px-1' : ''}`}>
-                                <span className={m.winner === m.team1 ? 'text-white font-bold' : m.loser === m.team1 ? 'text-gray-500' : m.team1 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>{m.team1}</span>
-                                {m.winner ? (
-                                  <span className="text-gray-600 text-[10px]">{m.score?.[0]}-{m.score?.[1]}</span>
-                                ) : (
-                                  <span className="text-gray-600 text-[10px]">vs</span>
-                                )}
-                                <span className={m.winner === m.team2 ? 'text-white font-bold' : m.loser === m.team2 ? 'text-gray-500' : m.team2 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>{m.team2}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {bracket && renderBracketWithLines(bracket)}
                 </div>
               );
             }
@@ -1560,46 +1649,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           <span className="text-[10px] text-green-400">予選終了</span>
                         )}
                       </div>
-                      {bracket.rounds.map((round, ri) => {
-                        const matches = round.filter(m => !m.isBye);
-                        if (matches.length === 0) return null;
-                        const roundDate = bracket.roundDates?.[ri];
-                        const dateStr = roundDate ? `${roundDate.month}/${roundDate.day}` : '';
-                        return (
-                          <div key={ri} className="mb-1.5">
-                            <div className="text-gray-500 text-[10px] font-bold mb-0.5 flex items-center gap-1">
-                              <span>{getRoundName(bracket, ri)}</span>
-                              {dateStr && <span className="text-gray-600 font-normal">({dateStr})</span>}
-                            </div>
-                            <div className="space-y-0.5">
-                              {matches.map((m, mi) => {
-                                const isUserMatch = m.team1 === userTeamName || m.team2 === userTeamName;
-                                const isPending = !m.winner && m.team1 && m.team2;
-                                return (
-                                  <div key={mi} className={`flex items-center gap-1.5 text-xs rounded px-1 py-0.5 ${isUserMatch ? 'bg-blue-900/30' : ''}`}>
-                                    <span className={m.winner === m.team1 ? 'text-white font-bold' : m.loser === m.team1 ? 'text-gray-600 line-through' : m.team1 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>
-                                      {m.team1 || 'TBD'}
-                                    </span>
-                                    {m.winner ? (
-                                      <span className="text-gray-600 text-[10px]">{m.score?.[0]}-{m.score?.[1]}</span>
-                                    ) : isPending ? (
-                                      <span className="text-gray-600 text-[10px]">vs</span>
-                                    ) : (
-                                      <span className="text-gray-700 text-[10px]">-</span>
-                                    )}
-                                    <span className={m.winner === m.team2 ? 'text-white font-bold' : m.loser === m.team2 ? 'text-gray-600 line-through' : m.team2 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>
-                                      {m.team2 || 'TBD'}
-                                    </span>
-                                    {isUserMatch && isPending && (
-                                      <span className="text-yellow-400 text-[10px] ml-auto">あなたの試合</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {renderBracketWithLines(bracket)}
                       {/* ユーザーの次の試合ボタン */}
                       {userNextMatch && (() => {
                         const nmBracket = userNextMatchBracket;
@@ -1647,46 +1697,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         return (
                           <div className="mt-2 border-t border-gray-700/50 pt-2">
                             <div className="text-[10px] font-bold text-orange-400 mb-1">敗者復活トーナメント</div>
-                            {lb.rounds.map((round, ri) => {
-                              const matches = round.filter(m => !m.isBye);
-                              if (matches.length === 0) return null;
-                              const roundDate = lb.roundDates?.[ri];
-                              const dateStr = roundDate ? `${roundDate.month}/${roundDate.day}` : '';
-                              return (
-                                <div key={ri} className="mb-1">
-                                  <div className="text-gray-500 text-[10px] font-bold mb-0.5 flex items-center gap-1">
-                                    <span>{getRoundName(lb, ri)}</span>
-                                    {dateStr && <span className="text-gray-600 font-normal">({dateStr})</span>}
-                                  </div>
-                                  <div className="space-y-0.5">
-                                    {matches.map((m, mi) => {
-                                      const isUserMatch = m.team1 === userTeamName || m.team2 === userTeamName;
-                                      const isPending = !m.winner && m.team1 && m.team2;
-                                      return (
-                                        <div key={mi} className={`flex items-center gap-1.5 text-xs rounded px-1 py-0.5 ${isUserMatch ? 'bg-orange-900/30' : ''}`}>
-                                          <span className={m.winner === m.team1 ? 'text-white font-bold' : m.loser === m.team1 ? 'text-gray-600 line-through' : m.team1 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>
-                                            {m.team1 || 'TBD'}
-                                          </span>
-                                          {m.winner ? (
-                                            <span className="text-gray-600 text-[10px]">{m.score?.[0]}-{m.score?.[1]}</span>
-                                          ) : isPending ? (
-                                            <span className="text-gray-600 text-[10px]">vs</span>
-                                          ) : (
-                                            <span className="text-gray-700 text-[10px]">-</span>
-                                          )}
-                                          <span className={m.winner === m.team2 ? 'text-white font-bold' : m.loser === m.team2 ? 'text-gray-600 line-through' : m.team2 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}>
-                                            {m.team2 || 'TBD'}
-                                          </span>
-                                          {isUserMatch && isPending && (
-                                            <span className="text-yellow-400 text-[10px] ml-auto">あなたの試合</span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                            {renderBracketWithLines(lb, true)}
                           </div>
                         );
                       })()}

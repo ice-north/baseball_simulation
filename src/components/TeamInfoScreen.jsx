@@ -526,7 +526,7 @@ const TeamInfoScreen = () => {
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">チーム選択</label>
           <select value={selectedTeam} onChange={(e) => { setSelectedTeam(e.target.value); setSelectedPlayer(null); }} className="w-full bg-gray-700 text-white rounded px-4 py-2">
-            {Object.keys(allTeamsData).map(teamName => (
+            {Object.keys(TEAMS_DATA).map(teamName => (
               <option key={teamName} value={teamName}>{teamName}</option>
             ))}
           </select>
