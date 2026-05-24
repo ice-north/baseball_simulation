@@ -193,6 +193,10 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
 
   switch (newPhase) {
     case SEASON_PHASES.PLAYOFFS: {
+      // 社会人モードはリーグ戦なし→プレーオフもスキップ
+      if (seasonData.settings?.corporateMode) {
+        break;
+      }
       // プレーオフ開始時：上位チームを取得してプレーオフスケジュールを生成
       let topTeams;
       const playoffFormat = seasonData.settings.playoffFormat;
