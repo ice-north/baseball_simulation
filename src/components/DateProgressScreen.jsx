@@ -228,19 +228,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
-    if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
+    if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT && !isCorporate) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('draft');
       return null;
     }
     if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
       setSeasonData(newData);
-      if (onForceEvent) onForceEvent('contract');
+      if (onForceEvent) onForceEvent(isCorporate ? 'corporate_departure' : 'contract');
       return null;
     }
     if (month === 11 && day === 10 && newPhase === SEASON_PHASES.TRYOUT) {
       setSeasonData(newData);
-      if (onForceEvent) onForceEvent('tryout');
+      if (onForceEvent) onForceEvent(isCorporate ? 'corporate_scout' : 'tryout');
       return null;
     }
     if (month >= 12 || (month === 11 && day >= 30)) {
@@ -688,8 +688,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
       else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
       else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
-      else if (phase === SEASON_PHASES.CONTRACT) eventLabel = '契約更改';
-      else if (phase === SEASON_PHASES.TRYOUT) eventLabel = 'トライアウト';
+      else if (phase === SEASON_PHASES.CONTRACT) eventLabel = seasonData.settings?.corporateMode ? '退団' : '契約更改';
+      else if (phase === SEASON_PHASES.TRYOUT) eventLabel = seasonData.settings?.corporateMode ? 'スカウト入団' : 'トライアウト';
       else if (phase === SEASON_PHASES.OFF_SEASON) eventLabel = 'オフシーズン';
       const tKey = `${selectedMonth}-${day}`;
       const tournamentEvents = tournamentCalendarDates[tKey] || [];

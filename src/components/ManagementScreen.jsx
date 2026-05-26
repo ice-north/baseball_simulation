@@ -26,6 +26,8 @@ import HallOfFameScreen from './HallOfFameScreen.jsx';
 import SaveLoadScreen from './SaveLoadScreen.jsx';
 import EditScreen from './EditScreen.jsx';
 import { ToshitaikouQualifierScreen, ToshitaikouMainScreen } from './ToshitaikouScreen.jsx';
+import CorporateDepartureScreen from './CorporateDepartureScreen.jsx';
+import CorporateScoutScreen from './CorporateScoutScreen.jsx';
 
 const ManagementScreen = ({
   managementView,
@@ -97,6 +99,24 @@ const ManagementScreen = ({
       setManagementView('tryout');
     }}
   />;
+  if (managementView === 'corporate_departure') return <CorporateDepartureScreen
+    seasonData={seasonData}
+    allTeams={allTeams}
+    onComplete={() => {
+      const newData = progressDate(seasonData, 1);
+      setSeasonData({ ...newData, phase: 'tryout' });
+      setManagementView('corporate_scout');
+    }}
+  />;
+  if (managementView === 'corporate_scout') return <CorporateScoutScreen
+    seasonData={seasonData}
+    allTeams={allTeams}
+    onComplete={() => {
+      const newData = { ...seasonData, currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
+      setSeasonData(newData);
+      setManagementView('dateprogress');
+    }}
+  />;
   if (managementView === 'draft') return <DraftResultScreen
     draftedPlayers={draftResults?.draftedPlayers || []}
     nearMissPlayers={draftResults?.nearMissPlayers || []}
@@ -118,7 +138,7 @@ const ManagementScreen = ({
     onSetupManagedGame={setupManagedGame}
     onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
     onForceEvent={(eventType) => {
-      if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft')) {
+      if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout')) {
         const update = {};
         if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
@@ -127,6 +147,8 @@ const ManagementScreen = ({
         return;
       }
       if (eventType === 'contract') setManagementView('contract');
+      else if (eventType === 'corporate_departure') setManagementView('corporate_departure');
+      else if (eventType === 'corporate_scout') setManagementView('corporate_scout');
       else if (eventType === 'tryout') setManagementView('tryout');
       else if (eventType === 'draft') {
         // プロ指名で選手が消える前にランキング・表彰を確定する
