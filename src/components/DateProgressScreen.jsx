@@ -1775,7 +1775,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       {/* ユーザーの次の試合ボタン */}
                       {userNextMatch && (() => {
                         const nmBracket = userNextMatchBracket;
-                        const matchDate = nmBracket?.roundDates?.[userNextMatch.roundIdx];
+                        const matchDate = nmBracket?.matchDates?.[userNextMatch.roundIdx]?.[userNextMatch.matchIdx]
+                          || nmBracket?.roundDates?.[userNextMatch.roundIdx];
                         const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
                         const isMatchDay = matchDate &&
                           seasonData.currentDate.year === matchDate.year &&

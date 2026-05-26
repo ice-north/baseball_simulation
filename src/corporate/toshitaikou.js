@@ -494,12 +494,22 @@ export function assignBracketDates(bracket, startDate, intervalDays = 2) {
   }
 }
 
-// 予選ブラケットに日程を割り当て（勝者側+敗者復活）
-export function assignQualifierDates(qualifier, startDate, intervalDays = 2) {
-  assignBracketDates(qualifier.mainBracket, startDate, intervalDays);
-  // 敗者復活は勝者側の最終ラウンドの次の日程
-  const mainRounds = qualifier.mainBracket.rounds.length;
-  const d = new Date(startDate.year, startDate.month - 1, startDate.day + mainRounds * intervalDays);
+// 予選ブラケットに日程を割り当て（勝者側+敗者復活、1日matchesPerDay試合）
+export function assignQualifierDates(qualifier, startDate, matchesPerDay = 3) {
+  assignMainTournamentDates(qualifier.mainBracket, startDate, matchesPerDay);
+  // 敗者復活の開始日 = 勝者側の最終試合日の翌日
+  const mainMD = qualifier.mainBracket.matchDates;
+  let lastDate = null;
+  if (mainMD) {
+    for (let r = mainMD.length - 1; r >= 0; r--) {
+      for (let m = (mainMD[r]?.length || 0) - 1; m >= 0; m--) {
+        if (mainMD[r][m]) { lastDate = mainMD[r][m]; break; }
+      }
+      if (lastDate) break;
+    }
+  }
+  if (!lastDate) lastDate = startDate;
+  const d = new Date(lastDate.year, lastDate.month - 1, lastDate.day + 1);
   qualifier.losersStartDate = { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
 }
 
@@ -542,7 +552,7 @@ export function simulateQualifierOnDate(qualifier, dateObj, userTeamName = null)
       buildLosersBracket(qualifier);
       // 敗者復活に日程を割り当て
       if (qualifier.losersStartDate) {
-        assignBracketDates(qualifier.losersBracket, qualifier.losersStartDate, 2);
+        assignMainTournamentDates(qualifier.losersBracket, qualifier.losersStartDate, 3);
       }
     } else {
       qualifier.phase = 'done';
@@ -642,50 +652,34 @@ export function getTournamentDatesForCalendar(toshitaikou, userTeamName) {
   if (!toshitaikou) return [];
   const dates = [];
 
-  // 予選日程
+  // 予選日程（matchDates対応）
+  const collectBracketDates = (bk, type, regionId, isUserRegion, labelText) => {
+    if (!bk?.roundDates) return;
+    const hasMatchDates = !!bk.matchDates;
+    const dateEntries = {};
+    for (let ri = 0; ri < bk.rounds.length; ri++) {
+      for (let mi = 0; mi < bk.rounds[ri].length; mi++) {
+        const m = bk.rounds[ri][mi];
+        if (m.isBye && !(m.team1 && m.team2)) continue;
+        const rd = hasMatchDates ? bk.matchDates[ri]?.[mi] : bk.roundDates[ri];
+        if (!rd) continue;
+        const key = `${rd.year}-${rd.month}-${rd.day}`;
+        if (!dateEntries[key]) dateEntries[key] = { date: rd, label: isUserRegion ? labelText : null, isUserMatch: false, isUserRegion, type, regionId, done: true };
+        if (!m.winner && !m.isBye && m.team1 && m.team2) dateEntries[key].done = false;
+        if (!m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)) {
+          dateEntries[key].isUserMatch = true;
+        }
+      }
+    }
+    for (const entry of Object.values(dateEntries)) dates.push(entry);
+  };
+
   if (toshitaikou.qualifiers) {
     for (const regionId of Object.keys(toshitaikou.qualifiers)) {
       const q = toshitaikou.qualifiers[regionId];
       const isUserRegion = regionId === toshitaikou.userRegionId;
-      if (q.mainBracket?.roundDates) {
-        q.mainBracket.roundDates.forEach((rd, ri) => {
-          const matches = q.mainBracket.rounds[ri]?.filter(m => !m.isBye && (m.team1 || m.team2));
-          if (!matches || matches.length === 0) return;
-          const hasUserMatch = isUserRegion && matches.some(m =>
-            !m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)
-          );
-          const allDone = matches.every(m => m.winner || m.isBye);
-          dates.push({
-            date: rd,
-            label: isUserRegion ? '予選' : null,
-            isUserMatch: hasUserMatch,
-            isUserRegion,
-            type: 'qualifier',
-            regionId,
-            done: allDone,
-          });
-        });
-      }
-      // 敗者復活ブラケットの日程
-      if (q.losersBracket?.roundDates) {
-        q.losersBracket.roundDates.forEach((rd, ri) => {
-          const matches = q.losersBracket.rounds[ri]?.filter(m => !m.isBye && (m.team1 || m.team2));
-          if (!matches || matches.length === 0) return;
-          const hasUserMatch = isUserRegion && matches.some(m =>
-            !m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)
-          );
-          const allDone = matches.every(m => m.winner || m.isBye);
-          dates.push({
-            date: rd,
-            label: isUserRegion ? '敗者復活' : null,
-            isUserMatch: hasUserMatch,
-            isUserRegion,
-            type: 'qualifier_losers',
-            regionId,
-            done: allDone,
-          });
-        });
-      }
+      collectBracketDates(q.mainBracket, 'qualifier', regionId, isUserRegion, '予選');
+      collectBracketDates(q.losersBracket, 'qualifier_losers', regionId, isUserRegion, '敗者復活');
     }
   }
 
@@ -743,9 +737,9 @@ export function generateToshitaikou(options = {}) {
     qualifiers[regionId] = qualifier;
   }
 
-  // 予選に日程を割り当て（6月1日から2日おきにラウンド進行）
+  // 予選に日程を割り当て（6月15日から1日3試合ずつ）
   for (const regionId of Object.keys(qualifiers)) {
-    assignQualifierDates(qualifiers[regionId], { year: calendarYear, month: 6, day: 1 }, 2);
+    assignQualifierDates(qualifiers[regionId], { year: calendarYear, month: 6, day: 15 }, 3);
   }
 
   const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';
