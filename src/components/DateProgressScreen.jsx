@@ -1658,7 +1658,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   )}
                   {bracket && renderBracketWithLines(bracket, mt.teamDefsMap)}
                   {userMainMatch && (() => {
-                    const matchDate = bracket?.roundDates?.[userMainMatch.roundIdx];
+                    const matchDate = bracket?.matchDates?.[userMainMatch.roundIdx]?.[userMainMatch.matchIdx]
+                      || bracket?.roundDates?.[userMainMatch.roundIdx];
                     const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
                     const isMatchDay = matchDate &&
                       seasonData.currentDate.year === matchDate.year &&

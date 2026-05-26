@@ -414,8 +414,8 @@ export function createMainTournament(qualifiedByRegion, defendingChampionName, c
   const teamNames = allQualified.slice(0, 32).map(t => t.name);
 
   const bracket = createBracket(teamNames);
-  // 本戦は8月1日から2日おきにラウンド進行
-  assignBracketDates(bracket, { year: calendarYear, month: 8, day: 1 }, 2);
+  // 本戦は8月15日から、1日3試合ずつ東京ドームで開催
+  assignMainTournamentDates(bracket, { year: calendarYear, month: 8, day: 15 }, 3);
 
   return {
     bracket,
@@ -441,6 +441,47 @@ export function autoPlayMainTournament(tournament) {
 // 統合: 都市対抗大会の全工程を生成
 // ============================================================
 
+// 本戦用: 1日あたりmatchesPerDay試合ずつ日付を割り当て
+// 各試合に個別の日付を付与し、bracket.matchDates[ri][mi] = {year, month, day}
+// roundDatesも各ラウンド初日として互換用に設定
+export function assignMainTournamentDates(bracket, startDate, matchesPerDay = 3) {
+  if (!bracket) return;
+  bracket.matchDates = [];
+  bracket.roundDates = [];
+  let d = new Date(startDate.year, startDate.month - 1, startDate.day);
+  let daySlotUsed = 0;
+
+  for (let r = 0; r < bracket.rounds.length; r++) {
+    const round = bracket.rounds[r];
+    bracket.matchDates[r] = [];
+    let roundFirstDate = null;
+
+    // 前ラウンドの最終日の翌日からこのラウンドを開始（ラウンド間に1日休み）
+    if (r > 0 && daySlotUsed > 0) {
+      d.setDate(d.getDate() + 1);
+      daySlotUsed = 0;
+    }
+
+    for (let m = 0; m < round.length; m++) {
+      const match = round[m];
+      if (match.isBye && !(match.team1 && match.team2)) {
+        bracket.matchDates[r][m] = null;
+        continue;
+      }
+      if (daySlotUsed >= matchesPerDay) {
+        d.setDate(d.getDate() + 1);
+        daySlotUsed = 0;
+      }
+      const dateObj = { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+      bracket.matchDates[r][m] = dateObj;
+      if (!roundFirstDate) roundFirstDate = { ...dateObj };
+      daySlotUsed++;
+    }
+
+    bracket.roundDates[r] = roundFirstDate || { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+  }
+}
+
 // ブラケットの各ラウンドに日付を割り当て
 // startDate: {year, month, day}, intervalDays: ラウンド間の日数
 export function assignBracketDates(bracket, startDate, intervalDays = 2) {
@@ -462,16 +503,17 @@ export function assignQualifierDates(qualifier, startDate, intervalDays = 2) {
   qualifier.losersStartDate = { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
 }
 
-// 指定日に該当するラウンドのAI試合を消化
+// 指定日に該当する試合を消化（matchDates対応）
 // 戻り値: そのラウンドで試合が行われたか
 export function simulateBracketRoundOnDate(bracket, teamDefsMap, dateObj, userTeamName = null) {
   if (!bracket || !bracket.roundDates) return false;
+  const hasMatchDates = !!bracket.matchDates;
   let played = false;
   for (let r = 0; r < bracket.rounds.length; r++) {
-    const rd = bracket.roundDates[r];
-    if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
-    // このラウンドの試合を消化
     for (let m = 0; m < bracket.rounds[r].length; m++) {
+      // 日付照合: matchDatesがあれば試合単位、なければラウンド単位
+      const rd = hasMatchDates ? bracket.matchDates[r]?.[m] : bracket.roundDates[r];
+      if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
       const match = bracket.rounds[r][m];
       if (match.winner || match.isBye || !match.team1 || !match.team2) continue;
       if (userTeamName && (match.team1 === userTeamName || match.team2 === userTeamName)) continue;
@@ -570,15 +612,17 @@ export function getUserMatchOnDate(toshitaikou, dateObj, userTeamName) {
     }
   }
 
-  // 本戦チェック
+  // 本戦チェック（matchDates対応）
   if (toshitaikou.mainTournament && toshitaikou.mainTournament.phase !== 'done') {
     const mt = toshitaikou.mainTournament;
-    if (mt.bracket?.roundDates) {
-      for (let r = 0; r < mt.bracket.rounds.length; r++) {
-        const rd = mt.bracket.roundDates[r];
-        if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
-        for (let m = 0; m < mt.bracket.rounds[r].length; m++) {
-          const match = mt.bracket.rounds[r][m];
+    const bk = mt.bracket;
+    if (bk?.roundDates) {
+      const hasMatchDates = !!bk.matchDates;
+      for (let r = 0; r < bk.rounds.length; r++) {
+        for (let m = 0; m < bk.rounds[r].length; m++) {
+          const rd = hasMatchDates ? bk.matchDates[r]?.[m] : bk.roundDates[r];
+          if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
+          const match = bk.rounds[r][m];
           if (!match.winner && !match.isBye && match.team1 && match.team2) {
             if (match.team1 === userTeamName || match.team2 === userTeamName) {
               return { type: 'main', roundIdx: r, matchIdx: m, match, bracketType: 'main_tournament' };
@@ -645,25 +689,33 @@ export function getTournamentDatesForCalendar(toshitaikou, userTeamName) {
     }
   }
 
-  // 本戦日程
+  // 本戦日程（matchDates対応: 試合単位の日付をカレンダーに集約）
   if (toshitaikou.mainTournament?.bracket?.roundDates) {
     const mt = toshitaikou.mainTournament;
-    mt.bracket.roundDates.forEach((rd, ri) => {
-      const roundName = getRoundName(mt.bracket, ri);
-      const matches = mt.bracket.rounds[ri]?.filter(m => !m.isBye && (m.team1 || m.team2));
-      if (!matches || matches.length === 0) return;
-      const hasUserMatch = matches.some(m =>
-        !m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)
-      );
-      const allDone = matches.every(m => m.winner || m.isBye);
-      dates.push({
-        date: rd,
-        label: roundName,
-        isUserMatch: hasUserMatch,
-        type: 'main',
-        done: allDone,
-      });
-    });
+    const bk = mt.bracket;
+    const hasMatchDates = !!bk.matchDates;
+    const dateEntries = {};
+
+    for (let ri = 0; ri < bk.rounds.length; ri++) {
+      const roundName = getRoundName(bk, ri);
+      for (let mi = 0; mi < bk.rounds[ri].length; mi++) {
+        const m = bk.rounds[ri][mi];
+        if (m.isBye && !(m.team1 && m.team2)) continue;
+        const rd = hasMatchDates ? bk.matchDates[ri]?.[mi] : bk.roundDates[ri];
+        if (!rd) continue;
+        const key = `${rd.year}-${rd.month}-${rd.day}`;
+        if (!dateEntries[key]) dateEntries[key] = { date: rd, label: roundName, isUserMatch: false, done: true };
+        if (!m.winner && m.team1 && m.team2) dateEntries[key].done = false;
+        if (!m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)) {
+          dateEntries[key].isUserMatch = true;
+          dateEntries[key].label = roundName;
+        }
+      }
+    }
+
+    for (const entry of Object.values(dateEntries)) {
+      dates.push({ ...entry, type: 'main' });
+    }
   }
 
   return dates;
