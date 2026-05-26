@@ -36,7 +36,7 @@ export const TOSHITAIKOU_REGION_NAMES = {
   chugoku: '中国', shikoku: '四国', kyushu: '九州',
 };
 
-const MAX_QUALIFIER_TEAMS = 16;
+const MAX_QUALIFIER_TEAMS = 32;
 const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 const RANK_STRENGTH = { S: 88, A: 73, B: 58, C: 43, D: 30 };
 

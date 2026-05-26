@@ -238,16 +238,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return newData;
   };
 
-  const renderBracketWithLines = (bracket, teamDefsMap = null, compact = false) => {
+  const renderBracketWithLines = (bracket, teamDefsMap = null) => {
     if (!bracket || !bracket.rounds || bracket.rounds.length === 0) return null;
     const rounds = bracket.rounds;
     const numRounds = rounds.length;
+    const firstRoundCount = rounds[0].length;
+    const compact = firstRoundCount > 8;
 
     const TEAM_H = compact ? 18 : 24;
     const MATCH_GAP = compact ? 4 : 6;
     const SLOT_H = TEAM_H * 2 + MATCH_GAP;
-    const NAME_W = compact ? 150 : 200;
-    const CONN_W = compact ? 28 : 44;
+    const NAME_W = compact ? 160 : 200;
+    const CONN_W = compact ? 30 : 44;
     const PAD_TOP = 8;
     const PAD_LEFT = 4;
     const PAD_BOTTOM = 18;
@@ -259,7 +261,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const WIN_W = 2.5;
     const DEF_W = 1;
 
-    const firstRoundCount = rounds[0].length;
     const svgH = PAD_TOP + firstRoundCount * SLOT_H + PAD_BOTTOM;
     const svgW = PAD_LEFT + NAME_W + numRounds * CONN_W + 30;
 
@@ -297,7 +298,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
 
     return (
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: compact ? '350px' : '700px' }}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '700px' }}>
         <svg width={svgW} height={svgH} xmlns="http://www.w3.org/2000/svg"
           style={{ display: 'block', fontFamily: "'Hiragino Sans','Yu Gothic','Meiryo',system-ui,sans-serif" }}>
 
