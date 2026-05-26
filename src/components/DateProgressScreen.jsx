@@ -293,8 +293,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const teamEntries = [];
     for (let mi = 0; mi < rounds[0].length; mi++) {
       const m = rounds[0][mi];
-      if (m.team1) teamEntries.push({ team: m.team1, mi, isTop: true });
-      if (m.team2) teamEntries.push({ team: m.team2, mi, isTop: false });
+      const isByeMatch = m.isBye && !(m.team1 && m.team2);
+      if (isByeMatch) {
+        const byeTeam = m.team1 || m.team2;
+        if (byeTeam) teamEntries.push({ team: byeTeam, mi, isTop: 'mid' });
+      } else {
+        if (m.team1) teamEntries.push({ team: m.team1, mi, isTop: true });
+        if (m.team2) teamEntries.push({ team: m.team2, mi, isTop: false });
+      }
     }
 
     return (
@@ -304,7 +310,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
           {/* Team names */}
           {teamEntries.map(({ team, mi, isTop }) => {
-            const cy = getTeamCY(0, mi, isTop);
+            const cy = isTop === 'mid' ? getMatchMidY(0, mi) : getTeamCY(0, mi, isTop);
             const isUser = team === userTeamName;
             const elim = isEliminated(team);
             const fill = isUser ? '#fde047' : elim ? '#6b7280' : '#e5e7eb';
@@ -325,15 +331,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const xR = xL + CONN_W;
 
             return round.map((m, mi) => {
-              // Bye: single team advances
+              // Bye: straight line through
               if (m.isBye && !(m.team1 && m.team2)) {
-                const tcy = getTeamCY(ri, mi, !!m.team1);
                 const midY = getMatchMidY(ri, mi);
                 return (
                   <g key={`m${ri}-${mi}`}>
-                    <line x1={xL} y1={tcy} x2={xMid} y2={tcy} stroke={DEF_COLOR} strokeWidth={DEF_W} />
-                    {tcy !== midY && <line x1={xMid} y1={tcy} x2={xMid} y2={midY} stroke={DEF_COLOR} strokeWidth={DEF_W} />}
-                    {ri < numRounds - 1 && <line x1={xMid} y1={midY} x2={xR} y2={midY} stroke={DEF_COLOR} strokeWidth={DEF_W} />}
+                    <line x1={xL} y1={midY} x2={xR} y2={midY} stroke={DEF_COLOR} strokeWidth={DEF_W} />
                   </g>
                 );
               }
