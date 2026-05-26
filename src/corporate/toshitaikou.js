@@ -6,7 +6,7 @@
 //  2. 勝者側の優勝チーム＋敗者復活の上位が代表枠を獲得
 //  3. 全12地域の代表31チーム＋前年優勝(推薦)1 = 32チームで本戦
 
-import { getTeamsByRegion } from './corporateTeamsData.js';
+import { getTeamsByRegion, getAllTeamsEffective } from './corporateTeamsData.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 
 // ============================================================
@@ -752,6 +752,96 @@ export function generateToshitaikou(options = {}) {
     champion: null,
     runnerUp: null,
   };
+}
+
+// ============================================================
+// 社会人野球日本選手権大会（11月上旬、32チームトーナメント）
+// ============================================================
+
+export function generateNihonSenshuken(options = {}) {
+  const {
+    userTeamName = null,
+    calendarYear = 2024,
+  } = options;
+
+  // 全チームからランク順に32チーム選出（将来的に予選で絞る）
+  const allTeams = getAllTeamsEffective();
+  const sorted = [...allTeams].sort((a, b) =>
+    (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
+  );
+  const selected = sorted.slice(0, 32);
+
+  const teamNames = selected.map(t => t.displayName || t.name);
+  const teamDefsMap = {};
+  selected.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+
+  const bracket = createBracket(teamNames);
+  // 11月1日から1日3試合ずつ
+  assignMainTournamentDates(bracket, { year: calendarYear, month: 11, day: 1 }, 3);
+
+  return {
+    bracket,
+    teams: selected,
+    teamDefsMap,
+    champion: null,
+    runnerUp: null,
+    phase: 'playing',
+  };
+}
+
+export function simulateNihonSenshukenOnDate(tournament, dateObj, userTeamName = null) {
+  if (!tournament || tournament.phase === 'done') return;
+  simulateBracketRoundOnDate(tournament.bracket, tournament.teamDefsMap, dateObj, userTeamName);
+  if (isBracketComplete(tournament.bracket)) {
+    const rankings = getBracketRankings(tournament.bracket);
+    tournament.champion = rankings[0] || null;
+    tournament.runnerUp = rankings[1] || null;
+    tournament.phase = 'done';
+  }
+}
+
+export function getUserNihonSenshukenMatchOnDate(tournament, dateObj, userTeamName) {
+  if (!tournament || !userTeamName || tournament.phase === 'done') return null;
+  const bk = tournament.bracket;
+  if (!bk?.roundDates) return null;
+  const hasMatchDates = !!bk.matchDates;
+  for (let r = 0; r < bk.rounds.length; r++) {
+    for (let m = 0; m < bk.rounds[r].length; m++) {
+      const rd = hasMatchDates ? bk.matchDates[r]?.[m] : bk.roundDates[r];
+      if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
+      const match = bk.rounds[r][m];
+      if (!match.winner && !match.isBye && match.team1 && match.team2) {
+        if (match.team1 === userTeamName || match.team2 === userTeamName) {
+          return { type: 'nihon_senshuken', roundIdx: r, matchIdx: m, match, bracketType: 'nihon_senshuken' };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+export function getNihonSenshukenDatesForCalendar(tournament, userTeamName) {
+  if (!tournament?.bracket?.roundDates) return [];
+  const bk = tournament.bracket;
+  const hasMatchDates = !!bk.matchDates;
+  const dateEntries = {};
+  for (let ri = 0; ri < bk.rounds.length; ri++) {
+    const roundName = getRoundName(bk, ri);
+    for (let mi = 0; mi < bk.rounds[ri].length; mi++) {
+      const m = bk.rounds[ri][mi];
+      if (m.isBye && !(m.team1 && m.team2)) continue;
+      const rd = hasMatchDates ? bk.matchDates[ri]?.[mi] : bk.roundDates[ri];
+      if (!rd) continue;
+      const key = `${rd.year}-${rd.month}-${rd.day}`;
+      if (!dateEntries[key]) dateEntries[key] = { date: rd, label: roundName, isUserMatch: false, done: true };
+      if (!m.winner && m.team1 && m.team2) dateEntries[key].done = false;
+      if (!m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)) {
+        dateEntries[key].isUserMatch = true;
+        dateEntries[key].label = roundName;
+      }
+    }
+  }
+  return Object.values(dateEntries).map(e => ({ ...e, type: 'nihon_senshuken' }));
 }
 
 // ============================================================

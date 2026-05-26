@@ -4,7 +4,7 @@ import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } 
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
-import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult } from '../corporate/toshitaikou.js';
+import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar } from '../corporate/toshitaikou.js';
 import { simulateParallelWorldDate, getAllParallelLeagues } from '../corporate/parallelWorldManager.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
@@ -188,6 +188,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const calYear = newData.currentDate.year;
         const mainTournament = createMainTournament(td.qualifiers, prevChamp, calYear);
         const updated = { ...newData, toshitaikou: { ...td, mainTournament, mainDone: false } };
+        setSeasonData(updated);
+        setIsGeneratingTournament(false);
+      }, 50);
+      return newData;
+    }
+
+    // 日本選手権（11月から）
+    if (isCorporate && month >= 11 && !newData.nihonSenshuken?.generated) {
+      setSeasonData(newData);
+      setIsGeneratingTournament(true);
+      setTimeout(() => {
+        const calYear = newData.currentDate.year;
+        const ns = generateNihonSenshuken({ userTeamName, calendarYear: calYear });
+        const updated = { ...newData, nihonSenshuken: { ...ns, generated: true } };
         setSeasonData(updated);
         setIsGeneratingTournament(false);
       }, 50);
@@ -498,6 +512,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
+    // 日本選手権のユーザー試合チェック
+    if (seasonData.nihonSenshuken?.generated && seasonData.nihonSenshuken.phase !== 'done') {
+      const nsMatch = getUserNihonSenshukenMatchOnDate(seasonData.nihonSenshuken, seasonData.currentDate, userTeamName);
+      if (nsMatch) {
+        setShowTournamentMatchModal(nsMatch);
+        return;
+      }
+    }
+
     // ユーザーチームの試合があるかチェック
     const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
     const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
@@ -550,6 +573,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       newSeasonData = { ...newSeasonData, toshitaikou: td };
     }
 
+    // 日本選手権の試合を消化
+    if (newSeasonData.nihonSenshuken?.generated && newSeasonData.nihonSenshuken.phase !== 'done') {
+      const ns = JSON.parse(JSON.stringify(newSeasonData.nihonSenshuken));
+      simulateNihonSenshukenOnDate(ns, seasonData.currentDate, userTeamName);
+      if (ns.phase === 'done') {
+        ns.champion = ns.champion;
+        ns.runnerUp = ns.runnerUp;
+      }
+      newSeasonData = { ...newSeasonData, nihonSenshuken: ns };
+    }
+
     if (newSeasonData.currentDate.month !== selectedMonth) setSelectedMonth(newSeasonData.currentDate.month);
     const finalData = checkAndTriggerEvents(seasonData, newSeasonData);
     if (finalData !== null) setSeasonData(finalData);
@@ -578,28 +612,31 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
   };
 
-  // 都市対抗トーナメント: ユーザーの試合を開始
+  // トーナメント: ユーザーの試合を開始（都市対抗 / 日本選手権 共用）
   const startTournamentMatch = (opponentName, opponentDef, matchInfo) => {
     if (!onSetupManagedGame) return;
     const oppName = opponentDef?.displayName || opponentDef?.name || opponentName;
+    const isNS = matchInfo.bracketType === 'nihon_senshuken';
+    const pendingMatch = {
+      regionId: matchInfo.regionId,
+      roundIdx: matchInfo.roundIdx,
+      matchIdx: matchInfo.matchIdx,
+      opponentName: oppName,
+      bracketType: matchInfo.bracketType || 'main',
+    };
 
-    const updatedData = {
+    const updatedData = isNS ? {
       ...seasonData,
-      toshitaikou: {
-        ...seasonData.toshitaikou,
-        pendingMatch: {
-          regionId: matchInfo.regionId,
-          roundIdx: matchInfo.roundIdx,
-          matchIdx: matchInfo.matchIdx,
-          opponentName: oppName,
-          bracketType: matchInfo.bracketType || 'main',
-        },
-      },
+      nihonSenshuken: { ...seasonData.nihonSenshuken, pendingMatch },
+    } : {
+      ...seasonData,
+      toshitaikou: { ...seasonData.toshitaikou, pendingMatch },
     };
     setSeasonData(updatedData);
 
+    const prefix = isNS ? 'nihon_senshuken' : 'toshitaikou';
     onSetupManagedGame({
-      gameId: `toshitaikou_${matchInfo.bracketType}_${matchInfo.roundIdx}_${matchInfo.matchIdx}`,
+      gameId: `${prefix}_${matchInfo.bracketType}_${matchInfo.roundIdx}_${matchInfo.matchIdx}`,
       home: userTeamName,
       away: oppName,
       otherGames: [],
@@ -622,16 +659,21 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   // トーナメント日程をカレンダー用に取得
   const tournamentCalendarDates = useMemo(() => {
-    if (!seasonData.toshitaikou?.generated) return {};
-    const dates = getTournamentDatesForCalendar(seasonData.toshitaikou, userTeamName);
+    const allDates = [];
+    if (seasonData.toshitaikou?.generated) {
+      allDates.push(...getTournamentDatesForCalendar(seasonData.toshitaikou, userTeamName));
+    }
+    if (seasonData.nihonSenshuken?.generated) {
+      allDates.push(...getNihonSenshukenDatesForCalendar(seasonData.nihonSenshuken, userTeamName));
+    }
     const dateMap = {};
-    dates.forEach(d => {
+    allDates.forEach(d => {
       const key = `${d.date.month}-${d.date.day}`;
       if (!dateMap[key]) dateMap[key] = [];
       dateMap[key].push(d);
     });
     return dateMap;
-  }, [seasonData.toshitaikou, userTeamName]);
+  }, [seasonData.toshitaikou, seasonData.nihonSenshuken, userTeamName]);
 
   const calendarCells = useMemo(() => {
     const cells = [];
@@ -1634,7 +1676,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <div className="flex justify-between text-gray-300"><span>7月</span><span className="text-gray-500">練習期間</span></div>
                   <div className="flex justify-between text-gray-300"><span>8月</span><span>都市対抗 本戦</span></div>
                   <div className="flex justify-between text-gray-300"><span>9月〜10月</span><span className="text-gray-500">練習期間</span></div>
-                  <div className="flex justify-between text-gray-300"><span>11月</span><span>契約更改・オフ</span></div>
+                  <div className="flex justify-between text-gray-300"><span>11月</span><span>日本選手権大会</span></div>
                 </div>
               </div>
             );
@@ -1697,8 +1739,67 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   })()}
                 </div>
               );
-              if (td.mainDone) return mainContent;
-              if (td.qualifiersDone) return mainContent;
+              const nsPanel = seasonData.nihonSenshuken?.generated ? (() => {
+                const ns = seasonData.nihonSenshuken;
+                const nsBracket = ns.bracket;
+                const userNsMatch = ns.phase !== 'done' ? getUserNextMatch(nsBracket, userTeamName) : null;
+                return (
+                  <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-red-700/30 mt-3">
+                    <h2 className="text-base font-bold text-red-400 flex items-center gap-2 mb-2">
+                      <span>🏆</span> 日本選手権大会
+                      {ns.phase === 'done' && <span className="text-xs text-green-400 ml-auto">大会終了</span>}
+                    </h2>
+                    {ns.phase === 'done' && ns.champion && (
+                      <div className="bg-yellow-900/30 border border-yellow-600/30 rounded-lg p-2 mb-2 text-center">
+                        <div className="text-yellow-400 font-bold">優勝: {ns.champion}</div>
+                        <div className="text-gray-400 text-xs">準優勝: {ns.runnerUp}</div>
+                      </div>
+                    )}
+                    {nsBracket && renderBracketWithLines(nsBracket, ns.teamDefsMap)}
+                    {userNsMatch && (() => {
+                      const matchDate = nsBracket?.matchDates?.[userNsMatch.roundIdx]?.[userNsMatch.matchIdx]
+                        || nsBracket?.roundDates?.[userNsMatch.roundIdx];
+                      const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
+                      const isMatchDay = matchDate &&
+                        seasonData.currentDate.year === matchDate.year &&
+                        seasonData.currentDate.month === matchDate.month &&
+                        seasonData.currentDate.day === matchDate.day;
+                      return (
+                        <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
+                          <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
+                            <span>{nsBracket ? getRoundName(nsBracket, userNsMatch.roundIdx) : ''} - あなたの試合</span>
+                            {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-white font-bold">
+                              {userTeamName} vs {userNsMatch.match.team1 === userTeamName ? userNsMatch.match.team2 : userNsMatch.match.team1}
+                            </span>
+                            {isMatchDay ? (
+                              <button
+                                onClick={() => {
+                                  const oppName = userNsMatch.match.team1 === userTeamName ? userNsMatch.match.team2 : userNsMatch.match.team1;
+                                  const oppDef = ns.teamDefsMap[oppName];
+                                  startTournamentMatch(oppName, oppDef, {
+                                    roundIdx: userNsMatch.roundIdx,
+                                    matchIdx: userNsMatch.matchIdx,
+                                    bracketType: 'nihon_senshuken',
+                                  });
+                                }}
+                                className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded transition"
+                              >試合開始</button>
+                            ) : (
+                              <span className="text-xs text-gray-400">試合日まで日程を進めてください</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })() : null;
+
+              if (td.mainDone) return <>{mainContent}{nsPanel}</>;
+              if (td.qualifiersDone) return <>{mainContent}{nsPanel}</>;
             }
 
             // 予選トーナメント表示（タブ切り替え）
@@ -2274,28 +2375,39 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <button
                   onClick={() => {
                     setShowTournamentMatchModal(null);
-                    const td = { ...seasonData.toshitaikou };
-                    if (tm.type === 'qualifier' && tm.regionId) {
-                      const q = td.qualifiers[tm.regionId];
-                      if (q) {
-                        const targetBracket = tm.bracketType === 'losers' ? q.losersBracket : q.mainBracket;
-                        const def1 = q.teamDefsMap[tm.match.team1];
-                        const def2 = q.teamDefsMap[tm.match.team2];
-                        if (targetBracket && def1 && def2) {
-                          const result = simulateQuickMatch(def1, def2);
-                          recordTournamentResult(targetBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
-                        }
-                      }
-                    } else if (tm.type === 'main' && td.mainTournament) {
-                      const mt = td.mainTournament;
-                      const def1 = mt.teamDefsMap[tm.match.team1];
-                      const def2 = mt.teamDefsMap[tm.match.team2];
+                    if (tm.type === 'nihon_senshuken') {
+                      const ns = { ...seasonData.nihonSenshuken };
+                      const def1 = ns.teamDefsMap[tm.match.team1];
+                      const def2 = ns.teamDefsMap[tm.match.team2];
                       if (def1 && def2) {
                         const result = simulateQuickMatch(def1, def2);
-                        recordTournamentResult(mt.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                        recordTournamentResult(ns.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
                       }
+                      setSeasonData(prev => ({ ...prev, nihonSenshuken: ns }));
+                    } else {
+                      const td = { ...seasonData.toshitaikou };
+                      if (tm.type === 'qualifier' && tm.regionId) {
+                        const q = td.qualifiers[tm.regionId];
+                        if (q) {
+                          const targetBracket = tm.bracketType === 'losers' ? q.losersBracket : q.mainBracket;
+                          const def1 = q.teamDefsMap[tm.match.team1];
+                          const def2 = q.teamDefsMap[tm.match.team2];
+                          if (targetBracket && def1 && def2) {
+                            const result = simulateQuickMatch(def1, def2);
+                            recordTournamentResult(targetBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                          }
+                        }
+                      } else if (tm.type === 'main' && td.mainTournament) {
+                        const mt = td.mainTournament;
+                        const def1 = mt.teamDefsMap[tm.match.team1];
+                        const def2 = mt.teamDefsMap[tm.match.team2];
+                        if (def1 && def2) {
+                          const result = simulateQuickMatch(def1, def2);
+                          recordTournamentResult(mt.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                        }
+                      }
+                      setSeasonData(prev => ({ ...prev, toshitaikou: td }));
                     }
-                    setSeasonData(prev => ({ ...prev, toshitaikou: td }));
                     executeSkipDay(1);
                   }}
                   className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-xl transition text-sm"

@@ -485,6 +485,30 @@ export function executeHandleManagedGameEnd(ctx) {
     });
   }
 
+  // 日本選手権の結果処理
+  const nsPending = updatedSeasonData.nihonSenshuken?.pendingMatch;
+  if (nsPending && info.isTournament) {
+    const ns = { ...updatedSeasonData.nihonSenshuken };
+    const userWon = finalScore.home > finalScore.away;
+    const winnerName = userWon ? htn : atn;
+    const scoreArr = [finalScore.home, finalScore.away];
+    recordResult(ns.bracket, nsPending.roundIdx, nsPending.matchIdx, winnerName, scoreArr);
+    if (isBracketComplete(ns.bracket)) {
+      const rankings = getBracketRankings(ns.bracket);
+      ns.champion = rankings[0] || null;
+      ns.runnerUp = rankings[1] || null;
+      ns.phase = 'done';
+    }
+    ns.pendingMatch = null;
+    updatedSeasonData = { ...updatedSeasonData, nihonSenshuken: ns };
+    setSeasonData(updatedSeasonData);
+    setManagedGameInfo(null);
+    managedGameInfoRef.current = null;
+    setScreenMode('management');
+    setManagementView('dateprogress');
+    return;
+  }
+
   // トーナメント試合の結果処理
   const pendingMatch = updatedSeasonData.toshitaikou?.pendingMatch;
   if (pendingMatch && info.isTournament) {
