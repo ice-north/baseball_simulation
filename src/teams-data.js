@@ -4,6 +4,7 @@
 // ============================================================
 
 import { createPlayerStats, createSeasonStats, createCareerStats } from './players.js';
+import { clearUniversityPool } from './season/universityPool.js';
 
 /**
  * チームデータ構造（動的に拡張可能）
@@ -44,6 +45,8 @@ export const initializeTeamsForCount = (teamCount, customNames = null, customAbb
   Object.keys(TEAMS_DATA).forEach(key => delete TEAMS_DATA[key]);
   // 解雇プールもクリア
   clearReleasedPlayersPool();
+  // 大学プールもクリア
+  clearUniversityPool();
 
   // チーム名を決定（カスタム名または自動生成）
   const teamNames = [];

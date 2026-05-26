@@ -27,6 +27,8 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - `src/components/GameUIComponents.jsx` (~380行) - Sidebar・RenderBases・AccordionSection
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
+- `src/season/universityPool.js` (~300行) - 大学プール（高卒世代生成・進路振分・4年間成長・卒業）
+- `src/corporate/scoutingSystem.js` (~400行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
 - `src/data/playerNames.js` (210KB) - 姓3000件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
@@ -61,10 +63,33 @@ App.jsxは大きいファイルなので、作業に関連するセクション�
 
 ## ゲームフロー
 ```
+【独立リーグモード】
 NEW GAME → レギュレーション設定 → トライアウト(24人ドラフト) → キャンプ
 → レギュラーシーズン(日付進行で自動消化) → プレーオフ → ドラフト
-→ オフシーズン(表彰/引退) → Year 2+(トライアウト15人→ロスター調整→キャンプ...)
+→ 契約更改 → トライアウト → オフシーズン(表彰/引退/大学プール処理)
+→ Year 2+(キャンプ...)
+
+【社会人モード】
+NEW GAME → 企業チーム選択 → キャンプ
+→ レギュラーシーズン(日付進行) → 都市対抗予選(6月) → 都市対抗本戦(8月)
+→ 日本選手権(11月) → 退団(11/9) → スカウト入団(11/10)
+→ オフシーズン → Year 2+(キャンプ...)
 ```
+
+## 大学プールシステム (`src/season/universityPool.js`)
+- **高卒世代生成**: 毎年オフシーズンに800人の高卒選手を一括生成
+- **進路振り分け**: 能力+成長力で上位30%→大学、次10%→社会人候補、次10%→独立候補、残50%→破棄
+- **大学在学**: `universityPool` にグローバル保持。4年間（or 22歳）で卒業。在学中は毎年成長処理
+- **卒業後**: `releasedPlayersPool` に追加され、トライアウト/スカウト候補として供給
+- **セーブ/ロード**: `serializeUniversityPool()` / `deserializeUniversityPool()` で保存・復元
+- **新規ゲーム時**: `clearUniversityPool()` でクリア（`initializeTeamsForCount` 内で自動実行）
+
+## 社会人モード入退団 (`src/corporate/scoutingSystem.js`)
+- **退団（11/9）**: 自動引退判定 + ユーザー/AI戦力外通告。戦力外選手(35歳未満)はリリースプールへ
+- **入団（11/10）**: スカウトシステム。`scoutingEye` でスカウト精度が変化（能力値のぼかし表示）
+  - `reputation` で候補者の基礎能力にボーナス、候補数はスカウト能力で6〜12人
+  - ユーザーは最大3名獲得。AIチームはポジション不足に応じて自動獲得
+- **画面遷移**: `corporate_departure` → `corporate_scout` → `dateprogress`（独立リーグの `contract` → `tryout` に対応）
 
 ## 投手起用ロール
 - 先発: complete(完投型), short(ショートスターター), quality(勝ち権利交代), ace(エース)

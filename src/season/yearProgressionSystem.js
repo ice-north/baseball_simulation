@@ -8,6 +8,8 @@ import { createSeasonData, initializeStandings } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear } from './universityPool.js';
+import { releasedPlayersPool } from '../teams-data.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
 
@@ -831,6 +833,36 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 5. 引退処理
   const { updatedTeams: teamsAfterRetirement, retirements } = processRetirements(updatedTeams);
 
+  // 5.5. 大学プール処理: 在学生の成長 + 卒業生を排出
+  const currentYear = seasonData.year;
+  const { graduates: uniGraduates, report: uniReport } = processUniversityYear(currentYear);
+  // 卒業生はリリースプールに追加（次年度のトライアウト/スカウト候補になる）
+  uniGraduates.forEach(grad => {
+    grad.isStarter = false;
+    grad.battingOrder = 0;
+    grad.origin = 'university';
+    grad.isReleasedCandidate = true;
+    releasedPlayersPool.push(grad);
+  });
+
+  // 5.6. 新しい高卒世代を生成 → 進路振り分け → 大学入学
+  const newClass = generateHighSchoolClass(currentYear + 1, 800);
+  const paths = assignCareerPaths(newClass, currentYear + 1);
+  enrollInUniversity(paths.university, currentYear + 1);
+  // 社会人/独立向けの選手もリリースプールに追加（入団候補として供給）
+  paths.corporate.forEach(p => {
+    p.isStarter = false;
+    p.battingOrder = 0;
+    p.origin = 'corporate_candidate';
+    releasedPlayersPool.push(p);
+  });
+  paths.independent.forEach(p => {
+    p.isStarter = false;
+    p.battingOrder = 0;
+    p.origin = 'independent_candidate';
+    releasedPlayersPool.push(p);
+  });
+
   // 6. 新シーズンデータ作成
   const newYear = seasonData.year + 1;
   const newSeasonData = createSeasonData(newYear);
@@ -844,6 +876,12 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 年齢カーブの結果を新シーズンデータに保存（キャンプ画面で表示用）
   newSeasonData.ageReports = ageReports;
+  // 大学プールの状態を記録
+  newSeasonData.universityReport = {
+    graduated: uniReport.graduated,
+    newEnrollment: paths.university.length,
+    growing: uniReport.grown
+  };
 
   return {
     newSeasonData,

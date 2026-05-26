@@ -119,6 +119,14 @@ function getReleasedCandidatesFromPool() {
   const candidates = [];
   for (const p of releasedPlayersPool) {
     const aged = JSON.parse(JSON.stringify(p));
+
+    // 大学卒業生/新規候補は減衰なし（入団直後のフレッシュな状態）
+    if (p.origin === 'university' || p.origin === 'corporate_candidate' || p.origin === 'independent_candidate') {
+      aged.isReleasedCandidate = true;
+      candidates.push(aged);
+      continue;
+    }
+
     // プール滞在年数（0回目の再挑戦=解雇直後の翌年 → +1歳, 1回目の不指名後の再挑戦=+2歳）
     const yearsInPool = (p.attemptsInPool || 0) + 1;
     aged.age = (p.age || 20) + yearsInPool;

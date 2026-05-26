@@ -2,6 +2,7 @@ import { compressData, decompressData, getLocalStorageUsage } from '../utils/com
 import { TEAMS_DATA } from '../teams-data.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import { serializeUniversityPool, deserializeUniversityPool } from '../season/universityPool.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
 
@@ -68,7 +69,8 @@ export const saveGameToSlot = (slotIndex, gameState) => {
       gameMode: gameState.gameMode,
       selectedMonth: gameState.selectedMonth,
       hallOfFamePlayers: gameState.hallOfFamePlayers,
-      teamHistory: gameState.teamHistory
+      teamHistory: gameState.teamHistory,
+      universityPool: serializeUniversityPool()
     };
 
     const compressed = compressData(saveData);
@@ -148,6 +150,11 @@ export const loadGameFromSlot = (slotIndex) => {
       }
       WORLD_DATA.draft = wd.draft || { draftedPlayers: [], history: [] };
       WORLD_DATA.corporateToshitaikou = wd.corporateToshitaikou || null;
+    }
+
+    // 大学プール復元
+    if (saveData.universityPool) {
+      deserializeUniversityPool(saveData.universityPool);
     }
 
     // バント能力値の移行（旧セーブデータ互換）
