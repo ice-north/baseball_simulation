@@ -69,6 +69,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                   <span className="text-green-400 font-bold">{POSITION_NAMES[p.position]}</span>
                   <span className="font-medium">{p.name}</span>
                   <span className="text-gray-500">({p.age}歳)</span>
+                  {p._scoutSource && <span className="text-cyan-400">{p._scoutSource}</span>}
                   {p.position === 'pitcher' ? (
                     <span className="text-gray-400">{p.pitching?.velocity}km/h 制球{p.pitching?.control}</span>
                   ) : (
@@ -142,6 +143,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                 <span className="text-yellow-400 font-bold w-6">{POSITION_NAMES[player.position]}</span>
                 <span className="text-white font-medium w-20">{player.name}</span>
                 <span className="text-gray-500 w-10">{player.age}歳</span>
+                {player._scoutSource && (
+                  <span className="text-cyan-400 w-16 truncate">{player._scoutSource}</span>
+                )}
                 <span className={`text-[10px] ${accuracy.color} w-16`}>
                   精度{accuracy.text}
                 </span>
@@ -171,6 +175,10 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
               {detailPlayer?.id === player.id && (
                 <div className="mt-2 pt-2 border-t border-gray-700 text-[10px] text-gray-400">
                   <div className="grid grid-cols-2 gap-x-4">
+                    <div>
+                      <span className="text-gray-500">出身: </span>
+                      <span className="text-cyan-400">{player._scoutSource || '不明'}</span>
+                    </div>
                     <div>
                       <span className="text-gray-500">投/打: </span>
                       {player.physical?.throws === 'left' ? '左' : '右'}投

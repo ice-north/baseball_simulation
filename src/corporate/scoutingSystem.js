@@ -4,12 +4,11 @@
 // 入団: スカウトによる選手獲得（トライアウトとは異なる仕組み）
 // ============================================================
 
-import { generateRandomPlayerName } from '../data/playerNames.js';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { checkRetirement } from '../season/yearProgressionSystem.js';
-import { getTeamStaffBonus, getScoutAccuracyGain } from './staffData.js';
+import { getTeamStaffBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
-import { generatePositionFitness, generateRandomArsenal } from '../season/tryoutSystem.js';
+import { universityPool } from '../season/universityPool.js';
 
 // ============================================================
 // 退団システム
@@ -148,15 +147,77 @@ export function executeDepartures(allTeams, retiredIds, releases, currentYear) {
 
 // ============================================================
 // 入団（スカウト）システム
+// スカウトがプール（大学・リリース）から有望選手を発掘し、候補に提示
 // ============================================================
 
 /**
- * スカウト候補者を生成
- * 独立リーグのトライアウトとは異なり、スカウトが見つけてくる選手。
- * チームの注目度とスカウト能力で候補の質と数が変わる。
- * @param {Object} teamData - チームデータ（corporateData, staff を持つ）
+ * プールから選手の総合力を算出（スカウト候補のソート用）
+ */
+function evaluatePlayerScore(player) {
+  const isPitcher = player.position === 'pitcher';
+  const gp = player.growthPotential || 1.0;
+
+  let score;
+  if (isPitcher) {
+    const v = player.pitching?.velocity || 130;
+    const c = player.pitching?.control || 40;
+    const s = player.pitching?.stamina || 60;
+    score = (v - 120) * 1.5 + c + s * 0.4;
+  } else {
+    const m = player.batting?.meet || 0;
+    const p = player.batting?.power || 0;
+    const spd = player.physical?.speed || 0;
+    const def = player.fielding?.defense || 0;
+    const arm = player.physical?.arm || 0;
+    score = m + p + spd * 0.5 + def * 0.3 + arm * 0.3;
+  }
+  return score + (gp - 0.9) * 30;
+}
+
+/**
+ * 大学プールから在学中の有望選手を取得（3-4年生のみ）
+ * @param {number} currentYear - 現在の年度
+ * @returns {Array} { player, source: 'university', enrollYear, poolIndex }
+ */
+function getUniversityScoutPool(currentYear) {
+  const pool = [];
+  Object.entries(universityPool).forEach(([enrollYear, cohort]) => {
+    const yr = parseInt(enrollYear);
+    cohort.forEach((entry, idx) => {
+      const yearsIn = currentYear - yr;
+      // 3年生以上（在学2年以上）がスカウト対象
+      if (yearsIn >= 2) {
+        pool.push({
+          player: entry.player,
+          source: 'university',
+          enrollYear: yr,
+          poolIndex: idx,
+          yearsInUni: yearsIn
+        });
+      }
+    });
+  });
+  return pool;
+}
+
+/**
+ * リリースプールからスカウト対象の選手を取得
+ * @returns {Array} { player, source: 'released', poolIndex }
+ */
+function getReleasedScoutPool() {
+  return releasedPlayersPool.map((p, idx) => ({
+    player: p,
+    source: 'released',
+    poolIndex: idx
+  }));
+}
+
+/**
+ * スカウト候補者をプールから発掘
+ * scoutingEye で発見数と精度が変わる。reputation で有望な選手が見つかりやすくなる。
+ * @param {Object} teamData - チームデータ
  * @param {number} year - 年度
- * @returns {Array} スカウト候補者
+ * @returns {Array} スカウト候補者（scoutAccuracy, scoutedAbilities, _poolRef 付き）
  */
 export function generateScoutCandidates(teamData, year) {
   const staffBonus = getTeamStaffBonus(teamData.staff || []);
@@ -165,260 +226,133 @@ export function generateScoutCandidates(teamData, year) {
 
   // 候補者数: スカウト能力で6〜12人
   const baseCount = 6;
-  const bonusCount = Math.floor(scoutEye / 20); // 0〜4
+  const bonusCount = Math.floor(scoutEye / 20);
   const candidateCount = baseCount + bonusCount;
 
-  // 質: 注目度で基礎能力にボーナス
-  const reputationBonus = getReputationRecruitBonus(reputation);
-  const scoutBonus = getReputationScoutBonus(reputation);
+  // 注目度が高いほど上位選手にアクセスしやすい
+  const reputationMult = getReputationScoutBonus(reputation);
 
-  const candidates = [];
-  const idBase = (year || 1) * 10000 + 5000;
+  // 大学プール + リリースプール を統合
+  const uniPool = getUniversityScoutPool(year);
+  const relPool = getReleasedScoutPool();
+  const allPool = [...uniPool, ...relPool];
 
-  for (let i = 0; i < candidateCount; i++) {
-    const player = generateScoutedPlayer(idBase + i, reputationBonus, year);
-    // スカウト精度: 能力の見え方を制御
-    player.scoutAccuracy = calculateScoutAccuracy(scoutEye);
-    player.scoutedAbilities = obscureAbilities(player, player.scoutAccuracy);
-    candidates.push(player);
-  }
+  if (allPool.length === 0) return [];
 
-  return candidates;
+  // 総合力でスコアリングし、注目度補正+ランダムノイズでソート
+  const scored = allPool.map(entry => {
+    const base = evaluatePlayerScore(entry.player);
+    const noise = (Math.random() - 0.5) * 30;
+    const repBonus = (reputationMult - 1.0) * 20;
+    return { ...entry, score: base + noise + repBonus };
+  });
+  scored.sort((a, b) => b.score - a.score);
+
+  // 上位からcandidateCount人を選出
+  const selected = scored.slice(0, candidateCount);
+
+  return selected.map(entry => {
+    const p = JSON.parse(JSON.stringify(entry.player));
+    const accuracy = calculateScoutAccuracy(scoutEye);
+    p.scoutAccuracy = accuracy;
+    p.scoutedAbilities = obscureAbilities(p, accuracy);
+    // プールからの除去用の参照情報
+    p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear };
+    // 出身表示用
+    if (entry.source === 'university') {
+      p._scoutSource = `大学${entry.yearsInUni + 1}年`;
+    } else {
+      p._scoutSource = p.origin === 'university' ? '大学卒'
+        : p.origin === 'corporate_candidate' ? '社会人候補'
+        : p.origin === 'independent_candidate' ? '独立L候補'
+        : p.previousTeam ? `元${p.previousTeam}` : 'フリー';
+    }
+    return p;
+  });
 }
 
 /**
  * スカウト精度を計算（0〜100）
- * scoutingEye が高いほど正確に能力が見える
  */
 function calculateScoutAccuracy(scoutEye) {
-  // 基礎精度40 + scoutEye * 0.5 → 最大90
   const base = 40 + Math.floor(scoutEye * 0.5);
   const variance = Math.floor(Math.random() * 15) - 7;
   return Math.max(20, Math.min(95, base + variance));
 }
 
 /**
- * 能力値をスカウト精度に応じてぼかす（ユーザーに見せる値）
- * 精度が低いと実際の値から大きくずれる
+ * 能力値をスカウト精度に応じてぼかす
  */
 function obscureAbilities(player, accuracy) {
   const blur = (val, maxVal = 99) => {
-    const errorRange = Math.floor((100 - accuracy) / 5); // 0〜16
+    const errorRange = Math.floor((100 - accuracy) / 5);
     const error = Math.floor(Math.random() * (errorRange * 2 + 1)) - errorRange;
     return Math.max(1, Math.min(maxVal, val + error));
   };
 
   return {
     batting: {
-      meet: blur(player.batting.meet),
-      power: blur(player.batting.power),
-      eye: blur(player.batting.eye)
+      meet: blur(player.batting?.meet || 0),
+      power: blur(player.batting?.power || 0),
+      eye: blur(player.batting?.eye || 0)
     },
     physical: {
-      speed: blur(player.physical.speed),
-      arm: blur(player.physical.arm)
+      speed: blur(player.physical?.speed || 0),
+      arm: blur(player.physical?.arm || 0)
     },
     fielding: {
-      defense: blur(player.fielding.defense)
+      defense: blur(player.fielding?.defense || 0)
     },
     pitching: {
-      velocity: blur(player.pitching.velocity, 165),
-      control: blur(player.pitching.control),
-      stamina: blur(player.pitching.stamina, 200)
+      velocity: blur(player.pitching?.velocity || 130, 165),
+      control: blur(player.pitching?.control || 30),
+      stamina: blur(player.pitching?.stamina || 60, 200)
     }
   };
 }
 
 /**
- * スカウトされた選手を生成
- * 大学/社会人/元プロなど多様な経歴の選手
+ * 獲得した選手をプールから除去
+ * @param {Object} player - _poolRef を持つスカウト候補者
  */
-function generateScoutedPlayer(id, reputationBonus, year) {
-  const name = generateRandomPlayerName();
+function removeFromPool(player) {
+  const ref = player._poolRef;
+  if (!ref) return;
 
-  // 年齢: 社会人野球は22〜28歳が中心
-  const ageWeights = [
-    { age: 18, weight: 3 },
-    { age: 19, weight: 5 },
-    { age: 20, weight: 8 },
-    { age: 21, weight: 10 },
-    { age: 22, weight: 25 },  // 大���
-    { age: 23, weight: 15 },
-    { age: 24, weight: 12 },
-    { age: 25, weight: 10 },
-    { age: 26, weight: 7 },
-    { age: 27, weight: 3 },
-    { age: 28, weight: 2 },
-  ];
-  const totalWeight = ageWeights.reduce((sum, w) => sum + w.weight, 0);
-  const roll = Math.random() * totalWeight;
-  let cumulative = 0;
-  let age = 22;
-  for (const entry of ageWeights) {
-    cumulative += entry.weight;
-    if (roll < cumulative) { age = entry.age; break; }
+  if (ref.source === 'university') {
+    const cohort = universityPool[ref.enrollYear];
+    if (cohort) {
+      const idx = cohort.findIndex(e => e.player.id === player.id);
+      if (idx >= 0) cohort.splice(idx, 1);
+      if (cohort.length === 0) delete universityPool[ref.enrollYear];
+    }
+  } else if (ref.source === 'released') {
+    const idx = releasedPlayersPool.findIndex(p => p.id === player.id);
+    if (idx >= 0) releasedPlayersPool.splice(idx, 1);
   }
-
-  // 利き手
-  const handRoll = Math.random() * 100;
-  let throws, bats;
-  if (handRoll < 40) { throws = 'right'; bats = 'right'; }
-  else if (handRoll < 70) { throws = 'right'; bats = 'left'; }
-  else if (handRoll < 92) { throws = 'left'; bats = 'left'; }
-  else if (handRoll < 98) { throws = 'right'; bats = 'switch'; }
-  else { throws = 'left'; bats = 'right'; }
-
-  // ポジション
-  const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
-  let isPitcher = Math.random() < 0.45;
-  let position;
-
-  if (throws === 'left') {
-    const leftPositions = ['pitcher', 'first', 'left', 'center', 'right'];
-    position = leftPositions[Math.floor(Math.random() * leftPositions.length)];
-    isPitcher = position === 'pitcher';
-  } else {
-    position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
-  }
-
-  // 投球フォーム
-  const formRand = Math.random() * 100;
-  let pitchingForm;
-  if (formRand < 45) pitchingForm = 'overhand';
-  else if (formRand < 85) pitchingForm = 'threeQuarter';
-  else if (formRand < 95) pitchingForm = 'sidearm';
-  else pitchingForm = 'submarine';
-
-  const isSideOrUnder = pitchingForm === 'sidearm' || pitchingForm === 'submarine';
-  const controlAdjust = isSideOrUnder ? 12 : 0;
-  const ageBonus = Math.min(18, Math.max(0, (age - 18) * 2));
-  const repBonus = Math.max(0, reputationBonus);
-
-  // 能力生成（社会人レベル: 独立リーグより少し高め）
-  const randStat = (min, max) => {
-    const base = Math.floor(Math.random() * (max - min + 1)) + min;
-    const bonus = Math.floor(ageBonus * 0.3) + Math.floor(repBonus * 0.5);
-    return Math.max(1, Math.min(99, base + bonus));
-  };
-
-  let abilities;
-  if (isPitcher) {
-    const arm = randStat(62, 88);
-    const velocity = Math.round(95 + Math.pow(arm / 100, 1.2) * 69);
-    abilities = {
-      meet: randStat(15, 35),
-      power: randStat(10, 30),
-      eye: randStat(20, 45),
-      steal: randStat(10, 30),
-      speed: randStat(30, 55),
-      arm,
-      defense: randStat(35, 60),
-      bodyStamina: randStat(45, 75),
-      recovery: randStat(45, 75),
-      velocity: Math.max(120, Math.min(160, velocity)),
-      control: Math.min(85, randStat(38, 68) + controlAdjust),
-      stamina: randStat(70, 130)
-    };
-  } else {
-    abilities = {
-      meet: randStat(35, 65),
-      power: randStat(25, 60),
-      eye: randStat(30, 60),
-      steal: randStat(20, 55),
-      speed: randStat(35, 70),
-      arm: randStat(30, 70),
-      defense: randStat(35, 70),
-      bodyStamina: randStat(40, 75),
-      recovery: randStat(40, 70),
-      velocity: randStat(120, 140),
-      control: randStat(25, 50),
-      stamina: randStat(50, 80)
-    };
-  }
-
-  // 成長力
-  const u1 = Math.random() || 0.001;
-  const u2 = Math.random();
-  const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  const skewed = normal > 0 ? normal * 0.7 : normal;
-  let growthPotential = 0.90 + skewed * 0.2;
-  if (age <= 20) growthPotential += 0.08;
-  growthPotential = Math.max(0.5, Math.min(1.45, growthPotential));
-
-  const player = {
-    id,
-    name,
-    age,
-    position,
-    battingOrder: 0,
-    isStarter: false,
-    batting: {
-      meet: abilities.meet,
-      power: abilities.power,
-      eye: abilities.eye,
-      bats,
-      steal: abilities.steal,
-      bunt: Math.floor(Math.random() * 30) + 20
-    },
-    physical: {
-      speed: abilities.speed,
-      arm: abilities.arm,
-      throws,
-      bodyStamina: abilities.bodyStamina,
-      recovery: abilities.recovery,
-      muscle: randStat(35, 70),
-      dexterity: randStat(35, 70)
-    },
-    fielding: {
-      defense: abilities.defense
-    },
-    catching: {
-      lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 35 : Math.floor(Math.random() * 26) + 20
-    },
-    pitching: {
-      velocity: abilities.velocity,
-      control: abilities.control,
-      stamina: abilities.stamina,
-      spinRate: Math.floor(Math.random() * 40) + 30,
-      form: pitchingForm,
-      arsenal: isPitcher ? generateRandomArsenal(0, false) : generateFielderArsenalSimple()
-    },
-    growthPotential,
-    growthModifier: 0,
-    positionFitness: generatePositionFitness(position),
-    fatigue: 0,
-    experience: 0,
-    seasonStats: {
-      batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-      pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-    },
-    careerStats: {
-      batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-      pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-    },
-    origin: 'scout', // スカウト経由入団マーカー
-    scoutYear: year
-  };
-
-  return player;
 }
 
-function generateFielderArsenalSimple() {
-  const types = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'cutter'];
-  const type = types[Math.floor(Math.random() * types.length)];
-  return [
-    { id: 1, type: 'straight', level: 100 },
-    { id: 2, type, level: Math.floor(Math.random() * 21) + 20 }
-  ];
+/**
+ * ユーザーがスカウト候補者を獲得
+ * プールから除去し、チームに追加
+ */
+export function recruitPlayer(team, player) {
+  removeFromPool(player);
+  const recruit = { ...player };
+  delete recruit.scoutAccuracy;
+  delete recruit.scoutedAbilities;
+  delete recruit._poolRef;
+  delete recruit._scoutSource;
+  recruit.origin = 'scout';
+  recruit.isStarter = false;
+  recruit.battingOrder = 0;
+  recruit.fatigue = 0;
+  team.players.push(recruit);
 }
 
 /**
  * AIチームのスカウト入団処理
- * 各AIチームが自動で候補者から選手を獲得
- * @param {Object} allTeams - TEAMS_DATA
- * @param {string} userTeamName - ユーザーチーム名
- * @param {number} year - 年度
- * @returns {Object} { teamName: [acquired players] }
+ * 各AIチームが自チームの候補から選手を獲得
  */
 export function processAIScoutRecruitment(allTeams, userTeamName, year) {
   const results = {};
@@ -434,6 +368,7 @@ export function processAIScoutRecruitment(allTeams, userTeamName, year) {
     if (need <= 0) return;
 
     const candidates = generateScoutCandidates(team, year);
+    if (candidates.length === 0) return;
     const acquired = [];
 
     // ポジション不足を分析
@@ -453,11 +388,8 @@ export function processAIScoutRecruitment(allTeams, userTeamName, year) {
     });
 
     for (let i = 0; i < need && i < sortedCandidates.length; i++) {
-      const recruit = { ...sortedCandidates[i] };
-      delete recruit.scoutAccuracy;
-      delete recruit.scoutedAbilities;
-      team.players.push(recruit);
-      acquired.push(recruit);
+      recruitPlayer(team, sortedCandidates[i]);
+      acquired.push({ name: sortedCandidates[i].name, position: sortedCandidates[i].position });
     }
 
     if (acquired.length > 0) {
@@ -474,16 +406,4 @@ function getPositionNeedScore(position, posCount) {
   if (['first', 'second', 'third', 'short'].includes(position) && posCount.infield < 5) return 20;
   if (['left', 'center', 'right'].includes(position) && posCount.outfield < 4) return 20;
   return 0;
-}
-
-/**
- * ユーザーがスカウト候補者を獲得
- * @param {Object} team - チームデータ
- * @param {Object} player - 獲得する選手
- */
-export function recruitPlayer(team, player) {
-  const recruit = { ...player };
-  delete recruit.scoutAccuracy;
-  delete recruit.scoutedAbilities;
-  team.players.push(recruit);
 }
