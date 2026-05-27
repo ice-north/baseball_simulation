@@ -6,7 +6,7 @@
 
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { checkRetirement } from '../season/yearProgressionSystem.js';
-import { getTeamStaffBonus } from './staffData.js';
+import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
 import { universityPool } from '../season/universityPool.js';
 
@@ -267,6 +267,8 @@ export function generateScoutCandidates(teamData, year) {
         : p.origin === 'independent_candidate' ? '独立L候補'
         : p.previousTeam ? `元${p.previousTeam}` : 'フリー';
     }
+    // 交渉成功率を事前計算
+    p.recruitRate = calculateRecruitSuccessRate(p, teamData);
     return p;
   });
 }
@@ -309,6 +311,63 @@ function obscureAbilities(player, accuracy) {
       stamina: blur(player.pitching?.stamina || 60, 200)
     }
   };
+}
+
+// ============================================================
+// 交渉成功率システム
+// 注目度・ランク・交渉力と選手の質で成功率が決まる
+// ============================================================
+
+const RANK_RECRUIT_BONUS = { S: 0.10, A: 0.05, B: 0, C: -0.05, D: -0.10 };
+
+/**
+ * 選手獲得の成功率を計算（0〜100）
+ * @param {Object} player - スカウト候補者
+ * @param {Object} teamData - チームデータ（corporateData を持つ）
+ * @returns {number} 成功率（0-100）
+ */
+export function calculateRecruitSuccessRate(player, teamData) {
+  const cd = teamData?.corporateData;
+  const reputation = cd?.reputation || 0;
+  const rank = cd?.rank || 'C';
+  const staffBonus = getTeamStaffBonus(cd?.staff || []);
+  const negotiation = staffBonus.negotiation || 0;
+
+  // ベース: 注目度 0→30%, 50→60%, 100→90%
+  const baseRate = 0.30 + (reputation / 100) * 0.60;
+
+  // 選手の質ペナルティ: 総合力が高いほど交渉が難しい
+  const playerScore = evaluatePlayerScore(player);
+  // スコア30(弱)→+10%, 60(平均)→0%, 90(有力)→-15%, 120(超有力)→-30%
+  const qualityPenalty = Math.max(-0.10, Math.min(0.30, (playerScore - 60) / 200));
+
+  // 交渉力ボーナス: 0〜15%
+  const negotiationBonus = (negotiation / 100) * 0.15;
+
+  // ランク補正
+  const rankBonus = RANK_RECRUIT_BONUS[rank] || 0;
+
+  const rate = baseRate - qualityPenalty + negotiationBonus + rankBonus;
+  return Math.max(5, Math.min(95, Math.round(rate * 100)));
+}
+
+/**
+ * 交渉を試みて成否を判定
+ * @param {Object} team - チームオブジェクト
+ * @param {Object} player - スカウト候補者
+ * @param {Object} teamData - チームデータ（corporateData付き）
+ * @returns {{ success: boolean, rate: number }}
+ */
+export function attemptRecruitment(team, player, teamData) {
+  const rate = calculateRecruitSuccessRate(player, teamData);
+  const roll = Math.random() * 100;
+  const success = roll < rate;
+
+  if (success) {
+    recruitPlayer(team, player);
+  }
+
+  return { success, rate };
 }
 
 /**
@@ -387,9 +446,11 @@ export function processAIScoutRecruitment(allTeams, userTeamName, year) {
       return scoreB - scoreA;
     });
 
-    for (let i = 0; i < need && i < sortedCandidates.length; i++) {
-      recruitPlayer(team, sortedCandidates[i]);
-      acquired.push({ name: sortedCandidates[i].name, position: sortedCandidates[i].position });
+    for (let i = 0; i < sortedCandidates.length && acquired.length < need; i++) {
+      const { success } = attemptRecruitment(team, sortedCandidates[i], team);
+      if (success) {
+        acquired.push({ name: sortedCandidates[i].name, position: sortedCandidates[i].position });
+      }
     }
 
     if (acquired.length > 0) {

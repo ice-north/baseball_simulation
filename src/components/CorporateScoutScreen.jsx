@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
-import { generateScoutCandidates, recruitPlayer, processAIScoutRecruitment } from '../corporate/scoutingSystem.js';
+import { generateScoutCandidates, attemptRecruitment, processAIScoutRecruitment } from '../corporate/scoutingSystem.js';
 
 const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -11,7 +11,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
   const [candidates, setCandidates] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [aiResults, setAiResults] = useState(null);
-  const [phase, setPhase] = useState('scout'); // 'scout' | 'confirmed'
+  // 'scout' → 'negotiating' → 'confirmed'
+  const [phase, setPhase] = useState('scout');
+  const [negotiationResults, setNegotiationResults] = useState([]);
   const [detailPlayer, setDetailPlayer] = useState(null);
   const maxRecruit = 3;
 
@@ -32,16 +34,51 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
     }
   };
 
+  const getRateColor = (rate) => {
+    if (rate >= 80) return 'text-green-400';
+    if (rate >= 60) return 'text-blue-400';
+    if (rate >= 40) return 'text-yellow-400';
+    if (rate >= 20) return 'text-orange-400';
+    return 'text-red-400';
+  };
+
+  const getRateLabel = (rate) => {
+    if (rate >= 80) return '確実';
+    if (rate >= 60) return '有望';
+    if (rate >= 40) return '五分';
+    if (rate >= 20) return '困難';
+    return '至難';
+  };
+
   const handleConfirm = () => {
     const year = seasonData?.year || 1;
-    // ユーザー獲得
+    const results = [];
+
     selectedIds.forEach(id => {
       const player = candidates.find(c => c.id === id);
-      if (player) recruitPlayer(teamData, player);
+      if (player) {
+        const result = attemptRecruitment(teamData, player, teamData);
+        results.push({
+          player,
+          success: result.success,
+          rate: result.rate,
+        });
+      }
     });
-    // AI獲得
-    const results = processAIScoutRecruitment(TEAMS_DATA, userTeamName, year);
-    setAiResults(results);
+
+    setNegotiationResults(results);
+
+    const aiRes = processAIScoutRecruitment(TEAMS_DATA, userTeamName, year);
+    setAiResults(aiRes);
+    setPhase('negotiating');
+  };
+
+  const handleSkip = () => {
+    const year = seasonData?.year || 1;
+    setNegotiationResults([]);
+    setSelectedIds([]);
+    const aiRes = processAIScoutRecruitment(TEAMS_DATA, userTeamName, year);
+    setAiResults(aiRes);
     setPhase('confirmed');
   };
 
@@ -54,34 +91,64 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
   };
 
   const totalAiRecruited = aiResults ? Object.values(aiResults).reduce((sum, arr) => sum + arr.length, 0) : 0;
+  const reputation = teamData?.corporateData?.reputation || 0;
+  const rank = teamData?.corporateData?.rank || 'C';
 
-  if (phase === 'confirmed') {
-    const acquiredPlayers = candidates.filter(c => selectedIds.includes(c.id));
+  // 交渉結果画面
+  if (phase === 'negotiating') {
+    const successes = negotiationResults.filter(r => r.success);
+    const failures = negotiationResults.filter(r => !r.success);
+
     return (
       <div className="p-4 bg-gray-900 min-h-screen">
-        <h1 className="text-xl font-bold text-white mb-3">スカウト入団完了</h1>
-        {acquiredPlayers.length > 0 ? (
-          <div className="mb-4">
-            <h2 className="text-sm font-bold text-green-400 mb-2">獲得選手 ({acquiredPlayers.length}名)</h2>
-            <div className="space-y-1">
-              {acquiredPlayers.map(p => (
-                <div key={p.id} className="text-xs text-gray-300 bg-gray-800 p-2 rounded flex items-center gap-2">
-                  <span className="text-green-400 font-bold">{POSITION_NAMES[p.position]}</span>
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-gray-500">({p.age}歳)</span>
-                  {p._scoutSource && <span className="text-cyan-400">{p._scoutSource}</span>}
-                  {p.position === 'pitcher' ? (
-                    <span className="text-gray-400">{p.pitching?.velocity}km/h 制球{p.pitching?.control}</span>
+        <h1 className="text-xl font-bold text-white mb-1">交渉結果</h1>
+        <p className="text-xs text-gray-500 mb-4">
+          {selectedIds.length}名に打診 → {successes.length}名が入団承諾
+        </p>
+
+        {negotiationResults.length > 0 && (
+          <div className="space-y-2 mb-6">
+            {negotiationResults.map(({ player: p, success, rate }) => (
+              <div key={p.id} className={`p-3 rounded border ${
+                success ? 'bg-green-900/20 border-green-700' : 'bg-red-900/10 border-red-900/30'
+              }`}>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className={`font-bold text-lg w-8 text-center ${success ? 'text-green-400' : 'text-red-400'}`}>
+                    {success ? 'O' : 'X'}
+                  </span>
+                  <span className="text-yellow-400 font-bold">{POSITION_NAMES[p.position]}</span>
+                  <span className="text-white font-medium">{p.name}</span>
+                  <span className="text-gray-500 text-xs">({p.age}歳)</span>
+                  {p._scoutSource && <span className="text-cyan-400 text-xs">{p._scoutSource}</span>}
+                  <span className={`ml-auto text-xs ${getRateColor(rate)}`}>
+                    成功率{rate}%
+                  </span>
+                </div>
+                <div className="ml-10 mt-1 text-xs">
+                  {success ? (
+                    <span className="text-green-400">入団が決まりました!</span>
                   ) : (
-                    <span className="text-gray-400">ミ{p.batting?.meet} パ{p.batting?.power} 走{p.physical?.speed}</span>
+                    <span className="text-gray-500">
+                      {rate >= 40 ? '条件面で折り合いがつきませんでした'
+                        : rate >= 20 ? 'より上位のチームへの入団を希望されました'
+                        : '力不足と判断され、交渉のテーブルにもつけませんでした'}
+                    </span>
                   )}
                 </div>
-              ))}
-            </div>
+                {success && (
+                  <div className="ml-10 mt-1 text-xs text-gray-400">
+                    {p.position === 'pitcher' ? (
+                      <span>{p.pitching?.velocity}km/h 制球{p.pitching?.control}</span>
+                    ) : (
+                      <span>ミ{p.batting?.meet} パ{p.batting?.power} 走{p.physical?.speed}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        ) : (
-          <p className="text-gray-400 text-sm mb-4">獲得選手なし</p>
         )}
+
         {totalAiRecruited > 0 && (
           <div className="mb-4">
             <h2 className="text-sm font-bold text-blue-400 mb-2">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
@@ -92,6 +159,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
             ))}
           </div>
         )}
+
         <p className="text-xs text-gray-500 mb-3">
           現在のロスター: {teamData?.players?.length || 0}名
         </p>
@@ -105,16 +173,46 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
     );
   }
 
+  // スキップ確認画面
+  if (phase === 'confirmed') {
+    return (
+      <div className="p-4 bg-gray-900 min-h-screen">
+        <h1 className="text-xl font-bold text-white mb-3">スカウト入団完了</h1>
+        <p className="text-gray-400 text-sm mb-4">今シーズンは選手を獲得しませんでした。</p>
+        {totalAiRecruited > 0 && (
+          <div className="mb-4">
+            <h2 className="text-sm font-bold text-blue-400 mb-2">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
+            {Object.entries(aiResults).map(([team, players]) => (
+              <div key={team} className="text-xs text-gray-400 mb-1">
+                {team}: {players.map(p => `${p.name}(${POSITION_NAMES[p.position]})`).join('、')}
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          onClick={onComplete}
+          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
+        >
+          完了
+        </button>
+      </div>
+    );
+  }
+
+  // メインのスカウト選択画面
   return (
     <div className="p-3 bg-gray-900 min-h-screen">
       <h1 className="text-xl font-bold text-white mb-1">スカウト入団 - {seasonData?.year || 1}年目</h1>
-      <p className="text-gray-400 text-xs mb-2">
-        スカウトが見つけた選手です。最大{maxRecruit}名まで獲得できます。
-        情報精度はスカウト能力に依存します（実際の能力と異なる場合があります）。
+      <p className="text-gray-400 text-xs mb-1">
+        スカウトが見つけた選手です。最大{maxRecruit}名まで交渉できます。
+        交渉の成否はチームの注目度・ランク・交渉力に左右されます。
       </p>
-      <p className="text-xs text-gray-500 mb-3">
-        現ロスター: {currentRosterSize}名 / 獲得予定: {selectedIds.length}名
-      </p>
+      <div className="flex items-center gap-4 text-[10px] text-gray-500 mb-3">
+        <span>注目度: <span className={reputation >= 50 ? 'text-yellow-400' : 'text-gray-400'}>{reputation}</span></span>
+        <span>ランク: <span className="text-white">{rank}</span></span>
+        <span>現ロスター: {currentRosterSize}名</span>
+        <span>交渉予定: {selectedIds.length}名</span>
+      </div>
 
       {/* 候補者一覧 */}
       <div className="space-y-1 mb-4">
@@ -123,6 +221,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
           const scouted = player.scoutedAbilities;
           const accuracy = getAccuracyLabel(player.scoutAccuracy);
           const isPitcher = player.position === 'pitcher';
+          const rate = player.recruitRate || 50;
 
           return (
             <div
@@ -146,8 +245,12 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                 {player._scoutSource && (
                   <span className="text-cyan-400 w-16 truncate">{player._scoutSource}</span>
                 )}
-                <span className={`text-[10px] ${accuracy.color} w-16`}>
+                <span className={`text-[10px] ${accuracy.color} w-12`}>
                   精度{accuracy.text}
+                </span>
+                {/* 交渉成功率 */}
+                <span className={`text-[10px] font-bold w-20 ${getRateColor(rate)}`}>
+                  交渉{rate}% {getRateLabel(rate)}
                 </span>
                 {isPitcher ? (
                   <span className="text-gray-400">
@@ -174,7 +277,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
               {/* 詳細パネル */}
               {detailPlayer?.id === player.id && (
                 <div className="mt-2 pt-2 border-t border-gray-700 text-[10px] text-gray-400">
-                  <div className="grid grid-cols-2 gap-x-4">
+                  <div className="grid grid-cols-3 gap-x-4">
                     <div>
                       <span className="text-gray-500">出身: </span>
                       <span className="text-cyan-400">{player._scoutSource || '不明'}</span>
@@ -184,8 +287,12 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                       {player.physical?.throws === 'left' ? '左' : '右'}投
                       {player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}打
                     </div>
+                    <div>
+                      <span className="text-gray-500">交渉成功率: </span>
+                      <span className={`font-bold ${getRateColor(rate)}`}>{rate}%</span>
+                    </div>
                     {isPitcher && player.pitching?.arsenal && (
-                      <div>
+                      <div className="col-span-3">
                         <span className="text-gray-500">球種: </span>
                         {player.pitching.arsenal.filter(a => a.type !== 'straight').map(a => {
                           const names = {
@@ -235,12 +342,17 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
       <div className="flex items-center gap-4">
         <button
           onClick={handleConfirm}
-          className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-bold text-sm"
+          disabled={selectedIds.length === 0}
+          className={`px-5 py-2 rounded font-bold text-sm ${
+            selectedIds.length > 0
+              ? 'bg-green-600 hover:bg-green-700 text-white'
+              : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+          }`}
         >
-          入団確定 ({selectedIds.length}名獲得)
+          交渉開始 ({selectedIds.length}名)
         </button>
         <button
-          onClick={() => { setSelectedIds([]); handleConfirm(); }}
+          onClick={handleSkip}
           className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm"
         >
           獲得なしで進む
