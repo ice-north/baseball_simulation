@@ -28,6 +28,7 @@ import EditScreen from './EditScreen.jsx';
 import { ToshitaikouQualifierScreen, ToshitaikouMainScreen } from './ToshitaikouScreen.jsx';
 import CorporateDepartureScreen from './CorporateDepartureScreen.jsx';
 import CorporateScoutScreen from './CorporateScoutScreen.jsx';
+import CorporateManagementScreen from './CorporateManagementScreen.jsx';
 
 const ManagementScreen = ({
   managementView,
@@ -125,6 +126,10 @@ const ManagementScreen = ({
       setDraftResults(null);
       setManagementView('dateprogress');
     }}
+  />;
+  if (managementView === 'corporate_management') return <CorporateManagementScreen
+    seasonData={seasonData}
+    gameMode={gameMode}
   />;
   if (managementView === 'roster') return <RosterScreen />;
   if (managementView === 'teaminfo') return <TeamInfoScreen />;

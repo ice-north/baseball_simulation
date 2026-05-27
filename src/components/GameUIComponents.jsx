@@ -365,6 +365,7 @@ export const Sidebar = ({
       <div className="border-t border-gray-700/40 my-2"></div>
       <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">チーム</div>
       <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      {gameMode === 'corporate' && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
       <SidebarButton view="trade" icon="🔄" label="トレード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="halloffame" icon="🏆" label="資料室" color="yellow" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
