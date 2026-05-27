@@ -6,6 +6,7 @@
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.js';
+import { getUniversityGrowthMultiplier } from '../university/universityTeamsData.js';
 
 /**
  * 大学プール: グローバルミュータブル
@@ -401,8 +402,8 @@ export function processUniversityYear(currentYear) {
         return;
       }
 
-      // 成長処理
-      applyUniversityGrowth(player);
+      // 成長処理（大学ランクに応じた成長倍率を適用）
+      applyUniversityGrowth(player, entry.universityRank);
       report.grown++;
       remaining.push(entry);
     });
@@ -420,14 +421,16 @@ export function processUniversityYear(currentYear) {
 /**
  * 大学での1年間の成長を適用
  * キャンプの練習とは異なり、バランス型の緩やかな成長
+ * @param {Object} player - 選手オブジェクト
+ * @param {string|null} universityRank - 大学ランク（S/A/B/C/D）。高ランクほど成長が速い
  */
-function applyUniversityGrowth(player) {
+function applyUniversityGrowth(player, universityRank = null) {
   const gp = player.growthPotential || 1.0;
+  const rankMult = getUniversityGrowthMultiplier(universityRank);
   const isPitcher = player.position === 'pitcher';
 
-  // 成長量の基本値（年間の練習効果）
   const grow = (current, base, cap = 99) => {
-    const amount = Math.round(base * gp * (0.7 + Math.random() * 0.6));
+    const amount = Math.round(base * gp * rankMult * (0.7 + Math.random() * 0.6));
     return Math.min(cap, current + amount);
   };
 
@@ -494,7 +497,8 @@ export function enrollInUniversity(players, enrollYear) {
     universityPool[enrollYear].push({
       player,
       enrollYear,
-      graduateYear: enrollYear + 4
+      graduateYear: enrollYear + 4,
+      universityRank: player._destinationRank || null
     });
   });
 }
@@ -503,7 +507,7 @@ export function enrollInUniversity(players, enrollYear) {
  * 大学プールの現在の状態サマリーを取得
  */
 export function getUniversityPoolSummary() {
-  const summary = { totalStudents: 0, byYear: {} };
+  const summary = { totalStudents: 0, byYear: {}, byRank: { S: 0, A: 0, B: 0, C: 0, D: 0, unknown: 0 } };
   Object.entries(universityPool).forEach(([year, cohort]) => {
     summary.byYear[year] = {
       count: cohort.length,
@@ -511,6 +515,14 @@ export function getUniversityPoolSummary() {
       fielders: cohort.filter(e => e.player.position !== 'pitcher').length
     };
     summary.totalStudents += cohort.length;
+    cohort.forEach(entry => {
+      const rank = entry.universityRank;
+      if (rank && summary.byRank[rank] !== undefined) {
+        summary.byRank[rank]++;
+      } else {
+        summary.byRank.unknown++;
+      }
+    });
   });
   return summary;
 }

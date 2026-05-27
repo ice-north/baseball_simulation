@@ -27,8 +27,9 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - `src/components/GameUIComponents.jsx` (~380行) - Sidebar・RenderBases・AccordionSection
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
-- `src/season/universityPool.js` (~300行) - 大学プール（高卒世代生成・進路振分・4年間成長・卒業）
+- `src/season/universityPool.js` (~550行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
 - `src/corporate/scoutingSystem.js` (~400行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
+- `src/university/universityTeamsData.js` - 大学チームデータ（将来の大学モード用。60校、ランク別成長倍率定義）
 - `src/data/playerNames.js` (210KB) - 姓3000件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
@@ -86,11 +87,23 @@ NEW GAME → 企業チーム選択 → キャンプ
   - 各ランク内で大学(50-70%) / 社会人候補(20-30%) / 独立候補(10-35%) に分配
   - S: 8%, A: 12%, B: 15%, C: 15%, D: 10%。残り40%は引退
   - Sランクの大学・社会人には有力選手が殺到、Dランクには下位選手のみ
-- **大学在学**: `universityPool` にグローバル保持。4年間（or 22歳）で卒業。在学中は毎年成長処理
+- **大学在学**: `universityPool` にグローバル保持。4年間（or 22歳）で卒業。在学中は毎年ランク別成長処理
+  - 各エントリに `universityRank` を保持。成長倍率: S=1.25, A=1.10, B=1.00, C=0.90, D=0.80
 - **卒業後**: `releasedPlayersPool` に追加され、トライアウト/スカウト候補として供給
 - **スカウト対象**: 高校生プール（4月〜）、大学3-4年生、リリースプールすべてがスカウト候補
 - **セーブ/ロード**: `serializeUniversityPool()` / `deserializeUniversityPool()` で大学+高校生プール両方を保存・復元
 - **新規ゲーム時**: `clearUniversityPool()` + `clearHighSchoolPool()` でクリア
+
+## 大学モード準備 (`src/university/universityTeamsData.js`)
+- **現状**: データ定義のみ。実際のゲームモードは未実装
+- **チームデータ**: `UNIVERSITY_TEAMS` に60校定義（東京六大学、東都、首都、関西等の主要連盟）
+- **リーグ連盟**: `UNIVERSITY_REGIONS` に25連盟を定義
+- **ランク別成長**: `UNIVERSITY_RANK_GROWTH` — S=1.25倍, A=1.10倍, B=1.00倍, C=0.90倍, D=0.80倍
+  - `applyUniversityGrowth()` で自動適用。universityPool の各エントリに `universityRank` を保持
+- **ランク別初期化設定**: `UNIVERSITY_RANK_CONFIG` — 将来 `corporateInit.js` と同様の初期化に使用
+- **将来のゲームモード**: `gameMode = 'university'` として社会人モードと並行実装可能
+  - 社会人モードの `corporate/` ディレクトリ構造をミラーする設計
+  - 必要なコンポーネント: UniversitySelectScreen, UniversityInit, scheduleGenerator対応, etc.
 
 ## 社会人モード入退団 (`src/corporate/scoutingSystem.js`)
 - **退団（11/9）**: 自動引退判定 + ユーザー/AI戦力外通告。戦力外選手(35歳未満)はリリースプールへ
