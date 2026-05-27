@@ -8,7 +8,7 @@ import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { checkRetirement } from '../season/yearProgressionSystem.js';
 import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
-import { universityPool } from '../season/universityPool.js';
+import { universityPool, highSchoolPool } from '../season/universityPool.js';
 
 // ============================================================
 // 退団システム
@@ -213,6 +213,20 @@ function getReleasedScoutPool() {
 }
 
 /**
+ * 高校生プールからスカウト対象の選手を取得
+ * 4月に生成された高校3年生が対象
+ * @returns {Array} { player, source: 'highschool', poolIndex }
+ */
+function getHighSchoolScoutPool() {
+  if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
+  return highSchoolPool.players.map((p, idx) => ({
+    player: p,
+    source: 'highschool',
+    poolIndex: idx
+  }));
+}
+
+/**
  * スカウト候補者をプールから発掘
  * scoutingEye で発見数と精度が変わる。reputation で有望な選手が見つかりやすくなる。
  * @param {Object} teamData - チームデータ
@@ -232,10 +246,11 @@ export function generateScoutCandidates(teamData, year) {
   // 注目度が高いほど上位選手にアクセスしやすい
   const reputationMult = getReputationScoutBonus(reputation);
 
-  // 大学プール + リリースプール を統合
+  // 大学プール + リリースプール + 高校生プール を統合
   const uniPool = getUniversityScoutPool(year);
   const relPool = getReleasedScoutPool();
-  const allPool = [...uniPool, ...relPool];
+  const hsPool = getHighSchoolScoutPool();
+  const allPool = [...uniPool, ...relPool, ...hsPool];
 
   if (allPool.length === 0) return [];
 
@@ -259,7 +274,9 @@ export function generateScoutCandidates(teamData, year) {
     // プールからの除去用の参照情報
     p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear };
     // 出身表示用
-    if (entry.source === 'university') {
+    if (entry.source === 'highschool') {
+      p._scoutSource = '高校3年';
+    } else if (entry.source === 'university') {
       p._scoutSource = `大学${entry.yearsInUni + 1}年`;
     } else {
       p._scoutSource = p.origin === 'university' ? '大学卒'
@@ -378,7 +395,10 @@ function removeFromPool(player) {
   const ref = player._poolRef;
   if (!ref) return;
 
-  if (ref.source === 'university') {
+  if (ref.source === 'highschool') {
+    const idx = highSchoolPool.players.findIndex(p => p.id === player.id);
+    if (idx >= 0) highSchoolPool.players.splice(idx, 1);
+  } else if (ref.source === 'university') {
     const cohort = universityPool[ref.enrollYear];
     if (cohort) {
       const idx = cohort.findIndex(e => e.player.id === player.id);

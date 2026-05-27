@@ -6,6 +6,7 @@ import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../s
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar } from '../corporate/toshitaikou.js';
 import { simulateParallelWorldDate, getAllParallelLeagues } from '../corporate/parallelWorldManager.js';
+import { generateAprilHighSchoolClass } from '../season/yearProgressionSystem.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
@@ -164,6 +165,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
     const { month, day } = newData.currentDate;
     const isCorporate = newData.settings?.corporateMode;
+
+    // 4月1日: 高校3年生を生成
+    if (month === 4 && day <= 3 && !newData._highSchoolGenerated) {
+      const gameYear = newData.settings?.year || seasonData?.year || 1;
+      generateAprilHighSchoolClass(gameYear);
+      newData = { ...newData, _highSchoolGenerated: true };
+    }
 
     if (isCorporate && month >= 6 && !newData.toshitaikou?.generated) {
       setSeasonData(newData);

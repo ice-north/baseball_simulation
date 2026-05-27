@@ -1,6 +1,7 @@
 // ============================================================
 // 大学野球プールシステム (universityPool.js)
-// 高卒世代 → NPB不指名 → 大学4年間 → 卒業後に再びドラフト/入団候補
+// 高卒世代 → NPB不指名 → ランク別進路振り分け
+// 大学4年間 → 卒業後に再びドラフト/入団候補
 // ============================================================
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
@@ -9,12 +10,22 @@ import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.j
 /**
  * 大学プール: グローバルミュータブル
  * { [enrollYear]: [ { player, enrollYear, graduateYear } ] }
- * 各学年最大数百〜千人程度
  */
 export const universityPool = {};
 
+/**
+ * 高校生プール: 4月に生成、10月ドラフト→11月進路振り分けまで保持
+ * { players: Array, year: number }
+ */
+export const highSchoolPool = { players: [], year: 0 };
+
 export const clearUniversityPool = () => {
   Object.keys(universityPool).forEach(k => delete universityPool[k]);
+};
+
+export const clearHighSchoolPool = () => {
+  highSchoolPool.players = [];
+  highSchoolPool.year = 0;
 };
 
 /**
@@ -227,6 +238,136 @@ function evaluatePlayerPotential(player) {
 }
 
 // ============================================================
+// ランク別進路振り分け（NPBドラフト後に実行）
+// S→A→B→C→D の順に良い選手から各ランクの大学・社会人・独立に配分
+// ============================================================
+
+// 各ランクの受け入れ割合（高校生全体に対する比率）
+const RANK_DISTRIBUTION = {
+  S: { ratio: 0.08, uniRatio: 0.70, corpRatio: 0.20, indRatio: 0.10 },
+  A: { ratio: 0.12, uniRatio: 0.65, corpRatio: 0.20, indRatio: 0.15 },
+  B: { ratio: 0.15, uniRatio: 0.55, corpRatio: 0.25, indRatio: 0.20 },
+  C: { ratio: 0.15, uniRatio: 0.45, corpRatio: 0.30, indRatio: 0.25 },
+  D: { ratio: 0.10, uniRatio: 0.35, corpRatio: 0.30, indRatio: 0.35 },
+};
+
+/**
+ * NPBドラフトで高校生プールから有力選手を除去
+ * 高校生は18歳なので年齢ボーナス+25ptがつく
+ * @returns {{ drafted: Array, remaining: Array }}
+ */
+export function processHighSchoolNPBDraft() {
+  const NPB_TEAMS = [
+    '読売ジャイアンツ', '阪神タイガース', '横浜DeNAベイスターズ',
+    '広島東洋カープ', '中日ドラゴンズ', 'ヤクルトスワローズ',
+    'オリックス・バファローズ', 'ソフトバンクホークス', '西武ライオンズ',
+    '楽天ゴールデンイーグルス', '千葉ロッテマリーンズ', '日本ハムファイターズ'
+  ];
+
+  // 高校生用の閾値（社会人/大学よりやや低い → 将来性重視）
+  const HS_PITCHER_THRESHOLD = 200;
+  const HS_FIELDER_THRESHOLD = 230;
+  const DRAFT_ROUND_LABELS = ['育成指名', 'ドラフト6位', 'ドラフト5位', 'ドラフト4位', 'ドラフト3位', 'ドラフト2位', 'ドラフト1位'];
+
+  const drafted = [];
+  const remaining = [];
+
+  highSchoolPool.players.forEach(player => {
+    const score = evaluatePlayerPotential(player);
+    const isPitcher = player.position === 'pitcher';
+    const threshold = isPitcher ? HS_PITCHER_THRESHOLD : HS_FIELDER_THRESHOLD;
+
+    // 成長力が高い選手は追加評価
+    const gpBonus = Math.max(0, (player.growthPotential - 1.0) * 40);
+    const totalScore = score + gpBonus;
+
+    if (totalScore >= threshold) {
+      const npbTeam = NPB_TEAMS[Math.floor(Math.random() * NPB_TEAMS.length)];
+      const overThreshold = totalScore - threshold;
+      const roundIndex = Math.min(Math.floor(overThreshold / 10), DRAFT_ROUND_LABELS.length - 1);
+      drafted.push({
+        player,
+        npbTeam,
+        draftRound: DRAFT_ROUND_LABELS[Math.max(0, roundIndex)],
+        position: player.position,
+        age: player.age,
+        name: player.name,
+        playerId: player.id,
+        score: totalScore,
+        source: 'highschool'
+      });
+    } else {
+      remaining.push(player);
+    }
+  });
+
+  highSchoolPool.players = remaining;
+  return { drafted, remaining };
+}
+
+/**
+ * ランク別に進路を振り分け（NPBドラフト後に実行）
+ * @param {number} enrollYear - 大学入学年度
+ * @returns {{ university: Object, corporate: Array, independent: Array, retired: Array }}
+ *   university: { S: [...], A: [...], ... } ランク別に分類
+ */
+export function distributeHighSchoolGraduates(enrollYear) {
+  const players = highSchoolPool.players;
+  if (players.length === 0) {
+    return { university: {}, corporate: [], independent: [], retired: [] };
+  }
+
+  // 潜在能力でソート（降順）
+  const scored = players.map(p => ({
+    player: p,
+    score: evaluatePlayerPotential(p)
+  }));
+  scored.sort((a, b) => b.score - a.score);
+
+  const total = scored.length;
+  const university = { S: [], A: [], B: [], C: [], D: [] };
+  const corporate = [];
+  const independent = [];
+  let cursor = 0;
+
+  // ランクS→Dの順に上位から取っていく
+  for (const rank of ['S', 'A', 'B', 'C', 'D']) {
+    const cfg = RANK_DISTRIBUTION[rank];
+    const slotCount = Math.floor(total * cfg.ratio);
+    const slice = scored.slice(cursor, cursor + slotCount);
+    cursor += slotCount;
+
+    // 各ランク内で大学/社会人/独立に分配
+    const uniCount = Math.floor(slice.length * cfg.uniRatio);
+    const corpCount = Math.floor(slice.length * cfg.corpRatio);
+
+    slice.forEach((entry, i) => {
+      const p = entry.player;
+      if (i < uniCount) {
+        p._destinationRank = rank;
+        university[rank].push(p);
+      } else if (i < uniCount + corpCount) {
+        p.origin = 'corporate_candidate';
+        p._destinationRank = rank;
+        corporate.push(p);
+      } else {
+        p.origin = 'independent_candidate';
+        p._destinationRank = rank;
+        independent.push(p);
+      }
+    });
+  }
+
+  // 残り（どこにも入れなかった選手）は引退
+  const retired = scored.slice(cursor).map(s => s.player);
+
+  // 高校生プールをクリア
+  highSchoolPool.players = [];
+
+  return { university, corporate, independent, retired };
+}
+
+// ============================================================
 // 大学在学中の成長
 // ============================================================
 
@@ -330,14 +471,26 @@ function applyUniversityGrowth(player) {
 
 /**
  * 高卒世代を大学プールに入学させる
- * @param {Array} players - 大学進学する選手の配列
+ * @param {Array|Object} players - 大学進学する選手の配列、またはランク別オブジェクト { S: [...], A: [...], ... }
  * @param {number} enrollYear - 入学年度
  */
 export function enrollInUniversity(players, enrollYear) {
   if (!universityPool[enrollYear]) {
     universityPool[enrollYear] = [];
   }
-  players.forEach(player => {
+
+  // ランク別オブジェクトの場合はフラットに展開
+  let playerList;
+  if (Array.isArray(players)) {
+    playerList = players;
+  } else {
+    playerList = [];
+    for (const rank of ['S', 'A', 'B', 'C', 'D']) {
+      if (players[rank]) playerList.push(...players[rank]);
+    }
+  }
+
+  playerList.forEach(player => {
     universityPool[enrollYear].push({
       player,
       enrollYear,
@@ -363,19 +516,38 @@ export function getUniversityPoolSummary() {
 }
 
 /**
- * セーブ/ロード用: 大学プールをシリアライズ可能な形式で取得
+ * セーブ/ロード用: 大学プール+高校生プールをシリアライズ
  */
 export function serializeUniversityPool() {
-  return JSON.parse(JSON.stringify(universityPool));
+  return {
+    university: JSON.parse(JSON.stringify(universityPool)),
+    highSchool: JSON.parse(JSON.stringify(highSchoolPool))
+  };
 }
 
 /**
- * セーブ/ロード用: シリアライズされたデータから大学プールを復元
+ * セーブ/ロード用: シリアライズされたデータから復元
  */
 export function deserializeUniversityPool(data) {
   clearUniversityPool();
+  clearHighSchoolPool();
   if (!data) return;
-  Object.entries(data).forEach(([year, cohort]) => {
-    universityPool[year] = cohort;
-  });
+
+  // 後方互換: 旧形式（大学プールのみ）の場合
+  if (!data.university && !data.highSchool) {
+    Object.entries(data).forEach(([year, cohort]) => {
+      universityPool[year] = cohort;
+    });
+    return;
+  }
+
+  if (data.university) {
+    Object.entries(data.university).forEach(([year, cohort]) => {
+      universityPool[year] = cohort;
+    });
+  }
+  if (data.highSchool) {
+    highSchoolPool.players = data.highSchool.players || [];
+    highSchoolPool.year = data.highSchool.year || 0;
+  }
 }

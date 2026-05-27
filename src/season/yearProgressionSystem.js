@@ -8,10 +8,26 @@ import { createSeasonData, initializeStandings } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
-import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear } from './universityPool.js';
+import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates } from './universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
+
+/**
+ * 4月: 高校3年生を生成して高校生プールに格納
+ * シーズン開始時に呼び出される
+ * @param {number} year - ゲーム内年度
+ * @returns {number} 生成人数
+ */
+export function generateAprilHighSchoolClass(year) {
+  if (highSchoolPool.year === year && highSchoolPool.players.length > 0) {
+    return highSchoolPool.players.length;
+  }
+  const players = generateHighSchoolClass(year, 800);
+  highSchoolPool.players = players;
+  highSchoolPool.year = year;
+  return players.length;
+}
 
 /**
  * チームから選手IDを除去した際にlineupSettings/pitchingRotationを清掃
@@ -463,7 +479,22 @@ export function processNPBDraft(allTeams) {
     }
   });
 
-  return { draftedPlayers, nearMissPlayers, proBonus };
+  // 高校生プールからもNPBドラフト処理
+  const hsResult = processHighSchoolNPBDraft();
+  const hsDrafted = hsResult.drafted.map(d => ({
+    ...d,
+    teamName: '高校',
+    hallOfFame: false,
+    hofReason: null,
+    careerStats: null,
+    yearsPlayed: 0,
+    awardBonus: 0,
+    seasonAwards: [],
+    reasons: [`高卒ドラフト: 潜在能力${Math.round(d.score)}pt`]
+  }));
+  draftedPlayers.push(...hsDrafted);
+
+  return { draftedPlayers, nearMissPlayers, proBonus, highSchoolDrafted: hsDrafted.length };
 }
 
 /**
@@ -845,23 +876,26 @@ export function advanceToNextYear(seasonData, allTeams) {
     releasedPlayersPool.push(grad);
   });
 
-  // 5.6. 新しい高卒世代を生成 → 進路振り分け → 大学入学
-  const newClass = generateHighSchoolClass(currentYear + 1, 800);
-  const paths = assignCareerPaths(newClass, currentYear + 1);
-  enrollInUniversity(paths.university, currentYear + 1);
-  // 社会人/独立向けの選手もリリースプールに追加（入団候補として供給）
-  paths.corporate.forEach(p => {
-    p.isStarter = false;
-    p.battingOrder = 0;
-    p.origin = 'corporate_candidate';
-    releasedPlayersPool.push(p);
-  });
-  paths.independent.forEach(p => {
-    p.isStarter = false;
-    p.battingOrder = 0;
-    p.origin = 'independent_candidate';
-    releasedPlayersPool.push(p);
-  });
+  // 5.6. 高校生プールの残り（ドラフト漏れ）をランク別に進路振り分け
+  // 高校生プールは4月に生成、10月ドラフトで上位が除去済み
+  let hsDistribution = { university: {}, corporate: [], independent: [], retired: [] };
+  if (highSchoolPool.players.length > 0) {
+    hsDistribution = distributeHighSchoolGraduates(currentYear + 1);
+    // ランク別に大学入学
+    enrollInUniversity(hsDistribution.university, currentYear + 1);
+    // 社会人候補はリリースプールへ
+    hsDistribution.corporate.forEach(p => {
+      p.isStarter = false;
+      p.battingOrder = 0;
+      releasedPlayersPool.push(p);
+    });
+    // 独立候補もリリースプールへ
+    hsDistribution.independent.forEach(p => {
+      p.isStarter = false;
+      p.battingOrder = 0;
+      releasedPlayersPool.push(p);
+    });
+  }
 
   // 6. 新シーズンデータ作成
   const newYear = seasonData.year + 1;
@@ -877,9 +911,13 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 年齢カーブの結果を新シーズンデータに保存（キャンプ画面で表示用）
   newSeasonData.ageReports = ageReports;
   // 大学プールの状態を記録
+  const uniEnrollCount = Object.values(hsDistribution.university).reduce((sum, arr) => sum + arr.length, 0);
   newSeasonData.universityReport = {
     graduated: uniReport.graduated,
-    newEnrollment: paths.university.length,
+    newEnrollment: uniEnrollCount,
+    corporateCount: hsDistribution.corporate.length,
+    independentCount: hsDistribution.independent.length,
+    retiredCount: hsDistribution.retired.length,
     growing: uniReport.grown
   };
 
