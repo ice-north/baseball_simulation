@@ -279,7 +279,7 @@ export function generateScoutCandidates(teamData, year) {
     p.scoutAccuracy = accuracy;
     p.scoutedAbilities = obscureAbilities(p, accuracy);
     // プールからの除去用の参照情報
-    p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear };
+    p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear, teamName: entry.teamName };
     // 出身表示用
     if (entry.source === 'highschool') {
       p._scoutSource = '高校3年';
@@ -684,7 +684,7 @@ function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
     // 初回は概要のみ（primary能力だけ開示）
     p.scoutedAbilities = obscureAbilities(p, accuracy, 'primary');
     p._revealLevel = 0;
-    p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear };
+    p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear, teamName: entry.teamName };
     p._scoutSource = getSourceLabel(entry);
     p._dispatchTarget = target;
     return p;

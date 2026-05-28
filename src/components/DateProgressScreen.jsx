@@ -12,7 +12,7 @@ import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
-import { checkScoutMissionCompletion } from '../corporate/scoutingSystem.js';
+import { checkScoutMissionCompletion, SCOUT_TARGETS } from '../corporate/scoutingSystem.js';
 
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
@@ -25,6 +25,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [isGeneratingTournament, setIsGeneratingTournament] = useState(false);
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
   const [scoutReportNotifications, setScoutReportNotifications] = useState([]);
+  const [showOtherLeagues, setShowOtherLeagues] = useState(false);
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -2276,12 +2277,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           )}
 
           {/* 主なトピック（試合のある日のみ更新、休日は前日のトピックを表示） */}
-          {cachedTopics.length > 0 && (
+          {(cachedTopics.length > 0 || scoutReportNotifications.length > 0) && (
             <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
               <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
                 <span className="text-yellow-400">📰</span> {todaysGames.length === 0 ? '直近のトピック' : '主なトピック'}
               </h2>
               <div className="space-y-1">
+                {scoutReportNotifications.map((mission, i) => (
+                  <div key={`scout-${i}`} className="flex items-start gap-1.5 bg-cyan-900/30 rounded-lg px-2.5 py-1.5 border border-cyan-700/30">
+                    <span className="text-sm shrink-0">🔍</span>
+                    <span className="text-xs text-cyan-300">
+                      {mission.staffName}のスカウトが{SCOUT_TARGETS[mission.target]?.label || mission.target}から帰還 — {mission.results?.length || 0}名の候補選手を発見
+                    </span>
+                  </div>
+                ))}
                 {cachedTopics.map((t, i) => (
                   <div key={i} className="flex items-start gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1.5">
                     <span className="text-sm shrink-0">{t.icon}</span>
@@ -2299,10 +2308,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             if (parallelLeagues.length === 0 && !corpToshi?.mainDone) return null;
             return (
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-emerald-700/30 mt-3">
-                <h2 className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-1.5">
+                <h2
+                  className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-1.5 cursor-pointer select-none"
+                  onClick={() => setShowOtherLeagues(prev => !prev)}
+                >
                   <span>🌐</span> 他リーグ状況
+                  <span className="text-[10px] text-gray-500 ml-auto">{showOtherLeagues ? '▲' : '▼'}</span>
                 </h2>
-                <div className="space-y-2">
+                {showOtherLeagues && <div className="space-y-2">
                   {parallelLeagues.map(league => {
                     const leagueDef = INDEPENDENT_LEAGUES[league.id];
                     const isTwoLeague = leagueDef?.leagueFormat === 'two';
@@ -2373,7 +2386,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       </div>
                     </div>
                   )}
-                </div>
+                </div>}
               </div>
             );
           })()}

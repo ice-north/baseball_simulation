@@ -472,6 +472,9 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                     <span className="text-gray-400">{p.age}歳</span>
                                     <span className="text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</span>
                                     <span className="text-gray-500">{p._scoutSource}</span>
+                                    {p._poolRef?.teamName && (
+                                      <span className="text-emerald-400 text-[10px]">所属: {p._poolRef.teamName}</span>
+                                    )}
                                     {(p.fame || 0) > 0 && (
                                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                         p.fame >= 50 ? 'bg-yellow-600/30 text-yellow-300' : 'bg-gray-700 text-gray-400'
