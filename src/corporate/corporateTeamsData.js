@@ -8,7 +8,7 @@ export const REGIONS = [
   { id: 'kitakanto', name: '北関東', teamCount: 0 },
   { id: 'minamikanto', name: '南関東', teamCount: 0 },
   { id: 'tokyo', name: '東京', teamCount: 0 },
-  { id: 'kanagawa', name: '神奈川', teamCount: 0 },
+  { id: 'kanagawa', name: '西関東', teamCount: 0 },
   { id: 'hokushinetsu', name: '北信越', teamCount: 0 },
   { id: 'tokai', name: '東海', teamCount: 0 },
   { id: 'kinki', name: '近畿', teamCount: 0 },
@@ -88,7 +88,7 @@ export const CORPORATE_TEAMS = [
   { id: 57, name: '調布レッドソックス', city: '調布', region: 'tokyo', type: 'club', rank: 'D', budget: 12 },
   { id: 58, name: '町田ゼルバス', city: '町田', region: 'tokyo', type: 'club', rank: 'D', budget: 12 },
 
-  // ========== 神奈川 (企業4 + クラブ5 = 9) ==========
+  // ========== 西関東 (企業4 + クラブ5 = 9) ==========
   { id: 59, name: 'ENEOS', city: '横浜', region: 'kanagawa', type: 'corporate', rank: 'S', budget: 90 },
   { id: 60, name: '東芝', city: '川崎', region: 'kanagawa', type: 'corporate', rank: 'S', budget: 90 },
   { id: 61, name: '三菱重工East', city: '横浜', region: 'kanagawa', type: 'corporate', rank: 'S', budget: 85 },
