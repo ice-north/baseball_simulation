@@ -308,32 +308,78 @@ function calculateScoutAccuracy(scoutEye) {
 
 /**
  * 能力値をスカウト精度に応じてぼかす
+ * stage: 'primary'=概要のみ, 'secondary'=主要能力, 'full'=全能力
  */
-function obscureAbilities(player, accuracy) {
+function obscureAbilities(player, accuracy, stage = 'full') {
   const blur = (val, maxVal = 99) => {
     const errorRange = Math.floor((100 - accuracy) / 5);
     const error = Math.floor(Math.random() * (errorRange * 2 + 1)) - errorRange;
     return Math.max(1, Math.min(maxVal, val + error));
   };
+  const hidden = '?';
 
+  const isPitcher = player.position === 'pitcher';
+
+  if (stage === 'primary') {
+    // 概要: 投手は球速のみ、野手はミート・パワーのみ。他は隠す
+    return {
+      batting: {
+        meet: isPitcher ? hidden : blur(player.batting?.meet || 0),
+        power: isPitcher ? hidden : blur(player.batting?.power || 0),
+        eye: hidden,
+      },
+      physical: { speed: hidden, arm: hidden },
+      fielding: { defense: hidden },
+      pitching: {
+        velocity: isPitcher ? blur(player.pitching?.velocity || 130, 165) : hidden,
+        control: isPitcher ? blur(player.pitching?.control || 30) : hidden,
+        stamina: hidden,
+      },
+    };
+  }
+
+  if (stage === 'secondary') {
+    // 主要能力: 投手は球速+制球+スタミナ、野手はミート+パワー+走力+守備
+    return {
+      batting: {
+        meet: blur(player.batting?.meet || 0),
+        power: blur(player.batting?.power || 0),
+        eye: isPitcher ? hidden : blur(player.batting?.eye || 0),
+      },
+      physical: {
+        speed: isPitcher ? hidden : blur(player.physical?.speed || 0),
+        arm: hidden,
+      },
+      fielding: {
+        defense: isPitcher ? hidden : blur(player.fielding?.defense || 0),
+      },
+      pitching: {
+        velocity: blur(player.pitching?.velocity || 130, 165),
+        control: blur(player.pitching?.control || 30),
+        stamina: isPitcher ? blur(player.pitching?.stamina || 60, 200) : hidden,
+      },
+    };
+  }
+
+  // full: 全能力を開示
   return {
     batting: {
       meet: blur(player.batting?.meet || 0),
       power: blur(player.batting?.power || 0),
-      eye: blur(player.batting?.eye || 0)
+      eye: blur(player.batting?.eye || 0),
     },
     physical: {
       speed: blur(player.physical?.speed || 0),
-      arm: blur(player.physical?.arm || 0)
+      arm: blur(player.physical?.arm || 0),
     },
     fielding: {
-      defense: blur(player.fielding?.defense || 0)
+      defense: blur(player.fielding?.defense || 0),
     },
     pitching: {
       velocity: blur(player.pitching?.velocity || 130, 165),
       control: blur(player.pitching?.control || 30),
-      stamina: blur(player.pitching?.stamina || 60, 200)
-    }
+      stamina: blur(player.pitching?.stamina || 60, 200),
+    },
   };
 }
 
@@ -498,56 +544,64 @@ function getPositionNeedScore(position, posCount) {
 
 // ============================================================
 // スカウト派遣システム
-// チーム運営画面から派遣先を選び、一定日数後に候補をリストアップ
+// スタッフを選んで派遣先に送り、帰還後に候補をリストアップ
+// 発見した選手は段階的に能力が判明する（初回は概要のみ）
 // ============================================================
 
 const SCOUT_TARGETS = {
-  highschool:   { label: '高校',       days: 14, poolFn: 'highschool' },
-  university:   { label: '大学',       days: 14, poolFn: 'university' },
-  independent:  { label: '独立リーグ', days: 10, poolFn: 'independent' },
-  corporate:    { label: '社会人',     days: 10, poolFn: 'corporate' },
+  highschool:   { label: '高校',       days: 14 },
+  university:   { label: '大学',       days: 14 },
+  independent:  { label: '独立リーグ', days: 10 },
+  corporate:    { label: '社会人',     days: 10 },
 };
 
 export { SCOUT_TARGETS };
 
 /**
- * スカウト派遣を開始
+ * スカウト派遣を開始（スタッフ指定）
  * @param {Object} teamData - TEAMS_DATA[teamName]
- * @param {string} target - 'highschool' | 'university' | 'independent' | 'corporate'
- * @param {{ year: number, month: number, day: number }} currentDate
- * @returns {{ success: boolean, message: string }}
+ * @param {string} target - 派遣先キー
+ * @param {number} staffId - 派遣するスタッフのID
+ * @param {{ year, month, day }} currentDate
  */
-export function dispatchScout(teamData, target, currentDate) {
+export function dispatchScout(teamData, target, staffId, currentDate) {
   const cd = teamData?.corporateData;
   if (!cd) return { success: false, message: '社会人チームではありません' };
 
   const targetDef = SCOUT_TARGETS[target];
   if (!targetDef) return { success: false, message: '無効な派遣先です' };
 
+  const staff = (cd.staff || []).find(s => s.id === staffId);
+  if (!staff) return { success: false, message: 'スタッフが見つかりません' };
+
   if (!cd.scoutMissions) cd.scoutMissions = [];
 
-  const active = cd.scoutMissions.filter(m => !m.completed);
-  if (active.length >= 2) return { success: false, message: '同時に派遣できるのは2件までです' };
-  if (active.find(m => m.target === target)) return { success: false, message: `${targetDef.label}には既に派遣中です` };
+  // 同じスタッフが既に派遣中なら不可
+  if (cd.scoutMissions.find(m => !m.completed && m.staffId === staffId)) {
+    return { success: false, message: `${staff.name}は既に派遣中です` };
+  }
+  // 同じ派遣先に既に派遣中なら不可
+  if (cd.scoutMissions.find(m => !m.completed && m.target === target)) {
+    return { success: false, message: `${targetDef.label}には既に派遣中です` };
+  }
 
   const returnDate = addDays(currentDate, targetDef.days);
   cd.scoutMissions.push({
     target,
+    staffId,
+    staffName: staff.name,
+    staffScoutEye: staff.abilities?.scoutingEye || 30,
     dispatchDate: { ...currentDate },
     returnDate,
     completed: false,
     results: null,
   });
 
-  return { success: true, message: `${targetDef.label}にスカウトを派遣しました（${returnDate.month}/${returnDate.day}帰還予定）` };
+  return { success: true, message: `${staff.name}を${targetDef.label}に派遣しました（${returnDate.month}/${returnDate.day}帰還予定）` };
 }
 
 /**
  * 日付進行時にスカウト派遣の完了をチェック
- * @param {Object} teamData - TEAMS_DATA[teamName]
- * @param {{ year: number, month: number, day: number }} currentDate
- * @param {number} gameYear - ゲーム内年度
- * @returns {Array} 完了したミッション配列（results付き）
  */
 export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
   const cd = teamData?.corporateData;
@@ -559,7 +613,7 @@ export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
     if (!isDatePassed(currentDate, mission.returnDate)) return;
 
     mission.completed = true;
-    mission.results = generateScoutReport(teamData, mission.target, gameYear);
+    mission.results = generateScoutReport(teamData, mission.target, mission.staffScoutEye, gameYear);
     completed.push(mission);
   });
 
@@ -567,11 +621,31 @@ export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
 }
 
 /**
- * スカウト派遣結果を生成（候補者リスト）
+ * 発見済み選手を追加調査して能力を明らかにする
+ * revealLevel: 0=概要のみ → 1=主要能力 → 2=全能力
  */
-function generateScoutReport(teamData, target, gameYear) {
-  const staffBonus = getTeamStaffBonus(teamData.corporateData?.staff || []);
-  const scoutEye = staffBonus.scoutingEye || 50;
+export function investigatePlayer(player) {
+  const current = player._revealLevel || 0;
+  if (current >= 2) return { success: false, message: 'これ以上調査できません' };
+
+  player._revealLevel = current + 1;
+
+  // 調査段階に応じて追加の能力を開示
+  const accuracy = player.scoutAccuracy || 50;
+  if (player._revealLevel === 1) {
+    player.scoutedAbilities = obscureAbilities(player, Math.min(95, accuracy + 15), 'secondary');
+  } else if (player._revealLevel === 2) {
+    player.scoutedAbilities = obscureAbilities(player, Math.min(99, accuracy + 30), 'full');
+  }
+
+  return { success: true, level: player._revealLevel };
+}
+
+/**
+ * スカウト派遣結果を生成（スタッフ個人の能力で判定）
+ */
+function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
+  const scoutEye = staffScoutEye || 30;
   const reputation = teamData.corporateData?.reputation || 30;
   const reputationMult = getReputationScoutBonus(reputation);
 
@@ -588,7 +662,6 @@ function generateScoutReport(teamData, target, gameYear) {
 
   if (pool.length === 0) return [];
 
-  // 派遣先特化: 対象プールのみからスコアリング
   const candidateCount = 3 + Math.floor(scoutEye / 25); // 3〜7人
 
   const scored = pool.map(entry => {
@@ -596,8 +669,6 @@ function generateScoutReport(teamData, target, gameYear) {
     const fame = entry.player.fame || 0;
     const noise = (Math.random() - 0.5) * 25;
     const repBonus = (reputationMult - 1.0) * 15;
-    // 知名度による発見補正: 低知名度は発見しやすい（競合が少ない）
-    // 高知名度は他チームも狙うので相対的に不利
     const fameDiscover = fame < 30 ? (30 - fame) * 0.2 : -(fame - 30) * 0.1;
     const discoveryPenalty = -((100 - fame) / 100) * ((100 - scoutEye) * 0.2);
     return { ...entry, score: base + noise + repBonus + fameDiscover + discoveryPenalty };
@@ -610,7 +681,9 @@ function generateScoutReport(teamData, target, gameYear) {
     const p = JSON.parse(JSON.stringify(entry.player));
     const accuracy = calculateScoutAccuracy(scoutEye);
     p.scoutAccuracy = accuracy;
-    p.scoutedAbilities = obscureAbilities(p, accuracy);
+    // 初回は概要のみ（primary能力だけ開示）
+    p.scoutedAbilities = obscureAbilities(p, accuracy, 'primary');
+    p._revealLevel = 0;
     p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear };
     p._scoutSource = getSourceLabel(entry);
     p._dispatchTarget = target;
@@ -623,9 +696,10 @@ function generateScoutReport(teamData, target, gameYear) {
  */
 function getIndependentScoutPool(excludeTeam) {
   const pool = [];
+  const excludeName = Object.keys(TEAMS_DATA)[0];
   Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
     if (!team?.players || !team.independentLeagueId) return;
-    if (teamName === Object.keys(TEAMS_DATA)[0]) return; // ユーザーチーム除外
+    if (teamName === excludeName) return;
     team.players.forEach((p, idx) => {
       pool.push({ player: p, source: 'independent', teamName, poolIndex: idx });
     });
@@ -634,7 +708,7 @@ function getIndependentScoutPool(excludeTeam) {
 }
 
 /**
- * 社会人チームの選手プールを取得（他の社会人チームから）
+ * 社会人チームの選手プールを取得
  */
 function getCorporateScoutPool(excludeTeam) {
   const pool = [];

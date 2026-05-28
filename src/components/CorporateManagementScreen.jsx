@@ -5,7 +5,7 @@ import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudget
 import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
-import { dispatchScout, SCOUT_TARGETS } from '../corporate/scoutingSystem.js';
+import { dispatchScout, SCOUT_TARGETS, investigatePlayer } from '../corporate/scoutingSystem.js';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -20,6 +20,8 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const [confirmFire, setConfirmFire] = useState(null);
   const [dispatchMessage, setDispatchMessage] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [dispatchTarget, setDispatchTarget] = useState(null); // 派遣先選択中
+  const [, setRefreshTick] = useState(0);
 
   if (!cd) {
     return (
@@ -342,7 +344,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           {/* スカウト派遣 */}
           <div className="bg-gray-800 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">スカウトを派遣する</h2>
-            <p className="text-[10px] text-gray-500 mb-3">派遣先を選んでスカウトを送り出すと、一定期間後に候補選手をリストアップして帰還します（同時に2件まで）</p>
+            <p className="text-[10px] text-gray-500 mb-3">スタッフを選んで派遣先に送ると、一定期間後に候補選手をリストアップして帰還します</p>
 
             {dispatchMessage && (
               <div className={`text-xs p-2 rounded mb-3 ${dispatchMessage.ok ? 'bg-green-900/40 text-green-400 border border-green-700/50' : 'bg-red-900/40 text-red-400 border border-red-700/50'}`}>
@@ -350,38 +352,28 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               </div>
             )}
 
+            {/* 派遣先カード */}
             <div className="grid grid-cols-4 gap-2 mb-4">
               {Object.entries(SCOUT_TARGETS).map(([key, def]) => {
                 const missions = cd.scoutMissions || [];
                 const active = missions.find(m => !m.completed && m.target === key);
-                const activeCount = missions.filter(m => !m.completed).length;
-                const canDispatch = !active && activeCount < 2;
-
                 return (
-                  <div key={key} className="bg-gray-750 rounded-lg p-3 text-center border border-gray-700/50">
+                  <div key={key} className={`bg-gray-750 rounded-lg p-3 text-center border transition ${
+                    dispatchTarget === key ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700/50'
+                  }`}>
                     <div className="text-sm font-bold text-white mb-1">{def.label}</div>
                     <div className="text-[10px] text-gray-500 mb-2">{def.days}日間</div>
                     {active ? (
                       <div className="text-[10px] text-yellow-400 font-bold">
-                        派遣中
+                        {active.staffName} 派遣中
                         <div className="text-gray-500 font-normal">{active.returnDate.month}/{active.returnDate.day} 帰還</div>
                       </div>
                     ) : (
                       <button
-                        onClick={() => {
-                          if (!canDispatch) return;
-                          const result = dispatchScout(teamData, key, seasonData.currentDate);
-                          setDispatchMessage({ text: result.message, ok: result.success });
-                          setTimeout(() => setDispatchMessage(null), 3000);
-                        }}
-                        disabled={!canDispatch}
-                        className={`px-3 py-1.5 rounded text-xs font-bold transition ${
-                          canDispatch
-                            ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                            : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                        }`}
+                        onClick={() => setDispatchTarget(dispatchTarget === key ? null : key)}
+                        className="px-3 py-1.5 rounded text-xs font-bold transition bg-blue-600 hover:bg-blue-500 text-white"
                       >
-                        派遣する
+                        {dispatchTarget === key ? '選択中…' : '派遣先に選択'}
                       </button>
                     )}
                   </div>
@@ -389,11 +381,67 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               })}
             </div>
 
+            {/* スタッフ選択パネル */}
+            {dispatchTarget && (() => {
+              const missions = cd.scoutMissions || [];
+              const dispatchedIds = new Set(missions.filter(m => !m.completed).map(m => m.staffId));
+              const availableStaff = staff.filter(s => !dispatchedIds.has(s.id));
+              const targetDef = SCOUT_TARGETS[dispatchTarget];
+
+              return (
+                <div className="bg-gray-750 rounded-lg p-3 mb-4 border border-blue-500/30">
+                  <div className="text-xs font-bold text-blue-400 mb-2">
+                    {targetDef?.label}に派遣するスタッフを選んでください
+                  </div>
+                  {availableStaff.length === 0 ? (
+                    <p className="text-xs text-gray-500">派遣可能なスタッフがいません（全員派遣中）</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {availableStaff.map(s => (
+                        <div key={s.id} className="flex items-center gap-3 bg-gray-800/80 rounded-lg p-2 hover:bg-gray-700/60 transition">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
+                              <span className="text-yellow-400 text-xs">{roleLabel(s.role)}</span>
+                              <span className="text-white text-sm font-bold">{s.name}</span>
+                            </div>
+                            <div className="flex gap-3 mt-0.5 text-[10px]">
+                              <span className="text-gray-400">スカウト眼<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.scoutingEye || 0)}`}>{s.abilities?.scoutingEye || 0}</span></span>
+                              <span className="text-gray-400">交渉<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.negotiation || 0)}`}>{s.abilities?.negotiation || 0}</span></span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const result = dispatchScout(teamData, dispatchTarget, s.id, seasonData.currentDate);
+                              setDispatchMessage({ text: result.message, ok: result.success });
+                              setDispatchTarget(null);
+                              setTimeout(() => setDispatchMessage(null), 3000);
+                            }}
+                            className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition"
+                          >
+                            派遣する
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={() => setDispatchTarget(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-2">キャンセル</button>
+                </div>
+              );
+            })()}
+
             {/* 完了した派遣レポート */}
             {(() => {
               const missions = cd.scoutMissions || [];
               const completedMissions = missions.filter(m => m.completed && m.results);
               if (completedMissions.length === 0) return null;
+
+              const renderAbility = (label, val) => {
+                if (val === '?' || val === undefined) return <span className="text-gray-600">{label} <span className="font-bold">?</span></span>;
+                const numVal = typeof val === 'number' ? val : parseInt(val);
+                return <span className="text-gray-400">{label}<span className={`font-bold ml-0.5 ${getAbilityColor(numVal)}`}>{val}{label === '球速' ? 'km' : ''}</span></span>;
+              };
+
               return (
                 <div>
                   <h3 className="text-xs font-bold text-yellow-400 mb-2">スカウトレポート</h3>
@@ -407,41 +455,65 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-yellow-400">{SCOUT_TARGETS[mission.target]?.label}</span>
                             <span className="text-[10px] text-gray-500">{mission.results.length}名発見</span>
+                            <span className="text-[10px] text-gray-600">({mission.staffName})</span>
                           </div>
                           <span className="text-[10px] text-gray-500">{selectedReport === idx ? '▲' : '▼'}</span>
                         </div>
                         {selectedReport === idx && mission.results.length > 0 && (
-                          <div className="mt-2 space-y-1.5">
-                            {mission.results.map((p, pi) => (
-                              <div key={pi} className="bg-gray-800/80 rounded p-2 text-xs">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-white font-bold">{p.name}</span>
-                                  <span className="text-gray-400">{p.age}歳</span>
-                                  <span className="text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</span>
-                                  <span className="text-gray-500">{p._scoutSource}</span>
-                                  {(p.fame || 0) > 0 && (
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                      p.fame >= 50 ? 'bg-yellow-600/30 text-yellow-300' : 'bg-gray-700 text-gray-400'
+                          <div className="mt-2 space-y-1.5" onClick={e => e.stopPropagation()}>
+                            {mission.results.map((p, pi) => {
+                              const sa = p.scoutedAbilities || {};
+                              const revealLevel = p._revealLevel || 0;
+                              const revealLabel = ['概要', '詳細', '完全'][revealLevel];
+                              return (
+                                <div key={pi} className="bg-gray-800/80 rounded p-2 text-xs">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-white font-bold">{p.name}</span>
+                                    <span className="text-gray-400">{p.age}歳</span>
+                                    <span className="text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</span>
+                                    <span className="text-gray-500">{p._scoutSource}</span>
+                                    {(p.fame || 0) > 0 && (
+                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                        p.fame >= 50 ? 'bg-yellow-600/30 text-yellow-300' : 'bg-gray-700 text-gray-400'
+                                      }`}>
+                                        知名度{p.fame}
+                                      </span>
+                                    )}
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                      revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
+                                      revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
+                                      'bg-gray-700 text-gray-400'
                                     }`}>
-                                      知名度{p.fame}
+                                      {revealLabel}
                                     </span>
+                                  </div>
+                                  <div className="flex gap-3 mt-1.5 text-[10px] flex-wrap">
+                                    {p.position === 'pitcher' ? (<>
+                                      {renderAbility('球速', sa.pitching?.velocity)}
+                                      {renderAbility('制球', sa.pitching?.control)}
+                                      {renderAbility('スタ', sa.pitching?.stamina)}
+                                    </>) : (<>
+                                      {renderAbility('ミート', sa.batting?.meet)}
+                                      {renderAbility('パワー', sa.batting?.power)}
+                                      {renderAbility('選球眼', sa.batting?.eye)}
+                                      {renderAbility('走力', sa.physical?.speed)}
+                                      {renderAbility('守備', sa.fielding?.defense)}
+                                    </>)}
+                                  </div>
+                                  {revealLevel < 2 && (
+                                    <button
+                                      onClick={() => {
+                                        investigatePlayer(p);
+                                        setRefreshTick(t => t + 1);
+                                      }}
+                                      className="mt-1.5 px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
+                                    >
+                                      🔍 調査する（{revealLevel === 0 ? '詳細を調べる' : '全能力を調べる'}）
+                                    </button>
                                   )}
                                 </div>
-                                <div className="flex gap-3 mt-1 text-[10px]">
-                                  {p.position === 'pitcher' ? (<>
-                                    <span className="text-gray-400">球速<span className={`font-bold ml-0.5 ${getAbilityColor(Math.min(99, Math.round((p.scoutedAbilities?.velocity || 130) - 100)))}`}>{p.scoutedAbilities?.velocity || '?'}km</span></span>
-                                    <span className="text-gray-400">制球<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.control)}`}>{p.scoutedAbilities?.control || '?'}</span></span>
-                                    <span className="text-gray-400">スタ<span className="font-bold ml-0.5 text-gray-300">{p.scoutedAbilities?.stamina || '?'}</span></span>
-                                  </>) : (<>
-                                    <span className="text-gray-400">ミート<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.meet)}`}>{p.scoutedAbilities?.meet || '?'}</span></span>
-                                    <span className="text-gray-400">パワー<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.power)}`}>{p.scoutedAbilities?.power || '?'}</span></span>
-                                    <span className="text-gray-400">走力<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.speed)}`}>{p.scoutedAbilities?.speed || '?'}</span></span>
-                                    <span className="text-gray-400">守備<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.defense)}`}>{p.scoutedAbilities?.defense || '?'}</span></span>
-                                  </>)}
-                                  <span className="text-gray-600 ml-auto">精度{p.scoutAccuracy}%</span>
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
