@@ -254,12 +254,19 @@ export function generateScoutCandidates(teamData, year) {
 
   if (allPool.length === 0) return [];
 
-  // 総合力でスコアリングし、注目度補正+ランダムノイズでソート
+  // 総合力でスコアリングし、知名度+注目度補正+ランダムノイズでソート
+  // 知名度が高い選手 → 誰でも見つけられる
+  // 知名度が低い＋能力高い → scoutingEyeが高いスカウトだけが発掘できる
   const scored = allPool.map(entry => {
     const base = evaluatePlayerScore(entry.player);
+    const fame = entry.player.fame || 0;
     const noise = (Math.random() - 0.5) * 30;
     const repBonus = (reputationMult - 1.0) * 20;
-    return { ...entry, score: base + noise + repBonus };
+    // 知名度が低い選手は、スカウト能力が低いと見落とされる
+    // fame 0 → discoveryPenalty = -(100-scoutEye)*0.3 = 最大-30（scoutEye=0の時）
+    // fame 100 → discoveryPenalty = 0（有名なので誰でも見つかる）
+    const discoveryPenalty = -((100 - fame) / 100) * ((100 - scoutEye) * 0.3);
+    return { ...entry, score: base + noise + repBonus + discoveryPenalty };
   });
   scored.sort((a, b) => b.score - a.score);
 
