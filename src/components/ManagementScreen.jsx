@@ -113,6 +113,11 @@ const ManagementScreen = ({
     seasonData={seasonData}
     allTeams={allTeams}
     onComplete={() => {
+      // 完了済みスカウトミッションをクリア（翌年の派遣用にリセット）
+      const ut = TEAMS_DATA[userTeamName];
+      if (ut?.corporateData?.scoutMissions) {
+        ut.corporateData.scoutMissions = [];
+      }
       const newData = { ...seasonData, currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
       setSeasonData(newData);
       setManagementView('dateprogress');

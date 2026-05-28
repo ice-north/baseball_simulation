@@ -386,9 +386,12 @@ function obscureAbilities(player, accuracy, stage = 'full') {
 // ============================================================
 // 交渉成功率システム
 // 注目度・ランク・交渉力と選手の質で成功率が決まる
+// 他球団からのスカウトも来ている場合、ランクの高い方が有利
 // ============================================================
 
 const RANK_RECRUIT_BONUS = { S: 0.10, A: 0.05, B: 0, C: -0.05, D: -0.10 };
+const RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
+const RANK_WEIGHT = { S: 50, A: 35, B: 20, C: 10, D: 5 };
 
 /**
  * 選手獲得の成功率を計算（0〜100）
@@ -461,6 +464,12 @@ function removeFromPool(player) {
   } else if (ref.source === 'released') {
     const idx = releasedPlayersPool.findIndex(p => p.id === player.id);
     if (idx >= 0) releasedPlayersPool.splice(idx, 1);
+  } else if ((ref.source === 'independent' || ref.source === 'corporate_team') && ref.teamName) {
+    const srcTeam = TEAMS_DATA[ref.teamName];
+    if (srcTeam?.players) {
+      const idx = srcTeam.players.findIndex(p => p.id === player.id);
+      if (idx >= 0) srcTeam.players.splice(idx, 1);
+    }
   }
 }
 
@@ -721,6 +730,114 @@ function getCorporateScoutPool(excludeTeam) {
     });
   });
   return pool;
+}
+
+/**
+ * スカウトリストの選手に対する他球団の興味を生成
+ * 選手の知名度・能力が高いほど、高ランクチームからの関心が多い
+ */
+export function generateRivalInterest(scoutedPlayers) {
+  return scoutedPlayers.map(player => {
+    const score = evaluatePlayerScore(player);
+    const fame = player.fame || 0;
+
+    // 有力選手ほど多くのチームが関心を寄せる（0〜3チーム）
+    const interestScore = score * 0.5 + fame * 0.3;
+    let rivalCount;
+    if (interestScore >= 60) rivalCount = 2 + (Math.random() < 0.5 ? 1 : 0);
+    else if (interestScore >= 40) rivalCount = 1 + (Math.random() < 0.4 ? 1 : 0);
+    else if (interestScore >= 25) rivalCount = Math.random() < 0.5 ? 1 : 0;
+    else rivalCount = 0;
+
+    const rivals = [];
+    for (let i = 0; i < rivalCount; i++) {
+      // 有力選手には高ランクチームが来る
+      const roll = Math.random() * 100;
+      let rank;
+      if (interestScore >= 50) {
+        rank = roll < 20 ? 'S' : roll < 55 ? 'A' : roll < 80 ? 'B' : roll < 95 ? 'C' : 'D';
+      } else if (interestScore >= 30) {
+        rank = roll < 5 ? 'S' : roll < 25 ? 'A' : roll < 55 ? 'B' : roll < 85 ? 'C' : 'D';
+      } else {
+        rank = roll < 10 ? 'B' : roll < 50 ? 'C' : 'D';
+      }
+      rivals.push({ rank });
+    }
+
+    player._rivals = rivals;
+    return player;
+  });
+}
+
+/**
+ * 他球団との競合を考慮した交渉
+ * ユーザーのランクが高い → 有利、ライバルのランクが高い → 不利
+ */
+export function negotiateWithCompetition(team, player, teamData) {
+  const userRank = teamData?.corporateData?.rank || 'C';
+  const rivals = player._rivals || [];
+
+  // まず基本の交渉成功率を算出
+  const baseRate = calculateRecruitSuccessRate(player, teamData);
+
+  if (rivals.length === 0) {
+    // ライバル不在：基本成功率をそのまま使う
+    const roll = Math.random() * 100;
+    const success = roll < baseRate;
+    if (success) recruitPlayer(team, player);
+    return { success, rate: baseRate, rivalResult: null };
+  }
+
+  // ライバルがいる場合：重み付き抽選で獲得先を決める
+  const userWeight = RANK_WEIGHT[userRank] || 10;
+  const staffBonus = getTeamStaffBonus(teamData?.corporateData?.staff || []);
+  const negotiationBoost = (staffBonus.negotiation || 0) * 0.2;
+  const contenders = [
+    { type: 'user', weight: userWeight + negotiationBoost },
+    ...rivals.map((r, i) => ({ type: `rival_${i}`, rank: r.rank, weight: RANK_WEIGHT[r.rank] || 10 })),
+    { type: 'none', weight: 15 }, // どこにも行かない
+  ];
+
+  const totalWeight = contenders.reduce((sum, c) => sum + c.weight, 0);
+  let roll = Math.random() * totalWeight;
+  let winner = contenders[contenders.length - 1];
+  for (const c of contenders) {
+    roll -= c.weight;
+    if (roll <= 0) { winner = c; break; }
+  }
+
+  const success = winner.type === 'user';
+  const adjustedRate = Math.round((userWeight + negotiationBoost) / totalWeight * 100);
+
+  if (success) recruitPlayer(team, player);
+
+  return {
+    success,
+    rate: adjustedRate,
+    rivalResult: success ? null : (winner.type === 'none' ? 'declined' : winner.rank),
+  };
+}
+
+/**
+ * スカウトリストから交渉可能な選手を集約
+ * 完了済みの全派遣ミッションから候補を統合
+ */
+export function getScoutedCandidates(teamData) {
+  const cd = teamData?.corporateData;
+  if (!cd?.scoutMissions) return [];
+
+  const candidates = [];
+  const seenIds = new Set();
+  cd.scoutMissions.forEach(mission => {
+    if (!mission.completed || !mission.results) return;
+    mission.results.forEach(p => {
+      if (!seenIds.has(p.id)) {
+        seenIds.add(p.id);
+        candidates.push(p);
+      }
+    });
+  });
+  return candidates;
 }
 
 function getSourceLabel(entry) {

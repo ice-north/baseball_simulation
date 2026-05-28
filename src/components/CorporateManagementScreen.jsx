@@ -532,16 +532,24 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             <h2 className="text-sm font-bold text-gray-300 mb-2">スカウト入団スケジュール</h2>
             <div className="text-xs text-gray-400 space-y-1">
               <div className="flex items-center gap-2">
-                <span className="w-20 text-gray-500">11月9日</span>
+                <span className="w-24 text-gray-500 shrink-0">4月〜</span>
+                <span>スタッフを派遣して候補選手を発見・調査</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-24 text-gray-500 shrink-0">10月24日</span>
+                <span>NPBドラフト（有力選手がプロに指名される）</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-24 text-gray-500 shrink-0">11月9日</span>
                 <span>退団処理（引退・戦力外通告）</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-20 text-gray-500">11月10日</span>
-                <span>スカウト入団（大学プール+リリースプールから最大3名獲得）</span>
+                <span className="w-24 text-gray-500 shrink-0">11月10日</span>
+                <span>スカウト交渉（発見した選手から最大3名と交渉）</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-20 text-gray-500">オフシーズン</span>
-                <span>大学プール成長処理・新入学者追加</span>
+                <span className="w-24 text-gray-500 shrink-0">キャンプ</span>
+                <span>入団した選手がチームに合流</span>
               </div>
             </div>
           </div>
