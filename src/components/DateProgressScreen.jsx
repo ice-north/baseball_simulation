@@ -12,6 +12,7 @@ import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
+import { checkScoutMissionCompletion } from '../corporate/scoutingSystem.js';
 
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
@@ -23,6 +24,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [selectedBracketTab, setSelectedBracketTab] = useState('main');
   const [isGeneratingTournament, setIsGeneratingTournament] = useState(false);
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
+  const [scoutReportNotifications, setScoutReportNotifications] = useState([]);
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -590,6 +592,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         ns.runnerUp = ns.runnerUp;
       }
       newSeasonData = { ...newSeasonData, nihonSenshuken: ns };
+    }
+
+    // スカウト派遣の完了チェック
+    if (seasonData.settings?.corporateMode) {
+      const userTeam = TEAMS_DATA[userTeamName];
+      if (userTeam?.corporateData?.scoutMissions) {
+        const completedMissions = checkScoutMissionCompletion(userTeam, newSeasonData.currentDate, newSeasonData.year || 1);
+        if (completedMissions.length > 0) {
+          setScoutReportNotifications(prev => [...prev, ...completedMissions]);
+        }
+      }
     }
 
     if (newSeasonData.currentDate.month !== selectedMonth) setSelectedMonth(newSeasonData.currentDate.month);

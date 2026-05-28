@@ -495,3 +495,176 @@ function getPositionNeedScore(position, posCount) {
   if (['left', 'center', 'right'].includes(position) && posCount.outfield < 4) return 20;
   return 0;
 }
+
+// ============================================================
+// スカウト派遣システム
+// チーム運営画面から派遣先を選び、一定日数後に候補をリストアップ
+// ============================================================
+
+const SCOUT_TARGETS = {
+  highschool:   { label: '高校',       days: 14, poolFn: 'highschool' },
+  university:   { label: '大学',       days: 14, poolFn: 'university' },
+  independent:  { label: '独立リーグ', days: 10, poolFn: 'independent' },
+  corporate:    { label: '社会人',     days: 10, poolFn: 'corporate' },
+};
+
+export { SCOUT_TARGETS };
+
+/**
+ * スカウト派遣を開始
+ * @param {Object} teamData - TEAMS_DATA[teamName]
+ * @param {string} target - 'highschool' | 'university' | 'independent' | 'corporate'
+ * @param {{ year: number, month: number, day: number }} currentDate
+ * @returns {{ success: boolean, message: string }}
+ */
+export function dispatchScout(teamData, target, currentDate) {
+  const cd = teamData?.corporateData;
+  if (!cd) return { success: false, message: '社会人チームではありません' };
+
+  const targetDef = SCOUT_TARGETS[target];
+  if (!targetDef) return { success: false, message: '無効な派遣先です' };
+
+  if (!cd.scoutMissions) cd.scoutMissions = [];
+
+  const active = cd.scoutMissions.filter(m => !m.completed);
+  if (active.length >= 2) return { success: false, message: '同時に派遣できるのは2件までです' };
+  if (active.find(m => m.target === target)) return { success: false, message: `${targetDef.label}には既に派遣中です` };
+
+  const returnDate = addDays(currentDate, targetDef.days);
+  cd.scoutMissions.push({
+    target,
+    dispatchDate: { ...currentDate },
+    returnDate,
+    completed: false,
+    results: null,
+  });
+
+  return { success: true, message: `${targetDef.label}にスカウトを派遣しました（${returnDate.month}/${returnDate.day}帰還予定）` };
+}
+
+/**
+ * 日付進行時にスカウト派遣の完了をチェック
+ * @param {Object} teamData - TEAMS_DATA[teamName]
+ * @param {{ year: number, month: number, day: number }} currentDate
+ * @param {number} gameYear - ゲーム内年度
+ * @returns {Array} 完了したミッション配列（results付き）
+ */
+export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
+  const cd = teamData?.corporateData;
+  if (!cd?.scoutMissions) return [];
+
+  const completed = [];
+  cd.scoutMissions.forEach(mission => {
+    if (mission.completed) return;
+    if (!isDatePassed(currentDate, mission.returnDate)) return;
+
+    mission.completed = true;
+    mission.results = generateScoutReport(teamData, mission.target, gameYear);
+    completed.push(mission);
+  });
+
+  return completed;
+}
+
+/**
+ * スカウト派遣結果を生成（候補者リスト）
+ */
+function generateScoutReport(teamData, target, gameYear) {
+  const staffBonus = getTeamStaffBonus(teamData.corporateData?.staff || []);
+  const scoutEye = staffBonus.scoutingEye || 50;
+  const reputation = teamData.corporateData?.reputation || 30;
+  const reputationMult = getReputationScoutBonus(reputation);
+
+  let pool = [];
+  if (target === 'highschool') {
+    pool = getHighSchoolScoutPool();
+  } else if (target === 'university') {
+    pool = getUniversityScoutPool(gameYear);
+  } else if (target === 'independent') {
+    pool = getIndependentScoutPool(teamData);
+  } else if (target === 'corporate') {
+    pool = getCorporateScoutPool(teamData);
+  }
+
+  if (pool.length === 0) return [];
+
+  // 派遣先特化: 対象プールのみからスコアリング
+  const candidateCount = 3 + Math.floor(scoutEye / 25); // 3〜7人
+
+  const scored = pool.map(entry => {
+    const base = evaluatePlayerScore(entry.player);
+    const fame = entry.player.fame || 0;
+    const noise = (Math.random() - 0.5) * 25;
+    const repBonus = (reputationMult - 1.0) * 15;
+    // 知名度による発見補正: 低知名度は発見しやすい（競合が少ない）
+    // 高知名度は他チームも狙うので相対的に不利
+    const fameDiscover = fame < 30 ? (30 - fame) * 0.2 : -(fame - 30) * 0.1;
+    const discoveryPenalty = -((100 - fame) / 100) * ((100 - scoutEye) * 0.2);
+    return { ...entry, score: base + noise + repBonus + fameDiscover + discoveryPenalty };
+  });
+  scored.sort((a, b) => b.score - a.score);
+
+  const selected = scored.slice(0, candidateCount);
+
+  return selected.map(entry => {
+    const p = JSON.parse(JSON.stringify(entry.player));
+    const accuracy = calculateScoutAccuracy(scoutEye);
+    p.scoutAccuracy = accuracy;
+    p.scoutedAbilities = obscureAbilities(p, accuracy);
+    p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear };
+    p._scoutSource = getSourceLabel(entry);
+    p._dispatchTarget = target;
+    return p;
+  });
+}
+
+/**
+ * 独立リーグの選手プールを取得
+ */
+function getIndependentScoutPool(excludeTeam) {
+  const pool = [];
+  Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+    if (!team?.players || !team.independentLeagueId) return;
+    if (teamName === Object.keys(TEAMS_DATA)[0]) return; // ユーザーチーム除外
+    team.players.forEach((p, idx) => {
+      pool.push({ player: p, source: 'independent', teamName, poolIndex: idx });
+    });
+  });
+  return pool;
+}
+
+/**
+ * 社会人チームの選手プールを取得（他の社会人チームから）
+ */
+function getCorporateScoutPool(excludeTeam) {
+  const pool = [];
+  const excludeName = Object.keys(TEAMS_DATA)[0];
+  Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+    if (!team?.players || !team.corporateData) return;
+    if (teamName === excludeName) return;
+    team.players.forEach((p, idx) => {
+      pool.push({ player: p, source: 'corporate_team', teamName, poolIndex: idx });
+    });
+  });
+  return pool;
+}
+
+function getSourceLabel(entry) {
+  if (entry.source === 'highschool') return '高校3年';
+  if (entry.source === 'university') return `大学${(entry.yearsInUni || 0) + 1}年`;
+  if (entry.source === 'independent') return `独立L(${entry.teamName || ''})`;
+  if (entry.source === 'corporate_team') return `社会人(${entry.teamName || ''})`;
+  return 'フリー';
+}
+
+function addDays(date, days) {
+  const d = new Date(date.year, date.month - 1, date.day);
+  d.setDate(d.getDate() + days);
+  return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+}
+
+function isDatePassed(current, target) {
+  const c = current.year * 10000 + current.month * 100 + current.day;
+  const t = target.year * 10000 + target.month * 100 + target.day;
+  return c >= t;
+}

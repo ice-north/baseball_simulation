@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, generateStaffMarket, getTeamStaffBonus } from '../corporate/staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus } from '../corporate/corporateInit.js';
-import { getAbilityColor } from '../utils/constants.js';
+import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
+import { dispatchScout, SCOUT_TARGETS } from '../corporate/scoutingSystem.js';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -17,6 +18,8 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const [marketStaff, setMarketStaff] = useState(null);
   const [confirmHire, setConfirmHire] = useState(null);
   const [confirmFire, setConfirmFire] = useState(null);
+  const [dispatchMessage, setDispatchMessage] = useState(null);
+  const [selectedReport, setSelectedReport] = useState(null);
 
   if (!cd) {
     return (
@@ -334,6 +337,119 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <p className="text-[10px] text-gray-600 mt-2">戦力外・大学卒業生が対象</p>
               </div>
             </div>
+          </div>
+
+          {/* スカウト派遣 */}
+          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+            <h2 className="text-sm font-bold text-gray-300 mb-3">スカウトを派遣する</h2>
+            <p className="text-[10px] text-gray-500 mb-3">派遣先を選んでスカウトを送り出すと、一定期間後に候補選手をリストアップして帰還します（同時に2件まで）</p>
+
+            {dispatchMessage && (
+              <div className={`text-xs p-2 rounded mb-3 ${dispatchMessage.ok ? 'bg-green-900/40 text-green-400 border border-green-700/50' : 'bg-red-900/40 text-red-400 border border-red-700/50'}`}>
+                {dispatchMessage.text}
+              </div>
+            )}
+
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {Object.entries(SCOUT_TARGETS).map(([key, def]) => {
+                const missions = cd.scoutMissions || [];
+                const active = missions.find(m => !m.completed && m.target === key);
+                const activeCount = missions.filter(m => !m.completed).length;
+                const canDispatch = !active && activeCount < 2;
+
+                return (
+                  <div key={key} className="bg-gray-750 rounded-lg p-3 text-center border border-gray-700/50">
+                    <div className="text-sm font-bold text-white mb-1">{def.label}</div>
+                    <div className="text-[10px] text-gray-500 mb-2">{def.days}日間</div>
+                    {active ? (
+                      <div className="text-[10px] text-yellow-400 font-bold">
+                        派遣中
+                        <div className="text-gray-500 font-normal">{active.returnDate.month}/{active.returnDate.day} 帰還</div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (!canDispatch) return;
+                          const result = dispatchScout(teamData, key, seasonData.currentDate);
+                          setDispatchMessage({ text: result.message, ok: result.success });
+                          setTimeout(() => setDispatchMessage(null), 3000);
+                        }}
+                        disabled={!canDispatch}
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition ${
+                          canDispatch
+                            ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                            : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                        }`}
+                      >
+                        派遣する
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 完了した派遣レポート */}
+            {(() => {
+              const missions = cd.scoutMissions || [];
+              const completedMissions = missions.filter(m => m.completed && m.results);
+              if (completedMissions.length === 0) return null;
+              return (
+                <div>
+                  <h3 className="text-xs font-bold text-yellow-400 mb-2">スカウトレポート</h3>
+                  <div className="space-y-1.5">
+                    {completedMissions.map((mission, idx) => (
+                      <div key={idx}
+                        className="bg-gray-750 rounded-lg p-2.5 border border-gray-700/50 cursor-pointer hover:border-yellow-600/50 transition"
+                        onClick={() => setSelectedReport(selectedReport === idx ? null : idx)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-yellow-400">{SCOUT_TARGETS[mission.target]?.label}</span>
+                            <span className="text-[10px] text-gray-500">{mission.results.length}名発見</span>
+                          </div>
+                          <span className="text-[10px] text-gray-500">{selectedReport === idx ? '▲' : '▼'}</span>
+                        </div>
+                        {selectedReport === idx && mission.results.length > 0 && (
+                          <div className="mt-2 space-y-1.5">
+                            {mission.results.map((p, pi) => (
+                              <div key={pi} className="bg-gray-800/80 rounded p-2 text-xs">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-white font-bold">{p.name}</span>
+                                  <span className="text-gray-400">{p.age}歳</span>
+                                  <span className="text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</span>
+                                  <span className="text-gray-500">{p._scoutSource}</span>
+                                  {(p.fame || 0) > 0 && (
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                      p.fame >= 50 ? 'bg-yellow-600/30 text-yellow-300' : 'bg-gray-700 text-gray-400'
+                                    }`}>
+                                      知名度{p.fame}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex gap-3 mt-1 text-[10px]">
+                                  {p.position === 'pitcher' ? (<>
+                                    <span className="text-gray-400">球速<span className={`font-bold ml-0.5 ${getAbilityColor(Math.min(99, Math.round((p.scoutedAbilities?.velocity || 130) - 100)))}`}>{p.scoutedAbilities?.velocity || '?'}km</span></span>
+                                    <span className="text-gray-400">制球<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.control)}`}>{p.scoutedAbilities?.control || '?'}</span></span>
+                                    <span className="text-gray-400">スタ<span className="font-bold ml-0.5 text-gray-300">{p.scoutedAbilities?.stamina || '?'}</span></span>
+                                  </>) : (<>
+                                    <span className="text-gray-400">ミート<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.meet)}`}>{p.scoutedAbilities?.meet || '?'}</span></span>
+                                    <span className="text-gray-400">パワー<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.power)}`}>{p.scoutedAbilities?.power || '?'}</span></span>
+                                    <span className="text-gray-400">走力<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.speed)}`}>{p.scoutedAbilities?.speed || '?'}</span></span>
+                                    <span className="text-gray-400">守備<span className={`font-bold ml-0.5 ${getAbilityColor(p.scoutedAbilities?.defense)}`}>{p.scoutedAbilities?.defense || '?'}</span></span>
+                                  </>)}
+                                  <span className="text-gray-600 ml-auto">精度{p.scoutAccuracy}%</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* スカウト入団スケジュール */}
