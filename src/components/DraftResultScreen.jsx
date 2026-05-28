@@ -24,7 +24,14 @@ const DEFAULT_ROUND_STYLE = {
   glow: '',
 };
 
-const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContinue }) => {
+const SOURCE_LABELS = {
+  highschool: { label: '高校', color: 'text-green-400 bg-green-900/40 border-green-600/40' },
+  university: { label: '大学', color: 'text-blue-400 bg-blue-900/40 border-blue-600/40' },
+  corporate:  { label: '社会人', color: 'text-orange-400 bg-orange-900/40 border-orange-600/40' },
+  independent: { label: '独立', color: 'text-purple-400 bg-purple-900/40 border-purple-600/40' },
+};
+
+const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBySource, onContinue }) => {
   const hasDrafted = draftedPlayers && draftedPlayers.length > 0;
 
   return (
@@ -59,6 +66,23 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContin
         </div>
       </div>
 
+      {draftBySource && hasDrafted && (
+        <div className="flex items-center justify-center gap-3 flex-wrap mb-4">
+          {[['highschool', '高校'], ['university', '大学'], ['corporate', '社会人'], ['independent', '独立']].map(([key, label]) => (
+            <div key={key} className="bg-gray-800/80 rounded-xl px-4 py-2 border border-gray-700/50 text-center min-w-[80px]">
+              <div className="text-xs text-gray-400">{label}</div>
+              <div className={`text-lg font-black ${SOURCE_LABELS[key]?.color?.split(' ')[0] || 'text-white'}`}>
+                {draftBySource[key] || 0}名
+              </div>
+            </div>
+          ))}
+          <div className="bg-gray-800/80 rounded-xl px-4 py-2 border border-yellow-600/40 text-center min-w-[80px]">
+            <div className="text-xs text-yellow-400">合計</div>
+            <div className="text-lg font-black text-yellow-300">{draftBySource.total || 0}名</div>
+          </div>
+        </div>
+      )}
+
       {hasDrafted ? (
         <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-4">
           <h2 className="text-base font-black text-yellow-400 mb-3 flex items-center gap-2">
@@ -66,7 +90,10 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContin
             <span className="ml-auto text-sm font-bold text-gray-400">{draftedPlayers.length}名</span>
           </h2>
           <div className="space-y-2.5">
-            {draftedPlayers.map((entry, idx) => {
+            {[...draftedPlayers].sort((a, b) => {
+              const roundOrder = { 'ドラフト1位': 0, 'ドラフト2位': 1, 'ドラフト3位': 2, 'ドラフト4位': 3, 'ドラフト5位': 4, 'ドラフト6位': 5, '育成指名': 6 };
+              return (roundOrder[a.draftRound] ?? 7) - (roundOrder[b.draftRound] ?? 7);
+            }).map((entry, idx) => {
               const style = ROUND_STYLES[entry.draftRound] || DEFAULT_ROUND_STYLE;
               const careerTitles = entry.player?.professionalCareer?.achievements || [];
               const currentSeasonTitles = (entry.seasonAwards || [])
@@ -108,6 +135,11 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, onContin
                           {entry.player.batting.bats === 'left' ? '左' :
                            entry.player.batting.bats === 'switch' ? '両' : '右'}打
                         </span>
+                      </span>
+                    )}
+                    {SOURCE_LABELS[entry.source] && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_LABELS[entry.source].color}`}>
+                        {SOURCE_LABELS[entry.source].label}
                       </span>
                     )}
                     <span className="text-xs text-gray-500 shrink-0">元 {entry.teamName}</span>

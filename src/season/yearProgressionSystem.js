@@ -8,7 +8,7 @@ import { createSeasonData, initializeStandings } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
-import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates } from './universityPool.js';
+import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates } from './universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
@@ -341,110 +341,195 @@ function computeSeasonAwardBonuses(allTeams) {
 }
 
 /**
- * NPBドラフト処理
- * 全チームの選手をチェックし、ドラフト対象者を抽出・処理
- * シーズン個人成績ボーナス付き（1位+10pt、2位+5pt）
+ * NPBドラフト処理（クォータ制）
+ * 全ソース（高校/大学/社会人/独立）から候補を収集し、
+ * 現実のドラフト比率に基づいて約120名を指名
+ *
+ * 比率: 高校30%, 大学35%, 社会人20%, 独立14%, その他1%
+ *
  * @param {Object} allTeams - TEAMS_DATA
- * @returns {Object} - { draftedPlayers, nearMissPlayers }
+ * @param {number} gameYear - 現在のゲーム年度
+ * @returns {Object} - { draftedPlayers, nearMissPlayers, proBonus, draftBySource }
  */
-export function processNPBDraft(allTeams) {
-  const PITCHER_THRESHOLD = 230;
-  const FIELDER_THRESHOLD = 260;
-
+export function processNPBDraft(allTeams, gameYear = 1) {
   const NPB_TEAMS = [
     '読売ジャイアンツ', '阪神タイガース', '横浜DeNAベイスターズ',
     '広島東洋カープ', '中日ドラゴンズ', 'ヤクルトスワローズ',
     'オリックス・バファローズ', 'ソフトバンクホークス', '西武ライオンズ',
     '楽天ゴールデンイーグルス', '千葉ロッテマリーンズ', '日本ハムファイターズ'
   ];
+  const DRAFT_ROUND_LABELS = ['育成指名', 'ドラフト6位', 'ドラフト5位', 'ドラフト4位', 'ドラフト3位', 'ドラフト2位', 'ドラフト1位'];
 
-  // シーズン個人成績ボーナスを計算
+  const TOTAL_DRAFT = 120;
+  // 目標枠（±20%のゆらぎ付き）
+  const addVariance = (base) => {
+    const variance = Math.round(base * (0.8 + Math.random() * 0.4));
+    return Math.max(1, variance);
+  };
+  const quotas = {
+    highschool:   addVariance(Math.round(TOTAL_DRAFT * 0.30)),  // ~36
+    university:   addVariance(Math.round(TOTAL_DRAFT * 0.35)),  // ~42
+    corporate:    addVariance(Math.round(TOTAL_DRAFT * 0.20)),  // ~24
+    independent:  addVariance(Math.round(TOTAL_DRAFT * 0.14)),  // ~17
+  };
+
   const awardBonusMap = computeSeasonAwardBonuses(allTeams);
 
-  const draftedPlayers = [];
-  const nearMissPlayers = [];
+  // === 各ソースから候補を収集 ===
 
+  // 1. チーム選手（社会人/独立リーグ/通常）を分類しつつ候補収集
+  const teamCandidates = { corporate: [], independent: [] };
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team.players) return;
+    const source = team.corporateData ? 'corporate'
+                 : team.independentLeagueId ? 'independent'
+                 : 'independent'; // 通常モードのチームは独立扱い
     team.players.forEach(player => {
-      const playerBonus = awardBonusMap[player.id]?.bonus || 0;
-      const playerAwards = awardBonusMap[player.id]?.awards || [];
-      const { isDraftEligible, reasons, totalScore } = checkNPBDraftEligibility(player, playerBonus);
-      if (isDraftEligible) {
-        const npbTeam = NPB_TEAMS[Math.floor(Math.random() * NPB_TEAMS.length)];
-        // 殿堂入り判定
-        const hofResult = checkHallOfFame(player);
-        // ドラフト順位を算出: 閾値から10ptごとに育成→6位→5位→4位→3位→2位→1位
-        const isPitcherForRound = player.position === 'pitcher';
-        const threshold = isPitcherForRound ? PITCHER_THRESHOLD : FIELDER_THRESHOLD;
-        const overThreshold = totalScore - threshold;
-        const DRAFT_ROUND_LABELS = ['育成指名', 'ドラフト6位', 'ドラフト5位', 'ドラフト4位', 'ドラフト3位', 'ドラフト2位', 'ドラフト1位'];
-        const roundIndex = Math.min(Math.floor(overThreshold / 10), DRAFT_ROUND_LABELS.length - 1);
-        const draftRound = DRAFT_ROUND_LABELS[Math.max(0, roundIndex)];
+      const bonus = awardBonusMap[player.id]?.bonus || 0;
+      const awards = awardBonusMap[player.id]?.awards || [];
+      const { totalScore } = checkNPBDraftEligibility(player, bonus);
+      if (player.age >= 30) return;
+      teamCandidates[source].push({
+        player, teamName, score: totalScore, bonus, awards, source,
+        hofResult: checkHallOfFame(player),
+      });
+    });
+  });
+  teamCandidates.corporate.sort((a, b) => b.score - a.score);
+  teamCandidates.independent.sort((a, b) => b.score - a.score);
 
-        draftedPlayers.push({
-          player,
-          teamName,
-          npbTeam,
-          reasons,
-          draftRound,
-          position: player.position,
-          age: player.age,
-          name: player.name,
-          playerId: player.id,
-          hallOfFame: hofResult.isHallOfFame,
-          hofReason: hofResult.reason,
-          careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
-          yearsPlayed: player.yearsPlayed || 1,
-          awardBonus: playerBonus,
-          seasonAwards: playerAwards
+  // 2. 高校生プール
+  const hsCandidates = highSchoolPool.players.map(player => {
+    const { totalScore } = checkNPBDraftEligibility(player, 0);
+    return { player, teamName: '高校', score: totalScore, bonus: 0, awards: [], source: 'highschool' };
+  }).sort((a, b) => b.score - a.score);
+
+  // 3. 大学生をuniversityPoolから収集（4年生を優先、3年生も候補に）
+  const uniCandidates = [];
+  Object.entries(universityPool).forEach(([enrollYear, cohort]) => {
+    if (!cohort) return;
+    const ey = parseInt(enrollYear);
+    cohort.forEach(entry => {
+      const player = entry.player;
+      const yearsInUni = gameYear - ey;
+      // 4年生（来年卒業）: フル候補、3年生: 上位のみ候補
+      if (yearsInUni >= 3) {
+        const { totalScore } = checkNPBDraftEligibility(player, 0);
+        uniCandidates.push({
+          player, teamName: '大学', score: totalScore, bonus: 0, awards: [],
+          source: 'university', enrollYear: ey,
+          universityRank: entry.universityRank,
         });
-      } else {
-        // 惜しかった選手の判定（ドラフト基準の85%以上）
-        const { totalScore: playerScore } = checkNPBDraftEligibility(player, playerBonus);
-        const isPitcher = player.position === 'pitcher';
-        const threshold = isPitcher ? PITCHER_THRESHOLD : FIELDER_THRESHOLD;
-        const nearMissThreshold = Math.round(threshold * 0.85);
-        if (playerScore >= nearMissThreshold && playerScore < threshold) {
-          const nearReasons = [];
-          nearReasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(playerScore)}pt（あと${Math.round(threshold - playerScore)}pt）`);
-          if (playerBonus > 0) nearReasons.push(`成績ボーナス+${playerBonus}pt`);
-          nearMissPlayers.push({
-            name: player.name,
-            teamName,
-            position: player.position,
-            age: player.age,
-            reasons: nearReasons
-          });
-        }
       }
     });
   });
+  uniCandidates.sort((a, b) => b.score - a.score);
 
-  // === プロ輩出ボーナスを適用 ===
+  // === クォータに基づいて上位N名を指名 ===
+  const selectTop = (candidates, quota) => candidates.slice(0, quota);
+
+  const selectedHS = selectTop(hsCandidates, quotas.highschool);
+  const selectedUni = selectTop(uniCandidates, quotas.university);
+  const selectedCorp = selectTop(teamCandidates.corporate, quotas.corporate);
+  const selectedInd = selectTop(teamCandidates.independent, quotas.independent);
+
+  // 指名最低ラインを記録（各ソースの最下位指名者のスコア）
+  const minScores = {
+    highschool: selectedHS.length > 0 ? selectedHS[selectedHS.length - 1].score : 0,
+    university: selectedUni.length > 0 ? selectedUni[selectedUni.length - 1].score : 0,
+    corporate: selectedCorp.length > 0 ? selectedCorp[selectedCorp.length - 1].score : 0,
+    independent: selectedInd.length > 0 ? selectedInd[selectedInd.length - 1].score : 0,
+  };
+
+  // === 指名結果を構築 ===
+  const draftedPlayers = [];
+  const nearMissPlayers = [];
+
+  const buildDraftEntry = (candidate) => {
+    const { player, teamName, score, bonus, awards, source, hofResult } = candidate;
+    const npbTeam = NPB_TEAMS[Math.floor(Math.random() * NPB_TEAMS.length)];
+    const minScore = minScores[source] || 0;
+    const overMin = score - minScore;
+    const roundIndex = Math.min(Math.floor(overMin / 8), DRAFT_ROUND_LABELS.length - 1);
+    const draftRound = DRAFT_ROUND_LABELS[Math.max(0, roundIndex)];
+
+    const isPitcher = player.position === 'pitcher';
+    const reasons = [];
+    if (source === 'highschool') {
+      reasons.push(`高卒ドラフト: 潜在能力${Math.round(score)}pt`);
+    } else if (source === 'university') {
+      reasons.push(`大卒ドラフト: 総合力${Math.round(score)}pt`);
+    } else {
+      reasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(score)}pt`);
+    }
+    if (bonus > 0) reasons.push(`成績ボーナス+${bonus}pt`);
+
+    return {
+      player,
+      teamName,
+      npbTeam,
+      reasons,
+      draftRound,
+      position: player.position,
+      age: player.age,
+      name: player.name,
+      playerId: player.id,
+      hallOfFame: hofResult?.isHallOfFame || false,
+      hofReason: hofResult?.reason || null,
+      careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
+      yearsPlayed: player.yearsPlayed || (source === 'highschool' ? 0 : source === 'university' ? 0 : 1),
+      awardBonus: bonus,
+      seasonAwards: awards,
+      source,
+      score,
+    };
+  };
+
+  // 各ソースの指名者を追加
+  selectedCorp.forEach(c => draftedPlayers.push(buildDraftEntry(c)));
+  selectedInd.forEach(c => draftedPlayers.push(buildDraftEntry(c)));
+  selectedHS.forEach(c => draftedPlayers.push(buildDraftEntry(c)));
+  selectedUni.forEach(c => draftedPlayers.push(buildDraftEntry(c)));
+
+  // === 惜しかった選手（チーム所属のみ） ===
+  const draftedIds = new Set(draftedPlayers.map(d => d.playerId));
+  [...teamCandidates.corporate, ...teamCandidates.independent].forEach(candidate => {
+    if (draftedIds.has(candidate.player.id)) return;
+    const minScore = minScores[candidate.source] || 0;
+    const nearThreshold = minScore * 0.85;
+    if (candidate.score >= nearThreshold && candidate.score < minScore) {
+      const isPitcher = candidate.player.position === 'pitcher';
+      nearMissPlayers.push({
+        name: candidate.player.name,
+        teamName: candidate.teamName,
+        position: candidate.player.position,
+        age: candidate.player.age,
+        reasons: [`${isPitcher ? '投手' : '野手'}力${Math.round(candidate.score)}pt（あと${Math.round(minScore - candidate.score)}pt）`]
+      });
+    }
+  });
+
+  // === プロ輩出ボーナス（チーム所属選手のみ） ===
   const teamDraftCounts = {};
-  draftedPlayers.forEach(({ teamName }) => {
+  draftedPlayers.forEach(({ teamName, source }) => {
+    if (source === 'highschool' || source === 'university') return;
     teamDraftCounts[teamName] = (teamDraftCounts[teamName] || 0) + 1;
   });
 
   const proBonus = [];
-
   Object.entries(teamDraftCounts).forEach(([teamName, count]) => {
     const team = allTeams[teamName];
     if (!team) return;
 
-    // 1. 育成評価ボーナス: プロ輩出1人ごとに+3、34人輩出で最高評価(100)
     if (!team.developmentReputation) team.developmentReputation = 0;
     if (!team.totalProPlayersProduced) team.totalProPlayersProduced = 0;
     team.totalProPlayersProduced += count;
     const reputationGain = count * 3;
     team.developmentReputation = Math.min(100, team.developmentReputation + reputationGain);
 
-    // 2. 指導効果: プロ入り選手と一緒にプレーしていた若手に能力ブースト
     const youngPlayers = team.players.filter(p => p.age <= 25);
     let boostedCount = 0;
     youngPlayers.forEach(player => {
-      // 各能力にランダムで+1～3のボーナス（プロの影響を受けた成長）
       const boostAmount = Math.floor(Math.random() * 3) + 1;
       if (player.position === 'pitcher') {
         const stat = ['control', 'stamina'][Math.floor(Math.random() * 2)];
@@ -462,16 +547,15 @@ export function processNPBDraft(allTeams) {
     });
 
     proBonus.push({
-      teamName,
-      draftCount: count,
-      reputationGain,
+      teamName, draftCount: count, reputationGain,
       currentReputation: team.developmentReputation,
       boostedYoungPlayers: boostedCount
     });
   });
 
-  // ドラフト対象者をチームから除外（lineupSettings/pitchingRotationも清掃）
-  draftedPlayers.forEach(({ playerId, teamName }) => {
+  // === チーム選手を除外 ===
+  draftedPlayers.forEach(({ playerId, teamName, source }) => {
+    if (source === 'highschool' || source === 'university') return;
     const team = allTeams[teamName];
     if (team) {
       cleanupPlayerReferences(team, playerId);
@@ -479,22 +563,28 @@ export function processNPBDraft(allTeams) {
     }
   });
 
-  // 高校生プールからもNPBドラフト処理
-  const hsResult = processHighSchoolNPBDraft();
-  const hsDrafted = hsResult.drafted.map(d => ({
-    ...d,
-    teamName: '高校',
-    hallOfFame: false,
-    hofReason: null,
-    careerStats: null,
-    yearsPlayed: 0,
-    awardBonus: 0,
-    seasonAwards: [],
-    reasons: [`高卒ドラフト: 潜在能力${Math.round(d.score)}pt`]
-  }));
-  draftedPlayers.push(...hsDrafted);
+  // === 高校生プールから指名者を除去 ===
+  const hsDraftedIds = new Set(selectedHS.map(c => c.player.id));
+  highSchoolPool.players = highSchoolPool.players.filter(p => !hsDraftedIds.has(p.id));
 
-  return { draftedPlayers, nearMissPlayers, proBonus, highSchoolDrafted: hsDrafted.length };
+  // === 大学プールから指名者を除去 ===
+  const uniDraftedIds = new Set(selectedUni.map(c => c.player.id));
+  Object.keys(universityPool).forEach(enrollYear => {
+    const cohort = universityPool[enrollYear];
+    if (!cohort) return;
+    universityPool[enrollYear] = cohort.filter(entry => !uniDraftedIds.has(entry.player.id));
+    if (universityPool[enrollYear].length === 0) delete universityPool[enrollYear];
+  });
+
+  const draftBySource = {
+    highschool: selectedHS.length,
+    university: selectedUni.length,
+    corporate: selectedCorp.length,
+    independent: selectedInd.length,
+    total: draftedPlayers.length,
+  };
+
+  return { draftedPlayers, nearMissPlayers, proBonus, draftBySource, highSchoolDrafted: selectedHS.length };
 }
 
 /**

@@ -122,6 +122,7 @@ const ManagementScreen = ({
     draftedPlayers={draftResults?.draftedPlayers || []}
     nearMissPlayers={draftResults?.nearMissPlayers || []}
     proBonus={draftResults?.proBonus || []}
+    draftBySource={draftResults?.draftBySource || null}
     onContinue={() => {
       setDraftResults(null);
       setManagementView('dateprogress');
@@ -161,7 +162,7 @@ const ManagementScreen = ({
         if (!seasonData.frozenAwards) preUpdate.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA);
         if (Object.keys(preUpdate).length > 0) setSeasonData(prev => ({ ...prev, ...preUpdate }));
-        const results = processNPBDraft(TEAMS_DATA);
+        const results = processNPBDraft(TEAMS_DATA, seasonData.year);
         setDraftResults(results);
         if (results.draftedPlayers.length > 0) {
           setHallOfFamePlayers(prev => [...prev, ...results.draftedPlayers.map(d => {

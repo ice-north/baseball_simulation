@@ -82,7 +82,10 @@ NEW GAME → 企業チーム選択 → キャンプ
 
 ## 高校生・大学プールシステム (`src/season/universityPool.js`)
 - **高校3年生生成（4月）**: `generateAprilHighSchoolClass(year)` で800人を `highSchoolPool` に生成
-- **NPBドラフト（10月）**: `processHighSchoolNPBDraft()` で有力高校生をプロ指名→除去
+- **NPBドラフト（10月）**: `processNPBDraft()` で全ソースからクォータ制で約120名指名
+  - 比率: 高校30%(~36名), 大学35%(~42名), 社会人20%(~24名), 独立14%(~17名)
+  - 各ソース内でスコア上位から指名、±20%のゆらぎ付き
+  - 大学3〜4年生がドラフト候補に含まれる（指名されたらuniversityPoolから除去）
 - **ランク別進路振り分け（オフシーズン）**: `distributeHighSchoolGraduates(enrollYear)` でドラフト漏れをS→A→B→C→Dの順に配分
   - 各ランク内で大学(50-70%) / 社会人候補(20-30%) / 独立候補(10-35%) に分配
   - S: 8%, A: 12%, B: 15%, C: 15%, D: 10%。残り40%は引退
