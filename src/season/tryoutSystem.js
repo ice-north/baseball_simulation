@@ -424,8 +424,8 @@ export function applyReputationBonus(candidates, allTeams) {
 
   // 評判に応じて「一芸に秀でた」尖った候補者が出やすくなる
   // 全体的な底上げではなく、1つの能力だけが突出する
-  const boostRate = Math.min(0.4, avgReputation / 250); // 最大40%の候補者に一芸ブースト
-  const spikeAmount = Math.min(15, Math.floor(avgReputation / 7)); // 最大+15ポイント（1つの能力のみ）
+  const boostRate = Math.min(0.2, avgReputation / 500); // 最大20%の候補者に一芸ブースト
+  const spikeAmount = Math.min(10, Math.floor(avgReputation / 10)); // 最大+10ポイント（1つの能力のみ）
 
   candidates.forEach(player => {
     if (Math.random() < boostRate) {
@@ -434,7 +434,7 @@ export function applyReputationBonus(candidates, allTeams) {
         const roll = Math.random();
         if (roll < 0.4) {
           // 剛速球タイプ
-          player.pitching.velocity = Math.min(158, player.pitching.velocity + Math.ceil(spikeAmount / 2));
+          player.pitching.velocity = Math.min(152, player.pitching.velocity + Math.ceil(spikeAmount / 3));
         } else if (roll < 0.7) {
           // 精密制球タイプ
           player.pitching.control = Math.min(99, player.pitching.control + spikeAmount);
@@ -480,14 +480,14 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   const controlAdjust = isSideOrUnder ? 15 : 0;
 
   // 年齢補正: 18歳を基準に、年齢が上がるほど即戦力（大卒・社会人の実力差を反映）
-  // 二次曲線だが+22でキャップ（24-25歳で個性がなくなるのを防止）
-  const ageBonus = Math.min(22, Math.max(0, Math.round((age - 18) * (age - 18) * 0.5 + (age - 18) * 1.5)));
-  const battingAgeBonus = Math.floor(ageBonus * 0.4);
-  const velocityAgeBonus = Math.floor(ageBonus * 0.3);
+  // 線形+小さな二次項（18歳=0, 22歳=6, 25歳=10でキャップ）
+  const ageBonus = Math.min(10, Math.max(0, Math.round((age - 18) * 1.2 + (age - 18) * (age - 18) * 0.08)));
+  const battingAgeBonus = Math.floor(ageBonus * 0.5);
+  const velocityAgeBonus = Math.floor(ageBonus * 0.2);
 
   // バラつき付きランダム生成（能力値用、10-99制限）
   const randRangeWithVariance = (min, max, bonus = ageBonus) => {
-    const variance = Math.floor(Math.random() * 15) - 7; // -7 ~ +7 のランダム変動
+    const variance = Math.floor(Math.random() * 11) - 5; // -5 ~ +5 のランダム変動
     const adjustedMin = Math.max(10, Math.min(min + bonus, max));
     const base = Math.floor(Math.random() * (max - adjustedMin + 1)) + adjustedMin;
     return Math.max(10, Math.min(99, base + variance));
@@ -499,8 +499,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     const r1 = Math.random();
     const r2 = Math.random();
     const normalRand = (r1 + r2) / 2; // 0-1の範囲で中央寄り
-    // 10%の確率で例外的な才能（より高い値）
-    const exceptional = Math.random() < 0.1 ? Math.floor(Math.random() * 8) + 3 : 0;
+    // 5%の確率で例外的な才能（より高い値）
+    const exceptional = Math.random() < 0.05 ? Math.floor(Math.random() * 4) + 2 : 0;
     const base = Math.floor(normalRand * (max - min + 1)) + min + bonus + exceptional;
     // バラつきを追加
     const variance = Math.floor(Math.random() * 7) - 3; // -3 ~ +3
@@ -515,12 +515,13 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   };
 
   // 肩力から球速を導出（全選手共通）
-  // べき乗カーブで高肩力帯ほど球速が伸びる
-  // arm 30→111, 50→125, 60→132, 70→140, 80→148, 90→156, 95→160, 99→163
+  // 低肩力は線形、高肩力帯は伸びが鈍化するカーブ
+  // arm 30→112, 50→124, 60→131, 70→137, 80→143, 85→146, 90→149, 95→151
   const velocityFromArm = (arm) => {
-    const base = Math.round(95 + Math.pow(arm / 100, 1.2) * 69);
+    const normalized = arm / 100;
+    const base = Math.round(95 + normalized * 45 + Math.pow(normalized, 2.5) * 15);
     const variance = Math.floor(Math.random() * 5) - 2; // -2 ~ +2
-    return Math.max(100, Math.min(165, base + variance));
+    return Math.max(100, Math.min(158, base + variance));
   };
 
   // 全生成選手の平均能力を-3する調整関数
@@ -543,7 +544,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   if (isTwoWay) {
     if (isPitcher) {
       // 投手登録の二刀流: 肩が強く投手能力寄り、打撃は原石レベル
-      const twoWayArm = randRangeWithVariance(72, 90, ageBonus);
+      const twoWayArm = randRangeWithVariance(60, 80, ageBonus);
       return applyGlobalOffset({
         meet: randRangeWithVariance(33, 55, battingAgeBonus),
         power: randRangeWithVariance(30, 55, battingAgeBonus),
@@ -564,7 +565,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       });
     } else {
       // 野手登録の二刀流: 野手能力メイン、肩が強めで投手もそこそこ
-      const twoWayArm = randRangeWithVariance(65, 82, ageBonus);
+      const twoWayArm = randRangeWithVariance(55, 73, ageBonus);
       return applyGlobalOffset({
         meet: randRangeWithVariance(40, 65, battingAgeBonus),
         power: randRangeWithVariance(32, 57, battingAgeBonus),
@@ -589,8 +590,8 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 通常の能力値範囲（投手用 or 野手アーキタイプ別）
   let normalAbilities;
   if (isPitcher) {
-    // 投手は肩力が高い選手（肩力68-88 → 球速132-145程度）
-    const pitcherArm = randRangeWithVariance(68, 88, ageBonus);
+    // 投手は肩力が高い選手（肩力55-78 → 球速127-143程度）
+    const pitcherArm = randRangeWithVariance(55, 78, ageBonus);
     normalAbilities = {
       meet: randRangeWithVariance(15, 40, battingAgeBonus),
       power: randRangeWithVariance(5, 29, battingAgeBonus),
@@ -774,7 +775,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     // 肩力を指定 → 球速は後で肩力から自動導出
     fireballer: {
       // 剛腕が魅力。制球や変化球を磨けば戦力に
-      arm: () => randRange(88, 96),
+      arm: () => randRange(80, 92),
       control: () => Math.min(randRange(28, 45) + controlAdjust, 58),
       stamina: () => randStamina(55, 82),
       muscle: () => randRange(65, 85),
@@ -808,7 +809,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
     },
     strikeoutArtist: {
       // 空振り奪取型。肩が強く粗削り
-      arm: () => randRange(82, 93),
+      arm: () => randRange(75, 88),
       control: () => Math.min(randRange(30, 48) + controlAdjust, 60),
       stamina: () => randStamina(55, 80),
       spinRate: () => randRange(60, 85)

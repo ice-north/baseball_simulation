@@ -89,13 +89,13 @@ const RANK_STAFF_CONFIG = {
 const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
 
 // ランク別球速キャップ・追加減速（corporateモード用）
-// D: クラブチーム → ほとんど130km台、速い人で138km
-// C: 育成型 → 135-143km
-// B: 中堅（独立リーグ平均） → 138-148km
-// A: 強豪 → 140-152km
-// S: 超強豪 → 145-155km（プロ予備軍レベル）
-const RANK_VELOCITY_CAP = { S: 155, A: 152, B: 148, C: 143, D: 138 };
-const RANK_VELOCITY_REDUCTION = { S: 0, A: -2, B: -5, C: -8, D: -12 };
+// D: クラブチーム → 平均120km台、速い人で133km
+// C: 育成型 → 平均125km台、速い人で138km
+// B: 中堅（独立リーグ平均） → 平均130km台、エースで143km
+// A: 強豪 → 平均135km台、エースで148km
+// S: 超強豪 → 平均138km台、エースで152km（プロ予備軍レベル）
+const RANK_VELOCITY_CAP = { S: 152, A: 148, B: 143, C: 138, D: 133 };
+const RANK_VELOCITY_REDUCTION = { S: 0, A: -3, B: -5, C: -8, D: -12 };
 
 // ランク別の初期注目度（0-100）
 // 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
@@ -128,10 +128,10 @@ const applyBoost = (player, boostRange, growthBonus) => {
   const boost = randInt(boostRange[0], boostRange[1]);
 
   if (isPitcher) {
-    player.pitching.velocity = clamp(player.pitching.velocity + randInt(2, 6), 100, 160);
+    player.pitching.velocity = clamp(player.pitching.velocity + randInt(2, 5), 100, 155);
     player.pitching.control = clamp(player.pitching.control + boost, 1, 99);
     player.pitching.stamina = clamp(player.pitching.stamina + Math.floor(boost * 0.6), 30, 150);
-    player.physical.arm = clamp(player.physical.arm + Math.floor(boost * 0.7), 1, 99);
+    player.physical.arm = clamp(player.physical.arm + Math.floor(boost * 0.5), 1, 99);
     if (player.pitching.arsenal) {
       for (const pitch of player.pitching.arsenal) {
         if (pitch.name !== 'ストレート') {

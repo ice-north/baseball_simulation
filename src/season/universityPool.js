@@ -92,14 +92,15 @@ function generateHighSchoolPlayer(id) {
 
   let abilities;
   if (isPitcher) {
-    const arm = r(50, 82);
-    const velocity = Math.round(95 + Math.pow(arm / 100, 1.2) * 69);
+    const arm = r(40, 78);
+    const normalized = arm / 100;
+    const velocity = Math.round(95 + normalized * 45 + Math.pow(normalized, 2.5) * 15);
     abilities = {
       meet: r(10, 30), power: r(5, 25), eye: r(15, 40),
       steal: r(10, 30), speed: r(30, 60),
       arm, defense: r(30, 55),
       bodyStamina: r(35, 65), recovery: r(35, 65),
-      velocity: Math.max(115, Math.min(155, velocity)),
+      velocity: Math.max(110, Math.min(148, velocity)),
       control: Math.min(75, r(25, 55) + controlAdjust),
       stamina: r(60, 110)
     };
