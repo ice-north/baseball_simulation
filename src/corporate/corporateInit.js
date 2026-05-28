@@ -89,14 +89,20 @@ const RANK_STAFF_CONFIG = {
 const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
 
 // ランク別球速キャップ・最低保証・追加減速（corporateモード用）
-// D: クラブチーム → 120-133km
-// C: 育成型 → 125-138km
+// D: クラブチーム → 108-133km（広い分布で個性を出す）
+// C: 育成型 → 118-138km
 // B: 中堅 → 128-143km
 // A: 強豪 → 132-148km
 // S: 超強豪 → 135-152km（プロ予備軍レベル）
 const RANK_VELOCITY_CAP = { S: 152, A: 148, B: 143, C: 138, D: 133 };
-const RANK_VELOCITY_FLOOR = { S: 135, A: 132, B: 128, C: 125, D: 120 };
-const RANK_VELOCITY_REDUCTION = { S: 0, A: -3, B: -5, C: -8, D: -12 };
+const RANK_VELOCITY_FLOOR = { S: 135, A: 132, B: 128, C: 118, D: 108 };
+const RANK_VELOCITY_REDUCTION = { S: 0, A: -3, B: -5, C: -8, D: -15 };
+
+// ランク別の投手制球追加補正（teamOffsetだけでは不十分なので投手専用補正）
+const RANK_CONTROL_OFFSET = { S: 8, A: 5, B: 0, C: -5, D: -15 };
+
+// ランク別の変化球レベル倍率（Dランクはアマチュアレベル）
+const RANK_ARSENAL_MULT = { S: 1.1, A: 1.0, B: 0.85, C: 0.65, D: 0.45 };
 
 // ランク別の初期注目度（0-100）
 // 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
@@ -174,11 +180,27 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
 
   const velFloor = RANK_VELOCITY_FLOOR[rank] || 120;
 
+  const controlOffset = RANK_CONTROL_OFFSET[rank] || 0;
+  const arsenalMult = RANK_ARSENAL_MULT[rank] || 1.0;
+
   candidates.forEach(p => {
     applyTeamOffset(p, cfg.teamOffset);
     adjustCorporateAge(p);
     if (p.position === 'pitcher') {
       p.pitching.velocity = clamp(p.pitching.velocity + velReduction, velFloor, velCap);
+      // ランク別制球補正（低ランクほど制球が荒い投手が多い）
+      if (controlOffset !== 0) {
+        const jitter = randInt(-3, 3);
+        p.pitching.control = clamp(p.pitching.control + controlOffset + jitter, 1, 99);
+      }
+      // ランク別変化球レベル補正（低ランクは変化球が未熟）
+      if (arsenalMult !== 1.0 && p.pitching.arsenal) {
+        for (const pitch of p.pitching.arsenal) {
+          if (pitch.name !== 'ストレート' && pitch.type !== 'straight') {
+            pitch.level = clamp(Math.round(pitch.level * arsenalMult), 5, 99);
+          }
+        }
+      }
     } else {
       p.pitching.velocity = clamp(p.pitching.velocity + velReduction, 100, velCap);
     }
