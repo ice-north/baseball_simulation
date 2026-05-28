@@ -708,6 +708,78 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
 
+  // 今日のトーナメント試合を取得（「本日の対戦」欄に表示するため）
+  const todaysTournamentMatches = useMemo(() => {
+    const matches = [];
+    const cd = seasonData.currentDate;
+    const isDateMatch = (d) => d && cd.year === d.year && cd.month === d.month && cd.day === d.day;
+
+    // 都市対抗 予選
+    const td = seasonData.toshitaikou;
+    if (td?.generated && !td.qualifiersDone) {
+      const qualifiers = td.qualifiers || {};
+      for (const [regionId, q] of Object.entries(qualifiers)) {
+        for (const [bracketType, bracket] of [['main', q.mainBracket], ['losers', q.losersBracket]]) {
+          if (!bracket) continue;
+          const um = getUserNextMatch(bracket, userTeamName);
+          if (!um) continue;
+          const matchDate = bracket.matchDates?.[um.roundIdx]?.[um.matchIdx] || bracket.roundDates?.[um.roundIdx];
+          if (!isDateMatch(matchDate)) continue;
+          const oppName = um.match.team1 === userTeamName ? um.match.team2 : um.match.team1;
+          const oppDef = q.teamDefsMap[oppName];
+          matches.push({
+            type: 'toshitaikou_qualifier',
+            label: `都市対抗 地区予選 ${bracketType === 'losers' ? '敗者復活 ' : ''}${getRoundName(bracket, um.roundIdx)}`,
+            opponent: oppName,
+            color: 'yellow',
+            onStart: () => startTournamentMatch(oppName, oppDef, { regionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType }),
+          });
+        }
+      }
+    }
+    // 都市対抗 本戦
+    if (td?.mainTournament) {
+      const mt = td.mainTournament;
+      const bracket = mt.bracket;
+      const um = td.phase !== 'done' ? getUserNextMatch(bracket, userTeamName) : null;
+      if (um) {
+        const matchDate = bracket?.matchDates?.[um.roundIdx]?.[um.matchIdx] || bracket?.roundDates?.[um.roundIdx];
+        if (isDateMatch(matchDate)) {
+          const oppName = um.match.team1 === userTeamName ? um.match.team2 : um.match.team1;
+          const oppDef = mt.teamDefsMap[oppName];
+          matches.push({
+            type: 'toshitaikou_main',
+            label: `都市対抗 本戦 ${getRoundName(bracket, um.roundIdx)}`,
+            opponent: oppName,
+            color: 'yellow',
+            onStart: () => startTournamentMatch(oppName, oppDef, { roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'main_tournament' }),
+          });
+        }
+      }
+    }
+    // 日本選手権
+    const ns = seasonData.nihonSenshuken;
+    if (ns?.generated && ns.phase !== 'done') {
+      const nsBracket = ns.bracket;
+      const um = getUserNextMatch(nsBracket, userTeamName);
+      if (um) {
+        const matchDate = nsBracket?.matchDates?.[um.roundIdx]?.[um.matchIdx] || nsBracket?.roundDates?.[um.roundIdx];
+        if (isDateMatch(matchDate)) {
+          const oppName = um.match.team1 === userTeamName ? um.match.team2 : um.match.team1;
+          const oppDef = ns.teamDefsMap[oppName];
+          matches.push({
+            type: 'nihon_senshuken',
+            label: `日本選手権 ${getRoundName(nsBracket, um.roundIdx)}`,
+            opponent: oppName,
+            color: 'red',
+            onStart: () => startTournamentMatch(oppName, oppDef, { roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'nihon_senshuken' }),
+          });
+        }
+      }
+    }
+    return matches;
+  }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.currentDate, userTeamName]);
+
   // 月間戦績を1回だけ計算（ヘッダーとサマリーの両方で使用）
   const monthlyStats = useMemo(() => {
     const monthGames = calendarCells
@@ -1397,15 +1469,42 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             <h2 className="text-sm font-bold text-white mb-1.5 flex items-center gap-1.5">
               <span className="text-orange-400 text-sm">⚾</span>
               <span>{formatDate(seasonData.currentDate)} の対戦</span>
-              <span className="text-xs font-normal text-gray-500 ml-1">{todaysGames.length}試合</span>
+              <span className="text-xs font-normal text-gray-500 ml-1">{todaysGames.length + todaysTournamentMatches.length}試合</span>
             </h2>
             <div>
-            {todaysGames.length === 0 ? (
+            {/* トーナメント試合カード */}
+            {todaysTournamentMatches.map((tm, idx) => (
+              <div key={`tm-${idx}`} className={`mb-1.5 rounded-lg p-2.5 border shadow-md ${
+                tm.color === 'red'
+                  ? 'bg-gradient-to-r from-red-900/40 to-red-800/20 border-red-500/40 shadow-red-900/20'
+                  : 'bg-gradient-to-r from-yellow-900/40 to-yellow-800/20 border-yellow-500/40 shadow-yellow-900/20'
+              }`}>
+                <div className={`text-[10px] font-bold mb-1 ${tm.color === 'red' ? 'text-red-400' : 'text-yellow-400'}`}>
+                  🏆 {tm.label}
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-bold text-sm">{userTeamName}</span>
+                    <span className="text-gray-500 text-xs font-bold">VS</span>
+                    <span className="text-white font-bold text-sm">{tm.opponent}</span>
+                  </div>
+                  <button
+                    onClick={tm.onStart}
+                    className={`px-4 py-1.5 font-bold text-xs rounded-lg transition ${
+                      tm.color === 'red'
+                        ? 'bg-red-600 hover:bg-red-500 text-white'
+                        : 'bg-yellow-600 hover:bg-yellow-500 text-black'
+                    }`}
+                  >試合開始</button>
+                </div>
+              </div>
+            ))}
+            {todaysGames.length === 0 && todaysTournamentMatches.length === 0 ? (
               <div className="text-center py-3 bg-gray-800/50 rounded-xl h-full flex flex-col items-center justify-center">
                 <div className="text-gray-600 text-xl mb-1">⚾</div>
                 <span className="text-gray-500 text-xs">本日は試合がありません（休養日）</span>
               </div>
-            ) : (
+            ) : todaysGames.length > 0 ? (
               <div>
                 {(() => {
                   const renderGameCards = (games) => (
@@ -1520,7 +1619,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   return renderGameCards(todaysGames);
                 })()}
               </div>
-            )}
+            ) : null}
             </div>
           </div>
 
@@ -1711,37 +1810,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     const matchDate = bracket?.matchDates?.[userMainMatch.roundIdx]?.[userMainMatch.matchIdx]
                       || bracket?.roundDates?.[userMainMatch.roundIdx];
                     const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
-                    const isMatchDay = matchDate &&
-                      seasonData.currentDate.year === matchDate.year &&
-                      seasonData.currentDate.month === matchDate.month &&
-                      seasonData.currentDate.day === matchDate.day;
                     return (
                       <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
                         <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
                           <span>{getRoundName(bracket, userMainMatch.roundIdx)} - あなたの試合</span>
                           {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-white font-bold">
-                            {userTeamName} vs {userMainMatch.match.team1 === userTeamName ? userMainMatch.match.team2 : userMainMatch.match.team1}
-                          </span>
-                          {isMatchDay ? (
-                            <button
-                              onClick={() => {
-                                const oppName = userMainMatch.match.team1 === userTeamName ? userMainMatch.match.team2 : userMainMatch.match.team1;
-                                const oppDef = mt.teamDefsMap[oppName];
-                                startTournamentMatch(oppName, oppDef, {
-                                  roundIdx: userMainMatch.roundIdx,
-                                  matchIdx: userMainMatch.matchIdx,
-                                  bracketType: 'main_tournament',
-                                });
-                              }}
-                              className="px-3 py-1 bg-yellow-600 hover:bg-yellow-500 text-black font-bold text-xs rounded transition"
-                            >試合開始</button>
-                          ) : (
-                            <span className="text-xs text-gray-400">試合日まで日程を進めてください</span>
-                          )}
-                        </div>
+                        <span className="text-sm text-white font-bold">
+                          {userTeamName} vs {userMainMatch.match.team1 === userTeamName ? userMainMatch.match.team2 : userMainMatch.match.team1}
+                        </span>
                       </div>
                     );
                   })()}
@@ -1768,37 +1845,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       const matchDate = nsBracket?.matchDates?.[userNsMatch.roundIdx]?.[userNsMatch.matchIdx]
                         || nsBracket?.roundDates?.[userNsMatch.roundIdx];
                       const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
-                      const isMatchDay = matchDate &&
-                        seasonData.currentDate.year === matchDate.year &&
-                        seasonData.currentDate.month === matchDate.month &&
-                        seasonData.currentDate.day === matchDate.day;
                       return (
                         <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
                           <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
                             <span>{nsBracket ? getRoundName(nsBracket, userNsMatch.roundIdx) : ''} - あなたの試合</span>
                             {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-white font-bold">
-                              {userTeamName} vs {userNsMatch.match.team1 === userTeamName ? userNsMatch.match.team2 : userNsMatch.match.team1}
-                            </span>
-                            {isMatchDay ? (
-                              <button
-                                onClick={() => {
-                                  const oppName = userNsMatch.match.team1 === userTeamName ? userNsMatch.match.team2 : userNsMatch.match.team1;
-                                  const oppDef = ns.teamDefsMap[oppName];
-                                  startTournamentMatch(oppName, oppDef, {
-                                    roundIdx: userNsMatch.roundIdx,
-                                    matchIdx: userNsMatch.matchIdx,
-                                    bracketType: 'nihon_senshuken',
-                                  });
-                                }}
-                                className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded transition"
-                              >試合開始</button>
-                            ) : (
-                              <span className="text-xs text-gray-400">試合日まで日程を進めてください</span>
-                            )}
-                          </div>
+                          <span className="text-sm text-white font-bold">
+                            {userTeamName} vs {userNsMatch.match.team1 === userTeamName ? userNsMatch.match.team2 : userNsMatch.match.team1}
+                          </span>
                         </div>
                       );
                     })()}
@@ -1881,16 +1936,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         ? renderBracketWithLines(activeQ.losersBracket, activeQ.teamDefsMap)
                         : renderBracketWithLines(bracket, activeQ.teamDefsMap)
                       }
-                      {/* ユーザーの次の試合ボタン */}
+                      {/* ユーザーの次の試合情報 */}
                       {userNextMatch && (() => {
                         const nmBracket = userNextMatchBracket;
                         const matchDate = nmBracket?.matchDates?.[userNextMatch.roundIdx]?.[userNextMatch.matchIdx]
                           || nmBracket?.roundDates?.[userNextMatch.roundIdx];
                         const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
-                        const isMatchDay = matchDate &&
-                          seasonData.currentDate.year === matchDate.year &&
-                          seasonData.currentDate.month === matchDate.month &&
-                          seasonData.currentDate.day === matchDate.day;
                         const labelPrefix = userNextMatchBracketType === 'losers' ? '敗者復活 ' : '';
                         return (
                           <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
@@ -1898,28 +1949,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               <span>{labelPrefix}{nmBracket ? getRoundName(nmBracket, userNextMatch.roundIdx) : ''} - あなたの試合</span>
                               {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-white font-bold">
-                                {userTeamName} vs {userNextMatch.match.team1 === userTeamName ? userNextMatch.match.team2 : userNextMatch.match.team1}
-                              </span>
-                              {isMatchDay ? (
-                                <button
-                                  onClick={() => {
-                                    const oppName = userNextMatch.match.team1 === userTeamName ? userNextMatch.match.team2 : userNextMatch.match.team1;
-                                    const oppDef = activeQ.teamDefsMap[oppName];
-                                    startTournamentMatch(oppName, oppDef, {
-                                      regionId: activeRegion,
-                                      roundIdx: userNextMatch.roundIdx,
-                                      matchIdx: userNextMatch.matchIdx,
-                                      bracketType: userNextMatchBracketType,
-                                    });
-                                  }}
-                                  className="px-3 py-1 bg-yellow-600 hover:bg-yellow-500 text-black font-bold text-xs rounded transition"
-                                >試合開始</button>
-                              ) : (
-                                <span className="text-xs text-gray-400">試合日まで日程を進めてください</span>
-                              )}
-                            </div>
+                            <span className="text-sm text-white font-bold">
+                              {userTeamName} vs {userNextMatch.match.team1 === userTeamName ? userNextMatch.match.team2 : userNextMatch.match.team1}
+                            </span>
                           </div>
                         );
                       })()}
