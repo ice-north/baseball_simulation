@@ -36,7 +36,7 @@ import { initializeStandings } from '../season/seasonManager.js';
 
 const RANK_CONFIG = {
   S: {
-    teamOffset: 5,         // チーム全体の底上げ
+    teamOffset: 10,        // 社会人強豪は独立リーグより大幅に上
     starCount: [4, 5],     // プロ注目選手（スカウトが視察するレベル）
     starBoost: [12, 18],   // 注目選手の能力追加（確実に頭一つ抜ける）
     starGrowth: 0.10,
@@ -45,7 +45,7 @@ const RANK_CONFIG = {
     eliteGrowth: 0.15,
   },
   A: {
-    teamOffset: 3,
+    teamOffset: 7,
     starCount: [2, 3],
     starBoost: [10, 16],
     starGrowth: 0.08,
@@ -54,7 +54,7 @@ const RANK_CONFIG = {
     eliteGrowth: 0.13,
   },
   B: {
-    teamOffset: 0,         // 独立リーグ平均
+    teamOffset: 4,         // 独立リーグ平均より上
     starCount: [0, 1],
     starBoost: [8, 14],
     starGrowth: 0.06,
@@ -63,14 +63,14 @@ const RANK_CONFIG = {
     eliteGrowth: 0.10,
   },
   C: {
-    teamOffset: -3,
+    teamOffset: 1,
     starCount: [0, 0],
     proChance: 0.04,       // 25人×4% ≈ 1人/チーム がプロ注目レベルに
     proBoost: [8, 13],
     proGrowth: 0.08,
   },
   D: {
-    teamOffset: -6,
+    teamOffset: -3,
     starCount: [0, 0],
     proChance: 0.012,      // 25人×1.2% ≈ 0.3人/チーム（3チームに1人程度）
     proBoost: [6, 10],
@@ -88,13 +88,14 @@ const RANK_STAFF_CONFIG = {
 
 const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
 
-// ランク別球速キャップ・追加減速（corporateモード用）
-// D: クラブチーム → 平均120km台、速い人で133km
-// C: 育成型 → 平均125km台、速い人で138km
-// B: 中堅（独立リーグ平均） → 平均130km台、エースで143km
-// A: 強豪 → 平均135km台、エースで148km
-// S: 超強豪 → 平均138km台、エースで152km（プロ予備軍レベル）
+// ランク別球速キャップ・最低保証・追加減速（corporateモード用）
+// D: クラブチーム → 120-133km
+// C: 育成型 → 125-138km
+// B: 中堅 → 128-143km
+// A: 強豪 → 132-148km
+// S: 超強豪 → 135-152km（プロ予備軍レベル）
 const RANK_VELOCITY_CAP = { S: 152, A: 148, B: 143, C: 138, D: 133 };
+const RANK_VELOCITY_FLOOR = { S: 135, A: 132, B: 128, C: 125, D: 120 };
 const RANK_VELOCITY_REDUCTION = { S: 0, A: -3, B: -5, C: -8, D: -12 };
 
 // ランク別の初期注目度（0-100）
@@ -128,10 +129,10 @@ const applyBoost = (player, boostRange, growthBonus) => {
   const boost = randInt(boostRange[0], boostRange[1]);
 
   if (isPitcher) {
-    player.pitching.velocity = clamp(player.pitching.velocity + randInt(2, 5), 100, 155);
+    player.pitching.velocity = clamp(player.pitching.velocity + randInt(3, 7), 100, 155);
     player.pitching.control = clamp(player.pitching.control + boost, 1, 99);
     player.pitching.stamina = clamp(player.pitching.stamina + Math.floor(boost * 0.6), 30, 150);
-    player.physical.arm = clamp(player.physical.arm + Math.floor(boost * 0.5), 1, 99);
+    player.physical.arm = clamp(player.physical.arm + Math.floor(boost * 0.6), 1, 99);
     if (player.pitching.arsenal) {
       for (const pitch of player.pitching.arsenal) {
         if (pitch.name !== 'ストレート') {
@@ -171,10 +172,16 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   const velReduction = RANK_VELOCITY_REDUCTION[rank] || 0;
   const velCap = RANK_VELOCITY_CAP[rank] || 155;
 
+  const velFloor = RANK_VELOCITY_FLOOR[rank] || 120;
+
   candidates.forEach(p => {
     applyTeamOffset(p, cfg.teamOffset);
     adjustCorporateAge(p);
-    p.pitching.velocity = clamp(p.pitching.velocity + velReduction, 100, velCap);
+    if (p.position === 'pitcher') {
+      p.pitching.velocity = clamp(p.pitching.velocity + velReduction, velFloor, velCap);
+    } else {
+      p.pitching.velocity = clamp(p.pitching.velocity + velReduction, 100, velCap);
+    }
   });
 
   const roster = [];
