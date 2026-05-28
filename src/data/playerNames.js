@@ -4,7 +4,7 @@
 
 export const PLAYER_NAMES = {
   surnames: [
-    { name: '佐藤', weight: 1.672 },
+    { name: '佐藤', weight: 1.671 },
     { name: '鈴木', weight: 1.62 },
     { name: '高橋', weight: 1.241 },
     { name: '田中', weight: 1.174 },
@@ -3193,7 +3193,17 @@ export const PLAYER_NAMES = {
     { name: '陳', weight: 0.004 },
     { name: 'スミス', weight: 0.004 },
     { name: 'ミラー', weight: 0.004 },
-    { name: '朴', weight: 0.004 }
+    { name: '朴', weight: 0.004 },
+    { name: '古宮', weight: 0.004 },
+    { name: '田巻', weight: 0.004 },
+    { name: '濱', weight: 0.004 },
+    { name: '吉尾', weight: 0.004 },
+    { name: '谷合', weight: 0.004 },
+    { name: '塩入', weight: 0.004 },
+    { name: '椎木', weight: 0.004 },
+    { name: '薦田', weight: 0.004 },
+    { name: '津曲', weight: 0.004 },
+    { name: '西城', weight: 0.004 }
   ],
   givenNames: [
     { name: '蒼', weight: 0.033 },
