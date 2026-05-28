@@ -215,31 +215,33 @@ export function updateAllPlayerAges(allTeams) {
 
 /**
  * NPBドラフト候補条件を判定
- * 能力ベース評価 + シーズン個人成績ボーナス（1位+10pt、2位+5pt）
- * 統一指名ライン: 220pt
+ * 能力ベース + 年齢補正 + 成長力 + 知名度（通算蓄積）+ シーズン成績ボーナス
  * @param {Object} player - 選手データ
  * @param {number} awardBonus - シーズン個人成績ボーナス（デフォルト0）
  * @returns {Object} - { isDraftEligible: boolean, reasons: string[], totalScore: number }
  */
 export function checkNPBDraftEligibility(player, awardBonus = 0) {
   const isPitcher = player.position === 'pitcher';
-  const DRAFT_THRESHOLD = isPitcher ? 225 : 255; // 投手225pt、野手255pt
+  const DRAFT_THRESHOLD = isPitcher ? 225 : 255;
   const reasons = [];
   const age = player.age || 20;
 
-  // 30歳以上はドラフト指名対象外
   if (age >= 30) {
     return { isDraftEligible: false, reasons: [], totalScore: 0 };
   }
 
-  // 年齢ボーナス: 若い選手ほど将来性で高評価、大卒年齢(22歳)が基準(±0)
+  // 年齢ボーナス
   const ageBonusMap = { 18: 25, 19: 20, 20: 15, 21: 10, 22: 0, 23: -5, 24: -10, 25: -15, 26: -20, 27: -30, 28: -40, 29: -50 };
   const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 25 : -50);
 
-  // 成長力ボーナス: 将来性の高い選手をNPBスカウトが評価
-  // 22歳以下で成長力1.0以上の選手にボーナス（若い高成長=ドラフト上位）
+  // 成長力ボーナス
   const gp = player.growthPotential || 1.0;
   const gpBonus = age <= 22 ? Math.max(0, (gp - 0.9) * 30) : Math.max(0, (gp - 1.0) * 15);
+
+  // 知名度ボーナス: 通算で蓄積された知名度がドラフト評価を底上げ
+  // fame 0=無名 → 0pt、fame 50=中堅 → +15pt、fame 100=超有名 → +30pt
+  const fame = player.fame || 0;
+  const fameBonus = Math.round(fame * 0.3);
 
   let baseScore = 0;
 
@@ -251,11 +253,12 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const bestBreaking = arsenal.filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
 
     const velocityScore = Math.max(0, (velocity - 130) * 2);
-    baseScore = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus + gpBonus;
+    baseScore = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus + gpBonus + fameBonus;
     const totalScore = baseScore + awardBonus;
 
     if (totalScore >= DRAFT_THRESHOLD) {
-      reasons.push(`投手力${Math.round(baseScore)}pt`);
+      reasons.push(`投手力${Math.round(baseScore - fameBonus)}pt`);
+      if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
       if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
       reasons.push(`総合${Math.round(totalScore)}pt`);
       if (velocity >= 148) reasons.push(`球速${velocity}km`);
@@ -271,11 +274,12 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const defense = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
 
-    baseScore = meet + power + eye * 0.5 + speed * 0.3 + defense * 0.3 + arm * 0.3 + ageBonus + gpBonus;
+    baseScore = meet + power + eye * 0.5 + speed * 0.3 + defense * 0.3 + arm * 0.3 + ageBonus + gpBonus + fameBonus;
     const totalScore = baseScore + awardBonus;
 
     if (totalScore >= DRAFT_THRESHOLD) {
-      reasons.push(`野手力${Math.round(baseScore)}pt`);
+      reasons.push(`野手力${Math.round(baseScore - fameBonus)}pt`);
+      if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
       if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
       reasons.push(`総合${Math.round(totalScore)}pt`);
       if (meet >= 75) reasons.push(`ミート${meet}`);
@@ -808,42 +812,94 @@ export function finalizePlayerSeason(player, year) {
 export function recordAwardsToPlayers(allTeams, awards) {
   const updatedTeams = {};
 
+  // タイトル別の知名度上昇量
+  const FAME_TITLE_1ST = 15;
+  const FAME_TITLE_2ND = 8;
+
+  // 2位の選手IDを収集
+  const runnerUpIds = new Set();
+  const allPlayers = [];
+  Object.values(allTeams).forEach(team => {
+    if (team.players) team.players.forEach(p => allPlayers.push(p));
+  });
+  const collectRunnerUp = (getStat, filterFn, ascending = false) => {
+    const qualified = allPlayers.filter(filterFn);
+    if (qualified.length < 2) return;
+    const sorted = [...qualified].sort((a, b) => ascending ? getStat(a) - getStat(b) : getStat(b) - getStat(a));
+    runnerUpIds.add(sorted[1].id);
+  };
+  const getBattingAvg = p => p.seasonStats?.batting?.atBats > 0 ? p.seasonStats.batting.hits / p.seasonStats.batting.atBats : 0;
+  const getEra = p => p.seasonStats?.pitching?.inningsPitched > 0 ? (p.seasonStats.pitching.earnedRuns * 27) / p.seasonStats.pitching.inningsPitched : 99.99;
+  const batFilter = p => (p.seasonStats?.batting?.atBats || 0) >= 100;
+  const pitFilter = p => (p.seasonStats?.pitching?.inningsPitched || 0) >= 30;
+  collectRunnerUp(getBattingAvg, batFilter);
+  collectRunnerUp(p => p.seasonStats?.batting?.homeruns || 0, batFilter);
+  collectRunnerUp(p => p.seasonStats?.batting?.rbis || 0, batFilter);
+  collectRunnerUp(p => p.seasonStats?.batting?.stolenBases || 0, batFilter);
+  collectRunnerUp(getEra, pitFilter, true);
+  collectRunnerUp(p => p.seasonStats?.pitching?.wins || 0, pitFilter);
+  collectRunnerUp(p => p.seasonStats?.pitching?.strikeouts || 0, pitFilter);
+  collectRunnerUp(p => p.seasonStats?.pitching?.saves || 0, p => (p.seasonStats?.pitching?.saves || 0) > 0);
+
   Object.entries(allTeams).forEach(([teamName, team]) => {
     updatedTeams[teamName] = {
       ...team,
       players: team.players.map(player => {
         const achievements = [...(player.professionalCareer?.achievements || [])];
+        let fameGain = 0;
 
-        // 各タイトルをチェック（IDで照合、IDがない場合は名前で照合）
         const matchAward = (award) => award && (award.id ? award.id === player.id : award.name === player.name);
 
         if (matchAward(awards.battingChampion)) {
           achievements.push({ year: 0, title: '首位打者' });
+          fameGain += FAME_TITLE_1ST;
         }
         if (matchAward(awards.homeRunKing)) {
           achievements.push({ year: 0, title: '本塁打王' });
+          fameGain += FAME_TITLE_1ST;
         }
         if (matchAward(awards.rbiKing)) {
           achievements.push({ year: 0, title: '打点王' });
+          fameGain += FAME_TITLE_1ST;
         }
         if (matchAward(awards.stolenBaseKing)) {
           achievements.push({ year: 0, title: '盗塁王' });
+          fameGain += FAME_TITLE_1ST;
         }
         if (matchAward(awards.eraChampion)) {
           achievements.push({ year: 0, title: '最優秀防御率' });
+          fameGain += FAME_TITLE_1ST;
         }
         if (matchAward(awards.winsLeader)) {
           achievements.push({ year: 0, title: '最多勝' });
+          fameGain += FAME_TITLE_1ST;
         }
         if (matchAward(awards.savesLeader)) {
           achievements.push({ year: 0, title: '最多セーブ' });
+          fameGain += FAME_TITLE_1ST;
         }
         if (matchAward(awards.strikeoutKing)) {
           achievements.push({ year: 0, title: '最多奪三振' });
+          fameGain += FAME_TITLE_1ST;
         }
+
+        // 2位にも知名度加算
+        if (runnerUpIds.has(player.id)) {
+          fameGain += FAME_TITLE_2ND;
+        }
+
+        // 規定到達で出場実績による微量加算（毎シーズン+2）
+        const batAB = player.seasonStats?.batting?.atBats || 0;
+        const pitIP = player.seasonStats?.pitching?.inningsPitched || 0;
+        if (batAB >= 100 || pitIP >= 30) {
+          fameGain += 2;
+        }
+
+        const currentFame = player.fame || 0;
 
         return {
           ...player,
+          fame: Math.min(100, currentFame + fameGain),
           professionalCareer: {
             ...(player.professionalCareer || {}),
             achievements

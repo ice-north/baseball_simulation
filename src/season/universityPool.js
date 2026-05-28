@@ -148,6 +148,7 @@ function generateHighSchoolPlayer(id) {
     growthPotential,
     growthModifier: 0,
     positionFitness: generatePositionFitness(position),
+    fame: 0,
     fatigue: 0,
     experience: 0,
     seasonStats: createEmptyStats(),

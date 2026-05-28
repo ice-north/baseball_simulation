@@ -375,8 +375,9 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         draftTeam: null,
         achievements: []
       },
-      fatigue: 0, // 疲労度（投げた球数分蓄積、1日20回復）
-      experience: 0, // 経験値（シーズン中に蓄積、キャンプで消費）
+      fame: 0,
+      fatigue: 0,
+      experience: 0,
       seasonStats: {
         batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
         pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
