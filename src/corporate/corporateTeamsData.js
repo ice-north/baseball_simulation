@@ -663,6 +663,14 @@ const getMergedTeams = () => {
   return [...base, ...customs, ...sessionCustoms];
 };
 
+// エディット用: セッションチームを除外（永続チームのみ）
+const getMasterTeams = () => {
+  const deletedIds = new Set(loadDeletedTeamIds());
+  const base = CORPORATE_TEAMS.filter(t => !deletedIds.has(t.id));
+  const customs = loadCustomTeams().filter(t => !deletedIds.has(t.id));
+  return [...base, ...customs];
+};
+
 // ============================================================
 // ヘルパー関数
 // ============================================================
@@ -674,6 +682,15 @@ export const getTeamsByRegion = (regionId) =>
 
 export const getAllTeamsEffective = () =>
   getMergedTeams().map(t => getEffectiveTeam(t));
+
+// エディット画面用: セッションチームを含まないマスターデータのみ
+export const getAllMasterTeamsEffective = () =>
+  getMasterTeams().map(t => getEffectiveTeam(t));
+
+export const getMasterTeamsByRegion = (regionId) =>
+  getMasterTeams()
+    .map(t => getEffectiveTeam(t))
+    .filter(t => t.region === regionId);
 
 export const getRegionName = (regionId) =>
   REGIONS.find(r => r.id === regionId)?.name || regionId;

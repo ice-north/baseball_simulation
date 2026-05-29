@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, addCustomTeam, updateCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam } from '../corporate/corporateTeamsData.js';
+import { REGIONS, CORPORATE_TEAMS, getTeamsByRegion, RANK_ABILITY_RANGE, setTeamDisplayName, resetTeamDisplayName, setTeamOverride, resetTeamOverrides, getAllTeamsEffective, getAllMasterTeamsEffective, addCustomTeam, updateCustomTeam, deleteTeam, restoreTeam, getDeletedTeams, clearGameSessionTeams, addGameSessionCustomTeam } from '../corporate/corporateTeamsData.js';
 
 const RANK_COLORS = {
   S: 'text-yellow-400',
@@ -306,7 +306,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
   const [showDeleted, setShowDeleted] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  const allTeams = getAllTeamsEffective();
+  const allTeams = getAllMasterTeamsEffective();
   const regionTeams = selectedRegion ? allTeams.filter(t => t.region === selectedRegion) : [];
   const deletedTeams = getDeletedTeams();
 
