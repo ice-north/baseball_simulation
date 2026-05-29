@@ -221,7 +221,7 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
 
   const roster = [];
   const remaining = [...candidates];
-  const maxPitchers = Math.max(7, Math.min(14, Math.round(rosterSize * 0.35)));
+  const maxPitchers = Math.max(6, Math.min(15, Math.round(rosterSize * 0.4)));
   for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
     const pitcherCount = roster.filter(p => p.position === 'pitcher').length;
     let pool = remaining;
