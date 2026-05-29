@@ -79,6 +79,44 @@ const RANK_CONFIG = {
   },
 };
 
+// 独立リーグ専用設定（プロを目指す選手の集まり → 社会人より高いスター率）
+// 20チーム ~515人から年15名前後のNPB指名を目標
+//   B 10×2星 ×20%エリート = ~4名
+//   C 8チーム  星0-1 + 覚醒12% = ~4-5名
+//   D 2チーム  覚醒8%          = ~0-1名
+//   + シーズン中のfame/成績ボーナスで +5-6名
+//   合計 ≒ 13-16名
+const INDEPENDENT_RANK_CONFIG = {
+  B: {
+    teamOffset: 4,
+    starCount: [1, 3],
+    starBoost: [10, 16],
+    starGrowth: 0.08,
+    eliteChance: 0.20,
+    eliteBoost: [10, 15],
+    eliteGrowth: 0.12,
+  },
+  C: {
+    teamOffset: 1,
+    starCount: [0, 1],
+    starBoost: [8, 14],
+    starGrowth: 0.06,
+    eliteChance: 0.08,
+    eliteBoost: [8, 12],
+    eliteGrowth: 0.08,
+    proChance: 0.12,
+    proBoost: [10, 16],
+    proGrowth: 0.08,
+  },
+  D: {
+    teamOffset: -3,
+    starCount: [0, 0],
+    proChance: 0.08,
+    proBoost: [8, 14],
+    proGrowth: 0.06,
+  },
+};
+
 const RANK_STAFF_CONFIG = {
   S: { coach: 3, manager: 1, trainer: 1 },
   A: { coach: 2, manager: 1, trainer: 1 },
@@ -179,11 +217,12 @@ const adjustCorporateAge = (player) => {
   }
 };
 
-// 社会人チームの選手を生成（ランク×種別でロースターサイズが変動）
+// 社会人/独立リーグチームの選手を生成（ランク×種別でロースターサイズが変動）
 export const generateCorporateRoster = (teamDef, year = 1) => {
   const rank = teamDef.rank || 'C';
   const type = teamDef.type || 'corporate';
-  const cfg = RANK_CONFIG[rank] || RANK_CONFIG.C;
+  const isIndependent = teamDef.id?.startsWith('il_');
+  const cfg = (isIndependent ? INDEPENDENT_RANK_CONFIG[rank] : null) || RANK_CONFIG[rank] || RANK_CONFIG.C;
   const sizeRange = ROSTER_SIZE[rank]?.[type] || ROSTER_SIZE.C.corporate;
   const rosterSize = randInt(sizeRange[0], sizeRange[1]);
 
