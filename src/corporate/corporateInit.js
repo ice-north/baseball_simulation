@@ -65,15 +65,15 @@ const RANK_CONFIG = {
   C: {
     teamOffset: 1,
     starCount: [0, 0],
-    proChance: 0.04,       // 25人×4% ≈ 1人/チーム がプロ注目レベルに
-    proBoost: [8, 13],
+    proChance: 0.10,       // 25人×10% ≈ 2.5人/チーム がプロ注目レベルに
+    proBoost: [10, 16],
     proGrowth: 0.08,
   },
   D: {
     teamOffset: -3,
     starCount: [0, 0],
-    proChance: 0.012,      // 25人×1.2% ≈ 0.3人/チーム（3チームに1人程度）
-    proBoost: [6, 10],
+    proChance: 0.06,       // 20人×6% ≈ 1.2人/チーム（クラブチームからプロ輩出もある）
+    proBoost: [8, 14],
     proGrowth: 0.06,
   },
 };
@@ -98,13 +98,14 @@ const ROSTER_SIZE = {
 };
 
 // ランク別球速キャップ・最低保証・追加減速（corporateモード用）
-// D: クラブチーム → 108-133km（広い分布で個性を出す）
-// C: 育成型 → 118-138km
-// B: 中堅 → 128-143km
-// A: 強豪 → 132-148km
-// S: 超強豪 → 135-152km（プロ予備軍レベル）
-const RANK_VELOCITY_CAP = { S: 152, A: 148, B: 143, C: 138, D: 133 };
-const RANK_VELOCITY_FLOOR = { S: 135, A: 132, B: 128, C: 118, D: 108 };
+// floorは「チームで一番遅い投手」の下限、capは「スター以外の上限」
+// D: クラブチーム → 105-133km（技巧派〜本格派まで幅広い）
+// C: 育成型 → 112-138km
+// B: 中堅 → 120-145km
+// A: 強豪 → 125-150km（自然に150km出せる選手も）
+// S: 超強豪 → 128-152km（プロ予備軍レベル）
+const RANK_VELOCITY_CAP = { S: 152, A: 150, B: 145, C: 138, D: 133 };
+const RANK_VELOCITY_FLOOR = { S: 128, A: 125, B: 120, C: 112, D: 105 };
 const RANK_VELOCITY_REDUCTION = { S: 0, A: -3, B: -5, C: -8, D: -15 };
 
 // ランク別の投手制球追加補正（teamOffsetだけでは不十分なので投手専用補正）
@@ -197,25 +198,69 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   const arsenalMult = RANK_ARSENAL_MULT[rank] || 1.0;
 
   candidates.forEach(p => {
+    // === 個人才能バラつき（三角分布: -6〜+6、中央集中） ===
+    const talent = randInt(-3, 3) + randInt(-3, 3);
+    p.batting.meet = clamp(p.batting.meet + talent + randInt(-3, 3), 1, 99);
+    p.batting.power = clamp(p.batting.power + talent + randInt(-3, 3), 1, 99);
+    p.batting.eye = clamp(p.batting.eye + talent + randInt(-2, 2), 1, 99);
+    p.batting.steal = clamp(p.batting.steal + randInt(-4, 4), 1, 99);
+    p.physical.speed = clamp(p.physical.speed + talent + randInt(-3, 3), 1, 99);
+    p.physical.arm = clamp(p.physical.arm + talent + randInt(-3, 3), 1, 99);
+    p.fielding.defense = clamp(p.fielding.defense + talent + randInt(-3, 3), 1, 99);
+
     applyTeamOffset(p, cfg.teamOffset);
     adjustCorporateAge(p);
+
     if (p.position === 'pitcher') {
-      p.pitching.velocity = clamp(p.pitching.velocity + velReduction, velFloor, velCap);
-      // ランク別制球補正（低ランクほど制球が荒い投手が多い）
-      if (controlOffset !== 0) {
-        const jitter = randInt(-3, 3);
-        p.pitching.control = clamp(p.pitching.control + controlOffset + jitter, 1, 99);
-      }
-      // ランク別変化球レベル補正（低ランクは変化球が未熟）
-      if (arsenalMult !== 1.0 && p.pitching.arsenal) {
+      // 球速: ランク補正 + 個人差（三角分布 -10〜+10）
+      const velJitter = randInt(-5, 5) + randInt(-5, 5);
+      p.pitching.velocity = clamp(p.pitching.velocity + velReduction + velJitter, velFloor, velCap);
+      // 制球: ランク補正 + 個人差（-8〜+8）
+      const ctrlJitter = randInt(-5, 5) + randInt(-3, 3);
+      p.pitching.control = clamp(p.pitching.control + controlOffset + ctrlJitter, 1, 99);
+      // 変化球: ランク倍率 + 個人差
+      if (p.pitching.arsenal) {
         for (const pitch of p.pitching.arsenal) {
           if (pitch.name !== 'ストレート' && pitch.type !== 'straight') {
-            pitch.level = clamp(Math.round(pitch.level * arsenalMult), 5, 99);
+            const arsenalJitter = randInt(-8, 8);
+            pitch.level = clamp(Math.round(pitch.level * arsenalMult) + arsenalJitter, 5, 99);
           }
         }
       }
     } else {
       p.pitching.velocity = clamp(p.pitching.velocity + velReduction, 100, velCap);
+    }
+
+    // 10%: 一芸特化選手（ひとつの分野だけ突出）
+    if (Math.random() < 0.10) {
+      if (p.position === 'pitcher') {
+        const roll = Math.random();
+        if (roll < 0.35) {
+          p.pitching.velocity = clamp(p.pitching.velocity + randInt(5, 10), velFloor, velCap + 5);
+        } else if (roll < 0.70) {
+          p.pitching.control = clamp(p.pitching.control + randInt(8, 15), 1, 99);
+        } else {
+          if (p.pitching.arsenal) {
+            for (const pitch of p.pitching.arsenal) {
+              if (pitch.name !== 'ストレート' && pitch.type !== 'straight') {
+                pitch.level = clamp(pitch.level + randInt(10, 20), 5, 99);
+              }
+            }
+          }
+        }
+      } else {
+        const roll = Math.random();
+        const boost = randInt(8, 15);
+        if (roll < 0.25) {
+          p.batting.meet = clamp(p.batting.meet + boost, 1, 99);
+        } else if (roll < 0.50) {
+          p.batting.power = clamp(p.batting.power + boost, 1, 99);
+        } else if (roll < 0.75) {
+          p.physical.speed = clamp(p.physical.speed + boost, 1, 99);
+        } else {
+          p.fielding.defense = clamp(p.fielding.defense + boost, 1, 99);
+        }
+      }
     }
   });
 
