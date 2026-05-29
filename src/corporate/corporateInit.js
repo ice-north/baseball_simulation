@@ -111,6 +111,10 @@ const RANK_VELOCITY_REDUCTION = { S: 0, A: -3, B: -5, C: -8, D: -15 };
 // ランク別の投手制球追加補正（teamOffsetだけでは不十分なので投手専用補正）
 const RANK_CONTROL_OFFSET = { S: 8, A: 5, B: 0, C: -5, D: -15 };
 
+// ランク別の制球キャップ（社会人野球はプロ未満）
+// 通常選手の上限。スター/プロ注目は+8まで許容
+const RANK_CONTROL_CAP = { S: 78, A: 72, B: 65, C: 55, D: 45 };
+
 // ランク別の変化球レベル倍率（Dランクはアマチュアレベル）
 const RANK_ARSENAL_MULT = { S: 1.1, A: 1.0, B: 0.85, C: 0.65, D: 0.45 };
 
@@ -195,34 +199,35 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   const velFloor = RANK_VELOCITY_FLOOR[rank] || 120;
 
   const controlOffset = RANK_CONTROL_OFFSET[rank] || 0;
+  const controlCap = RANK_CONTROL_CAP[rank] || 65;
   const arsenalMult = RANK_ARSENAL_MULT[rank] || 1.0;
 
   candidates.forEach(p => {
-    // === 個人才能バラつき（三角分布: -6〜+6、中央集中） ===
-    const talent = randInt(-3, 3) + randInt(-3, 3);
-    p.batting.meet = clamp(p.batting.meet + talent + randInt(-3, 3), 1, 99);
-    p.batting.power = clamp(p.batting.power + talent + randInt(-3, 3), 1, 99);
-    p.batting.eye = clamp(p.batting.eye + talent + randInt(-2, 2), 1, 99);
-    p.batting.steal = clamp(p.batting.steal + randInt(-4, 4), 1, 99);
-    p.physical.speed = clamp(p.physical.speed + talent + randInt(-3, 3), 1, 99);
-    p.physical.arm = clamp(p.physical.arm + talent + randInt(-3, 3), 1, 99);
-    p.fielding.defense = clamp(p.fielding.defense + talent + randInt(-3, 3), 1, 99);
+    // === 個人才能バラつき（三角分布: -8〜+8、中央集中） ===
+    const talent = randInt(-4, 4) + randInt(-4, 4);
+    p.batting.meet = clamp(p.batting.meet + talent + randInt(-4, 4), 1, 99);
+    p.batting.power = clamp(p.batting.power + talent + randInt(-4, 4), 1, 99);
+    p.batting.eye = clamp(p.batting.eye + talent + randInt(-3, 3), 1, 99);
+    p.batting.steal = clamp(p.batting.steal + randInt(-5, 5), 1, 99);
+    p.physical.speed = clamp(p.physical.speed + talent + randInt(-4, 4), 1, 99);
+    p.physical.arm = clamp(p.physical.arm + talent + randInt(-4, 4), 1, 99);
+    p.fielding.defense = clamp(p.fielding.defense + talent + randInt(-4, 4), 1, 99);
 
     applyTeamOffset(p, cfg.teamOffset);
     adjustCorporateAge(p);
 
     if (p.position === 'pitcher') {
-      // 球速: ランク補正 + 個人差（三角分布 -10〜+10）
-      const velJitter = randInt(-5, 5) + randInt(-5, 5);
+      // 球速: ランク補正 + 個人差（三角分布 -12〜+12）
+      const velJitter = randInt(-6, 6) + randInt(-6, 6);
       p.pitching.velocity = clamp(p.pitching.velocity + velReduction + velJitter, velFloor, velCap);
-      // 制球: ランク補正 + 個人差（-8〜+8）
-      const ctrlJitter = randInt(-5, 5) + randInt(-3, 3);
-      p.pitching.control = clamp(p.pitching.control + controlOffset + ctrlJitter, 1, 99);
+      // 制球: ランク補正 + 個人差（-10〜+10）、ランク別キャップ適用
+      const ctrlJitter = randInt(-7, 7) + randInt(-3, 3);
+      p.pitching.control = clamp(p.pitching.control + controlOffset + ctrlJitter, 1, controlCap);
       // 変化球: ランク倍率 + 個人差
       if (p.pitching.arsenal) {
         for (const pitch of p.pitching.arsenal) {
           if (pitch.name !== 'ストレート' && pitch.type !== 'straight') {
-            const arsenalJitter = randInt(-8, 8);
+            const arsenalJitter = randInt(-10, 10);
             pitch.level = clamp(Math.round(pitch.level * arsenalMult) + arsenalJitter, 5, 99);
           }
         }
@@ -238,7 +243,7 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
         if (roll < 0.35) {
           p.pitching.velocity = clamp(p.pitching.velocity + randInt(5, 10), velFloor, velCap + 5);
         } else if (roll < 0.70) {
-          p.pitching.control = clamp(p.pitching.control + randInt(8, 15), 1, 99);
+          p.pitching.control = clamp(p.pitching.control + randInt(8, 15), 1, controlCap + 5);
         } else {
           if (p.pitching.arsenal) {
             for (const pitch of p.pitching.arsenal) {
@@ -321,7 +326,14 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     }
   }
 
-  roster.forEach(p => { p.scoutComment = generateScoutComment(p); });
+  // スター/プロ注目も含め制球上限を強制（通常cap + 8が絶対上限）
+  const ctrlMax = controlCap + 8;
+  roster.forEach(p => {
+    if (p.position === 'pitcher') {
+      p.pitching.control = Math.min(p.pitching.control, ctrlMax);
+    }
+    p.scoutComment = generateScoutComment(p);
+  });
   return roster;
 };
 
