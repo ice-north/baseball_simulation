@@ -88,6 +88,15 @@ const RANK_STAFF_CONFIG = {
 
 const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
 
+// ランク×種別ごとのロースターサイズ [min, max]
+const ROSTER_SIZE = {
+  S: { corporate: [33, 38], club: [28, 33] },
+  A: { corporate: [30, 35], club: [25, 30] },
+  B: { corporate: [25, 30], club: [22, 27] },
+  C: { corporate: [22, 27], club: [20, 24] },
+  D: { corporate: [20, 24], club: [16, 20] },
+};
+
 // ランク別球速キャップ・最低保証・追加減速（corporateモード用）
 // D: クラブチーム → 108-133km（広い分布で個性を出す）
 // C: 育成型 → 118-138km
@@ -164,13 +173,17 @@ const adjustCorporateAge = (player) => {
   }
 };
 
-// 社会人チームの選手25名を生成
+// 社会人チームの選手を生成（ランク×種別でロースターサイズが変動）
 export const generateCorporateRoster = (teamDef, year = 1) => {
   const rank = teamDef.rank || 'C';
+  const type = teamDef.type || 'corporate';
   const cfg = RANK_CONFIG[rank] || RANK_CONFIG.C;
-  const rosterSize = 25;
+  const sizeRange = ROSTER_SIZE[rank]?.[type] || ROSTER_SIZE.C.corporate;
+  const rosterSize = randInt(sizeRange[0], sizeRange[1]);
 
-  const candidates = generateTryoutCandidates(year, 2, true);
+  // 候補者数をロースターの1.5倍以上確保
+  const candidateTeams = Math.max(2, Math.ceil(rosterSize / 25));
+  const candidates = generateTryoutCandidates(year, candidateTeams, true);
 
   corporatePlayerIdBase += 1000;
   candidates.forEach((p, i) => { p.id = corporatePlayerIdBase + i; });
@@ -208,7 +221,7 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
 
   const roster = [];
   const remaining = [...candidates];
-  const maxPitchers = 9;
+  const maxPitchers = Math.max(7, Math.min(14, Math.round(rosterSize * 0.35)));
   for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
     const pitcherCount = roster.filter(p => p.position === 'pitcher').length;
     let pool = remaining;
