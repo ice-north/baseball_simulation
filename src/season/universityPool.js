@@ -49,7 +49,8 @@ export function generateHighSchoolClass(year, count = 800) {
 
 /**
  * 高卒選手を1人生成
- * 能力は低め（高校卒業レベル）、成長力の個人差が大きい
+ * 平均能力は社会人・独立リーグより低く、分散が大きい。
+ * 約4%（~32/800）がプロ指名圏内の逸材。残りは大学・社会人・独立へ。
  */
 function generateHighSchoolPlayer(id) {
   const name = generateRandomPlayerName();
@@ -85,42 +86,85 @@ function generateHighSchoolPlayer(id) {
   else pitchingForm = 'submarine';
 
   const isSideOrUnder = pitchingForm === 'sidearm' || pitchingForm === 'submarine';
-  const controlAdjust = isSideOrUnder ? 10 : 0;
+  const controlAdjust = isSideOrUnder ? 8 : 0;
 
-  // 高卒レベルの能力値（低め、伸びしろ重視）
   const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+  // 三角分布: 中央集中で±spread、たまに大きくブレる
+  const tri = (spread) => {
+    const a = Math.floor(Math.random() * (spread * 2 + 1)) - spread;
+    const b = Math.floor(Math.random() * (spread * 2 + 1)) - spread;
+    return a + b;
+  };
+
+  // 逸材判定（約4%）
+  const isProdigy = Math.random() < 0.04;
 
   let abilities;
-  if (isPitcher) {
-    const arm = r(40, 78);
-    const normalized = arm / 100;
-    const velocity = Math.round(95 + normalized * 45 + Math.pow(normalized, 2.5) * 15);
-    abilities = {
-      meet: r(10, 30), power: r(5, 25), eye: r(15, 40),
-      steal: r(10, 30), speed: r(30, 60),
-      arm, defense: r(30, 55),
-      bodyStamina: r(35, 65), recovery: r(35, 65),
-      velocity: Math.max(110, Math.min(148, velocity)),
-      control: Math.min(75, r(25, 55) + controlAdjust),
-      stamina: r(60, 110)
-    };
+  let growthPotential;
+
+  if (isProdigy) {
+    // === 逸材: プロ指名圏の能力 ===
+    if (isPitcher) {
+      const arm = r(55, 78);
+      const normalized = arm / 100;
+      const baseVel = Math.round(100 + normalized * 45 + Math.pow(normalized, 2.5) * 15);
+      abilities = {
+        meet: r(10, 25) + tri(3), power: r(8, 22) + tri(3), eye: r(15, 35) + tri(3),
+        steal: r(15, 35), speed: r(35, 60) + tri(4),
+        arm, defense: r(35, 55) + tri(3),
+        bodyStamina: r(45, 70), recovery: r(40, 65),
+        velocity: Math.max(138, Math.min(155, baseVel + r(5, 15))),
+        control: Math.min(75, r(35, 55) + controlAdjust + tri(5)),
+        stamina: r(75, 110) + tri(5)
+      };
+    } else {
+      abilities = {
+        meet: r(42, 65) + tri(5), power: r(35, 58) + tri(5), eye: r(28, 48) + tri(4),
+        steal: r(20, 50) + tri(4), speed: r(35, 65) + tri(5),
+        arm: r(30, 60) + tri(4), defense: r(30, 55) + tri(4),
+        bodyStamina: r(40, 70), recovery: r(40, 65),
+        velocity: r(110, 135), control: r(15, 35),
+        stamina: r(35, 60)
+      };
+    }
+    growthPotential = Math.max(1.05, Math.min(1.50, 1.25 + (Math.random() - 0.3) * 0.5));
   } else {
-    abilities = {
-      meet: r(20, 55), power: r(15, 50), eye: r(20, 50),
-      steal: r(15, 50), speed: r(25, 65),
-      arm: r(25, 65), defense: r(25, 60),
-      bodyStamina: r(35, 70), recovery: r(35, 65),
-      velocity: r(110, 138), control: r(20, 45),
-      stamina: r(40, 70)
-    };
+    // === 一般選手: 能力低め、分散大きい ===
+    if (isPitcher) {
+      const arm = r(25, 62) + tri(5);
+      const clampedArm = Math.max(20, Math.min(75, arm));
+      const normalized = clampedArm / 100;
+      const baseVel = Math.round(90 + normalized * 40 + Math.pow(normalized, 2.5) * 12);
+      abilities = {
+        meet: r(5, 22) + tri(4), power: r(3, 18) + tri(4), eye: r(8, 28) + tri(4),
+        steal: r(8, 25) + tri(3), speed: r(22, 50) + tri(5),
+        arm: clampedArm, defense: r(20, 45) + tri(4),
+        bodyStamina: r(28, 55) + tri(4), recovery: r(28, 55) + tri(4),
+        velocity: Math.max(100, Math.min(142, baseVel + tri(4))),
+        control: Math.min(60, Math.max(8, r(12, 38) + controlAdjust + tri(5))),
+        stamina: Math.max(30, r(40, 80) + tri(6))
+      };
+    } else {
+      abilities = {
+        meet: r(8, 35) + tri(5), power: r(5, 28) + tri(5), eye: r(8, 32) + tri(5),
+        steal: r(8, 38) + tri(4), speed: r(18, 52) + tri(5),
+        arm: r(15, 50) + tri(5), defense: r(15, 45) + tri(5),
+        bodyStamina: r(28, 58) + tri(4), recovery: r(28, 55) + tri(4),
+        velocity: r(100, 130) + tri(4), control: r(10, 35) + tri(3),
+        stamina: r(30, 60) + tri(4)
+      };
+    }
+    // 成長力: 中央0.80、分散大きめ
+    const u1 = Math.random() || 0.001;
+    const u2 = Math.random();
+    const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    growthPotential = Math.max(0.35, Math.min(1.30, 0.80 + normal * 0.22));
   }
 
-  // 成長力: 高卒は分散が大きい（将来のスター候補が混ざる）
-  const u1 = Math.random() || 0.001;
-  const u2 = Math.random();
-  const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  const skewed = normal > 0 ? normal * 0.8 : normal;
-  const growthPotential = Math.max(0.4, Math.min(1.5, 0.95 + skewed * 0.25));
+  // 能力値の下限クランプ（負の値を防止）
+  for (const key of Object.keys(abilities)) {
+    if (abilities[key] < 1) abilities[key] = 1;
+  }
 
   return {
     id,
@@ -129,27 +173,27 @@ function generateHighSchoolPlayer(id) {
     position,
     batting: {
       meet: abilities.meet, power: abilities.power, eye: abilities.eye,
-      bats, steal: abilities.steal, bunt: r(15, 45)
+      bats, steal: abilities.steal, bunt: r(10, 40)
     },
     physical: {
       speed: abilities.speed, arm: abilities.arm, throws,
       bodyStamina: abilities.bodyStamina, recovery: abilities.recovery,
-      muscle: r(30, 65), dexterity: r(30, 65)
+      muscle: r(25, 60), dexterity: r(25, 60)
     },
     fielding: { defense: abilities.defense },
     catching: {
-      lead: position === 'catcher' ? r(30, 60) : r(15, 35)
+      lead: position === 'catcher' ? r(25, 55) : r(10, 30)
     },
     pitching: {
       velocity: abilities.velocity, control: abilities.control,
-      stamina: abilities.stamina, spinRate: r(25, 55),
+      stamina: abilities.stamina, spinRate: r(20, 50),
       form: pitchingForm,
       arsenal: isPitcher ? generateRandomArsenal(0, true) : generateFielderArsenalBasic()
     },
     growthPotential,
     growthModifier: 0,
     positionFitness: generatePositionFitness(position),
-    fame: 0,
+    fame: isProdigy ? r(5, 25) : 0,
     fatigue: 0,
     experience: 0,
     seasonStats: createEmptyStats(),
