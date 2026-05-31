@@ -49,13 +49,12 @@ export function generateHighSchoolClass(year, count = 800) {
 
 /**
  * 高卒選手を1人生成
- * 平均能力は社会人・独立リーグより低く、分散が大きい。
- * 約4%（~32/800）がプロ指名圏内の逸材。残りは大学・社会人・独立へ。
+ * 才能ランク（S～E）で基礎能力が決まり、一芸特化で個性を付与。
+ * 成長力はランクと緩く相関するが、低ランクでも大器晩成型が出現する。
  */
 function generateHighSchoolPlayer(id) {
   const name = generateRandomPlayerName();
 
-  // 利き手
   const handRoll = Math.random() * 100;
   let throws, bats;
   if (handRoll < 42) { throws = 'right'; bats = 'right'; }
@@ -64,7 +63,6 @@ function generateHighSchoolPlayer(id) {
   else if (handRoll < 98) { throws = 'right'; bats = 'switch'; }
   else { throws = 'left'; bats = 'right'; }
 
-  // ポジション
   const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
   let isPitcher = Math.random() < 0.40;
   let position;
@@ -77,7 +75,6 @@ function generateHighSchoolPlayer(id) {
     position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
   }
 
-  // 投球フォーム
   const formRand = Math.random() * 100;
   let pitchingForm;
   if (formRand < 48) pitchingForm = 'overhand';
@@ -89,82 +86,95 @@ function generateHighSchoolPlayer(id) {
   const controlAdjust = isSideOrUnder ? 8 : 0;
 
   const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-  // 三角分布: 中央集中で±spread、たまに大きくブレる
   const tri = (spread) => {
     const a = Math.floor(Math.random() * (spread * 2 + 1)) - spread;
     const b = Math.floor(Math.random() * (spread * 2 + 1)) - spread;
     return a + b;
   };
+  const cl = (val, lo, hi) => Math.max(lo, Math.min(hi, val));
 
-  // 逸材判定（約4%）
-  const isProdigy = Math.random() < 0.04;
+  // === 才能ランク（連続分布）===
+  const talentRoll = Math.random() * 100;
+  let tier, off;
+  if (talentRoll < 1)        { tier = 'S'; off = 22; }
+  else if (talentRoll < 4)   { tier = 'A'; off = 15; }
+  else if (talentRoll < 12)  { tier = 'B'; off = 7; }
+  else if (talentRoll < 28)  { tier = 'C'; off = 2; }
+  else if (talentRoll < 68)  { tier = 'D'; off = 0; }
+  else                       { tier = 'E'; off = -4; }
+
+  // === 一芸特化（25%）===
+  let specialty = null;
+  if (Math.random() < 0.25) {
+    specialty = isPitcher
+      ? ['power_arm', 'technician', 'iron_arm'][r(0, 2)]
+      : ['speedster', 'slugger', 'contact', 'glove', 'cannon'][r(0, 4)];
+  }
 
   let abilities;
-  let growthPotential;
+  if (isPitcher) {
+    const velRanges = { S: [143, 158], A: [133, 148], B: [122, 140], C: [112, 132], D: [103, 124], E: [96, 116] };
+    let velocity = r(velRanges[tier][0], velRanges[tier][1]) + tri(3);
+    let control = r(12, 35) + off + controlAdjust + tri(5);
+    let stamina = r(40, 75) + Math.round(off * 1.5) + tri(5);
 
-  if (isProdigy) {
-    // === 逸材: プロ指名圏の能力 ===
-    if (isPitcher) {
-      const arm = r(55, 78);
-      const normalized = arm / 100;
-      const baseVel = Math.round(100 + normalized * 45 + Math.pow(normalized, 2.5) * 15);
-      abilities = {
-        meet: r(10, 25) + tri(3), power: r(8, 22) + tri(3), eye: r(15, 35) + tri(3),
-        steal: r(15, 35), speed: r(35, 60) + tri(4),
-        arm, defense: r(35, 55) + tri(3),
-        bodyStamina: r(45, 70), recovery: r(40, 65),
-        velocity: Math.max(138, Math.min(155, baseVel + r(5, 15))),
-        control: Math.min(75, r(35, 55) + controlAdjust + tri(5)),
-        stamina: r(75, 110) + tri(5)
-      };
-    } else {
-      abilities = {
-        meet: r(42, 65) + tri(5), power: r(35, 58) + tri(5), eye: r(28, 48) + tri(4),
-        steal: r(20, 50) + tri(4), speed: r(35, 65) + tri(5),
-        arm: r(30, 60) + tri(4), defense: r(30, 55) + tri(4),
-        bodyStamina: r(40, 70), recovery: r(40, 65),
-        velocity: r(110, 135), control: r(15, 35),
-        stamina: r(35, 60)
-      };
-    }
-    growthPotential = Math.max(1.05, Math.min(1.50, 1.25 + (Math.random() - 0.3) * 0.5));
+    if (specialty === 'power_arm') velocity += r(5, 12);
+    else if (specialty === 'technician') control += r(10, 20);
+    else if (specialty === 'iron_arm') stamina += r(15, 25);
+
+    abilities = {
+      meet: cl(r(5, 22) + Math.round(off * 0.3) + tri(3), 1, 40),
+      power: cl(r(3, 18) + Math.round(off * 0.3) + tri(3), 1, 35),
+      eye: cl(r(8, 25) + Math.round(off * 0.3) + tri(3), 1, 45),
+      steal: cl(r(8, 25) + tri(3), 1, 50),
+      speed: cl(r(22, 48) + Math.round(off * 0.5) + tri(4), 1, 70),
+      arm: cl(r(30, 58) + Math.round(off * 0.5) + tri(4), 15, 80),
+      defense: cl(r(22, 42) + Math.round(off * 0.4) + tri(3), 1, 65),
+      bodyStamina: cl(r(30, 55) + Math.round(off * 0.3) + tri(3), 20, 75),
+      recovery: cl(r(30, 55) + Math.round(off * 0.3) + tri(3), 20, 70),
+      velocity: cl(velocity, 95, 163),
+      control: cl(control, 5, 80),
+      stamina: cl(stamina, 25, 120)
+    };
   } else {
-    // === 一般選手: 能力低め、分散大きい ===
-    if (isPitcher) {
-      const arm = r(25, 62) + tri(5);
-      const clampedArm = Math.max(20, Math.min(75, arm));
-      const normalized = clampedArm / 100;
-      const baseVel = Math.round(90 + normalized * 40 + Math.pow(normalized, 2.5) * 12);
-      abilities = {
-        meet: r(5, 22) + tri(4), power: r(3, 18) + tri(4), eye: r(8, 28) + tri(4),
-        steal: r(8, 25) + tri(3), speed: r(22, 50) + tri(5),
-        arm: clampedArm, defense: r(20, 45) + tri(4),
-        bodyStamina: r(28, 55) + tri(4), recovery: r(28, 55) + tri(4),
-        velocity: Math.max(100, Math.min(142, baseVel + tri(4))),
-        control: Math.min(60, Math.max(8, r(12, 38) + controlAdjust + tri(5))),
-        stamina: Math.max(30, r(40, 80) + tri(6))
-      };
-    } else {
-      abilities = {
-        meet: r(8, 35) + tri(5), power: r(5, 28) + tri(5), eye: r(8, 32) + tri(5),
-        steal: r(8, 38) + tri(4), speed: r(18, 52) + tri(5),
-        arm: r(15, 50) + tri(5), defense: r(15, 45) + tri(5),
-        bodyStamina: r(28, 58) + tri(4), recovery: r(28, 55) + tri(4),
-        velocity: r(100, 130) + tri(4), control: r(10, 35) + tri(3),
-        stamina: r(30, 60) + tri(4)
-      };
-    }
-    // 成長力: 中央0.80、分散大きめ
-    const u1 = Math.random() || 0.001;
-    const u2 = Math.random();
-    const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-    growthPotential = Math.max(0.35, Math.min(1.30, 0.80 + normal * 0.22));
+    let meet = r(8, 30) + off + tri(5);
+    let power = r(5, 25) + off + tri(5);
+    let eye = r(8, 28) + Math.round(off * 0.8) + tri(4);
+    let speed = r(18, 48) + Math.round(off * 0.6) + tri(5);
+    let defense = r(15, 42) + Math.round(off * 0.6) + tri(4);
+    let arm = r(15, 48) + Math.round(off * 0.5) + tri(4);
+    let steal = r(8, 35) + Math.round(off * 0.4) + tri(4);
+
+    if (specialty === 'speedster') { speed += r(12, 22); steal += r(8, 15); }
+    else if (specialty === 'slugger') power += r(12, 22);
+    else if (specialty === 'contact') { meet += r(12, 20); eye += r(8, 15); }
+    else if (specialty === 'glove') defense += r(12, 20);
+    else if (specialty === 'cannon') arm += r(15, 25);
+
+    abilities = {
+      meet: cl(meet, 1, 80), power: cl(power, 1, 75),
+      eye: cl(eye, 1, 65), steal: cl(steal, 1, 70),
+      speed: cl(speed, 1, 85), arm: cl(arm, 1, 80),
+      defense: cl(defense, 1, 75),
+      bodyStamina: cl(r(30, 58) + Math.round(off * 0.3) + tri(3), 20, 75),
+      recovery: cl(r(28, 55) + Math.round(off * 0.3) + tri(3), 20, 70),
+      velocity: cl(r(100, 128) + Math.round(off * 0.4) + tri(3), 90, 145),
+      control: cl(r(10, 30) + Math.round(off * 0.3) + tri(3), 5, 50),
+      stamina: cl(r(30, 55) + Math.round(off * 0.3) + tri(3), 20, 70)
+    };
   }
 
-  // 能力値の下限クランプ（負の値を防止）
-  for (const key of Object.keys(abilities)) {
-    if (abilities[key] < 1) abilities[key] = 1;
-  }
+  // 成長力: ランクと緩く相関（低ランクでも大器晩成型が出現）
+  const gpCenter = { S: 1.15, A: 1.05, B: 0.95, C: 0.85, D: 0.78, E: 0.70 };
+  const u1 = Math.random() || 0.001;
+  const u2 = Math.random();
+  const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  const growthPotential = cl(gpCenter[tier] + normal * 0.22, 0.35, 1.50);
+
+  let fame = 0;
+  if (tier === 'S') fame = r(15, 40);
+  else if (tier === 'A') fame = r(5, 20);
+  else if (tier === 'B' && Math.random() < 0.3) fame = r(1, 10);
 
   return {
     id,
@@ -193,7 +203,7 @@ function generateHighSchoolPlayer(id) {
     growthPotential,
     growthModifier: 0,
     positionFitness: generatePositionFitness(position),
-    fame: isProdigy ? r(5, 25) : 0,
+    fame,
     fatigue: 0,
     experience: 0,
     seasonStats: createEmptyStats(),
