@@ -29,7 +29,7 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
 - `src/season/universityPool.js` (~550行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
 - `src/corporate/scoutingSystem.js` (~400行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
-- `src/university/universityTeamsData.js` - 大学チームデータ（将来の大学モード用。15完成版リーグ×6校=90校、ランク別成長倍率定義）
+- `src/university/universityTeamsData.js` - 大学チームデータ（将来の大学モード用。14リーグ90校（東都2部制12校＋13リーグ×6校）、ランク別成長倍率定義）
 - `src/data/playerNames.js` (210KB) - 姓3000件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
@@ -112,10 +112,10 @@ NEW GAME → 企業チーム選択 → キャンプ
 
 ## 大学モード準備 (`src/university/universityTeamsData.js`)
 - **現状**: データ定義のみ。実際のゲームモードは未実装
-- **チームデータ**: `UNIVERSITY_TEAMS` に90校定義（15完成版リーグ×6校）
-  - 首都圏7リーグ(42校): 東京六大学, 東都1部, 首都1部, 東京新1部, 千葉県1部, 神奈川1部, 関甲新1部
-  - 地方8リーグ(48校): 札幌学生, 仙台六大学, 愛知1部, 関西学生, 関西六大学, 広島六大学, 福岡六大学, 九州六大学
-- **リーグ連盟**: `UNIVERSITY_REGIONS` に15リーグを定義（すべて6校完成版、部分代表なし）
+- **チームデータ**: `UNIVERSITY_TEAMS` に90校定義（14リーグ、東都のみ2部制12校）
+  - 首都圏7リーグ(48校): 東京六大学, 東都1部+2部, 首都1部, 東京新1部, 千葉県1部, 神奈川1部, 関甲新1部
+  - 地方7リーグ(42校): 北東北大学, 仙台六大学, 愛知1部, 関西学生, 関西六大学, 広島六大学, 福岡六大学
+- **リーグ連盟**: `UNIVERSITY_REGIONS` に14リーグを定義（東都12校、他は6校完成版）
 - **ランク別成長**: `UNIVERSITY_RANK_GROWTH` — S=1.25倍, A=1.10倍, B=1.00倍, C=0.90倍, D=0.80倍
   - `applyUniversityGrowth()` で自動適用。universityPool の各エントリに `universityRank` を保持
 - **ランク別初期化設定**: `UNIVERSITY_RANK_CONFIG` — 将来 `corporateInit.js` と同様の初期化に使用
