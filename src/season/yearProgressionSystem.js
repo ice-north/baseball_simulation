@@ -410,7 +410,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       if (yearsInUni >= 3) {
         const { totalScore } = checkNPBDraftEligibility(entry.player, 0);
         allCandidates.push({
-          player: entry.player, teamName: '大学', score: totalScore,
+          player: entry.player, teamName: entry.universityTeamName || '大学', score: totalScore,
           bonus: 0, awards: [], source: 'university',
           enrollYear: ey, universityRank: entry.universityRank,
         });
@@ -983,13 +983,33 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 5.5. 大学プール処理: 在学生の成長 + 卒業生を排出
   const currentYear = seasonData.year;
   const { graduates: uniGraduates, report: uniReport } = processUniversityYear(currentYear);
-  // 卒業生はリリースプールに追加（次年度のトライアウト/スカウト候補になる）
-  uniGraduates.forEach(grad => {
+  // 卒業生の進路を能力別に振り分け
+  // NPBドラフト漏れの大学卒業生 → 社会人候補 / 独立候補 / 引退
+  const gradScored = uniGraduates.map(g => ({
+    player: g,
+    score: (g.position === 'pitcher'
+      ? (g.pitching?.velocity - 120) * 1.5 + (g.pitching?.control || 0) + (g.pitching?.stamina || 0) * 0.4
+      : (g.batting?.meet || 0) + (g.batting?.power || 0) + (g.batting?.eye || 0) * 0.5 + (g.physical?.speed || 0) * 0.3)
+  }));
+  gradScored.sort((a, b) => b.score - a.score);
+  const corpCut = Math.floor(gradScored.length * 0.35);
+  const indCut = corpCut + Math.floor(gradScored.length * 0.25);
+  gradScored.forEach((entry, i) => {
+    const grad = entry.player;
     grad.isStarter = false;
     grad.battingOrder = 0;
     grad.origin = 'university';
     grad.isReleasedCandidate = true;
-    releasedPlayersPool.push(grad);
+    if (i < corpCut) {
+      grad.postGradPath = 'corporate';
+    } else if (i < indCut) {
+      grad.postGradPath = 'independent';
+    } else {
+      grad.postGradPath = 'retired';
+    }
+    if (grad.postGradPath !== 'retired') {
+      releasedPlayersPool.push(grad);
+    }
   });
 
   // 5.6. 高校生プールの残り（ドラフト漏れ）をランク別に進路振り分け
@@ -1028,13 +1048,17 @@ export function advanceToNextYear(seasonData, allTeams) {
   newSeasonData.ageReports = ageReports;
   // 大学プールの状態を記録
   const uniEnrollCount = Object.values(hsDistribution.university).reduce((sum, arr) => sum + arr.length, 0);
+  const gradCorpCount = gradScored.filter(e => e.player.postGradPath === 'corporate').length;
+  const gradIndCount = gradScored.filter(e => e.player.postGradPath === 'independent').length;
+  const gradRetiredCount = gradScored.filter(e => e.player.postGradPath === 'retired').length;
   newSeasonData.universityReport = {
     graduated: uniReport.graduated,
     newEnrollment: uniEnrollCount,
     corporateCount: hsDistribution.corporate.length,
     independentCount: hsDistribution.independent.length,
     retiredCount: hsDistribution.retired.length,
-    growing: uniReport.grown
+    growing: uniReport.grown,
+    gradPaths: { corporate: gradCorpCount, independent: gradIndCount, retired: gradRetiredCount },
   };
 
   return {

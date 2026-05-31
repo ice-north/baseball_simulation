@@ -6,7 +6,7 @@
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.js';
-import { getUniversityGrowthMultiplier } from '../university/universityTeamsData.js';
+import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 
 /**
  * 大学プール: グローバルミュータブル
@@ -399,6 +399,9 @@ export function processUniversityYear(currentYear) {
 
       // 卒業判定: 4年経過 or 年齢22歳以上
       if (yearsInUni >= 4 || player.age >= 22) {
+        player.universityTeamId = entry.universityTeamId;
+        player.universityTeamName = entry.universityTeamName;
+        player.universityRank = entry.universityRank;
         graduates.push(player);
         report.graduated++;
         return;
@@ -475,7 +478,7 @@ function applyUniversityGrowth(player, universityRank = null) {
 // ============================================================
 
 /**
- * 高卒世代を大学プールに入学させる
+ * 高卒世代を大学プールに入学させる（具体的な大学チームに配属）
  * @param {Array|Object} players - 大学進学する選手の配列、またはランク別オブジェクト { S: [...], A: [...], ... }
  * @param {number} enrollYear - 入学年度
  */
@@ -484,32 +487,63 @@ export function enrollInUniversity(players, enrollYear) {
     universityPool[enrollYear] = [];
   }
 
-  // ランク別オブジェクトの場合はフラットに展開
-  let playerList;
+  const teamCounts = {};
+  const assignTeam = (rank) => {
+    const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank);
+    if (teams.length === 0) return null;
+    let minCount = Infinity;
+    let candidates = [];
+    teams.forEach(t => {
+      const count = teamCounts[t.id] || 0;
+      if (count < minCount) {
+        minCount = count;
+        candidates = [t];
+      } else if (count === minCount) {
+        candidates.push(t);
+      }
+    });
+    const team = candidates[Math.floor(Math.random() * candidates.length)];
+    teamCounts[team.id] = (teamCounts[team.id] || 0) + 1;
+    return team;
+  };
+
   if (Array.isArray(players)) {
-    playerList = players;
+    players.forEach(player => {
+      const rank = player._destinationRank || 'C';
+      const team = assignTeam(rank);
+      universityPool[enrollYear].push({
+        player, enrollYear, graduateYear: enrollYear + 4,
+        universityRank: rank,
+        universityTeamId: team?.id || null,
+        universityTeamName: team?.name || null,
+      });
+    });
   } else {
-    playerList = [];
     for (const rank of ['S', 'A', 'B', 'C', 'D']) {
-      if (players[rank]) playerList.push(...players[rank]);
+      if (!players[rank]) continue;
+      players[rank].forEach(player => {
+        const team = assignTeam(rank);
+        universityPool[enrollYear].push({
+          player, enrollYear, graduateYear: enrollYear + 4,
+          universityRank: rank,
+          universityTeamId: team?.id || null,
+          universityTeamName: team?.name || null,
+        });
+      });
     }
   }
-
-  playerList.forEach(player => {
-    universityPool[enrollYear].push({
-      player,
-      enrollYear,
-      graduateYear: enrollYear + 4,
-      universityRank: player._destinationRank || null
-    });
-  });
 }
 
 /**
  * 大学プールの現在の状態サマリーを取得
  */
 export function getUniversityPoolSummary() {
-  const summary = { totalStudents: 0, byYear: {}, byRank: { S: 0, A: 0, B: 0, C: 0, D: 0, unknown: 0 } };
+  const summary = {
+    totalStudents: 0,
+    byYear: {},
+    byRank: { S: 0, A: 0, B: 0, C: 0, D: 0, unknown: 0 },
+    byTeam: {},
+  };
   Object.entries(universityPool).forEach(([year, cohort]) => {
     summary.byYear[year] = {
       count: cohort.length,
@@ -523,6 +557,12 @@ export function getUniversityPoolSummary() {
         summary.byRank[rank]++;
       } else {
         summary.byRank.unknown++;
+      }
+      if (entry.universityTeamName) {
+        if (!summary.byTeam[entry.universityTeamName]) {
+          summary.byTeam[entry.universityTeamName] = { count: 0, rank: entry.universityRank };
+        }
+        summary.byTeam[entry.universityTeamName].count++;
       }
     });
   });
