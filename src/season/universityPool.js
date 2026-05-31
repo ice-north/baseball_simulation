@@ -496,13 +496,11 @@ function applyUniversityGrowth(player, universityRank = null) {
   if (isPitcher) {
     player.pitching.control = grow(player.pitching.control, 3);
     player.pitching.stamina = grow(player.pitching.stamina, 4, 200);
-    // 球速は肩力(arm)連動: armを少し成長させ、velocityを再計算
     player.physical.arm = grow(player.physical.arm, 2);
-    player.pitching.velocity = Math.max(
-      player.pitching.velocity,
-      Math.round(95 + Math.pow(player.physical.arm / 100, 1.2) * 69)
-    );
-    // 変化球も少し成長
+    // 球速: 直接成長 + arm連動の高い方を採用
+    const directVel = grow(player.pitching.velocity, 1.5, 170);
+    const armDerivedVel = Math.round(95 + Math.pow(player.physical.arm / 100, 1.2) * 69);
+    player.pitching.velocity = Math.max(directVel, armDerivedVel);
     if (player.pitching.arsenal) {
       player.pitching.arsenal.forEach(pitch => {
         if (pitch.type !== 'straight') {
