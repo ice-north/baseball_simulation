@@ -1671,7 +1671,23 @@ export function generateExpansionRoster(year = 1, rosterSize = 24) {
   const roster = [];
   const remaining = [...candidates];
 
-  for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
+  // 必須ポジションを先に確保
+  const requiredPositions = [
+    'catcher', 'catcher', 'second', 'short', 'first', 'third', 'left', 'center', 'right'
+  ];
+  for (const reqPos of requiredPositions) {
+    if (roster.length >= rosterSize) break;
+    const posPool = remaining.filter(p => p.position === reqPos);
+    if (posPool.length > 0) {
+      posPool.sort((a, b) => (b.batting.meet + b.batting.power + b.fielding.defense) - (a.batting.meet + a.batting.power + a.fielding.defense));
+      const pick = posPool[0];
+      const idx = remaining.findIndex(c => c.id === pick.id);
+      if (idx >= 0) remaining.splice(idx, 1);
+      roster.push(pick);
+    }
+  }
+
+  for (let i = roster.length; i < rosterSize && remaining.length > 0; i++) {
     const pick = selectPlayerForAI(remaining, roster);
     if (!pick) break;
     const idx = remaining.findIndex(c => c.id === pick.id);

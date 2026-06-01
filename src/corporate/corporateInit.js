@@ -212,10 +212,28 @@ const applyBoost = (player, boostRange, growthBonus) => {
   player.growthPotential = clamp((player.growthPotential || 1.0) + growthBonus, 0.5, 1.5);
 };
 
-const adjustCorporateAge = (player) => {
-  if (player.age < 22) {
-    player.age += 22 - player.age + Math.floor(Math.random() * 6);
+const adjustCorporateAge = (player, isIndependent = false) => {
+  const roll = Math.random();
+  let targetAge;
+  if (isIndependent) {
+    // 独立リーグ: 若手中心（18-28）
+    if (roll < 0.15) targetAge = 18 + Math.floor(Math.random() * 2);      // 18-19 (15%)
+    else if (roll < 0.35) targetAge = 20 + Math.floor(Math.random() * 2); // 20-21 (20%)
+    else if (roll < 0.60) targetAge = 22 + Math.floor(Math.random() * 2); // 22-23 (25%)
+    else if (roll < 0.80) targetAge = 24 + Math.floor(Math.random() * 2); // 24-25 (20%)
+    else if (roll < 0.92) targetAge = 26 + Math.floor(Math.random() * 2); // 26-27 (12%)
+    else targetAge = 28 + Math.floor(Math.random() * 2);                  // 28-29 (8%)
+  } else {
+    // 社会人: 幅広い年齢層（22-34）
+    if (roll < 0.10) targetAge = 22 + Math.floor(Math.random() * 2);      // 22-23 (10%)
+    else if (roll < 0.30) targetAge = 24 + Math.floor(Math.random() * 2); // 24-25 (20%)
+    else if (roll < 0.55) targetAge = 26 + Math.floor(Math.random() * 2); // 26-27 (25%)
+    else if (roll < 0.75) targetAge = 28 + Math.floor(Math.random() * 2); // 28-29 (20%)
+    else if (roll < 0.88) targetAge = 30 + Math.floor(Math.random() * 2); // 30-31 (13%)
+    else if (roll < 0.96) targetAge = 32 + Math.floor(Math.random() * 2); // 32-33 (8%)
+    else targetAge = 34;                                                    // 34    (4%)
   }
+  player.age = Math.max(player.age, targetAge);
 };
 
 // 社会人/独立リーグチームの選手を生成（ランク×種別でロースターサイズが変動）
@@ -255,7 +273,7 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     p.fielding.defense = clamp(p.fielding.defense + talent + randInt(-4, 4), 1, 99);
 
     applyTeamOffset(p, cfg.teamOffset);
-    adjustCorporateAge(p);
+    adjustCorporateAge(p, isIndependent);
 
     if (p.position === 'pitcher') {
       // 球速: ランク補正 + 個人差（三角分布 -12〜+12）
@@ -310,10 +328,51 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     }
   });
 
+  // 野手にも投球フォームを保証
+  const FORMS = ['overhand', 'threeQuarter', 'sidearm', 'submarine'];
+  const FORM_WEIGHTS = [45, 40, 10, 5];
+  const pickForm = () => {
+    const r = Math.random() * 100;
+    let cum = 0;
+    for (let i = 0; i < FORMS.length; i++) { cum += FORM_WEIGHTS[i]; if (r < cum) return FORMS[i]; }
+    return 'overhand';
+  };
+  candidates.forEach(p => {
+    if (!p.pitching.form) p.pitching.form = pickForm();
+  });
+
   const roster = [];
   const remaining = [...candidates];
   const maxPitchers = Math.max(6, Math.min(15, Math.round(rosterSize * 0.4)));
-  for (let i = 0; i < rosterSize && remaining.length > 0; i++) {
+
+  // 必須ポジションを先に確保: 捕手2、内野手4(二遊間各1)、外野手3
+  const requiredPositions = [
+    'catcher', 'catcher', 'second', 'short', 'first', 'third', 'left', 'center', 'right'
+  ];
+  for (const reqPos of requiredPositions) {
+    if (roster.length >= rosterSize) break;
+    const posPool = remaining.filter(p => p.position === reqPos);
+    if (posPool.length > 0) {
+      posPool.sort((a, b) => (b.batting.meet + b.batting.power + b.fielding.defense) - (a.batting.meet + a.batting.power + a.fielding.defense));
+      const pick = posPool[0];
+      const idx = remaining.findIndex(c => c.id === pick.id);
+      if (idx >= 0) remaining.splice(idx, 1);
+      roster.push(pick);
+    } else {
+      // 候補にいない場合、最も近いポジションの選手を転向
+      const fielders = remaining.filter(p => p.position !== 'pitcher');
+      if (fielders.length > 0) {
+        const pick = fielders[Math.floor(Math.random() * fielders.length)];
+        pick.position = reqPos;
+        if (pick.positionFitness) pick.positionFitness[reqPos] = Math.max(pick.positionFitness[reqPos] || 0, 40);
+        const idx = remaining.findIndex(c => c.id === pick.id);
+        if (idx >= 0) remaining.splice(idx, 1);
+        roster.push(pick);
+      }
+    }
+  }
+
+  for (let i = roster.length; i < rosterSize && remaining.length > 0; i++) {
     const pitcherCount = roster.filter(p => p.position === 'pitcher').length;
     let pool = remaining;
     if (pitcherCount >= maxPitchers) {
