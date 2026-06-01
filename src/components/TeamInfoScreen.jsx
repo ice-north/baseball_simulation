@@ -533,10 +533,29 @@ const TeamInfoScreen = () => {
         </div>
 
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <div className="grid grid-cols-3 gap-4 text-white">
+          <div className={`grid ${team.corporateData ? 'grid-cols-5' : 'grid-cols-3'} gap-4 text-white`}>
             <div><div className="text-sm text-gray-400">総人数</div><div className="text-2xl font-bold">{team.players.length}人</div></div>
             <div><div className="text-sm text-gray-400">投手</div><div className="text-2xl font-bold">{pitchers.length}人</div></div>
             <div><div className="text-sm text-gray-400">野手</div><div className="text-2xl font-bold">{fielders.length}人</div></div>
+            {team.corporateData && (() => {
+              const cd = team.corporateData;
+              const rankColor = { S: 'text-yellow-400', A: 'text-blue-400', B: 'text-green-400', C: 'text-gray-300', D: 'text-gray-500' }[cd.rank] || 'text-gray-300';
+              return (<>
+                <div>
+                  <div className="text-sm text-gray-400">ランク</div>
+                  <div className={`text-2xl font-black ${rankColor}`}>{cd.rank}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-400">注目度</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-2xl font-bold">{Math.round(cd.reputation)}</div>
+                    <div className="flex-1 max-w-[80px] bg-gray-700 rounded-full h-2.5 mt-1">
+                      <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full" style={{width: `${cd.reputation}%`}} />
+                    </div>
+                  </div>
+                </div>
+              </>);
+            })()}
           </div>
         </div>
 
