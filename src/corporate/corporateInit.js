@@ -222,7 +222,7 @@ const adjustCorporateAge = (player) => {
 export const generateCorporateRoster = (teamDef, year = 1) => {
   const rank = teamDef.rank || 'C';
   const type = teamDef.type || 'corporate';
-  const isIndependent = teamDef.id?.startsWith('il_');
+  const isIndependent = String(teamDef.id || '').startsWith('il_');
   const cfg = (isIndependent ? INDEPENDENT_RANK_CONFIG[rank] : null) || RANK_CONFIG[rank] || RANK_CONFIG.C;
   const sizeRange = ROSTER_SIZE[rank]?.[type] || ROSTER_SIZE.C.corporate;
   const rosterSize = randInt(sizeRange[0], sizeRange[1]);
