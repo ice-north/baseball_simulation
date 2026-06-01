@@ -146,29 +146,30 @@ const GameFlowScreens = ({
         setGameFlowState('corporate_loading');
         setTimeout(() => {
           const result = initializeCorporateGame(team);
-          const teamNames = result.allTeamNames;
-          const teamCount = teamNames.length;
+          const rl = result.regionalLeague;
+          const leagueTeams = rl.leagueTeams;
 
           setLeagueConfig({
             format: 'single',
-            teamsPerLeague: teamCount,
-            leagues: [{ name: '社会人リーグ', teams: teamNames }]
+            teamsPerLeague: leagueTeams.length,
+            leagues: [{ name: '地域リーグ', teams: leagueTeams }]
           });
 
           const newSeasonData = createSeasonData(1);
           newSeasonData.settings = {
-            teamsCount: teamCount,
-            teamNames: teamNames,
-            teamAbbreviations: teamNames.map(n => n.length <= 3 ? n : (/^[A-Za-z]/.test(n) ? n.slice(0, 3).toUpperCase() : n.slice(0, 3))),
-            gamesPerSeason: 0,
+            teamsCount: leagueTeams.length,
+            teamNames: leagueTeams,
+            teamAbbreviations: leagueTeams.map(n => n.length <= 3 ? n : (/^[A-Za-z]/.test(n) ? n.slice(0, 3).toUpperCase() : n.slice(0, 3))),
+            gamesPerSeason: rl.gamesPerSeason,
             useDH: true,
             leagueFormat: 'single',
             corporateMode: true,
             corporateTeamId: team.id,
+            allCorporateTeamNames: result.allTeamNames,
           };
 
-          newSeasonData.schedule = [];
-          newSeasonData.standings = initializeStandings(teamNames);
+          newSeasonData.schedule = rl.schedule;
+          newSeasonData.standings = initializeStandings(leagueTeams);
           setSeasonData(newSeasonData);
           setGameFlowState('corporate_camp');
         }, 50);

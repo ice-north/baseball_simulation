@@ -193,7 +193,7 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
 
   switch (newPhase) {
     case SEASON_PHASES.PLAYOFFS: {
-      // 社会人モードはリーグ戦なし→プレーオフもスキップ
+      // 社会人モードは都市対抗・日本選手権がプレーオフ代替→リーグ戦プレーオフはスキップ
       if (seasonData.settings?.corporateMode) {
         break;
       }

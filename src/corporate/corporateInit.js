@@ -497,6 +497,88 @@ export const initializeIndependentLeagues = (excludeLeagueId = null, existingTea
 };
 
 // ============================================================
+// 地域リーグ生成（社会人モードのレギュラーシーズン）
+// ユーザーの地域から8-12チームを選出してリーグ戦を組む
+// ============================================================
+
+const NEIGHBOR_REGIONS = {
+  hokkaido: ['tohoku'],
+  tohoku: ['hokkaido', 'kitakanto'],
+  kitakanto: ['tohoku', 'minamikanto', 'tokyo'],
+  minamikanto: ['kitakanto', 'tokyo', 'kanagawa'],
+  tokyo: ['kitakanto', 'minamikanto', 'kanagawa'],
+  kanagawa: ['tokyo', 'minamikanto', 'hokushinetsu'],
+  hokushinetsu: ['kanagawa', 'kitakanto', 'tokai'],
+  tokai: ['hokushinetsu', 'kinki'],
+  kinki: ['tokai', 'chugoku'],
+  chugoku: ['kinki', 'shikoku', 'kyushu'],
+  shikoku: ['chugoku', 'kyushu', 'kinki'],
+  kyushu: ['chugoku', 'shikoku'],
+};
+
+const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+const TARGET_LEAGUE_SIZE = 10;
+const GAMES_PER_SEASON = 30;
+
+export const generateRegionalLeague = (userTeamName, userRegion, allTeamDefs) => {
+  // 同地域のチームを取得（ランク順）
+  const regionTeams = allTeamDefs
+    .filter(d => d.region === userRegion)
+    .map(d => d.displayName || d.name)
+    .filter(name => TEAMS_DATA[name]);
+
+  // ユーザーチームを含むリーグメンバーを構築
+  let leagueTeams = [...regionTeams];
+
+  // 地域のチーム数が多すぎる場合: ユーザー＋上位チームを選出
+  if (leagueTeams.length > TARGET_LEAGUE_SIZE + 2) {
+    const userIncluded = leagueTeams.includes(userTeamName);
+    const sorted = leagueTeams
+      .filter(name => name !== userTeamName)
+      .sort((a, b) => {
+        const ra = RANK_ORDER[TEAMS_DATA[a]?.corporateData?.rank] ?? 4;
+        const rb = RANK_ORDER[TEAMS_DATA[b]?.corporateData?.rank] ?? 4;
+        return ra - rb;
+      });
+    leagueTeams = userIncluded ? [userTeamName, ...sorted.slice(0, TARGET_LEAGUE_SIZE - 1)] : sorted.slice(0, TARGET_LEAGUE_SIZE);
+  }
+
+  // 地域のチーム数が少なすぎる場合: 近隣地域から補充
+  if (leagueTeams.length < 6) {
+    const neighbors = NEIGHBOR_REGIONS[userRegion] || [];
+    for (const nRegion of neighbors) {
+      if (leagueTeams.length >= 8) break;
+      const nTeams = allTeamDefs
+        .filter(d => d.region === nRegion)
+        .map(d => d.displayName || d.name)
+        .filter(name => TEAMS_DATA[name] && !leagueTeams.includes(name))
+        .sort((a, b) => {
+          const ra = RANK_ORDER[TEAMS_DATA[a]?.corporateData?.rank] ?? 4;
+          const rb = RANK_ORDER[TEAMS_DATA[b]?.corporateData?.rank] ?? 4;
+          return ra - rb;
+        });
+      const needed = Math.min(nTeams.length, 8 - leagueTeams.length);
+      leagueTeams.push(...nTeams.slice(0, needed));
+    }
+  }
+
+  // スケジュール生成
+  const schedule = generateFullSeasonSchedule({
+    teams: leagueTeams,
+    gamesPerSeason: GAMES_PER_SEASON,
+    startDate: { year: 2024, month: 4, day: 1 },
+    endDate: { year: 2024, month: 9, day: 30 },
+    leagueFormat: 'single',
+  });
+
+  return {
+    leagueTeams,
+    schedule,
+    gamesPerSeason: GAMES_PER_SEASON,
+  };
+};
+
+// ============================================================
 // 社会人モードの完全初期化（全チーム＋独立リーグのロスターを生成）
 // ============================================================
 
@@ -510,6 +592,7 @@ export const initializeCorporateGame = (teamDef) => {
   // 社会人179チーム生成
   const allTeamDefs = getAllTeamsEffective();
   const userTeamName = teamDef.displayName || teamDef.name;
+  const userRegion = teamDef.region;
   const allTeamNames = [];
   let userRoster = null;
   let userStaff = null;
@@ -556,13 +639,19 @@ export const initializeCorporateGame = (teamDef) => {
     WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
   }
 
+  // 地域リーグ生成
+  const regionalLeague = generateRegionalLeague(userTeamName, userRegion, allTeamDefs);
+
   // 独立リーグ4つも生成
   initializeIndependentLeagues(null, allTeamNames);
 
   // 大学リーグ初期化
   initializeUniversityLeagues(2024);
 
-  return { userTeamName, allTeamNames, roster: userRoster, staff: userStaff };
+  return {
+    userTeamName, allTeamNames, roster: userRoster, staff: userStaff,
+    regionalLeague,
+  };
 };
 
 // ============================================================

@@ -11,7 +11,8 @@ import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates } from './universityPool.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
-import { releasedPlayersPool } from '../teams-data.js';
+import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
+import { generateRegionalLeague } from '../corporate/corporateInit.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
 
@@ -1040,11 +1041,31 @@ export function advanceToNextYear(seasonData, allTeams) {
   const newSeasonData = createSeasonData(newYear);
   newSeasonData.settings = { ...seasonData.settings };
 
-  // スケジュールはレギュレーション設定後に生成するため、ここでは空のまま
-  // 順位表のみ初期化
-  const teams = Object.keys(teamsAfterRetirement);
-  newSeasonData.schedule = [];
-  newSeasonData.standings = initializeStandings(teams);
+  // 社会人モード: 地域リーグを再生成
+  if (seasonData.settings?.corporateMode) {
+    const userTeamName = Object.keys(teamsAfterRetirement)[0];
+    const userRegion = TEAMS_DATA[userTeamName]?.corporateData?.region;
+    if (userRegion) {
+      const allDefs = Object.values(TEAMS_DATA).map(t => ({
+        name: t.name, displayName: t.name, region: t.corporateData?.region,
+        rank: t.corporateData?.rank, type: t.corporateData?.type,
+      })).filter(d => d.region);
+      const rl = generateRegionalLeague(userTeamName, userRegion, allDefs);
+      newSeasonData.schedule = rl.schedule;
+      newSeasonData.standings = initializeStandings(rl.leagueTeams);
+      newSeasonData.settings.teamNames = rl.leagueTeams;
+      newSeasonData.settings.teamsCount = rl.leagueTeams.length;
+      newSeasonData.settings.gamesPerSeason = rl.gamesPerSeason;
+    } else {
+      newSeasonData.schedule = [];
+      newSeasonData.standings = initializeStandings(Object.keys(teamsAfterRetirement));
+    }
+  } else {
+    // 独立リーグモード: スケジュールはレギュレーション設定後に生成
+    const teams = Object.keys(teamsAfterRetirement);
+    newSeasonData.schedule = [];
+    newSeasonData.standings = initializeStandings(teams);
+  }
 
   // 年齢カーブの結果を新シーズンデータに保存（キャンプ画面で表示用）
   newSeasonData.ageReports = ageReports;
