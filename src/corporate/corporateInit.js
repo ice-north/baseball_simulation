@@ -860,24 +860,28 @@ export const updateAllTeamReputations = (seasonData) => {
   }
   // 日本選手権
   const ns = seasonData.nihonSenshuken;
-  if (ns?.bracket) {
-    if (ns.bracket.rounds?.[0]) {
-      for (const match of ns.bracket.rounds[0]) {
+  if (ns?.mainTournament?.bracket) {
+    if (ns.mainTournament.bracket.rounds?.[0]) {
+      for (const match of ns.mainTournament.bracket.rounds[0]) {
         if (match.team1) senshukenEntries.add(match.team1);
         if (match.team2) senshukenEntries.add(match.team2);
       }
     }
-    const nsWins = countBracketWins(ns.bracket);
+    const nsWins = countBracketWins(ns.mainTournament.bracket);
     for (const [team, w] of Object.entries(nsWins)) {
       mainTournamentWinsMap[team] = (mainTournamentWinsMap[team] || 0) + w;
+    }
+  } else if (ns?.qualifiers) {
+    for (const q of Object.values(ns.qualifiers)) {
+      if (q.qualifiedTeams) q.qualifiedTeams.forEach(t => senshukenEntries.add(t));
     }
   }
 
   const toshitaikouChampion = td?.mainTournament?.champion || td?.champion || null;
-  const toshitaikouFinal = td?.mainTournament?.rounds?.slice(-1)[0] || [];
+  const toshitaikouFinal = td?.mainTournament?.bracket?.rounds?.slice(-1)[0] || [];
   const toshitaikouRunnerUp = toshitaikouFinal.length > 0 ? (toshitaikouFinal[0]?.loser || null) : null;
-  const senshukenChampion = ns?.bracket?.champion || null;
-  const senshukenFinal = ns?.bracket?.rounds?.slice(-1)[0] || [];
+  const senshukenChampion = ns?.mainTournament?.champion || ns?.champion || null;
+  const senshukenFinal = ns?.mainTournament?.bracket?.rounds?.slice(-1)[0] || [];
   const senshukenRunnerUp = senshukenFinal.length > 0 ? (senshukenFinal[0]?.loser || null) : null;
 
   const rankChanges = [];

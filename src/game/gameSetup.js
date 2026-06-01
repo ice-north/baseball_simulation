@@ -492,13 +492,48 @@ export function executeHandleManagedGameEnd(ctx) {
     const userWon = finalScore.home > finalScore.away;
     const winnerName = userWon ? htn : atn;
     const scoreArr = [finalScore.home, finalScore.away];
-    recordResult(ns.bracket, nsPending.roundIdx, nsPending.matchIdx, winnerName, scoreArr);
-    if (isBracketComplete(ns.bracket)) {
-      const rankings = getBracketRankings(ns.bracket);
-      ns.champion = rankings[0] || null;
-      ns.runnerUp = rankings[1] || null;
-      ns.phase = 'done';
+
+    if (nsPending.bracketType === 'nihon_senshuken' && ns.mainTournament) {
+      recordResult(ns.mainTournament.bracket, nsPending.roundIdx, nsPending.matchIdx, winnerName, scoreArr);
+      if (isBracketComplete(ns.mainTournament.bracket)) {
+        const rankings = getBracketRankings(ns.mainTournament.bracket);
+        ns.mainTournament.champion = rankings[0] || null;
+        ns.mainTournament.runnerUp = rankings[1] || null;
+        ns.mainTournament.phase = 'done';
+        ns.champion = ns.mainTournament.champion;
+        ns.runnerUp = ns.mainTournament.runnerUp;
+        ns.phase = 'done';
+      }
+    } else if (nsPending.bracketType === 'nihon_senshuken_qualifier_losers' && nsPending.regionId) {
+      const qualifier = ns.qualifiers[nsPending.regionId];
+      if (qualifier?.losersBracket) {
+        recordResult(qualifier.losersBracket, nsPending.roundIdx, nsPending.matchIdx, winnerName, scoreArr);
+        if (!userWon) {
+          autoPlayBracket(qualifier.losersBracket, qualifier.teamDefsMap);
+        }
+        if (isBracketComplete(qualifier.losersBracket)) {
+          const losersRankings = getBracketRankings(qualifier.losersBracket);
+          qualifier.qualifiedTeams.push(...losersRankings.slice(0, qualifier.slots - 1));
+          qualifier.phase = 'done';
+        }
+        const allDone = Object.values(ns.qualifiers).every(q => q.phase === 'done');
+        if (allDone) {
+          ns.userQualifierDone = true;
+          ns.phase = 'qualifiers_done';
+        }
+      }
+    } else if (nsPending.bracketType === 'nihon_senshuken_qualifier' && nsPending.regionId) {
+      const qualifier = ns.qualifiers[nsPending.regionId];
+      if (qualifier) {
+        advanceQualifierWithResult(qualifier, nsPending.roundIdx, nsPending.matchIdx, winnerName, scoreArr, htn);
+        const allDone = Object.values(ns.qualifiers).every(q => q.phase === 'done');
+        if (allDone) {
+          ns.userQualifierDone = true;
+          ns.phase = 'qualifiers_done';
+        }
+      }
     }
+
     ns.pendingMatch = null;
     updatedSeasonData = { ...updatedSeasonData, nihonSenshuken: ns };
     setSeasonData(updatedSeasonData);

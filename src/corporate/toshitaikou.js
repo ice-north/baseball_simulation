@@ -778,78 +778,88 @@ export function generateNihonSenshuken(options = {}) {
   const {
     userTeamName = null,
     calendarYear = 2024,
-    standings = null,
-    leagueTeamNames = null,
   } = options;
 
-  const allTeams = getAllTeamsEffective();
-  const allTeamMap = {};
-  allTeams.forEach(t => { allTeamMap[t.displayName || t.name] = t; });
+  const qualifiers = {};
+  let userRegionId = null;
 
-  const selected = [];
-  const selectedSet = new Set();
-
-  // 地域リーグの順位表からユーザー地域の上位チームを選出
-  if (standings && leagueTeamNames) {
-    const sortedStandings = [...standings].sort((a, b) =>
-      b.winRate - a.winRate || b.wins - a.wins
+  for (const regionId of Object.keys(SENSHUKEN_SLOTS)) {
+    const allTeams = getTeamsByRegion(regionId);
+    const sorted = [...allTeams].sort((a, b) =>
+      (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
     );
-    const userRegion = allTeamMap[userTeamName]?.region;
-    const regionSlots = SENSHUKEN_SLOTS[userRegion] || 2;
-    let added = 0;
-    for (const s of sortedStandings) {
-      if (added >= regionSlots) break;
-      if (allTeamMap[s.team]) {
-        selected.push(allTeamMap[s.team]);
-        selectedSet.add(s.team);
-        added++;
+    const teams = sorted.slice(0, MAX_QUALIFIER_TEAMS);
+    const slots = SENSHUKEN_SLOTS[regionId] || 1;
+
+    const teamNames = teams.map(t => t.displayName || t.name);
+    const teamDefsMap = {};
+    teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+
+    const qualifier = {
+      regionId,
+      regionName: TOSHITAIKOU_REGION_NAMES[regionId],
+      slots,
+      teamDefs: teams,
+      teamDefsMap,
+      mainBracket: createBracket(teamNames),
+      losersBracket: null,
+      qualifiedTeams: [],
+      phase: 'main',
+    };
+
+    assignQualifierDates(qualifier, { year: calendarYear, month: 10, day: 5 }, 3);
+
+    if (userTeamName && teamDefsMap[userTeamName]) {
+      userRegionId = regionId;
+    }
+
+    qualifiers[regionId] = qualifier;
+  }
+
+  const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';
+
+  return {
+    qualifiers,
+    mainTournament: null,
+    userRegionId,
+    userQualifierDone,
+    champion: null,
+    runnerUp: null,
+    phase: 'qualifiers',
+  };
+}
+
+export function createSenshukenMainTournament(qualifiers, calendarYear = 2024) {
+  const allQualified = [];
+  for (const regionId of Object.keys(qualifiers)) {
+    const q = qualifiers[regionId];
+    if (q?.qualifiedTeams) {
+      for (const name of q.qualifiedTeams) {
+        allQualified.push({ name, region: regionId, teamDef: q.teamDefsMap?.[name] });
       }
     }
   }
 
-  // 残り枠: 他地域からランク順で選出
-  const regionUsed = {};
-  selected.forEach(t => {
-    regionUsed[t.region] = (regionUsed[t.region] || 0) + 1;
-  });
-
-  const otherTeams = allTeams
-    .filter(t => !selectedSet.has(t.displayName || t.name))
-    .sort((a, b) => (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3));
-
-  for (const t of otherTeams) {
-    if (selected.length >= 32) break;
-    const name = t.displayName || t.name;
-    const region = t.region;
-    const slots = SENSHUKEN_SLOTS[region] || 1;
-    const used = regionUsed[region] || 0;
-    if (used < slots) {
-      selected.push(t);
-      selectedSet.add(name);
-      regionUsed[region] = used + 1;
-    }
+  while (allQualified.length < 32) {
+    const allTeams = getAllTeamsEffective();
+    const usedSet = new Set(allQualified.map(t => t.name));
+    const filler = allTeams
+      .filter(t => !usedSet.has(t.displayName || t.name))
+      .sort((a, b) => (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3));
+    if (filler.length === 0) break;
+    const t = filler[0];
+    allQualified.push({ name: t.displayName || t.name, region: t.region, teamDef: t });
   }
 
-  // 枠が余った場合、ランク上位で埋める
-  for (const t of otherTeams) {
-    if (selected.length >= 32) break;
-    const name = t.displayName || t.name;
-    if (!selectedSet.has(name)) {
-      selected.push(t);
-      selectedSet.add(name);
-    }
-  }
-
-  const teamNames = selected.map(t => t.displayName || t.name);
+  const teamNames = allQualified.map(t => t.name);
   const teamDefsMap = {};
-  selected.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+  allQualified.forEach(t => { if (t.teamDef) teamDefsMap[t.name] = t.teamDef; });
 
   const bracket = createBracket(teamNames);
   assignMainTournamentDates(bracket, { year: calendarYear, month: 11, day: 1 }, 3);
 
   return {
     bracket,
-    teams: selected,
     teamDefsMap,
     champion: null,
     runnerUp: null,
@@ -859,28 +869,77 @@ export function generateNihonSenshuken(options = {}) {
 
 export function simulateNihonSenshukenOnDate(tournament, dateObj, userTeamName = null) {
   if (!tournament || tournament.phase === 'done') return;
-  simulateBracketRoundOnDate(tournament.bracket, tournament.teamDefsMap, dateObj, userTeamName);
-  if (isBracketComplete(tournament.bracket)) {
-    const rankings = getBracketRankings(tournament.bracket);
-    tournament.champion = rankings[0] || null;
-    tournament.runnerUp = rankings[1] || null;
-    tournament.phase = 'done';
+
+  // 予選フェーズ
+  if (tournament.phase === 'qualifiers' && tournament.qualifiers) {
+    for (const regionId of Object.keys(tournament.qualifiers)) {
+      simulateQualifierOnDate(tournament.qualifiers[regionId], dateObj, userTeamName);
+    }
+    const allDone = Object.values(tournament.qualifiers).every(q => q.phase === 'done');
+    if (allDone) {
+      tournament.userQualifierDone = true;
+      tournament.phase = 'qualifiers_done';
+    }
+    return;
+  }
+
+  // 本戦フェーズ
+  if (tournament.mainTournament && tournament.phase === 'main') {
+    simulateBracketRoundOnDate(tournament.mainTournament.bracket, tournament.mainTournament.teamDefsMap, dateObj, userTeamName);
+    if (isBracketComplete(tournament.mainTournament.bracket)) {
+      const rankings = getBracketRankings(tournament.mainTournament.bracket);
+      tournament.champion = rankings[0] || null;
+      tournament.runnerUp = rankings[1] || null;
+      tournament.mainTournament.champion = tournament.champion;
+      tournament.mainTournament.runnerUp = tournament.runnerUp;
+      tournament.mainTournament.phase = 'done';
+      tournament.phase = 'done';
+    }
   }
 }
 
 export function getUserNihonSenshukenMatchOnDate(tournament, dateObj, userTeamName) {
   if (!tournament || !userTeamName || tournament.phase === 'done') return null;
-  const bk = tournament.bracket;
-  if (!bk?.roundDates) return null;
-  const hasMatchDates = !!bk.matchDates;
-  for (let r = 0; r < bk.rounds.length; r++) {
-    for (let m = 0; m < bk.rounds[r].length; m++) {
-      const rd = hasMatchDates ? bk.matchDates[r]?.[m] : bk.roundDates[r];
-      if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
-      const match = bk.rounds[r][m];
-      if (!match.winner && !match.isBye && match.team1 && match.team2) {
-        if (match.team1 === userTeamName || match.team2 === userTeamName) {
-          return { type: 'nihon_senshuken', roundIdx: r, matchIdx: m, match, bracketType: 'nihon_senshuken' };
+
+  // 予選フェーズ
+  if (tournament.phase === 'qualifiers' && tournament.qualifiers && tournament.userRegionId) {
+    const q = tournament.qualifiers[tournament.userRegionId];
+    if (q && q.phase !== 'done') {
+      const match = getUserNextMatch(q.mainBracket, userTeamName);
+      if (match) {
+        const bk = q.mainBracket;
+        const rd = bk.matchDates?.[match.roundIdx]?.[match.matchIdx] || bk.roundDates?.[match.roundIdx];
+        if (rd && rd.year === dateObj.year && rd.month === dateObj.month && rd.day === dateObj.day) {
+          return { type: 'nihon_senshuken_qualifier', roundIdx: match.roundIdx, matchIdx: match.matchIdx, match: match.match || bk.rounds[match.roundIdx][match.matchIdx], bracketType: 'nihon_senshuken_qualifier', regionId: tournament.userRegionId };
+        }
+      }
+      if (q.losersBracket && q.phase === 'losers') {
+        const lMatch = getUserNextMatch(q.losersBracket, userTeamName);
+        if (lMatch) {
+          const lbk = q.losersBracket;
+          const rd = lbk.matchDates?.[lMatch.roundIdx]?.[lMatch.matchIdx] || lbk.roundDates?.[lMatch.roundIdx];
+          if (rd && rd.year === dateObj.year && rd.month === dateObj.month && rd.day === dateObj.day) {
+            return { type: 'nihon_senshuken_qualifier', roundIdx: lMatch.roundIdx, matchIdx: lMatch.matchIdx, match: lMatch.match || lbk.rounds[lMatch.roundIdx][lMatch.matchIdx], bracketType: 'nihon_senshuken_qualifier_losers', regionId: tournament.userRegionId };
+          }
+        }
+      }
+    }
+  }
+
+  // 本戦フェーズ
+  if (tournament.mainTournament && tournament.phase === 'main') {
+    const bk = tournament.mainTournament.bracket;
+    if (!bk?.roundDates) return null;
+    const hasMatchDates = !!bk.matchDates;
+    for (let r = 0; r < bk.rounds.length; r++) {
+      for (let m = 0; m < bk.rounds[r].length; m++) {
+        const rd = hasMatchDates ? bk.matchDates[r]?.[m] : bk.roundDates[r];
+        if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
+        const match = bk.rounds[r][m];
+        if (!match.winner && !match.isBye && match.team1 && match.team2) {
+          if (match.team1 === userTeamName || match.team2 === userTeamName) {
+            return { type: 'nihon_senshuken', roundIdx: r, matchIdx: m, match, bracketType: 'nihon_senshuken' };
+          }
         }
       }
     }
@@ -889,27 +948,66 @@ export function getUserNihonSenshukenMatchOnDate(tournament, dateObj, userTeamNa
 }
 
 export function getNihonSenshukenDatesForCalendar(tournament, userTeamName) {
-  if (!tournament?.bracket?.roundDates) return [];
-  const bk = tournament.bracket;
-  const hasMatchDates = !!bk.matchDates;
-  const dateEntries = {};
-  for (let ri = 0; ri < bk.rounds.length; ri++) {
-    const roundName = getRoundName(bk, ri);
-    for (let mi = 0; mi < bk.rounds[ri].length; mi++) {
-      const m = bk.rounds[ri][mi];
-      if (m.isBye && !(m.team1 && m.team2)) continue;
-      const rd = hasMatchDates ? bk.matchDates[ri]?.[mi] : bk.roundDates[ri];
-      if (!rd) continue;
-      const key = `${rd.year}-${rd.month}-${rd.day}`;
-      if (!dateEntries[key]) dateEntries[key] = { date: rd, label: roundName, isUserMatch: false, done: true };
-      if (!m.winner && m.team1 && m.team2) dateEntries[key].done = false;
-      if (!m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)) {
-        dateEntries[key].isUserMatch = true;
-        dateEntries[key].label = roundName;
+  if (!tournament) return [];
+  const dates = [];
+
+  const collectBracketDates = (bk, type, regionId, isUserRegion, labelText) => {
+    if (!bk?.roundDates) return;
+    const hasMatchDates = !!bk.matchDates;
+    const dateEntries = {};
+    for (let ri = 0; ri < bk.rounds.length; ri++) {
+      for (let mi = 0; mi < bk.rounds[ri].length; mi++) {
+        const m = bk.rounds[ri][mi];
+        if (m.isBye && !(m.team1 && m.team2)) continue;
+        const rd = hasMatchDates ? bk.matchDates[ri]?.[mi] : bk.roundDates[ri];
+        if (!rd) continue;
+        const key = `${rd.year}-${rd.month}-${rd.day}`;
+        if (!dateEntries[key]) dateEntries[key] = { date: rd, label: isUserRegion ? labelText : null, isUserMatch: false, isUserRegion, type, regionId, done: true };
+        if (!m.winner && !m.isBye && m.team1 && m.team2) dateEntries[key].done = false;
+        if (!m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)) {
+          dateEntries[key].isUserMatch = true;
+        }
       }
     }
+    for (const entry of Object.values(dateEntries)) dates.push(entry);
+  };
+
+  if (tournament.qualifiers) {
+    for (const regionId of Object.keys(tournament.qualifiers)) {
+      const q = tournament.qualifiers[regionId];
+      const isUserRegion = regionId === tournament.userRegionId;
+      collectBracketDates(q.mainBracket, 'nihon_senshuken_qualifier', regionId, isUserRegion, '選手権予選');
+      collectBracketDates(q.losersBracket, 'nihon_senshuken_qualifier_losers', regionId, isUserRegion, '選手権敗者復活');
+    }
   }
-  return Object.values(dateEntries).map(e => ({ ...e, type: 'nihon_senshuken' }));
+
+  if (tournament.mainTournament?.bracket?.roundDates) {
+    const mt = tournament.mainTournament;
+    const bk = mt.bracket;
+    const hasMatchDates = !!bk.matchDates;
+    const dateEntries = {};
+    for (let ri = 0; ri < bk.rounds.length; ri++) {
+      const roundName = getRoundName(bk, ri);
+      for (let mi = 0; mi < bk.rounds[ri].length; mi++) {
+        const m = bk.rounds[ri][mi];
+        if (m.isBye && !(m.team1 && m.team2)) continue;
+        const rd = hasMatchDates ? bk.matchDates[ri]?.[mi] : bk.roundDates[ri];
+        if (!rd) continue;
+        const key = `${rd.year}-${rd.month}-${rd.day}`;
+        if (!dateEntries[key]) dateEntries[key] = { date: rd, label: roundName, isUserMatch: false, done: true };
+        if (!m.winner && m.team1 && m.team2) dateEntries[key].done = false;
+        if (!m.winner && m.team1 && m.team2 && (m.team1 === userTeamName || m.team2 === userTeamName)) {
+          dateEntries[key].isUserMatch = true;
+          dateEntries[key].label = roundName;
+        }
+      }
+    }
+    for (const entry of Object.values(dateEntries)) {
+      dates.push({ ...entry, type: 'nihon_senshuken' });
+    }
+  }
+
+  return dates;
 }
 
 // ============================================================
