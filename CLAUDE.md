@@ -29,7 +29,8 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
 - `src/season/universityPool.js` (~550行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
 - `src/corporate/scoutingSystem.js` (~400行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
-- `src/university/universityTeamsData.js` - 大学チームデータ（将来の大学モード用。14リーグ90校（東都2部制12校＋13リーグ×6校）、ランク別成長倍率定義）
+- `src/university/universityTeamsData.js` - 大学チームデータ（14リーグ90校（東都2部制12校＋13リーグ×6校）、ランク別成長倍率定義）
+- `src/university/universityLeagueManager.js` (~280行) - 大学リーグ戦シミュレーション（14リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
 - `src/data/playerNames.js` (210KB) - 姓3000件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
@@ -110,18 +111,18 @@ NEW GAME → 企業チーム選択 → キャンプ
   - 無名の原石(fame=0)はscoutingEyeが高いスカウトだけが見つけられる
   - 有名選手(fame=100)はどのチームでも候補に挙がる
 
-## 大学モード準備 (`src/university/universityTeamsData.js`)
-- **現状**: データ定義のみ。実際のゲームモードは未実装
-- **チームデータ**: `UNIVERSITY_TEAMS` に90校定義（14リーグ、東都のみ2部制12校）
+## 大学リーグシステム (`src/university/`)
+- **チームデータ** (`universityTeamsData.js`): `UNIVERSITY_TEAMS` に90校定義（14リーグ、東都のみ2部制12校）
   - 首都圏7リーグ(48校): 東京六大学, 東都1部+2部, 首都1部, 東京新1部, 千葉県1部, 神奈川1部, 関甲新1部
   - 地方7リーグ(42校): 北東北大学, 仙台六大学, 愛知1部, 関西学生, 関西六大学, 広島六大学, 福岡六大学
-- **リーグ連盟**: `UNIVERSITY_REGIONS` に14リーグを定義（東都12校、他は6校完成版）
+- **リーグ戦** (`universityLeagueManager.js`): 14リーグの春季(4/5〜6/10)・秋季(9/6〜11/5)リーグ戦
+  - ランク別戦力値 `{ S: 78, A: 65, B: 50, C: 38, D: 25 }` で簡易シミュレーション
+  - 東都は1部6校+2部6校の2部制、他は6校総当たり×2巡
+  - 試合日: 火・水・土・日。`WORLD_DATA.universityLeagues` に格納
+  - DateProgressScreenで折りたたみ表示（全14リーグ個別展開可）
 - **ランク別成長**: `UNIVERSITY_RANK_GROWTH` — S=1.25倍, A=1.10倍, B=1.00倍, C=0.90倍, D=0.80倍
   - `applyUniversityGrowth()` で自動適用。universityPool の各エントリに `universityRank` を保持
-- **ランク別初期化設定**: `UNIVERSITY_RANK_CONFIG` — 将来 `corporateInit.js` と同様の初期化に使用
 - **将来のゲームモード**: `gameMode = 'university'` として社会人モードと並行実装可能
-  - 社会人モードの `corporate/` ディレクトリ構造をミラーする設計
-  - 必要なコンポーネント: UniversitySelectScreen, UniversityInit, scheduleGenerator対応, etc.
 
 ## 社会人モード入退団 (`src/corporate/scoutingSystem.js`)
 - **退団（11/9）**: 自動引退判定 + ユーザー/AI戦力外通告。戦力外選手(35歳未満)はリリースプールへ

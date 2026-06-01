@@ -160,81 +160,8 @@ export const UNIVERSITY_RANK_GROWTH = {
 };
 
 // ============================================================
-// ランク別設定（将来の大学モード初期化で使用）
-// corporateInit.js の RANK_CONFIG に相当
-// ============================================================
-
-export const UNIVERSITY_RANK_CONFIG = {
-  S: {
-    teamOffset: 5,
-    starCount: [3, 5],
-    starBoost: [10, 16],
-    starGrowth: 0.10,
-    eliteChance: 0.18,
-    eliteBoost: [8, 14],
-    eliteGrowth: 0.12,
-  },
-  A: {
-    teamOffset: 3,
-    starCount: [2, 3],
-    starBoost: [8, 14],
-    starGrowth: 0.08,
-    eliteChance: 0.10,
-    eliteBoost: [8, 12],
-    eliteGrowth: 0.10,
-  },
-  B: {
-    teamOffset: 0,
-    starCount: [0, 1],
-    starBoost: [6, 12],
-    starGrowth: 0.05,
-    eliteChance: 0.05,
-    eliteBoost: [6, 10],
-    eliteGrowth: 0.08,
-  },
-  C: {
-    teamOffset: -2,
-    starCount: [0, 1],
-    starBoost: [4, 8],
-    starGrowth: 0.03,
-    eliteChance: 0.02,
-    eliteBoost: [4, 8],
-    eliteGrowth: 0.05,
-  },
-  D: {
-    teamOffset: -4,
-    starCount: [0, 0],
-    starBoost: [0, 0],
-    starGrowth: 0.00,
-    eliteChance: 0.00,
-    eliteBoost: [0, 0],
-    eliteGrowth: 0.00,
-  },
-};
-
-// ============================================================
 // ヘルパー関数
 // ============================================================
-
-export function getUniversityTeamsByRegion(regionId) {
-  return UNIVERSITY_TEAMS.filter(t => t.region === regionId);
-}
-
-export function getUniversityTeamById(id) {
-  return UNIVERSITY_TEAMS.find(t => t.id === id);
-}
-
-export function getUniversityTeamByName(name) {
-  return UNIVERSITY_TEAMS.find(t => t.name === name);
-}
-
-export function getAllUniversityTeams() {
-  return UNIVERSITY_TEAMS;
-}
-
-export function getUniversityTeamsByRank(rank) {
-  return UNIVERSITY_TEAMS.filter(t => t.rank === rank);
-}
 
 export function getUniversityGrowthMultiplier(rank) {
   return UNIVERSITY_RANK_GROWTH[rank] || 1.0;
