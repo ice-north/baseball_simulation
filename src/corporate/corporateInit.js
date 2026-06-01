@@ -707,11 +707,16 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
 
 // 注目度の変動要因
 const REPUTATION_GAINS = {
-  win: 0.3,                // 1勝ごと
-  tournamentWin: 8,        // 大会優勝
-  tournamentRunnerUp: 4,   // 大会準優勝
-  proDrafted: 12,          // プロ選手輩出
-  seasonChampion: 15,      // リーグ優勝
+  win: 0.3,                // 地域リーグ1勝ごと
+  highWinRate: 3,          // 勝率.600以上ボーナス
+  dominantSeason: 5,       // 勝率.700以上ボーナス（highWinRateに加算）
+  seasonChampion: 10,      // 地域リーグ優勝
+  tournamentRoundWin: 2,   // 大会1勝（予選・本戦問わず）
+  tournamentQF: 3,         // ベスト8進出ボーナス
+  tournamentSF: 5,         // ベスト4進出ボーナス
+  tournamentRunnerUp: 8,   // 大会準優勝
+  tournamentWin: 12,       // 大会優勝
+  proDrafted: 10,          // プロ選手輩出
 };
 
 const REPUTATION_DECAY = 2; // 年間自然減衰（実績なしなら忘れられる）
@@ -741,16 +746,25 @@ export const updateReputation = (teamData, seasonResults) => {
   if (!cd) return;
 
   let gain = 0;
+  // 地域リーグ成績
   gain += (seasonResults.wins || 0) * REPUTATION_GAINS.win;
+  if (seasonResults.winRate >= 0.700) gain += REPUTATION_GAINS.dominantSeason;
+  if (seasonResults.winRate >= 0.600) gain += REPUTATION_GAINS.highWinRate;
   if (seasonResults.isChampion) gain += REPUTATION_GAINS.seasonChampion;
-  if (seasonResults.tournamentWin) gain += REPUTATION_GAINS.tournamentWin;
-  if (seasonResults.tournamentRunnerUp) gain += REPUTATION_GAINS.tournamentRunnerUp;
+  // 大会成績（予選+本戦の勝利数）
+  const tWins = seasonResults.tournamentWins || 0;
+  gain += tWins * REPUTATION_GAINS.tournamentRoundWin;
+  if (tWins >= 3) gain += REPUTATION_GAINS.tournamentQF;
+  if (tWins >= 4) gain += REPUTATION_GAINS.tournamentSF;
+  if (seasonResults.tournamentChampion) gain += REPUTATION_GAINS.tournamentWin;
+  else if (seasonResults.tournamentRunnerUp) gain += REPUTATION_GAINS.tournamentRunnerUp;
+  // プロ輩出
   if (seasonResults.proDraftedCount) gain += seasonResults.proDraftedCount * REPUTATION_GAINS.proDrafted;
 
   cd.reputation = clamp(cd.reputation + gain - REPUTATION_DECAY, 0, 100);
   cd.yearlyBudgetBonus = getReputationBudgetBonus(cd.reputation);
   cd.proDraftCount += seasonResults.proDraftedCount || 0;
-  cd.tournamentWins += seasonResults.tournamentWin ? 1 : 0;
+  cd.tournamentWins += seasonResults.tournamentChampion ? 1 : 0;
 };
 
 // 注目度からランクを再判定（昇格/降格）
@@ -793,6 +807,20 @@ export const updateRankFromReputation = (teamData) => {
   return null;
 };
 
+// トーナメントブラケットからチームごとの勝利数を集計
+const countBracketWins = (bracket) => {
+  const wins = {};
+  if (!bracket?.rounds) return wins;
+  for (const round of bracket.rounds) {
+    for (const match of round) {
+      if (match.winner && !match.isBye) {
+        wins[match.winner] = (wins[match.winner] || 0) + 1;
+      }
+    }
+  }
+  return wins;
+};
+
 // 全チームの注目度とランクを一括更新
 export const updateAllTeamReputations = (seasonData) => {
   const standings = seasonData.standings || [];
@@ -803,16 +831,38 @@ export const updateAllTeamReputations = (seasonData) => {
     ? [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)[0]?.team
     : null;
 
-  const toshitaikouChampion = seasonData.toshitaikou?.mainTournament?.champion || null;
-  const toshitaikouFinal = seasonData.toshitaikou?.mainTournament?.rounds?.slice(-1)[0] || [];
-  const toshitaikouRunnerUp = toshitaikouFinal.length > 0
-    ? (toshitaikouFinal[0]?.loser || null)
-    : null;
-  const senshukenChampion = seasonData.nihonSenshuken?.bracket?.champion || null;
-  const senshukenFinal = seasonData.nihonSenshuken?.bracket?.rounds?.slice(-1)[0] || [];
-  const senshukenRunnerUp = senshukenFinal.length > 0
-    ? (senshukenFinal[0]?.loser || null)
-    : null;
+  // 大会結果を集計（都市対抗: 予選+本戦、日本選手権）
+  const tournamentWinsMap = {};
+  const td = seasonData.toshitaikou;
+  if (td?.qualifiers) {
+    for (const regionId of Object.keys(td.qualifiers)) {
+      const q = td.qualifiers[regionId];
+      const qWins = countBracketWins(q.mainBracket || q);
+      for (const [team, w] of Object.entries(qWins)) {
+        tournamentWinsMap[team] = (tournamentWinsMap[team] || 0) + w;
+      }
+    }
+  }
+  if (td?.mainTournament) {
+    const mtWins = countBracketWins(td.mainTournament);
+    for (const [team, w] of Object.entries(mtWins)) {
+      tournamentWinsMap[team] = (tournamentWinsMap[team] || 0) + w;
+    }
+  }
+  const ns = seasonData.nihonSenshuken;
+  if (ns?.bracket) {
+    const nsWins = countBracketWins(ns.bracket);
+    for (const [team, w] of Object.entries(nsWins)) {
+      tournamentWinsMap[team] = (tournamentWinsMap[team] || 0) + w;
+    }
+  }
+
+  const toshitaikouChampion = td?.mainTournament?.champion || td?.champion || null;
+  const toshitaikouFinal = td?.mainTournament?.rounds?.slice(-1)[0] || [];
+  const toshitaikouRunnerUp = toshitaikouFinal.length > 0 ? (toshitaikouFinal[0]?.loser || null) : null;
+  const senshukenChampion = ns?.bracket?.champion || null;
+  const senshukenFinal = ns?.bracket?.rounds?.slice(-1)[0] || [];
+  const senshukenRunnerUp = senshukenFinal.length > 0 ? (senshukenFinal[0]?.loser || null) : null;
 
   const rankChanges = [];
 
@@ -823,8 +873,10 @@ export const updateAllTeamReputations = (seasonData) => {
     const s = standingsMap[teamName];
     const seasonResults = {
       wins: s?.wins || 0,
+      winRate: s?.winRate || 0,
       isChampion: teamName === champion,
-      tournamentWin: teamName === toshitaikouChampion || teamName === senshukenChampion,
+      tournamentWins: tournamentWinsMap[teamName] || 0,
+      tournamentChampion: teamName === toshitaikouChampion || teamName === senshukenChampion,
       tournamentRunnerUp: teamName === toshitaikouRunnerUp || teamName === senshukenRunnerUp,
       proDraftedCount: 0,
     };
