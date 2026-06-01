@@ -45,6 +45,7 @@ export const saveGameToSlot = (slotIndex, gameState) => {
       userLeagueId: WORLD_DATA.userLeagueId,
       year: WORLD_DATA.year,
       independentLeagues: JSON.parse(JSON.stringify(WORLD_DATA.independentLeagues)),
+      universityLeagues: WORLD_DATA.universityLeagues ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeagues)) : {},
       corporateLeague: { teams: Object.keys(WORLD_DATA.corporateLeague?.teams || {}), userTeam: WORLD_DATA.corporateLeague?.userTeam },
       draft: JSON.parse(JSON.stringify(WORLD_DATA.draft)),
       corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
@@ -139,6 +140,7 @@ export const loadGameFromSlot = (slotIndex) => {
       WORLD_DATA.userLeagueId = wd.userLeagueId;
       WORLD_DATA.year = wd.year;
       WORLD_DATA.independentLeagues = wd.independentLeagues || {};
+      WORLD_DATA.universityLeagues = wd.universityLeagues || {};
       WORLD_DATA.corporateLeague = {
         teams: {},
         userTeam: wd.corporateLeague?.userTeam || null,

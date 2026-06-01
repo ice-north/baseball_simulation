@@ -29,6 +29,7 @@ import { TEAMS_DATA, clearReleasedPlayersPool } from '../teams-data.js';
 import { INDEPENDENT_LEAGUES, ALL_INDEPENDENT_LEAGUE_IDS } from './independentLeagueData.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
+import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 
 // ============================================================
 // ランク別チーム構成
@@ -506,6 +507,9 @@ export const initializeCorporateGame = (teamDef) => {
   // 独立リーグ4つも生成
   initializeIndependentLeagues(null, allTeamNames);
 
+  // 大学リーグ初期化
+  initializeUniversityLeagues(2024);
+
   return { userTeamName, allTeamNames, roster: userRoster, staff: userStaff };
 };
 
@@ -550,6 +554,9 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
 
   // ユーザーのリーグ以外の独立リーグを生成
   initializeIndependentLeagues(userLeagueId, [...userTeamNames, ...corpTeamNames]);
+
+  // 大学リーグ初期化
+  initializeUniversityLeagues(2024);
 };
 
 // ============================================================

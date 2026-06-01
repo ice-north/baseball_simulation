@@ -20,6 +20,9 @@ export const WORLD_DATA = {
   // { shikoku: { teams: [...], schedule: [...], standings: [...] }, bc: {...}, ... }
   independentLeagues: {},
 
+  // 大学リーグの状態（リージョンIDごとに管理）
+  universityLeagues: {},
+
   // 社会人リーグの状態
   corporateLeague: {
     teams: {},           // チーム名→TEAMS_DATA参照
@@ -174,6 +177,7 @@ export const initializeWorld = (mode, userLeagueId = null) => {
   WORLD_DATA.playerPools.college = [];
   WORLD_DATA.playerPools.free = [];
   WORLD_DATA.independentLeagues = {};
+  WORLD_DATA.universityLeagues = {};
   WORLD_DATA.corporateLeague = { teams: {}, userTeam: null };
   WORLD_DATA.draft = { draftedPlayers: [], history: [] };
   nextPoolPlayerId = 10000;
@@ -186,6 +190,7 @@ export const resetWorld = () => {
   WORLD_DATA.year = 1;
   WORLD_DATA.playerPools = { highSchool: [], college: [], free: [] };
   WORLD_DATA.independentLeagues = {};
+  WORLD_DATA.universityLeagues = {};
   WORLD_DATA.corporateLeague = { teams: {}, userTeam: null };
   WORLD_DATA.draft = { draftedPlayers: [], history: [] };
   nextPoolPlayerId = 10000;

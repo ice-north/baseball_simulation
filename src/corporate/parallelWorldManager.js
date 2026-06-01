@@ -6,6 +6,7 @@
 import { WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
+import { simulateUniversityLeagueDate, getAllUniversityLeagues } from '../university/universityLeagueManager.js';
 
 const getScheduleByDateForLeague = (schedule, date) => {
   if (!schedule || !date) return [];
@@ -44,6 +45,11 @@ const updateLeagueStandings = (standings, homeTeam, awayTeam, homeScore, awaySco
 
 export const simulateParallelWorldDate = (currentDate) => {
   if (!WORLD_DATA.initialized) return;
+
+  // 大学リーグ
+  if (WORLD_DATA.universityLeagues && Object.keys(WORLD_DATA.universityLeagues).length > 0) {
+    simulateUniversityLeagueDate(currentDate);
+  }
 
   for (const [leagueId, leagueData] of Object.entries(WORLD_DATA.independentLeagues)) {
     if (!leagueData || !leagueData.schedule) continue;
@@ -99,3 +105,5 @@ export const getAllParallelLeagues = () => {
       gamesPlayed: data.standings?.reduce((sum, s) => sum + (s.gamesPlayed || 0), 0) / Math.max(1, data.teams?.length || 1),
     }));
 };
+
+export { getAllUniversityLeagues };

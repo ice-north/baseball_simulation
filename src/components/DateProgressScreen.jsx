@@ -5,7 +5,7 @@ import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar } from '../corporate/toshitaikou.js';
-import { simulateParallelWorldDate, getAllParallelLeagues } from '../corporate/parallelWorldManager.js';
+import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues } from '../corporate/parallelWorldManager.js';
 import { generateAprilHighSchoolClass } from '../season/yearProgressionSystem.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
@@ -26,6 +26,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
   const [scoutReportNotifications, setScoutReportNotifications] = useState([]);
   const [showOtherLeagues, setShowOtherLeagues] = useState(false);
+  const [showUniversityLeagues, setShowUniversityLeagues] = useState(false);
+  const [expandedUniLeagues, setExpandedUniLeagues] = useState({});
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -2386,6 +2388,82 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       </div>
                     </div>
                   )}
+                </div>}
+              </div>
+            );
+          })()}
+
+          {/* 大学リーグ順位表 */}
+          {WORLD_DATA.initialized && (() => {
+            const uniLeagues = getAllUniversityLeagues();
+            if (uniLeagues.length === 0) return null;
+            const activeLeagues = uniLeagues.filter(l => l.playedGames > 0 || l.currentSeason !== '終了');
+            if (activeLeagues.length === 0 && !uniLeagues.some(l => l.springDone || l.fallDone)) return null;
+            return (
+              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30 mt-3">
+                <h2
+                  className="text-sm font-bold text-blue-400 mb-2 flex items-center gap-1.5 cursor-pointer select-none"
+                  onClick={() => setShowUniversityLeagues(prev => !prev)}
+                >
+                  <span>🎓</span> 大学リーグ
+                  <span className="text-[10px] text-gray-500 ml-1">({uniLeagues.length}リーグ)</span>
+                  <span className="text-[10px] text-gray-500 ml-auto">{showUniversityLeagues ? '▲' : '▼'}</span>
+                </h2>
+                {showUniversityLeagues && <div className="space-y-1">
+                  {uniLeagues.map(league => {
+                    const isExpanded = expandedUniLeagues[league.id] || false;
+                    const toggleLeague = () => setExpandedUniLeagues(prev => ({ ...prev, [league.id]: !prev[league.id] }));
+                    const renderStandingsRow = (s, i) => {
+                      const wr = (s.wins + s.losses) > 0 ? (s.wins / (s.wins + s.losses)).toFixed(3) : '.000';
+                      return (
+                        <div key={s.team} className="flex items-center text-[11px] gap-1">
+                          <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-400' : 'text-gray-500'}`}>{i + 1}</span>
+                          <span className="flex-1 text-gray-200 truncate">{s.team}</span>
+                          <span className="text-green-400 w-5 text-right">{s.wins}</span>
+                          <span className="text-gray-600">-</span>
+                          <span className="text-red-400 w-5">{s.losses}</span>
+                          <span className="text-gray-400 w-8 text-right font-mono">{wr}</span>
+                        </div>
+                      );
+                    };
+                    return (
+                      <div key={league.id} className="bg-gray-800/50 rounded-lg px-2 py-1.5 border border-gray-700/30">
+                        <div
+                          className="text-xs font-bold text-gray-300 flex items-center justify-between cursor-pointer select-none"
+                          onClick={toggleLeague}
+                        >
+                          <span>{league.name}</span>
+                          <span className="flex items-center gap-2">
+                            <span className="text-[10px] text-blue-400/70">{league.currentSeason}</span>
+                            <span className="text-[10px] text-gray-500">{league.playedGames}/{league.totalGames}</span>
+                            <span className="text-[10px] text-gray-600">{isExpanded ? '▲' : '▼'}</span>
+                          </span>
+                        </div>
+                        {isExpanded && <div className="mt-1 space-y-0.5">
+                          {league.divisions ? (
+                            <div className="space-y-1.5">
+                              <div>
+                                <div className="text-[9px] text-blue-400/60 font-bold mb-0.5">1部</div>
+                                <div className="space-y-0.5">
+                                  {(league.standings.div1 || []).map((s, i) => renderStandingsRow(s, i))}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[9px] text-gray-500 font-bold mb-0.5">2部</div>
+                                <div className="space-y-0.5">
+                                  {(league.standings.div2 || []).map((s, i) => renderStandingsRow(s, i))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {(Array.isArray(league.standings) ? league.standings : []).map((s, i) => renderStandingsRow(s, i))}
+                            </div>
+                          )}
+                        </div>}
+                      </div>
+                    );
+                  })}
                 </div>}
               </div>
             );

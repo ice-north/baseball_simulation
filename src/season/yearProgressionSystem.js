@@ -9,6 +9,8 @@ import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates } from './universityPool.js';
+import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool } from '../teams-data.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
@@ -1061,6 +1063,11 @@ export function advanceToNextYear(seasonData, allTeams) {
     gradPaths: { corporate: gradCorpCount, independent: gradIndCount, retired: gradRetiredCount },
   };
 
+  // 大学リーグの新シーズン初期化
+  if (WORLD_DATA.initialized) {
+    initializeUniversityLeagues(newSeasonData.currentDate?.year || 2024);
+  }
+
   return {
     newSeasonData,
     updatedTeams: teamsAfterRetirement,
@@ -1097,6 +1104,10 @@ export function advanceToNextYearSandbox(seasonData, allTeams) {
   const teams = Object.keys(updatedTeams);
   newSeasonData.schedule = [];
   newSeasonData.standings = initializeStandings(teams);
+
+  if (WORLD_DATA.initialized) {
+    initializeUniversityLeagues(newSeasonData.currentDate?.year || 2024);
+  }
 
   return {
     newSeasonData,
