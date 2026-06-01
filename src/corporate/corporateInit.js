@@ -247,34 +247,24 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   const arsenalMult = RANK_ARSENAL_MULT[rank] || 1.0;
 
   // ランク別能力スケーリング（乗算式）
-  // S=社会人トップ(プロ予備軍), A=強豪, B=中堅, C=育成型, D=高校県大会レベル
-  const RANK_SCALE = { S: 1.10, A: 1.00, B: 0.85, C: 0.72, D: 0.58 };
-  const scale = RANK_SCALE[rank] || 0.72;
+  // 社会人選手は高校野球経験者なので高校生より上、プロ未満
+  // D=クラブチーム(高校強豪卒レベル), C=育成型, B=中堅, A=強豪, S=プロ予備軍
+  const RANK_SCALE = { S: 1.10, A: 1.00, B: 0.92, C: 0.80, D: 0.68 };
+  const scale = RANK_SCALE[rank] || 0.80;
 
   const scaleAndJitter = (val, jitter = 3) =>
     clamp(Math.round(val * scale) + randInt(-jitter, jitter), 1, 99);
 
   candidates.forEach(p => {
     // 個人差: 各能力に独立したジッター（共有talent廃止で二極化を解消）
-    if (p.position !== 'pitcher') {
-      p.batting.meet = scaleAndJitter(p.batting.meet, 4);
-      p.batting.power = scaleAndJitter(p.batting.power, 4);
-      p.batting.eye = scaleAndJitter(p.batting.eye, 3);
-      p.batting.steal = scaleAndJitter(p.batting.steal, 4);
-      p.physical.speed = scaleAndJitter(p.physical.speed, 4);
-      p.physical.arm = scaleAndJitter(p.physical.arm, 4);
-      p.fielding.defense = scaleAndJitter(p.fielding.defense, 4);
-    } else {
-      // 投手の打撃はさらに低く
-      const batScale = Math.min(1.0, scale * 0.7);
-      p.batting.meet = clamp(Math.round(p.batting.meet * batScale) + randInt(-3, 3), 1, 99);
-      p.batting.power = clamp(Math.round(p.batting.power * batScale) + randInt(-3, 3), 1, 99);
-      p.batting.eye = clamp(Math.round(p.batting.eye * batScale) + randInt(-2, 2), 1, 99);
-      p.batting.steal = clamp(Math.round(p.batting.steal * scale) + randInt(-3, 3), 1, 99);
-      p.physical.speed = scaleAndJitter(p.physical.speed, 3);
-      p.physical.arm = scaleAndJitter(p.physical.arm, 3);
-      p.fielding.defense = scaleAndJitter(p.fielding.defense, 3);
-    }
+    // 投手もベースが既に低い(meet15-40等)ので野手と同じスケールを適用
+    p.batting.meet = scaleAndJitter(p.batting.meet, 4);
+    p.batting.power = scaleAndJitter(p.batting.power, 4);
+    p.batting.eye = scaleAndJitter(p.batting.eye, 3);
+    p.batting.steal = scaleAndJitter(p.batting.steal, 4);
+    p.physical.speed = scaleAndJitter(p.physical.speed, 4);
+    p.physical.arm = scaleAndJitter(p.physical.arm, 4);
+    p.fielding.defense = scaleAndJitter(p.fielding.defense, 4);
 
     adjustCorporateAge(p, isIndependent);
 
