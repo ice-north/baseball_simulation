@@ -756,27 +756,95 @@ export function generateToshitaikou(options = {}) {
 
 // ============================================================
 // 社会人野球日本選手権大会（11月上旬、32チームトーナメント）
+// 地域リーグの順位表上位チームが出場（各地域の枠数に基づく）
 // ============================================================
+
+const SENSHUKEN_SLOTS = {
+  hokkaido: 1,
+  tohoku: 3,
+  hokushinetsu: 2,
+  kitakanto: 3,
+  tokyo: 4,
+  minamikanto: 3,
+  kanagawa: 3,
+  tokai: 5,
+  kinki: 4,
+  chugoku: 2,
+  shikoku: 1,
+  kyushu: 1,
+};
 
 export function generateNihonSenshuken(options = {}) {
   const {
     userTeamName = null,
     calendarYear = 2024,
+    standings = null,
+    leagueTeamNames = null,
   } = options;
 
-  // 全チームからランク順に32チーム選出（将来的に予選で絞る）
   const allTeams = getAllTeamsEffective();
-  const sorted = [...allTeams].sort((a, b) =>
-    (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
-  );
-  const selected = sorted.slice(0, 32);
+  const allTeamMap = {};
+  allTeams.forEach(t => { allTeamMap[t.displayName || t.name] = t; });
+
+  const selected = [];
+  const selectedSet = new Set();
+
+  // 地域リーグの順位表からユーザー地域の上位チームを選出
+  if (standings && leagueTeamNames) {
+    const sortedStandings = [...standings].sort((a, b) =>
+      b.winRate - a.winRate || b.wins - a.wins
+    );
+    const userRegion = allTeamMap[userTeamName]?.region;
+    const regionSlots = SENSHUKEN_SLOTS[userRegion] || 2;
+    let added = 0;
+    for (const s of sortedStandings) {
+      if (added >= regionSlots) break;
+      if (allTeamMap[s.team]) {
+        selected.push(allTeamMap[s.team]);
+        selectedSet.add(s.team);
+        added++;
+      }
+    }
+  }
+
+  // 残り枠: 他地域からランク順で選出
+  const regionUsed = {};
+  selected.forEach(t => {
+    regionUsed[t.region] = (regionUsed[t.region] || 0) + 1;
+  });
+
+  const otherTeams = allTeams
+    .filter(t => !selectedSet.has(t.displayName || t.name))
+    .sort((a, b) => (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3));
+
+  for (const t of otherTeams) {
+    if (selected.length >= 32) break;
+    const name = t.displayName || t.name;
+    const region = t.region;
+    const slots = SENSHUKEN_SLOTS[region] || 1;
+    const used = regionUsed[region] || 0;
+    if (used < slots) {
+      selected.push(t);
+      selectedSet.add(name);
+      regionUsed[region] = used + 1;
+    }
+  }
+
+  // 枠が余った場合、ランク上位で埋める
+  for (const t of otherTeams) {
+    if (selected.length >= 32) break;
+    const name = t.displayName || t.name;
+    if (!selectedSet.has(name)) {
+      selected.push(t);
+      selectedSet.add(name);
+    }
+  }
 
   const teamNames = selected.map(t => t.displayName || t.name);
   const teamDefsMap = {};
   selected.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
 
   const bracket = createBracket(teamNames);
-  // 11月1日から1日3試合ずつ
   assignMainTournamentDates(bracket, { year: calendarYear, month: 11, day: 1 }, 3);
 
   return {

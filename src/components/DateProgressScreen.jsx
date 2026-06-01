@@ -213,7 +213,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setIsGeneratingTournament(true);
       setTimeout(() => {
         const calYear = newData.currentDate.year;
-        const ns = generateNihonSenshuken({ userTeamName, calendarYear: calYear });
+        const ns = generateNihonSenshuken({
+          userTeamName,
+          calendarYear: calYear,
+          standings: newData.standings,
+          leagueTeamNames: newData.settings?.teamNames,
+        });
         const updated = { ...newData, nihonSenshuken: { ...ns, generated: true } };
         setSeasonData(updated);
         setIsGeneratingTournament(false);
