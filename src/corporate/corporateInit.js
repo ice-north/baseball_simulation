@@ -158,6 +158,10 @@ const RANK_CONTROL_CAP = { S: 78, A: 72, B: 65, C: 55, D: 45 };
 // ランク別の変化球レベル倍率（Dランクはアマチュアレベル）
 const RANK_ARSENAL_MULT = { S: 1.1, A: 1.0, B: 0.85, C: 0.65, D: 0.45 };
 
+// ランク別の打撃能力キャップ（初期生成時）
+// 成長してピークでS級ならOKだが、初期生成で85超は非現実的
+const RANK_BATTING_CAP = { S: 72, A: 66, B: 60, C: 52, D: 45 };
+
 // ランク別の初期注目度（0-100）
 // 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
 const RANK_INITIAL_REPUTATION = { S: 85, A: 65, B: 40, C: 20, D: 5 };
@@ -421,10 +425,16 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
 
   // スター/プロ注目も含め制球上限を強制（通常cap + 8が絶対上限）
   const ctrlMax = controlCap + 8;
+  const batCap = RANK_BATTING_CAP[rank] || 52;
   roster.forEach(p => {
     if (p.position === 'pitcher') {
       p.pitching.control = Math.min(p.pitching.control, ctrlMax);
     }
+    // 打撃能力キャップ（初期生成でワールドクラスにならないよう制限）
+    p.batting.meet = Math.min(p.batting.meet, batCap);
+    p.batting.power = Math.min(p.batting.power, batCap);
+    p.batting.eye = Math.min(p.batting.eye, batCap);
+
     p.scoutComment = generateScoutComment(p);
     if (!p.careerHistory) p.careerHistory = [];
     if (p.careerHistory.length === 0) {
@@ -432,6 +442,39 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     }
     p.careerHistory.push({ type: 'corporate', label: teamDef.name || teamDef.displayName });
   });
+
+  // 二刀流選手の保証（1-2人）
+  const twoWayCount = roster.filter(p => p.isTwoWay).length;
+  if (twoWayCount < 1) {
+    const targetCount = Math.random() < 0.5 ? 1 : 2;
+    const young = roster
+      .filter(p => p.position !== 'pitcher' && p.age <= 25 && !p.isTwoWay)
+      .sort((a, b) => (b.physical.arm + b.physical.speed) - (a.physical.arm + a.physical.speed));
+    for (let i = 0; i < targetCount && i < young.length; i++) {
+      const p = young[i];
+      p.isTwoWay = true;
+      p.twoWaySubPosition = p.position;
+      // 投球能力を付与（野手ベースの二刀流）
+      p.pitching.velocity = clamp(p.pitching.velocity + randInt(5, 15), 120, velCap);
+      p.pitching.control = clamp(p.pitching.control + randInt(5, 15), 20, controlCap);
+      p.pitching.stamina = clamp(p.pitching.stamina + randInt(10, 30), 50, 120);
+      if (!p.pitching.arsenal || p.pitching.arsenal.length < 2) {
+        const BREAKING_BALLS = ['スライダー', 'カーブ', 'チェンジアップ', 'フォーク', 'カットボール'];
+        const ball1 = BREAKING_BALLS[Math.floor(Math.random() * BREAKING_BALLS.length)];
+        let ball2 = BREAKING_BALLS[Math.floor(Math.random() * BREAKING_BALLS.length)];
+        while (ball2 === ball1) ball2 = BREAKING_BALLS[Math.floor(Math.random() * BREAKING_BALLS.length)];
+        p.pitching.arsenal = [
+          { name: 'ストレート', type: 'straight', level: 50 },
+          { name: ball1, type: 'breaking', level: randInt(25, 50) },
+          { name: ball2, type: 'breaking', level: randInt(20, 40) },
+        ];
+      }
+      if (p.positionFitness) {
+        p.positionFitness.pitcher = randInt(30, 60);
+      }
+    }
+  }
+
   return roster;
 };
 
