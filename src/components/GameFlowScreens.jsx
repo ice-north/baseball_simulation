@@ -204,6 +204,9 @@ const GameFlowScreens = ({
         Object.keys(TEAMS_DATA).forEach(teamName => {
           const teamData = TEAMS_DATA[teamName];
           if (teamData && teamData.players && teamData.players.length > 0) {
+            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+              generatePitchingRotation(teamName);
+            }
             if (teamName === userTeamName) {
               setRecommendedLineup(teamData, teamName);
             } else {
@@ -295,6 +298,9 @@ const GameFlowScreens = ({
         Object.keys(TEAMS_DATA).forEach(teamName => {
           const teamData = TEAMS_DATA[teamName];
           if (teamData && teamData.players && teamData.players.length > 0) {
+            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+              generatePitchingRotation(teamName);
+            }
             if (teamName === userTeamName) {
               setRecommendedLineup(teamData, teamName);
             } else {
@@ -339,6 +345,9 @@ const GameFlowScreens = ({
         Object.keys(TEAMS_DATA).forEach(teamName => {
           const teamData = TEAMS_DATA[teamName];
           if (teamData && teamData.players && teamData.players.length > 0) {
+            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+              generatePitchingRotation(teamName);
+            }
             if (teamName === userTeamName) {
               setRecommendedLineup(teamData, teamName);
             } else {

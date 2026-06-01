@@ -347,12 +347,26 @@ export const generatePitchingRotation = (teamName) => {
     (p.pitching?.control || 0) * 0.35 +
     (p.pitching?.stamina || 0) * 0.20;
 
-  // 先発候補: スタミナ130以上で先発スコア上位5人
+  // 先発候補: スタミナ上位の投手を先発スコア順に5人
+  // 閾値は投手陣のスタミナ中央値を基準に動的決定（社会人モード対応）
+  const sortedByStamina = [...pitchers].sort((a, b) => (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0));
+  const medianStamina = sortedByStamina.length > 0 ? (sortedByStamina[Math.floor(sortedByStamina.length / 2)]?.pitching?.stamina || 80) : 80;
+  const starterThreshold = Math.max(60, Math.min(130, medianStamina));
   const starterCandidates = pitchers
-    .filter(p => (p.pitching?.stamina || 0) >= 130)
+    .filter(p => (p.pitching?.stamina || 0) >= starterThreshold)
     .sort((a, b) => starterScore(b) - starterScore(a));
   const starters = starterCandidates.slice(0, 5);
   const starterIds = new Set(starters.map(p => p.id));
+
+  // 先発が足りない場合はスタミナ順で補充
+  if (starters.length < 3) {
+    const needed = 3 - starters.length;
+    const remaining = sortedByStamina.filter(p => !starterIds.has(p.id));
+    for (let i = 0; i < Math.min(needed, remaining.length); i++) {
+      starters.push(remaining[i]);
+      starterIds.add(remaining[i].id);
+    }
+  }
 
   // リリーフ候補
   const relievers = pitchers.filter(p => !starterIds.has(p.id));

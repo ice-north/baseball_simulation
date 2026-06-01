@@ -430,7 +430,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               );
             })()}
 
-            {/* 完了した派遣レポート */}
+            {/* 発見選手一覧（全レポート統合） */}
             {(() => {
               const missions = cd.scoutMissions || [];
               const completedMissions = missions.filter(m => m.completed && m.results);
@@ -442,85 +442,82 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 return <span className="text-gray-400">{label}<span className={`font-bold ml-0.5 ${getAbilityColor(numVal)}`}>{val}{label === '球速' ? 'km' : ''}</span></span>;
               };
 
+              const allPlayers = [];
+              const seenIds = new Set();
+              completedMissions.forEach(mission => {
+                (mission.results || []).forEach(p => {
+                  if (!seenIds.has(p.id)) {
+                    seenIds.add(p.id);
+                    allPlayers.push(p);
+                  }
+                });
+              });
+
               return (
                 <div>
-                  <h3 className="text-xs font-bold text-yellow-400 mb-2">スカウトレポート</h3>
+                  <h3 className="text-xs font-bold text-yellow-400 mb-2">
+                    発見選手一覧（{allPlayers.length}名）
+                    <span className="text-[10px] text-gray-500 font-normal ml-2">
+                      {completedMissions.length}件のレポートから統合
+                    </span>
+                  </h3>
                   <div className="space-y-1.5">
-                    {completedMissions.map((mission, idx) => (
-                      <div key={idx}
-                        className="bg-gray-750 rounded-lg p-2.5 border border-gray-700/50 cursor-pointer hover:border-yellow-600/50 transition"
-                        onClick={() => setSelectedReport(selectedReport === idx ? null : idx)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-yellow-400">{SCOUT_TARGETS[mission.target]?.label}</span>
-                            <span className="text-[10px] text-gray-500">{mission.results.length}名発見</span>
-                            <span className="text-[10px] text-gray-600">({mission.staffName})</span>
+                    {allPlayers.map((p, pi) => {
+                      const sa = p.scoutedAbilities || {};
+                      const revealLevel = p._revealLevel || 0;
+                      const revealLabel = ['概要', '詳細', '完全'][revealLevel];
+                      return (
+                        <div key={pi} className="bg-gray-800/80 rounded p-2 text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white font-bold">{p.name}</span>
+                            <span className="text-gray-400">{p.age}歳</span>
+                            <span className="text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</span>
+                            <span className="text-gray-500">{p._scoutSource}</span>
+                            {p._poolRef?.teamName && (
+                              <span className="text-emerald-400 text-[10px]">所属: {p._poolRef.teamName}</span>
+                            )}
+                            {(p.fame || 0) > 0 && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                p.fame >= 50 ? 'bg-yellow-600/30 text-yellow-300' : 'bg-gray-700 text-gray-400'
+                              }`}>
+                                知名度{p.fame}
+                              </span>
+                            )}
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                              revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
+                              revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
+                              'bg-gray-700 text-gray-400'
+                            }`}>
+                              {revealLabel}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-gray-500">{selectedReport === idx ? '▲' : '▼'}</span>
+                          <div className="flex gap-3 mt-1.5 text-[10px] flex-wrap">
+                            {p.position === 'pitcher' ? (<>
+                              {renderAbility('球速', sa.pitching?.velocity)}
+                              {renderAbility('制球', sa.pitching?.control)}
+                              {renderAbility('スタ', sa.pitching?.stamina)}
+                            </>) : (<>
+                              {renderAbility('ミート', sa.batting?.meet)}
+                              {renderAbility('パワー', sa.batting?.power)}
+                              {renderAbility('選球眼', sa.batting?.eye)}
+                              {renderAbility('走力', sa.physical?.speed)}
+                              {renderAbility('守備', sa.fielding?.defense)}
+                            </>)}
+                          </div>
+                          {revealLevel < 2 && (
+                            <button
+                              onClick={() => {
+                                investigatePlayer(p);
+                                setRefreshTick(t => t + 1);
+                              }}
+                              className="mt-1.5 px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
+                            >
+                              🔍 調査する（{revealLevel === 0 ? '詳細を調べる' : '全能力を調べる'}）
+                            </button>
+                          )}
                         </div>
-                        {selectedReport === idx && mission.results.length > 0 && (
-                          <div className="mt-2 space-y-1.5" onClick={e => e.stopPropagation()}>
-                            {mission.results.map((p, pi) => {
-                              const sa = p.scoutedAbilities || {};
-                              const revealLevel = p._revealLevel || 0;
-                              const revealLabel = ['概要', '詳細', '完全'][revealLevel];
-                              return (
-                                <div key={pi} className="bg-gray-800/80 rounded p-2 text-xs">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-white font-bold">{p.name}</span>
-                                    <span className="text-gray-400">{p.age}歳</span>
-                                    <span className="text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</span>
-                                    <span className="text-gray-500">{p._scoutSource}</span>
-                                    {p._poolRef?.teamName && (
-                                      <span className="text-emerald-400 text-[10px]">所属: {p._poolRef.teamName}</span>
-                                    )}
-                                    {(p.fame || 0) > 0 && (
-                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                        p.fame >= 50 ? 'bg-yellow-600/30 text-yellow-300' : 'bg-gray-700 text-gray-400'
-                                      }`}>
-                                        知名度{p.fame}
-                                      </span>
-                                    )}
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                                      revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
-                                      revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
-                                      'bg-gray-700 text-gray-400'
-                                    }`}>
-                                      {revealLabel}
-                                    </span>
-                                  </div>
-                                  <div className="flex gap-3 mt-1.5 text-[10px] flex-wrap">
-                                    {p.position === 'pitcher' ? (<>
-                                      {renderAbility('球速', sa.pitching?.velocity)}
-                                      {renderAbility('制球', sa.pitching?.control)}
-                                      {renderAbility('スタ', sa.pitching?.stamina)}
-                                    </>) : (<>
-                                      {renderAbility('ミート', sa.batting?.meet)}
-                                      {renderAbility('パワー', sa.batting?.power)}
-                                      {renderAbility('選球眼', sa.batting?.eye)}
-                                      {renderAbility('走力', sa.physical?.speed)}
-                                      {renderAbility('守備', sa.fielding?.defense)}
-                                    </>)}
-                                  </div>
-                                  {revealLevel < 2 && (
-                                    <button
-                                      onClick={() => {
-                                        investigatePlayer(p);
-                                        setRefreshTick(t => t + 1);
-                                      }}
-                                      className="mt-1.5 px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
-                                    >
-                                      🔍 調査する（{revealLevel === 0 ? '詳細を調べる' : '全能力を調べる'}）
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );

@@ -319,6 +319,9 @@ const ManagementScreen = ({
       Object.keys(TEAMS_DATA).forEach(teamName => {
         const teamData = TEAMS_DATA[teamName];
         if (teamData && teamData.players && teamData.players.length > 0) {
+          if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+            generatePitchingRotation(teamName);
+          }
           if (teamName === userTeamName) {
             if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
               setRecommendedLineup(teamData, teamName);
@@ -427,6 +430,9 @@ const ManagementScreen = ({
       Object.keys(TEAMS_DATA).forEach(teamName => {
         const teamData = TEAMS_DATA[teamName];
         if (teamData && teamData.players && teamData.players.length > 0) {
+          if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+            generatePitchingRotation(teamName);
+          }
           if (teamName === userTeamName) {
             if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
               setRecommendedLineup(teamData, teamName);
