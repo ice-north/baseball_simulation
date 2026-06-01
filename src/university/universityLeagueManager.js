@@ -35,12 +35,12 @@ function generateLeagueSchedule(teamNames, year, season) {
   const cfg = season === 'spring' ? SPRING : FALL;
   const rounds = generateRoundRobin(teamNames);
 
-  // 2巡（ホーム&アウェイ）
+  // 6巡（各カード6試合＝1チーム30試合/季）
   const allGames = [];
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 6; pass++) {
     for (const round of rounds) {
       for (const g of round) {
-        allGames.push(pass === 0
+        allGames.push(pass % 2 === 0
           ? { home: g.home, away: g.away }
           : { home: g.away, away: g.home });
       }
