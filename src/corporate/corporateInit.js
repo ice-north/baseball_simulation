@@ -426,6 +426,11 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
       p.pitching.control = Math.min(p.pitching.control, ctrlMax);
     }
     p.scoutComment = generateScoutComment(p);
+    if (!p.careerHistory) p.careerHistory = [];
+    if (p.careerHistory.length === 0) {
+      p.careerHistory.push({ type: 'highschool', label: '高校卒' });
+    }
+    p.careerHistory.push({ type: 'corporate', label: teamDef.name || teamDef.displayName });
   });
   return roster;
 };

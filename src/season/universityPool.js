@@ -206,6 +206,7 @@ function generateHighSchoolPlayer(id) {
     fame,
     fatigue: 0,
     experience: 0,
+    careerHistory: [{ type: 'highschool', year: null, label: '高校卒' }],
     seasonStats: createEmptyStats(),
     careerStats: createEmptyStats()
   };
@@ -559,10 +560,18 @@ export function enrollInUniversity(players, enrollYear) {
     return team;
   };
 
+  const addUniHistory = (player, team) => {
+    if (!player.careerHistory) player.careerHistory = [];
+    if (team?.name) {
+      player.careerHistory.push({ type: 'university', year: enrollYear, label: team.name });
+    }
+  };
+
   if (Array.isArray(players)) {
     players.forEach(player => {
       const rank = player._destinationRank || 'C';
       const team = assignTeam(rank);
+      addUniHistory(player, team);
       universityPool[enrollYear].push({
         player, enrollYear, graduateYear: enrollYear + 4,
         universityRank: rank,
@@ -575,6 +584,7 @@ export function enrollInUniversity(players, enrollYear) {
       if (!players[rank]) continue;
       players[rank].forEach(player => {
         const team = assignTeam(rank);
+        addUniHistory(player, team);
         universityPool[enrollYear].push({
           player, enrollYear, graduateYear: enrollYear + 4,
           universityRank: rank,

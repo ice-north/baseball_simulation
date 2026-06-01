@@ -134,13 +134,35 @@ const TeamInfoScreen = () => {
             <div>投: <span className="text-white">{player.physical?.throws === 'left' ? '左' : '右'}</span></div>
             <div>打: <span className="text-white">{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</span></div>
           </div>
-          {player.draftInfo && (
-            <div className="text-sm text-gray-400 mb-4">
-              入団: <span className="text-white">{player.draftInfo.year}年目</span>
-              <span className="mx-2">|</span>
-              指名: <span className="text-white">{player.draftInfo.round}巡目</span>
-            </div>
-          )}
+          {/* 経歴 */}
+          {(() => {
+            const history = player.careerHistory || [];
+            const steps = [];
+            if (history.length > 0) {
+              history.forEach(h => steps.push({ label: h.label, type: h.type }));
+            } else {
+              if (player.universityTeamName) {
+                steps.push({ label: '高校卒', type: 'highschool' });
+                steps.push({ label: player.universityTeamName, type: 'university' });
+              }
+              if (player.previousTeam) steps.push({ label: player.previousTeam, type: 'corporate' });
+            }
+            if (player.draftInfo) {
+              steps.push({ label: `${player.draftInfo.year}年目 ${player.draftInfo.round}巡目入団`, type: 'draft' });
+            }
+            if (steps.length === 0) return null;
+            const typeColor = { highschool: 'bg-gray-600', university: 'bg-blue-900/60 text-blue-300', corporate: 'bg-green-900/60 text-green-300', independent: 'bg-orange-900/60 text-orange-300', released: 'bg-red-900/60 text-red-300', draft: 'bg-yellow-900/60 text-yellow-300' };
+            return (
+              <div className="flex items-center gap-1 text-sm mb-4 flex-wrap">
+                {steps.map((s, i) => (
+                  <span key={i} className="flex items-center gap-1">
+                    {i > 0 && <span className="text-gray-600 mx-0.5">&rarr;</span>}
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeColor[s.type] || 'bg-gray-700 text-gray-200'}`}>{s.label}</span>
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* タブ切り替え */}
           <div className="flex gap-1 mb-4 border-b border-gray-600">

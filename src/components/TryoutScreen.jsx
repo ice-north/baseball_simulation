@@ -157,6 +157,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
             year: draftYear,
             round: historyEntry?.round || 0
           };
+          if (!p.careerHistory) p.careerHistory = [];
+          p.careerHistory.push({ type: 'independent', year: draftYear, label: actualTeamName });
         });
         TEAMS_DATA[actualTeamName].players = [
           ...(TEAMS_DATA[actualTeamName].players || []),

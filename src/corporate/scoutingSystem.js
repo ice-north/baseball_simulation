@@ -133,6 +133,8 @@ export function executeDepartures(allTeams, retiredIds, releases, currentYear) {
           snapshot.releasedYear = currentYear;
           snapshot.previousTeam = teamName;
           snapshot.attemptsInPool = 0;
+          if (!snapshot.careerHistory) snapshot.careerHistory = [];
+          snapshot.careerHistory.push({ type: 'released', year: currentYear, label: `${teamName}退団` });
           releasedPlayersPool.push(snapshot);
         }
       }
@@ -488,6 +490,8 @@ export function recruitPlayer(team, player) {
   recruit.isStarter = false;
   recruit.battingOrder = 0;
   recruit.fatigue = 0;
+  if (!recruit.careerHistory) recruit.careerHistory = [];
+  recruit.careerHistory.push({ type: 'corporate', year: null, label: team.name });
   team.players.push(recruit);
 }
 
