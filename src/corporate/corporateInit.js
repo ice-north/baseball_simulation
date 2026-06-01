@@ -752,3 +752,87 @@ export const updateReputation = (teamData, seasonResults) => {
   cd.proDraftCount += seasonResults.proDraftedCount || 0;
   cd.tournamentWins += seasonResults.tournamentWin ? 1 : 0;
 };
+
+// 注目度からランクを再判定（昇格/降格）
+// 昇格閾値は初期値より少し低め（努力で到達可能に）、降格閾値はさらに低め（ヒステリシス）
+const RANK_PROMOTE_THRESHOLD = { S: 75, A: 55, B: 32, C: 15 };
+const RANK_DEMOTE_THRESHOLD  = { S: 60, A: 40, B: 22, C: 8 };
+
+export const updateRankFromReputation = (teamData) => {
+  const cd = teamData.corporateData;
+  if (!cd) return null;
+
+  const rep = cd.reputation;
+  const oldRank = cd.rank;
+  let newRank = oldRank;
+
+  if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';
+  else if (rep >= RANK_PROMOTE_THRESHOLD.A) newRank = 'A';
+  else if (rep >= RANK_PROMOTE_THRESHOLD.B) newRank = 'B';
+  else if (rep >= RANK_PROMOTE_THRESHOLD.C) newRank = 'C';
+  else newRank = 'D';
+
+  // ヒステリシス: 降格は低い閾値を下回った場合のみ
+  const rankOrder = ['D', 'C', 'B', 'A', 'S'];
+  const oldIdx = rankOrder.indexOf(oldRank);
+  const newIdx = rankOrder.indexOf(newRank);
+  if (newIdx < oldIdx) {
+    const demoteThreshold = oldRank === 'S' ? RANK_DEMOTE_THRESHOLD.S
+      : oldRank === 'A' ? RANK_DEMOTE_THRESHOLD.A
+      : oldRank === 'B' ? RANK_DEMOTE_THRESHOLD.B
+      : RANK_DEMOTE_THRESHOLD.C;
+    if (rep >= demoteThreshold) {
+      newRank = oldRank;
+    }
+  }
+
+  if (newRank !== oldRank) {
+    cd.rank = newRank;
+    return { team: teamData.name, from: oldRank, to: newRank, reputation: rep };
+  }
+  return null;
+};
+
+// 全チームの注目度とランクを一括更新
+export const updateAllTeamReputations = (seasonData) => {
+  const standings = seasonData.standings || [];
+  const standingsMap = {};
+  standings.forEach(s => { standingsMap[s.team] = s; });
+
+  const champion = standings.length > 0
+    ? [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)[0]?.team
+    : null;
+
+  const toshitaikouChampion = seasonData.toshitaikou?.mainTournament?.champion || null;
+  const toshitaikouFinal = seasonData.toshitaikou?.mainTournament?.rounds?.slice(-1)[0] || [];
+  const toshitaikouRunnerUp = toshitaikouFinal.length > 0
+    ? (toshitaikouFinal[0]?.loser || null)
+    : null;
+  const senshukenChampion = seasonData.nihonSenshuken?.bracket?.champion || null;
+  const senshukenFinal = seasonData.nihonSenshuken?.bracket?.rounds?.slice(-1)[0] || [];
+  const senshukenRunnerUp = senshukenFinal.length > 0
+    ? (senshukenFinal[0]?.loser || null)
+    : null;
+
+  const rankChanges = [];
+
+  for (const teamName of Object.keys(TEAMS_DATA)) {
+    const teamData = TEAMS_DATA[teamName];
+    if (!teamData?.corporateData) continue;
+
+    const s = standingsMap[teamName];
+    const seasonResults = {
+      wins: s?.wins || 0,
+      isChampion: teamName === champion,
+      tournamentWin: teamName === toshitaikouChampion || teamName === senshukenChampion,
+      tournamentRunnerUp: teamName === toshitaikouRunnerUp || teamName === senshukenRunnerUp,
+      proDraftedCount: 0,
+    };
+
+    updateReputation(teamData, seasonResults);
+    const change = updateRankFromReputation(teamData);
+    if (change) rankChanges.push(change);
+  }
+
+  return rankChanges;
+};

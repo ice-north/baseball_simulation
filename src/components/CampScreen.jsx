@@ -865,6 +865,21 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
           </div>
         </div>
 
+        {/* ランク変動通知 */}
+        {currentRound === 1 && seasonData?.rankChanges?.length > 0 && (() => {
+          const userChange = seasonData.rankChanges.find(c => c.team === userTeamName);
+          if (!userChange) return null;
+          const isUp = 'DCBAS'.indexOf(userChange.to) > 'DCBAS'.indexOf(userChange.from);
+          return (
+            <div className={`mb-2 p-3 rounded-xl border text-center ${isUp ? 'bg-green-900/30 border-green-500/40' : 'bg-red-900/30 border-red-500/40'}`}>
+              <span className={`font-black text-lg ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+                {isUp ? '↑' : '↓'} ランク{isUp ? '昇格' : '降格'}: {userChange.from} → {userChange.to}
+              </span>
+              <span className="text-gray-400 text-xs ml-2">(注目度: {Math.round(userChange.reputation)})</span>
+            </div>
+          );
+        })()}
+
         {viewMode === 'select' && (
           <>
             {/* プリセット一括設定 */}

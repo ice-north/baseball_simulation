@@ -263,6 +263,36 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           </div>
         )}
 
+        {/* 社会人モード: チーム注目度・ランク */}
+        {(() => {
+          const userTeamName = seasonData.settings?.teamNames?.[0] || Object.keys(TEAMS_DATA)[0];
+          const cd = TEAMS_DATA[userTeamName]?.corporateData;
+          if (!cd) return null;
+          const rankColors = { S: 'text-yellow-400 border-yellow-500/40 bg-yellow-900/20', A: 'text-blue-400 border-blue-500/40 bg-blue-900/20', B: 'text-green-400 border-green-500/40 bg-green-900/20', C: 'text-gray-300 border-gray-500/40 bg-gray-800/40', D: 'text-gray-500 border-gray-600/40 bg-gray-800/20' };
+          const colors = rankColors[cd.rank] || rankColors.C;
+          return (
+            <div className={`rounded-xl border p-4 mb-5 ${colors}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-400 mb-1">チームランク・注目度</h3>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-3xl font-black ${colors.split(' ')[0]}`}>{cd.rank}</span>
+                    <div>
+                      <div className="text-white text-sm font-bold">{userTeamName}</div>
+                      <div className="text-gray-400 text-xs">注目度: {Math.round(cd.reputation)} / 100</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="w-32">
+                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all" style={{width: `${cd.reputation}%`}} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         <SaveSlotSelector />
 
         {(() => {
