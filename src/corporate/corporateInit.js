@@ -711,7 +711,8 @@ const REPUTATION_GAINS = {
   highWinRate: 3,          // 勝率.600以上ボーナス
   dominantSeason: 5,       // 勝率.700以上ボーナス（highWinRateに加算）
   seasonChampion: 10,      // 地域リーグ優勝
-  tournamentRoundWin: 2,   // 大会1勝（予選・本戦問わず）
+  mainTournamentEntry: 6,  // 都市対抗/日本選手権 本戦出場（予選突破）
+  tournamentRoundWin: 2,   // 大会本戦1勝ごと
   tournamentQF: 3,         // ベスト8進出ボーナス
   tournamentSF: 5,         // ベスト4進出ボーナス
   tournamentRunnerUp: 8,   // 大会準優勝
@@ -751,8 +752,10 @@ export const updateReputation = (teamData, seasonResults) => {
   if (seasonResults.winRate >= 0.700) gain += REPUTATION_GAINS.dominantSeason;
   if (seasonResults.winRate >= 0.600) gain += REPUTATION_GAINS.highWinRate;
   if (seasonResults.isChampion) gain += REPUTATION_GAINS.seasonChampion;
-  // 大会成績（予選+本戦の勝利数）
-  const tWins = seasonResults.tournamentWins || 0;
+  // 大会成績
+  const entries = seasonResults.mainTournamentEntries || 0;
+  gain += entries * REPUTATION_GAINS.mainTournamentEntry;
+  const tWins = seasonResults.tournamentMainWins || 0;
   gain += tWins * REPUTATION_GAINS.tournamentRoundWin;
   if (tWins >= 3) gain += REPUTATION_GAINS.tournamentQF;
   if (tWins >= 4) gain += REPUTATION_GAINS.tournamentSF;
@@ -831,29 +834,37 @@ export const updateAllTeamReputations = (seasonData) => {
     ? [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)[0]?.team
     : null;
 
-  // 大会結果を集計（都市対抗: 予選+本戦、日本選手権）
-  const tournamentWinsMap = {};
+  // 大会結果を集計
+  const mainTournamentWinsMap = {};
+  const toshitaikouEntries = new Set();
+  const senshukenEntries = new Set();
   const td = seasonData.toshitaikou;
+  // 都市対抗: 予選突破チームを収集
   if (td?.qualifiers) {
     for (const regionId of Object.keys(td.qualifiers)) {
       const q = td.qualifiers[regionId];
-      const qWins = countBracketWins(q.mainBracket || q);
-      for (const [team, w] of Object.entries(qWins)) {
-        tournamentWinsMap[team] = (tournamentWinsMap[team] || 0) + w;
-      }
+      if (q.qualifiedTeams) q.qualifiedTeams.forEach(t => toshitaikouEntries.add(t));
     }
   }
+  // 都市対抗本戦の勝利数
   if (td?.mainTournament) {
     const mtWins = countBracketWins(td.mainTournament);
     for (const [team, w] of Object.entries(mtWins)) {
-      tournamentWinsMap[team] = (tournamentWinsMap[team] || 0) + w;
+      mainTournamentWinsMap[team] = (mainTournamentWinsMap[team] || 0) + w;
     }
   }
+  // 日本選手権
   const ns = seasonData.nihonSenshuken;
   if (ns?.bracket) {
+    if (ns.bracket.rounds?.[0]) {
+      for (const match of ns.bracket.rounds[0]) {
+        if (match.team1) senshukenEntries.add(match.team1);
+        if (match.team2) senshukenEntries.add(match.team2);
+      }
+    }
     const nsWins = countBracketWins(ns.bracket);
     for (const [team, w] of Object.entries(nsWins)) {
-      tournamentWinsMap[team] = (tournamentWinsMap[team] || 0) + w;
+      mainTournamentWinsMap[team] = (mainTournamentWinsMap[team] || 0) + w;
     }
   }
 
@@ -871,11 +882,16 @@ export const updateAllTeamReputations = (seasonData) => {
     if (!teamData?.corporateData) continue;
 
     const s = standingsMap[teamName];
+    let entryCount = 0;
+    if (toshitaikouEntries.has(teamName)) entryCount++;
+    if (senshukenEntries.has(teamName)) entryCount++;
+
     const seasonResults = {
       wins: s?.wins || 0,
       winRate: s?.winRate || 0,
       isChampion: teamName === champion,
-      tournamentWins: tournamentWinsMap[teamName] || 0,
+      mainTournamentEntries: entryCount,
+      tournamentMainWins: mainTournamentWinsMap[teamName] || 0,
       tournamentChampion: teamName === toshitaikouChampion || teamName === senshukenChampion,
       tournamentRunnerUp: teamName === toshitaikouRunnerUp || teamName === senshukenRunnerUp,
       proDraftedCount: 0,
