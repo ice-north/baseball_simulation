@@ -168,21 +168,6 @@ const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const randInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
 // チーム全体のベース補正
-const applyTeamOffset = (player, offset) => {
-  if (offset === 0) return;
-  player.batting.meet = clamp(player.batting.meet + offset, 1, 99);
-  player.batting.power = clamp(player.batting.power + offset, 1, 99);
-  player.batting.eye = clamp(player.batting.eye + offset, 1, 99);
-  player.batting.steal = clamp(player.batting.steal + Math.floor(offset * 0.5), 1, 99);
-  player.batting.bunt = clamp(player.batting.bunt + Math.floor(offset * 0.3), 1, 99);
-  player.physical.speed = clamp(player.physical.speed + Math.floor(offset * 0.7), 1, 99);
-  player.physical.arm = clamp(player.physical.arm + Math.floor(offset * 0.7), 1, 99);
-  player.fielding.defense = clamp(player.fielding.defense + Math.floor(offset * 0.8), 1, 99);
-  player.pitching.velocity = clamp(player.pitching.velocity + Math.floor(offset * 0.3), 100, 165);
-  player.pitching.control = clamp(player.pitching.control + Math.floor(offset * 0.8), 1, 99);
-  player.pitching.stamina = clamp(player.pitching.stamina + Math.floor(offset * 0.5), 30, 150);
-};
-
 // プロ注目/エリートのブースト（投手・野手で異なる）
 const applyBoost = (player, boostRange, growthBonus) => {
   const isPitcher = player.position === 'pitcher';
@@ -261,18 +246,36 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   const controlCap = RANK_CONTROL_CAP[rank] || 65;
   const arsenalMult = RANK_ARSENAL_MULT[rank] || 1.0;
 
-  candidates.forEach(p => {
-    // === 個人才能バラつき（三角分布: -8〜+8、中央集中） ===
-    const talent = randInt(-4, 4) + randInt(-4, 4);
-    p.batting.meet = clamp(p.batting.meet + talent + randInt(-4, 4), 1, 99);
-    p.batting.power = clamp(p.batting.power + talent + randInt(-4, 4), 1, 99);
-    p.batting.eye = clamp(p.batting.eye + talent + randInt(-3, 3), 1, 99);
-    p.batting.steal = clamp(p.batting.steal + randInt(-5, 5), 1, 99);
-    p.physical.speed = clamp(p.physical.speed + talent + randInt(-4, 4), 1, 99);
-    p.physical.arm = clamp(p.physical.arm + talent + randInt(-4, 4), 1, 99);
-    p.fielding.defense = clamp(p.fielding.defense + talent + randInt(-4, 4), 1, 99);
+  // ランク別能力スケーリング（乗算式）
+  // S=社会人トップ(プロ予備軍), A=強豪, B=中堅, C=育成型, D=高校県大会レベル
+  const RANK_SCALE = { S: 1.10, A: 1.00, B: 0.85, C: 0.72, D: 0.58 };
+  const scale = RANK_SCALE[rank] || 0.72;
 
-    applyTeamOffset(p, cfg.teamOffset);
+  const scaleAndJitter = (val, jitter = 3) =>
+    clamp(Math.round(val * scale) + randInt(-jitter, jitter), 1, 99);
+
+  candidates.forEach(p => {
+    // 個人差: 各能力に独立したジッター（共有talent廃止で二極化を解消）
+    if (p.position !== 'pitcher') {
+      p.batting.meet = scaleAndJitter(p.batting.meet, 4);
+      p.batting.power = scaleAndJitter(p.batting.power, 4);
+      p.batting.eye = scaleAndJitter(p.batting.eye, 3);
+      p.batting.steal = scaleAndJitter(p.batting.steal, 4);
+      p.physical.speed = scaleAndJitter(p.physical.speed, 4);
+      p.physical.arm = scaleAndJitter(p.physical.arm, 4);
+      p.fielding.defense = scaleAndJitter(p.fielding.defense, 4);
+    } else {
+      // 投手の打撃はさらに低く
+      const batScale = Math.min(1.0, scale * 0.7);
+      p.batting.meet = clamp(Math.round(p.batting.meet * batScale) + randInt(-3, 3), 1, 99);
+      p.batting.power = clamp(Math.round(p.batting.power * batScale) + randInt(-3, 3), 1, 99);
+      p.batting.eye = clamp(Math.round(p.batting.eye * batScale) + randInt(-2, 2), 1, 99);
+      p.batting.steal = clamp(Math.round(p.batting.steal * scale) + randInt(-3, 3), 1, 99);
+      p.physical.speed = scaleAndJitter(p.physical.speed, 3);
+      p.physical.arm = scaleAndJitter(p.physical.arm, 3);
+      p.fielding.defense = scaleAndJitter(p.fielding.defense, 3);
+    }
+
     adjustCorporateAge(p, isIndependent);
 
     if (p.position === 'pitcher') {
@@ -314,7 +317,7 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
         }
       } else {
         const roll = Math.random();
-        const boost = randInt(8, 15);
+        const boost = randInt(5, 12);
         if (roll < 0.25) {
           p.batting.meet = clamp(p.batting.meet + boost, 1, 99);
         } else if (roll < 0.50) {
