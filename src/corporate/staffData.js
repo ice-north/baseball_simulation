@@ -49,12 +49,15 @@ export const STAFF_GRADES = {
   D: { label: 'D級', baseMin: 10, baseMax: 35 },
 };
 
-// 給料: 全員400万スタート、経験年数で昇給
-const BASE_SALARY = 400; // 万円/年
-const SALARY_PER_YEAR = 30; // 1年あたりの昇給額（万円）
+// 給与計算（選手・スタッフ共通）: 高卒1年目400万、年齢+1ごとに+40万
+const BASE_SALARY = 400; // 万円/年（18歳基準）
+const SALARY_PER_AGE = 40; // 1歳あたりの昇給額（万円）
 
 export const getStaffSalary = (staff) =>
-  BASE_SALARY + (staff.experience || 0) * SALARY_PER_YEAR;
+  BASE_SALARY + ((staff.age || 35) - 18) * SALARY_PER_AGE;
+
+export const getPlayerSalary = (player) =>
+  BASE_SALARY + ((player.age || 18) - 18) * SALARY_PER_AGE;
 
 // ============================================================
 // スタッフ生成

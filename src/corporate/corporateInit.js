@@ -126,7 +126,7 @@ const RANK_STAFF_CONFIG = {
   D: { coach: 1, manager: 0, trainer: 0 },
 };
 
-const BUDGET_BY_RANK = { S: 90, A: 70, B: 50, C: 35, D: 20 };
+const BUDGET_BY_RANK = { S: 24000, A: 21000, B: 18000, C: 15000, D: 12000 };
 
 // ランク×種別ごとのロースターサイズ [min, max]
 const ROSTER_SIZE = {
@@ -775,12 +775,12 @@ const REPUTATION_GAINS = {
 
 const REPUTATION_DECAY = 2; // 年間自然減衰（実績なしなら忘れられる）
 
-// 注目度 → 企業の年間追加資金（万円）
+// 注目度 → 企業の年間追加予算（万円）
 export const getReputationBudgetBonus = (reputation) => {
-  if (reputation >= 80) return 50;  // 超有名 → +5000万
-  if (reputation >= 60) return 35;
-  if (reputation >= 40) return 20;
-  if (reputation >= 20) return 10;
+  if (reputation >= 80) return 3000;
+  if (reputation >= 60) return 2000;
+  if (reputation >= 40) return 1000;
+  if (reputation >= 20) return 500;
   return 0;
 };
 
