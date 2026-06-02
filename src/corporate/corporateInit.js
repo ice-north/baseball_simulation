@@ -784,6 +784,10 @@ export const getReputationBudgetBonus = (reputation) => {
   return 0;
 };
 
+// マネージング能力 → 予算ボーナス（万円）: 0→0万、50→1000万、100→2000万
+export const getManagingBudgetBonus = (managingValue) =>
+  Math.round((managingValue || 0) * 20);
+
 // 注目度 → スカウト成功率補正（1.0基準）
 export const getReputationScoutBonus = (reputation) => {
   return 0.6 + (reputation / 100) * 0.8; // 0→0.6倍、50→1.0倍、100→1.4倍

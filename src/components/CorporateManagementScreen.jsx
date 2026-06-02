@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus } from '../corporate/staffData.js';
-import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus } from '../corporate/corporateInit.js';
+import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
@@ -41,7 +41,9 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const reputation = cd.reputation || 0;
   const baseBudget = cd.budget || 12000;
   const reputationBonus = cd.yearlyBudgetBonus ?? getReputationBudgetBonus(reputation);
-  const totalBudget = baseBudget + reputationBonus;
+  const managingValue = Math.max(...staff.map(s => s.abilities?.managing || 0), 0);
+  const managingBonus = getManagingBudgetBonus(managingValue);
+  const totalBudget = baseBudget + reputationBonus + managingBonus;
   const budgetBalance = totalBudget - totalSalary;
 
   const gradeColor = (grade) => {
@@ -566,14 +568,18 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           {/* 予算サマリー */}
           <div className="bg-gray-800 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">予算</h2>
-            <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-3 gap-3 mb-3">
               <div className="bg-gray-750 rounded p-3">
                 <div className="text-xs text-gray-400 mb-1">基本予算</div>
                 <div className="text-lg font-bold text-white">{baseBudget.toLocaleString()}<span className="text-sm text-gray-400">万円</span></div>
               </div>
               <div className="bg-gray-750 rounded p-3">
-                <div className="text-xs text-gray-400 mb-1">注目度ボーナス</div>
+                <div className="text-xs text-gray-400 mb-1">注目度</div>
                 <div className="text-lg font-bold text-green-400">+{reputationBonus.toLocaleString()}<span className="text-sm text-gray-400">万円</span></div>
+              </div>
+              <div className="bg-gray-750 rounded p-3">
+                <div className="text-xs text-gray-400 mb-1">マネージング<span className="text-gray-500">({managingValue})</span></div>
+                <div className="text-lg font-bold text-cyan-400">+{managingBonus.toLocaleString()}<span className="text-sm text-gray-400">万円</span></div>
               </div>
             </div>
             <div className="flex items-center justify-between bg-gray-750 rounded p-3">
