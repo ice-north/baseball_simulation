@@ -197,6 +197,7 @@ const ManagementScreen = ({
               age: d.age,
               yearsPlayed: d.yearsPlayed,
               year: seasonData?.year,
+              source: d.source || null,
               draftInfo: p?.draftInfo || null
             };
           })]);
