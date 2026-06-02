@@ -1013,6 +1013,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-1 text-center w-7">位</th>
                     <th className="py-1.5 px-1 text-center w-6">齢</th>
                     <th className="py-1.5 px-1 text-center w-10" title="成長率 (基礎+変動)">成長</th>
+                    <th className="py-1.5 px-1 text-center w-6" title="規律性">規</th>
+                    <th className="py-1.5 px-1 text-center w-6" title="精神力">精</th>
                     <th className="py-1.5 px-1 text-center w-8">投/打</th>
                     <th className="py-1.5 px-1 text-center w-12">フォーム</th>
                     <th className="py-1.5 px-1 text-center w-7">ミ</th>
@@ -1071,6 +1073,20 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                                 {effective.toFixed(2)}
                               </span>
                             );
+                          })()}
+                        </td>
+                        <td className="py-1 px-1 text-center text-[10px]">
+                          {(() => {
+                            const d = player.personality?.discipline ?? 50;
+                            const c = d >= 80 ? 'text-green-400' : d >= 60 ? 'text-blue-400' : d >= 40 ? 'text-gray-400' : d >= 20 ? 'text-orange-400' : 'text-red-400';
+                            return <span className={c}>{d}</span>;
+                          })()}
+                        </td>
+                        <td className="py-1 px-1 text-center text-[10px]">
+                          {(() => {
+                            const m = player.personality?.mental ?? 50;
+                            const c = m >= 80 ? 'text-green-400' : m >= 60 ? 'text-blue-400' : m >= 40 ? 'text-gray-400' : m >= 20 ? 'text-orange-400' : 'text-red-400';
+                            return <span className={c}>{m}</span>;
                           })()}
                         </td>
                         <td className="py-1 px-1 text-center text-[10px]">

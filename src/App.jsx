@@ -1228,11 +1228,16 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const batterCondMod = CONDITION_BATTING_MODIFIER[currentBatter.condition ?? CONDITION_LEVELS.NORMAL] || 0;
         const pitcherCondMod = CONDITION_PITCHING_MODIFIER[currentPitcher.condition ?? CONDITION_LEVELS.NORMAL] || 0;
 
+        // 精神力によるチャンス/ピンチ補正（得点圏にランナー）
+        const isClutchSituation = bases[1] || bases[2];
+        const batterMentalMod = isClutchSituation ? Math.round(((currentBatter.personality?.mental ?? 50) - 50) / 10) : 0;
+        const pitcherMentalMod = isClutchSituation ? Math.round(((currentPitcher.personality?.mental ?? 50) - 50) / 10) : 0;
+
         // 選手データから必要な情報を展開
         const batter = {
           name: currentBatter.name,
-          meet: currentBatter.batting.meet + batterCondMod,
-          power: currentBatter.batting.power + batterCondMod,
+          meet: currentBatter.batting.meet + batterCondMod + batterMentalMod,
+          power: currentBatter.batting.power + batterCondMod + batterMentalMod,
           eye: currentBatter.batting.eye,
           speed: currentBatter.physical.speed,
           steal: currentBatter.batting.steal,
@@ -1242,7 +1247,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const pitcher = {
           name: currentPitcher.name,
           velocity: currentPitcher.pitching.velocity,
-          control: currentPitcher.pitching.control + pitcherCondMod,
+          control: currentPitcher.pitching.control + pitcherCondMod + pitcherMentalMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
           pitches: currentPitcher.pitching.arsenal,

@@ -497,9 +497,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const batterFatigue = batterPlayer.fatigue || 0;
     const fatiguePenalty = batterFatigue > 0 ? Math.round(batterFatigue * batterFatigue / 1200) : 0;
 
+    // 精神力によるチャンス/ピンチ補正
+    const isClutch = bases[1] || bases[2]; // 得点圏にランナー
+    const batterMental = batterPlayer.personality?.mental ?? 50;
+    const pitcherMental = pitcherPlayer.personality?.mental ?? 50;
+    const batterClutchMod = isClutch ? Math.round((batterMental - 50) / 10) : 0;
+    const pitcherClutchMod = isClutch ? Math.round((pitcherMental - 50) / 10) : 0;
+
     const batter = {
-      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod - fatiguePenalty,
-      power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod - fatiguePenalty,
+      meet: (batterPlayer.batting?.meet || 50) + stratMeetMod + batterCondMod - fatiguePenalty + batterClutchMod,
+      power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod - fatiguePenalty + batterClutchMod,
       eye: (batterPlayer.batting?.eye || 50) + stratEyeMod - Math.floor(fatiguePenalty * 0.5),
       speed: (batterPlayer.physical?.speed || 50) - fatiguePenalty,
       bats: batterPlayer.batting?.bats || 'right'
@@ -512,7 +519,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     const pitcherFormEffect = PITCHING_FORM_EFFECTS[pitcherPlayer.pitching?.form] || PITCHING_FORM_EFFECTS.threeQuarter;
     const pitcher = {
       velocity: Math.round((pitcherPlayer.pitching?.velocity || 140) * (pitcherFormEffect.velocityMult || 1.0)) - pitcherFatiguePenalty,
-      control: (pitcherPlayer.pitching?.control || 50) + pitcherCondMod - pitcherFatiguePenalty,
+      control: (pitcherPlayer.pitching?.control || 50) + pitcherCondMod - pitcherFatiguePenalty + pitcherClutchMod,
       throws: pitcherPlayer.physical?.throws || 'right',
       spinRate: pitcherPlayer.pitching?.spinRate ?? 50
     };

@@ -797,6 +797,10 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     }
     const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
 
+    // 規律性による練習効率（規律0=80%, 50=100%, 100=120%）
+    const discipline = player.personality?.discipline ?? 50;
+    const disciplineMult = 0.8 + (discipline / 100) * 0.4;
+
     let baseGrowth, isAwakening, awakeningGrowth;
 
     if (menu.intensive && menu.penaltyPool) {
@@ -809,7 +813,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * potential * aptitudeFactor * physiqueMult);
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * potential * aptitudeFactor * physiqueMult * disciplineMult);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
       const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;

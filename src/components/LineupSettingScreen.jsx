@@ -787,6 +787,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 })}
                               </div>
                               <div className="flex items-center gap-1 ml-auto">
+                                {player.personality && (
+                                  <div className="flex items-center gap-1 mr-1">
+                                    <span className={`text-[10px] ${(player.personality.discipline ?? 50) >= 70 ? 'text-green-400' : (player.personality.discipline ?? 50) <= 30 ? 'text-red-400' : 'text-gray-400'}`} title="規律性">
+                                      規{player.personality.discipline ?? 50}
+                                    </span>
+                                    <span className={`text-[10px] ${(player.personality.mental ?? 50) >= 70 ? 'text-green-400' : (player.personality.mental ?? 50) <= 30 ? 'text-red-400' : 'text-gray-400'}`} title="精神力">
+                                      精{player.personality.mental ?? 50}
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-0.5">
                                   <span className="text-[10px] text-gray-400">体</span>
                                   <div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden">

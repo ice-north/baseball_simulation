@@ -159,7 +159,7 @@ export const loadGameFromSlot = (slotIndex) => {
       deserializeUniversityPool(saveData.universityPool);
     }
 
-    // バント能力値の移行（旧セーブデータ互換）
+    // 旧セーブデータ互換: バント能力値 + 性格パラメータの移行
     Object.values(TEAMS_DATA).forEach(team => {
       if (team?.players) {
         team.players.forEach(p => {
@@ -167,6 +167,10 @@ export const loadGameFromSlot = (slotIndex) => {
             p.batting.bunt = Math.min(99, Math.max(1, Math.round(
               (p.batting.meet || 50) * 0.4 + (p.physical?.speed || 50) * 0.3 + Math.random() * 20
             )));
+          }
+          if (!p.personality) {
+            const norm = () => Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18)));
+            p.personality = { discipline: norm(), mental: norm() };
           }
         });
       }

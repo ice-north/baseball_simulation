@@ -202,6 +202,10 @@ function generateHighSchoolPlayer(id) {
     },
     growthPotential,
     growthModifier: 0,
+    personality: {
+      discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
+      mental: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
+    },
     positionFitness: generatePositionFitness(position),
     fame,
     fatigue: 0,
