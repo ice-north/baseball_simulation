@@ -798,6 +798,9 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     // プロ意識による練習効率（プロ意識0=50%, 50=100%, 100=150%）
     const discipline = player.personality?.discipline ?? 50;
     const disciplineMult = 0.5 + (discipline / 100) * 1.0;
+    // 成長率のキャンプ影響（30%: 成長率1.4→1.12倍, 0.6→0.88倍）
+    const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
+    const campPotMult = 0.7 + 0.3 * potential;
 
     let baseGrowth, isAwakening, awakeningGrowth;
 
@@ -811,7 +814,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult);
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
       const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
@@ -851,11 +854,11 @@ export function executeCampTraining(player, trainingType, newPitchType) {
           adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
         }
       } else {
-        // 技術系(meet/power/eye/control/defense/steal): 能力値70(プロ級)以上で成長減衰
-        // 超過1ごとに5%減衰、下限10%。70までは通常成長、70以降は練習だけでは伸びにくい
-        if (currentValue >= 70) {
-          const overAmount = currentValue - 70;
-          const dampFactor = Math.max(0.10, 1.0 - overAmount * 0.05);
+        // 技術系(meet/power/eye/control/defense/steal): 能力値75以上で成長減衰
+        // 超過1ごとに4%減衰、下限15%
+        if (currentValue >= 75) {
+          const overAmount = currentValue - 75;
+          const dampFactor = Math.max(0.15, 1.0 - overAmount * 0.04);
           adjustedBaseGrowth = Math.max(0, Math.round(baseGrowth * dampFactor));
         }
       }
