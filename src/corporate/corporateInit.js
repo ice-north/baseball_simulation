@@ -666,6 +666,7 @@ export const initializeCorporateGame = (teamDef) => {
         staff,
         reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
         proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
+        tournamentBudgetBonus: 0, sponsors: [],
       },
     };
     allTeamNames.push(name);
@@ -737,6 +738,7 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
         staff,
         reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
         proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
+        tournamentBudgetBonus: 0, sponsors: [],
       },
     };
     corpTeamNames.push(name);
@@ -788,6 +790,95 @@ export const getReputationBudgetBonus = (reputation) => {
 export const getManagingBudgetBonus = (managingValue) =>
   Math.round((managingValue || 0) * 20);
 
+// 大会成績 → 予算ボーナス（万円）
+// 都市対抗/日本選手権の成績が翌年の企業からの追加支援に反映
+const TOURNAMENT_BUDGET_BONUS = {
+  champion: 2000,    // 優勝
+  runnerUp: 1000,    // 準優勝
+  semiFinal: 500,    // ベスト4
+  entry: 300,        // 本戦出場
+};
+
+export const getTournamentBudgetBonus = (cd) => cd?.tournamentBudgetBonus || 0;
+
+// スポンサー契約 → 年間収入（万円）
+// 注目度と実績に応じてスポンサーが付く
+export const SPONSOR_TIERS = {
+  platinum: { label: 'プラチナ', income: 3000, minReputation: 80, color: 'text-purple-400' },
+  gold:     { label: 'ゴールド', income: 1500, minReputation: 60, color: 'text-yellow-400' },
+  silver:   { label: 'シルバー', income: 800,  minReputation: 40, color: 'text-gray-300' },
+  bronze:   { label: 'ブロンズ', income: 400,  minReputation: 20, color: 'text-orange-600' },
+};
+
+const SPONSOR_NAMES = {
+  platinum: [
+    '大和重工業', '東洋自動車', '帝都銀行', '日本製鉄グループ', '太平洋電力',
+    '三菱化学工業', 'セントラル保険', '富士通信工業', '国際航空',
+  ],
+  gold: [
+    '東海建設', 'サクラ食品', 'マルナカ不動産', '北斗電機', '東京精密',
+    'オーシャン運輸', '日光化成', 'トップバリュー', '朝日ソフトウェア',
+  ],
+  silver: [
+    '地元タクシー', '町田製パン', 'さくら薬局', 'みどり信用金庫', '富士見印刷',
+    '中央スポーツ用品', 'やまと弁当', '武蔵野測量', '星野接骨院',
+  ],
+  bronze: [
+    '駅前商店会', '田中鮮魚店', '山下理容室', '佐藤工務店', '鈴木自動車整備',
+    '町内会有志', '地元ラーメン店', '中田酒店', '渡辺畳店',
+  ],
+};
+
+export const getSponsorIncome = (cd) => {
+  if (!cd?.sponsors || cd.sponsors.length === 0) return 0;
+  return cd.sponsors.reduce((sum, s) => sum + (SPONSOR_TIERS[s.tier]?.income || 0), 0);
+};
+
+// スポンサー候補を生成（シーズン終了時に呼ばれる）
+export const generateSponsorOffers = (cd) => {
+  if (!cd) return [];
+  const rep = cd.reputation || 0;
+  const offers = [];
+
+  // 各ティアについて、注目度に応じた確率でオファーが来る
+  for (const [tier, info] of Object.entries(SPONSOR_TIERS)) {
+    if (rep < info.minReputation) continue;
+    const overRep = rep - info.minReputation;
+    const chance = Math.min(0.8, 0.3 + overRep * 0.015);
+    if (Math.random() < chance) {
+      const names = SPONSOR_NAMES[tier];
+      const existing = new Set((cd.sponsors || []).map(s => s.name));
+      const available = names.filter(n => !existing.has(n));
+      if (available.length > 0) {
+        const name = available[Math.floor(Math.random() * available.length)];
+        offers.push({ tier, name, income: info.income, duration: 1 + Math.floor(Math.random() * 3) });
+      }
+    }
+  }
+  return offers;
+};
+
+// スポンサー契約を適用（年始に呼ばれる）
+export const advanceSponsors = (cd) => {
+  if (!cd?.sponsors) return;
+  cd.sponsors = cd.sponsors.filter(s => {
+    s.remainingYears = (s.remainingYears || 1) - 1;
+    return s.remainingYears > 0;
+  });
+};
+
+// スポンサー契約を追加
+export const acceptSponsor = (cd, offer) => {
+  if (!cd) return;
+  if (!cd.sponsors) cd.sponsors = [];
+  cd.sponsors.push({
+    tier: offer.tier,
+    name: offer.name,
+    income: offer.income,
+    remainingYears: offer.duration,
+  });
+};
+
 // 注目度 → スカウト成功率補正（1.0基準）
 export const getReputationScoutBonus = (reputation) => {
   return 0.6 + (reputation / 100) * 0.8; // 0→0.6倍、50→1.0倍、100→1.4倍
@@ -825,6 +916,19 @@ export const updateReputation = (teamData, seasonResults) => {
   cd.yearlyBudgetBonus = getReputationBudgetBonus(cd.reputation);
   cd.proDraftCount += seasonResults.proDraftedCount || 0;
   cd.tournamentWins += seasonResults.tournamentChampion ? 1 : 0;
+
+  // 大会成績 → 予算ボーナス（最も良い成績を基準に計算）
+  let tBonus = 0;
+  if (seasonResults.tournamentChampion) {
+    tBonus = TOURNAMENT_BUDGET_BONUS.champion;
+  } else if (seasonResults.tournamentRunnerUp) {
+    tBonus = TOURNAMENT_BUDGET_BONUS.runnerUp;
+  } else if ((seasonResults.tournamentMainWins || 0) >= 2) {
+    tBonus = TOURNAMENT_BUDGET_BONUS.semiFinal;
+  } else if ((seasonResults.mainTournamentEntries || 0) > 0) {
+    tBonus = TOURNAMENT_BUDGET_BONUS.entry;
+  }
+  cd.tournamentBudgetBonus = tBonus;
 };
 
 // 注目度からランクを再判定（昇格/降格）

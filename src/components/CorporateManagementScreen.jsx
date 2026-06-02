@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus } from '../corporate/staffData.js';
-import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus } from '../corporate/corporateInit.js';
+import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
@@ -43,7 +43,9 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const reputationBonus = cd.yearlyBudgetBonus ?? getReputationBudgetBonus(reputation);
   const managingValue = Math.max(...staff.map(s => s.abilities?.managing || 0), 0);
   const managingBonus = getManagingBudgetBonus(managingValue);
-  const totalBudget = baseBudget + reputationBonus + managingBonus;
+  const tournamentBonus = getTournamentBudgetBonus(cd);
+  const sponsorIncome = getSponsorIncome(cd);
+  const totalBudget = baseBudget + reputationBonus + managingBonus + tournamentBonus + sponsorIncome;
   const budgetBalance = totalBudget - totalSalary;
 
   const gradeColor = (grade) => {
@@ -568,18 +570,26 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           {/* 予算サマリー */}
           <div className="bg-gray-800 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">予算</h2>
-            <div className="grid grid-cols-3 gap-3 mb-3">
-              <div className="bg-gray-750 rounded p-3">
-                <div className="text-xs text-gray-400 mb-1">基本予算</div>
-                <div className="text-lg font-bold text-white">{baseBudget.toLocaleString()}<span className="text-sm text-gray-400">万円</span></div>
+            <div className="grid grid-cols-5 gap-2 mb-3">
+              <div className="bg-gray-750 rounded p-2">
+                <div className="text-[10px] text-gray-400 mb-1">基本予算</div>
+                <div className="text-sm font-bold text-white">{baseBudget.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
               </div>
-              <div className="bg-gray-750 rounded p-3">
-                <div className="text-xs text-gray-400 mb-1">注目度</div>
-                <div className="text-lg font-bold text-green-400">+{reputationBonus.toLocaleString()}<span className="text-sm text-gray-400">万円</span></div>
+              <div className="bg-gray-750 rounded p-2">
+                <div className="text-[10px] text-gray-400 mb-1">注目度</div>
+                <div className="text-sm font-bold text-green-400">+{reputationBonus.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
               </div>
-              <div className="bg-gray-750 rounded p-3">
-                <div className="text-xs text-gray-400 mb-1">マネージング<span className="text-gray-500">({managingValue})</span></div>
-                <div className="text-lg font-bold text-cyan-400">+{managingBonus.toLocaleString()}<span className="text-sm text-gray-400">万円</span></div>
+              <div className="bg-gray-750 rounded p-2">
+                <div className="text-[10px] text-gray-400 mb-1">マネージング<span className="text-gray-600">({managingValue})</span></div>
+                <div className="text-sm font-bold text-cyan-400">+{managingBonus.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
+              </div>
+              <div className="bg-gray-750 rounded p-2">
+                <div className="text-[10px] text-gray-400 mb-1">大会ボーナス</div>
+                <div className="text-sm font-bold text-yellow-400">+{tournamentBonus.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
+              </div>
+              <div className="bg-gray-750 rounded p-2">
+                <div className="text-[10px] text-gray-400 mb-1">スポンサー</div>
+                <div className="text-sm font-bold text-purple-400">+{sponsorIncome.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
               </div>
             </div>
             <div className="flex items-center justify-between bg-gray-750 rounded p-3">
@@ -594,6 +604,33 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* スポンサー一覧 */}
+          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+            <h2 className="text-sm font-bold text-gray-300 mb-3">スポンサー契約</h2>
+            {(cd.sponsors || []).length === 0 ? (
+              <p className="text-xs text-gray-500 py-2 text-center">現在スポンサー契約はありません</p>
+            ) : (
+              <div className="space-y-1.5">
+                {(cd.sponsors || []).map((s, i) => {
+                  const tierInfo = SPONSOR_TIERS[s.tier];
+                  return (
+                    <div key={i} className="flex items-center gap-3 bg-gray-750 rounded p-2.5">
+                      <span className={`text-xs font-bold w-16 ${tierInfo?.color || 'text-gray-400'}`}>
+                        {tierInfo?.label || s.tier}
+                      </span>
+                      <span className="text-white text-sm font-medium flex-1">{s.name}</span>
+                      <span className="text-yellow-400 text-xs font-bold">
+                        +{(s.income || tierInfo?.income || 0).toLocaleString()}万/年
+                      </span>
+                      <span className="text-gray-500 text-xs">残{s.remainingYears || 0}年</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="text-[10px] text-gray-500 mt-2">注目度が高いほど上位スポンサーのオファーが来やすくなります</p>
           </div>
 
           {/* 人件費内訳 */}

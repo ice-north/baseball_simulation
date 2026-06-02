@@ -12,7 +12,7 @@ import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, process
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
-import { generateRegionalLeague, updateAllTeamReputations } from '../corporate/corporateInit.js';
+import { generateRegionalLeague, updateAllTeamReputations, advanceSponsors } from '../corporate/corporateInit.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
 
@@ -965,10 +965,13 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
   updateGrowthModifiers(updatedTeams, awards);
 
-  // 2.6. 社会人モード: 全チームの注目度・ランクを更新
+  // 2.6. 社会人モード: 全チームの注目度・ランクを更新 + スポンサー契約更新
   let rankChanges = [];
   if (seasonData.settings?.corporateMode) {
     rankChanges = updateAllTeamReputations(seasonData);
+    for (const teamData of Object.values(updatedTeams)) {
+      if (teamData?.corporateData) advanceSponsors(teamData.corporateData);
+    }
   }
 
   // 2.8. ランキングをスナップショット（ドラフト前に確定済みならそのまま使用）
