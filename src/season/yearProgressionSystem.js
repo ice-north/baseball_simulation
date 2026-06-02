@@ -1211,17 +1211,17 @@ export function applyAgeCurveChanges(allTeams) {
           const growthPotential = Math.max(0, Math.min(1.8, effectiveRaw));
           const decayMult = effectiveRaw < 0 ? 1 + Math.abs(effectiveRaw) * 0.5 : 1.0;
 
-          // プロ意識: 成長方向に影響（プロ意識0=90%, 50=100%, 100=110%）
+          // プロ意識: 衰退を緩和（プロ意識100=60%, 50=80%, 0=100%の衰退速度）
           const discipline = player.personality?.discipline ?? 50;
-          const disciplineMult = 0.9 + (discipline / 100) * 0.2;
+          const decayDiscMult = 1.0 - (discipline / 100) * 0.4;
 
           // 最終変動値（四捨五入、±0の場合もある）
           let rawChange = base + variance;
-          // 成長方向: ポテンシャル適用（0以下なら成長なし）+ 筋力/器用さ補正 + プロ意識
-          // 衰退方向: マイナスポテンシャルで加速（筋力/器用さ・プロ意識は影響しない）
+          // 成長方向: ポテンシャル + 筋力/器用さ補正（プロ意識は練習に集中）
+          // 衰退方向: マイナスポテンシャルで加速 + プロ意識で緩和
           let change = rawChange > 0
-            ? Math.round(rawChange * ageTalentMult * growthPotential * physiqueMult * disciplineMult)
-            : Math.round(rawChange * decayMult);
+            ? Math.round(rawChange * ageTalentMult * growthPotential * physiqueMult)
+            : Math.round(rawChange * decayMult * decayDiscMult);
 
           // 能力値を取得・更新
           const statPath = getStatPath(stat);
@@ -1238,13 +1238,13 @@ export function applyAgeCurveChanges(allTeams) {
           // 球速は変動幅を1.2倍に（スケールが大きいため）+ フォーム補正 + 筋力補正
           if (stat === 'velocity') change = rawChange > 0
             ? Math.round(rawChange * 1.2 * ageTalentMult * growthPotential * formVelMult * physiqueMult)
-            : Math.round(rawChange * 1.2 * decayMult);
+            : Math.round(rawChange * 1.2 * decayMult * decayDiscMult);
           // 制球はフォーム補正適用（器用さ補正は既にchangeに適用済み）
           if (stat === 'control' && rawChange > 0) change = Math.round(change * formCtrlMult);
           // スタミナも変動幅を1.2倍（成長方向のみポテンシャル適用）
           if (stat === 'stamina') change = rawChange > 0
             ? Math.round(rawChange * 1.2 * growthPotential)
-            : Math.round(rawChange * 1.2 * decayMult);
+            : Math.round(rawChange * 1.2 * decayMult * decayDiscMult);
 
           const newValue = Math.max(1, currentValue + change);
 

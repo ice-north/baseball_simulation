@@ -9,19 +9,19 @@ export function getAgeGrowthBase(age, isPhysical) {
   if (isPhysical) {
     if (age <= 20) return 0.8;
     if (age <= 22) return 0.6;
-    if (age <= 25) return 0.3;
-    if (age <= 28) return 0.0;
-    if (age <= 31) return -0.5;
-    if (age <= 34) return -1.2;
-    if (age <= 37) return -2.0;
+    if (age <= 24) return 0.3;
+    if (age <= 26) return 0.0;
+    if (age <= 29) return -0.4;
+    if (age <= 32) return -1.0;
+    if (age <= 35) return -1.8;
     return -3.0;
   } else {
     if (age <= 21) return 0.3;
     if (age <= 24) return 0.9;
-    if (age <= 27) return 0.6;
-    if (age <= 30) return 0.2;
-    if (age <= 33) return -0.3;
-    if (age <= 36) return -1.0;
+    if (age <= 26) return 0.0;
+    if (age <= 29) return -0.3;
+    if (age <= 32) return -0.7;
+    if (age <= 35) return -1.2;
     return -2.0;
   }
 }
