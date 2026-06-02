@@ -416,8 +416,8 @@ export function calculateRecruitSuccessRate(player, teamData) {
   // スコア30(弱)→+10%, 60(平均)→0%, 90(有力)→-15%, 120(超有力)→-30%
   const qualityPenalty = Math.max(-0.10, Math.min(0.30, (playerScore - 60) / 200));
 
-  // 交渉力ボーナス: 0〜15%
-  const negotiationBonus = (negotiation / 100) * 0.15;
+  // 交渉力ボーナス: 0〜25%
+  const negotiationBonus = (negotiation / 100) * 0.25;
 
   // ランク補正
   const rankBonus = RANK_RECRUIT_BONUS[rank] || 0;
@@ -694,9 +694,12 @@ function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
     const p = JSON.parse(JSON.stringify(entry.player));
     const accuracy = calculateScoutAccuracy(scoutEye);
     p.scoutAccuracy = accuracy;
-    // 初回は概要のみ（primary能力だけ開示）
-    p.scoutedAbilities = obscureAbilities(p, accuracy, 'primary');
-    p._revealLevel = 0;
+    // スカウト眼が高いと初回から多くの情報が判明
+    // 70以上: secondary(主要能力), 90以上: full(全能力)
+    const initialStage = scoutEye >= 90 ? 'full' : scoutEye >= 70 ? 'secondary' : 'primary';
+    const initialLevel = initialStage === 'full' ? 2 : initialStage === 'secondary' ? 1 : 0;
+    p.scoutedAbilities = obscureAbilities(p, accuracy, initialStage);
+    p._revealLevel = initialLevel;
     p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear, teamName: entry.teamName };
     p._scoutSource = getSourceLabel(entry);
     p._dispatchTarget = target;

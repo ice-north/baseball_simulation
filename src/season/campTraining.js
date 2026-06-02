@@ -6,6 +6,13 @@
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 
+// 練習カテゴリ → スタッフ指導能力のマッピング
+const CATEGORY_TO_STAFF_ABILITY = {
+  batting: 'battingCoach',
+  fielding: 'fieldRunCoach',
+  pitching: 'pitchingCoach',
+};
+
 
 /**
  * 練習メニュー定義
@@ -680,7 +687,7 @@ function getFormPitchAffinity(form, pitchType) {
  * @param {string} [newPitchType] - 新球種習得時の球種キー
  * @returns {Object} - 成長結果 { player, growthReport }
  */
-export function executeCampTraining(player, trainingType, newPitchType) {
+export function executeCampTraining(player, trainingType, newPitchType, staffBonus = null) {
   const menu = TRAINING_MENUS[trainingType];
   if (!menu) {
     console.warn(`Unknown training type: ${trainingType}`);
@@ -691,6 +698,11 @@ export function executeCampTraining(player, trainingType, newPitchType) {
   const age = player.age || 20;
   const growthReport = [];
   let updatedPlayer = JSON.parse(JSON.stringify(player));
+
+  // スタッフ指導補正: 練習カテゴリに対応するスタッフ能力で0.7〜1.3倍
+  const staffAbilityKey = CATEGORY_TO_STAFF_ABILITY[menu.category];
+  const staffAbilityValue = staffBonus && staffAbilityKey ? (staffBonus[staffAbilityKey] || 50) : 50;
+  const coachingMult = 0.7 + (staffAbilityValue / 100) * 0.6;
 
   // 新球種習得の場合（覚醒10%/大成功15%/成功20%/習得25%/失敗30%）
   if (trainingType === 'newpitch') {
@@ -814,7 +826,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult);
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
       const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
@@ -960,19 +972,47 @@ export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY };
  * @param {Object} [newPitchSelections] - { playerId: pitchType } 新球種選択
  * @returns {Object} - { updatedTeam, allReports }
  */
-export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}) {
+/**
+ * スタッフのモチベーション管理が選手のプロ意識に影響（キャンプ1クールごと）
+ * motivation 0→変化なし, 50→+0~1, 100→+1~2（1クールあたり）
+ */
+export function applyMotivationEffect(players, staffBonus) {
+  if (!staffBonus) return [];
+  const motivation = staffBonus.motivation || 0;
+  if (motivation < 20) return [];
+
+  const reports = [];
+  const baseChance = motivation / 100;
+
+  players.forEach(p => {
+    if (!p.personality) return;
+    const current = p.personality.discipline ?? 50;
+    if (current >= 95) return;
+    if (Math.random() < baseChance) {
+      const gain = motivation >= 70 ? (Math.random() < 0.4 ? 2 : 1) : 1;
+      const newVal = Math.min(99, current + gain);
+      p.personality.discipline = newVal;
+      if (gain > 0) {
+        reports.push({ name: p.name, before: current, after: newVal, gain });
+      }
+    }
+  });
+  return reports;
+}
+
+export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null) {
   const allReports = [];
   const updatedPlayers = team.players.map(player => {
     const trainingType = trainingAssignments[player.id];
     if (!trainingType) {
       const autoTraining = player.position === 'pitcher' ? 'stamina' : 'batting';
-      const { player: trained, growthReport } = executeCampTraining(player, autoTraining);
+      const { player: trained, growthReport } = executeCampTraining(player, autoTraining, undefined, staffBonus);
       allReports.push({ player: trained, trainingType: autoTraining, growthReport });
       return trained;
     }
 
     const newPitchType = trainingType === 'newpitch' ? newPitchSelections[player.id] : undefined;
-    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType);
+    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType, staffBonus);
     allReports.push({ player: trained, trainingType, growthReport });
     return trained;
   });

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { getTeamStaffBonus } from '../corporate/staffData.js';
 
 const MAX_CAMP_ROUNDS = 4;
 
@@ -726,8 +727,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       finalAssignments[p.id] = assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting');
     });
 
+    const userStaffBonus = userTeam.corporateData?.staff ? getTeamStaffBonus(userTeam.corporateData.staff) : null;
     const { updatedTeam, allReports } = executeTeamCampTraining(
-      userTeam, finalAssignments, newPitchSelections
+      userTeam, finalAssignments, newPitchSelections, userStaffBonus
     );
     TEAMS_DATA[userTeamName] = updatedTeam;
 
@@ -745,6 +747,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
         mainReport.subTrainingType = subType;
       }
     });
+
+    // モチベーション管理 → プロ意識向上
+    if (userStaffBonus) {
+      applyMotivationEffect(updatedTeam.players, userStaffBonus);
+    }
 
     teamNames.forEach(tn => {
       if (tn === userTeamName) return;
@@ -778,8 +785,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
           aiAssign[p.id] = batterMenus[Math.floor(Math.random() * batterMenus.length)];
         }
       });
-      const aiResult = executeTeamCampTraining(aiTeam, aiAssign);
+      const aiStaffBonus = aiTeam.corporateData?.staff ? getTeamStaffBonus(aiTeam.corporateData.staff) : null;
+      const aiResult = executeTeamCampTraining(aiTeam, aiAssign, {}, aiStaffBonus);
       TEAMS_DATA[tn] = aiResult.updatedTeam;
+      if (aiStaffBonus) applyMotivationEffect(aiResult.updatedTeam.players, aiStaffBonus);
       const subMenuKeys = Object.keys(SUB_TRAINING_MENUS);
       aiResult.updatedTeam.players.forEach(p => {
         const aiSubType = subMenuKeys[Math.floor(Math.random() * subMenuKeys.length)];
