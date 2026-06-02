@@ -280,13 +280,34 @@ export const getNegotiationBonus = (staffBonus) => {
   return neg / 100; // 0〜1.0
 };
 
-// 年次更新: 全スタッフの経験を+1
-export const advanceStaffYear = (staffList) => {
-  if (!staffList) return;
+// 年次更新: 全スタッフの経験+1、高齢退職判定、AIチーム自動補充
+// 返り値: 退職者リスト（UIでの通知用）
+export const advanceStaffYear = (staffList, autoReplenish = false) => {
+  if (!staffList) return [];
+  const retired = [];
   for (const staff of staffList) {
     staff.experience = (staff.experience || 0) + 1;
     staff.age = (staff.age || 35) + 1;
   }
+  // 60歳以上で退職判定（60歳:20%, 65歳:60%, 70歳:100%）
+  for (let i = staffList.length - 1; i >= 0; i--) {
+    const s = staffList[i];
+    const age = s.age || 35;
+    if (age < 60) continue;
+    const retireChance = age >= 70 ? 1.0 : age >= 65 ? 0.6 : 0.2;
+    if (Math.random() < retireChance) {
+      retired.push({ name: s.name, role: s.role, age, grade: s.grade });
+      staffList.splice(i, 1);
+    }
+  }
+  // AI自動補充: 退職分と同じ役職で補充
+  if (autoReplenish && retired.length > 0) {
+    for (const r of retired) {
+      const replacement = generateStaff(r.role);
+      if (replacement) staffList.push(replacement);
+    }
+  }
+  return retired;
 };
 
 // ============================================================

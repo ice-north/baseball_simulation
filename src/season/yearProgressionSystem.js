@@ -966,14 +966,20 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
   updateGrowthModifiers(updatedTeams, awards);
 
-  // 2.6. 社会人モード: 全チームの注目度・ランクを更新 + スポンサー契約更新
+  // 2.6. 社会人モード: 全チームの注目度・ランクを更新 + スポンサー契約更新 + スタッフ年次更新
   let rankChanges = [];
+  let staffRetirements = [];
   if (seasonData.settings?.corporateMode) {
     rankChanges = updateAllTeamReputations(seasonData);
-    for (const teamData of Object.values(updatedTeams)) {
+    const userTeamName = Object.keys(updatedTeams)[0];
+    for (const [teamName, teamData] of Object.entries(updatedTeams)) {
       if (teamData?.corporateData) {
         advanceSponsors(teamData.corporateData);
-        advanceStaffYear(teamData.corporateData.staff);
+        const isUser = teamName === userTeamName;
+        const retired = advanceStaffYear(teamData.corporateData.staff, !isUser);
+        if (isUser && retired.length > 0) {
+          staffRetirements = retired;
+        }
       }
     }
   }
@@ -1105,6 +1111,11 @@ export function advanceToNextYear(seasonData, allTeams) {
   // ランク変動レポートを新シーズンデータに保存
   if (rankChanges.length > 0) {
     newSeasonData.rankChanges = rankChanges;
+  }
+
+  // スタッフ退職レポートを新シーズンデータに保存
+  if (staffRetirements.length > 0) {
+    newSeasonData.staffRetirements = staffRetirements;
   }
 
   return {

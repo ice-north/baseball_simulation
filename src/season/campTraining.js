@@ -228,7 +228,7 @@ function applyTechStatDecay(currentValue, growth) {
  * @param {string} subType - サブ練習タイプ
  * @param {Object} options - オプション { targetPosition, targetForm, targetBats }
  */
-export function executeSubTraining(player, subType, options = {}) {
+export function executeSubTraining(player, subType, options = {}, staffBonus = null) {
   const menu = SUB_TRAINING_MENUS[subType];
   if (!menu) return { player, growthReport: [] };
 
@@ -488,7 +488,10 @@ export function executeSubTraining(player, subType, options = {}) {
     }
     case 'clead_study': {
       if (!player.catching) player.catching = {};
-      const gain = Math.floor(Math.random() * 3) + 1; // 1~3
+      const batteryValue = staffBonus ? (staffBonus.batteryCoach || 50) : 50;
+      const batteryMult = 0.7 + (batteryValue / 100) * 0.6;
+      const rawGain = Math.floor(Math.random() * 3) + 1; // 1~3
+      const gain = Math.max(1, Math.round(rawGain * batteryMult));
       const old = player.catching.lead || 40;
       player.catching.lead = Math.min(100, old + gain);
       growthReport.push({ statName: 'Cリード', before: old, after: player.catching.lead, growth: gain });

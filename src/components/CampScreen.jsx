@@ -740,7 +740,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
         targetForm: formSelections[p.id],
         targetBats: batsSelections[p.id],
       };
-      const { growthReport: subGrowth } = executeSubTraining(p, subType, subOptions);
+      const { growthReport: subGrowth } = executeSubTraining(p, subType, subOptions, userStaffBonus);
       const mainReport = allReports.find(r => r.player.id === p.id);
       if (mainReport && subGrowth.length > 0) {
         mainReport.subGrowthReport = subGrowth;
@@ -792,7 +792,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       const subMenuKeys = Object.keys(SUB_TRAINING_MENUS);
       aiResult.updatedTeam.players.forEach(p => {
         const aiSubType = subMenuKeys[Math.floor(Math.random() * subMenuKeys.length)];
-        executeSubTraining(p, aiSubType);
+        executeSubTraining(p, aiSubType, {}, aiStaffBonus);
       });
     });
 
@@ -889,6 +889,26 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
           );
         })()}
 
+        {/* スタッフ退職通知 */}
+        {currentRound === 1 && seasonData?.staffRetirements?.length > 0 && (
+          <div className="mb-2 p-3 rounded-xl border bg-gray-800/80 border-gray-600/40">
+            <div className="text-sm font-bold text-gray-300 mb-1">スタッフ退職のお知らせ</div>
+            <div className="space-y-0.5">
+              {seasonData.staffRetirements.map((s, idx) => {
+                const roleNames = { coach: 'コーチ', manager: 'マネージャー', trainer: 'トレーナー' };
+                return (
+                  <div key={idx} className="text-xs text-gray-400">
+                    <span className="text-white font-bold">{s.name}</span>
+                    <span className="ml-1">({roleNames[s.role] || s.role} / {s.age}歳 / {s.grade}級)</span>
+                    <span className="ml-1 text-orange-400">が退職しました</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="text-[10px] text-gray-500 mt-1">チーム運営画面からスタッフを補充できます</div>
+          </div>
+        )}
+
         {viewMode === 'select' && (
           <>
             {/* スタッフ指導効果 */}
@@ -899,6 +919,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                 { label: '打撃指導', val: sb.battingCoach, target: '打撃系' },
                 { label: '守走指導', val: sb.fieldRunCoach, target: '守備系' },
                 { label: '投手指導', val: sb.pitchingCoach, target: '投手系' },
+                { label: 'バッテリー', val: sb.batteryCoach, target: 'Cリード' },
                 { label: 'フィットネス', val: sb.fitness, target: 'フィジカル系' },
                 { label: 'モチベ管理', val: sb.motivation, target: 'プロ意識' },
               ];
@@ -920,7 +941,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           ? (it.val >= 20 ? `+プロ意識` : '効果なし')
                           : it.label === 'フィットネス'
                             ? multLabel(it.val, 0.8, 0.4)
-                            : multLabel(it.val, 0.7, 0.6)
+                            : it.label === 'バッテリー'
+                              ? multLabel(it.val, 0.7, 0.6)
+                              : multLabel(it.val, 0.7, 0.6)
                         })
                       </span>
                     </span>
