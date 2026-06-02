@@ -797,7 +797,7 @@ export function executeCampTraining(player, trainingType, newPitchType) {
     }
     const potential = Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
 
-    // 規律性による練習効率（規律0=80%, 50=100%, 100=120%）
+    // プロ意識による練習効率（プロ意識0=80%, 50=100%, 100=120%）
     const discipline = player.personality?.discipline ?? 50;
     const disciplineMult = 0.8 + (discipline / 100) * 0.4;
 

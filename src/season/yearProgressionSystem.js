@@ -1211,14 +1211,14 @@ export function applyAgeCurveChanges(allTeams) {
           const growthPotential = Math.max(0, Math.min(1.8, effectiveRaw));
           const decayMult = effectiveRaw < 0 ? 1 + Math.abs(effectiveRaw) * 0.5 : 1.0;
 
-          // 規律性: 成長方向に影響（規律0=90%, 50=100%, 100=110%）
+          // プロ意識: 成長方向に影響（プロ意識0=90%, 50=100%, 100=110%）
           const discipline = player.personality?.discipline ?? 50;
           const disciplineMult = 0.9 + (discipline / 100) * 0.2;
 
           // 最終変動値（四捨五入、±0の場合もある）
           let rawChange = base + variance;
-          // 成長方向: ポテンシャル適用（0以下なら成長なし）+ 筋力/器用さ補正 + 規律性
-          // 衰退方向: マイナスポテンシャルで加速（筋力/器用さ・規律性は影響しない）
+          // 成長方向: ポテンシャル適用（0以下なら成長なし）+ 筋力/器用さ補正 + プロ意識
+          // 衰退方向: マイナスポテンシャルで加速（筋力/器用さ・プロ意識は影響しない）
           let change = rawChange > 0
             ? Math.round(rawChange * ageTalentMult * growthPotential * physiqueMult * disciplineMult)
             : Math.round(rawChange * decayMult);

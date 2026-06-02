@@ -1013,7 +1013,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     <th className="py-1.5 px-1 text-center w-7">位</th>
                     <th className="py-1.5 px-1 text-center w-6">齢</th>
                     <th className="py-1.5 px-1 text-center w-10" title="成長率 (基礎+変動)">成長</th>
-                    <th className="py-1.5 px-1 text-center w-6" title="規律性">規</th>
+                    <th className="py-1.5 px-1 text-center w-6" title="プロ意識">プ</th>
                     <th className="py-1.5 px-1 text-center w-6" title="精神力">精</th>
                     <th className="py-1.5 px-1 text-center w-8">投/打</th>
                     <th className="py-1.5 px-1 text-center w-12">フォーム</th>
