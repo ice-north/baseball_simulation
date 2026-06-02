@@ -704,6 +704,10 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   const staffAbilityValue = staffBonus && staffAbilityKey ? (staffBonus[staffAbilityKey] || 50) : 50;
   const coachingMult = 0.7 + (staffAbilityValue / 100) * 0.6;
 
+  // フィットネス補正: フィジカル系能力の練習に0.8〜1.2倍
+  const fitnessValue = staffBonus ? (staffBonus.fitness || 50) : 50;
+  const fitnessMult = 0.8 + (fitnessValue / 100) * 0.4;
+
   // 新球種習得の場合（覚醒10%/大成功15%/成功20%/習得25%/失敗30%）
   if (trainingType === 'newpitch') {
     const arsenal = updatedPlayer.pitching?.arsenal || [];
@@ -826,7 +830,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult);
+      const physFitMult = isPhysical ? fitnessMult : 1.0;
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * physFitMult);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
       const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;

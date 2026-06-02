@@ -3,6 +3,7 @@ import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach,
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier } from '../utils/constants.js';
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
+import { getTeamStaffBonus } from '../corporate/staffData.js';
 
 // ロール別球数制限
 const PITCH_LIMITS = {
@@ -233,20 +234,24 @@ export const POSITION_PLAYER_RECOVERY_BASE = 7;
 
 // 全チームの疲労を回復（日次処理）
 // 投手はrecoveryAmount(20)で回復、野手はPOSITION_PLAYER_RECOVERY_BASE(7)で回復
+// スタッフの身体ケア能力で回復量にボーナス（0→×1.0、50→×1.1、100→×1.2）
 export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
   Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
     if (!team || !team.players) return;
+
+    // スタッフの身体ケアボーナス
+    const staffBonus = team.corporateData?.staff ? getTeamStaffBonus(team.corporateData.staff) : null;
+    const bodyCare = staffBonus ? (staffBonus.bodyCare || 0) : 0;
+    const bodyCareMult = 1.0 + (bodyCare / 100) * 0.2;
 
     // 選手個人の疲労回復（回復能力が高いほど多く回復）
     team.players.forEach(player => {
       if (player.fatigue && player.fatigue > 0) {
         const recoveryAbility = player.physical?.recovery || 50;
-        // 回復量 = ベース回復 × (0.7〜1.3)（回復能力50で1.0倍）
+        // 回復量 = ベース回復 × (0.7〜1.3)（回復能力50で1.0倍）× 身体ケア補正
         const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
-        // 野手は回復が遅い（投手は登板間隔があるため高回復を維持）
-        // 現在のポジションで判定（投手→野手変更時に正しく野手回復が適用されるように）
         const baseRecov = player.position === 'pitcher' ? recoveryAmount : POSITION_PLAYER_RECOVERY_BASE;
-        const actualRecovery = Math.round(baseRecov * recoveryMult);
+        const actualRecovery = Math.round(baseRecov * recoveryMult * bodyCareMult);
         player.fatigue = Math.max(0, player.fatigue - actualRecovery);
       }
     });
