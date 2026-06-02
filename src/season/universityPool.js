@@ -123,9 +123,9 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
     abilities = {
-      meet: cl(r(5, 22) + Math.round(off * 0.3) + tri(3), 1, 40),
-      power: cl(r(3, 18) + Math.round(off * 0.3) + tri(3), 1, 35),
-      eye: cl(r(8, 25) + Math.round(off * 0.3) + tri(3), 1, 45),
+      meet: cl(r(5, 22) + Math.round(off * 0.3) + tri(3), 5, 40),
+      power: cl(r(3, 18) + Math.round(off * 0.3) + tri(3), 3, 35),
+      eye: cl(r(8, 25) + Math.round(off * 0.3) + tri(3), 5, 45),
       steal: cl(r(8, 25) + tri(3), 1, 50),
       speed: cl(r(22, 48) + Math.round(off * 0.5) + tri(4), 1, 70),
       arm: cl(r(30, 58) + Math.round(off * 0.5) + tri(4), 15, 80),
@@ -152,8 +152,8 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'cannon') arm += r(15, 25);
 
     abilities = {
-      meet: cl(meet, 1, 80), power: cl(power, 1, 75),
-      eye: cl(eye, 1, 65), steal: cl(steal, 1, 70),
+      meet: cl(meet, 10, 80), power: cl(power, 8, 75),
+      eye: cl(eye, 10, 65), steal: cl(steal, 5, 70),
       speed: cl(speed, 1, 85), arm: cl(arm, 1, 80),
       defense: cl(defense, 1, 75),
       bodyStamina: cl(r(30, 58) + Math.round(off * 0.3) + tri(3), 20, 75),

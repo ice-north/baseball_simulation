@@ -434,6 +434,11 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     p.batting.meet = Math.min(p.batting.meet, batCap);
     p.batting.power = Math.min(p.batting.power, batCap);
     p.batting.eye = Math.min(p.batting.eye, batCap);
+    // 打撃能力フロア（Dランクでも高校野球経験者なので一桁はありえない）
+    const batFloor = p.position === 'pitcher' ? 10 : 15;
+    p.batting.meet = Math.max(p.batting.meet, batFloor);
+    p.batting.power = Math.max(p.batting.power, batFloor);
+    p.batting.eye = Math.max(p.batting.eye, batFloor);
 
     p.scoutComment = generateScoutComment(p);
     if (!p.careerHistory) p.careerHistory = [];
