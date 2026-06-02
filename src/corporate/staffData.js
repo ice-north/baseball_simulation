@@ -121,6 +121,96 @@ export const generateStaff = (role, grade = null) => {
   };
 };
 
+// 引退選手をスタッフに転向（チーム内情を知る分、市場スタッフより有利）
+export const convertPlayerToStaff = (player) => {
+  const id = nextStaffId++;
+  const isPitcher = player.position === 'pitcher';
+  const isCatcher = player.position === 'catcher';
+
+  // 選手の総合力からグレードを判定し、1段階昇格（チーム貢献ボーナス）
+  let overall;
+  if (isPitcher) {
+    overall = ((player.pitching?.velocity || 130) - 120) * 1.5
+      + (player.pitching?.control || 40) + (player.pitching?.stamina || 80) * 0.4;
+    overall /= 3;
+  } else {
+    overall = ((player.batting?.meet || 30) + (player.batting?.power || 30)
+      + (player.physical?.speed || 30) + (player.physical?.arm || 30)
+      + (player.fielding?.defense || 30)) / 5;
+  }
+
+  let baseGrade;
+  if (overall >= 65) baseGrade = 'S';
+  else if (overall >= 52) baseGrade = 'A';
+  else if (overall >= 40) baseGrade = 'B';
+  else if (overall >= 28) baseGrade = 'C';
+  else baseGrade = 'D';
+
+  const UPGRADE = { D: 'C', C: 'B', B: 'A', A: 'S', S: 'S' };
+  const grade = UPGRADE[baseGrade];
+  const g = STAFF_GRADES[grade];
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  // 選手能力 → スタッフ指導能力への変換（0~99 → 0~40のボーナス）
+  const statToBonus = (stat, scale = 0.4) => Math.round((stat || 0) * scale);
+
+  const abilities = {};
+  for (const key of STAFF_ABILITY_KEYS) {
+    abilities[key] = g.baseMin + Math.floor(Math.random() * (g.baseMax - g.baseMin + 1));
+  }
+
+  // 選手の得意分野を指導力に反映
+  const strengths = [];
+  if (isPitcher) {
+    abilities.pitchingCoach += statToBonus(player.pitching?.control, 0.45);
+    abilities.batteryCoach += statToBonus(player.pitching?.control, 0.3);
+    strengths.push('pitchingCoach');
+    if ((player.pitching?.control || 0) >= 55) strengths.push('batteryCoach');
+  } else {
+    abilities.battingCoach += statToBonus(player.batting?.meet, 0.35)
+      + statToBonus(player.batting?.power, 0.15);
+    abilities.fieldRunCoach += statToBonus(player.fielding?.defense, 0.25)
+      + statToBonus(player.physical?.speed, 0.2);
+    strengths.push('battingCoach');
+    if ((player.fielding?.defense || 0) >= 50) strengths.push('fieldRunCoach');
+  }
+  if (isCatcher) {
+    abilities.batteryCoach += statToBonus(player.fielding?.defense, 0.4);
+    if (!strengths.includes('batteryCoach')) strengths.push('batteryCoach');
+  }
+
+  // チーム内情ボーナス: 全能力に+8〜15
+  const familiarityBonus = 8 + Math.floor(Math.random() * 8);
+  for (const key of STAFF_ABILITY_KEYS) {
+    abilities[key] = clamp(abilities[key] + familiarityBonus, 1, 99);
+  }
+
+  // プロ意識の高い選手はモチベーション管理も得意
+  const discipline = player.personality?.discipline || 50;
+  if (discipline >= 60) {
+    abilities.motivation += Math.round(discipline * 0.2);
+    abilities.motivation = clamp(abilities.motivation, 1, 99);
+    if (discipline >= 75) strengths.push('motivation');
+  }
+
+  // 経験年数 = 選手としてのキャリア（年齢-18を目安に、最大15）
+  const experience = Math.min(15, Math.max(1, (player.age || 30) - 18));
+
+  return {
+    id,
+    name: player.name,
+    role: 'coach',
+    grade,
+    age: player.age || 35,
+    abilities,
+    strengths: [...new Set(strengths)],
+    experience,
+    personality: player.personality?.type || randomPersonality(),
+    isFormerPlayer: true,
+  };
+};
+
 // 市場に出回るスタッフ候補を生成
 export const generateStaffMarket = (count = 15) => {
   const market = [];

@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import { processCorporateRetirements, executeDepartures } from '../corporate/scoutingSystem.js';
-import { getPlayerSalary, getStaffSalary } from '../corporate/staffData.js';
+import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES } from '../corporate/staffData.js';
 import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
-import { getTeamStaffBonus } from '../corporate/staffData.js';
+import { getTeamStaffBonus, STAFF_GRADES } from '../corporate/staffData.js';
 
 const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -17,6 +17,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const [sortKey, setSortKey] = useState('salary');
   const [sortAsc, setSortAsc] = useState(false);
   const [sponsorOffers, setSponsorOffers] = useState(null);
+  const [staffConversions, setStaffConversions] = useState({});
+  const [staffPreviews, setStaffPreviews] = useState({});
 
   useEffect(() => {
     if (processed) return;
@@ -59,7 +61,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     if (decision === 'release' || decision === 'retire') return sum;
     return sum + getPlayerSalary(p);
   }, 0);
-  const totalSalary = projectedPlayerSalary + staffSalaryTotal;
+  const totalSalary = projectedPlayerSalary + staffSalaryTotal + conversionSalaryTotal;
   const totalBudget = baseBudget + reputationBonus + managingBonus + tournamentBonus + currentSponsorIncome;
   const budgetBalance = totalBudget - totalSalary;
 
@@ -105,7 +107,44 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     const current = playerDecisions[playerId] || 'contract';
     const next = current === 'contract' ? 'release' : current === 'release' ? 'retire' : 'contract';
     setPlayerDecisions({ ...playerDecisions, [playerId]: next });
+    if (next !== 'retire' && staffConversions[playerId]) {
+      const nextConv = { ...staffConversions };
+      delete nextConv[playerId];
+      setStaffConversions(nextConv);
+      const nextPrev = { ...staffPreviews };
+      delete nextPrev[playerId];
+      setStaffPreviews(nextPrev);
+    }
   };
+
+  const toggleStaffConversion = (playerId) => {
+    const player = players.find(p => p.id === playerId);
+    if (!player) return;
+    if (staffConversions[playerId]) {
+      const next = { ...staffConversions };
+      delete next[playerId];
+      setStaffConversions(next);
+      const nextPrev = { ...staffPreviews };
+      delete nextPrev[playerId];
+      setStaffPreviews(nextPrev);
+    } else {
+      const preview = convertPlayerToStaff(player);
+      setStaffConversions({ ...staffConversions, [playerId]: true });
+      setStaffPreviews({ ...staffPreviews, [playerId]: preview });
+    }
+  };
+
+  // スタッフ転向する選手の追加人件費
+  const conversionSalaryTotal = Object.entries(staffPreviews).reduce((sum, [pid, sp]) => {
+    if (!staffConversions[pid]) return sum;
+    const numPid = parseInt(pid);
+    const decision = playerDecisions[numPid] || playerDecisions[pid] || 'contract';
+    const isAutoRetired = userRetiredIds.has(numPid) || userRetiredIds.has(pid);
+    if (decision === 'retire' || isAutoRetired) {
+      return sum + getStaffSalary(sp);
+    }
+    return sum;
+  }, 0);
 
   const handleAcceptSponsor = (offer, index) => {
     acceptSponsor(cd, offer);
@@ -132,6 +171,21 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     ];
 
     executeDepartures(TEAMS_DATA, allRetiredIds, allReleases, currentYear);
+
+    // スタッフ転向処理
+    Object.entries(staffConversions).forEach(([pid, enabled]) => {
+      if (!enabled) return;
+      const numPid = typeof pid === 'string' ? parseInt(pid) : pid;
+      const decision = playerDecisions[numPid] || 'contract';
+      const isAutoRetired = userRetiredIds.has(numPid);
+      if (decision === 'retire' || isAutoRetired) {
+        const preview = staffPreviews[pid];
+        if (preview && cd) {
+          cd.staff.push(preview);
+        }
+      }
+    });
+
     setConfirmed(true);
   };
 
@@ -146,6 +200,39 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const totalAiReleases = Object.values(aiReleases).reduce((sum, arr) => sum + arr.length, 0);
   const totalRetirements = retirements.length;
+
+  const gradeColor = (grade) => {
+    const colors = { S: 'text-red-400', A: 'text-orange-400', B: 'text-yellow-400', C: 'text-green-400', D: 'text-gray-400' };
+    return colors[grade] || 'text-gray-400';
+  };
+
+  const StaffPreview = ({ preview }) => (
+    <div className="mt-1 pl-2 border-l-2 border-cyan-700/50">
+      <div className="flex items-center gap-2 text-[10px]">
+        <span className={`font-bold ${gradeColor(preview.grade)}`}>{STAFF_GRADES[preview.grade]?.label}</span>
+        <span className="text-cyan-400">コーチ</span>
+        <span className="text-gray-400">年俸{getStaffSalary(preview).toLocaleString()}万</span>
+        <span className="text-cyan-600">元選手</span>
+      </div>
+      <div className="flex gap-2 mt-0.5 text-[10px] flex-wrap">
+        {preview.strengths.map(key => (
+          <span key={key} className="bg-cyan-900/30 text-cyan-400 px-1 py-0.5 rounded">
+            {STAFF_ABILITIES[key]?.name || key}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2 mt-0.5 text-[10px] text-gray-500">
+        {Object.entries(STAFF_ABILITIES).slice(0, 5).map(([key, info]) => (
+          <span key={key}>
+            {info.name.slice(0, 2)}
+            <span className={`font-bold ml-0.5 ${getAbilityColor(preview.abilities[key] || 0)}`}>
+              {preview.abilities[key] || 0}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 
   const DecisionBadge = ({ decision }) => {
     if (decision === 'release') return <span className="text-red-400 font-bold text-[10px] bg-red-900/40 px-1.5 py-0.5 rounded">解雇</span>;
@@ -186,6 +273,27 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
             <p className="text-xs text-gray-400 mb-1">
               自チーム: {releaseCount}名 / 他チーム: {totalAiReleases}名
             </p>
+          </div>
+        )}
+        {/* スタッフ転向 */}
+        {Object.keys(staffConversions).filter(pid => staffConversions[pid] && staffPreviews[pid]).length > 0 && (
+          <div className="mb-4">
+            <h2 className="text-sm font-bold text-cyan-400 mb-2">スタッフ転向</h2>
+            <div className="grid grid-cols-2 gap-1">
+              {Object.entries(staffConversions).filter(([, v]) => v).map(([pid]) => {
+                const preview = staffPreviews[pid];
+                if (!preview) return null;
+                return (
+                  <div key={pid} className="text-xs text-gray-300 bg-gray-800 p-1.5 rounded flex items-center gap-2">
+                    <span className={`font-bold ${gradeColor(preview.grade)}`}>{STAFF_GRADES[preview.grade]?.label}</span>
+                    <span className="text-cyan-400">コーチ</span>
+                    <span className="text-white font-medium">{preview.name}</span>
+                    <span className="text-gray-500">({preview.age}歳)</span>
+                    <span className="text-cyan-600 text-[10px]">元選手</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
         <div className="mb-4 bg-gray-800 rounded p-3">
@@ -267,16 +375,54 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         </div>
       )}
 
-      {/* 引退選手 */}
-      {totalRetirements > 0 && (
-        <div className="mb-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded">
-          <p className="text-yellow-400 text-xs font-bold">
-            自動引退: {retirements.filter(r => r.team === userTeamName).map(r => `${r.name}(${r.age}歳)`).join('、') || 'なし'}
-            {retirements.filter(r => r.team !== userTeamName).length > 0 &&
-              ` (他チーム${retirements.filter(r => r.team !== userTeamName).length}名)`}
-          </p>
-        </div>
-      )}
+      {/* 引退選手（自動） */}
+      {totalRetirements > 0 && (() => {
+        const userRetirements = retirements.filter(r => r.team === userTeamName);
+        const otherCount = retirements.filter(r => r.team !== userTeamName).length;
+        return (
+          <div className="mb-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded">
+            <p className="text-yellow-400 text-xs font-bold mb-1">
+              自動引退{otherCount > 0 ? ` (他チーム${otherCount}名)` : ''}
+            </p>
+            {userRetirements.length > 0 && (
+              <div className="space-y-1">
+                {userRetirements.map(r => {
+                  const player = players.find(p => p.id === r.id);
+                  const isConverting = staffConversions[r.id];
+                  const preview = staffPreviews[r.id];
+                  return (
+                    <div key={r.id} className="bg-gray-800/60 rounded p-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-yellow-300 text-xs">{POSITION_NAMES[r.position]}</span>
+                        <span className="text-gray-300 text-xs font-medium">{r.name}</span>
+                        <span className="text-gray-500 text-[10px]">{r.age}歳 / {r.reason}</span>
+                        <button
+                          onClick={() => {
+                            if (player) toggleStaffConversion(r.id);
+                          }}
+                          className={`ml-auto px-2 py-0.5 text-[10px] font-bold rounded transition ${
+                            isConverting
+                              ? 'bg-cyan-700 text-cyan-100'
+                              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                          }`}
+                        >
+                          {isConverting ? 'コーチ就任' : 'スタッフ転向'}
+                        </button>
+                      </div>
+                      {isConverting && preview && (
+                        <StaffPreview preview={preview} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {userRetirements.length === 0 && (
+              <p className="text-gray-500 text-xs">自チーム: なし</p>
+            )}
+          </div>
+        );
+      })()}
 
       {totalAiReleases > 0 && (
         <p className="text-xs text-gray-500 mb-2">他チーム自動戦力外: {totalAiReleases}名</p>
@@ -311,8 +457,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                 : (player.seasonStats?.batting?.games || 0);
               const salary = getPlayerSalary(player);
               return (
+                <React.Fragment key={player.id}>
                 <tr
-                  key={player.id}
                   onClick={() => cycleDecision(player.id)}
                   className={`cursor-pointer border-b border-gray-800 transition ${
                     decision === 'release' ? 'bg-red-900/30 opacity-70' :
@@ -352,6 +498,28 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                   </td>
                   <td className="py-0.5 px-1 text-center">{games}</td>
                 </tr>
+                {decision === 'retire' && (
+                  <tr key={`${player.id}-staff`} className="bg-yellow-900/10 border-b border-gray-800">
+                    <td colSpan={13} className="py-1 px-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleStaffConversion(player.id); }}
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded transition ${
+                            staffConversions[player.id]
+                              ? 'bg-cyan-700 text-cyan-100'
+                              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                          }`}
+                        >
+                          {staffConversions[player.id] ? 'コーチ就任確定' : 'スタッフとして残す'}
+                        </button>
+                        {staffConversions[player.id] && staffPreviews[player.id] && (
+                          <StaffPreview preview={staffPreviews[player.id]} />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
               );
             })}
           </tbody>
@@ -370,6 +538,9 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           <span className="text-green-400">契約{contractCount}名</span>
           {releaseCount > 0 && <span className="text-red-400">解雇{releaseCount}名</span>}
           {retireCount > 0 && <span className="text-yellow-400">引退{retireCount}名</span>}
+          {Object.values(staffConversions).filter(Boolean).length > 0 && (
+            <span className="text-cyan-400">スタッフ転向{Object.values(staffConversions).filter(Boolean).length}名</span>
+          )}
           <span className="text-gray-500">→ 来季{contractCount}名</span>
         </div>
       </div>
