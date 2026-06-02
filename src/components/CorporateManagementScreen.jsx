@@ -202,7 +202,29 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             <AbilityBar key={key} label={info.name} value={s.abilities[key] || 0} />
                           ))}
                         </div>
-                        <div className="flex justify-end">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-400">役職:</span>
+                            {Object.entries(STAFF_ROLE_PROFILES).map(([roleKey, rp]) => (
+                              <button
+                                key={roleKey}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (s.role !== roleKey) {
+                                    s.role = roleKey;
+                                    setRefreshTick(t => t + 1);
+                                  }
+                                }}
+                                className={`px-2.5 py-1 text-xs rounded transition ${
+                                  s.role === roleKey
+                                    ? 'bg-green-700 text-white font-bold'
+                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
+                                }`}
+                              >
+                                {rp.name}
+                              </button>
+                            ))}
+                          </div>
                           <button
                             onClick={(e) => { e.stopPropagation(); setConfirmFire(s); }}
                             className="px-3 py-1 bg-red-800 hover:bg-red-700 text-red-200 rounded text-xs"
