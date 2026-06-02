@@ -891,6 +891,43 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
 
         {viewMode === 'select' && (
           <>
+            {/* スタッフ指導効果 */}
+            {(() => {
+              const sb = userTeam?.corporateData?.staff ? getTeamStaffBonus(userTeam.corporateData.staff) : null;
+              if (!sb) return null;
+              const items = [
+                { label: '打撃指導', val: sb.battingCoach, target: '打撃系' },
+                { label: '守走指導', val: sb.fieldRunCoach, target: '守備系' },
+                { label: '投手指導', val: sb.pitchingCoach, target: '投手系' },
+                { label: 'フィットネス', val: sb.fitness, target: 'フィジカル系' },
+                { label: 'モチベ管理', val: sb.motivation, target: 'プロ意識' },
+              ];
+              const multLabel = (v, base, range) => {
+                const m = base + (v / 100) * range;
+                return m >= 1.0 ? `×${m.toFixed(2)}` : `×${m.toFixed(2)}`;
+              };
+              return (
+                <div className="mb-2 flex items-center gap-3 bg-gray-800/60 rounded px-3 py-1.5 text-[10px] flex-wrap">
+                  <span className="text-gray-500 font-bold">コーチ効果:</span>
+                  {items.map(it => (
+                    <span key={it.label} className="text-gray-400">
+                      {it.label}
+                      <span className={`font-bold ml-0.5 ${it.val >= 70 ? 'text-yellow-400' : it.val >= 40 ? 'text-green-400' : 'text-gray-500'}`}>
+                        {it.val}
+                      </span>
+                      <span className="text-gray-600 ml-0.5">
+                        ({it.label === 'モチベ管理'
+                          ? (it.val >= 20 ? `+プロ意識` : '効果なし')
+                          : it.label === 'フィットネス'
+                            ? multLabel(it.val, 0.8, 0.4)
+                            : multLabel(it.val, 0.7, 0.6)
+                        })
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
             {/* プリセット一括設定 */}
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               <span className="text-gray-500 text-xs font-bold">プリセット:</span>

@@ -526,13 +526,26 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         </table>
       </div>
 
+      {/* 予算超過警告 */}
+      {budgetBalance < 0 && (
+        <div className="mb-2 p-2 bg-red-900/30 border border-red-700 rounded">
+          <p className="text-red-400 text-xs font-bold">
+            予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です。選手を解雇するかスタッフ転向を見直してください。
+          </p>
+        </div>
+      )}
+
       {/* 操作ボタン */}
       <div className="flex items-center gap-4">
         <button
           onClick={handleConfirm}
-          className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-sm"
+          className={`px-5 py-2 rounded font-bold text-sm ${
+            budgetBalance < 0
+              ? 'bg-red-700 hover:bg-red-600 text-white'
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
         >
-          契約更改を確定
+          {budgetBalance < 0 ? '赤字のまま確定' : '契約更改を確定'}
         </button>
         <div className="text-xs text-gray-400 space-x-3">
           <span className="text-green-400">契約{contractCount}名</span>
