@@ -415,7 +415,7 @@ export function createMainTournament(qualifiedByRegion, defendingChampionName, c
 
   const bracket = createBracket(teamNames);
   // 本戦は8月15日から、1日3試合ずつ東京ドームで開催
-  assignMainTournamentDates(bracket, { year: calendarYear, month: 8, day: 15 }, 3);
+  assignMainTournamentDates(bracket, { year: calendarYear, month: 7, day: 15 }, 3);
 
   return {
     bracket,
@@ -813,7 +813,7 @@ export function generateToshitaikou(options = {}) {
 
   // 予選に日程を割り当て（6月15日から1日3試合ずつ）
   for (const regionId of Object.keys(qualifiers)) {
-    assignQualifierDates(qualifiers[regionId], { year: calendarYear, month: 6, day: 15 }, 3);
+    assignQualifierDates(qualifiers[regionId], { year: calendarYear, month: 5, day: 15 }, 3);
   }
 
   const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';

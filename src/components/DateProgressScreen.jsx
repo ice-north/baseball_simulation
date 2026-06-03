@@ -178,7 +178,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       newData = { ...newData, _highSchoolGenerated: true };
     }
 
-    if (isCorporate && month >= 6 && !newData.toshitaikou?.generated) {
+    if (isCorporate && month >= 5 && !newData.toshitaikou?.generated) {
       setSeasonData(newData);
       setIsGeneratingTournament(true);
       setTimeout(() => {
@@ -192,7 +192,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return newData;
     }
 
-    if (isCorporate && month >= 8 && newData.toshitaikou?.qualifiersDone && !newData.toshitaikou?.mainDone && !newData.toshitaikou?.mainTournament) {
+    if (isCorporate && month >= 7 && newData.toshitaikou?.qualifiersDone && !newData.toshitaikou?.mainDone && !newData.toshitaikou?.mainTournament) {
       setSeasonData(newData);
       setIsGeneratingTournament(true);
       setTimeout(() => {
@@ -272,13 +272,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
     // 独立リーグモード: 社会人都市対抗をバックグラウンドで自動処理
     if (!isCorporate && WORLD_DATA.initialized && WORLD_DATA.mode === 'independent') {
-      if (month >= 6 && !WORLD_DATA.corporateToshitaikou?.generated) {
+      if (month >= 5 && !WORLD_DATA.corporateToshitaikou?.generated) {
         const calYear = newData.currentDate.year;
         const tournament = generateToshitaikou({ userTeamName: null, calendarYear: calYear });
         if (!WORLD_DATA.corporateToshitaikou) WORLD_DATA.corporateToshitaikou = {};
         WORLD_DATA.corporateToshitaikou = { ...tournament, generated: true, qualifiersDone: true, mainDone: false };
       }
-      if (month >= 8 && WORLD_DATA.corporateToshitaikou?.generated && !WORLD_DATA.corporateToshitaikou?.mainDone) {
+      if (month >= 7 && WORLD_DATA.corporateToshitaikou?.generated && !WORLD_DATA.corporateToshitaikou?.mainDone) {
         const td = WORLD_DATA.corporateToshitaikou;
         const calYear = newData.currentDate.year;
         const mainTournament = createMainTournament(td.qualifiers, null, calYear);
