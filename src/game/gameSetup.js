@@ -485,6 +485,38 @@ export function executeHandleManagedGameEnd(ctx) {
     });
   }
 
+  // 地域トーナメントの結果処理
+  const rtPending = updatedSeasonData.regionalTournament?.pendingMatch;
+  if (rtPending && info.isTournament) {
+    const rt = { ...updatedSeasonData.regionalTournament };
+    const userWon = finalScore.home > finalScore.away;
+    const winnerName = userWon ? htn : atn;
+    const scoreArr = [finalScore.home, finalScore.away];
+
+    const region = rt.brackets?.[rtPending.regionId];
+    if (region) {
+      recordResult(region.bracket, rtPending.roundIdx, rtPending.matchIdx, winnerName, scoreArr);
+      if (isBracketComplete(region.bracket)) {
+        region.champion = region.bracket.champion;
+        region.phase = 'done';
+        const allDone = Object.values(rt.brackets).every(r => r.phase === 'done');
+        if (allDone) {
+          rt.champions = Object.values(rt.brackets).map(r => r.champion).filter(Boolean);
+          rt.phase = 'done';
+        }
+      }
+    }
+
+    rt.pendingMatch = null;
+    updatedSeasonData = { ...updatedSeasonData, regionalTournament: rt };
+    setSeasonData(updatedSeasonData);
+    setManagedGameInfo(null);
+    managedGameInfoRef.current = null;
+    setScreenMode('management');
+    setManagementView('dateprogress');
+    return;
+  }
+
   // 日本選手権の結果処理
   const nsPending = updatedSeasonData.nihonSenshuken?.pendingMatch;
   if (nsPending && info.isTournament) {

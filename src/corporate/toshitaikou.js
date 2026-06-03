@@ -626,11 +626,7 @@ export function simulateQualifierOnDate(qualifier, dateObj, userTeamName = null)
       buildLosersBracket(qualifier);
       // 敗者復活に日程を割り当て
       if (qualifier.losersStartDate) {
-        if (qualifier.weekendOnly) {
-          assignWeekendQualifierDates(qualifier.losersBracket, qualifier.losersStartDate, 3);
-        } else {
-          assignMainTournamentDates(qualifier.losersBracket, qualifier.losersStartDate, 3);
-        }
+        assignMainTournamentDates(qualifier.losersBracket, qualifier.losersStartDate, 3);
       }
     } else {
       qualifier.phase = 'done';
@@ -886,8 +882,7 @@ export function generateNihonSenshuken(options = {}) {
       phase: 'main',
     };
 
-    qualifier.weekendOnly = true;
-    assignWeekendQualifier(qualifier, { year: calendarYear, month: 4, day: 5 }, 5);
+    assignQualifierDates(qualifier, { year: calendarYear, month: 9, day: 1 }, 5);
 
     if (userTeamName && teamDefsMap[userTeamName]) {
       userRegionId = regionId;
@@ -936,7 +931,7 @@ export function createSenshukenMainTournament(qualifiers, calendarYear = 2024) {
   allQualified.forEach(t => { if (t.teamDef) teamDefsMap[t.name] = t.teamDef; });
 
   const bracket = createBracket(teamNames);
-  assignMainTournamentDates(bracket, { year: calendarYear, month: 11, day: 1 }, 3);
+  assignMainTournamentDates(bracket, { year: calendarYear, month: 10, day: 1 }, 3);
 
   return {
     bracket,
@@ -1100,4 +1095,144 @@ export function getRoundName(bracket, roundIdx) {
   if (fromFinal === 1) return '準決勝';
   if (fromFinal === 2) return '準々決勝';
   return `${roundIdx + 1}回戦`;
+}
+
+// ============================================================
+// 地域トーナメント（4〜5月、各地域16チームのシングルエリミネーション）
+// JABA大会に相当。優勝チームは日本選手権の出場権を獲得
+// ============================================================
+
+const REGIONAL_TOURNAMENT_TEAMS = 16;
+
+export function generateRegionalTournament(options = {}) {
+  const { userTeamName = null, calendarYear = 2024 } = options;
+
+  const brackets = {};
+  let userRegionId = null;
+
+  for (const regionId of Object.keys(REGIONAL_SLOTS)) {
+    const allTeams = getTeamsByRegion(regionId);
+    const sorted = [...allTeams].sort((a, b) =>
+      (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
+    );
+    const teams = sorted.slice(0, Math.min(REGIONAL_TOURNAMENT_TEAMS, allTeams.length));
+    const teamNames = teams.map(t => t.displayName || t.name);
+    const teamDefsMap = {};
+    teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+
+    const bracket = createBracket(teamNames);
+    assignWeekendQualifierDates(bracket, { year: calendarYear, month: 4, day: 5 }, 5);
+
+    if (userTeamName && teamDefsMap[userTeamName]) {
+      userRegionId = regionId;
+    }
+
+    brackets[regionId] = {
+      regionId,
+      regionName: TOSHITAIKOU_REGION_NAMES[regionId],
+      bracket,
+      teamDefs: teams,
+      teamDefsMap,
+      champion: null,
+      phase: 'playing',
+    };
+  }
+
+  return {
+    brackets,
+    userRegionId,
+    champions: [],
+    phase: 'playing',
+  };
+}
+
+export function simulateRegionalTournamentOnDate(tournament, dateObj, userTeamName = null) {
+  if (!tournament || tournament.phase === 'done') return;
+
+  for (const regionId of Object.keys(tournament.brackets)) {
+    const region = tournament.brackets[regionId];
+    if (region.phase === 'done') continue;
+
+    const isUserRegion = userTeamName && region.teamDefsMap[userTeamName];
+    const utn = isUserRegion ? userTeamName : null;
+
+    simulateBracketRoundOnDate(region.bracket, region.teamDefsMap, dateObj, utn);
+
+    if (isBracketComplete(region.bracket)) {
+      region.champion = region.bracket.champion;
+      region.phase = 'done';
+    }
+  }
+
+  const allDone = Object.values(tournament.brackets).every(r => r.phase === 'done');
+  if (allDone) {
+    tournament.champions = Object.values(tournament.brackets)
+      .map(r => r.champion)
+      .filter(Boolean);
+    tournament.phase = 'done';
+  }
+}
+
+export function getUserRegionalTournamentMatchOnDate(tournament, dateObj, userTeamName) {
+  if (!tournament || !userTeamName || tournament.phase === 'done') return null;
+  if (!tournament.userRegionId) return null;
+
+  const region = tournament.brackets[tournament.userRegionId];
+  if (!region || region.phase === 'done') return null;
+
+  const bracket = region.bracket;
+  if (!bracket?.matchDates) return null;
+
+  for (let r = 0; r < bracket.rounds.length; r++) {
+    for (let m = 0; m < bracket.rounds[r].length; m++) {
+      const rd = bracket.matchDates[r]?.[m];
+      if (!rd || rd.year !== dateObj.year || rd.month !== dateObj.month || rd.day !== dateObj.day) continue;
+      const match = bracket.rounds[r][m];
+      if (match.winner || match.isBye) continue;
+      if (match.team1 === userTeamName || match.team2 === userTeamName) {
+        return {
+          type: 'regional_tournament',
+          roundIdx: r,
+          matchIdx: m,
+          match,
+          bracketType: 'regional_tournament',
+          regionId: tournament.userRegionId,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+export function getRegionalTournamentDatesForCalendar(tournament, userTeamName) {
+  if (!tournament) return [];
+  const dates = [];
+
+  for (const regionId of Object.keys(tournament.brackets)) {
+    const region = tournament.brackets[regionId];
+    if (!region.bracket?.matchDates) continue;
+    const isUserRegion = userTeamName && regionId === tournament.userRegionId;
+    const bk = region.bracket;
+
+    const dateEntries = {};
+    for (let r = 0; r < bk.rounds.length; r++) {
+      for (let m = 0; m < bk.rounds[r].length; m++) {
+        const rd = bk.matchDates[r]?.[m];
+        if (!rd) continue;
+        const match = bk.rounds[r][m];
+        if (match.isBye && !(match.team1 && match.team2)) continue;
+        const key = `${rd.year}-${rd.month}-${rd.day}`;
+        if (!dateEntries[key]) {
+          dateEntries[key] = { date: rd, label: isUserRegion ? '地域トーナメント' : null, isUserMatch: false, isUserRegion, type: 'regional_tournament', regionId, done: true };
+        }
+        if (!match.winner && !match.isBye && match.team1 && match.team2) dateEntries[key].done = false;
+        if (!match.winner && match.team1 && match.team2 && (match.team1 === userTeamName || match.team2 === userTeamName)) {
+          dateEntries[key].isUserMatch = true;
+        }
+      }
+    }
+    for (const entry of Object.values(dateEntries)) dates.push(entry);
+  }
+
+  return dates;
 }
