@@ -946,7 +946,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           : it.label === 'フィットネス'
                             ? multLabel(it.val, 0.8, 0.4)
                             : it.label === 'バッテリー'
-                              ? multLabel(it.val, 0.85, 0.3)
+                              ? multLabel(it.val, 0.9, 0.2)
                               : multLabel(it.val, 0.7, 0.6)
                         })
                       </span>

@@ -436,7 +436,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const nonStraight = arsenal.filter(p => p.type !== 'straight');
         const playerForm = player.pitching?.form;
         const battVal = staffBonus ? (staffBonus.batteryCoach || 50) : 50;
-        const battMult = 0.85 + (battVal / 100) * 0.3;
+        const battMult = 0.9 + (battVal / 100) * 0.2;
         if (nonStraight.length > 0) {
           nonStraight.forEach(pitch => {
             const age = player.age || 20;
@@ -713,9 +713,9 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   const fitnessValue = staffBonus ? (staffBonus.fitness || 50) : 50;
   const fitnessMult = 0.8 + (fitnessValue / 100) * 0.4;
 
-  // バッテリー指導補正: 制球練習に0.85〜1.15倍（配球理解が制球向上を促す）
+  // バッテリー指導補正: 制球練習に0.9〜1.1倍（投手コーチが主、バッテリーは補助）
   const batteryValue = staffBonus ? (staffBonus.batteryCoach || 50) : 50;
-  const batteryMult = 0.85 + (batteryValue / 100) * 0.3;
+  const batteryMult = 0.9 + (batteryValue / 100) * 0.2;
 
   // 新球種習得の場合（覚醒10%/大成功15%/成功20%/習得25%/失敗30%）
   if (trainingType === 'newpitch') {
