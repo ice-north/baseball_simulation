@@ -40,6 +40,28 @@ const MAX_QUALIFIER_TEAMS = 32;
 const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
 const RANK_STRENGTH = { S: 88, A: 73, B: 58, C: 43, D: 30 };
 
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function shuffleWithinRanks(teams) {
+  const byRank = {};
+  for (const t of teams) {
+    const r = t.rank || 'D';
+    (byRank[r] ||= []).push(t);
+  }
+  const result = [];
+  for (const rank of ['S', 'A', 'B', 'C', 'D']) {
+    if (byRank[rank]) result.push(...shuffleArray(byRank[rank]));
+  }
+  return result;
+}
+
 // ============================================================
 // ユーティリティ
 // ============================================================
@@ -277,10 +299,7 @@ export function getBracketRankings(bracket) {
 
 export function createRegionalQualifier(regionId) {
   const allTeams = getTeamsByRegion(regionId);
-  const sorted = [...allTeams].sort((a, b) =>
-    (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
-  );
-  const teams = sorted.slice(0, MAX_QUALIFIER_TEAMS);
+  const teams = shuffleWithinRanks(allTeams).slice(0, MAX_QUALIFIER_TEAMS);
   const slots = REGIONAL_SLOTS[regionId] || 1;
 
   const teamNames = teams.map(t => t.displayName || t.name);
@@ -406,12 +425,18 @@ export function createMainTournament(qualifiedByRegion, defendingChampionName, c
     }
   }
 
-  // ランク順でシード
-  allQualified.sort((a, b) =>
-    (RANK_ORDER[a.def?.rank] ?? 3) - (RANK_ORDER[b.def?.rank] ?? 3)
-  );
+  // ランク順でシード（同ランク内はシャッフル）
+  const grouped = {};
+  for (const t of allQualified) {
+    const r = t.def?.rank || 'D';
+    (grouped[r] ||= []).push(t);
+  }
+  const seeded = [];
+  for (const rank of ['S', 'A', 'B', 'C', 'D']) {
+    if (grouped[rank]) seeded.push(...shuffleArray(grouped[rank]));
+  }
 
-  const teamNames = allQualified.slice(0, 32).map(t => t.name);
+  const teamNames = seeded.slice(0, 32).map(t => t.name);
 
   const bracket = createBracket(teamNames);
   // 本戦は8月15日から、1日3試合ずつ東京ドームで開催
@@ -877,10 +902,7 @@ export function generateNihonSenshuken(options = {}) {
   for (const regionId of Object.keys(SENSHUKEN_SLOTS)) {
     const allTeams = getTeamsByRegion(regionId);
     const corporateTeams = allTeams.filter(t => t.type === 'corporate');
-    const sorted = [...corporateTeams].sort((a, b) =>
-      (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
-    );
-    const teams = sorted;
+    const teams = shuffleWithinRanks(corporateTeams);
     const slots = SENSHUKEN_SLOTS[regionId] || 1;
 
     const teamNames = teams.map(t => t.displayName || t.name);
@@ -937,10 +959,7 @@ export function generateClubSenshuken(options = {}) {
   for (const regionId of Object.keys(CLUB_SENSHUKEN_SLOTS)) {
     const allTeams = getTeamsByRegion(regionId);
     const clubTeams = allTeams.filter(t => t.type === 'club');
-    const sorted = [...clubTeams].sort((a, b) =>
-      (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
-    );
-    const teams = sorted;
+    const teams = shuffleWithinRanks(clubTeams);
     const slots = CLUB_SENSHUKEN_SLOTS[regionId] || 1;
 
     if (teams.length < 2) continue;
@@ -997,9 +1016,9 @@ export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, t
   while (allQualified.length < 32) {
     const allTeams = getAllTeamsEffective();
     const usedSet = new Set(allQualified.map(t => t.name));
-    const filler = allTeams
-      .filter(t => !usedSet.has(t.displayName || t.name) && (!teamType || t.type === teamType))
-      .sort((a, b) => (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3));
+    const filler = shuffleWithinRanks(
+      allTeams.filter(t => !usedSet.has(t.displayName || t.name) && (!teamType || t.type === teamType))
+    );
     if (filler.length === 0) break;
     const t = filler[0];
     allQualified.push({ name: t.displayName || t.name, region: t.region, teamDef: t });
@@ -1189,10 +1208,7 @@ export function generateRegionalTournament(options = {}) {
 
   for (const regionId of Object.keys(REGIONAL_SLOTS)) {
     const allTeams = getTeamsByRegion(regionId);
-    const sorted = [...allTeams].sort((a, b) =>
-      (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
-    );
-    const teams = sorted;
+    const teams = shuffleWithinRanks(allTeams);
     const teamNames = teams.map(t => t.displayName || t.name);
     const teamDefsMap = {};
     teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
