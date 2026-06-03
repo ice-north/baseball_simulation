@@ -408,14 +408,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const xR = xL + CONN_W;
 
             return round.map((m, mi) => {
-              // Bye: straight line through (winner always advances)
+              // Bye: straight line through — orange only if the bye team won their next match
               if (m.isBye && !(m.team1 && m.team2)) {
                 const midY = getMatchMidY(ri, mi);
-                const hasWinner = m.winner != null;
+                const byeTeam = m.winner;
+                const nextMatch = rounds[ri + 1]?.[Math.floor(mi / 2)];
+                const wonNext = byeTeam && nextMatch?.winner === byeTeam;
                 return (
                   <g key={`m${ri}-${mi}`}>
                     <line x1={xL} y1={midY} x2={xR} y2={midY}
-                      stroke={hasWinner ? WIN_COLOR : DEF_COLOR} strokeWidth={hasWinner ? WIN_W : DEF_W} />
+                      stroke={wonNext ? WIN_COLOR : DEF_COLOR} strokeWidth={wonNext ? WIN_W : DEF_W} />
                   </g>
                 );
               }
