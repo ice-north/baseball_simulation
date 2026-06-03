@@ -919,7 +919,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                 { label: '打撃指導', val: sb.battingCoach, target: '打撃系' },
                 { label: '守走指導', val: sb.fieldRunCoach, target: '守備系' },
                 { label: '投手指導', val: sb.pitchingCoach, target: '投手系' },
-                { label: 'バッテリー', val: sb.batteryCoach, target: 'Cリード' },
+                { label: 'バッテリー', val: sb.batteryCoach, target: 'Cリード/制球/変化球' },
                 { label: 'フィットネス', val: sb.fitness, target: 'フィジカル系' },
                 { label: 'モチベ管理', val: sb.motivation, target: 'プロ意識' },
               ];
@@ -942,7 +942,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                           : it.label === 'フィットネス'
                             ? multLabel(it.val, 0.8, 0.4)
                             : it.label === 'バッテリー'
-                              ? multLabel(it.val, 0.7, 0.6)
+                              ? multLabel(it.val, 0.85, 0.3)
                               : multLabel(it.val, 0.7, 0.6)
                         })
                       </span>

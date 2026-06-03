@@ -430,11 +430,13 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'breaking': {
-      // 変化球練習（サブ練習版）- フォーム適性で成長ボーナス
+      // 変化球練習（サブ練習版）- フォーム適性で成長ボーナス + バッテリー指導補正
       if (player.position === 'pitcher' && player.pitching) {
         const arsenal = player.pitching?.arsenal || [];
         const nonStraight = arsenal.filter(p => p.type !== 'straight');
         const playerForm = player.pitching?.form;
+        const battVal = staffBonus ? (staffBonus.batteryCoach || 50) : 50;
+        const battMult = 0.85 + (battVal / 100) * 0.3;
         if (nonStraight.length > 0) {
           nonStraight.forEach(pitch => {
             const age = player.age || 20;
@@ -445,7 +447,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
             const dext = player.physical?.dexterity ?? 50;
             const dextMult = 0.5 + (dext / 100) * 1.0;
             const rawGrowth = (Math.floor(Math.random() * 3) + 1 + Math.floor(Math.random() * 4) + 1) * ageMultiplier;
-            const growth = Math.max(1, Math.round(rawGrowth * 0.167 * formMult * dextMult));
+            const growth = Math.max(1, Math.round(rawGrowth * 0.167 * formMult * dextMult * battMult));
             const before = pitch.level;
             pitch.level = before + growth;
             const affinityTag = formAff ? ' [適性]' : '';
@@ -711,6 +713,10 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   const fitnessValue = staffBonus ? (staffBonus.fitness || 50) : 50;
   const fitnessMult = 0.8 + (fitnessValue / 100) * 0.4;
 
+  // バッテリー指導補正: 制球練習に0.85〜1.15倍（配球理解が制球向上を促す）
+  const batteryValue = staffBonus ? (staffBonus.batteryCoach || 50) : 50;
+  const batteryMult = 0.85 + (batteryValue / 100) * 0.3;
+
   // 新球種習得の場合（覚醒10%/大成功15%/成功20%/習得25%/失敗30%）
   if (trainingType === 'newpitch') {
     const arsenal = updatedPlayer.pitching?.arsenal || [];
@@ -834,7 +840,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
       const physFitMult = isPhysical ? fitnessMult : 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * physFitMult);
+      const battCoachMult = targetStat === 'control' ? batteryMult : 1.0;
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * physFitMult * battCoachMult);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
       const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
