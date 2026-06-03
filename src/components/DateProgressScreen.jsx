@@ -23,6 +23,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [selectedRegionTab, setSelectedRegionTab] = useState(null);
   const [selectedBracketTab, setSelectedBracketTab] = useState('main');
   const [selectedRtRegionTab, setSelectedRtRegionTab] = useState(null);
+  const [activeTournamentTab, setActiveTournamentTab] = useState(null);
   const [isGeneratingTournament, setIsGeneratingTournament] = useState(false);
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
   const [scoutReportNotifications, setScoutReportNotifications] = useState([]);
@@ -850,9 +851,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           matches.push({
             type: 'toshitaikou_qualifier',
             label: `都市対抗 地区予選 ${bracketType === 'losers' ? '敗者復活 ' : ''}${getRoundName(bracket, um.roundIdx)}`,
-            opponent: oppName,
-            color: 'yellow',
-            onStart: () => startTournamentMatch(oppName, oppDef, { regionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType }),
+            opponent: oppName, oppDef, color: 'yellow',
+            regionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType,
           });
         }
       }
@@ -870,9 +870,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           matches.push({
             type: 'toshitaikou_main',
             label: `都市対抗 本戦 ${getRoundName(bracket, um.roundIdx)}`,
-            opponent: oppName,
-            color: 'yellow',
-            onStart: () => startTournamentMatch(oppName, oppDef, { roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'main_tournament' }),
+            opponent: oppName, oppDef, color: 'yellow',
+            roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'main_tournament',
           });
         }
       }
@@ -891,9 +890,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             matches.push({
               type: 'regional_tournament',
               label: `地域トーナメント ${region.regionName} ${getRoundName(region.bracket, um.roundIdx)}`,
-              opponent: oppName,
-              color: 'green',
-              onStart: () => startTournamentMatch(oppName, oppDef, { regionId: rt.userRegionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'regional_tournament' }),
+              opponent: oppName, oppDef, color: 'green',
+              regionId: rt.userRegionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'regional_tournament',
             });
           }
         }
@@ -917,9 +915,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             matches.push({
               type: 'nihon_senshuken_qualifier',
               label: `日本選手権 地区予選 ${bracketType.includes('losers') ? '敗者復活 ' : ''}${getRoundName(bracket, um.roundIdx)}`,
-              opponent: oppName,
-              color: 'red',
-              onStart: () => startTournamentMatch(oppName, oppDef, { regionId: ns.userRegionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType }),
+              opponent: oppName, oppDef, color: 'red',
+              regionId: ns.userRegionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType,
             });
           }
         }
@@ -936,9 +933,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             matches.push({
               type: 'nihon_senshuken',
               label: `日本選手権 本戦 ${getRoundName(nsBracket, um.roundIdx)}`,
-              opponent: oppName,
-              color: 'red',
-              onStart: () => startTournamentMatch(oppName, oppDef, { roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'nihon_senshuken' }),
+              opponent: oppName, oppDef, color: 'red',
+              roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'nihon_senshuken',
             });
           }
         }
@@ -961,9 +957,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             matches.push({
               type: 'club_senshuken_qualifier',
               label: `クラブ選手権 地区予選 ${bracketType.includes('losers') ? '敗者復活 ' : ''}${getRoundName(bracket, um.roundIdx)}`,
-              opponent: oppName,
-              color: 'purple',
-              onStart: () => startTournamentMatch(oppName, oppDef, { regionId: csd.userRegionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType }),
+              opponent: oppName, oppDef, color: 'purple',
+              regionId: csd.userRegionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType,
             });
           }
         }
@@ -979,9 +974,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             matches.push({
               type: 'club_senshuken',
               label: `クラブ選手権 本戦 ${getRoundName(csBracket, um.roundIdx)}`,
-              opponent: oppName,
-              color: 'purple',
-              onStart: () => startTournamentMatch(oppName, oppDef, { roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'club_senshuken' }),
+              opponent: oppName, oppDef, color: 'purple',
+              roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'club_senshuken',
             });
           }
         }
@@ -1683,32 +1677,37 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             </h2>
             <div>
             {/* トーナメント試合カード */}
-            {todaysTournamentMatches.map((tm, idx) => (
-              <div key={`tm-${idx}`} className={`mb-1.5 rounded-lg p-2.5 border shadow-md ${
-                tm.color === 'red'
-                  ? 'bg-gradient-to-r from-red-900/40 to-red-800/20 border-red-500/40 shadow-red-900/20'
-                  : 'bg-gradient-to-r from-yellow-900/40 to-yellow-800/20 border-yellow-500/40 shadow-yellow-900/20'
-              }`}>
-                <div className={`text-[10px] font-bold mb-1 ${tm.color === 'red' ? 'text-red-400' : 'text-yellow-400'}`}>
+            {todaysTournamentMatches.map((tm, idx) => {
+              const userStarter = getStartingPitcher(userTeamName);
+              const oppStarter = getStartingPitcher(tm.opponent);
+              const colorMap = {
+                green: { bg: 'from-green-900/40 to-green-800/20', border: 'border-green-500/40', shadow: 'shadow-green-900/20', text: 'text-green-400' },
+                red: { bg: 'from-red-900/40 to-red-800/20', border: 'border-red-500/40', shadow: 'shadow-red-900/20', text: 'text-red-400' },
+                purple: { bg: 'from-purple-900/40 to-purple-800/20', border: 'border-purple-500/40', shadow: 'shadow-purple-900/20', text: 'text-purple-400' },
+                yellow: { bg: 'from-yellow-900/40 to-yellow-800/20', border: 'border-yellow-500/40', shadow: 'shadow-yellow-900/20', text: 'text-yellow-400' },
+              };
+              const c = colorMap[tm.color] || colorMap.yellow;
+              return (
+              <div key={`tm-${idx}`}
+                onClick={() => setShowTournamentMatchModal({ opponent: tm.opponent, oppDef: tm.oppDef, roundIdx: tm.roundIdx, matchIdx: tm.matchIdx, bracketType: tm.bracketType, regionId: tm.regionId })}
+                className={`mb-1.5 rounded-lg p-2.5 border shadow-md cursor-pointer hover:brightness-125 transition bg-gradient-to-r ${c.bg} ${c.border} ${c.shadow}`}>
+                <div className={`text-[10px] font-bold mb-1 ${c.text}`}>
                   🏆 {tm.label}
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-white font-bold text-sm">{userTeamName}</span>
-                    <span className="text-gray-500 text-xs font-bold">VS</span>
-                    <span className="text-white font-bold text-sm">{tm.opponent}</span>
+                <div className="flex items-center justify-center gap-4">
+                  <div className="text-center">
+                    <div className="text-white font-bold text-sm">{userTeamName}</div>
+                    {userStarter && <div className="text-[10px] text-gray-400">先発: {userStarter.name}</div>}
                   </div>
-                  <button
-                    onClick={tm.onStart}
-                    className={`px-4 py-1.5 font-bold text-xs rounded-lg transition ${
-                      tm.color === 'red'
-                        ? 'bg-red-600 hover:bg-red-500 text-white'
-                        : 'bg-yellow-600 hover:bg-yellow-500 text-black'
-                    }`}
-                  >試合開始</button>
+                  <span className="text-gray-500 text-xs font-bold">VS</span>
+                  <div className="text-center">
+                    <div className="text-white font-bold text-sm">{tm.opponent}</div>
+                    {oppStarter && <div className="text-[10px] text-gray-400">先発: {oppStarter.name}</div>}
+                  </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
             {todaysGames.length === 0 && todaysTournamentMatches.length === 0 ? (
               <div className="text-center py-3 bg-gray-800/50 rounded-xl h-full flex flex-col items-center justify-center">
                 <div className="text-gray-600 text-xl mb-1">⚾</div>
@@ -1981,349 +1980,216 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           {seasonData.settings?.corporateMode ? (() => {
             const td = seasonData.toshitaikou;
             const rtData = seasonData.regionalTournament;
+            const ns = seasonData.nihonSenshuken;
+            const cs = seasonData.clubSenshuken;
             const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
 
-            // 地域トーナメント パネル
-            const rtPanel = rtData?.generated ? (() => {
-              const rtBrackets = rtData.brackets || {};
-              const rtRegionIds = Object.keys(rtBrackets);
-              const rtActiveRegion = selectedRtRegionTab || rtData.userRegionId || rtRegionIds[0];
-              const rtActiveQ = rtBrackets[rtActiveRegion];
-              const rtUserNext = rtActiveRegion === rtData.userRegionId && rtActiveQ
-                ? getUserNextMatch(rtActiveQ.bracket, userTeamName) : null;
-
-              return (
-                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-green-700/30 mb-3">
-                  <h2 className="text-base font-bold text-green-400 flex items-center gap-2 mb-2">
-                    <span>🏟️</span> 地域トーナメント
-                    {rtData.phase === 'done' && <span className="text-xs text-gray-400 ml-auto">大会終了</span>}
-                    {rtData.phase !== 'done' && <span className="text-xs text-blue-400 ml-auto">進行中</span>}
-                  </h2>
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {rtRegionIds.map(rid => {
-                      const rq = rtBrackets[rid];
-                      const isUser = rid === rtData.userRegionId;
-                      const isActive = rid === rtActiveRegion;
-                      return (
-                        <button key={rid} onClick={() => setSelectedRtRegionTab(rid)}
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
-                            isActive ? 'bg-green-600 text-white' :
-                            isUser ? 'bg-green-900/50 text-green-300 hover:bg-green-800/50' :
-                            rq.phase === 'done' ? 'bg-gray-700/50 text-gray-500 hover:text-gray-300' :
-                            'bg-gray-700/50 text-gray-400 hover:text-white'
-                          }`}>
-                          {rq.regionName}{isUser ? '*' : ''}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {rtActiveQ && (() => {
-                    const bracket = rtActiveQ.bracket;
-                    if (!bracket) return null;
-                    return (
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-xs text-gray-400">{rtActiveQ.regionName}</span>
-                          {rtActiveQ.phase === 'done' && (
-                            <span className="text-[10px] text-green-400">終了</span>
-                          )}
-                        </div>
-                        {renderBracketWithLines(bracket, rtActiveQ.teamDefsMap)}
-                        {rtActiveQ.champion && (
-                          <div className="mt-1 bg-green-900/30 border border-green-700/50 rounded-lg p-2 text-center">
-                            <div className="text-green-400 font-bold text-sm">優勝: {rtActiveQ.champion}</div>
-                          </div>
-                        )}
-                        {rtUserNext && (() => {
-                          const matchDate = bracket.matchDates?.[rtUserNext.roundIdx]?.[rtUserNext.matchIdx]
-                            || bracket.roundDates?.[rtUserNext.roundIdx];
-                          const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
-                          return (
-                            <div className="mt-2 bg-green-900/30 border border-green-700/50 rounded-lg p-2">
-                              <div className="text-xs text-green-400 font-bold mb-1 flex items-center gap-1">
-                                <span>{getRoundName(bracket, rtUserNext.roundIdx)} - あなたの試合</span>
-                                {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
-                              </div>
-                              <span className="text-sm text-white font-bold">
-                                {userTeamName} vs {rtUserNext.match.team1 === userTeamName ? rtUserNext.match.team2 : rtUserNext.match.team1}
-                              </span>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-            })() : null;
-
-            if (!td || !td.generated) return (
-              <>
-              {rtPanel}
-              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-4 shadow-xl border border-gray-700/30">
-                <h2 className="text-base font-bold text-white flex items-center gap-2 mb-2">
-                  <span>📅</span> 年間スケジュール
-                </h2>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between text-gray-300"><span>4月〜5月</span><span>地域トーナメント</span></div>
-                  <div className="flex justify-between text-gray-300"><span>5月〜6月</span><span>都市対抗 地区予選</span></div>
-                  <div className="flex justify-between text-gray-300"><span>7月</span><span>都市対抗 本戦</span></div>
-                  <div className="flex justify-between text-gray-300"><span>9月</span><span>日本選手権/クラブ選手権 地区予選</span></div>
-                  <div className="flex justify-between text-gray-300"><span>10月</span><span>日本選手権/クラブ選手権 本戦</span></div>
-                  <div className="flex justify-between text-gray-300"><span>10月</span><span>NPBドラフト</span></div>
-                  <div className="flex justify-between text-gray-300"><span>11月</span><span>退団・スカウト</span></div>
-                </div>
-              </div>
-              </>
-            );
-
-            // 本戦表示（進行中 or 終了）
-            if (td.mainTournament) {
-              const mt = td.mainTournament;
-              const bracket = mt.bracket;
-              const userMainMatch = !td.mainDone ? getUserNextMatch(bracket, userTeamName) : null;
-              const mainContent = (
-                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-yellow-700/30">
-                  <h2 className="text-base font-bold text-yellow-400 flex items-center gap-2 mb-2">
-                    <span>🏆</span> 都市対抗野球大会 本戦
-                    {!td.mainDone && <span className="text-xs text-blue-400 ml-auto">進行中</span>}
-                  </h2>
-                  {td.mainDone && (
-                    <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2 mb-2 text-center">
-                      <div className="text-yellow-400 font-bold">優勝: {td.champion}</div>
-                      <div className="text-gray-400 text-xs">準優勝: {td.runnerUp}</div>
-                    </div>
-                  )}
-                  {bracket && renderBracketWithLines(bracket, mt.teamDefsMap)}
-                  {userMainMatch && (() => {
-                    const matchDate = bracket?.matchDates?.[userMainMatch.roundIdx]?.[userMainMatch.matchIdx]
-                      || bracket?.roundDates?.[userMainMatch.roundIdx];
-                    const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
-                    return (
-                      <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
-                        <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
-                          <span>{getRoundName(bracket, userMainMatch.roundIdx)} - あなたの試合</span>
-                          {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
-                        </div>
-                        <span className="text-sm text-white font-bold">
-                          {userTeamName} vs {userMainMatch.match.team1 === userTeamName ? userMainMatch.match.team2 : userMainMatch.match.team1}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-              const nsPanel = seasonData.nihonSenshuken?.generated ? (() => {
-                const ns = seasonData.nihonSenshuken;
-                const nsPhase = ns.phase;
-                const nsDone = nsPhase === 'done';
-
-                // 本戦ブラケット表示
-                const nsMainBracket = ns.mainTournament?.bracket;
-                const nsMainTeamDefs = ns.mainTournament?.teamDefsMap;
-                const userNsMainMatch = nsMainBracket && !nsDone ? getUserNextMatch(nsMainBracket, userTeamName) : null;
-
-                return (
-                  <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-red-700/30 mt-3">
-                    <h2 className="text-base font-bold text-red-400 flex items-center gap-2 mb-2">
-                      <span>🏆</span> 日本選手権大会
-                      {nsDone && <span className="text-xs text-green-400 ml-auto">大会終了</span>}
-                      {nsPhase === 'qualifiers' && <span className="text-xs text-blue-400 ml-auto">予選進行中</span>}
-                      {nsPhase === 'qualifiers_done' && <span className="text-xs text-yellow-400 ml-auto">予選終了</span>}
-                      {nsPhase === 'main' && <span className="text-xs text-orange-400 ml-auto">本戦進行中</span>}
-                    </h2>
-                    {nsDone && ns.champion && (
-                      <div className="bg-yellow-900/30 border border-yellow-600/30 rounded-lg p-2 mb-2 text-center">
-                        <div className="text-yellow-400 font-bold">優勝: {ns.champion}</div>
-                        <div className="text-gray-400 text-xs">準優勝: {ns.runnerUp}</div>
-                      </div>
-                    )}
-                    {nsMainBracket && renderBracketWithLines(nsMainBracket, nsMainTeamDefs)}
-                    {userNsMainMatch && (() => {
-                      const matchDate = nsMainBracket?.matchDates?.[userNsMainMatch.roundIdx]?.[userNsMainMatch.matchIdx]
-                        || nsMainBracket?.roundDates?.[userNsMainMatch.roundIdx];
-                      const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
-                      return (
-                        <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
-                          <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
-                            <span>{getRoundName(nsMainBracket, userNsMainMatch.roundIdx)} - あなたの試合</span>
-                            {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
-                          </div>
-                          <span className="text-sm text-white font-bold">
-                            {userTeamName} vs {userNsMainMatch.match.team1 === userTeamName ? userNsMainMatch.match.team2 : userNsMainMatch.match.team1}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                    {/* 予選フェーズ: ユーザー地域の予選状況 */}
-                    {(nsPhase === 'qualifiers' || nsPhase === 'qualifiers_done') && ns.userRegionId && ns.qualifiers?.[ns.userRegionId] && (() => {
-                      const q = ns.qualifiers[ns.userRegionId];
-                      const userQMain = getUserNextMatch(q.mainBracket, userTeamName);
-                      const userQLosers = q.losersBracket ? getUserNextMatch(q.losersBracket, userTeamName) : null;
-                      const userQNext = userQMain || userQLosers;
-                      const userQBracket = userQMain ? q.mainBracket : q.losersBracket;
-                      const userQType = userQMain ? '予選' : '敗者復活';
-                      return (
-                        <div className="mt-2">
-                          <div className="text-xs text-red-300 font-bold mb-1">{q.regionName}地区予選 ({q.slots}枠)</div>
-                          {renderBracketWithLines(q.mainBracket, q.teamDefsMap)}
-                          {q.losersBracket && (
-                            <div className="mt-1">
-                              <div className="text-xs text-orange-300 font-bold mb-1">敗者復活</div>
-                              {renderBracketWithLines(q.losersBracket, q.teamDefsMap)}
-                            </div>
-                          )}
-                          {userQNext && (() => {
-                            const matchDate = userQBracket?.matchDates?.[userQNext.roundIdx]?.[userQNext.matchIdx]
-                              || userQBracket?.roundDates?.[userQNext.roundIdx];
-                            const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
-                            return (
-                              <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
-                                <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
-                                  <span>{userQType} {getRoundName(userQBracket, userQNext.roundIdx)} - あなたの試合</span>
-                                  {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
-                                </div>
-                                <span className="text-sm text-white font-bold">
-                                  {userTeamName} vs {userQNext.match.team1 === userTeamName ? userQNext.match.team2 : userQNext.match.team1}
-                                </span>
-                              </div>
-                            );
-                          })()}
-                          {q.qualifiedTeams.length > 0 && (
-                            <div className="mt-2 bg-green-900/20 border border-green-700/30 rounded-lg p-2">
-                              <div className="text-[10px] text-green-400 font-bold mb-0.5">本戦出場</div>
-                              <div className="flex flex-wrap gap-x-2">
-                                {q.qualifiedTeams.map((name, i) => (
-                                  <span key={i} className={`text-[11px] ${name === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}`}>{name}</span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-              })() : null;
-
-              if (td.mainDone) return <>{rtPanel}{mainContent}{nsPanel}</>;
-              if (td.qualifiersDone) return <>{rtPanel}{mainContent}{nsPanel}</>;
+            // 利用可能なトーナメントタブを構築（時系列順）
+            const tournamentTabs = [];
+            if (rtData?.generated) tournamentTabs.push({ key: 'regional', label: '地域', color: 'green', done: rtData.phase === 'done' });
+            if (td?.generated) {
+              if (td.mainTournament) tournamentTabs.push({ key: 'toshitaikou_main', label: '都市対抗 本戦', color: 'yellow', done: !!td.mainDone });
+              else tournamentTabs.push({ key: 'toshitaikou', label: '都市対抗 予選', color: 'blue', done: !!td.qualifiersDone });
             }
+            if (ns?.generated) tournamentTabs.push({ key: 'senshuken', label: '日本選手権', color: 'red', done: ns.phase === 'done' });
+            if (cs?.generated) tournamentTabs.push({ key: 'club', label: 'クラブ選手権', color: 'purple', done: cs.phase === 'done' });
 
-            // 予選トーナメント表示（タブ切り替え）
-            const qualifiers = td.qualifiers || {};
-            const regionIds = Object.keys(qualifiers);
-            const activeRegion = selectedRegionTab || td.userRegionId || regionIds[0];
-            const activeQ = qualifiers[activeRegion];
-            const userNextMatchMain = activeRegion === td.userRegionId && activeQ
-              ? getUserNextMatch(activeQ.mainBracket, userTeamName)
-              : null;
-            const userNextMatchLosers = activeRegion === td.userRegionId && activeQ?.losersBracket
-              ? getUserNextMatch(activeQ.losersBracket, userTeamName)
-              : null;
-            const userNextMatch = userNextMatchMain || userNextMatchLosers;
-            const userNextMatchBracketType = userNextMatchMain ? 'main' : 'losers';
-            const userNextMatchBracket = userNextMatchMain ? activeQ?.mainBracket : activeQ?.losersBracket;
+            // 自動選択: 最新の未完了タブ（なければ最後のタブ）
+            const autoTab = tournamentTabs.find(t => !t.done)?.key || tournamentTabs[tournamentTabs.length - 1]?.key || null;
+            const curTab = (activeTournamentTab && tournamentTabs.some(t => t.key === activeTournamentTab)) ? activeTournamentTab : autoTab;
 
-            return (
-              <>
-              {rtPanel}
-              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30">
-                <h2 className="text-base font-bold text-blue-400 flex items-center gap-2 mb-2">
-                  <span>⚾</span> 都市対抗 地区予選
-                  {td.qualifiersDone && <span className="text-xs text-green-400 ml-auto">予選終了</span>}
-                </h2>
-                {/* 地域タブ */}
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {regionIds.map(rid => {
-                    const q = qualifiers[rid];
-                    const isUser = rid === td.userRegionId;
-                    const isActive = rid === activeRegion;
-                    return (
-                      <button key={rid} onClick={() => { setSelectedRegionTab(rid); setSelectedBracketTab('main'); }}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
-                          isActive ? 'bg-blue-600 text-white' :
-                          isUser ? 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50' :
-                          q.phase === 'done' ? 'bg-gray-700/50 text-gray-500 hover:text-gray-300' :
-                          'bg-gray-700/50 text-gray-400 hover:text-white'
-                        }`}>
-                        {q.regionName}{isUser ? '*' : ''}
-                      </button>
-                    );
-                  })}
-                </div>
-                {/* 選択地域のブラケット */}
-                {activeQ && (() => {
-                  const bracket = activeQ.mainBracket;
-                  if (!bracket) return null;
-                  const hasLosers = !!activeQ.losersBracket;
-                  const showingLosers = hasLosers && selectedBracketTab === 'losers';
+            const tabColors = { green: 'bg-green-600', blue: 'bg-blue-600', yellow: 'bg-yellow-600', red: 'bg-red-600', purple: 'bg-purple-600' };
+            const borderColors = { green: 'border-green-700/30', blue: 'border-blue-700/30', yellow: 'border-yellow-700/30', red: 'border-red-700/30', purple: 'border-purple-700/30' };
+
+            // ヘルパー: ブラケット＋ユーザー試合情報の描画
+            const themeBg = { green: 'bg-green-900/30', yellow: 'bg-yellow-900/30', red: 'bg-red-900/30', purple: 'bg-purple-900/30', blue: 'bg-blue-900/30' };
+            const themeBorder = { green: 'border-green-700/50', yellow: 'border-yellow-700/50', red: 'border-red-700/50', purple: 'border-purple-700/50', blue: 'border-blue-700/50' };
+            const themeText = { green: 'text-green-400', yellow: 'text-yellow-400', red: 'text-red-400', purple: 'text-purple-400', blue: 'text-blue-400' };
+            const renderBracketPanel = (bracket, teamDefsMap, themeColor, champion, runnerUp, userMatch) => (
+              <div>
+                {champion && (
+                  <div className={`${themeBg[themeColor]} border ${themeBorder[themeColor]} rounded-lg p-2 mb-2 text-center`}>
+                    <div className={`${themeText[themeColor]} font-bold`}>優勝: {champion}</div>
+                    {runnerUp && <div className="text-gray-400 text-xs">準優勝: {runnerUp}</div>}
+                  </div>
+                )}
+                {bracket && renderBracketWithLines(bracket, teamDefsMap)}
+                {userMatch && (() => {
+                  const md = bracket?.matchDates?.[userMatch.roundIdx]?.[userMatch.matchIdx] || bracket?.roundDates?.[userMatch.roundIdx];
+                  const ds = md ? `${md.month}/${md.day}` : '';
                   return (
-                    <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs text-gray-400">{activeQ.regionName} ({activeQ.slots}枠)</span>
-                        {activeQ.phase === 'done' && (
-                          <span className="text-[10px] text-green-400">予選終了</span>
-                        )}
+                    <div className={`mt-2 ${themeBg[themeColor]} border ${themeBorder[themeColor]} rounded-lg p-2`}>
+                      <div className={`text-xs ${themeText[themeColor]} font-bold mb-1 flex items-center gap-1`}>
+                        <span>{getRoundName(bracket, userMatch.roundIdx)} - あなたの試合</span>
+                        {ds && <span className="text-gray-400 font-normal">({ds})</span>}
                       </div>
-                      {/* 地区予選 / 敗者復活 タブ */}
-                      {hasLosers && (
-                        <div className="flex gap-1 mb-2">
-                          <button onClick={() => setSelectedBracketTab('main')}
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
-                              !showingLosers ? 'bg-blue-600 text-white' : 'bg-gray-700/50 text-gray-400 hover:text-white'
-                            }`}>地区予選</button>
-                          <button onClick={() => setSelectedBracketTab('losers')}
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
-                              showingLosers ? 'bg-orange-600 text-white' : 'bg-gray-700/50 text-gray-400 hover:text-white'
-                            }`}>敗者復活</button>
-                        </div>
-                      )}
-                      {showingLosers
-                        ? renderBracketWithLines(activeQ.losersBracket, activeQ.teamDefsMap)
-                        : renderBracketWithLines(bracket, activeQ.teamDefsMap)
-                      }
-                      {/* ユーザーの次の試合情報 */}
-                      {userNextMatch && (() => {
-                        const nmBracket = userNextMatchBracket;
-                        const matchDate = nmBracket?.matchDates?.[userNextMatch.roundIdx]?.[userNextMatch.matchIdx]
-                          || nmBracket?.roundDates?.[userNextMatch.roundIdx];
-                        const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
-                        const labelPrefix = userNextMatchBracketType === 'losers' ? '敗者復活 ' : '';
-                        return (
-                          <div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
-                            <div className="text-xs text-yellow-400 font-bold mb-1 flex items-center gap-1">
-                              <span>{labelPrefix}{nmBracket ? getRoundName(nmBracket, userNextMatch.roundIdx) : ''} - あなたの試合</span>
-                              {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
-                            </div>
-                            <span className="text-sm text-white font-bold">
-                              {userTeamName} vs {userNextMatch.match.team1 === userTeamName ? userNextMatch.match.team2 : userNextMatch.match.team1}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                      {/* 予選通過チーム */}
-                      {activeQ.qualifiedTeams.length > 0 && (
-                        <div className="mt-2 bg-green-900/20 border border-green-700/30 rounded-lg p-2">
-                          <div className="text-[10px] text-green-400 font-bold mb-0.5">本戦出場</div>
-                          <div className="flex flex-wrap gap-x-2">
-                            {activeQ.qualifiedTeams.map((name, i) => {
-                              const def = activeQ.teamDefsMap[name];
-                              return (
-                                <span key={i} className="text-[11px]">
-                                  <span className={`font-bold ${RANK_COLORS[def?.rank] || ''}`}>{def?.rank}</span>
-                                  <span className={name === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}> {name}</span>
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                      <span className="text-sm text-white font-bold">
+                        {userTeamName} vs {userMatch.match.team1 === userTeamName ? userMatch.match.team2 : userMatch.match.team1}
+                      </span>
                     </div>
                   );
                 })()}
               </div>
-              </>
+            );
+
+            // 各タブの中身
+            const renderTabContent = () => {
+              if (curTab === 'regional' && rtData?.generated) {
+                const rtBrackets = rtData.brackets || {};
+                const rtRegionIds = Object.keys(rtBrackets);
+                const rtActiveRegion = selectedRtRegionTab || rtData.userRegionId || rtRegionIds[0];
+                const rtActiveQ = rtBrackets[rtActiveRegion];
+                const rtUserNext = rtActiveRegion === rtData.userRegionId && rtActiveQ ? getUserNextMatch(rtActiveQ.bracket, userTeamName) : null;
+                return (<>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {rtRegionIds.map(rid => {
+                      const rq = rtBrackets[rid]; const isUser = rid === rtData.userRegionId; const isActive = rid === rtActiveRegion;
+                      return (<button key={rid} onClick={() => setSelectedRtRegionTab(rid)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${isActive ? 'bg-green-600 text-white' : isUser ? 'bg-green-900/50 text-green-300' : rq.phase === 'done' ? 'bg-gray-700/50 text-gray-500' : 'bg-gray-700/50 text-gray-400 hover:text-white'}`}>
+                        {rq.regionName}{isUser ? '*' : ''}
+                      </button>);
+                    })}
+                  </div>
+                  {rtActiveQ && renderBracketPanel(rtActiveQ.bracket, rtActiveQ.teamDefsMap, 'green', rtActiveQ.champion, null, rtUserNext)}
+                </>);
+              }
+              if (curTab === 'toshitaikou' && td?.generated) {
+                const qualifiers = td.qualifiers || {};
+                const regionIds = Object.keys(qualifiers);
+                const activeRegion = selectedRegionTab || td.userRegionId || regionIds[0];
+                const activeQ = qualifiers[activeRegion];
+                const umMain = activeRegion === td.userRegionId && activeQ ? getUserNextMatch(activeQ.mainBracket, userTeamName) : null;
+                const umLosers = activeRegion === td.userRegionId && activeQ?.losersBracket ? getUserNextMatch(activeQ.losersBracket, userTeamName) : null;
+                const um = umMain || umLosers;
+                const umBracket = umMain ? activeQ?.mainBracket : activeQ?.losersBracket;
+                const hasLosers = !!activeQ?.losersBracket;
+                const showingLosers = hasLosers && selectedBracketTab === 'losers';
+                return (<>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {regionIds.map(rid => {
+                      const q = qualifiers[rid]; const isUser = rid === td.userRegionId; const isActive = rid === activeRegion;
+                      return (<button key={rid} onClick={() => { setSelectedRegionTab(rid); setSelectedBracketTab('main'); }}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${isActive ? 'bg-blue-600 text-white' : isUser ? 'bg-blue-900/50 text-blue-300' : q.phase === 'done' ? 'bg-gray-700/50 text-gray-500' : 'bg-gray-700/50 text-gray-400 hover:text-white'}`}>
+                        {q.regionName}{isUser ? '*' : ''}
+                      </button>);
+                    })}
+                  </div>
+                  {activeQ && (<div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs text-gray-400">{activeQ.regionName} ({activeQ.slots}枠)</span>
+                      {activeQ.phase === 'done' && <span className="text-[10px] text-green-400">予選終了</span>}
+                    </div>
+                    {hasLosers && (
+                      <div className="flex gap-1 mb-2">
+                        <button onClick={() => setSelectedBracketTab('main')} className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${!showingLosers ? 'bg-blue-600 text-white' : 'bg-gray-700/50 text-gray-400'}`}>地区予選</button>
+                        <button onClick={() => setSelectedBracketTab('losers')} className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${showingLosers ? 'bg-orange-600 text-white' : 'bg-gray-700/50 text-gray-400'}`}>敗者復活</button>
+                      </div>
+                    )}
+                    {showingLosers ? renderBracketWithLines(activeQ.losersBracket, activeQ.teamDefsMap) : renderBracketWithLines(activeQ.mainBracket, activeQ.teamDefsMap)}
+                    {um && (() => {
+                      const md = umBracket?.matchDates?.[um.roundIdx]?.[um.matchIdx] || umBracket?.roundDates?.[um.roundIdx];
+                      const ds = md ? `${md.month}/${md.day}` : '';
+                      const lp = umLosers && !umMain ? '敗者復活 ' : '';
+                      return (<div className="mt-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-2">
+                        <div className="text-xs text-yellow-400 font-bold mb-1">{lp}{getRoundName(umBracket, um.roundIdx)} - あなたの試合 {ds && <span className="text-gray-400 font-normal">({ds})</span>}</div>
+                        <span className="text-sm text-white font-bold">{userTeamName} vs {um.match.team1 === userTeamName ? um.match.team2 : um.match.team1}</span>
+                      </div>);
+                    })()}
+                    {activeQ.qualifiedTeams?.length > 0 && (
+                      <div className="mt-2 bg-green-900/20 border border-green-700/30 rounded-lg p-2">
+                        <div className="text-[10px] text-green-400 font-bold mb-0.5">本戦出場</div>
+                        <div className="flex flex-wrap gap-x-2">{activeQ.qualifiedTeams.map((name, i) => {
+                          const def = activeQ.teamDefsMap[name];
+                          return (<span key={i} className="text-[11px]"><span className={`font-bold ${RANK_COLORS[def?.rank] || ''}`}>{def?.rank}</span><span className={name === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}> {name}</span></span>);
+                        })}</div>
+                      </div>
+                    )}
+                  </div>)}
+                </>);
+              }
+              if (curTab === 'toshitaikou_main' && td?.mainTournament) {
+                const mt = td.mainTournament;
+                const um = !td.mainDone ? getUserNextMatch(mt.bracket, userTeamName) : null;
+                return renderBracketPanel(mt.bracket, mt.teamDefsMap, 'yellow', td.mainDone ? td.champion : null, td.mainDone ? td.runnerUp : null, um);
+              }
+              if (curTab === 'senshuken' && ns?.generated) {
+                const nsMainBracket = ns.mainTournament?.bracket;
+                const nsMainTeamDefs = ns.mainTournament?.teamDefsMap;
+                const nsDone = ns.phase === 'done';
+                if (nsMainBracket) {
+                  const um = !nsDone ? getUserNextMatch(nsMainBracket, userTeamName) : null;
+                  return renderBracketPanel(nsMainBracket, nsMainTeamDefs, 'red', nsDone ? ns.champion : null, nsDone ? ns.runnerUp : null, um);
+                }
+                if (ns.userRegionId && ns.qualifiers?.[ns.userRegionId]) {
+                  const q = ns.qualifiers[ns.userRegionId];
+                  const umQ = getUserNextMatch(q.mainBracket, userTeamName) || (q.losersBracket ? getUserNextMatch(q.losersBracket, userTeamName) : null);
+                  return (<div>
+                    <div className="text-xs text-red-300 font-bold mb-1">{q.regionName}地区予選 ({q.slots}枠)</div>
+                    {renderBracketWithLines(q.mainBracket, q.teamDefsMap)}
+                    {q.losersBracket && (<div className="mt-1"><div className="text-xs text-orange-300 font-bold mb-1">敗者復活</div>{renderBracketWithLines(q.losersBracket, q.teamDefsMap)}</div>)}
+                    {q.qualifiedTeams?.length > 0 && (<div className="mt-2 bg-green-900/20 border border-green-700/30 rounded-lg p-2"><div className="text-[10px] text-green-400 font-bold mb-0.5">本戦出場</div><div className="flex flex-wrap gap-x-2">{q.qualifiedTeams.map((n2, i) => <span key={i} className={`text-[11px] ${n2 === userTeamName ? 'text-yellow-300 font-bold' : 'text-gray-300'}`}>{n2}</span>)}</div></div>)}
+                  </div>);
+                }
+                return <div className="text-gray-500 text-xs text-center py-2">予選進行中...</div>;
+              }
+              if (curTab === 'club' && cs?.generated) {
+                const csMainBracket = cs.mainTournament?.bracket;
+                const csMainTeamDefs = cs.mainTournament?.teamDefsMap;
+                const csDone = cs.phase === 'done';
+                if (csMainBracket) {
+                  const um = !csDone ? getUserNextMatch(csMainBracket, userTeamName) : null;
+                  return renderBracketPanel(csMainBracket, csMainTeamDefs, 'purple', csDone ? cs.champion : null, csDone ? cs.runnerUp : null, um);
+                }
+                if (cs.userRegionId && cs.qualifiers?.[cs.userRegionId]) {
+                  const q = cs.qualifiers[cs.userRegionId];
+                  return (<div>
+                    <div className="text-xs text-purple-300 font-bold mb-1">{q.regionName}地区予選 ({q.slots}枠)</div>
+                    {renderBracketWithLines(q.mainBracket, q.teamDefsMap)}
+                    {q.losersBracket && (<div className="mt-1"><div className="text-xs text-orange-300 font-bold mb-1">敗者復活</div>{renderBracketWithLines(q.losersBracket, q.teamDefsMap)}</div>)}
+                  </div>);
+                }
+                return <div className="text-gray-500 text-xs text-center py-2">予選進行中...</div>;
+              }
+              // スケジュール表示（タブなし時）
+              return (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between text-gray-300"><span>4月〜5月</span><span>地域トーナメント</span></div>
+                  <div className="flex justify-between text-gray-300"><span>5月〜6月</span><span>都市対抗 地区予選</span></div>
+                  <div className="flex justify-between text-gray-300"><span>7月</span><span>都市対抗 本戦</span></div>
+                  <div className="flex justify-between text-gray-300"><span>9月</span><span>日本選手権/クラブ選手権 予選</span></div>
+                  <div className="flex justify-between text-gray-300"><span>10月</span><span>本戦 / NPBドラフト</span></div>
+                  <div className="flex justify-between text-gray-300"><span>11月</span><span>退団・スカウト</span></div>
+                </div>
+              );
+            };
+
+            const curTabDef = tournamentTabs.find(t => t.key === curTab);
+            return (
+              <div className={`bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border ${borderColors[curTabDef?.color] || 'border-gray-700/30'}`}>
+                {tournamentTabs.length > 0 ? (
+                  <>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {tournamentTabs.map(tab => {
+                      const active = tab.key === curTab;
+                      return (
+                        <button key={tab.key} onClick={() => setActiveTournamentTab(tab.key)}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold transition ${
+                            active ? `${tabColors[tab.color]} text-white` : tab.done ? 'bg-gray-700/50 text-gray-500 hover:text-gray-300' : 'bg-gray-700/50 text-gray-400 hover:text-white'
+                          }`}>
+                          {tab.label}{tab.done ? ' ✓' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {renderTabContent()}
+                  </>
+                ) : (
+                  <>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2 mb-2"><span>📅</span> 年間スケジュール</h2>
+                  {renderTabContent()}
+                  </>
+                )}
+              </div>
             );
           })() : (() => {
             const renderStandingsTable = (leagueStandings, title, titleColor) => {

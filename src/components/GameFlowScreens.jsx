@@ -5,6 +5,7 @@ import { REGULATION_PRESETS } from '../season/regulationSettings.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
+import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 import { initializeCorporateGame, initializeParallelWorldForIndependent } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 
@@ -214,10 +215,14 @@ const GameFlowScreens = ({
         });
 
         const calYear = 2024 + (seasonData?.year || 1) - 1;
+        // 地域トーナメントをキャンプ終了時に生成（4/1開始時に組み合わせ確定済み）
+        const rtSeeds = seasonData?.tournamentSeeds || null;
+        const rt = generateRegionalTournament({ userTeamName, calendarYear: calYear, seeds: rtSeeds });
         setSeasonData(prev => ({
           ...prev,
           currentDate: { year: calYear, month: 4, day: 1 },
-          phase: SEASON_PHASES.REGULAR_SEASON
+          phase: SEASON_PHASES.REGULAR_SEASON,
+          regionalTournament: { ...rt, generated: true },
         }));
         setSelectedMonth(4);
         setManagementView('dateprogress');

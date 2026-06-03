@@ -1070,6 +1070,35 @@ export function advanceToNextYear(seasonData, allTeams) {
     if (seasonData.toshitaikou?.mainTournament?.champion) {
       newSeasonData.prevToshitaikouChampion = seasonData.toshitaikou.mainTournament.champion;
     }
+    // 大会結果アーカイブ
+    const prevHistory = seasonData.tournamentHistory || [];
+    const yearRecord = { year: seasonData.year, calendarYear: seasonData.currentDate?.year };
+    const rt = seasonData.regionalTournament;
+    if (rt?.phase === 'done' && rt.brackets) {
+      yearRecord.regional = {};
+      Object.entries(rt.brackets).forEach(([rid, region]) => {
+        yearRecord.regional[rid] = { regionName: region.regionName, champion: region.champion };
+      });
+    }
+    const td = seasonData.toshitaikou;
+    if (td?.generated) {
+      yearRecord.toshitaikou = { champion: td.champion, runnerUp: td.runnerUp };
+      if (td.qualifiers) {
+        yearRecord.toshitaikouQualifiers = {};
+        Object.entries(td.qualifiers).forEach(([rid, q]) => {
+          yearRecord.toshitaikouQualifiers[rid] = { regionName: q.regionName, qualifiedTeams: q.qualifiedTeams || [] };
+        });
+      }
+    }
+    const ns = seasonData.nihonSenshuken;
+    if (ns?.generated) {
+      yearRecord.senshuken = { champion: ns.champion, runnerUp: ns.runnerUp };
+    }
+    const cs = seasonData.clubSenshuken;
+    if (cs?.generated) {
+      yearRecord.club = { champion: cs.champion, runnerUp: cs.runnerUp };
+    }
+    newSeasonData.tournamentHistory = [...prevHistory, yearRecord];
   } else {
     // 独立リーグモード: スケジュールはレギュレーション設定後に生成
     const teams = Object.keys(teamsAfterRetirement);

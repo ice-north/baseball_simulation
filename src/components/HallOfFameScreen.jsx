@@ -303,6 +303,18 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             >
               チーム成績
             </button>
+            {seasonData?.settings?.corporateMode && (
+              <button
+                onClick={() => setActiveTab('tournaments')}
+                className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                  activeTab === 'tournaments'
+                    ? 'bg-yellow-600 text-white shadow-sm'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+              >
+                大会記録
+              </button>
+            )}
           </div>
         </div>
 
@@ -908,6 +920,122 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             )}
           </div>
         )}
+
+        {/* 大会記録タブ（社会人モード） */}
+        {activeTab === 'tournaments' && (() => {
+          const history = seasonData?.tournamentHistory || [];
+          const currentYear = seasonData?.year;
+          const allRecords = [...history];
+          const rt = seasonData?.regionalTournament;
+          const td = seasonData?.toshitaikou;
+          const ns = seasonData?.nihonSenshuken;
+          const cs = seasonData?.clubSenshuken;
+          const hasCurrent = rt?.generated || td?.generated || ns?.generated || cs?.generated;
+          if (hasCurrent) {
+            const cur = { year: currentYear, calendarYear: seasonData?.currentDate?.year, isCurrent: true };
+            if (rt?.phase === 'done' && rt.brackets) {
+              cur.regional = {};
+              Object.entries(rt.brackets).forEach(([rid, region]) => {
+                cur.regional[rid] = { regionName: region.regionName, champion: region.champion };
+              });
+            }
+            if (td?.generated) cur.toshitaikou = { champion: td.champion, runnerUp: td.runnerUp };
+            if (ns?.generated) cur.senshuken = { champion: ns.champion, runnerUp: ns.runnerUp };
+            if (cs?.generated) cur.club = { champion: cs.champion, runnerUp: cs.runnerUp };
+            allRecords.push(cur);
+          }
+          const sorted = [...allRecords].sort((a, b) => (b.year || 0) - (a.year || 0));
+          return (
+            <div>
+              {sorted.length === 0 ? (
+                <div className="bg-gray-800 rounded-lg p-6 text-center">
+                  <p className="text-gray-400">まだ大会記録がありません</p>
+                  <p className="text-gray-500 text-sm mt-1">シーズン中の大会結果がここに記録されます</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {sorted.map((rec, ri) => (
+                    <div key={ri} className="bg-gray-800 rounded-lg overflow-hidden">
+                      <div className="px-4 py-2.5 border-b border-gray-700 flex items-center gap-3">
+                        <span className="text-lg font-bold text-white">{rec.year}年目</span>
+                        {rec.calendarYear && <span className="text-gray-500 text-sm">({rec.calendarYear}年)</span>}
+                        {rec.isCurrent && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded font-bold">今季</span>}
+                      </div>
+                      <div className="p-3 space-y-2">
+                        {/* 都市対抗 */}
+                        {rec.toshitaikou && (
+                          <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-700/30 rounded-lg px-3 py-2">
+                            <span className="text-blue-400 font-bold text-sm w-24 shrink-0">都市対抗</span>
+                            {rec.toshitaikou.champion ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-yellow-400 font-bold">優勝: {rec.toshitaikou.champion}</span>
+                                {rec.toshitaikou.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.toshitaikou.runnerUp}</span>}
+                              </div>
+                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                          </div>
+                        )}
+                        {/* 日本選手権 */}
+                        {rec.senshuken && (
+                          <div className="flex items-center gap-3 bg-red-900/20 border border-red-700/30 rounded-lg px-3 py-2">
+                            <span className="text-red-400 font-bold text-sm w-24 shrink-0">日本選手権</span>
+                            {rec.senshuken.champion ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-yellow-400 font-bold">優勝: {rec.senshuken.champion}</span>
+                                {rec.senshuken.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.senshuken.runnerUp}</span>}
+                              </div>
+                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                          </div>
+                        )}
+                        {/* クラブ選手権 */}
+                        {rec.club && (
+                          <div className="flex items-center gap-3 bg-purple-900/20 border border-purple-700/30 rounded-lg px-3 py-2">
+                            <span className="text-purple-400 font-bold text-sm w-24 shrink-0">クラブ選手権</span>
+                            {rec.club.champion ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-yellow-400 font-bold">優勝: {rec.club.champion}</span>
+                                {rec.club.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.club.runnerUp}</span>}
+                              </div>
+                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                          </div>
+                        )}
+                        {/* 地域トーナメント */}
+                        {rec.regional && (
+                          <div className="bg-green-900/20 border border-green-700/30 rounded-lg px-3 py-2">
+                            <div className="text-green-400 font-bold text-sm mb-1">地域トーナメント</div>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                              {Object.values(rec.regional).map((r, i) => (
+                                <span key={i} className="text-xs">
+                                  <span className="text-gray-400">{r.regionName}:</span>
+                                  <span className="text-white font-bold ml-1">{r.champion || '未決定'}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* 都市対抗予選結果 */}
+                        {rec.toshitaikouQualifiers && (
+                          <details className="group">
+                            <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200 transition px-1">
+                              都市対抗 地区予選結果 ▼
+                            </summary>
+                            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 px-1">
+                              {Object.values(rec.toshitaikouQualifiers).map((q, i) => (
+                                <span key={i} className="text-xs">
+                                  <span className="text-gray-400">{q.regionName}:</span>
+                                  <span className="text-blue-300 ml-1">{q.qualifiedTeams?.join(', ') || '-'}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {onClose && (
           <div className="text-center mt-4">
