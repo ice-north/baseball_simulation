@@ -1015,6 +1015,35 @@ export function applyMotivationEffect(players, staffBonus) {
   return reports;
 }
 
+/**
+ * バッテリー指導が投手・捕手の精神力に影響（キャンプ1クールごと）
+ * batteryCoach 0→変化なし, 50→+0~1, 100→+1~2
+ */
+export function applyBatteryMentalEffect(players, staffBonus) {
+  if (!staffBonus) return [];
+  const battery = staffBonus.batteryCoach || 0;
+  if (battery < 20) return [];
+
+  const reports = [];
+  const baseChance = battery / 100;
+
+  players.forEach(p => {
+    if (p.position !== 'pitcher' && p.position !== 'catcher') return;
+    if (!p.personality) return;
+    const current = p.personality.mental ?? 50;
+    if (current >= 95) return;
+    if (Math.random() < baseChance) {
+      const gain = battery >= 70 ? (Math.random() < 0.4 ? 2 : 1) : 1;
+      const newVal = Math.min(99, current + gain);
+      p.personality.mental = newVal;
+      if (gain > 0) {
+        reports.push({ name: p.name, before: current, after: newVal, gain });
+      }
+    }
+  });
+  return reports;
+}
+
 export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null) {
   const allReports = [];
   const updatedPlayers = team.players.map(player => {

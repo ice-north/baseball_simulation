@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 
@@ -748,9 +748,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       }
     });
 
-    // モチベーション管理 → プロ意識向上
+    // モチベーション管理 → プロ意識向上、バッテリー指導 → 精神力向上
     if (userStaffBonus) {
       applyMotivationEffect(updatedTeam.players, userStaffBonus);
+      applyBatteryMentalEffect(updatedTeam.players, userStaffBonus);
     }
 
     teamNames.forEach(tn => {
@@ -788,7 +789,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
       const aiStaffBonus = aiTeam.corporateData?.staff ? getTeamStaffBonus(aiTeam.corporateData.staff) : null;
       const aiResult = executeTeamCampTraining(aiTeam, aiAssign, {}, aiStaffBonus);
       TEAMS_DATA[tn] = aiResult.updatedTeam;
-      if (aiStaffBonus) applyMotivationEffect(aiResult.updatedTeam.players, aiStaffBonus);
+      if (aiStaffBonus) {
+        applyMotivationEffect(aiResult.updatedTeam.players, aiStaffBonus);
+        applyBatteryMentalEffect(aiResult.updatedTeam.players, aiStaffBonus);
+      }
       const subMenuKeys = Object.keys(SUB_TRAINING_MENUS);
       aiResult.updatedTeam.players.forEach(p => {
         const aiSubType = subMenuKeys[Math.floor(Math.random() * subMenuKeys.length)];
