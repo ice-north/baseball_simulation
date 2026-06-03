@@ -172,9 +172,13 @@ function generateHighSchoolPlayer(id) {
   const growthPotential = cl(gpCenter[tier] + normal * 0.22, 0.35, 1.50);
 
   let fame = 0;
-  if (tier === 'S') fame = r(15, 40);
-  else if (tier === 'A') fame = r(5, 20);
-  else if (tier === 'B' && Math.random() < 0.3) fame = r(1, 10);
+  if (tier === 'S') {
+    fame = Math.random() < 0.10 ? r(0, 5) : r(15, 40);
+  } else if (tier === 'A') {
+    fame = Math.random() < 0.10 ? r(0, 5) : r(5, 20);
+  } else if (tier === 'B' && Math.random() < 0.3) {
+    fame = r(1, 10);
+  }
 
   return {
     id,
@@ -296,7 +300,13 @@ function evaluatePlayerPotential(player) {
   // ランダムなゆらぎ（完全な実力順にならないように）
   const noise = (Math.random() - 0.5) * 20;
 
-  return abilityScore + growthBonus + noise;
+  // 知名度補正: 無名の逸材は評価が低くなり、下位に流れやすい
+  const fame = player.fame || 0;
+  const famePenalty = fame < 5 ? -(20 + Math.random() * 10)
+                    : fame < 15 ? -(5 + Math.random() * 10)
+                    : 0;
+
+  return abilityScore + growthBonus + noise + famePenalty;
 }
 
 // ============================================================

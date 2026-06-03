@@ -25,7 +25,7 @@ import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } fro
 import { generateStaff } from './staffData.js';
 import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
-import { TEAMS_DATA, clearReleasedPlayersPool } from '../teams-data.js';
+import { TEAMS_DATA, clearReleasedPlayersPool, initializeAllPitchingRotations } from '../teams-data.js';
 import { INDEPENDENT_LEAGUES, ALL_INDEPENDENT_LEAGUE_IDS } from './independentLeagueData.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
@@ -698,6 +698,9 @@ export const initializeCorporateGame = (teamDef) => {
 
   // 独立リーグ4つも生成
   initializeIndependentLeagues(null, allTeamNames);
+
+  // 全チームの投手ローテーション初期化
+  initializeAllPitchingRotations();
 
   // 大学リーグ初期化
   initializeUniversityLeagues(2024);

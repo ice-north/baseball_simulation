@@ -207,8 +207,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return newData;
     }
 
-    // 日本選手権（10月から予選、11月に本戦）
-    if (isCorporate && month >= 10 && !newData.nihonSenshuken?.generated) {
+    // 日本選手権（4月から予選（週末のみ）、11月に本戦）
+    if (isCorporate && month >= 4 && !newData.nihonSenshuken?.generated) {
       setSeasonData(newData);
       setIsGeneratingTournament(true);
       setTimeout(() => {

@@ -494,6 +494,80 @@ export function assignBracketDates(bracket, startDate, intervalDays = 2) {
   }
 }
 
+// 週末のみの日程割り当て（土日だけに試合を配置）
+export function assignWeekendQualifierDates(bracket, startDate, matchesPerDay = 3) {
+  if (!bracket) return;
+  bracket.matchDates = [];
+  bracket.roundDates = [];
+  let d = new Date(startDate.year, startDate.month - 1, startDate.day);
+
+  // 最初の土曜日まで進める
+  while (d.getDay() !== 6 && d.getDay() !== 0) {
+    d.setDate(d.getDate() + 1);
+  }
+
+  let daySlotUsed = 0;
+
+  const advanceToNextWeekend = () => {
+    if (d.getDay() === 6) {
+      d.setDate(d.getDate() + 1); // 土→日
+    } else {
+      d.setDate(d.getDate() + 6); // 日→土
+    }
+    daySlotUsed = 0;
+  };
+
+  for (let r = 0; r < bracket.rounds.length; r++) {
+    const round = bracket.rounds[r];
+    bracket.matchDates[r] = [];
+    let roundFirstDate = null;
+
+    if (r > 0 && daySlotUsed > 0) {
+      advanceToNextWeekend();
+    }
+
+    for (let m = 0; m < round.length; m++) {
+      const match = round[m];
+      if (match.isBye && !(match.team1 && match.team2)) {
+        bracket.matchDates[r][m] = null;
+        continue;
+      }
+      if (daySlotUsed >= matchesPerDay) {
+        advanceToNextWeekend();
+      }
+      const dateObj = { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+      bracket.matchDates[r][m] = dateObj;
+      if (!roundFirstDate) roundFirstDate = { ...dateObj };
+      daySlotUsed++;
+    }
+
+    bracket.roundDates[r] = roundFirstDate || { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+  }
+}
+
+// 予選ブラケットに週末のみ日程を割り当て（勝者側+敗者復活）
+export function assignWeekendQualifier(qualifier, startDate, matchesPerDay = 3) {
+  assignWeekendQualifierDates(qualifier.mainBracket, startDate, matchesPerDay);
+  const mainMD = qualifier.mainBracket.matchDates;
+  let lastDate = null;
+  if (mainMD) {
+    for (let r = mainMD.length - 1; r >= 0; r--) {
+      for (let m = (mainMD[r]?.length || 0) - 1; m >= 0; m--) {
+        if (mainMD[r][m]) { lastDate = mainMD[r][m]; break; }
+      }
+      if (lastDate) break;
+    }
+  }
+  if (!lastDate) lastDate = startDate;
+  // 次の週末を敗者復活の開始日にする
+  const ld = new Date(lastDate.year, lastDate.month - 1, lastDate.day);
+  ld.setDate(ld.getDate() + 1);
+  while (ld.getDay() !== 6 && ld.getDay() !== 0) {
+    ld.setDate(ld.getDate() + 1);
+  }
+  qualifier.losersStartDate = { year: ld.getFullYear(), month: ld.getMonth() + 1, day: ld.getDate() };
+}
+
 // 予選ブラケットに日程を割り当て（勝者側+敗者復活、1日matchesPerDay試合）
 export function assignQualifierDates(qualifier, startDate, matchesPerDay = 3) {
   assignMainTournamentDates(qualifier.mainBracket, startDate, matchesPerDay);
@@ -552,7 +626,11 @@ export function simulateQualifierOnDate(qualifier, dateObj, userTeamName = null)
       buildLosersBracket(qualifier);
       // 敗者復活に日程を割り当て
       if (qualifier.losersStartDate) {
-        assignMainTournamentDates(qualifier.losersBracket, qualifier.losersStartDate, 3);
+        if (qualifier.weekendOnly) {
+          assignWeekendQualifierDates(qualifier.losersBracket, qualifier.losersStartDate, 3);
+        } else {
+          assignMainTournamentDates(qualifier.losersBracket, qualifier.losersStartDate, 3);
+        }
       }
     } else {
       qualifier.phase = 'done';
@@ -807,7 +885,8 @@ export function generateNihonSenshuken(options = {}) {
       phase: 'main',
     };
 
-    assignQualifierDates(qualifier, { year: calendarYear, month: 10, day: 5 }, 3);
+    qualifier.weekendOnly = true;
+    assignWeekendQualifier(qualifier, { year: calendarYear, month: 4, day: 5 }, 3);
 
     if (userTeamName && teamDefsMap[userTeamName]) {
       userRegionId = regionId;
