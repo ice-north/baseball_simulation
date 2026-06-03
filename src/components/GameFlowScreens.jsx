@@ -167,7 +167,7 @@ const GameFlowScreens = ({
           };
 
           newSeasonData.schedule = [];
-          newSeasonData.standings = {};
+          newSeasonData.standings = [];
           setSeasonData(newSeasonData);
           setGameFlowState('corporate_camp');
         }, 50);

@@ -1063,7 +1063,7 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 社会人モード: 地域リーグを再生成
   if (seasonData.settings?.corporateMode) {
     newSeasonData.schedule = [];
-    newSeasonData.standings = {};
+    newSeasonData.standings = [];
   } else {
     // 独立リーグモード: スケジュールはレギュレーション設定後に生成
     const teams = Object.keys(teamsAfterRetirement);
