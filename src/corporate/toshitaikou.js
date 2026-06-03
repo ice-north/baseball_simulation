@@ -866,7 +866,8 @@ export function generateNihonSenshuken(options = {}) {
     const sorted = [...allTeams].sort((a, b) =>
       (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
     );
-    const teams = sorted.slice(0, MAX_QUALIFIER_TEAMS);
+    const maxSenshukenQualifier = 16;
+    const teams = sorted.slice(0, maxSenshukenQualifier);
     const slots = SENSHUKEN_SLOTS[regionId] || 1;
 
     const teamNames = teams.map(t => t.displayName || t.name);
@@ -886,7 +887,7 @@ export function generateNihonSenshuken(options = {}) {
     };
 
     qualifier.weekendOnly = true;
-    assignWeekendQualifier(qualifier, { year: calendarYear, month: 4, day: 5 }, 3);
+    assignWeekendQualifier(qualifier, { year: calendarYear, month: 4, day: 5 }, 5);
 
     if (userTeamName && teamDefsMap[userTeamName]) {
       userRegionId = regionId;
