@@ -62,6 +62,84 @@ function shuffleWithinRanks(teams) {
   return result;
 }
 
+// シード4チームを先頭に配置し、残りをランク内シャッフル
+// 戻り値: { teams, appliedSeeds } — appliedSeeds は実際に配置されたシードチーム名→番号のマップ
+function applySeeds(teams, seedNames) {
+  if (!seedNames || seedNames.length === 0) return { teams: shuffleWithinRanks(teams), appliedSeeds: null };
+  const nameKey = t => t.displayName || t.name;
+  const seedSet = new Set(seedNames);
+  const seeded = [];
+  const rest = [];
+  for (const t of teams) {
+    if (seedSet.has(nameKey(t))) seeded.push(t);
+    else rest.push(t);
+  }
+  seeded.sort((a, b) => seedNames.indexOf(nameKey(a)) - seedNames.indexOf(nameKey(b)));
+  const appliedSeeds = {};
+  seeded.forEach((t, i) => { appliedSeeds[nameKey(t)] = i + 1; });
+  return { teams: [...seeded, ...shuffleWithinRanks(rest)], appliedSeeds: Object.keys(appliedSeeds).length > 0 ? appliedSeeds : null };
+}
+
+// トーナメント結果からシード情報を抽出（上位4チーム）
+export function extractTournamentSeeds(seasonData) {
+  const seeds = {};
+
+  // 地域トーナメント: 各地域の上位4
+  const rt = seasonData.regionalTournament;
+  if (rt?.generated) {
+    seeds.regional = {};
+    for (const [regionId, region] of Object.entries(rt.brackets || {})) {
+      if (region.bracket?.champion) {
+        seeds.regional[regionId] = getBracketRankings(region.bracket).slice(0, 4);
+      }
+    }
+  }
+
+  // 都市対抗: 予選は各地域上位4、本戦は上位4
+  const td = seasonData.toshitaikou;
+  if (td?.generated) {
+    seeds.toshitaikouQualifiers = {};
+    for (const [regionId, q] of Object.entries(td.qualifiers || {})) {
+      if (q.mainBracket?.champion) {
+        seeds.toshitaikouQualifiers[regionId] = getBracketRankings(q.mainBracket).slice(0, 4);
+      }
+    }
+    if (td.mainTournament?.bracket?.champion) {
+      seeds.toshitaikouMain = getBracketRankings(td.mainTournament.bracket).slice(0, 4);
+    }
+  }
+
+  // 日本選手権: 予選は各地域上位4、本戦は上位4
+  const ns = seasonData.nihonSenshuken;
+  if (ns?.generated) {
+    seeds.senshukenQualifiers = {};
+    for (const [regionId, q] of Object.entries(ns.qualifiers || {})) {
+      if (q.mainBracket?.champion) {
+        seeds.senshukenQualifiers[regionId] = getBracketRankings(q.mainBracket).slice(0, 4);
+      }
+    }
+    if (ns.mainTournament?.bracket?.champion) {
+      seeds.senshukenMain = getBracketRankings(ns.mainTournament.bracket).slice(0, 4);
+    }
+  }
+
+  // クラブ選手権: 予選は各地域上位4、本戦は上位4
+  const cs = seasonData.clubSenshuken;
+  if (cs?.generated) {
+    seeds.clubQualifiers = {};
+    for (const [regionId, q] of Object.entries(cs.qualifiers || {})) {
+      if (q.mainBracket?.champion) {
+        seeds.clubQualifiers[regionId] = getBracketRankings(q.mainBracket).slice(0, 4);
+      }
+    }
+    if (cs.mainTournament?.bracket?.champion) {
+      seeds.clubMain = getBracketRankings(cs.mainTournament.bracket).slice(0, 4);
+    }
+  }
+
+  return seeds;
+}
+
 // ============================================================
 // ユーティリティ
 // ============================================================
@@ -297,25 +375,29 @@ export function getBracketRankings(bracket) {
 // 地域予選（勝者側トーナメント＋敗者復活トーナメント）
 // ============================================================
 
-export function createRegionalQualifier(regionId) {
+export function createRegionalQualifier(regionId, seedNames = null) {
   const allTeams = getTeamsByRegion(regionId);
-  const teams = shuffleWithinRanks(allTeams).slice(0, MAX_QUALIFIER_TEAMS);
+  const { teams, appliedSeeds } = applySeeds(allTeams, seedNames);
+  const slicedTeams = teams.slice(0, MAX_QUALIFIER_TEAMS);
   const slots = REGIONAL_SLOTS[regionId] || 1;
 
-  const teamNames = teams.map(t => t.displayName || t.name);
+  const teamNames = slicedTeams.map(t => t.displayName || t.name);
   const teamDefsMap = {};
-  teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+  slicedTeams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+
+  const mainBracket = createBracket(teamNames);
+  if (mainBracket && appliedSeeds) mainBracket.seeds = appliedSeeds;
 
   return {
     regionId,
     regionName: TOSHITAIKOU_REGION_NAMES[regionId],
     slots,
-    teamDefs: teams,
+    teamDefs: slicedTeams,
     teamDefsMap,
-    mainBracket: createBracket(teamNames),
+    mainBracket,
     losersBracket: null,
     qualifiedTeams: [],
-    phase: 'main', // 'main' → 'losers' → 'done'
+    phase: 'main',
   };
 }
 
@@ -392,7 +474,7 @@ export function advanceQualifierWithResult(qualifier, roundIdx, matchIdx, winner
 // 本戦（32チームトーナメント）
 // ============================================================
 
-export function createMainTournament(qualifiedByRegion, defendingChampionName, calendarYear = 2024) {
+export function createMainTournament(qualifiedByRegion, defendingChampionName, calendarYear = 2024, seedNames = null) {
   const allQualified = [];
   const teamDefsMap = {};
 
@@ -425,21 +507,33 @@ export function createMainTournament(qualifiedByRegion, defendingChampionName, c
     }
   }
 
-  // ランク順でシード（同ランク内はシャッフル）
-  const grouped = {};
+  // シード配置: 前年上位4チーム → 残りはランク順シャッフル
+  const seedSet = new Set(seedNames || []);
+  const seededTop = [];
+  const rest = [];
   for (const t of allQualified) {
-    const r = t.def?.rank || 'D';
-    (grouped[r] ||= []).push(t);
+    if (seedSet.has(t.name)) seededTop.push(t);
+    else rest.push(t);
   }
-  const seeded = [];
+  seededTop.sort((a, b) => (seedNames || []).indexOf(a.name) - (seedNames || []).indexOf(b.name));
+  const restGrouped = {};
+  for (const t of rest) {
+    const r = t.def?.rank || 'D';
+    (restGrouped[r] ||= []).push(t);
+  }
+  const restShuffled = [];
   for (const rank of ['S', 'A', 'B', 'C', 'D']) {
-    if (grouped[rank]) seeded.push(...shuffleArray(grouped[rank]));
+    if (restGrouped[rank]) restShuffled.push(...shuffleArray(restGrouped[rank]));
   }
 
-  const teamNames = seeded.slice(0, 32).map(t => t.name);
+  const teamNames = [...seededTop, ...restShuffled].slice(0, 32).map(t => t.name);
 
   const bracket = createBracket(teamNames);
-  // 本戦は8月15日から、1日3試合ずつ東京ドームで開催
+  if (bracket && seedNames && seededTop.length > 0) {
+    const appliedSeeds = {};
+    seededTop.forEach((t, i) => { appliedSeeds[t.name] = i + 1; });
+    bracket.seeds = appliedSeeds;
+  }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 7, day: 15 }, 3);
 
   return {
@@ -820,6 +914,7 @@ export function generateToshitaikou(options = {}) {
     defendingChampionName = null,
     userTeamName = null,
     calendarYear = 2024,
+    seeds = null,
   } = options;
 
   const qualifiers = {};
@@ -827,7 +922,8 @@ export function generateToshitaikou(options = {}) {
 
   // 各地域の予選を生成
   for (const regionId of Object.keys(REGIONAL_SLOTS)) {
-    const qualifier = createRegionalQualifier(regionId);
+    const regionSeeds = seeds?.toshitaikouQualifiers?.[regionId] || null;
+    const qualifier = createRegionalQualifier(regionId, regionSeeds);
 
     if (userTeamName && qualifier.teamDefsMap[userTeamName]) {
       userRegionId = regionId;
@@ -894,6 +990,7 @@ export function generateNihonSenshuken(options = {}) {
   const {
     userTeamName = null,
     calendarYear = 2024,
+    seeds = null,
   } = options;
 
   const qualifiers = {};
@@ -902,12 +999,16 @@ export function generateNihonSenshuken(options = {}) {
   for (const regionId of Object.keys(SENSHUKEN_SLOTS)) {
     const allTeams = getTeamsByRegion(regionId);
     const corporateTeams = allTeams.filter(t => t.type === 'corporate');
-    const teams = shuffleWithinRanks(corporateTeams);
+    const regionSeeds = seeds?.senshukenQualifiers?.[regionId] || null;
+    const { teams, appliedSeeds } = applySeeds(corporateTeams, regionSeeds);
     const slots = SENSHUKEN_SLOTS[regionId] || 1;
 
     const teamNames = teams.map(t => t.displayName || t.name);
     const teamDefsMap = {};
     teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+
+    const mainBracket = createBracket(teamNames);
+    if (mainBracket && appliedSeeds) mainBracket.seeds = appliedSeeds;
 
     const qualifier = {
       regionId,
@@ -915,7 +1016,7 @@ export function generateNihonSenshuken(options = {}) {
       slots,
       teamDefs: teams,
       teamDefsMap,
-      mainBracket: createBracket(teamNames),
+      mainBracket,
       losersBracket: null,
       qualifiedTeams: [],
       phase: 'main',
@@ -951,6 +1052,7 @@ export function generateClubSenshuken(options = {}) {
   const {
     userTeamName = null,
     calendarYear = 2024,
+    seeds = null,
   } = options;
 
   const qualifiers = {};
@@ -959,7 +1061,8 @@ export function generateClubSenshuken(options = {}) {
   for (const regionId of Object.keys(CLUB_SENSHUKEN_SLOTS)) {
     const allTeams = getTeamsByRegion(regionId);
     const clubTeams = allTeams.filter(t => t.type === 'club');
-    const teams = shuffleWithinRanks(clubTeams);
+    const regionSeeds = seeds?.clubQualifiers?.[regionId] || null;
+    const { teams, appliedSeeds } = applySeeds(clubTeams, regionSeeds);
     const slots = CLUB_SENSHUKEN_SLOTS[regionId] || 1;
 
     if (teams.length < 2) continue;
@@ -968,13 +1071,16 @@ export function generateClubSenshuken(options = {}) {
     const teamDefsMap = {};
     teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
 
+    const mainBracket = createBracket(teamNames);
+    if (mainBracket && appliedSeeds) mainBracket.seeds = appliedSeeds;
+
     const qualifier = {
       regionId,
       regionName: TOSHITAIKOU_REGION_NAMES[regionId],
       slots,
       teamDefs: teams,
       teamDefsMap,
-      mainBracket: createBracket(teamNames),
+      mainBracket,
       losersBracket: null,
       qualifiedTeams: [],
       phase: 'main',
@@ -1002,7 +1108,7 @@ export function generateClubSenshuken(options = {}) {
   };
 }
 
-export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, teamType = null) {
+export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, teamType = null, seedNames = null) {
   const allQualified = [];
   for (const regionId of Object.keys(qualifiers)) {
     const q = qualifiers[regionId];
@@ -1024,11 +1130,25 @@ export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, t
     allQualified.push({ name: t.displayName || t.name, region: t.region, teamDef: t });
   }
 
-  const teamNames = allQualified.map(t => t.name);
+  // シード配置: 前年上位4チーム → 残りはシャッフル
+  const seedSet = new Set(seedNames || []);
+  const seededTop = [];
+  const rest = [];
+  for (const t of allQualified) {
+    if (seedSet.has(t.name)) seededTop.push(t);
+    else rest.push(t);
+  }
+  seededTop.sort((a, b) => (seedNames || []).indexOf(a.name) - (seedNames || []).indexOf(b.name));
+  const teamNames = [...seededTop, ...shuffleArray(rest)].map(t => t.name);
   const teamDefsMap = {};
   allQualified.forEach(t => { if (t.teamDef) teamDefsMap[t.name] = t.teamDef; });
 
   const bracket = createBracket(teamNames);
+  if (bracket && seedNames && seededTop.length > 0) {
+    const appliedSeeds = {};
+    seededTop.forEach((t, i) => { appliedSeeds[t.name] = i + 1; });
+    bracket.seeds = appliedSeeds;
+  }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 10, day: 1 }, 3);
 
   return {
@@ -1201,19 +1321,21 @@ export function getRoundName(bracket, roundIdx) {
 // ============================================================
 
 export function generateRegionalTournament(options = {}) {
-  const { userTeamName = null, calendarYear = 2024 } = options;
+  const { userTeamName = null, calendarYear = 2024, seeds = null } = options;
 
   const brackets = {};
   let userRegionId = null;
 
   for (const regionId of Object.keys(REGIONAL_SLOTS)) {
     const allTeams = getTeamsByRegion(regionId);
-    const teams = shuffleWithinRanks(allTeams);
-    const teamNames = teams.map(t => t.displayName || t.name);
+    const regionSeeds = seeds?.regional?.[regionId] || null;
+    const { teams: orderedTeams, appliedSeeds } = applySeeds(allTeams, regionSeeds);
+    const teamNames = orderedTeams.map(t => t.displayName || t.name);
     const teamDefsMap = {};
-    teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+    orderedTeams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
 
     const bracket = createBracket(teamNames);
+    if (bracket && appliedSeeds) bracket.seeds = appliedSeeds;
     assignWeekendQualifierDates(bracket, { year: calendarYear, month: 4, day: 5 }, 5);
 
     if (userTeamName && teamDefsMap[userTeamName]) {
@@ -1224,7 +1346,7 @@ export function generateRegionalTournament(options = {}) {
       regionId,
       regionName: TOSHITAIKOU_REGION_NAMES[regionId],
       bracket,
-      teamDefs: teams,
+      teamDefs: orderedTeams,
       teamDefsMap,
       champion: null,
       phase: 'playing',

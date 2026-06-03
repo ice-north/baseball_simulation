@@ -184,7 +184,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setIsGeneratingTournament(true);
       setTimeout(() => {
         const calYear = newData.currentDate.year;
-        const tournament = generateToshitaikou({ userTeamName, calendarYear: calYear });
+        const seeds = newData.tournamentSeeds || null;
+        const tournament = generateToshitaikou({ userTeamName, calendarYear: calYear, seeds });
         const updated = { ...newData, toshitaikou: { ...tournament, generated: true, qualifiersDone: false, mainDone: false } };
         if (tournament.userRegionId) setSelectedRegionTab(tournament.userRegionId);
         setSeasonData(updated);
@@ -198,9 +199,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setIsGeneratingTournament(true);
       setTimeout(() => {
         const td = newData.toshitaikou;
-        const prevChamp = td.prevChampion || null;
+        const prevChamp = td.prevChampion || newData.prevToshitaikouChampion || null;
         const calYear = newData.currentDate.year;
-        const mainTournament = createMainTournament(td.qualifiers, prevChamp, calYear);
+        const mainSeeds = newData.tournamentSeeds?.toshitaikouMain || null;
+        const mainTournament = createMainTournament(td.qualifiers, prevChamp, calYear, mainSeeds);
         const updated = { ...newData, toshitaikou: { ...td, mainTournament, mainDone: false } };
         setSeasonData(updated);
         setIsGeneratingTournament(false);
@@ -214,7 +216,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setIsGeneratingTournament(true);
       setTimeout(() => {
         const calYear = newData.currentDate.year;
-        const rt = generateRegionalTournament({ userTeamName, calendarYear: calYear });
+        const rtSeeds = newData.tournamentSeeds || null;
+        const rt = generateRegionalTournament({ userTeamName, calendarYear: calYear, seeds: rtSeeds });
         const updated = { ...newData, regionalTournament: { ...rt, generated: true } };
         setSeasonData(updated);
         setIsGeneratingTournament(false);
@@ -228,8 +231,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setIsGeneratingTournament(true);
       setTimeout(() => {
         const calYear = newData.currentDate.year;
-        const ns = generateNihonSenshuken({ userTeamName, calendarYear: calYear });
-        const cs = generateClubSenshuken({ userTeamName, calendarYear: calYear });
+        const nsSeeds = newData.tournamentSeeds || null;
+        const ns = generateNihonSenshuken({ userTeamName, calendarYear: calYear, seeds: nsSeeds });
+        const cs = generateClubSenshuken({ userTeamName, calendarYear: calYear, seeds: nsSeeds });
         const updated = {
           ...newData,
           nihonSenshuken: { ...ns, generated: true },
@@ -248,7 +252,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setTimeout(() => {
         const ns = newData.nihonSenshuken;
         const calYear = newData.currentDate.year;
-        const mainTournament = createSenshukenMainTournament(ns.qualifiers, calYear, 'corporate');
+        const nsMainSeeds = newData.tournamentSeeds?.senshukenMain || null;
+        const mainTournament = createSenshukenMainTournament(ns.qualifiers, calYear, 'corporate', nsMainSeeds);
         const updated = { ...newData, nihonSenshuken: { ...ns, mainTournament, phase: 'main' } };
         setSeasonData(updated);
         setIsGeneratingTournament(false);
@@ -263,7 +268,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setTimeout(() => {
         const cs = newData.clubSenshuken;
         const calYear = newData.currentDate.year;
-        const mainTournament = createSenshukenMainTournament(cs.qualifiers, calYear, 'club');
+        const csMainSeeds = newData.tournamentSeeds?.clubMain || null;
+        const mainTournament = createSenshukenMainTournament(cs.qualifiers, calYear, 'club', csMainSeeds);
         const updated = { ...newData, clubSenshuken: { ...cs, mainTournament, phase: 'main' } };
         setSeasonData(updated);
         setIsGeneratingTournament(false);
@@ -392,11 +398,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const elim = isEliminated(team);
             const fill = isUser ? '#fde047' : elim ? '#6b7280' : '#e5e7eb';
             const fw = isUser ? 'bold' : 'normal';
+            const seedNum = bracket.seeds?.[team];
+            const seedPrefix = seedNum ? `[${seedNum}]` : '';
+            const champPrefix = bracket.champion === team ? '🏆' : '';
             return (
               <text key={`t${mi}-${isTop}`} x={PAD_LEFT} y={cy + FONT * 0.35}
                 fill={fill} fontSize={FONT} fontWeight={fw}
 >
-                {bracket.champion === team ? `🏆${getLabel(team)}` : getLabel(team)}
+                {seedPrefix && <tspan fill="#f59e0b" fontWeight="bold">{seedPrefix}</tspan>}
+                {champPrefix}{getLabel(team)}
               </text>
             );
           })}
