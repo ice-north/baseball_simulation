@@ -576,6 +576,65 @@ export function executeHandleManagedGameEnd(ctx) {
     return;
   }
 
+  // クラブ選手権の結果処理
+  const csPending = updatedSeasonData.clubSenshuken?.pendingMatch;
+  if (csPending && info.isTournament) {
+    const cs = { ...updatedSeasonData.clubSenshuken };
+    const userWon = finalScore.home > finalScore.away;
+    const winnerName = userWon ? htn : atn;
+    const scoreArr = [finalScore.home, finalScore.away];
+
+    if (csPending.bracketType === 'club_senshuken' && cs.mainTournament) {
+      recordResult(cs.mainTournament.bracket, csPending.roundIdx, csPending.matchIdx, winnerName, scoreArr);
+      if (isBracketComplete(cs.mainTournament.bracket)) {
+        const rankings = getBracketRankings(cs.mainTournament.bracket);
+        cs.mainTournament.champion = rankings[0] || null;
+        cs.mainTournament.runnerUp = rankings[1] || null;
+        cs.mainTournament.phase = 'done';
+        cs.champion = cs.mainTournament.champion;
+        cs.runnerUp = cs.mainTournament.runnerUp;
+        cs.phase = 'done';
+      }
+    } else if (csPending.bracketType === 'club_senshuken_qualifier_losers' && csPending.regionId) {
+      const qualifier = cs.qualifiers[csPending.regionId];
+      if (qualifier?.losersBracket) {
+        recordResult(qualifier.losersBracket, csPending.roundIdx, csPending.matchIdx, winnerName, scoreArr);
+        if (!userWon) {
+          autoPlayBracket(qualifier.losersBracket, qualifier.teamDefsMap);
+        }
+        if (isBracketComplete(qualifier.losersBracket)) {
+          const losersRankings = getBracketRankings(qualifier.losersBracket);
+          qualifier.qualifiedTeams.push(...losersRankings.slice(0, qualifier.slots - 1));
+          qualifier.phase = 'done';
+        }
+        const allDone = Object.values(cs.qualifiers).every(q => q.phase === 'done');
+        if (allDone) {
+          cs.userQualifierDone = true;
+          cs.phase = 'qualifiers_done';
+        }
+      }
+    } else if (csPending.bracketType === 'club_senshuken_qualifier' && csPending.regionId) {
+      const qualifier = cs.qualifiers[csPending.regionId];
+      if (qualifier) {
+        advanceQualifierWithResult(qualifier, csPending.roundIdx, csPending.matchIdx, winnerName, scoreArr, htn);
+        const allDone = Object.values(cs.qualifiers).every(q => q.phase === 'done');
+        if (allDone) {
+          cs.userQualifierDone = true;
+          cs.phase = 'qualifiers_done';
+        }
+      }
+    }
+
+    cs.pendingMatch = null;
+    updatedSeasonData = { ...updatedSeasonData, clubSenshuken: cs };
+    setSeasonData(updatedSeasonData);
+    setManagedGameInfo(null);
+    managedGameInfoRef.current = null;
+    setScreenMode('management');
+    setManagementView('dateprogress');
+    return;
+  }
+
   // トーナメント試合の結果処理
   const pendingMatch = updatedSeasonData.toshitaikou?.pendingMatch;
   if (pendingMatch && info.isTournament) {

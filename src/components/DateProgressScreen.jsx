@@ -4,7 +4,7 @@ import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } 
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
-import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
+import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
 import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues } from '../corporate/parallelWorldManager.js';
 import { generateAprilHighSchoolClass } from '../season/yearProgressionSystem.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
@@ -221,17 +221,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return newData;
     }
 
-    // 日本選手権（9月予選、10月本戦）
+    // 日本選手権（企業）＋全日本クラブ野球選手権（クラブ）（9月予選、10月本戦）
     if (isCorporate && month >= 9 && !newData.nihonSenshuken?.generated) {
       setSeasonData(newData);
       setIsGeneratingTournament(true);
       setTimeout(() => {
         const calYear = newData.currentDate.year;
-        const ns = generateNihonSenshuken({
-          userTeamName,
-          calendarYear: calYear,
-        });
-        const updated = { ...newData, nihonSenshuken: { ...ns, generated: true } };
+        const ns = generateNihonSenshuken({ userTeamName, calendarYear: calYear });
+        const cs = generateClubSenshuken({ userTeamName, calendarYear: calYear });
+        const updated = {
+          ...newData,
+          nihonSenshuken: { ...ns, generated: true },
+          clubSenshuken: { ...cs, generated: true },
+        };
         setSeasonData(updated);
         setIsGeneratingTournament(false);
       }, 50);
@@ -245,8 +247,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setTimeout(() => {
         const ns = newData.nihonSenshuken;
         const calYear = newData.currentDate.year;
-        const mainTournament = createSenshukenMainTournament(ns.qualifiers, calYear);
+        const mainTournament = createSenshukenMainTournament(ns.qualifiers, calYear, 'corporate');
         const updated = { ...newData, nihonSenshuken: { ...ns, mainTournament, phase: 'main' } };
+        setSeasonData(updated);
+        setIsGeneratingTournament(false);
+      }, 50);
+      return newData;
+    }
+
+    // クラブ選手権: 予選終了 → 本戦生成
+    if (isCorporate && newData.clubSenshuken?.generated && newData.clubSenshuken.phase === 'qualifiers_done' && !newData.clubSenshuken.mainTournament) {
+      setSeasonData(newData);
+      setIsGeneratingTournament(true);
+      setTimeout(() => {
+        const cs = newData.clubSenshuken;
+        const calYear = newData.currentDate.year;
+        const mainTournament = createSenshukenMainTournament(cs.qualifiers, calYear, 'club');
+        const updated = { ...newData, clubSenshuken: { ...cs, mainTournament, phase: 'main' } };
         setSeasonData(updated);
         setIsGeneratingTournament(false);
       }, 50);
@@ -575,6 +592,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
+    // クラブ選手権のユーザー試合チェック
+    if (seasonData.clubSenshuken?.generated && seasonData.clubSenshuken.phase !== 'done') {
+      const csMatch = getUserNihonSenshukenMatchOnDate(seasonData.clubSenshuken, seasonData.currentDate, userTeamName);
+      if (csMatch) {
+        const clubMatch = { ...csMatch, bracketType: csMatch.bracketType?.replace('nihon_senshuken', 'club_senshuken') || 'club_senshuken', type: csMatch.type?.replace('nihon_senshuken', 'club_senshuken') || 'club_senshuken' };
+        setShowTournamentMatchModal(clubMatch);
+        return;
+      }
+    }
+
     // ユーザーチームの試合があるかチェック
     const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
     const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
@@ -638,11 +665,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (newSeasonData.nihonSenshuken?.generated && newSeasonData.nihonSenshuken.phase !== 'done') {
       const ns = JSON.parse(JSON.stringify(newSeasonData.nihonSenshuken));
       simulateNihonSenshukenOnDate(ns, seasonData.currentDate, userTeamName);
-      if (ns.phase === 'done') {
-        ns.champion = ns.champion;
-        ns.runnerUp = ns.runnerUp;
-      }
       newSeasonData = { ...newSeasonData, nihonSenshuken: ns };
+    }
+
+    // クラブ選手権の試合を消化
+    if (newSeasonData.clubSenshuken?.generated && newSeasonData.clubSenshuken.phase !== 'done') {
+      const cs = JSON.parse(JSON.stringify(newSeasonData.clubSenshuken));
+      simulateNihonSenshukenOnDate(cs, seasonData.currentDate, userTeamName);
+      newSeasonData = { ...newSeasonData, clubSenshuken: cs };
     }
 
     // スカウト派遣の完了チェック
@@ -689,6 +719,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (!onSetupManagedGame) return;
     const oppName = opponentDef?.displayName || opponentDef?.name || opponentName;
     const isNS = matchInfo.bracketType === 'nihon_senshuken' || matchInfo.bracketType === 'nihon_senshuken_qualifier' || matchInfo.bracketType === 'nihon_senshuken_qualifier_losers';
+    const isCS = matchInfo.bracketType === 'club_senshuken' || matchInfo.bracketType === 'club_senshuken_qualifier' || matchInfo.bracketType === 'club_senshuken_qualifier_losers';
     const isRT = matchInfo.bracketType === 'regional_tournament';
     const pendingMatch = {
       regionId: matchInfo.regionId,
@@ -701,6 +732,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     let updatedData;
     if (isRT) {
       updatedData = { ...seasonData, regionalTournament: { ...seasonData.regionalTournament, pendingMatch } };
+    } else if (isCS) {
+      updatedData = { ...seasonData, clubSenshuken: { ...seasonData.clubSenshuken, pendingMatch } };
     } else if (isNS) {
       updatedData = { ...seasonData, nihonSenshuken: { ...seasonData.nihonSenshuken, pendingMatch } };
     } else {
@@ -708,7 +741,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
     setSeasonData(updatedData);
 
-    const prefix = isRT ? 'regional_tournament' : isNS ? 'nihon_senshuken' : 'toshitaikou';
+    const prefix = isRT ? 'regional_tournament' : isCS ? 'club_senshuken' : isNS ? 'nihon_senshuken' : 'toshitaikou';
     onSetupManagedGame({
       gameId: `${prefix}_${matchInfo.bracketType}_${matchInfo.roundIdx}_${matchInfo.matchIdx}`,
       home: userTeamName,
@@ -743,6 +776,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (seasonData.regionalTournament?.generated) {
       allDates.push(...getRegionalTournamentDatesForCalendar(seasonData.regionalTournament, userTeamName));
     }
+    if (seasonData.clubSenshuken?.generated) {
+      allDates.push(...getNihonSenshukenDatesForCalendar(seasonData.clubSenshuken, userTeamName));
+    }
     const dateMap = {};
     allDates.forEach(d => {
       const key = `${d.date.month}-${d.date.day}`;
@@ -750,7 +786,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       dateMap[key].push(d);
     });
     return dateMap;
-  }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.regionalTournament, userTeamName]);
+  }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.clubSenshuken, seasonData.regionalTournament, userTeamName]);
 
   const calendarCells = useMemo(() => {
     const cells = [];
@@ -893,8 +929,51 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         }
       }
     }
+    // クラブ選手権（予選＋本戦）
+    const csd = seasonData.clubSenshuken;
+    if (csd?.generated && csd.phase !== 'done') {
+      if ((csd.phase === 'qualifiers' || csd.phase === 'qualifiers_done') && csd.qualifiers && csd.userRegionId) {
+        const q = csd.qualifiers[csd.userRegionId];
+        if (q && q.phase !== 'done') {
+          for (const [bracketType, bracket] of [['club_senshuken_qualifier', q.mainBracket], ['club_senshuken_qualifier_losers', q.losersBracket]]) {
+            if (!bracket) continue;
+            const um = getUserNextMatch(bracket, userTeamName);
+            if (!um) continue;
+            const matchDate = bracket.matchDates?.[um.roundIdx]?.[um.matchIdx] || bracket.roundDates?.[um.roundIdx];
+            if (!isDateMatch(matchDate)) continue;
+            const oppName = um.match.team1 === userTeamName ? um.match.team2 : um.match.team1;
+            const oppDef = q.teamDefsMap[oppName];
+            matches.push({
+              type: 'club_senshuken_qualifier',
+              label: `クラブ選手権 地区予選 ${bracketType.includes('losers') ? '敗者復活 ' : ''}${getRoundName(bracket, um.roundIdx)}`,
+              opponent: oppName,
+              color: 'purple',
+              onStart: () => startTournamentMatch(oppName, oppDef, { regionId: csd.userRegionId, roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType }),
+            });
+          }
+        }
+      }
+      if (csd.phase === 'main' && csd.mainTournament) {
+        const csBracket = csd.mainTournament.bracket;
+        const um = csd.mainTournament.phase !== 'done' ? getUserNextMatch(csBracket, userTeamName) : null;
+        if (um) {
+          const matchDate = csBracket?.matchDates?.[um.roundIdx]?.[um.matchIdx] || csBracket?.roundDates?.[um.roundIdx];
+          if (isDateMatch(matchDate)) {
+            const oppName = um.match.team1 === userTeamName ? um.match.team2 : um.match.team1;
+            const oppDef = csd.mainTournament.teamDefsMap[oppName];
+            matches.push({
+              type: 'club_senshuken',
+              label: `クラブ選手権 本戦 ${getRoundName(csBracket, um.roundIdx)}`,
+              opponent: oppName,
+              color: 'purple',
+              onStart: () => startTournamentMatch(oppName, oppDef, { roundIdx: um.roundIdx, matchIdx: um.matchIdx, bracketType: 'club_senshuken' }),
+            });
+          }
+        }
+      }
+    }
     return matches;
-  }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.regionalTournament, seasonData.currentDate, userTeamName]);
+  }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.clubSenshuken, seasonData.regionalTournament, seasonData.currentDate, userTeamName]);
 
   // 月間戦績を1回だけ計算（ヘッダーとサマリーの両方で使用）
   const monthlyStats = useMemo(() => {
@@ -2633,10 +2712,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const tm = showTournamentMatchModal;
         const oppName = tm.match.team1 === userTeamName ? tm.match.team2 : tm.match.team1;
         const isNsType = tm.bracketType === 'nihon_senshuken' || tm.bracketType === 'nihon_senshuken_qualifier' || tm.bracketType === 'nihon_senshuken_qualifier_losers';
+        const isCsType = tm.bracketType === 'club_senshuken' || tm.bracketType === 'club_senshuken_qualifier' || tm.bracketType === 'club_senshuken_qualifier_losers';
         const isRtType = tm.bracketType === 'regional_tournament';
         const isQualifier = tm.type === 'qualifier' || tm.type === 'nihon_senshuken_qualifier';
         const td = seasonData.toshitaikou;
         const ns = seasonData.nihonSenshuken;
+        const cs = seasonData.clubSenshuken;
         const rt = seasonData.regionalTournament;
         let oppDef, bracket, modalTitle, modalSubtitle;
 
@@ -2647,24 +2728,26 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           modalTitle = '地域トーナメント';
           const roundName = bracket ? getRoundName(bracket, tm.roundIdx) : '';
           modalSubtitle = `${region?.regionName || ''} - ${roundName}`;
-        } else if (isNsType) {
-          const nsQ = ns?.qualifiers?.[tm.regionId];
-          if (tm.bracketType === 'nihon_senshuken') {
-            oppDef = ns?.mainTournament?.teamDefsMap?.[oppName];
-            bracket = ns?.mainTournament?.bracket;
-          } else if (tm.bracketType === 'nihon_senshuken_qualifier_losers') {
-            oppDef = nsQ?.teamDefsMap?.[oppName];
-            bracket = nsQ?.losersBracket;
+        } else if (isNsType || isCsType) {
+          const source = isCsType ? cs : ns;
+          const srcQ = source?.qualifiers?.[tm.regionId];
+          const mainBt = isCsType ? 'club_senshuken' : 'nihon_senshuken';
+          if (tm.bracketType === mainBt) {
+            oppDef = source?.mainTournament?.teamDefsMap?.[oppName];
+            bracket = source?.mainTournament?.bracket;
+          } else if (tm.bracketType.includes('losers')) {
+            oppDef = srcQ?.teamDefsMap?.[oppName];
+            bracket = srcQ?.losersBracket;
           } else {
-            oppDef = nsQ?.teamDefsMap?.[oppName];
-            bracket = nsQ?.mainBracket;
+            oppDef = srcQ?.teamDefsMap?.[oppName];
+            bracket = srcQ?.mainBracket;
           }
-          modalTitle = '日本選手権大会';
+          modalTitle = isCsType ? '全日本クラブ野球選手権' : '日本選手権大会';
           const roundName = bracket ? getRoundName(bracket, tm.roundIdx) : '';
-          if (tm.bracketType === 'nihon_senshuken') {
+          if (tm.bracketType === mainBt) {
             modalSubtitle = `本戦 - ${roundName}`;
           } else {
-            modalSubtitle = `地区予選 ${nsQ?.regionName || ''}${tm.bracketType.includes('losers') ? ' 敗者復活' : ''} - ${roundName}`;
+            modalSubtitle = `地区予選 ${srcQ?.regionName || ''}${tm.bracketType.includes('losers') ? ' 敗者復活' : ''} - ${roundName}`;
           }
         } else {
           const isTdQualifier = tm.type === 'qualifier';
@@ -2681,8 +2764,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className={`bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border ${isRtType ? 'border-green-600/50' : isNsType ? 'border-red-600/50' : 'border-yellow-600/50'}`}>
-              <h2 className={`text-xl font-bold text-center mb-1 ${isRtType ? 'text-green-400' : isNsType ? 'text-red-400' : 'text-yellow-400'}`}>
+            <div className={`bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border ${isRtType ? 'border-green-600/50' : isCsType ? 'border-purple-600/50' : isNsType ? 'border-red-600/50' : 'border-yellow-600/50'}`}>
+              <h2 className={`text-xl font-bold text-center mb-1 ${isRtType ? 'text-green-400' : isCsType ? 'text-purple-400' : isNsType ? 'text-red-400' : 'text-yellow-400'}`}>
                 {modalTitle}
               </h2>
               <div className="text-center text-sm text-gray-400 mb-4">
@@ -2726,18 +2809,20 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         }
                       }
                       setSeasonData(prev => ({ ...prev, regionalTournament: rtData }));
-                    } else if (isNsType) {
-                      const nsData = { ...seasonData.nihonSenshuken };
+                    } else if (isNsType || isCsType) {
+                      const dataKey = isCsType ? 'clubSenshuken' : 'nihonSenshuken';
+                      const srcData = { ...seasonData[dataKey] };
+                      const mainBt = isCsType ? 'club_senshuken' : 'nihon_senshuken';
                       let targetBracket, teamDefsMap;
-                      if (tm.bracketType === 'nihon_senshuken') {
-                        targetBracket = nsData.mainTournament?.bracket;
-                        teamDefsMap = nsData.mainTournament?.teamDefsMap;
-                      } else if (tm.bracketType === 'nihon_senshuken_qualifier_losers') {
-                        targetBracket = nsData.qualifiers?.[tm.regionId]?.losersBracket;
-                        teamDefsMap = nsData.qualifiers?.[tm.regionId]?.teamDefsMap;
+                      if (tm.bracketType === mainBt) {
+                        targetBracket = srcData.mainTournament?.bracket;
+                        teamDefsMap = srcData.mainTournament?.teamDefsMap;
+                      } else if (tm.bracketType.includes('losers')) {
+                        targetBracket = srcData.qualifiers?.[tm.regionId]?.losersBracket;
+                        teamDefsMap = srcData.qualifiers?.[tm.regionId]?.teamDefsMap;
                       } else {
-                        targetBracket = nsData.qualifiers?.[tm.regionId]?.mainBracket;
-                        teamDefsMap = nsData.qualifiers?.[tm.regionId]?.teamDefsMap;
+                        targetBracket = srcData.qualifiers?.[tm.regionId]?.mainBracket;
+                        teamDefsMap = srcData.qualifiers?.[tm.regionId]?.teamDefsMap;
                       }
                       if (targetBracket && teamDefsMap) {
                         const def1 = teamDefsMap[tm.match.team1];
@@ -2747,7 +2832,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           recordTournamentResult(targetBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
                         }
                       }
-                      setSeasonData(prev => ({ ...prev, nihonSenshuken: nsData }));
+                      setSeasonData(prev => ({ ...prev, [dataKey]: srcData }));
                     } else {
                       const td = { ...seasonData.toshitaikou };
                       if (tm.type === 'qualifier' && tm.regionId) {

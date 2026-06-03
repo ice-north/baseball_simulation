@@ -833,19 +833,36 @@ export function generateToshitaikou(options = {}) {
 // 地域リーグの順位表上位チームが出場（各地域の枠数に基づく）
 // ============================================================
 
+// 企業チーム向け日本選手権（合計32）
 const SENSHUKEN_SLOTS = {
   hokkaido: 1,
   tohoku: 3,
   hokushinetsu: 2,
   kitakanto: 3,
-  tokyo: 4,
+  tokyo: 3,
+  minamikanto: 3,
+  kanagawa: 2,
+  tokai: 4,
+  kinki: 4,
+  chugoku: 3,
+  shikoku: 1,
+  kyushu: 3,
+};
+
+// クラブチーム向け全日本クラブ野球選手権（合計32）
+const CLUB_SENSHUKEN_SLOTS = {
+  hokkaido: 2,
+  tohoku: 3,
+  hokushinetsu: 3,
+  kitakanto: 3,
+  tokyo: 3,
   minamikanto: 3,
   kanagawa: 3,
-  tokai: 5,
-  kinki: 4,
+  tokai: 2,
+  kinki: 3,
   chugoku: 2,
-  shikoku: 1,
-  kyushu: 1,
+  shikoku: 2,
+  kyushu: 3,
 };
 
 export function generateNihonSenshuken(options = {}) {
@@ -859,11 +876,11 @@ export function generateNihonSenshuken(options = {}) {
 
   for (const regionId of Object.keys(SENSHUKEN_SLOTS)) {
     const allTeams = getTeamsByRegion(regionId);
-    const sorted = [...allTeams].sort((a, b) =>
+    const corporateTeams = allTeams.filter(t => t.type === 'corporate');
+    const sorted = [...corporateTeams].sort((a, b) =>
       (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
     );
-    const maxSenshukenQualifier = 16;
-    const teams = sorted.slice(0, maxSenshukenQualifier);
+    const teams = sorted;
     const slots = SENSHUKEN_SLOTS[regionId] || 1;
 
     const teamNames = teams.map(t => t.displayName || t.name);
@@ -904,7 +921,69 @@ export function generateNihonSenshuken(options = {}) {
   };
 }
 
-export function createSenshukenMainTournament(qualifiers, calendarYear = 2024) {
+// ============================================================
+// 全日本クラブ野球選手権大会（9月予選、10月本戦、クラブチームのみ）
+// ============================================================
+
+export function generateClubSenshuken(options = {}) {
+  const {
+    userTeamName = null,
+    calendarYear = 2024,
+  } = options;
+
+  const qualifiers = {};
+  let userRegionId = null;
+
+  for (const regionId of Object.keys(CLUB_SENSHUKEN_SLOTS)) {
+    const allTeams = getTeamsByRegion(regionId);
+    const clubTeams = allTeams.filter(t => t.type === 'club');
+    const sorted = [...clubTeams].sort((a, b) =>
+      (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
+    );
+    const teams = sorted;
+    const slots = CLUB_SENSHUKEN_SLOTS[regionId] || 1;
+
+    if (teams.length < 2) continue;
+
+    const teamNames = teams.map(t => t.displayName || t.name);
+    const teamDefsMap = {};
+    teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
+
+    const qualifier = {
+      regionId,
+      regionName: TOSHITAIKOU_REGION_NAMES[regionId],
+      slots,
+      teamDefs: teams,
+      teamDefsMap,
+      mainBracket: createBracket(teamNames),
+      losersBracket: null,
+      qualifiedTeams: [],
+      phase: 'main',
+    };
+
+    assignQualifierDates(qualifier, { year: calendarYear, month: 9, day: 1 }, 5);
+
+    if (userTeamName && teamDefsMap[userTeamName]) {
+      userRegionId = regionId;
+    }
+
+    qualifiers[regionId] = qualifier;
+  }
+
+  const userQualifierDone = !userRegionId || qualifiers[userRegionId]?.phase === 'done';
+
+  return {
+    qualifiers,
+    mainTournament: null,
+    userRegionId,
+    userQualifierDone,
+    champion: null,
+    runnerUp: null,
+    phase: 'qualifiers',
+  };
+}
+
+export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, teamType = null) {
   const allQualified = [];
   for (const regionId of Object.keys(qualifiers)) {
     const q = qualifiers[regionId];
@@ -919,7 +998,7 @@ export function createSenshukenMainTournament(qualifiers, calendarYear = 2024) {
     const allTeams = getAllTeamsEffective();
     const usedSet = new Set(allQualified.map(t => t.name));
     const filler = allTeams
-      .filter(t => !usedSet.has(t.displayName || t.name))
+      .filter(t => !usedSet.has(t.displayName || t.name) && (!teamType || t.type === teamType))
       .sort((a, b) => (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3));
     if (filler.length === 0) break;
     const t = filler[0];
@@ -1102,8 +1181,6 @@ export function getRoundName(bracket, roundIdx) {
 // JABA大会に相当。優勝チームは日本選手権の出場権を獲得
 // ============================================================
 
-const REGIONAL_TOURNAMENT_TEAMS = 16;
-
 export function generateRegionalTournament(options = {}) {
   const { userTeamName = null, calendarYear = 2024 } = options;
 
@@ -1115,7 +1192,7 @@ export function generateRegionalTournament(options = {}) {
     const sorted = [...allTeams].sort((a, b) =>
       (RANK_ORDER[a.rank] ?? 3) - (RANK_ORDER[b.rank] ?? 3)
     );
-    const teams = sorted.slice(0, Math.min(REGIONAL_TOURNAMENT_TEAMS, allTeams.length));
+    const teams = sorted;
     const teamNames = teams.map(t => t.displayName || t.name);
     const teamDefsMap = {};
     teams.forEach(t => { teamDefsMap[t.displayName || t.name] = t; });
