@@ -22,6 +22,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [rankingLeague, setRankingLeague] = useState('all');
   const [selectedRegionTab, setSelectedRegionTab] = useState(null);
   const [selectedBracketTab, setSelectedBracketTab] = useState('main');
+  const [selectedRtRegionTab, setSelectedRtRegionTab] = useState(null);
   const [isGeneratingTournament, setIsGeneratingTournament] = useState(false);
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
   const [scoutReportNotifications, setScoutReportNotifications] = useState([]);
@@ -1965,23 +1966,101 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         <div className="flex-1 min-w-[420px]">
           {seasonData.settings?.corporateMode ? (() => {
             const td = seasonData.toshitaikou;
+            const rtData = seasonData.regionalTournament;
             const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
 
+            // 地域トーナメント パネル
+            const rtPanel = rtData?.generated ? (() => {
+              const rtBrackets = rtData.brackets || {};
+              const rtRegionIds = Object.keys(rtBrackets);
+              const rtActiveRegion = selectedRtRegionTab || rtData.userRegionId || rtRegionIds[0];
+              const rtActiveQ = rtBrackets[rtActiveRegion];
+              const rtUserNext = rtActiveRegion === rtData.userRegionId && rtActiveQ
+                ? getUserNextMatch(rtActiveQ.bracket, userTeamName) : null;
+
+              return (
+                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-green-700/30 mb-3">
+                  <h2 className="text-base font-bold text-green-400 flex items-center gap-2 mb-2">
+                    <span>🏟️</span> 地域トーナメント
+                    {rtData.phase === 'done' && <span className="text-xs text-gray-400 ml-auto">大会終了</span>}
+                    {rtData.phase !== 'done' && <span className="text-xs text-blue-400 ml-auto">進行中</span>}
+                  </h2>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {rtRegionIds.map(rid => {
+                      const rq = rtBrackets[rid];
+                      const isUser = rid === rtData.userRegionId;
+                      const isActive = rid === rtActiveRegion;
+                      return (
+                        <button key={rid} onClick={() => setSelectedRtRegionTab(rid)}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                            isActive ? 'bg-green-600 text-white' :
+                            isUser ? 'bg-green-900/50 text-green-300 hover:bg-green-800/50' :
+                            rq.phase === 'done' ? 'bg-gray-700/50 text-gray-500 hover:text-gray-300' :
+                            'bg-gray-700/50 text-gray-400 hover:text-white'
+                          }`}>
+                          {rq.regionName}{isUser ? '*' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {rtActiveQ && (() => {
+                    const bracket = rtActiveQ.bracket;
+                    if (!bracket) return null;
+                    return (
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs text-gray-400">{rtActiveQ.regionName}</span>
+                          {rtActiveQ.phase === 'done' && (
+                            <span className="text-[10px] text-green-400">終了</span>
+                          )}
+                        </div>
+                        {renderBracketWithLines(bracket, rtActiveQ.teamDefsMap)}
+                        {rtActiveQ.champion && (
+                          <div className="mt-1 bg-green-900/30 border border-green-700/50 rounded-lg p-2 text-center">
+                            <div className="text-green-400 font-bold text-sm">優勝: {rtActiveQ.champion}</div>
+                          </div>
+                        )}
+                        {rtUserNext && (() => {
+                          const matchDate = bracket.matchDates?.[rtUserNext.roundIdx]?.[rtUserNext.matchIdx]
+                            || bracket.roundDates?.[rtUserNext.roundIdx];
+                          const matchDateStr = matchDate ? `${matchDate.month}/${matchDate.day}` : '';
+                          return (
+                            <div className="mt-2 bg-green-900/30 border border-green-700/50 rounded-lg p-2">
+                              <div className="text-xs text-green-400 font-bold mb-1 flex items-center gap-1">
+                                <span>{getRoundName(bracket, rtUserNext.roundIdx)} - あなたの試合</span>
+                                {matchDateStr && <span className="text-gray-400 font-normal">({matchDateStr})</span>}
+                              </div>
+                              <span className="text-sm text-white font-bold">
+                                {userTeamName} vs {rtUserNext.match.team1 === userTeamName ? rtUserNext.match.team2 : rtUserNext.match.team1}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })() : null;
+
             if (!td || !td.generated) return (
+              <>
+              {rtPanel}
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-4 shadow-xl border border-gray-700/30">
                 <h2 className="text-base font-bold text-white flex items-center gap-2 mb-2">
                   <span>📅</span> 年間スケジュール
                 </h2>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between text-gray-300"><span>4月〜5月</span><span className="text-gray-500">練習期間</span></div>
-                  <div className="flex justify-between text-gray-300"><span>6月</span><span>都市対抗 地区予選</span></div>
-                  <div className="flex justify-between text-gray-300"><span>7月</span><span className="text-gray-500">練習期間</span></div>
-                  <div className="flex justify-between text-gray-300"><span>8月</span><span>都市対抗 本戦</span></div>
-                  <div className="flex justify-between text-gray-300"><span>9月〜10月</span><span className="text-gray-500">練習期間</span></div>
-                  <div className="flex justify-between text-gray-300"><span>10月</span><span>日本選手権 地区予選</span></div>
-                  <div className="flex justify-between text-gray-300"><span>11月</span><span>日本選手権 本戦</span></div>
+                  <div className="flex justify-between text-gray-300"><span>4月〜5月</span><span>地域トーナメント</span></div>
+                  <div className="flex justify-between text-gray-300"><span>5月〜6月</span><span>都市対抗 地区予選</span></div>
+                  <div className="flex justify-between text-gray-300"><span>7月</span><span>都市対抗 本戦</span></div>
+                  <div className="flex justify-between text-gray-300"><span>9月</span><span>日本選手権/クラブ選手権 地区予選</span></div>
+                  <div className="flex justify-between text-gray-300"><span>10月</span><span>日本選手権/クラブ選手権 本戦</span></div>
+                  <div className="flex justify-between text-gray-300"><span>10月</span><span>NPBドラフト</span></div>
+                  <div className="flex justify-between text-gray-300"><span>11月</span><span>退団・スカウト</span></div>
                 </div>
               </div>
+              </>
             );
 
             // 本戦表示（進行中 or 終了）
@@ -2113,8 +2192,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 );
               })() : null;
 
-              if (td.mainDone) return <>{mainContent}{nsPanel}</>;
-              if (td.qualifiersDone) return <>{mainContent}{nsPanel}</>;
+              if (td.mainDone) return <>{rtPanel}{mainContent}{nsPanel}</>;
+              if (td.qualifiersDone) return <>{rtPanel}{mainContent}{nsPanel}</>;
             }
 
             // 予選トーナメント表示（タブ切り替え）
@@ -2133,6 +2212,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const userNextMatchBracket = userNextMatchMain ? activeQ?.mainBracket : activeQ?.losersBracket;
 
             return (
+              <>
+              {rtPanel}
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30">
                 <h2 className="text-base font-bold text-blue-400 flex items-center gap-2 mb-2">
                   <span>⚾</span> 都市対抗 地区予選
@@ -2228,6 +2309,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   );
                 })()}
               </div>
+              </>
             );
           })() : (() => {
             const renderStandingsTable = (leagueStandings, title, titleColor) => {
