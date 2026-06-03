@@ -693,9 +693,6 @@ export const initializeCorporateGame = (teamDef) => {
     WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
   }
 
-  // 地域リーグ生成
-  const regionalLeague = generateRegionalLeague(userTeamName, userRegion, allTeamDefs);
-
   // 独立リーグ4つも生成
   initializeIndependentLeagues(null, allTeamNames);
 
@@ -707,7 +704,6 @@ export const initializeCorporateGame = (teamDef) => {
 
   return {
     userTeamName, allTeamNames, roster: userRoster, staff: userStaff,
-    regionalLeague,
   };
 };
 

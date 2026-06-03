@@ -12,7 +12,7 @@ import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, process
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
-import { generateRegionalLeague, updateAllTeamReputations, advanceSponsors } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, advanceSponsors } from '../corporate/corporateInit.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience, applyMotivationEffect, applyBatteryMentalEffect } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
@@ -1062,23 +1062,8 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 社会人モード: 地域リーグを再生成
   if (seasonData.settings?.corporateMode) {
-    const userTeamName = Object.keys(teamsAfterRetirement)[0];
-    const userRegion = TEAMS_DATA[userTeamName]?.corporateData?.region;
-    if (userRegion) {
-      const allDefs = Object.values(TEAMS_DATA).map(t => ({
-        name: t.name, displayName: t.name, region: t.corporateData?.region,
-        rank: t.corporateData?.rank, type: t.corporateData?.type,
-      })).filter(d => d.region);
-      const rl = generateRegionalLeague(userTeamName, userRegion, allDefs);
-      newSeasonData.schedule = rl.schedule;
-      newSeasonData.standings = initializeStandings(rl.leagueTeams);
-      newSeasonData.settings.teamNames = rl.leagueTeams;
-      newSeasonData.settings.teamsCount = rl.leagueTeams.length;
-      newSeasonData.settings.gamesPerSeason = rl.gamesPerSeason;
-    } else {
-      newSeasonData.schedule = [];
-      newSeasonData.standings = initializeStandings(Object.keys(teamsAfterRetirement));
-    }
+    newSeasonData.schedule = [];
+    newSeasonData.standings = {};
   } else {
     // 独立リーグモード: スケジュールはレギュレーション設定後に生成
     const teams = Object.keys(teamsAfterRetirement);

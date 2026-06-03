@@ -1,6 +1,6 @@
 import React from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations } from '../teams-data.js';
-import { SEASON_PHASES, createSeasonData, initializeStandings } from '../season/seasonManager.js';
+import { SEASON_PHASES, createSeasonData } from '../season/seasonManager.js';
 import { REGULATION_PRESETS } from '../season/regulationSettings.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
@@ -146,30 +146,28 @@ const GameFlowScreens = ({
         setGameFlowState('corporate_loading');
         setTimeout(() => {
           const result = initializeCorporateGame(team);
-          const rl = result.regionalLeague;
-          const leagueTeams = rl.leagueTeams;
 
           setLeagueConfig({
-            format: 'single',
-            teamsPerLeague: leagueTeams.length,
-            leagues: [{ name: '地域リーグ', teams: leagueTeams }]
+            format: 'tournament',
+            teamsPerLeague: result.allTeamNames.length,
+            leagues: [{ name: '社会人野球', teams: [result.userTeamName] }]
           });
 
           const newSeasonData = createSeasonData(1);
           newSeasonData.settings = {
-            teamsCount: leagueTeams.length,
-            teamNames: leagueTeams,
-            teamAbbreviations: leagueTeams.map(n => n.length <= 3 ? n : (/^[A-Za-z]/.test(n) ? n.slice(0, 3).toUpperCase() : n.slice(0, 3))),
-            gamesPerSeason: rl.gamesPerSeason,
+            teamsCount: result.allTeamNames.length,
+            teamNames: [result.userTeamName],
+            teamAbbreviations: [result.userTeamName.slice(0, 3)],
+            gamesPerSeason: 0,
             useDH: true,
-            leagueFormat: 'single',
+            leagueFormat: 'tournament',
             corporateMode: true,
             corporateTeamId: team.id,
             allCorporateTeamNames: result.allTeamNames,
           };
 
-          newSeasonData.schedule = rl.schedule;
-          newSeasonData.standings = initializeStandings(leagueTeams);
+          newSeasonData.schedule = [];
+          newSeasonData.standings = {};
           setSeasonData(newSeasonData);
           setGameFlowState('corporate_camp');
         }, 50);
