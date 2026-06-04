@@ -18,11 +18,12 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
   const [candidates, setCandidates] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [aiResults, setAiResults] = useState(null);
-  const [phase, setPhase] = useState('scout'); // 'scout' → 'negotiating' → 'confirmed'
+  const [phase, setPhase] = useState('scout'); // 'scout' → 'results' → 'confirmed'
   const [negotiationResults, setNegotiationResults] = useState([]);
+  const [allResults, setAllResults] = useState([]); // 全ラウンドの結果
   const [detailPlayer, setDetailPlayer] = useState(null);
   const [, setRefreshTick] = useState(0);
-  const maxRecruit = 3;
+  const [sortKey, setSortKey] = useState('rate'); // 'rate', 'ability', 'age', 'growth'
 
   useEffect(() => {
     if (candidates.length > 0) return;
@@ -34,7 +35,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
   const toggleSelect = (playerId) => {
     if (selectedIds.includes(playerId)) {
       setSelectedIds(selectedIds.filter(id => id !== playerId));
-    } else if (selectedIds.length < maxRecruit) {
+    } else {
       setSelectedIds([...selectedIds, playerId]);
     }
   };
@@ -61,10 +62,24 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
     return <span className="text-gray-400">{label}<span className={`font-bold ml-0.5 ${getAbilityColor(numVal)}`}>{val}{label === '球速' ? 'km' : ''}</span></span>;
   };
 
-  const handleConfirm = () => {
-    const year = seasonData?.year || 1;
-    const results = [];
+  const getStrategyLabel = (strat) => {
+    if (strat === 'ability') return '実力派';
+    if (strat === 'negotiable') return '交渉◎';
+    if (strat === 'growth') return '将来性';
+    if (strat === 'hidden') return '掘り出し';
+    return '';
+  };
 
+  const getStrategyColor = (strat) => {
+    if (strat === 'ability') return 'bg-red-900/40 text-red-400';
+    if (strat === 'negotiable') return 'bg-green-900/40 text-green-400';
+    if (strat === 'growth') return 'bg-blue-900/40 text-blue-400';
+    if (strat === 'hidden') return 'bg-purple-900/40 text-purple-400';
+    return 'bg-gray-700 text-gray-400';
+  };
+
+  const handleNegotiate = () => {
+    const results = [];
     selectedIds.forEach(id => {
       const player = candidates.find(c => c.id === id);
       if (player) {
@@ -72,11 +87,30 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
         results.push({ player, ...result });
       }
     });
-
     setNegotiationResults(results);
+    setAllResults(prev => [...prev, ...results]);
+    // 交渉済み候補を一覧から除外
+    const negotiatedIds = new Set(selectedIds);
+    setCandidates(prev => prev.filter(c => !negotiatedIds.has(c.id)));
+    setSelectedIds([]);
+    setPhase('results');
+  };
+
+  const handleContinue = () => {
+    // まだ候補が残っていれば追加交渉可能
+    if (candidates.length > 0) {
+      setPhase('scout');
+      setNegotiationResults([]);
+    } else {
+      handleFinalize();
+    }
+  };
+
+  const handleFinalize = () => {
+    const year = seasonData?.year || 1;
     const aiRes = processAIScoutRecruitment(TEAMS_DATA, userTeamName, year);
     setAiResults(aiRes);
-    setPhase('negotiating');
+    setPhase('confirmed');
   };
 
   const handleSkip = () => {
@@ -91,16 +125,33 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
   const reputation = teamData?.corporateData?.reputation || 0;
   const rank = teamData?.corporateData?.rank || 'C';
   const totalAiRecruited = aiResults ? Object.values(aiResults).reduce((sum, arr) => sum + arr.length, 0) : 0;
+  const totalAcquired = allResults.filter(r => r.success).length;
+
+  const sortedCandidates = [...candidates].sort((a, b) => {
+    if (sortKey === 'rate') return (b.recruitRate || 0) - (a.recruitRate || 0);
+    if (sortKey === 'age') return (a.age || 99) - (b.age || 99);
+    if (sortKey === 'growth') return (b.growthPotential || 1) - (a.growthPotential || 1);
+    // ability (default)
+    const sa = a.position === 'pitcher'
+      ? (a.pitching?.velocity || 0) + (a.pitching?.control || 0)
+      : (a.batting?.meet || 0) + (a.batting?.power || 0) + (a.physical?.speed || 0);
+    const sb = b.position === 'pitcher'
+      ? (b.pitching?.velocity || 0) + (b.pitching?.control || 0)
+      : (b.batting?.meet || 0) + (b.batting?.power || 0) + (b.physical?.speed || 0);
+    return sb - sa;
+  });
 
   // 交渉結果画面
-  if (phase === 'negotiating') {
+  if (phase === 'results') {
     const successes = negotiationResults.filter(r => r.success);
+    const remaining = candidates.length;
 
     return (
       <div className="p-4 bg-gray-900 min-h-screen">
         <h1 className="text-xl font-bold text-white mb-1">交渉結果</h1>
         <p className="text-xs text-gray-500 mb-4">
-          {selectedIds.length}名に打診 → {successes.length}名が入団承諾
+          {negotiationResults.length}名に打診 → {successes.length}名が入団承諾
+          {totalAcquired > 0 && <span className="text-green-400 ml-2">(累計{totalAcquired}名獲得)</span>}
         </p>
 
         {negotiationResults.length > 0 && (
@@ -146,6 +197,49 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
           </div>
         )}
 
+        <div className="flex items-center gap-4">
+          {remaining > 0 && (
+            <button
+              onClick={handleContinue}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-sm"
+            >
+              追加交渉する (残り{remaining}名)
+            </button>
+          )}
+          <button
+            onClick={handleFinalize}
+            className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-bold text-sm"
+          >
+            交渉を終了する
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 最終確認画面
+  if (phase === 'confirmed') {
+    return (
+      <div className="p-4 bg-gray-900 min-h-screen">
+        <h1 className="text-xl font-bold text-white mb-3">スカウト入団完了</h1>
+        {totalAcquired > 0 ? (
+          <div className="mb-4">
+            <p className="text-green-400 text-sm mb-2">今シーズンは{totalAcquired}名を獲得しました</p>
+            <div className="space-y-1">
+              {allResults.filter(r => r.success).map(({ player: p }, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs bg-green-900/20 border border-green-700/30 rounded p-2">
+                  <span className="text-yellow-400 font-bold">{POSITION_NAMES[p.position]}</span>
+                  <span className="text-white font-medium">{p.name}</span>
+                  <span className="text-gray-500">({p.age}歳)</span>
+                  <span className="text-cyan-400">{p._scoutSource}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-gray-400 text-sm mb-4">今シーズンは選手を獲得しませんでした。</p>
+        )}
+
         {totalAiRecruited > 0 && (
           <div className="mb-4">
             <h2 className="text-sm font-bold text-blue-400 mb-2">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
@@ -159,34 +253,8 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
 
         <p className="text-xs text-gray-500 mb-3">
           現在のロスター: {teamData?.players?.length || 0}名
-          {successes.length > 0 && <span className="text-green-400 ml-2">（入団した選手はキャンプから合流します）</span>}
+          {totalAcquired > 0 && <span className="text-green-400 ml-2">（入団した選手はキャンプから合流します）</span>}
         </p>
-        <button
-          onClick={onComplete}
-          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
-        >
-          完了
-        </button>
-      </div>
-    );
-  }
-
-  // スキップ確認画面
-  if (phase === 'confirmed') {
-    return (
-      <div className="p-4 bg-gray-900 min-h-screen">
-        <h1 className="text-xl font-bold text-white mb-3">スカウト入団完了</h1>
-        <p className="text-gray-400 text-sm mb-4">今シーズンは選手を獲得しませんでした。</p>
-        {totalAiRecruited > 0 && (
-          <div className="mb-4">
-            <h2 className="text-sm font-bold text-blue-400 mb-2">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
-            {Object.entries(aiResults).map(([team, players]) => (
-              <div key={team} className="text-xs text-gray-400 mb-1">
-                {team}: {players.map(p => `${p.name}(${POSITION_NAMES[p.position]})`).join('、')}
-              </div>
-            ))}
-          </div>
-        )}
         <button
           onClick={onComplete}
           className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
@@ -202,24 +270,43 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
     <div className="p-3 bg-gray-900 min-h-screen">
       <h1 className="text-xl font-bold text-white mb-1">スカウト交渉 - {seasonData?.year || 1}年目</h1>
       <p className="text-gray-400 text-xs mb-1">
-        シーズン中にスカウトが発見した選手です。最大{maxRecruit}名まで交渉できます。
+        シーズン中にスカウトが発見した選手です。交渉したい選手を選んでください。
         {candidates.length === 0 && 'スカウトを派遣していなかったため、候補選手がいません。'}
       </p>
-      <div className="flex items-center gap-4 text-[10px] text-gray-500 mb-3">
+      <div className="flex items-center gap-4 text-[10px] text-gray-500 mb-2">
         <span>注目度: <span className={reputation >= 50 ? 'text-yellow-400' : 'text-gray-400'}>{reputation}</span></span>
         <span>ランク: <span className="text-white">{rank}</span></span>
         <span>現ロスター: {teamData?.players?.length || 0}名</span>
-        <span>交渉予定: {selectedIds.length}名</span>
+        <span>交渉予定: <span className="text-green-400 font-bold">{selectedIds.length}名</span></span>
+        {totalAcquired > 0 && <span className="text-green-400">獲得済: {totalAcquired}名</span>}
+      </div>
+
+      {/* ソートボタン */}
+      <div className="flex gap-1 mb-2">
+        {[
+          { key: 'rate', label: '成功率順' },
+          { key: 'ability', label: '能力順' },
+          { key: 'age', label: '若い順' },
+          { key: 'growth', label: '成長力順' },
+        ].map(s => (
+          <button key={s.key}
+            onClick={() => setSortKey(s.key)}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+              sortKey === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-white'
+            }`}
+          >{s.label}</button>
+        ))}
       </div>
 
       {/* 候補者一覧 */}
       <div className="space-y-1.5 mb-4">
-        {candidates.map(player => {
+        {sortedCandidates.map(player => {
           const selected = selectedIds.includes(player.id);
           const sa = player.scoutedAbilities || {};
           const revealLevel = player._revealLevel || 0;
           const isPitcher = player.position === 'pitcher';
           const rivals = player._rivals || [];
+          const rate = player.recruitRate || 0;
 
           return (
             <div
@@ -245,8 +332,10 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                   <span className="text-white font-medium">{player.name}</span>
                   <span className="text-gray-500">{player.age}歳</span>
                   <span className="text-cyan-400 text-[10px]">{player._scoutSource}</span>
-                  {player._poolRef?.teamName && (
-                    <span className="text-emerald-400 text-[10px]">所属:{player._poolRef.teamName}</span>
+                  {player._strategy && (
+                    <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${getStrategyColor(player._strategy)}`}>
+                      {getStrategyLabel(player._strategy)}
+                    </span>
                   )}
                   {(player.fame || 0) > 0 && (
                     <span className={`px-1 py-0.5 rounded text-[10px] font-bold ${
@@ -255,23 +344,11 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                       知名度{player.fame}
                     </span>
                   )}
-                  <span className={`text-[10px] px-1 py-0.5 rounded font-bold ${
-                    revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
-                    revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
-                    'bg-gray-700 text-gray-400'
-                  }`}>
-                    {['概要', '詳細', '完全'][revealLevel]}
-                  </span>
 
-                  {/* ライバル表示 */}
-                  {rivals.length > 0 && (
-                    <span className="text-[10px] text-red-400 font-bold ml-auto">
-                      競合{rivals.length}社 ({rivals.map(r => r.rank).join(',')})
-                    </span>
-                  )}
-                  {rivals.length === 0 && (
-                    <span className="text-[10px] text-gray-600 ml-auto">競合なし</span>
-                  )}
+                  {/* 成功率 */}
+                  <span className={`ml-auto px-1.5 py-0.5 rounded text-[10px] font-bold ${getRateColor(rate)} bg-gray-700/50`}>
+                    {getRateLabel(rate)} {rate}%
+                  </span>
                 </div>
 
                 {/* 能力値 */}
@@ -287,6 +364,12 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                     {renderAbility('走力', sa.physical?.speed)}
                     {renderAbility('守備', sa.fielding?.defense)}
                   </>)}
+                  {/* ライバル */}
+                  {rivals.length > 0 && (
+                    <span className="text-[10px] text-red-400 font-bold">
+                      競合{rivals.length}社 ({rivals.map(r => r.rank).join(',')})
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -301,7 +384,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                     }}
                     className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
                   >
-                    🔍 {revealLevel === 0 ? '詳細を調べる' : '全能力を調べる'}
+                    {revealLevel === 0 ? '詳細を調べる' : '全能力を調べる'}
                   </button>
                 )}
                 <button
@@ -310,6 +393,13 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
                 >
                   {detailPlayer?.id === player.id ? '閉じる' : '詳細情報'}
                 </button>
+                <span className={`text-[10px] px-1 py-0.5 rounded font-bold ${
+                  revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
+                  revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
+                  'bg-gray-700 text-gray-400'
+                }`}>
+                  {['概要', '詳細', '完全'][revealLevel]}
+                </span>
               </div>
 
               {/* 詳細パネル */}
@@ -371,7 +461,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, onComplete }) => {
 
       <div className="flex items-center gap-4">
         <button
-          onClick={handleConfirm}
+          onClick={handleNegotiate}
           disabled={selectedIds.length === 0}
           className={`px-5 py-2 rounded font-bold text-sm ${
             selectedIds.length > 0

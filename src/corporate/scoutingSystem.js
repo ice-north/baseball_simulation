@@ -656,6 +656,8 @@ export function investigatePlayer(player) {
 
 /**
  * スカウト派遣結果を生成（スタッフ個人の能力で判定）
+ * 派遣回数に関わらず安定した候補数を返す。
+ * 毎回異なる視点（能力重視/交渉容易/将来性/掘り出し物）でピックする。
  */
 function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
   const scoutEye = staffScoutEye || 30;
@@ -675,27 +677,73 @@ function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
 
   if (pool.length === 0) return [];
 
-  const candidateCount = 3 + Math.floor(scoutEye / 25); // 3〜7人
+  const candidateCount = Math.min(pool.length, 5 + Math.floor(scoutEye / 20)); // 5〜10人
 
-  const scored = pool.map(entry => {
-    const base = evaluatePlayerScore(entry.player);
-    const fame = entry.player.fame || 0;
-    const noise = (Math.random() - 0.5) * 25;
-    const repBonus = (reputationMult - 1.0) * 15;
-    const fameDiscover = fame < 30 ? (30 - fame) * 0.2 : -(fame - 30) * 0.1;
-    const discoveryPenalty = -((100 - fame) / 100) * ((100 - scoutEye) * 0.2);
-    return { ...entry, score: base + noise + repBonus + fameDiscover + discoveryPenalty };
+  // 既にスカウト済みのIDを除外
+  const existingIds = new Set();
+  (teamData.corporateData?.scoutMissions || []).forEach(m => {
+    if (m.results) m.results.forEach(p => existingIds.add(p.id));
   });
-  scored.sort((a, b) => b.score - a.score);
+  const freshPool = pool.filter(e => !existingIds.has(e.player.id));
+  const usePool = freshPool.length >= candidateCount ? freshPool : pool;
 
-  const selected = scored.slice(0, candidateCount);
+  // 4つの視点でスコアリングし、各視点から候補を選出
+  const strategies = [
+    { name: 'ability', weight: 0.35, score: (entry) => {
+      const base = evaluatePlayerScore(entry.player);
+      const noise = (Math.random() - 0.5) * 15;
+      return base + noise + (reputationMult - 1.0) * 15;
+    }},
+    { name: 'negotiable', weight: 0.25, score: (entry) => {
+      const base = evaluatePlayerScore(entry.player);
+      const quality = Math.max(0, 80 - base) * 0.5;
+      const age = entry.player.age || 22;
+      const ageBonus = age <= 22 ? 10 : age >= 28 ? -5 : 0;
+      return quality + ageBonus + (Math.random() - 0.5) * 20;
+    }},
+    { name: 'growth', weight: 0.2, score: (entry) => {
+      const gp = entry.player.growthPotential || 1.0;
+      const age = entry.player.age || 22;
+      const youth = Math.max(0, (25 - age) * 5);
+      return gp * 40 + youth + (Math.random() - 0.5) * 20;
+    }},
+    { name: 'hidden', weight: 0.2, score: (entry) => {
+      const base = evaluatePlayerScore(entry.player);
+      const fame = entry.player.fame || 0;
+      const hiddenGem = (100 - fame) * 0.3 + base * 0.3;
+      const eyeBonus = scoutEye * 0.2;
+      return hiddenGem + eyeBonus + (Math.random() - 0.5) * 25;
+    }},
+  ];
 
-  return selected.map(entry => {
+  const selectedMap = new Map();
+  strategies.forEach(strat => {
+    const count = Math.max(1, Math.round(candidateCount * strat.weight));
+    const scored = usePool.map(e => ({ ...e, _stratScore: strat.score(e) }));
+    scored.sort((a, b) => b._stratScore - a._stratScore);
+    for (const entry of scored) {
+      if (selectedMap.size >= candidateCount) break;
+      if (!selectedMap.has(entry.player.id)) {
+        selectedMap.set(entry.player.id, { ...entry, _strategy: strat.name });
+        if ([...selectedMap.values()].filter(e => e._strategy === strat.name).length >= count) break;
+      }
+    }
+  });
+
+  // まだ足りなければ能力順で補充
+  if (selectedMap.size < candidateCount) {
+    const byAbility = usePool.map(e => ({ ...e, _s: evaluatePlayerScore(e.player) + (Math.random() - 0.5) * 20 }));
+    byAbility.sort((a, b) => b._s - a._s);
+    for (const entry of byAbility) {
+      if (selectedMap.size >= candidateCount) break;
+      if (!selectedMap.has(entry.player.id)) selectedMap.set(entry.player.id, entry);
+    }
+  }
+
+  return [...selectedMap.values()].map(entry => {
     const p = JSON.parse(JSON.stringify(entry.player));
     const accuracy = calculateScoutAccuracy(scoutEye);
     p.scoutAccuracy = accuracy;
-    // スカウト眼が高いと初回から多くの情報が判明
-    // 70以上: secondary(主要能力), 90以上: full(全能力)
     const initialStage = scoutEye >= 90 ? 'full' : scoutEye >= 70 ? 'secondary' : 'primary';
     const initialLevel = initialStage === 'full' ? 2 : initialStage === 'secondary' ? 1 : 0;
     p.scoutedAbilities = obscureAbilities(p, accuracy, initialStage);
@@ -703,6 +751,9 @@ function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
     p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear, teamName: entry.teamName };
     p._scoutSource = getSourceLabel(entry);
     p._dispatchTarget = target;
+    p._strategy = entry._strategy;
+    // 交渉成功率を事前計算
+    p.recruitRate = calculateRecruitSuccessRate(p, teamData);
     return p;
   });
 }

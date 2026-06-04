@@ -298,7 +298,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
-    if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT && !isCorporate) {
+    if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('draft');
       return null;
