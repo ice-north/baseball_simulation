@@ -55,6 +55,18 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     }
   }, [processed]);
 
+  // スタッフ転向する選手の追加人件費
+  const conversionSalaryTotal = Object.entries(staffPreviews).reduce((sum, [pid, sp]) => {
+    if (!staffConversions[pid]) return sum;
+    const numPid = parseInt(pid);
+    const decision = playerDecisions[numPid] || playerDecisions[pid] || 'contract';
+    const isAutoRetired = userRetiredIds.has(numPid) || userRetiredIds.has(pid);
+    if (decision === 'retire' || isAutoRetired) {
+      return sum + getStaffSalary(sp);
+    }
+    return sum;
+  }, 0);
+
   // 契約中の選手の総年俸（解雇/引退でない選手）
   const projectedPlayerSalary = activePlayers.reduce((sum, p) => {
     const decision = playerDecisions[p.id];
@@ -133,18 +145,6 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       setStaffPreviews({ ...staffPreviews, [playerId]: preview });
     }
   };
-
-  // スタッフ転向する選手の追加人件費
-  const conversionSalaryTotal = Object.entries(staffPreviews).reduce((sum, [pid, sp]) => {
-    if (!staffConversions[pid]) return sum;
-    const numPid = parseInt(pid);
-    const decision = playerDecisions[numPid] || playerDecisions[pid] || 'contract';
-    const isAutoRetired = userRetiredIds.has(numPid) || userRetiredIds.has(pid);
-    if (decision === 'retire' || isAutoRetired) {
-      return sum + getStaffSalary(sp);
-    }
-    return sum;
-  }, 0);
 
   const handleAcceptSponsor = (offer, index) => {
     acceptSponsor(cd, offer);

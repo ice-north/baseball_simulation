@@ -126,7 +126,7 @@ const RANK_STAFF_CONFIG = {
   D: { coach: 1, manager: 0, trainer: 0 },
 };
 
-const BUDGET_BY_RANK = { S: 24000, A: 21000, B: 18000, C: 15000, D: 12000 };
+export const BUDGET_BY_RANK = { S: 24000, A: 21000, B: 18000, C: 15000, D: 12000 };
 
 // ランク×種別ごとのロースターサイズ [min, max]
 const ROSTER_SIZE = {
@@ -662,7 +662,7 @@ export const initializeCorporateGame = (teamDef) => {
       corporateTeamId: def.id,
       corporateData: {
         rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: def.budget || BUDGET_BY_RANK[def.rank] || 35,
+        budget: def.budget || BUDGET_BY_RANK[def.rank] || 12000,
         staff,
         reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
         proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
@@ -733,7 +733,7 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
       corporateTeamId: def.id,
       corporateData: {
         rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: def.budget || BUDGET_BY_RANK[def.rank] || 35,
+        budget: def.budget || BUDGET_BY_RANK[def.rank] || 12000,
         staff,
         reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
         proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,

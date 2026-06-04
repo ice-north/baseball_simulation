@@ -1694,7 +1694,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           filter={player ? 'url(#glow)' : undefined}
                           r={markerSize}>
                           <animate attributeName="r" from="0" to={markerSize} dur="0.4s" begin={animDelay} fill="freeze"
-                            calcMode="spline" keySplines="0.34 1.56 0.64 1" />
+                            calcMode="spline" keySplines="0.34 0.80 0.64 1" />
                         </circle>
                         {/* マーカーのハイライト（立体感） */}
                         {player && (

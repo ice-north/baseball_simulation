@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus } from '../corporate/staffData.js';
-import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS } from '../corporate/corporateInit.js';
+import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
@@ -110,7 +110,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const tabs = [
     { id: 'staff', label: 'スタッフ' },
     { id: 'scout', label: 'スカウト状況' },
-    { id: 'finance', label: '財務・注目度' },
+    { id: 'finance', label: '予算' },
   ];
 
   return (
@@ -591,10 +591,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
         <div>
           {/* 予算サマリー */}
           <div className="bg-gray-800 rounded-lg p-4 mb-4">
-            <h2 className="text-sm font-bold text-gray-300 mb-3">予算</h2>
+            <h2 className="text-sm font-bold text-gray-300 mb-3">{seasonData?.year || 1}年目 予算</h2>
             <div className="grid grid-cols-5 gap-2 mb-3">
               <div className="bg-gray-750 rounded p-2">
-                <div className="text-[10px] text-gray-400 mb-1">基本予算</div>
+                <div className="text-[10px] text-gray-400 mb-1">基本予算 <span className="text-gray-600">({cd.rank}ランク)</span></div>
                 <div className="text-sm font-bold text-white">{baseBudget.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
               </div>
               <div className="bg-gray-750 rounded p-2">
@@ -625,6 +625,12 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                   {budgetBalance >= 0 ? '+' : ''}{budgetBalance.toLocaleString()}<span className="text-sm text-gray-400">万円</span>
                 </div>
               </div>
+            </div>
+            <div className="text-[10px] text-gray-500 flex gap-3 mt-1">
+              <span>ランク別基本予算:</span>
+              {Object.entries(BUDGET_BY_RANK).map(([r, b]) => (
+                <span key={r} className={r === cd.rank ? 'text-yellow-400 font-bold' : ''}>{r}: {(b / 10000).toFixed(1)}億</span>
+              ))}
             </div>
           </div>
 
@@ -680,9 +686,37 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <div className="text-lg font-bold text-white">{staffSalaryTotal.toLocaleString()}<span className="text-sm text-gray-400">万円</span></div>
               </div>
             </div>
+            {/* スタッフ年俸一覧 */}
+            <details className="mt-2">
+              <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-300">スタッフ年俸一覧 ({staff.length}名)</summary>
+              <div className="mt-2 max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-gray-500 border-b border-gray-700">
+                    <tr>
+                      <th className="text-left py-1 px-1">名前</th>
+                      <th className="text-center py-1 px-1 w-12">役職</th>
+                      <th className="text-center py-1 px-1 w-8">齢</th>
+                      <th className="text-center py-1 px-1 w-10">等級</th>
+                      <th className="text-right py-1 px-1 w-16">年俸</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...staff].sort((a, b) => getStaffSalary(b) - getStaffSalary(a)).map((s, i) => (
+                      <tr key={s.id || i} className="border-b border-gray-800 hover:bg-gray-750">
+                        <td className="py-0.5 px-1 text-white">{s.name}</td>
+                        <td className="py-0.5 px-1 text-center text-cyan-400">{roleLabel(s.role)}</td>
+                        <td className="py-0.5 px-1 text-center text-gray-400">{s.age}</td>
+                        <td className={`py-0.5 px-1 text-center font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label || s.grade}</td>
+                        <td className="py-0.5 px-1 text-right text-yellow-400">{getStaffSalary(s).toLocaleString()}万</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
             {/* 選手年俸一覧 */}
             <details className="mt-2">
-              <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-300">選手年俸一覧</summary>
+              <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-300">選手年俸一覧 ({players.length}名)</summary>
               <div className="mt-2 max-h-64 overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead className="text-gray-500 border-b border-gray-700">
@@ -698,7 +732,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       <tr key={p.id} className="border-b border-gray-800 hover:bg-gray-750">
                         <td className="py-0.5 px-1 text-white">{p.name}</td>
                         <td className="py-0.5 px-1 text-center text-gray-400">{p.age}</td>
-                        <td className="py-0.5 px-1 text-center text-gray-400">{p.position === 'pitcher' ? '投' : (p.position || '野')}</td>
+                        <td className="py-0.5 px-1 text-center text-gray-400">{p.position === 'pitcher' ? '投' : (POSITION_NAMES[p.position] || '野')}</td>
                         <td className="py-0.5 px-1 text-right text-yellow-400">{getPlayerSalary(p).toLocaleString()}万</td>
                       </tr>
                     ))}
