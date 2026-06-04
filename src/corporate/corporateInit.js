@@ -251,34 +251,48 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   const arsenalMult = RANK_ARSENAL_MULT[rank] || 1.0;
 
   // ランク別能力スケーリング（乗算式）
-  // 社会人選手は高校野球経験者なので高校生より上、プロ未満
-  // D=クラブチーム(高校強豪卒レベル), C=育成型, B=中堅, A=強豪, S=プロ予備軍
-  const RANK_SCALE = { S: 1.10, A: 1.00, B: 0.92, C: 0.80, D: 0.68 };
-  const scale = RANK_SCALE[rank] || 0.80;
+  // キャップ付近に集中しないよう、スケール係数はキャップの60-70%あたりを中央に設定
+  // S: 中央45前後(cap72), A: 中央42(cap66), B: 中央37(cap60), C: 中央32(cap52), D: 中央27(cap45)
+  const RANK_SCALE = { S: 0.95, A: 0.88, B: 0.80, C: 0.70, D: 0.58 };
+  const scale = RANK_SCALE[rank] || 0.70;
 
-  const scaleAndJitter = (val, jitter = 3) =>
-    clamp(Math.round(val * scale) + randInt(-jitter, jitter), 1, 99);
+  // 三角分布ジッター（2つのrandIntの合算で中央寄り正規分布に近似）
+  const scaleAndJitter = (val, jitter = 5) => {
+    const j = randInt(-jitter, jitter) + randInt(-jitter, jitter);
+    return clamp(Math.round(val * scale) + j, 1, 99);
+  };
 
   candidates.forEach(p => {
-    // 個人差: 各能力に独立したジッター（共有talent廃止で二極化を解消）
-    // 投手もベースが既に低い(meet15-40等)ので野手と同じスケールを適用
-    p.batting.meet = scaleAndJitter(p.batting.meet, 4);
-    p.batting.power = scaleAndJitter(p.batting.power, 4);
-    p.batting.eye = scaleAndJitter(p.batting.eye, 3);
-    p.batting.steal = scaleAndJitter(p.batting.steal, 4);
-    p.physical.speed = scaleAndJitter(p.physical.speed, 4);
-    p.physical.arm = scaleAndJitter(p.physical.arm, 4);
-    p.fielding.defense = scaleAndJitter(p.fielding.defense, 4);
+    p.batting.meet = scaleAndJitter(p.batting.meet, 6);
+    p.batting.power = scaleAndJitter(p.batting.power, 6);
+    p.batting.eye = scaleAndJitter(p.batting.eye, 5);
+    p.batting.steal = scaleAndJitter(p.batting.steal, 5);
+    p.physical.speed = scaleAndJitter(p.physical.speed, 5);
+    p.physical.arm = scaleAndJitter(p.physical.arm, 5);
+    p.fielding.defense = scaleAndJitter(p.fielding.defense, 5);
 
     adjustCorporateAge(p, isIndependent);
 
     if (p.position === 'pitcher') {
       // 球速: ランク補正 + 個人差（三角分布 -12〜+12）
       const velJitter = randInt(-6, 6) + randInt(-6, 6);
-      p.pitching.velocity = clamp(p.pitching.velocity + velReduction + velJitter, velFloor, velCap);
-      // 制球: ランク補正 + 個人差（-10〜+10）、ランク別キャップ適用
-      const ctrlJitter = randInt(-7, 7) + randInt(-3, 3);
-      p.pitching.control = clamp(p.pitching.control + controlOffset + ctrlJitter, 1, controlCap);
+      const rawVel = p.pitching.velocity + velReduction + velJitter;
+      // ソフトキャップ: キャップ超過分を50-80%カットして自然な分布に
+      if (rawVel > velCap) {
+        const velExcess = rawVel - velCap;
+        p.pitching.velocity = clamp(velCap + Math.round(velExcess * (0.2 + Math.random() * 0.3)), velFloor, velCap + 3);
+      } else {
+        p.pitching.velocity = clamp(rawVel, velFloor, velCap);
+      }
+      // 制球: ランク補正 + 個人差（三角分布 -10〜+10）
+      const ctrlJitter = randInt(-5, 5) + randInt(-5, 5);
+      const rawCtrl = p.pitching.control + controlOffset + ctrlJitter;
+      if (rawCtrl > controlCap) {
+        const ctrlExcess = rawCtrl - controlCap;
+        p.pitching.control = clamp(controlCap + Math.round(ctrlExcess * (0.2 + Math.random() * 0.3)), 1, controlCap + 3);
+      } else {
+        p.pitching.control = clamp(rawCtrl, 1, controlCap);
+      }
       // 変化球: ランク倍率 + 個人差
       if (p.pitching.arsenal) {
         for (const pitch of p.pitching.arsenal) {
@@ -423,18 +437,23 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     }
   }
 
-  // スター/プロ注目も含め制球上限を強制（通常cap + 8が絶対上限）
+  // ソフトキャップ: キャップを超過した分を確率的に削減（上限に張り付かない自然な分布）
   const ctrlMax = controlCap + 8;
   const batCap = RANK_BATTING_CAP[rank] || 52;
+  const softCap = (val, cap) => {
+    if (val <= cap) return val;
+    const excess = val - cap;
+    // 超過分の50-80%をカット（ランダム）。一部のスター級は突き抜ける
+    const cut = Math.round(excess * (0.5 + Math.random() * 0.3));
+    return cap + Math.max(0, excess - cut);
+  };
   roster.forEach(p => {
     if (p.position === 'pitcher') {
       p.pitching.control = Math.min(p.pitching.control, ctrlMax);
     }
-    // 打撃能力キャップ（初期生成でワールドクラスにならないよう制限）
-    p.batting.meet = Math.min(p.batting.meet, batCap);
-    p.batting.power = Math.min(p.batting.power, batCap);
-    p.batting.eye = Math.min(p.batting.eye, batCap);
-    // 打撃能力フロア（Dランクでも高校野球経験者なので一桁はありえない）
+    p.batting.meet = softCap(p.batting.meet, batCap);
+    p.batting.power = softCap(p.batting.power, batCap);
+    p.batting.eye = softCap(p.batting.eye, batCap);
     const batFloor = p.position === 'pitcher' ? 10 : 15;
     p.batting.meet = Math.max(p.batting.meet, batFloor);
     p.batting.power = Math.max(p.batting.power, batFloor);
@@ -662,7 +681,7 @@ export const initializeCorporateGame = (teamDef) => {
       corporateTeamId: def.id,
       corporateData: {
         rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: def.budget || BUDGET_BY_RANK[def.rank] || 12000,
+        budget: BUDGET_BY_RANK[def.rank] || 12000,
         staff,
         reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
         proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
@@ -733,7 +752,7 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
       corporateTeamId: def.id,
       corporateData: {
         rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: def.budget || BUDGET_BY_RANK[def.rank] || 12000,
+        budget: BUDGET_BY_RANK[def.rank] || 12000,
         staff,
         reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
         proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
