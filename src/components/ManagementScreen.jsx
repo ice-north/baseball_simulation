@@ -128,6 +128,7 @@ const ManagementScreen = ({
     nearMissPlayers={draftResults?.nearMissPlayers || []}
     proBonus={draftResults?.proBonus || []}
     draftBySource={draftResults?.draftBySource || null}
+    userTeamName={userTeamName}
     onContinue={() => {
       setDraftResults(null);
       setManagementView('dateprogress');
