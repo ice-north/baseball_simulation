@@ -4,18 +4,18 @@ import { exportDraftedPlayers } from '../game/saveSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const NPB_TEAMS_GRID = [
-  { name: '楽天ゴールデンイーグルス', short: '楽天', color: '#8B0000', logo: '🦅' },
+  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', logo: '🦅' },
   { name: '阪神タイガース', short: '阪神', color: '#FFD700', logo: '🐯' },
-  { name: '千葉ロッテマリーンズ', short: 'ロッテ', color: '#000080', logo: '🐟' },
-  { name: '横浜DeNAベイスターズ', short: 'DeNA', color: '#003DA5', logo: '⭐' },
+  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', logo: '🐟' },
+  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', logo: '⭐' },
   { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', logo: '🐃' },
   { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', logo: '🐉' },
-  { name: '日本ハムファイターズ', short: '日本ハム', color: '#004080', logo: '🐻' },
-  { name: '読売ジャイアンツ', short: '巨人', color: '#FF6600', logo: '🏟️' },
-  { name: 'ソフトバンクホークス', short: 'ソフトバンク', color: '#DAA520', logo: '🦅' },
-  { name: '広島東洋カープ', short: '広島', color: '#CC0000', logo: '🎏' },
-  { name: '西武ライオンズ', short: '西武', color: '#003366', logo: '🦁' },
-  { name: 'ヤクルトスワローズ', short: 'ヤクルト', color: '#006633', logo: '🐦' },
+  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', logo: '🐻' },
+  { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', logo: '🏟️' },
+  { name: 'ソフトバンクホークス', short: '福岡ソフトバンク', color: '#DAA520', logo: '🦅' },
+  { name: '広島東洋カープ', short: '広島東洋', color: '#CC0000', logo: '🎏' },
+  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', logo: '🦁' },
+  { name: 'ヤクルトスワローズ', short: '東京ヤクルト', color: '#006633', logo: '🐦' },
 ];
 
 const ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位', 'ドラフト4位', 'ドラフト5位', 'ドラフト6位', '育成指名'];

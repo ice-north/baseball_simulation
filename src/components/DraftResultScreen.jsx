@@ -2,19 +2,38 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const NPB_TEAMS_INFO = [
-  { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', textColor: '#000' },
-  { name: '阪神タイガース', short: '阪神', color: '#FFD700', textColor: '#000' },
-  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', textColor: '#fff' },
-  { name: '広島東洋カープ', short: '広島東洋', color: '#CC0000', textColor: '#fff' },
-  { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', textColor: '#fff' },
-  { name: 'ヤクルトスワローズ', short: '東京ヤクルト', color: '#006633', textColor: '#fff' },
-  { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', textColor: '#fff' },
-  { name: 'ソフトバンクホークス', short: 'ソフトバンク', color: '#DAA520', textColor: '#000' },
-  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', textColor: '#fff' },
-  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', textColor: '#fff' },
-  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', textColor: '#fff' },
-  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', textColor: '#fff' },
+  { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', textColor: '#000', league: 'ce' },
+  { name: '阪神タイガース', short: '阪神', color: '#FFD700', textColor: '#000', league: 'ce' },
+  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', textColor: '#fff', league: 'ce' },
+  { name: '広島東洋カープ', short: '広島東洋', color: '#CC0000', textColor: '#fff', league: 'ce' },
+  { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', textColor: '#fff', league: 'ce' },
+  { name: 'ヤクルトスワローズ', short: '東京ヤクルト', color: '#006633', textColor: '#fff', league: 'ce' },
+  { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', textColor: '#fff', league: 'pa' },
+  { name: 'ソフトバンクホークス', short: '福岡ソフトバンク', color: '#DAA520', textColor: '#000', league: 'pa' },
+  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', textColor: '#fff', league: 'pa' },
+  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', textColor: '#fff', league: 'pa' },
+  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', textColor: '#fff', league: 'pa' },
+  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', textColor: '#fff', league: 'pa' },
 ];
+
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+const buildGridOrder = () => {
+  const ce = shuffle(NPB_TEAMS_INFO.filter(t => t.league === 'ce'));
+  const pa = shuffle(NPB_TEAMS_INFO.filter(t => t.league === 'pa'));
+  const grid = [];
+  for (let row = 0; row < 3; row++) {
+    grid.push(ce[row], pa[row], ce[row + 3], pa[row + 3]);
+  }
+  return grid;
+};
 
 const ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位', 'ドラフト4位', 'ドラフト5位', 'ドラフト6位', '育成指名'];
 
@@ -67,8 +86,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
   const [revealedTeams, setRevealedTeams] = useState(new Set());
   const [isRevealing, setIsRevealing] = useState(false);
   const [roundComplete, setRoundComplete] = useState(false);
-  // 1巡目: 'revealing' → 'allRevealed' → 'lotteryShown' → 'complete'
   const [firstRoundPhase, setFirstRoundPhase] = useState('revealing');
+  const [gridOrder] = useState(() => buildGridOrder());
   const timerRef = useRef(null);
   const revealedRef = useRef(revealedTeams);
   revealedRef.current = revealedTeams;
@@ -455,7 +474,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
       </div>
 
       <div className="max-w-5xl mx-auto grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
-        {NPB_TEAMS_INFO.map(team => renderCard(team))}
+        {gridOrder.map(team => renderCard(team))}
       </div>
 
       {renderLotteryPanel()}
@@ -470,6 +489,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
 };
 
 const DraftTeamSummaryScreen = ({ draftedPlayers, onContinue }) => {
+  const [summaryGrid] = useState(() => buildGridOrder());
   const teamPicks = useMemo(() => {
     const map = {};
     NPB_TEAMS_INFO.forEach(t => { map[t.name] = []; });
@@ -487,7 +507,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, onContinue }) => {
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">全球団指名一覧</h1>
       </div>
       <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {NPB_TEAMS_INFO.map(team => {
+        {summaryGrid.map(team => {
           const picks = teamPicks[team.name] || [];
           if (picks.length === 0) return null;
           const sorted = [...picks].sort((a, b) => (roundOrder[a.draftRound] ?? 99) - (roundOrder[b.draftRound] ?? 99));
