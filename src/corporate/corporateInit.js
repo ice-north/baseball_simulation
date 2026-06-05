@@ -63,6 +63,8 @@ const RANK_CONFIG = {
     eliteChance: 0.06,
     eliteBoost: [10, 15],
     eliteGrowth: 0.10,
+    standoutCount: [1, 2],   // Sランク級の突出選手
+    standoutTargetRank: 'S',
   },
   C: {
     teamOffset: 1,
@@ -70,6 +72,8 @@ const RANK_CONFIG = {
     proChance: 0.10,       // 25人×10% ≈ 2.5人/チーム がプロ注目レベルに
     proBoost: [10, 16],
     proGrowth: 0.08,
+    standoutCount: [1, 2],   // Aランク級の突出選手
+    standoutTargetRank: 'A',
   },
   D: {
     teamOffset: -3,
@@ -77,6 +81,8 @@ const RANK_CONFIG = {
     proChance: 0.06,       // 20人×6% ≈ 1.2人/チーム（クラブチームからプロ輩出もある）
     proBoost: [8, 14],
     proGrowth: 0.06,
+    standoutCount: [1, 2],   // Bランク級の突出選手
+    standoutTargetRank: 'B',
   },
 };
 
@@ -115,6 +121,8 @@ const INDEPENDENT_RANK_CONFIG = {
     proChance: 0.08,
     proBoost: [8, 14],
     proGrowth: 0.06,
+    standoutCount: [1, 2],
+    standoutTargetRank: 'B',
   },
 };
 
@@ -437,23 +445,62 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     }
   }
 
+  // B/C/Dランク: 1-2名の突出選手（2ランク上の実力で生成）
+  if (cfg.standoutCount && cfg.standoutTargetRank) {
+    const targetRank = cfg.standoutTargetRank;
+    const targetScale = RANK_SCALE[targetRank] || 0.80;
+    const rescale = targetScale / scale;
+    const tgtVelCap = RANK_VELOCITY_CAP[targetRank] || 145;
+    const tgtCtrlCap = RANK_CONTROL_CAP[targetRank] || 65;
+    const tgtArsenalMult = RANK_ARSENAL_MULT[targetRank] || 1.0;
+    const count = randInt(cfg.standoutCount[0], cfg.standoutCount[1]);
+    const shuffled = [...roster].sort(() => Math.random() - 0.5);
+    const standouts = shuffled.slice(0, count);
+
+    for (const p of standouts) {
+      p._standoutRank = targetRank;
+      p.batting.meet = clamp(Math.round(p.batting.meet * rescale) + randInt(0, 3), 1, 99);
+      p.batting.power = clamp(Math.round(p.batting.power * rescale) + randInt(0, 3), 1, 99);
+      p.batting.eye = clamp(Math.round(p.batting.eye * rescale) + randInt(0, 2), 1, 99);
+      p.physical.speed = clamp(Math.round(p.physical.speed * rescale) + randInt(0, 2), 1, 99);
+      p.fielding.defense = clamp(Math.round(p.fielding.defense * rescale) + randInt(0, 2), 1, 99);
+      p.physical.arm = clamp(Math.round(p.physical.arm * rescale) + randInt(0, 2), 1, 99);
+      if (p.position === 'pitcher') {
+        const velBoost = tgtVelCap - velCap;
+        p.pitching.velocity = clamp(p.pitching.velocity + velBoost + randInt(-2, 3), velFloor, tgtVelCap + 3);
+        p.pitching.control = clamp(Math.round(p.pitching.control * rescale) + randInt(0, 3), 1, tgtCtrlCap + 5);
+        if (p.pitching.arsenal) {
+          const multBoost = tgtArsenalMult / arsenalMult;
+          for (const pitch of p.pitching.arsenal) {
+            if (pitch.name !== 'ストレート' && pitch.type !== 'straight') {
+              pitch.level = clamp(Math.round(pitch.level * multBoost) + randInt(2, 8), 5, 99);
+            }
+          }
+        }
+      }
+      p.growthPotential = clamp((p.growthPotential || 1.0) + 0.10, 0.5, 1.5);
+      p.fame = clamp((p.fame || 0) + randInt(5, 15), 0, 100);
+    }
+  }
+
   // ソフトキャップ: キャップを超過した分を確率的に削減（上限に張り付かない自然な分布）
   const ctrlMax = controlCap + 8;
   const batCap = RANK_BATTING_CAP[rank] || 52;
   const softCap = (val, cap) => {
     if (val <= cap) return val;
     const excess = val - cap;
-    // 超過分の50-80%をカット（ランダム）。一部のスター級は突き抜ける
     const cut = Math.round(excess * (0.5 + Math.random() * 0.3));
     return cap + Math.max(0, excess - cut);
   };
   roster.forEach(p => {
+    const pCtrlMax = p._standoutRank ? (RANK_CONTROL_CAP[p._standoutRank] + 8) : ctrlMax;
+    const pBatCap = p._standoutRank ? (RANK_BATTING_CAP[p._standoutRank] || batCap) : batCap;
     if (p.position === 'pitcher') {
-      p.pitching.control = Math.min(p.pitching.control, ctrlMax);
+      p.pitching.control = Math.min(p.pitching.control, pCtrlMax);
     }
-    p.batting.meet = softCap(p.batting.meet, batCap);
-    p.batting.power = softCap(p.batting.power, batCap);
-    p.batting.eye = softCap(p.batting.eye, batCap);
+    p.batting.meet = softCap(p.batting.meet, pBatCap);
+    p.batting.power = softCap(p.batting.power, pBatCap);
+    p.batting.eye = softCap(p.batting.eye, pBatCap);
     const batFloor = p.position === 'pitcher' ? 10 : 15;
     p.batting.meet = Math.max(p.batting.meet, batFloor);
     p.batting.power = Math.max(p.batting.power, batFloor);
