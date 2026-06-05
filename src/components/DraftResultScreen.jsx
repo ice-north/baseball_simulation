@@ -132,7 +132,7 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-3 sm:p-6">
+    <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <style>{`
         @keyframes cardReveal {
           0% { opacity: 0; transform: perspective(600px) rotateY(90deg) scale(0.9); }
@@ -144,7 +144,7 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
 
       {/* ヘッダー */}
       <div className="text-center mb-5">
-        <div className="text-gray-500 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
+        <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">プロ野球ドラフト会議</h1>
         <div className="flex items-center justify-center gap-4 mt-2">
           <div className="h-px w-16 bg-gradient-to-r from-transparent to-red-500/60" />
@@ -184,16 +184,16 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
               </div>
 
               {/* 選手表示エリア — 白背景 */}
-              <div className="bg-white p-3 flex flex-col items-center justify-center" style={{ minHeight: '115px' }}>
+              <div className="bg-white p-3 flex flex-col justify-center" style={{ minHeight: '115px' }}>
                 {!hasPick ? (
-                  <div className="text-gray-300 text-xs">指名なし</div>
+                  <div className="text-gray-300 text-xs text-center w-full">指名なし</div>
                 ) : !isRevealed ? (
-                  <div className="text-center">
+                  <div className="text-center w-full">
                     <div className="text-3xl sm:text-4xl mb-1 opacity-20 select-none font-black text-gray-400">?</div>
                     <div className="text-gray-300 text-[10px]">未発表</div>
                   </div>
                 ) : (
-                  <div className="card-reveal text-center w-full space-y-1">
+                  <div className="card-reveal w-full space-y-1">
                     {picks.map((entry, pi) => (
                       <div key={pi}>
                         <div className="text-gray-900 font-black text-lg sm:text-xl leading-tight tracking-wide">
