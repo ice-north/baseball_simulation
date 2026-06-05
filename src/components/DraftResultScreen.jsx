@@ -48,6 +48,12 @@ const SOURCE_LABELS = {
   independent: { label: '独立', color: 'text-purple-400 bg-purple-900/40 border-purple-600/40' },
 };
 
+const DRAFT_POSITION_NAMES = {
+  pitcher: '投手', catcher: '捕手',
+  first: '内野手', second: '内野手', third: '内野手', short: '内野手',
+  left: '外野手', center: '外野手', right: '外野手', dh: 'DH',
+};
+
 // ドラフト会議ライブ画面
 const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
   const [currentRoundIdx, setCurrentRoundIdx] = useState(0);
@@ -196,11 +202,11 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
                   <div className="card-reveal w-full space-y-1">
                     {picks.map((entry, pi) => (
                       <div key={pi}>
-                        <div className="text-gray-900 font-black text-lg sm:text-xl leading-tight tracking-wide">
+                        <div className="text-gray-900 font-black text-xl sm:text-2xl leading-tight tracking-wide text-center">
                           {entry.name}
                         </div>
-                        <div className="text-gray-600 text-xs sm:text-sm mt-1 font-medium">
-                          {POSITION_NAMES[entry.position] || entry.position}
+                        <div className="text-gray-600 text-xs sm:text-sm mt-1.5 font-medium">
+                          {DRAFT_POSITION_NAMES[entry.position] || entry.position}
                         </div>
                         <div className="text-gray-500 text-xs mt-0.5">
                           {entry.teamName}
@@ -279,9 +285,9 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, onContinue }) => {
   ROUND_ORDER.forEach((r, i) => { roundOrder[r] = i; });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-3 sm:p-6">
+    <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <div className="text-center mb-5">
-        <div className="text-gray-500 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
+        <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">全球団指名一覧</h1>
       </div>
 
@@ -291,27 +297,27 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, onContinue }) => {
           if (picks.length === 0) return null;
           const sorted = [...picks].sort((a, b) => (roundOrder[a.draftRound] ?? 99) - (roundOrder[b.draftRound] ?? 99));
           return (
-            <div key={team.name} className="bg-gray-800/80 rounded-lg shadow-md border border-gray-700/50 overflow-hidden">
+            <div key={team.name} className="bg-white rounded-lg shadow-md overflow-hidden">
               <div
                 className="px-3 py-2 font-bold text-sm tracking-wide"
                 style={{ backgroundColor: team.color, color: team.textColor }}
               >
                 {team.short} ({picks.length}名)
               </div>
-              <div className="divide-y divide-gray-700/30">
+              <div className="divide-y divide-gray-200">
                 {sorted.map((entry, idx) => (
-                  <div key={idx} className="px-3 py-2 flex items-center gap-2">
+                  <div key={idx} className="px-3 py-2 flex items-baseline gap-2 flex-wrap">
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                      entry.draftRound === 'ドラフト1位' ? 'bg-red-900/50 text-red-300' :
-                      entry.draftRound === '育成指名' ? 'bg-gray-700 text-gray-400' :
-                      'bg-amber-900/40 text-amber-300'
+                      entry.draftRound === 'ドラフト1位' ? 'bg-red-100 text-red-700' :
+                      entry.draftRound === '育成指名' ? 'bg-gray-100 text-gray-500' :
+                      'bg-amber-50 text-amber-700'
                     }`}>
                       {entry.draftRound.replace('ドラフト', '')}
                     </span>
-                    <span className="text-white font-bold text-sm truncate">{entry.name}</span>
-                    <span className="text-gray-400 text-xs shrink-0">({entry.age})</span>
-                    <span className="text-gray-500 text-xs shrink-0">{POSITION_NAMES[entry.position] || entry.position}</span>
-                    <span className="text-gray-600 text-[10px] ml-auto shrink-0 truncate max-w-[80px]">{entry.teamName}</span>
+                    <span className="text-gray-900 font-bold text-sm">{entry.name}</span>
+                    <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
+                    <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
+                    <span className="text-gray-400 text-xs">{entry.teamName}</span>
                   </div>
                 ))}
               </div>
