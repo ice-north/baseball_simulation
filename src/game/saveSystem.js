@@ -2,7 +2,7 @@ import { compressData, decompressData, getLocalStorageUsage } from '../utils/com
 import { TEAMS_DATA } from '../teams-data.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
-import { serializeUniversityPool, deserializeUniversityPool } from '../season/universityPool.js';
+import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
 
@@ -158,6 +158,9 @@ export const loadGameFromSlot = (slotIndex) => {
     if (saveData.universityPool) {
       deserializeUniversityPool(saveData.universityPool);
     }
+    // 大学プールが空の場合（旧セーブデータ等）、初期シードを生成
+    const loadedYear = saveData.seasonData?.year || 1;
+    seedInitialUniversityClasses(loadedYear);
 
     // 旧セーブデータ互換: バント能力値 + 性格パラメータの移行
     Object.values(TEAMS_DATA).forEach(team => {

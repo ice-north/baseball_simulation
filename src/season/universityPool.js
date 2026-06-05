@@ -611,6 +611,58 @@ export function enrollInUniversity(players, enrollYear) {
 }
 
 /**
+ * ゲーム開始時・セーブロード時に大学プールを初期シードする
+ * 過去数年分の高校卒業生を遡って生成し、大学に在籍させる
+ * これにより、Year1のドラフトから大学生が指名可能になる
+ * @param {number} gameYear - 現在のゲーム年度
+ */
+export function seedInitialUniversityClasses(gameYear) {
+  const existingCount = Object.values(universityPool).reduce((sum, cohort) => sum + (cohort?.length || 0), 0);
+  if (existingCount > 0) return;
+
+  const classesNeeded = 4;
+  for (let i = 0; i < classesNeeded; i++) {
+    const enrollYear = gameYear - classesNeeded + i;
+    const yearsInUni = gameYear - enrollYear;
+    const count = 200 + Math.floor(Math.random() * 50);
+    const idBase = (enrollYear + 10000) * 100000 + 70000;
+    const players = [];
+    for (let j = 0; j < count; j++) {
+      const p = generateHighSchoolPlayer(idBase + j);
+      p.age = 18 + yearsInUni;
+      players.push(p);
+    }
+
+    const scored = players.map(p => ({ player: p, score: evaluatePlayerPotential(p) }));
+    scored.sort((a, b) => b.score - a.score);
+    const uniPlayers = { S: [], A: [], B: [], C: [], D: [] };
+    let cursor = 0;
+    for (const rank of ['S', 'A', 'B', 'C', 'D']) {
+      const cfg = RANK_DISTRIBUTION[rank];
+      const slotCount = Math.floor(scored.length * cfg.ratio);
+      const slice = scored.slice(cursor, cursor + slotCount);
+      cursor += slotCount;
+      const uniCount = Math.floor(slice.length * cfg.uniRatio);
+      slice.slice(0, uniCount).forEach(entry => {
+        entry.player._destinationRank = rank;
+        uniPlayers[rank].push(entry.player);
+      });
+    }
+
+    enrollInUniversity(uniPlayers, enrollYear);
+
+    const cohort = universityPool[enrollYear];
+    if (cohort) {
+      for (let y = 0; y < yearsInUni; y++) {
+        cohort.forEach(entry => {
+          applyUniversityGrowth(entry.player, entry.universityRank);
+        });
+      }
+    }
+  }
+}
+
+/**
  * 大学プールの現在の状態サマリーを取得
  */
 export function getUniversityPoolSummary() {
