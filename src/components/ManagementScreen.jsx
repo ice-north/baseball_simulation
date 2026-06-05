@@ -112,6 +112,7 @@ const ManagementScreen = ({
   if (managementView === 'corporate_scout') return <CorporateScoutScreen
     seasonData={seasonData}
     allTeams={allTeams}
+    draftedPlayerIds={draftResults?.draftedPlayers?.map(d => d.playerId) || []}
     onComplete={() => {
       // 完了済みスカウトミッションをクリア（翌年の派遣用にリセット）
       const ut = TEAMS_DATA[userTeamName];
