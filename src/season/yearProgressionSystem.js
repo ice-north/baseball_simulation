@@ -433,45 +433,131 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const eligible = allCandidates.filter(c => c.score >= MIN_DRAFT_SCORE);
   const selected = eligible.slice(0, Math.min(totalSlots, eligible.length));
 
-  // === ラウンドロビンで各球団に配分 ===
+  // === 指名エントリ生成ヘルパー ===
+  const createDraftEntry = (candidate, npbTeam, roundLabel) => {
+    const { player, teamName, score, bonus = 0, awards = [], source, hofResult } = candidate;
+    const isPitcher = player.position === 'pitcher';
+    const reasons = [];
+    if (source === 'highschool') reasons.push(`高卒ドラフト: 潜在能力${Math.round(score)}pt`);
+    else if (source === 'university') reasons.push(`大卒ドラフト: 総合力${Math.round(score)}pt`);
+    else reasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(score)}pt`);
+    if (bonus > 0) reasons.push(`成績ボーナス+${bonus}pt`);
+    return {
+      player, teamName, npbTeam, reasons, draftRound: roundLabel,
+      position: player.position, age: player.age,
+      name: player.name, playerId: player.id,
+      hallOfFame: hofResult?.isHallOfFame || false,
+      hofReason: hofResult?.reason || null,
+      careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
+      yearsPlayed: player.yearsPlayed || (source === 'highschool' || source === 'university' ? 0 : 1),
+      awardBonus: candidate.bonus || 0, seasonAwards: candidate.awards || [],
+      source, score,
+    };
+  };
+
   const draftedPlayers = [];
   const nearMissPlayers = [];
   const shuffledTeams = [...NPB_TEAMS].sort(() => Math.random() - 0.5);
-  let pickIdx = 0;
+  const takenIds = new Set();
 
-  for (let round = 0; round < mainRounds + (ikuSlots > 0 ? Math.ceil(ikuSlots / numTeams) : 0); round++) {
+  // === 1巡目: 同時指名 + 抽選 ===
+  const firstRoundData = { initialPicks: [], lotteryResults: [], hazurePicks: [] };
+
+  const teamInitialPick = {};
+  shuffledTeams.forEach(team => {
+    let bestCand = null, bestPref = -Infinity;
+    for (const c of eligible) {
+      const noise = (Math.random() - 0.5) * 30;
+      const pref = c.score + noise;
+      if (pref > bestPref) { bestPref = pref; bestCand = c; }
+    }
+    teamInitialPick[team] = bestCand;
+  });
+
+  const playerCompetitors = {};
+  for (const [team, cand] of Object.entries(teamInitialPick)) {
+    if (!cand) continue;
+    const id = cand.player.id;
+    if (!playerCompetitors[id]) playerCompetitors[id] = [];
+    playerCompetitors[id].push(team);
+  }
+
+  let colorIdx = 0;
+  const playerColorGroup = {};
+  for (const [id, teams] of Object.entries(playerCompetitors)) {
+    if (teams.length > 1) { playerColorGroup[id] = colorIdx++; }
+  }
+
+  for (const team of shuffledTeams) {
+    const cand = teamInitialPick[team];
+    if (!cand) continue;
+    const id = cand.player.id;
+    firstRoundData.initialPicks.push({
+      npbTeam: team, name: cand.player.name, position: cand.player.position,
+      teamName: cand.teamName, source: cand.source, playerId: id,
+      contested: (playerCompetitors[id]?.length || 0) > 1,
+      colorGroup: playerColorGroup[id] ?? -1,
+    });
+  }
+
+  const lotteryLosers = new Set();
+  for (const [playerId, teams] of Object.entries(playerCompetitors)) {
+    if (teams.length <= 1) continue;
+    const winner = teams[Math.floor(Math.random() * teams.length)];
+    teams.filter(t => t !== winner).forEach(t => lotteryLosers.add(t));
+    firstRoundData.lotteryResults.push({
+      playerName: teamInitialPick[teams[0]].player.name,
+      playerId: parseInt(playerId),
+      competitors: [...teams], winner,
+    });
+  }
+
+  const round1Winners = {};
+  for (const team of shuffledTeams) {
+    if (!lotteryLosers.has(team) && teamInitialPick[team]) {
+      round1Winners[team] = teamInitialPick[team];
+      takenIds.add(teamInitialPick[team].player.id);
+    }
+  }
+
+  const sortedLosers = [...lotteryLosers];
+  for (const team of sortedLosers) {
+    let bestCand = null, bestScore = -Infinity;
+    for (const c of eligible) {
+      if (takenIds.has(c.player.id)) continue;
+      if (c.score > bestScore) { bestScore = c.score; bestCand = c; }
+    }
+    if (bestCand) {
+      round1Winners[team] = bestCand;
+      takenIds.add(bestCand.player.id);
+      firstRoundData.hazurePicks.push({
+        npbTeam: team, name: bestCand.player.name, position: bestCand.player.position,
+        teamName: bestCand.teamName, source: bestCand.source, playerId: bestCand.player.id,
+      });
+    }
+  }
+
+  for (const team of shuffledTeams) {
+    const cand = round1Winners[team];
+    if (!cand) continue;
+    draftedPlayers.push(createDraftEntry(cand, team, 'ドラフト1位'));
+  }
+
+  // === 2巡目以降: ウェーバー制 ===
+  let eligibleIdx = 0;
+  for (let round = 1; round < mainRounds + (ikuSlots > 0 ? Math.ceil(ikuSlots / numTeams) : 0); round++) {
     const isIku = round >= mainRounds;
     const roundLabel = isIku ? '育成指名' : DRAFT_ROUND_LABELS[Math.min(6, 6 - round)];
     const teamOrder = round % 2 === 0 ? shuffledTeams : [...shuffledTeams].reverse();
 
-    for (let t = 0; t < numTeams && pickIdx < selected.length; t++) {
+    for (let t = 0; t < numTeams; t++) {
+      while (eligibleIdx < eligible.length && takenIds.has(eligible[eligibleIdx].player.id)) eligibleIdx++;
+      if (eligibleIdx >= eligible.length) break;
       const npbTeam = teamOrder[t % numTeams];
-      const candidate = selected[pickIdx];
-      const { player, teamName, score, bonus, awards, source, hofResult } = candidate;
-
-      const isPitcher = player.position === 'pitcher';
-      const reasons = [];
-      if (source === 'highschool') {
-        reasons.push(`高卒ドラフト: 潜在能力${Math.round(score)}pt`);
-      } else if (source === 'university') {
-        reasons.push(`大卒ドラフト: 総合力${Math.round(score)}pt`);
-      } else {
-        reasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(score)}pt`);
-      }
-      if (bonus > 0) reasons.push(`成績ボーナス+${bonus}pt`);
-
-      draftedPlayers.push({
-        player, teamName, npbTeam, reasons, draftRound: roundLabel,
-        position: player.position, age: player.age,
-        name: player.name, playerId: player.id,
-        hallOfFame: hofResult?.isHallOfFame || false,
-        hofReason: hofResult?.reason || null,
-        careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
-        yearsPlayed: player.yearsPlayed || (source === 'highschool' || source === 'university' ? 0 : 1),
-        awardBonus: bonus, seasonAwards: awards,
-        source, score,
-      });
-      pickIdx++;
+      const candidate = eligible[eligibleIdx];
+      takenIds.add(candidate.player.id);
+      eligibleIdx++;
+      draftedPlayers.push(createDraftEntry(candidate, npbTeam, roundLabel));
     }
   }
 
@@ -573,7 +659,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     total: draftedPlayers.length,
   };
 
-  return { draftedPlayers, nearMissPlayers, proBonus, draftBySource, highSchoolDrafted: draftBySource.highschool };
+  return { draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, highSchoolDrafted: draftBySource.highschool };
 }
 
 /**

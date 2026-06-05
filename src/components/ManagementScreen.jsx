@@ -129,6 +129,7 @@ const ManagementScreen = ({
     nearMissPlayers={draftResults?.nearMissPlayers || []}
     proBonus={draftResults?.proBonus || []}
     draftBySource={draftResults?.draftBySource || null}
+    firstRoundData={draftResults?.firstRoundData || null}
     userTeamName={userTeamName}
     onContinue={() => {
       setDraftResults(null);

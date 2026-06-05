@@ -54,12 +54,39 @@ const DRAFT_POSITION_NAMES = {
   left: '外野手', center: '外野手', right: '外野手', dh: 'DH',
 };
 
+const COLLISION_COLORS = [
+  { bg: 'bg-pink-100', border: 'border-pink-300', label: 'text-pink-600' },
+  { bg: 'bg-cyan-100', border: 'border-cyan-300', label: 'text-cyan-600' },
+  { bg: 'bg-green-100', border: 'border-green-300', label: 'text-green-600' },
+  { bg: 'bg-orange-100', border: 'border-orange-300', label: 'text-orange-600' },
+  { bg: 'bg-purple-100', border: 'border-purple-300', label: 'text-purple-600' },
+];
+
+const getTeamInfo = (name) => NPB_TEAMS_INFO.find(t => t.name === name) || { short: name, color: '#666', textColor: '#fff' };
+
+// 選手カード中身（名前中央・ポジ所属は名前の左端に揃える）
+const PlayerCardContent = ({ name, position, teamName, dimmed }) => (
+  <div className={`w-fit mx-auto ${dimmed ? 'opacity-30' : ''}`}>
+    <div className="text-gray-900 font-black text-xl sm:text-2xl leading-tight tracking-wide text-center">
+      {name}
+    </div>
+    <div className="text-gray-600 text-xs sm:text-sm mt-1.5 font-medium text-left">
+      {DRAFT_POSITION_NAMES[position] || position}
+    </div>
+    <div className="text-gray-500 text-xs mt-0.5 text-left">
+      {teamName}
+    </div>
+  </div>
+);
+
 // ドラフト会議ライブ画面
-const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
+const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) => {
   const [currentRoundIdx, setCurrentRoundIdx] = useState(0);
   const [revealedTeams, setRevealedTeams] = useState(new Set());
   const [isRevealing, setIsRevealing] = useState(false);
   const [roundComplete, setRoundComplete] = useState(false);
+  // 1巡目フェーズ: 'initial' → 'revealed' → 'lottery' → 'hazure' → 'complete'
+  const [firstRoundPhase, setFirstRoundPhase] = useState('initial');
   const revealQueueRef = useRef([]);
   const timerRef = useRef(null);
 
@@ -80,6 +107,9 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
   const activeRounds = ROUND_ORDER.filter(r => roundData[r]);
   const currentRound = activeRounds[currentRoundIdx];
   const currentTeamMap = currentRound ? roundData[currentRound] : null;
+  const isFirstRound = currentRound === 'ドラフト1位' && firstRoundData;
+  const hasLottery = isFirstRound && firstRoundData.lotteryResults.length > 0;
+  const hasHazure = isFirstRound && firstRoundData.hazurePicks.length > 0;
 
   const teamsWithPicks = React.useMemo(() => {
     if (!currentTeamMap) return [];
@@ -89,10 +119,9 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
   const allRevealed = teamsWithPicks.length > 0 && teamsWithPicks.every(t => revealedTeams.has(t.name));
 
   useEffect(() => {
-    if (allRevealed && !roundComplete) setRoundComplete(true);
-  }, [allRevealed, roundComplete]);
+    if (!isFirstRound && allRevealed && !roundComplete) setRoundComplete(true);
+  }, [allRevealed, roundComplete, isFirstRound]);
 
-  // useRef で最新の revealedTeams を追跡（クロージャ問題回避）
   const revealedRef = useRef(revealedTeams);
   revealedRef.current = revealedTeams;
 
@@ -112,9 +141,9 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     const allNames = teamsWithPicks.map(t => t.name);
     setRevealedTeams(new Set(allNames));
-    setRoundComplete(true);
+    if (!isFirstRound) setRoundComplete(true);
     setIsRevealing(false);
-  }, [teamsWithPicks]);
+  }, [teamsWithPicks, isFirstRound]);
 
   const nextRound = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -123,6 +152,7 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
       setRevealedTeams(new Set());
       setRoundComplete(false);
       setIsRevealing(false);
+      setFirstRoundPhase('initial');
     } else {
       onComplete();
     }
@@ -137,38 +167,238 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
     return null;
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
-      <style>{`
-        @keyframes cardReveal {
-          0% { opacity: 0; transform: perspective(600px) rotateY(90deg) scale(0.9); }
-          50% { opacity: 1; transform: perspective(600px) rotateY(-5deg) scale(1.02); }
-          100% { opacity: 1; transform: perspective(600px) rotateY(0deg) scale(1); }
-        }
-        .card-reveal { animation: cardReveal 0.6s cubic-bezier(.22,.68,0,1.1) forwards; }
-      `}</style>
+  // 1巡目: 初回表示で全員一斉に見せる
+  const handleFirstRoundReveal = () => {
+    const allNames = NPB_TEAMS_INFO.map(t => t.name);
+    setRevealedTeams(new Set(allNames));
+    setFirstRoundPhase('revealed');
+  };
 
-      {/* ヘッダー */}
-      <div className="text-center mb-5">
-        <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
-        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">プロ野球ドラフト会議</h1>
-        <div className="flex items-center justify-center gap-4 mt-2">
-          <div className="h-px w-16 bg-gradient-to-r from-transparent to-red-500/60" />
-          <span className={`text-sm font-black px-4 py-1.5 rounded-lg ${
-            currentRound === 'ドラフト1位' ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' :
-            currentRound === '育成指名' ? 'bg-gray-600 text-white' :
-            'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
-          }`}>
-            {currentRound}
-          </span>
-          <div className="h-px w-16 bg-gradient-to-l from-transparent to-red-500/60" />
-        </div>
-        <div className="text-gray-500 text-xs mt-1.5">
-          {currentRoundIdx + 1} / {activeRounds.length} ラウンド
-        </div>
-      </div>
+  const handleLottery = () => {
+    setFirstRoundPhase(hasHazure ? 'hazure' : 'complete');
+  };
 
-      {/* 3×4 球団グリッド */}
+  const handleHazureComplete = () => {
+    setFirstRoundPhase('complete');
+  };
+
+  // 1巡目用: initialPicksから各チームの「最初の指名選手」を引く
+  const getInitialPick = (teamName) => {
+    if (!firstRoundData) return null;
+    return firstRoundData.initialPicks.find(p => p.npbTeam === teamName);
+  };
+
+  // 1巡目用: 抽選に勝ったか
+  const isLotteryWinner = (teamName) => {
+    if (!firstRoundData) return true;
+    const pick = getInitialPick(teamName);
+    if (!pick || !pick.contested) return true;
+    return firstRoundData.lotteryResults.some(r => r.winner === teamName);
+  };
+
+  // 1巡目用: 外れ1位の指名
+  const getHazurePick = (teamName) => {
+    if (!firstRoundData) return null;
+    return firstRoundData.hazurePicks.find(p => p.npbTeam === teamName);
+  };
+
+  // 1巡目用: 最終確定の指名（currentTeamMapから取る）
+  const getFinalPick = (teamName) => {
+    const picks = currentTeamMap[teamName] || [];
+    return picks[0] || null;
+  };
+
+  // 1巡目の表示
+  const renderFirstRound = () => {
+    const showRevealed = firstRoundPhase !== 'initial';
+    const showLotteryResult = firstRoundPhase === 'hazure' || firstRoundPhase === 'complete';
+    const showHazureResult = firstRoundPhase === 'complete';
+
+    return (
+      <>
+        <div className="max-w-5xl mx-auto grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
+          {NPB_TEAMS_INFO.map(team => {
+            const initialPick = getInitialPick(team.name);
+            const hasPick = !!initialPick;
+            const isContested = initialPick?.contested;
+            const colorGroup = initialPick?.colorGroup ?? -1;
+            const collision = colorGroup >= 0 ? COLLISION_COLORS[colorGroup % COLLISION_COLORS.length] : null;
+            const wonLottery = isLotteryWinner(team.name);
+            const hazurePick = getHazurePick(team.name);
+            const finalPick = getFinalPick(team.name);
+            const isLoser = isContested && !wonLottery;
+
+            let cardBg = 'bg-white';
+            let borderClass = '';
+            if (showRevealed && isContested && collision) {
+              cardBg = collision.bg;
+              borderClass = `border-2 ${collision.border}`;
+            }
+            if (showLotteryResult && isLoser) {
+              cardBg = 'bg-gray-100';
+              borderClass = '';
+            }
+
+            return (
+              <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
+                <div
+                  className="px-3 py-1.5 text-center font-bold text-sm tracking-wide"
+                  style={{ backgroundColor: team.color, color: team.textColor }}
+                >
+                  {team.short}
+                </div>
+
+                <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ minHeight: '115px' }}>
+                  {!hasPick ? (
+                    <div className="text-gray-300 text-xs text-center w-full">指名なし</div>
+                  ) : !showRevealed ? (
+                    <div className="text-center w-full">
+                      <div className="text-3xl sm:text-4xl mb-1 opacity-20 select-none font-black text-gray-400">?</div>
+                      <div className="text-gray-300 text-[10px]">未発表</div>
+                    </div>
+                  ) : (
+                    <div className="card-reveal w-full space-y-1">
+                      {/* 抽選結果表示後、負けたチームは元の指名を薄く＋新しい指名を表示 */}
+                      {showLotteryResult && isLoser ? (
+                        <>
+                          <PlayerCardContent name={initialPick.name} position={initialPick.position} teamName={initialPick.teamName} dimmed={true} />
+                          <div className="text-center text-red-500 text-[10px] font-bold my-0.5">抽選外れ →</div>
+                          {showHazureResult && finalPick ? (
+                            <PlayerCardContent name={finalPick.name} position={finalPick.position} teamName={finalPick.teamName} />
+                          ) : (
+                            <div className="text-gray-400 text-xs text-center">外れ1位選択中...</div>
+                          )}
+                        </>
+                      ) : (
+                        <PlayerCardContent name={initialPick.name} position={initialPick.position} teamName={initialPick.teamName} />
+                      )}
+                      {showRevealed && isContested && !showLotteryResult && collision && (
+                        <div className={`text-center text-[10px] font-bold mt-1 ${collision.label}`}>
+                          ※ 競合 {(firstRoundData.lotteryResults.find(r => r.playerId === initialPick.playerId)?.competitors.length || 0)}球団
+                        </div>
+                      )}
+                      {showLotteryResult && isContested && wonLottery && (
+                        <div className="text-center text-[10px] font-bold mt-1 text-green-600">✓ 抽選当選</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 抽選情報パネル */}
+        {showRevealed && hasLottery && !showLotteryResult && (
+          <div className="max-w-3xl mx-auto mb-4">
+            <div className="bg-white/90 rounded-lg p-4 shadow-lg">
+              <h3 className="text-gray-900 font-black text-base mb-3 text-center">競合指名</h3>
+              <div className="space-y-2">
+                {firstRoundData.lotteryResults.map((lr, idx) => {
+                  const collision = COLLISION_COLORS[
+                    (firstRoundData.initialPicks.find(p => p.playerId === lr.playerId)?.colorGroup ?? 0) % COLLISION_COLORS.length
+                  ];
+                  return (
+                    <div key={idx} className={`${collision.bg} ${collision.border} border rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap`}>
+                      <span className="text-gray-900 font-black text-sm">{lr.playerName}</span>
+                      <span className="text-gray-500 text-xs">←</span>
+                      {lr.competitors.map(t => {
+                        const ti = getTeamInfo(t);
+                        return (
+                          <span key={t} className="text-xs font-bold px-2 py-0.5 rounded" style={{ backgroundColor: ti.color, color: ti.textColor }}>
+                            {ti.short}
+                          </span>
+                        );
+                      })}
+                      <span className="text-gray-500 text-xs ml-auto">{lr.competitors.length}球団競合</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 抽選結果パネル */}
+        {showLotteryResult && hasLottery && (
+          <div className="max-w-3xl mx-auto mb-4">
+            <div className="bg-white/90 rounded-lg p-4 shadow-lg">
+              <h3 className="text-gray-900 font-black text-base mb-3 text-center">抽選結果</h3>
+              <div className="space-y-2">
+                {firstRoundData.lotteryResults.map((lr, idx) => {
+                  const winnerInfo = getTeamInfo(lr.winner);
+                  return (
+                    <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap">
+                      <span className="text-gray-900 font-black text-sm">{lr.playerName}</span>
+                      <span className="text-gray-400 text-xs">→</span>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ backgroundColor: winnerInfo.color, color: winnerInfo.textColor }}>
+                        {winnerInfo.short} 当選
+                      </span>
+                      <span className="text-gray-400 text-xs ml-2">
+                        ({lr.competitors.filter(t => t !== lr.winner).map(t => getTeamInfo(t).short).join('・')} 外れ)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* コントロールボタン */}
+        <div className="max-w-5xl mx-auto flex items-center justify-center gap-3 flex-wrap">
+          {firstRoundPhase === 'initial' && (
+            <>
+              <button
+                onClick={handleFirstRoundReveal}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95"
+              >
+                一斉指名を発表
+              </button>
+              <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+            </>
+          )}
+          {firstRoundPhase === 'revealed' && (
+            <>
+              <button
+                onClick={hasLottery ? handleLottery : () => setFirstRoundPhase('complete')}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95"
+              >
+                {hasLottery ? '抽選を行う' : '次のラウンドへ'}
+              </button>
+              <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+            </>
+          )}
+          {firstRoundPhase === 'hazure' && (
+            <>
+              <button
+                onClick={handleHazureComplete}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95"
+              >
+                外れ1位を発表
+              </button>
+              <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+            </>
+          )}
+          {firstRoundPhase === 'complete' && (
+            <>
+              <button
+                onClick={nextRound}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-blue-500/30 active:scale-95"
+              >
+                {currentRoundIdx < activeRounds.length - 1 ? `次のラウンドへ → ${activeRounds[currentRoundIdx + 1]}` : '結果一覧へ →'}
+              </button>
+              <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+            </>
+          )}
+        </div>
+      </>
+    );
+  };
+
+  // 2巡目以降の表示（ウェーバー、1球団ずつ発表）
+  const renderWaiverRound = () => (
+    <>
       <div className="max-w-5xl mx-auto grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
         {NPB_TEAMS_INFO.map(team => {
           const picks = currentTeamMap[team.name] || [];
@@ -176,20 +406,13 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
           const isRevealed = revealedTeams.has(team.name);
 
           return (
-            <div
-              key={team.name}
-              className="relative rounded-lg overflow-hidden shadow-lg"
-              style={{ minHeight: '150px' }}
-            >
-              {/* 球団ヘッダー */}
+            <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
               <div
                 className="px-3 py-1.5 text-center font-bold text-sm tracking-wide"
                 style={{ backgroundColor: team.color, color: team.textColor }}
               >
                 {team.short}
               </div>
-
-              {/* 選手表示エリア — 白背景 */}
               <div className="bg-white p-3 flex flex-col justify-center" style={{ minHeight: '115px' }}>
                 {!hasPick ? (
                   <div className="text-gray-300 text-xs text-center w-full">指名なし</div>
@@ -201,17 +424,7 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
                 ) : (
                   <div className="card-reveal w-full space-y-1">
                     {picks.map((entry, pi) => (
-                      <div key={pi}>
-                        <div className="text-gray-900 font-black text-xl sm:text-2xl leading-tight tracking-wide text-center">
-                          {entry.name}
-                        </div>
-                        <div className="text-gray-600 text-xs sm:text-sm mt-1.5 font-medium">
-                          {DRAFT_POSITION_NAMES[entry.position] || entry.position}
-                        </div>
-                        <div className="text-gray-500 text-xs mt-0.5">
-                          {entry.teamName}
-                        </div>
-                      </div>
+                      <PlayerCardContent key={pi} name={entry.name} position={entry.position} teamName={entry.teamName} />
                     ))}
                   </div>
                 )}
@@ -221,7 +434,6 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
         })}
       </div>
 
-      {/* コントロールボタン */}
       <div className="max-w-5xl mx-auto flex items-center justify-center gap-3 flex-wrap">
         {!roundComplete ? (
           <>
@@ -238,12 +450,7 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
             >
               一斉発表
             </button>
-            <button
-              onClick={onComplete}
-              className="text-gray-500 hover:text-gray-300 text-xs transition underline"
-            >
-              スキップ
-            </button>
+            <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
           </>
         ) : (
           <>
@@ -253,18 +460,54 @@ const DraftConferenceScreen = ({ draftedPlayers, onComplete }) => {
             >
               {currentRoundIdx < activeRounds.length - 1 ? `次のラウンドへ → ${activeRounds[currentRoundIdx + 1]}` : '結果一覧へ →'}
             </button>
-            <button
-              onClick={onComplete}
-              className="text-gray-500 hover:text-gray-300 text-xs transition underline"
-            >
-              スキップ
-            </button>
+            <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
           </>
         )}
       </div>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
+      <style>{`
+        @keyframes cardReveal {
+          0% { opacity: 0; transform: perspective(600px) rotateY(90deg) scale(0.9); }
+          50% { opacity: 1; transform: perspective(600px) rotateY(-5deg) scale(1.02); }
+          100% { opacity: 1; transform: perspective(600px) rotateY(0deg) scale(1); }
+        }
+        .card-reveal { animation: cardReveal 0.6s cubic-bezier(.22,.68,0,1.1) forwards; }
+      `}</style>
+
+      <div className="text-center mb-5">
+        <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
+        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">プロ野球ドラフト会議</h1>
+        <div className="flex items-center justify-center gap-4 mt-2">
+          <div className="h-px w-16 bg-gradient-to-r from-transparent to-red-500/60" />
+          <span className={`text-sm font-black px-4 py-1.5 rounded-lg ${
+            currentRound === 'ドラフト1位' ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' :
+            currentRound === '育成指名' ? 'bg-gray-600 text-white' :
+            'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
+          }`}>
+            {currentRound}
+          </span>
+          <div className="h-px w-16 bg-gradient-to-l from-transparent to-red-500/60" />
+        </div>
+        <div className="text-gray-500 text-xs mt-1.5">
+          {currentRoundIdx + 1} / {activeRounds.length} ラウンド
+          {isFirstRound && ' (同時指名)'}
+          {!isFirstRound && currentRoundIdx > 0 && ' (ウェーバー制)'}
+        </div>
+      </div>
+
+      {isFirstRound ? renderFirstRound() : renderWaiverRound()}
 
       <div className="text-center mt-3 text-gray-600 text-xs">
-        {revealedTeams.size} / {teamsWithPicks.length} 球団発表済み
+        {isFirstRound
+          ? (firstRoundPhase === 'initial' ? '一斉指名待ち' :
+             firstRoundPhase === 'revealed' ? (hasLottery ? '競合あり — 抽選待ち' : '競合なし') :
+             firstRoundPhase === 'hazure' ? '外れ1位指名待ち' : '1巡目確定')
+          : `${revealedTeams.size} / ${teamsWithPicks.length} 球団発表済み`
+        }
       </div>
     </div>
   );
@@ -342,10 +585,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, onContinue }) => {
 const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBySource, userTeamName, onContinue }) => {
   const hasDrafted = draftedPlayers && draftedPlayers.length > 0;
 
-  // 自チームから指名された選手のみ
-  const myTeamDrafted = draftedPlayers.filter(d =>
-    d.teamName === userTeamName
-  );
+  const myTeamDrafted = draftedPlayers.filter(d => d.teamName === userTeamName);
   const myTeamProBonus = proBonus?.filter(b => b.teamName === userTeamName) || [];
   const myTeamNearMiss = nearMissPlayers?.filter(n => n.teamName === userTeamName) || [];
 
@@ -464,9 +704,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
 
       {myTeamProBonus.length > 0 && (
         <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 rounded-2xl p-4 mb-4 border border-green-600/30">
-          <h2 className="text-base font-black text-green-400 mb-3">
-            プロ輩出ボーナス
-          </h2>
+          <h2 className="text-base font-black text-green-400 mb-3">プロ輩出ボーナス</h2>
           <div className="space-y-2">
             {myTeamProBonus.map((bonus, idx) => (
               <div key={idx} className="bg-gray-700/40 rounded-xl p-3.5">
@@ -489,9 +727,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
 
       {myTeamNearMiss.length > 0 && (
         <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-4">
-          <h2 className="text-base font-black text-gray-300 mb-3">
-            NPB候補に迫る選手
-          </h2>
+          <h2 className="text-base font-black text-gray-300 mb-3">NPB候補に迫る選手</h2>
           <div className="space-y-1.5">
             {myTeamNearMiss.slice(0, 10).map((entry, idx) => (
               <div key={idx} className="bg-gray-700/40 rounded-xl p-3 flex items-center justify-between">
@@ -520,7 +756,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
 };
 
 // メインコンポーネント: 会議 → 球団別一覧 → サマリーの3段階
-const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBySource, userTeamName, onContinue }) => {
+const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, userTeamName, onContinue }) => {
   const [phase, setPhase] = useState('conference');
 
   const hasDrafted = draftedPlayers && draftedPlayers.length > 0;
@@ -529,6 +765,7 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftByS
     return (
       <DraftConferenceScreen
         draftedPlayers={draftedPlayers}
+        firstRoundData={firstRoundData}
         onComplete={() => setPhase('teamSummary')}
       />
     );
