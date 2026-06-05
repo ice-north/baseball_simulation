@@ -460,8 +460,9 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const shuffledTeams = [...NPB_TEAMS].sort(() => Math.random() - 0.5);
   const takenIds = new Set();
 
-  // === 1巡目: 同時指名 + 抽選 ===
+  // === 1巡目: 同時指名 + 抽選（重複は最大8チーム）===
   const firstRoundData = { initialPicks: [], lotteryResults: [], hazurePicks: [] };
+  const MAX_CONTESTED = 8;
 
   const teamInitialPick = {};
   shuffledTeams.forEach(team => {
@@ -482,21 +483,42 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     playerCompetitors[id].push(team);
   }
 
-  let colorIdx = 0;
-  const playerColorGroup = {};
-  for (const [id, teams] of Object.entries(playerCompetitors)) {
-    if (teams.length > 1) { playerColorGroup[id] = colorIdx++; }
+  const countContested = () => {
+    let c = 0;
+    for (const teams of Object.values(playerCompetitors)) {
+      if (teams.length > 1) c += teams.length;
+    }
+    return c;
+  };
+  const allPickedIds = new Set(Object.values(teamInitialPick).filter(Boolean).map(c => c.player.id));
+
+  while (countContested() > MAX_CONTESTED) {
+    let maxId = null, maxLen = 0;
+    for (const [id, teams] of Object.entries(playerCompetitors)) {
+      if (teams.length > maxLen) { maxLen = teams.length; maxId = id; }
+    }
+    if (!maxId || maxLen <= 1) break;
+    const team = playerCompetitors[maxId].pop();
+    let bestCand = null, bestScore = -Infinity;
+    for (const c of eligible) {
+      if (allPickedIds.has(c.player.id)) continue;
+      if (c.score > bestScore) { bestScore = c.score; bestCand = c; }
+    }
+    if (!bestCand) break;
+    allPickedIds.add(bestCand.player.id);
+    teamInitialPick[team] = bestCand;
+    if (!playerCompetitors[bestCand.player.id]) playerCompetitors[bestCand.player.id] = [];
+    playerCompetitors[bestCand.player.id].push(team);
   }
 
   for (const team of shuffledTeams) {
     const cand = teamInitialPick[team];
     if (!cand) continue;
     const id = cand.player.id;
+    const contested = (playerCompetitors[id]?.length || 0) > 1;
     firstRoundData.initialPicks.push({
       npbTeam: team, name: cand.player.name, position: cand.player.position,
-      teamName: cand.teamName, source: cand.source, playerId: id,
-      contested: (playerCompetitors[id]?.length || 0) > 1,
-      colorGroup: playerColorGroup[id] ?? -1,
+      teamName: cand.teamName, source: cand.source, playerId: id, contested,
     });
   }
 
