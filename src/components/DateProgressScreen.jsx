@@ -34,6 +34,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
   const userTeamName = Object.keys(TEAMS_DATA || {})[0] || 'チームA';
+  const isCorporate = !!seasonData.settings?.corporateMode;
   const currentPhase = seasonData.phase || 'off_season';
   const phaseInfo = PHASE_INFO[currentPhase] || { name: '', color: 'bg-gray-100', description: '' };
 
@@ -815,17 +816,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       let eventLabel = null;
       if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
-      else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
+      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'プレーオフ';
       else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
-      else if (phase === SEASON_PHASES.CONTRACT) eventLabel = seasonData.settings?.corporateMode ? '退団' : '契約更改';
-      else if (phase === SEASON_PHASES.TRYOUT) eventLabel = seasonData.settings?.corporateMode ? 'スカウト入団' : 'トライアウト';
-      else if (phase === SEASON_PHASES.OFF_SEASON) eventLabel = 'オフシーズン';
+      else if (phase === SEASON_PHASES.CONTRACT) eventLabel = isCorporate ? '退団' : '契約更改';
+      else if (phase === SEASON_PHASES.TRYOUT) eventLabel = isCorporate ? 'スカウト入団' : 'トライアウト';
+      else if (phase === SEASON_PHASES.OFF_SEASON && !isCorporate) eventLabel = 'オフシーズン';
       const tKey = `${selectedMonth}-${day}`;
       const tournamentEvents = tournamentCalendarDates[tKey] || [];
       cells.push({ day, games: gamesOnDay, isToday, eventLabel, tournamentEvents });
     }
     return cells;
-  }, [seasonData.schedule, seasonData.currentDate, year, selectedMonth, daysInMonth, firstDay, tournamentCalendarDates]);
+  }, [seasonData.schedule, seasonData.currentDate, year, selectedMonth, daysInMonth, firstDay, tournamentCalendarDates, isCorporate]);
 
   const todaysGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
 

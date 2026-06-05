@@ -227,7 +227,6 @@ export function updateAllPlayerAges(allTeams) {
  */
 export function checkNPBDraftEligibility(player, awardBonus = 0) {
   const isPitcher = player.position === 'pitcher';
-  const DRAFT_THRESHOLD = isPitcher ? 225 : 255;
   const reasons = [];
   const age = player.age || 20;
 
@@ -235,16 +234,17 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     return { isDraftEligible: false, reasons: [], totalScore: 0 };
   }
 
-  // 年齢ボーナス
-  const ageBonusMap = { 18: 25, 19: 20, 20: 15, 21: 10, 22: 0, 23: -5, 24: -10, 25: -15, 26: -20, 27: -30, 28: -40, 29: -50 };
-  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 25 : -50);
+  // 年齢ボーナス（若い高校生・大学生を大幅に優遇）
+  const ageBonusMap = { 18: 40, 19: 35, 20: 25, 21: 18, 22: 10, 23: 0, 24: -8, 25: -15, 26: -22, 27: -30, 28: -40, 29: -50 };
+  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 40 : -50);
 
-  // 成長力ボーナス
+  // 成長力ボーナス（若い選手ほど成長力が大きく評価される）
   const gp = player.growthPotential || 1.0;
-  const gpBonus = age <= 22 ? Math.max(0, (gp - 0.9) * 30) : Math.max(0, (gp - 1.0) * 15);
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.7) * 50)
+               : age <= 22 ? Math.max(0, (gp - 0.8) * 40)
+               : Math.max(0, (gp - 1.0) * 15);
 
-  // 知名度ボーナス: 通算で蓄積された知名度がドラフト評価を底上げ
-  // fame 0=無名 → 0pt、fame 50=中堅 → +15pt、fame 100=超有名 → +30pt
+  // 知名度ボーナス
   const fame = player.fame || 0;
   const fameBonus = Math.round(fame * 0.3);
 
@@ -257,20 +257,18 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const arsenal = player.pitching?.arsenal || [];
     const bestBreaking = arsenal.filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
 
-    const velocityScore = Math.max(0, (velocity - 130) * 2);
+    const velocityScore = Math.max(0, (velocity - 125) * 2.2);
     baseScore = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus + gpBonus + fameBonus;
     const totalScore = baseScore + awardBonus;
 
-    if (totalScore >= DRAFT_THRESHOLD) {
-      reasons.push(`投手力${Math.round(baseScore - fameBonus)}pt`);
-      if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
-      if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
-      reasons.push(`総合${Math.round(totalScore)}pt`);
-      if (velocity >= 148) reasons.push(`球速${velocity}km`);
-      if (control >= 75) reasons.push(`制球力${control}`);
-      if (bestBreaking >= 70) reasons.push(`変化球${bestBreaking}`);
-      if (age <= 22) reasons.push(`${age}歳の将来性`);
-    }
+    reasons.push(`投手力${Math.round(baseScore - fameBonus)}pt`);
+    if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
+    if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
+    reasons.push(`総合${Math.round(totalScore)}pt`);
+    if (velocity >= 148) reasons.push(`球速${velocity}km`);
+    if (control >= 75) reasons.push(`制球力${control}`);
+    if (bestBreaking >= 70) reasons.push(`変化球${bestBreaking}`);
+    if (age <= 22) reasons.push(`${age}歳の将来性`);
   } else {
     const meet = player.batting?.meet || 0;
     const power = player.batting?.power || 0;
@@ -279,24 +277,22 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const defense = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
 
-    baseScore = meet + power + eye * 0.5 + speed * 0.3 + defense * 0.3 + arm * 0.3 + ageBonus + gpBonus + fameBonus;
+    baseScore = meet * 1.2 + power * 1.1 + eye * 0.6 + speed * 0.4 + defense * 0.4 + arm * 0.3 + ageBonus + gpBonus + fameBonus;
     const totalScore = baseScore + awardBonus;
 
-    if (totalScore >= DRAFT_THRESHOLD) {
-      reasons.push(`野手力${Math.round(baseScore - fameBonus)}pt`);
-      if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
-      if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
-      reasons.push(`総合${Math.round(totalScore)}pt`);
-      if (meet >= 75) reasons.push(`ミート${meet}`);
-      if (power >= 75) reasons.push(`パワー${power}`);
-      if (speed >= 80) reasons.push(`俊足${speed}`);
-      if (defense >= 80) reasons.push(`守備${defense}`);
-      if (age <= 22) reasons.push(`${age}歳の将来性`);
-    }
+    reasons.push(`野手力${Math.round(baseScore - fameBonus)}pt`);
+    if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
+    if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
+    reasons.push(`総合${Math.round(totalScore)}pt`);
+    if (meet >= 75) reasons.push(`ミート${meet}`);
+    if (power >= 75) reasons.push(`パワー${power}`);
+    if (speed >= 80) reasons.push(`俊足${speed}`);
+    if (defense >= 80) reasons.push(`守備${defense}`);
+    if (age <= 22) reasons.push(`${age}歳の将来性`);
   }
 
   return {
-    isDraftEligible: reasons.length > 0,
+    isDraftEligible: true,
     reasons,
     totalScore: baseScore + awardBonus
   };
@@ -426,52 +422,66 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   // === スコア順にソートし、上位~120名を指名 ===
   allCandidates.sort((a, b) => b.score - a.score);
 
-  // 指名人数は100〜140の範囲でゆらぎ
-  const draftSize = 100 + Math.floor(Math.random() * 41);
-  const selected = allCandidates.slice(0, Math.min(draftSize, allCandidates.length));
-  const cutoffScore = selected.length > 0 ? selected[selected.length - 1].score : 0;
+  // 各NPBチームの指名枠: 本指名6巡 + 育成 = 最大7巡 × 12球団 = 84名
+  // 実際は5-7巡が多い → 60-84名の本指名 + 育成指名
+  const numTeams = NPB_TEAMS.length;
+  const mainRounds = 5 + Math.floor(Math.random() * 2); // 5〜6巡
+  const mainSlots = mainRounds * numTeams;
+  const ikuSlots = Math.floor(Math.random() * 3) * numTeams; // 0〜2巡の育成
+  const totalSlots = mainSlots + ikuSlots;
+  const MIN_DRAFT_SCORE = 80;
+  const eligible = allCandidates.filter(c => c.score >= MIN_DRAFT_SCORE);
+  const selected = eligible.slice(0, Math.min(totalSlots, eligible.length));
 
-  // === 指名結果を構築 ===
+  // === ラウンドロビンで各球団に配分 ===
   const draftedPlayers = [];
   const nearMissPlayers = [];
+  const shuffledTeams = [...NPB_TEAMS].sort(() => Math.random() - 0.5);
+  let pickIdx = 0;
 
-  selected.forEach(candidate => {
-    const { player, teamName, score, bonus, awards, source, hofResult } = candidate;
-    const npbTeam = NPB_TEAMS[Math.floor(Math.random() * NPB_TEAMS.length)];
-    const overCutoff = score - cutoffScore;
-    const roundIndex = Math.min(Math.floor(overCutoff / 8), DRAFT_ROUND_LABELS.length - 1);
-    const draftRound = DRAFT_ROUND_LABELS[Math.max(0, roundIndex)];
+  for (let round = 0; round < mainRounds + (ikuSlots > 0 ? Math.ceil(ikuSlots / numTeams) : 0); round++) {
+    const isIku = round >= mainRounds;
+    const roundLabel = isIku ? '育成指名' : DRAFT_ROUND_LABELS[Math.min(6, 6 - round)];
+    const teamOrder = round % 2 === 0 ? shuffledTeams : [...shuffledTeams].reverse();
 
-    const isPitcher = player.position === 'pitcher';
-    const reasons = [];
-    if (source === 'highschool') {
-      reasons.push(`高卒ドラフト: 潜在能力${Math.round(score)}pt`);
-    } else if (source === 'university') {
-      reasons.push(`大卒ドラフト: 総合力${Math.round(score)}pt`);
-    } else {
-      reasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(score)}pt`);
+    for (let t = 0; t < numTeams && pickIdx < selected.length; t++) {
+      const npbTeam = teamOrder[t % numTeams];
+      const candidate = selected[pickIdx];
+      const { player, teamName, score, bonus, awards, source, hofResult } = candidate;
+
+      const isPitcher = player.position === 'pitcher';
+      const reasons = [];
+      if (source === 'highschool') {
+        reasons.push(`高卒ドラフト: 潜在能力${Math.round(score)}pt`);
+      } else if (source === 'university') {
+        reasons.push(`大卒ドラフト: 総合力${Math.round(score)}pt`);
+      } else {
+        reasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(score)}pt`);
+      }
+      if (bonus > 0) reasons.push(`成績ボーナス+${bonus}pt`);
+
+      draftedPlayers.push({
+        player, teamName, npbTeam, reasons, draftRound: roundLabel,
+        position: player.position, age: player.age,
+        name: player.name, playerId: player.id,
+        hallOfFame: hofResult?.isHallOfFame || false,
+        hofReason: hofResult?.reason || null,
+        careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
+        yearsPlayed: player.yearsPlayed || (source === 'highschool' || source === 'university' ? 0 : 1),
+        awardBonus: bonus, seasonAwards: awards,
+        source, score,
+      });
+      pickIdx++;
     }
-    if (bonus > 0) reasons.push(`成績ボーナス+${bonus}pt`);
-
-    draftedPlayers.push({
-      player, teamName, npbTeam, reasons, draftRound,
-      position: player.position, age: player.age,
-      name: player.name, playerId: player.id,
-      hallOfFame: hofResult?.isHallOfFame || false,
-      hofReason: hofResult?.reason || null,
-      careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
-      yearsPlayed: player.yearsPlayed || (source === 'highschool' || source === 'university' ? 0 : 1),
-      awardBonus: bonus, seasonAwards: awards,
-      source, score,
-    });
-  });
+  }
 
   // === 惜しかった選手 ===
   const draftedIds = new Set(draftedPlayers.map(d => d.playerId));
-  const nearThreshold = cutoffScore * 0.90;
+  const lowestDraftedScore = draftedPlayers.length > 0 ? Math.min(...draftedPlayers.map(d => d.score)) : 0;
+  const nearThreshold = lowestDraftedScore * 0.90;
   allCandidates.forEach(candidate => {
     if (draftedIds.has(candidate.player.id)) return;
-    if (candidate.score >= nearThreshold && candidate.score < cutoffScore) {
+    if (candidate.score >= nearThreshold && candidate.score < lowestDraftedScore) {
       const isPitcher = candidate.player.position === 'pitcher';
       const sourceLabel = { highschool: '高校', university: '大学', corporate: '', independent: '' }[candidate.source] || '';
       nearMissPlayers.push({
@@ -480,7 +490,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         position: candidate.player.position,
         age: candidate.player.age,
         source: candidate.source,
-        reasons: [`${sourceLabel}${isPitcher ? '投手' : '野手'}力${Math.round(candidate.score)}pt（あと${Math.round(cutoffScore - candidate.score)}pt）`]
+        reasons: [`${sourceLabel}${isPitcher ? '投手' : '野手'}力${Math.round(candidate.score)}pt（あと${Math.round(lowestDraftedScore - candidate.score)}pt）`]
       });
     }
   });
