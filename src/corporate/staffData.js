@@ -19,13 +19,10 @@ export const STAFF_ABILITIES = {
 export const STAFF_ABILITY_KEYS = Object.keys(STAFF_ABILITIES);
 
 // スタッフの役職別・得意になりやすい能力プール
-// 実際の個人差は生成時にランダムで決まる
 export const STAFF_ROLE_PROFILES = {
   coach: {
     name: 'コーチ',
-    // この中から2〜3個がランダムに強みになる
     strongPool: ['battingCoach', 'fieldRunCoach', 'pitchingCoach', 'batteryCoach', 'motivation', 'fitness'],
-    // これらは低めになりやすい（ただし個人差あり）
     weakPool: ['managing', 'negotiation'],
   },
   manager: {
@@ -40,6 +37,41 @@ export const STAFF_ROLE_PROFILES = {
   },
 };
 
+// スタッフの専門タイプ（生成時にランダム付与、得意分野を極端に尖らせる）
+const STAFF_SPECIALTIES = {
+  batting_expert:    { label: '打撃特化', primary: ['battingCoach'], secondary: ['motivation'], weak: ['pitchingCoach', 'scoutingEye', 'negotiation'] },
+  pitching_expert:   { label: '投手特化', primary: ['pitchingCoach'], secondary: ['batteryCoach'], weak: ['battingCoach', 'scoutingEye', 'negotiation'] },
+  defense_expert:    { label: '守備走塁特化', primary: ['fieldRunCoach'], secondary: ['fitness'], weak: ['battingCoach', 'pitchingCoach', 'negotiation'] },
+  battery_expert:    { label: 'バッテリー特化', primary: ['batteryCoach'], secondary: ['pitchingCoach'], weak: ['battingCoach', 'fieldRunCoach', 'negotiation'] },
+  scout_expert:      { label: 'スカウト特化', primary: ['scoutingEye'], secondary: ['negotiation'], weak: ['battingCoach', 'pitchingCoach', 'fitness'] },
+  negotiation_expert:{ label: '交渉特化', primary: ['negotiation'], secondary: ['managing'], weak: ['battingCoach', 'pitchingCoach', 'fitness'] },
+  conditioning:      { label: 'コンディション特化', primary: ['fitness', 'bodyCare'], secondary: ['motivation'], weak: ['battingCoach', 'pitchingCoach', 'negotiation'] },
+  motivator:         { label: 'モチベーター', primary: ['motivation'], secondary: ['managing'], weak: ['pitchingCoach', 'scoutingEye', 'fitness'] },
+  strategist:        { label: '戦略家', primary: ['managing'], secondary: ['motivation', 'scoutingEye'], weak: ['fitness', 'bodyCare'] },
+  allrounder:        { label: '万能型', primary: [], secondary: [], weak: [] },
+};
+
+// ランク別の専門タイプ出現確率
+// D/C: 尖った専門家が多い  B: バランス  A: やや万能  S: 万能型が中心
+const SPECIALTY_WEIGHTS = {
+  S: { allrounder: 50, batting_expert: 5, pitching_expert: 5, defense_expert: 5, battery_expert: 5, scout_expert: 5, negotiation_expert: 5, conditioning: 5, motivator: 5, strategist: 10 },
+  A: { allrounder: 25, batting_expert: 8, pitching_expert: 8, defense_expert: 8, battery_expert: 5, scout_expert: 10, negotiation_expert: 10, conditioning: 8, motivator: 8, strategist: 10 },
+  B: { allrounder: 10, batting_expert: 12, pitching_expert: 12, defense_expert: 10, battery_expert: 8, scout_expert: 12, negotiation_expert: 10, conditioning: 10, motivator: 8, strategist: 8 },
+  C: { allrounder: 5, batting_expert: 15, pitching_expert: 15, defense_expert: 12, battery_expert: 8, scout_expert: 12, negotiation_expert: 10, conditioning: 10, motivator: 8, strategist: 5 },
+  D: { allrounder: 3, batting_expert: 15, pitching_expert: 15, defense_expert: 12, battery_expert: 10, scout_expert: 12, negotiation_expert: 10, conditioning: 12, motivator: 8, strategist: 3 },
+};
+
+const pickSpecialty = (grade) => {
+  const weights = SPECIALTY_WEIGHTS[grade] || SPECIALTY_WEIGHTS.C;
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  let roll = Math.random() * total;
+  for (const [key, w] of Object.entries(weights)) {
+    roll -= w;
+    if (roll <= 0) return key;
+  }
+  return 'allrounder';
+};
+
 // スタッフのグレード（能力の基準値）
 export const STAFF_GRADES = {
   S: { label: 'S級', baseMin: 70, baseMax: 95 },
@@ -49,9 +81,18 @@ export const STAFF_GRADES = {
   D: { label: 'D級', baseMin: 10, baseMax: 35 },
 };
 
+// チームランク → 雇用できるスタッフの最大グレード
+export const STAFF_GRADE_CAP = { S: 'S', A: 'S', B: 'A', C: 'B', D: 'C' };
+const GRADE_ORDER = ['D', 'C', 'B', 'A', 'S'];
+
+export const canHireGrade = (teamRank, staffGrade) => {
+  const cap = STAFF_GRADE_CAP[teamRank] || 'C';
+  return GRADE_ORDER.indexOf(staffGrade) <= GRADE_ORDER.indexOf(cap);
+};
+
 // 給与計算（選手・スタッフ共通）: 高卒1年目400万、年齢+1ごとに+40万
-const BASE_SALARY = 400; // 万円/年（18歳基準）
-const SALARY_PER_AGE = 40; // 1歳あたりの昇給額（万円）
+const BASE_SALARY = 400;
+const SALARY_PER_AGE = 40;
 
 export const getStaffSalary = (staff) =>
   BASE_SALARY + ((staff.age || 35) - 18) * SALARY_PER_AGE;
@@ -65,7 +106,7 @@ export const getPlayerSalary = (player) =>
 
 let nextStaffId = 5000;
 
-export const generateStaff = (role, grade = null) => {
+export const generateStaff = (role, grade = null, maxGrade = null) => {
   const id = nextStaffId++;
   const profile = STAFF_ROLE_PROFILES[role];
   if (!profile) return null;
@@ -79,28 +120,56 @@ export const generateStaff = (role, grade = null) => {
     else grade = 'D';
   }
 
+  // グレードキャップ適用
+  if (maxGrade) {
+    const capIdx = GRADE_ORDER.indexOf(maxGrade);
+    const gradeIdx = GRADE_ORDER.indexOf(grade);
+    if (gradeIdx > capIdx) {
+      grade = maxGrade;
+    }
+  }
+
   const g = STAFF_GRADES[grade];
   const abilities = {};
 
-  // 個人の強み: strongPoolから2〜3個ランダムに選出
-  const strongCount = 2 + (Math.random() < 0.5 ? 1 : 0);
-  const shuffledStrong = [...profile.strongPool].sort(() => Math.random() - 0.5);
-  const personalStrengths = new Set(shuffledStrong.slice(0, strongCount));
+  // 専門タイプを決定
+  const specialtyKey = pickSpecialty(grade);
+  const specialty = STAFF_SPECIALTIES[specialtyKey];
 
-  // 個人の弱み: weakPoolから0〜1個（weakPoolに入っていても得意な人もいる）
-  const weakCount = Math.random() < 0.7 ? 1 : 0;
-  const shuffledWeak = [...profile.weakPool].sort(() => Math.random() - 0.5);
+  // 個人の強み: 専門タイプの primary + 役職 strongPool から選出
+  const combinedStrong = [...new Set([...(specialty.primary || []), ...profile.strongPool])];
+  const strongCount = specialtyKey === 'allrounder'
+    ? Math.min(combinedStrong.length, 5 + Math.floor(Math.random() * 3))
+    : 2 + (Math.random() < 0.5 ? 1 : 0);
+  const shuffledStrong = [...combinedStrong].sort(() => Math.random() - 0.5);
+  const personalStrengths = new Set(shuffledStrong.slice(0, strongCount));
+  // 専門の primary は必ず含める
+  if (specialty.primary) specialty.primary.forEach(k => personalStrengths.add(k));
+  if (specialty.secondary) specialty.secondary.forEach(k => { if (Math.random() < 0.6) personalStrengths.add(k); });
+
+  // 弱み: 専門タイプの weak + 役職 weakPool
+  const combinedWeak = [...new Set([...(specialty.weak || []), ...profile.weakPool])];
+  const weakCount = specialtyKey === 'allrounder' ? 0 : (Math.random() < 0.7 ? 2 : 1);
+  const shuffledWeak = combinedWeak.filter(k => !personalStrengths.has(k)).sort(() => Math.random() - 0.5);
   const personalWeaknesses = new Set(shuffledWeak.slice(0, weakCount));
 
   for (const key of STAFF_ABILITY_KEYS) {
     let base = g.baseMin + Math.floor(Math.random() * (g.baseMax - g.baseMin + 1));
 
     if (personalStrengths.has(key)) {
-      // 強み: +15〜30のブースト
-      base += 15 + Math.floor(Math.random() * 16);
+      if (specialty.primary?.includes(key)) {
+        // 専門の主力: +20〜35（極端に尖る）
+        base += 20 + Math.floor(Math.random() * 16);
+      } else {
+        base += 15 + Math.floor(Math.random() * 16);
+      }
     } else if (personalWeaknesses.has(key)) {
-      // 弱み: -10〜20のペナルティ
-      base -= 10 + Math.floor(Math.random() * 11);
+      base -= 15 + Math.floor(Math.random() * 11);
+    }
+
+    // S級万能型: 全能力の下限を引き上げ
+    if (grade === 'S' && specialtyKey === 'allrounder') {
+      base = Math.max(base, 65 + Math.floor(Math.random() * 10));
     }
 
     abilities[key] = Math.min(99, Math.max(1, base));
@@ -113,9 +182,11 @@ export const generateStaff = (role, grade = null) => {
     name: generateStaffName(),
     role,
     grade,
+    specialty: specialtyKey,
+    specialtyLabel: specialty.label,
     age: role === 'trainer' ? 28 + Math.floor(Math.random() * 20) : 35 + Math.floor(Math.random() * 20),
     abilities,
-    strengths: [...personalStrengths], // UIで「得意」表示用
+    strengths: [...personalStrengths],
     experience,
     personality: randomPersonality(),
   };
@@ -211,13 +282,14 @@ export const convertPlayerToStaff = (player) => {
   };
 };
 
-// 市場に出回るスタッフ候補を生成
-export const generateStaffMarket = (count = 15) => {
+// 市場に出回るスタッフ候補を生成（チームランクで雇用可能グレードをフィルタ）
+export const generateStaffMarket = (count = 15, teamRank = null) => {
+  const maxGrade = teamRank ? (STAFF_GRADE_CAP[teamRank] || 'C') : null;
   const market = [];
   const roles = ['coach', 'coach', 'coach', 'manager', 'manager', 'trainer', 'trainer'];
   for (let i = 0; i < count; i++) {
     const role = roles[Math.floor(Math.random() * roles.length)];
-    market.push(generateStaff(role));
+    market.push(generateStaff(role, null, maxGrade));
   }
   return market.sort((a, b) => {
     const gradeOrder = { S: 0, A: 1, B: 2, C: 3, D: 4 };
@@ -282,7 +354,7 @@ export const getNegotiationBonus = (staffBonus) => {
 
 // 年次更新: 全スタッフの経験+1、高齢退職判定、AIチーム自動補充
 // 返り値: 退職者リスト（UIでの通知用）
-export const advanceStaffYear = (staffList, autoReplenish = false) => {
+export const advanceStaffYear = (staffList, autoReplenish = false, teamRank = null) => {
   if (!staffList) return [];
   const retired = [];
   for (const staff of staffList) {
@@ -300,10 +372,11 @@ export const advanceStaffYear = (staffList, autoReplenish = false) => {
       staffList.splice(i, 1);
     }
   }
-  // AI自動補充: 退職分と同じ役職で補充
+  // AI自動補充: 退職分と同じ役職で補充（グレードキャップ適用）
   if (autoReplenish && retired.length > 0) {
+    const maxGrade = teamRank ? (STAFF_GRADE_CAP[teamRank] || 'C') : null;
     for (const r of retired) {
-      const replacement = generateStaff(r.role);
+      const replacement = generateStaff(r.role, null, maxGrade);
       if (replacement) staffList.push(replacement);
     }
   }

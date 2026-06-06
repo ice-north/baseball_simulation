@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus } from '../corporate/staffData.js';
+import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus, STAFF_GRADE_CAP, canHireGrade } from '../corporate/staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
@@ -87,13 +87,20 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const scoutEye = staffBonus.scoutingEye || 0;
   const negotiation = staffBonus.negotiation || 0;
 
+  const teamRank = cd.rank || 'C';
+  const maxStaffGrade = STAFF_GRADE_CAP[teamRank] || 'C';
+
   const handleOpenMarket = () => {
     if (!marketStaff) {
-      setMarketStaff(generateStaffMarket(15));
+      setMarketStaff(generateStaffMarket(15, teamRank));
     }
   };
 
   const handleHire = (newStaff) => {
+    if (!canHireGrade(teamRank, newStaff.grade)) {
+      setConfirmHire(null);
+      return;
+    }
     cd.staff.push(newStaff);
     const idx = marketStaff.findIndex(s => s.id === newStaff.id);
     if (idx >= 0) marketStaff.splice(idx, 1);
@@ -147,6 +154,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             </div>
             <div className="mt-2 text-xs text-gray-500">
               スタッフ{staff.length}名 / スタッフ人件費: {staffSalaryTotal.toLocaleString()}万円
+              <span className="ml-3 text-gray-600">雇用上限: {STAFF_GRADES[maxStaffGrade]?.label}まで</span>
             </div>
           </div>
 
@@ -186,8 +194,13 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       <span className="text-gray-400 text-xs">{getStaffSalary(s)}万円</span>
                     </div>
 
-                    {/* 得意分野タグ */}
-                    <div className="flex gap-1 mt-1.5">
+                    {/* 専門＋得意分野タグ */}
+                    <div className="flex gap-1 mt-1.5 flex-wrap">
+                      {s.specialtyLabel && (
+                        <span className="text-[10px] bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded font-bold">
+                          {s.specialtyLabel}
+                        </span>
+                      )}
                       {(s.strengths || []).map(key => (
                         <span key={key} className="text-[10px] bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded">
                           {STAFF_ABILITIES[key]?.name || key}
@@ -248,7 +261,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <h2 className="text-sm font-bold text-gray-300">スタッフ市場</h2>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setMarketStaff(generateStaffMarket(15))}
+                    onClick={() => setMarketStaff(generateStaffMarket(15, teamRank))}
                     className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs"
                   >
                     更新
@@ -270,7 +283,12 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     <span className="text-gray-500 w-10">{s.age}歳</span>
                     <span className="text-gray-600 w-12">経験{s.experience}年</span>
                     <span className="text-gray-600 w-12">{s.personality}</span>
-                    <div className="flex gap-1 flex-1">
+                    <div className="flex gap-1 flex-1 flex-wrap">
+                      {s.specialtyLabel && (
+                        <span className="text-[9px] bg-purple-900/30 text-purple-400 px-1 py-0.5 rounded font-bold">
+                          {s.specialtyLabel}
+                        </span>
+                      )}
                       {(s.strengths || []).map(key => (
                         <span key={key} className="text-[9px] bg-blue-900/30 text-blue-400 px-1 py-0.5 rounded">
                           {STAFF_ABILITIES[key]?.name || key}
@@ -848,10 +866,13 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white mb-3">スタッフ雇用確認</h3>
             <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className={`font-bold ${gradeColor(confirmHire.grade)}`}>{STAFF_GRADES[confirmHire.grade]?.label}</span>
                 <span className="text-yellow-400 text-sm">{roleLabel(confirmHire.role)}</span>
                 <span className="text-white font-medium">{confirmHire.name}</span>
+                {confirmHire.specialtyLabel && (
+                  <span className="text-[10px] bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded font-bold">{confirmHire.specialtyLabel}</span>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-0">
                 {Object.entries(STAFF_ABILITIES).map(([key, info]) => (

@@ -1111,7 +1111,7 @@ export function advanceToNextYear(seasonData, allTeams) {
       if (teamData?.corporateData) {
         advanceSponsors(teamData.corporateData);
         const isUser = teamName === userTeamName;
-        const retired = advanceStaffYear(teamData.corporateData.staff, !isUser);
+        const retired = advanceStaffYear(teamData.corporateData.staff, !isUser, teamData.corporateData.rank);
         if (isUser && retired.length > 0) {
           staffRetirements = retired;
         }

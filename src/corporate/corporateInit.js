@@ -22,7 +22,7 @@
 // ============================================================
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
-import { generateStaff } from './staffData.js';
+import { generateStaff, STAFF_GRADE_CAP } from './staffData.js';
 import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA, clearReleasedPlayersPool, initializeAllPitchingRotations } from '../teams-data.js';
@@ -128,11 +128,11 @@ const INDEPENDENT_RANK_CONFIG = {
 };
 
 const RANK_STAFF_CONFIG = {
-  S: { coach: 3, manager: 1, trainer: 1 },
-  A: { coach: 2, manager: 1, trainer: 1 },
-  B: { coach: 2, manager: 1, trainer: 0 },
-  C: { coach: 1, manager: 1, trainer: 0 },
-  D: { coach: 1, manager: 0, trainer: 0 },
+  S: { coach: 4, manager: 2, trainer: 2 },
+  A: { coach: 3, manager: 2, trainer: 1 },
+  B: { coach: 3, manager: 1, trainer: 1 },
+  C: { coach: 2, manager: 1, trainer: 1 },
+  D: { coach: 2, manager: 1, trainer: 0 },
 };
 
 export const BUDGET_BY_RANK = { S: 24000, A: 21000, B: 18000, C: 15000, D: 12000 };
@@ -552,11 +552,11 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
 
 export const generateInitialStaff = (rank) => {
   const config = RANK_STAFF_CONFIG[rank] || RANK_STAFF_CONFIG.C;
+  const maxGrade = STAFF_GRADE_CAP[rank] || 'C';
   const staff = [];
   for (const [role, count] of Object.entries(config)) {
     for (let i = 0; i < count; i++) {
-      const grade = rank === 'S' || rank === 'A' ? null : (rank === 'D' ? 'D' : null);
-      staff.push(generateStaff(role, grade));
+      staff.push(generateStaff(role, null, maxGrade));
     }
   }
   return staff;
