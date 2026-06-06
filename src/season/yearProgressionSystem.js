@@ -584,8 +584,9 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   let eligibleIdx = 0;
   for (let round = 1; round < mainRounds + (ikuSlots > 0 ? Math.ceil(ikuSlots / numTeams) : 0); round++) {
     const isIku = round >= mainRounds;
-    const roundLabel = isIku ? '育成指名' : DRAFT_ROUND_LABELS[Math.min(6, 6 - round)];
-    const teamOrder = round % 2 === 0 ? shuffledTeams : [...shuffledTeams].reverse();
+    const ikuRound = round - mainRounds + 1;
+    const roundLabel = isIku ? `育成${ikuRound}巡目` : DRAFT_ROUND_LABELS[Math.min(6, 6 - round)];
+    const teamOrder = round % 2 === 1 ? shuffledTeams : [...shuffledTeams].reverse();
 
     for (let t = 0; t < numTeams; t++) {
       while (eligibleIdx < eligible.length && takenIds.has(eligible[eligibleIdx].player.id)) eligibleIdx++;

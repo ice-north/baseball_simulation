@@ -36,14 +36,14 @@ const buildGridOrder = () => {
   return grid;
 };
 
-const ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位', 'ドラフト4位', 'ドラフト5位', 'ドラフト6位', '育成指名'];
+const KNOWN_ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位', 'ドラフト4位', 'ドラフト5位', 'ドラフト6位'];
 
 const ROUND_STYLES = {
   'ドラフト1位': { badge: 'bg-red-600 text-white shadow-[0_0_8px_rgba(239,68,68,0.6)]', border: 'border-l-4 border-red-500', glow: 'shadow-[0_2px_16px_rgba(239,68,68,0.18)]' },
   'ドラフト2位': { badge: 'bg-orange-500 text-white', border: 'border-l-4 border-orange-500', glow: '' },
-  '育成指名': { badge: 'bg-gray-600 text-gray-200', border: 'border-l-4 border-gray-500', glow: '' },
 };
 const DEFAULT_ROUND_STYLE = { badge: 'bg-yellow-700 text-yellow-200', border: 'border-l-4 border-yellow-600', glow: '' };
+const IKU_ROUND_STYLE = { badge: 'bg-gray-600 text-gray-200', border: 'border-l-4 border-gray-500', glow: '' };
 
 const SOURCE_LABELS = {
   highschool: { label: '高校', color: 'text-green-400 bg-green-900/40 border-green-600/40' },
@@ -66,10 +66,28 @@ const COLLISION_STYLES = [
   { bg: 'bg-purple-100', border: 'border-2 border-purple-300', label: 'text-purple-600' },
 ];
 
+const CARD_BODY_HEIGHT = 120;
+
 const getTeamInfo = (name) => NPB_TEAMS_INFO.find(t => t.name === name) || { short: name, color: '#666', textColor: '#fff' };
 
-const PlayerCardContent = ({ name, position, teamName, dimmed }) => (
-  <div className={`w-fit mx-auto ${dimmed ? 'opacity-30' : ''}`}>
+const getLotteryMissHistory = (firstRoundData) => {
+  if (!firstRoundData?.phases) return {};
+  const history = {};
+  firstRoundData.phases.forEach((phase, pIdx) => {
+    phase.lotteryResults.forEach(lr => {
+      lr.competitors.forEach(team => {
+        if (team !== lr.winner) {
+          if (!history[team]) history[team] = [];
+          history[team].push({ playerName: lr.playerName, phaseIdx: pIdx });
+        }
+      });
+    });
+  });
+  return history;
+};
+
+const PlayerCardContent = ({ name, position, teamName }) => (
+  <div className="w-fit mx-auto">
     <div className="text-gray-900 font-black text-lg sm:text-2xl leading-tight tracking-wide text-center">
       {name}
     </div>
@@ -100,22 +118,38 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
   const phaseRevRef = useRef(phaseRevealed);
   phaseRevRef.current = phaseRevealed;
 
-  const roundData = useMemo(() => {
+  const { roundData, activeRounds } = useMemo(() => {
     const data = {};
-    ROUND_ORDER.forEach(round => {
-      const teamMap = {};
-      NPB_TEAMS_INFO.forEach(t => { teamMap[t.name] = []; });
-      const roundPlayers = draftedPlayers.filter(p => p.draftRound === round);
-      roundPlayers.forEach(p => { if (teamMap[p.npbTeam]) teamMap[p.npbTeam].push(p); });
-      if (roundPlayers.length > 0) data[round] = teamMap;
+    const rounds = [];
+    const seen = new Set();
+    draftedPlayers.forEach(p => {
+      if (!seen.has(p.draftRound)) {
+        seen.add(p.draftRound);
+        rounds.push(p.draftRound);
+      }
+      if (!data[p.draftRound]) {
+        const teamMap = {};
+        NPB_TEAMS_INFO.forEach(t => { teamMap[t.name] = []; });
+        data[p.draftRound] = teamMap;
+      }
+      if (data[p.draftRound][p.npbTeam]) {
+        data[p.draftRound][p.npbTeam].push(p);
+      }
     });
-    return data;
+    const orderMap = {};
+    KNOWN_ROUND_ORDER.forEach((r, i) => { orderMap[r] = i; });
+    rounds.sort((a, b) => {
+      const oa = orderMap[a] ?? (a.startsWith('育成') ? 100 + parseInt(a.match(/\d+/)?.[0] || '0') : 999);
+      const ob = orderMap[b] ?? (b.startsWith('育成') ? 100 + parseInt(b.match(/\d+/)?.[0] || '0') : 999);
+      return oa - ob;
+    });
+    return { roundData: data, activeRounds: rounds };
   }, [draftedPlayers]);
 
-  const activeRounds = ROUND_ORDER.filter(r => roundData[r]);
   const currentRound = activeRounds[currentRoundIdx];
   const currentTeamMap = currentRound ? roundData[currentRound] : null;
   const isFirstRound = currentRound === 'ドラフト1位' && firstRoundData?.phases?.length > 0;
+  const isIkuRound = currentRound?.startsWith('育成');
 
   const currentPhase = isFirstRound ? (firstRoundData.phases[phaseIdx] || null) : null;
   const hasLottery = currentPhase?.lotteryResults?.length > 0;
@@ -129,13 +163,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
 
   const waiverRevealOrder = useMemo(() => {
     if (!currentTeamMap || isFirstRound) return [];
-    const pos = {};
-    gridOrder.forEach((t, i) => { pos[t.name] = i; });
-    return NPB_TEAMS_INFO
-      .filter(t => currentTeamMap[t.name]?.length > 0)
-      .map(t => t.name)
-      .sort((a, b) => (pos[a] ?? 99) - (pos[b] ?? 99));
-  }, [currentTeamMap, isFirstRound, gridOrder]);
+    const roundPicks = draftedPlayers.filter(p => p.draftRound === currentRound);
+    const seen = new Set();
+    return roundPicks
+      .filter(p => { if (seen.has(p.npbTeam)) return false; seen.add(p.npbTeam); return true; })
+      .map(p => p.npbTeam);
+  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound]);
 
   const collisionColors = useMemo(() => {
     if (!currentPhase) return {};
@@ -252,11 +285,11 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
 
     if (settledPick) {
       return (
-        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
+        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
           <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
             {team.short}
           </div>
-          <div className="bg-white p-3 flex flex-col justify-center" style={{ minHeight: '115px' }}>
+          <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
             <PlayerCardContent name={settledPick.name} position={settledPick.position} teamName={settledPick.teamName} />
             <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 確定</div>
           </div>
@@ -281,18 +314,18 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
       }
 
       return (
-        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
+        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
           <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
             {team.short}
           </div>
-          <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ minHeight: '115px' }}>
+          <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ height: CARD_BODY_HEIGHT }}>
             {!revealed ? (
               <div className="text-center">
                 <div className="text-3xl sm:text-4xl mb-1 opacity-20 select-none font-black text-gray-400">?</div>
                 <div className="text-gray-300 text-[10px]">未発表</div>
               </div>
             ) : phaseState === 'lotteryShown' && isLoser ? (
-              <div className="text-center py-2">
+              <div className="text-center">
                 <div className="text-red-400 text-xs font-bold">抽選外れ</div>
                 <div className="text-gray-400 text-[10px] mt-1">再指名待ち...</div>
               </div>
@@ -313,11 +346,11 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
     }
 
     return (
-      <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
+      <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
         <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
           {team.short}
         </div>
-        <div className="bg-white p-3 flex flex-col justify-center" style={{ minHeight: '115px' }}>
+        <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
           <div className="text-gray-200 text-xs text-center">—</div>
         </div>
       </div>
@@ -329,11 +362,11 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
     const hasPick = picks.length > 0;
     const revealed = waiverRevealed.has(team.name);
     return (
-      <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
+      <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
         <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
           {team.short}
         </div>
-        <div className="bg-white p-3 flex flex-col justify-center" style={{ minHeight: '115px' }}>
+        <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
           {!hasPick ? (
             <div className="text-gray-300 text-xs text-center">指名なし</div>
           ) : !revealed ? (
@@ -504,6 +537,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
     return `${waiverRevealed.size} / ${waiverRevealOrder.length} 球団発表済み`;
   };
 
+  const roundBadgeLabel = isIkuRound ? currentRound : currentRound;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <style>{`
@@ -522,10 +557,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
           <div className="h-px w-16 bg-gradient-to-r from-transparent to-red-500/60" />
           <span className={`text-sm font-black px-4 py-1.5 rounded-lg ${
             currentRound === 'ドラフト1位' ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' :
-            currentRound === '育成指名' ? 'bg-gray-600 text-white' :
+            isIkuRound ? 'bg-gray-600 text-white' :
             'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
           }`}>
-            {currentRound}
+            {roundBadgeLabel}
             {isFirstRound && phaseIdx > 0 && ` (外れ${'外れ'.repeat(phaseIdx - 1)}1位)`}
           </span>
           <div className="h-px w-16 bg-gradient-to-l from-transparent to-red-500/60" />
@@ -533,7 +568,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
         <div className="text-gray-500 text-xs mt-1.5">
           {currentRoundIdx + 1} / {activeRounds.length} ラウンド
           {isFirstRound && ' (入札制)'}
-          {!isFirstRound && currentRoundIdx > 0 && ' (ウェーバー制)'}
+          {!isFirstRound && ' (ウェーバー制)'}
         </div>
       </div>
 
@@ -552,7 +587,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
   );
 };
 
-const DraftTeamSummaryScreen = ({ draftedPlayers, onContinue }) => {
+const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, onContinue }) => {
   const [summaryGrid] = useState(() => buildGridOrder());
   const teamPicks = useMemo(() => {
     const map = {};
@@ -561,8 +596,14 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, onContinue }) => {
     return map;
   }, [draftedPlayers]);
 
-  const roundOrder = {};
-  ROUND_ORDER.forEach((r, i) => { roundOrder[r] = i; });
+  const missHistory = useMemo(() => getLotteryMissHistory(firstRoundData), [firstRoundData]);
+
+  const sortRound = (label) => {
+    const idx = KNOWN_ROUND_ORDER.indexOf(label);
+    if (idx >= 0) return idx;
+    if (label.startsWith('育成')) return 100 + parseInt(label.match(/\d+/)?.[0] || '0');
+    return 999;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
@@ -574,25 +615,42 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, onContinue }) => {
         {summaryGrid.map(team => {
           const picks = teamPicks[team.name] || [];
           if (picks.length === 0) return null;
-          const sorted = [...picks].sort((a, b) => (roundOrder[a.draftRound] ?? 99) - (roundOrder[b.draftRound] ?? 99));
+          const sorted = [...picks].sort((a, b) => sortRound(a.draftRound) - sortRound(b.draftRound));
+          const misses = missHistory[team.name] || [];
           return (
             <div key={team.name} className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="px-3 py-2 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
                 {team.short} ({picks.length}名)
               </div>
               <div className="divide-y divide-gray-200">
-                {sorted.map((entry, idx) => (
-                  <div key={idx} className="px-3 py-2 flex items-baseline gap-2 flex-wrap">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                      entry.draftRound === 'ドラフト1位' ? 'bg-red-100 text-red-700' :
-                      entry.draftRound === '育成指名' ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
-                    }`}>{entry.draftRound.replace('ドラフト', '')}</span>
-                    <span className="text-gray-900 font-bold text-sm">{entry.name}</span>
-                    <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
-                    <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
-                    <span className="text-gray-400 text-xs">{entry.teamName}</span>
-                  </div>
-                ))}
+                {sorted.map((entry, idx) => {
+                  const isFirst = entry.draftRound === 'ドラフト1位';
+                  const displayLabel = entry.draftRound.replace('ドラフト', '');
+                  return (
+                    <div key={idx}>
+                      {isFirst && misses.length > 0 && (
+                        <div className="px-3 py-1.5 bg-red-50">
+                          {misses.map((m, mi) => (
+                            <div key={mi} className="flex items-center gap-1.5 text-red-400 text-[10px]">
+                              <span className="font-bold">✕ 外れ{mi > 0 ? '外れ'.repeat(mi) : ''}</span>
+                              <span>{m.playerName}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="px-3 py-2 flex items-baseline gap-2 flex-wrap">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                          isFirst ? 'bg-red-100 text-red-700' :
+                          entry.draftRound.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
+                        }`}>{displayLabel}</span>
+                        <span className="text-gray-900 font-bold text-sm">{entry.name}</span>
+                        <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
+                        <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
+                        <span className="text-gray-400 text-xs">{entry.teamName}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
@@ -612,6 +670,13 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
   const myTeamDrafted = draftedPlayers.filter(d => d.teamName === userTeamName);
   const myTeamProBonus = proBonus?.filter(b => b.teamName === userTeamName) || [];
   const myTeamNearMiss = nearMissPlayers?.filter(n => n.teamName === userTeamName) || [];
+
+  const sortRound = (label) => {
+    const idx = KNOWN_ROUND_ORDER.indexOf(label);
+    if (idx >= 0) return idx;
+    if (label.startsWith('育成')) return 100 + parseInt(label.match(/\d+/)?.[0] || '0');
+    return 999;
+  };
 
   return (
     <div className="p-4 max-w-3xl mx-auto">
@@ -654,11 +719,8 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
             <span className="ml-auto text-sm font-bold text-gray-400">{myTeamDrafted.length}名</span>
           </h2>
           <div className="space-y-2.5">
-            {[...myTeamDrafted].sort((a, b) => {
-              const ro = { 'ドラフト1位': 0, 'ドラフト2位': 1, 'ドラフト3位': 2, 'ドラフト4位': 3, 'ドラフト5位': 4, 'ドラフト6位': 5, '育成指名': 6 };
-              return (ro[a.draftRound] ?? 7) - (ro[b.draftRound] ?? 7);
-            }).map((entry, idx) => {
-              const style = ROUND_STYLES[entry.draftRound] || DEFAULT_ROUND_STYLE;
+            {[...myTeamDrafted].sort((a, b) => sortRound(a.draftRound) - sortRound(b.draftRound)).map((entry, idx) => {
+              const style = ROUND_STYLES[entry.draftRound] || (entry.draftRound.startsWith('育成') ? IKU_ROUND_STYLE : DEFAULT_ROUND_STYLE);
               const filteredReasons = entry.reasons.filter(r => !/ミート|パワー|選球眼|走力|守備|肩力|盗塁|球速|制球|スタミナ|俊足/.test(r));
               return (
                 <div key={idx} className={`draft-card bg-gray-700/60 rounded-xl p-3.5 ${style.border} ${style.glow}`} style={{ animationDelay: `${idx * 0.07}s` }}>
@@ -744,15 +806,53 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
   );
 };
 
+const DraftTitleScreen = ({ onComplete }) => {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 3500);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center cursor-pointer" onClick={onComplete}>
+      <style>{`
+        @keyframes draftTitleIn {
+          0% { opacity: 0; letter-spacing: 0.5em; }
+          25% { opacity: 1; letter-spacing: 0.3em; }
+          70% { opacity: 1; letter-spacing: 0.3em; }
+          100% { opacity: 0; letter-spacing: 0.2em; }
+        }
+        @keyframes draftSubIn {
+          0% { opacity: 0; }
+          30% { opacity: 0; }
+          50% { opacity: 0.6; }
+          70% { opacity: 0.6; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+      <div className="text-center">
+        <h1 className="text-4xl sm:text-6xl font-black text-white" style={{ animation: 'draftTitleIn 3.5s ease-in-out forwards' }}>
+          プロ野球ドラフト会議
+        </h1>
+        <div className="mt-6 text-gray-500 text-sm tracking-[0.4em] uppercase" style={{ animation: 'draftSubIn 3.5s ease-in-out forwards' }}>
+          NPB Draft Conference
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, userTeamName, onContinue }) => {
-  const [phase, setPhase] = useState('conference');
+  const [phase, setPhase] = useState('title');
   const hasDrafted = draftedPlayers && draftedPlayers.length > 0;
 
+  if (phase === 'title' && hasDrafted) {
+    return <DraftTitleScreen onComplete={() => setPhase('conference')} />;
+  }
   if (phase === 'conference' && hasDrafted) {
     return <DraftConferenceScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} onComplete={() => setPhase('teamSummary')} />;
   }
   if (phase === 'teamSummary' && hasDrafted) {
-    return <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} onContinue={() => setPhase('summary')} />;
+    return <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} onContinue={() => setPhase('summary')} />;
   }
   return (
     <DraftSummaryScreen draftedPlayers={draftedPlayers} nearMissPlayers={nearMissPlayers} proBonus={proBonus}
