@@ -422,7 +422,10 @@ export function calculateRecruitSuccessRate(player, teamData) {
   // ランク補正
   const rankBonus = RANK_RECRUIT_BONUS[rank] || 0;
 
-  const rate = baseRate - qualityPenalty + negotiationBonus + rankBonus;
+  // 調査ボーナス: 1回調査ごとに+7%
+  const investigationBonus = ((player._investigationCount || 0) * 0.07);
+
+  const rate = baseRate - qualityPenalty + negotiationBonus + rankBonus + investigationBonus;
   return Math.max(5, Math.min(95, Math.round(rate * 100)));
 }
 
@@ -614,7 +617,7 @@ export function dispatchScout(teamData, target, staffId, currentDate) {
 }
 
 /**
- * 日付進行時にスカウト派遣の完了をチェック
+ * 日付進行時にスカウト派遣の完了をチェック（発掘+調査の両方を処理）
  */
 export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
   const cd = teamData?.corporateData;
@@ -626,7 +629,21 @@ export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
     if (!isDatePassed(currentDate, mission.returnDate)) return;
 
     mission.completed = true;
-    mission.results = generateScoutReport(teamData, mission.target, mission.staffScoutEye, gameYear);
+
+    if (mission.type === 'investigation') {
+      const targetId = mission.targetPlayerId;
+      for (const m of cd.scoutMissions) {
+        if (m.type === 'investigation' || !m.results) continue;
+        const found = m.results.find(p => p.id === targetId);
+        if (found) {
+          investigatePlayer(found);
+          found.recruitRate = calculateRecruitSuccessRate(found, teamData);
+          break;
+        }
+      }
+    } else {
+      mission.results = generateScoutReport(teamData, mission.target, mission.staffScoutEye, gameYear);
+    }
     completed.push(mission);
   });
 
@@ -642,8 +659,8 @@ export function investigatePlayer(player) {
   if (current >= 2) return { success: false, message: 'これ以上調査できません' };
 
   player._revealLevel = current + 1;
+  player._investigationCount = (player._investigationCount || 0) + 1;
 
-  // 調査段階に応じて追加の能力を開示
   const accuracy = player.scoutAccuracy || 50;
   if (player._revealLevel === 1) {
     player.scoutedAbilities = obscureAbilities(player, Math.min(95, accuracy + 15), 'secondary');
@@ -652,6 +669,41 @@ export function investigatePlayer(player) {
   }
 
   return { success: true, level: player._revealLevel };
+}
+
+const INVESTIGATION_DAYS = 3;
+
+/**
+ * スカウトを選手の能力調査に派遣する
+ * 調査中のスカウトは発掘に行けない
+ */
+export function startInvestigation(teamData, playerId, playerName, staffId, currentDate) {
+  const cd = teamData?.corporateData;
+  if (!cd) return { success: false, message: '社会人チームではありません' };
+
+  const staff = (cd.staff || []).find(s => s.id === staffId);
+  if (!staff) return { success: false, message: 'スタッフが見つかりません' };
+
+  if (!cd.scoutMissions) cd.scoutMissions = [];
+
+  if (cd.scoutMissions.find(m => !m.completed && m.staffId === staffId)) {
+    return { success: false, message: `${staff.name}は現在別の任務中です` };
+  }
+
+  const returnDate = addDays(currentDate, INVESTIGATION_DAYS);
+  cd.scoutMissions.push({
+    type: 'investigation',
+    targetPlayerId: playerId,
+    targetPlayerName: playerName,
+    staffId,
+    staffName: staff.name,
+    staffScoutEye: staff.abilities?.scoutingEye || 30,
+    dispatchDate: { ...currentDate },
+    returnDate,
+    completed: false,
+  });
+
+  return { success: true, message: `${staff.name}が${playerName}の調査を開始しました（${returnDate.month}/${returnDate.day}完了）` };
 }
 
 /**

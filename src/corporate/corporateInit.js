@@ -142,8 +142,8 @@ const ROSTER_SIZE = {
   S: { corporate: [33, 38], club: [28, 33] },
   A: { corporate: [30, 35], club: [25, 30] },
   B: { corporate: [25, 30], club: [22, 27] },
-  C: { corporate: [22, 27], club: [20, 24] },
-  D: { corporate: [20, 24], club: [16, 20] },
+  C: { corporate: [22, 27], club: [19, 23] },
+  D: { corporate: [16, 20], club: [13, 17] },
 };
 
 // ランク別球速キャップ・最低保証・追加減速（corporateモード用）

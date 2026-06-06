@@ -5,7 +5,7 @@ import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudget
 import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
-import { dispatchScout, SCOUT_TARGETS, investigatePlayer } from '../corporate/scoutingSystem.js';
+import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation } from '../corporate/scoutingSystem.js';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -20,7 +20,8 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const [confirmFire, setConfirmFire] = useState(null);
   const [dispatchMessage, setDispatchMessage] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
-  const [dispatchTarget, setDispatchTarget] = useState(null); // 派遣先選択中
+  const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [investigateTargetId, setInvestigateTargetId] = useState(null);
   const [, setRefreshTick] = useState(0);
 
   if (!cd) {
@@ -523,6 +524,11 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             }`}>
                               {revealLabel}
                             </span>
+                            {(p._investigationCount || 0) > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-cyan-900/40 text-cyan-400">
+                                交渉+{(p._investigationCount || 0) * 7}%
+                              </span>
+                            )}
                           </div>
                           <div className="flex gap-3 mt-1.5 text-[10px] flex-wrap">
                             {p.position === 'pitcher' ? (<>
@@ -537,17 +543,65 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                               {renderAbility('守備', sa.fielding?.defense)}
                             </>)}
                           </div>
-                          {revealLevel < 2 && (
-                            <button
-                              onClick={() => {
-                                investigatePlayer(p);
-                                setRefreshTick(t => t + 1);
-                              }}
-                              className="mt-1.5 px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
-                            >
-                              🔍 調査する（{revealLevel === 0 ? '詳細を調べる' : '全能力を調べる'}）
-                            </button>
-                          )}
+                          {revealLevel < 2 && (() => {
+                            const missions = cd.scoutMissions || [];
+                            const activeInv = missions.find(m =>
+                              m.type === 'investigation' && !m.completed && m.targetPlayerId === p.id
+                            );
+
+                            if (activeInv) {
+                              return (
+                                <div className="mt-1.5 text-[10px] text-yellow-400 flex items-center gap-1.5">
+                                  <span>🔍 {activeInv.staffName}が調査中...</span>
+                                  <span className="text-gray-500">({activeInv.returnDate.month}/{activeInv.returnDate.day}完了)</span>
+                                </div>
+                              );
+                            }
+
+                            if (investigateTargetId === p.id) {
+                              const busyIds = new Set(missions.filter(m => !m.completed).map(m => m.staffId));
+                              const availScouts = staff.filter(s => !busyIds.has(s.id));
+                              return (
+                                <div className="mt-1.5 bg-gray-900/60 rounded p-2 border border-cyan-500/30">
+                                  <div className="text-[10px] text-cyan-400 mb-1.5">調査するスカウトを選んでください</div>
+                                  {availScouts.length === 0 ? (
+                                    <p className="text-[10px] text-gray-500">全スタッフが任務中です</p>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      {availScouts.map(s => (
+                                        <div key={s.id} className="flex items-center gap-2 bg-gray-800/80 rounded p-1.5">
+                                          <span className="text-white text-[10px] font-bold">{s.name}</span>
+                                          <span className="text-gray-400 text-[10px]">眼{s.abilities?.scoutingEye || 0}</span>
+                                          <button
+                                            onClick={() => {
+                                              const result = startInvestigation(teamData, p.id, p.name, s.id, seasonData.currentDate);
+                                              setDispatchMessage({ text: result.message, ok: result.success });
+                                              setInvestigateTargetId(null);
+                                              setRefreshTick(t => t + 1);
+                                              setTimeout(() => setDispatchMessage(null), 3000);
+                                            }}
+                                            className="ml-auto px-2 py-0.5 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
+                                          >
+                                            調査開始
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <button onClick={() => setInvestigateTargetId(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-1.5">キャンセル</button>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <button
+                                onClick={() => setInvestigateTargetId(p.id)}
+                                className="mt-1.5 px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
+                              >
+                                🔍 調査する（{revealLevel === 0 ? '詳細を調べる' : '全能力を調べる'}）
+                              </button>
+                            );
+                          })()}
                         </div>
                       );
                     })}

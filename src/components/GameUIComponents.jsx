@@ -309,18 +309,24 @@ export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
 );
 
 // --- SidebarButton コンポーネント ---
+const BLOCKING_VIEWS = new Set(['draft', 'contract', 'tryout', 'corporate_departure', 'corporate_scout']);
+
 export const SidebarButton = ({ view, icon, label, color = 'green', onActiveClick, screenMode, managementView, setScreenMode, setManagementView }) => {
   const isActive = screenMode === 'management' && managementView === view;
+  const isBlocked = screenMode === 'management' && BLOCKING_VIEWS.has(managementView) && !isActive;
   const activeColors = { green: 'bg-green-600/20 text-green-300 border-green-400', yellow: 'bg-yellow-600/20 text-yellow-300 border-yellow-400', blue: 'bg-blue-600/20 text-blue-300 border-blue-400' };
   const hoverColors = { green: 'hover:bg-green-900/20 hover:text-green-300', yellow: 'hover:bg-yellow-900/20 hover:text-yellow-300', blue: 'hover:bg-blue-900/20 hover:text-blue-300' };
   return (
     <button
       onClick={() => {
+        if (isBlocked) return;
         if (isActive && onActiveClick) { onActiveClick(); return; }
         setScreenMode('management'); setManagementView(view);
       }}
       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2.5 ${
-        isActive
+        isBlocked
+          ? 'text-gray-600 border-l-[3px] border-transparent cursor-not-allowed'
+          : isActive
           ? `${activeColors[color] || activeColors.green} border-l-[3px] shadow-sm`
           : `text-gray-400 ${hoverColors[color] || hoverColors.green} border-l-[3px] border-transparent`
       }`}

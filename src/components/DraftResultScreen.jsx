@@ -806,34 +806,47 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
   );
 };
 
-const DraftTitleScreen = ({ onComplete }) => {
+const DraftTitleOverlay = ({ onComplete }) => {
+  const [fading, setFading] = useState(false);
+
   useEffect(() => {
-    const timer = setTimeout(onComplete, 3500);
+    const timer = setTimeout(() => setFading(true), 3000);
     return () => clearTimeout(timer);
-  }, [onComplete]);
+  }, []);
+
+  useEffect(() => {
+    if (fading) {
+      const timer = setTimeout(onComplete, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [fading, onComplete]);
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center cursor-pointer" onClick={onComplete}>
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center cursor-pointer transition-opacity duration-[600ms] ${fading ? 'opacity-0' : 'opacity-100'}`}
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      onClick={() => setFading(true)}
+    >
       <style>{`
         @keyframes draftTitleIn {
           0% { opacity: 0; letter-spacing: 0.5em; }
           25% { opacity: 1; letter-spacing: 0.3em; }
-          70% { opacity: 1; letter-spacing: 0.3em; }
+          65% { opacity: 1; letter-spacing: 0.3em; }
           100% { opacity: 0; letter-spacing: 0.2em; }
         }
         @keyframes draftSubIn {
           0% { opacity: 0; }
           30% { opacity: 0; }
           50% { opacity: 0.6; }
-          70% { opacity: 0.6; }
+          65% { opacity: 0.6; }
           100% { opacity: 0; }
         }
       `}</style>
       <div className="text-center">
-        <h1 className="text-4xl sm:text-6xl font-black text-white" style={{ animation: 'draftTitleIn 3.5s ease-in-out forwards' }}>
+        <h1 className="text-4xl sm:text-6xl font-black text-white" style={{ animation: 'draftTitleIn 3s ease-in-out forwards' }}>
           プロ野球ドラフト会議
         </h1>
-        <div className="mt-6 text-gray-500 text-sm tracking-[0.4em] uppercase" style={{ animation: 'draftSubIn 3.5s ease-in-out forwards' }}>
+        <div className="mt-6 text-gray-400 text-sm tracking-[0.4em] uppercase" style={{ animation: 'draftSubIn 3s ease-in-out forwards' }}>
           NPB Draft Conference
         </div>
       </div>
@@ -842,21 +855,33 @@ const DraftTitleScreen = ({ onComplete }) => {
 };
 
 const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, userTeamName, onContinue }) => {
-  const [phase, setPhase] = useState('title');
   const hasDrafted = draftedPlayers && draftedPlayers.length > 0;
+  const [phase, setPhase] = useState(() => hasDrafted ? 'title' : 'summary');
+  const [showTitleOverlay, setShowTitleOverlay] = useState(() => hasDrafted);
 
-  if (phase === 'title' && hasDrafted) {
-    return <DraftTitleScreen onComplete={() => setPhase('conference')} />;
-  }
-  if (phase === 'conference' && hasDrafted) {
-    return <DraftConferenceScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} onComplete={() => setPhase('teamSummary')} />;
-  }
-  if (phase === 'teamSummary' && hasDrafted) {
-    return <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} onContinue={() => setPhase('summary')} />;
-  }
+  const handleTitleComplete = useCallback(() => {
+    setShowTitleOverlay(false);
+    setPhase('conference');
+  }, []);
+
+  const conferenceVisible = (phase === 'title' || phase === 'conference') && hasDrafted;
+
   return (
-    <DraftSummaryScreen draftedPlayers={draftedPlayers} nearMissPlayers={nearMissPlayers} proBonus={proBonus}
-      draftBySource={draftBySource} userTeamName={userTeamName} onContinue={onContinue} />
+    <>
+      {conferenceVisible && (
+        <DraftConferenceScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} onComplete={() => setPhase('teamSummary')} />
+      )}
+      {phase === 'teamSummary' && hasDrafted && (
+        <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} onContinue={() => setPhase('summary')} />
+      )}
+      {phase === 'summary' && (
+        <DraftSummaryScreen draftedPlayers={draftedPlayers} nearMissPlayers={nearMissPlayers} proBonus={proBonus}
+          draftBySource={draftBySource} userTeamName={userTeamName} onContinue={onContinue} />
+      )}
+      {showTitleOverlay && (
+        <DraftTitleOverlay onComplete={handleTitleComplete} />
+      )}
+    </>
   );
 };
 
