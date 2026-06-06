@@ -28,9 +28,10 @@ const shuffle = (arr) => {
 const buildGridOrder = () => {
   const ce = shuffle(NPB_TEAMS_INFO.filter(t => t.league === 'ce'));
   const pa = shuffle(NPB_TEAMS_INFO.filter(t => t.league === 'pa'));
+  const [left, right] = Math.random() < 0.5 ? [ce, pa] : [pa, ce];
   const grid = [];
   for (let row = 0; row < 3; row++) {
-    grid.push(ce[row], pa[row], ce[row + 3], pa[row + 3]);
+    grid.push(left[row], right[row], left[row + 3], right[row + 3]);
   }
   return grid;
 };
@@ -83,14 +84,21 @@ const PlayerCardContent = ({ name, position, teamName, dimmed }) => (
 
 const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) => {
   const [currentRoundIdx, setCurrentRoundIdx] = useState(0);
-  const [revealedTeams, setRevealedTeams] = useState(new Set());
-  const [isRevealing, setIsRevealing] = useState(false);
-  const [roundComplete, setRoundComplete] = useState(false);
-  const [firstRoundPhase, setFirstRoundPhase] = useState('revealing');
   const [gridOrder] = useState(() => buildGridOrder());
   const timerRef = useRef(null);
-  const revealedRef = useRef(revealedTeams);
-  revealedRef.current = revealedTeams;
+
+  const [waiverRevealed, setWaiverRevealed] = useState(new Set());
+  const [roundComplete, setRoundComplete] = useState(false);
+  const [isRevealing, setIsRevealing] = useState(false);
+  const waiverRevRef = useRef(waiverRevealed);
+  waiverRevRef.current = waiverRevealed;
+
+  const [phaseIdx, setPhaseIdx] = useState(0);
+  const [phaseState, setPhaseState] = useState('revealing');
+  const [settled, setSettled] = useState({});
+  const [phaseRevealed, setPhaseRevealed] = useState(new Set());
+  const phaseRevRef = useRef(phaseRevealed);
+  phaseRevRef.current = phaseRevealed;
 
   const roundData = useMemo(() => {
     const data = {};
@@ -107,23 +115,38 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
   const activeRounds = ROUND_ORDER.filter(r => roundData[r]);
   const currentRound = activeRounds[currentRoundIdx];
   const currentTeamMap = currentRound ? roundData[currentRound] : null;
-  const isFirstRound = currentRound === 'ドラフト1位' && firstRoundData?.initialPicks?.length > 0;
-  const hasLottery = isFirstRound && firstRoundData.lotteryResults.length > 0;
+  const isFirstRound = currentRound === 'ドラフト1位' && firstRoundData?.phases?.length > 0;
 
-  // 1巡目の発表順序
-  const firstRoundRevealOrder = useMemo(() => {
-    if (!firstRoundData?.initialPicks) return [];
-    return firstRoundData.initialPicks.map(p => p.npbTeam);
-  }, [firstRoundData]);
+  const currentPhase = isFirstRound ? (firstRoundData.phases[phaseIdx] || null) : null;
+  const hasLottery = currentPhase?.lotteryResults?.length > 0;
 
-  // 1巡目: 発表済みチームから動的に重複色を計算
+  const phaseRevealOrder = useMemo(() => {
+    if (!currentPhase) return [];
+    const pos = {};
+    gridOrder.forEach((t, i) => { pos[t.name] = i; });
+    return currentPhase.picks.map(p => p.npbTeam).sort((a, b) => (pos[a] ?? 99) - (pos[b] ?? 99));
+  }, [currentPhase, gridOrder]);
+
+  const waiverRevealOrder = useMemo(() => {
+    if (!currentTeamMap || isFirstRound) return [];
+    const pos = {};
+    gridOrder.forEach((t, i) => { pos[t.name] = i; });
+    return NPB_TEAMS_INFO
+      .filter(t => currentTeamMap[t.name]?.length > 0)
+      .map(t => t.name)
+      .sort((a, b) => (pos[a] ?? 99) - (pos[b] ?? 99));
+  }, [currentTeamMap, isFirstRound, gridOrder]);
+
   const collisionColors = useMemo(() => {
-    if (!isFirstRound) return {};
+    if (!currentPhase) return {};
     const colors = {};
     let idx = 0;
     const seen = {};
-    for (const pick of firstRoundData.initialPicks) {
-      if (!revealedTeams.has(pick.npbTeam)) continue;
+    const pos = {};
+    gridOrder.forEach((t, i) => { pos[t.name] = i; });
+    const sorted = [...currentPhase.picks].sort((a, b) => (pos[a.npbTeam] ?? 99) - (pos[b.npbTeam] ?? 99));
+    for (const pick of sorted) {
+      if (!phaseRevealed.has(pick.npbTeam)) continue;
       if (seen[pick.playerId]) {
         if (colors[pick.playerId] === undefined) colors[pick.playerId] = idx++;
       } else {
@@ -131,65 +154,87 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
       }
     }
     return colors;
-  }, [isFirstRound, firstRoundData, revealedTeams]);
+  }, [currentPhase, phaseRevealed, gridOrder]);
 
-  // ウェーバー巡: 指名ありチーム一覧
-  const teamsWithPicks = useMemo(() => {
-    if (!currentTeamMap) return [];
-    return NPB_TEAMS_INFO.filter(t => currentTeamMap[t.name]?.length > 0);
-  }, [currentTeamMap]);
-
-  const allWaiverRevealed = teamsWithPicks.length > 0 && teamsWithPicks.every(t => revealedTeams.has(t.name));
-
-  // 1巡目: 全員発表完了 → フェーズ遷移
   useEffect(() => {
-    if (isFirstRound && firstRoundPhase === 'revealing') {
-      if (firstRoundRevealOrder.length > 0 && firstRoundRevealOrder.every(n => revealedTeams.has(n))) {
-        setFirstRoundPhase(hasLottery ? 'allRevealed' : 'complete');
-      }
+    if (!isFirstRound || phaseState !== 'revealing') return;
+    if (phaseRevealOrder.length === 0) return;
+    if (!phaseRevealOrder.every(n => phaseRevealed.has(n))) return;
+    setPhaseState(hasLottery ? 'allRevealed' : 'noLotteryDone');
+  }, [isFirstRound, phaseState, phaseRevealed, phaseRevealOrder, hasLottery]);
+
+  useEffect(() => {
+    if (isFirstRound || roundComplete) return;
+    if (waiverRevealOrder.length > 0 && waiverRevealOrder.every(n => waiverRevealed.has(n))) {
+      setRoundComplete(true);
     }
-  }, [isFirstRound, firstRoundPhase, revealedTeams, firstRoundRevealOrder, hasLottery]);
-
-  // ウェーバー巡: 全員発表 → roundComplete
-  useEffect(() => {
-    if (!isFirstRound && allWaiverRevealed && !roundComplete) setRoundComplete(true);
-  }, [isFirstRound, allWaiverRevealed, roundComplete]);
+  }, [isFirstRound, waiverRevealOrder, waiverRevealed, roundComplete]);
 
   const revealNext = useCallback(() => {
-    let unrevealed;
     if (isFirstRound) {
-      unrevealed = firstRoundRevealOrder.filter(n => !revealedRef.current.has(n));
+      const unrevealed = phaseRevealOrder.filter(n => !phaseRevRef.current.has(n));
+      if (unrevealed.length === 0) return;
+      setIsRevealing(true);
+      timerRef.current = setTimeout(() => {
+        setPhaseRevealed(prev => new Set([...prev, unrevealed[0]]));
+        setIsRevealing(false);
+      }, 500);
     } else {
-      unrevealed = teamsWithPicks.filter(t => !revealedRef.current.has(t.name)).map(t => t.name);
+      const unrevealed = waiverRevealOrder.filter(n => !waiverRevRef.current.has(n));
+      if (unrevealed.length === 0) return;
+      setIsRevealing(true);
+      timerRef.current = setTimeout(() => {
+        setWaiverRevealed(prev => new Set([...prev, unrevealed[0]]));
+        setIsRevealing(false);
+      }, 500);
     }
-    if (unrevealed.length === 0) return;
-    setIsRevealing(true);
-    const next = unrevealed[0];
-    timerRef.current = setTimeout(() => {
-      setRevealedTeams(prev => new Set([...prev, next]));
-      setIsRevealing(false);
-    }, 500);
-  }, [isFirstRound, firstRoundRevealOrder, teamsWithPicks]);
+  }, [isFirstRound, phaseRevealOrder, waiverRevealOrder]);
 
   const revealAll = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (isFirstRound) {
-      setRevealedTeams(new Set(firstRoundRevealOrder));
+      setPhaseRevealed(new Set(phaseRevealOrder));
     } else {
-      setRevealedTeams(new Set(teamsWithPicks.map(t => t.name)));
+      setWaiverRevealed(new Set(waiverRevealOrder));
       setRoundComplete(true);
     }
     setIsRevealing(false);
-  }, [isFirstRound, firstRoundRevealOrder, teamsWithPicks]);
+  }, [isFirstRound, phaseRevealOrder, waiverRevealOrder]);
+
+  const settleAndAdvance = useCallback((winnersOnly) => {
+    const newSettled = { ...settled };
+    if (winnersOnly && hasLottery) {
+      const losers = new Set();
+      currentPhase.lotteryResults.forEach(lr => {
+        lr.competitors.filter(t => t !== lr.winner).forEach(t => losers.add(t));
+      });
+      currentPhase.picks.forEach(p => {
+        if (!losers.has(p.npbTeam)) newSettled[p.npbTeam] = p;
+      });
+    } else {
+      currentPhase.picks.forEach(p => { newSettled[p.npbTeam] = p; });
+    }
+    setSettled(newSettled);
+    if (phaseIdx < firstRoundData.phases.length - 1) {
+      setPhaseIdx(prev => prev + 1);
+      setPhaseState('revealing');
+      setPhaseRevealed(new Set());
+    } else {
+      setPhaseState('roundDone');
+    }
+  }, [settled, currentPhase, hasLottery, phaseIdx, firstRoundData]);
 
   const nextRound = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (currentRoundIdx < activeRounds.length - 1) {
       setCurrentRoundIdx(prev => prev + 1);
-      setRevealedTeams(new Set());
+      setWaiverRevealed(new Set());
       setRoundComplete(false);
       setIsRevealing(false);
-      setFirstRoundPhase('revealing');
+      setPhaseIdx(0);
+      setPhaseState('revealing');
+      setSettled({});
+      setPhaseRevealed(new Set());
     } else {
       onComplete();
     }
@@ -199,34 +244,72 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
 
   if (!currentRound || !currentTeamMap) { onComplete(); return null; }
 
-  // === カード描画 ===
-  const renderCard = (team) => {
-    if (isFirstRound) return renderFirstRoundCard(team);
-    return renderWaiverCard(team);
-  };
-
   const renderFirstRoundCard = (team) => {
-    const initialPick = firstRoundData.initialPicks.find(p => p.npbTeam === team.name);
-    const revealed = revealedTeams.has(team.name);
-    const colorIdx = initialPick ? collisionColors[initialPick.playerId] : undefined;
-    const hasCollision = colorIdx !== undefined;
-    const cStyle = hasCollision ? COLLISION_STYLES[colorIdx % COLLISION_STYLES.length] : null;
+    const settledPick = settled[team.name];
+    const phasePick = currentPhase?.picks?.find(p => p.npbTeam === team.name);
+    const isInPhase = !!phasePick;
+    const revealed = phaseRevealed.has(team.name);
 
-    const showLottery = firstRoundPhase === 'lotteryShown' || firstRoundPhase === 'complete';
-    const showHazure = firstRoundPhase === 'complete';
-    const isLoser = hasLottery && firstRoundData.lotteryResults.some(r => r.competitors.includes(team.name) && r.winner !== team.name);
-    const isWinner = hasLottery && firstRoundData.lotteryResults.some(r => r.winner === team.name);
+    if (settledPick) {
+      return (
+        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
+          <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
+            {team.short}
+          </div>
+          <div className="bg-white p-3 flex flex-col justify-center" style={{ minHeight: '115px' }}>
+            <PlayerCardContent name={settledPick.name} position={settledPick.position} teamName={settledPick.teamName} />
+            <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 確定</div>
+          </div>
+        </div>
+      );
+    }
 
-    const finalPick = currentTeamMap?.[team.name]?.[0];
+    if (isInPhase) {
+      const colorIdx = collisionColors[phasePick.playerId];
+      const hasCollision = colorIdx !== undefined;
+      const cStyle = hasCollision ? COLLISION_STYLES[colorIdx % COLLISION_STYLES.length] : null;
+      const isLoser = hasLottery && currentPhase.lotteryResults.some(r =>
+        r.competitors.includes(team.name) && r.winner !== team.name);
+      const isWinner = hasLottery && currentPhase.lotteryResults.some(r => r.winner === team.name);
 
-    let cardBg = 'bg-white', borderClass = '';
-    if (revealed && hasCollision && cStyle) {
-      if (!showLottery || isWinner) {
-        cardBg = cStyle.bg;
-        borderClass = cStyle.border;
-      } else {
-        cardBg = 'bg-gray-100';
+      let cardBg = 'bg-white', borderClass = '';
+      if (revealed && hasCollision && cStyle) {
+        if (phaseState !== 'lotteryShown' || isWinner) {
+          cardBg = cStyle.bg;
+          borderClass = cStyle.border;
+        }
       }
+
+      return (
+        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
+          <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
+            {team.short}
+          </div>
+          <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ minHeight: '115px' }}>
+            {!revealed ? (
+              <div className="text-center">
+                <div className="text-3xl sm:text-4xl mb-1 opacity-20 select-none font-black text-gray-400">?</div>
+                <div className="text-gray-300 text-[10px]">未発表</div>
+              </div>
+            ) : phaseState === 'lotteryShown' && isLoser ? (
+              <div className="text-center py-2">
+                <div className="text-red-400 text-xs font-bold">抽選外れ</div>
+                <div className="text-gray-400 text-[10px] mt-1">再指名待ち...</div>
+              </div>
+            ) : (
+              <div className="card-reveal w-full space-y-1">
+                <PlayerCardContent name={phasePick.name} position={phasePick.position} teamName={phasePick.teamName} />
+                {(phaseState === 'revealing' || phaseState === 'allRevealed') && hasCollision && cStyle && (
+                  <div className={`text-center text-[10px] font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
+                )}
+                {phaseState === 'lotteryShown' && isWinner && (
+                  <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 抽選当選</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
     }
 
     return (
@@ -234,39 +317,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
         <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
           {team.short}
         </div>
-        <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ minHeight: '115px' }}>
-          {!initialPick ? (
-            <div className="text-gray-300 text-xs text-center">指名なし</div>
-          ) : !revealed ? (
-            <div className="text-center">
-              <div className="text-3xl sm:text-4xl mb-1 opacity-20 select-none font-black text-gray-400">?</div>
-              <div className="text-gray-300 text-[10px]">未発表</div>
-            </div>
-          ) : (
-            <div className="card-reveal w-full space-y-1">
-              {showLottery && isLoser ? (
-                <>
-                  <PlayerCardContent name={initialPick.name} position={initialPick.position} teamName={initialPick.teamName} dimmed />
-                  <div className="text-center text-red-500 text-[10px] font-bold my-0.5">抽選外れ →</div>
-                  {showHazure && finalPick ? (
-                    <PlayerCardContent name={finalPick.name} position={finalPick.position} teamName={finalPick.teamName} />
-                  ) : (
-                    <div className="text-gray-400 text-xs text-center">外れ1位選択中...</div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <PlayerCardContent name={initialPick.name} position={initialPick.position} teamName={initialPick.teamName} />
-                  {!showLottery && hasCollision && cStyle && (
-                    <div className={`text-center text-[10px] font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
-                  )}
-                  {showLottery && isWinner && (
-                    <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 抽選当選</div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+        <div className="bg-white p-3 flex flex-col justify-center" style={{ minHeight: '115px' }}>
+          <div className="text-gray-200 text-xs text-center">—</div>
         </div>
       </div>
     );
@@ -275,7 +327,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
   const renderWaiverCard = (team) => {
     const picks = currentTeamMap[team.name] || [];
     const hasPick = picks.length > 0;
-    const revealed = revealedTeams.has(team.name);
+    const revealed = waiverRevealed.has(team.name);
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg" style={{ minHeight: '150px' }}>
         <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
@@ -301,11 +353,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
     );
   };
 
-  // === コントロールボタン ===
   const renderButtons = () => {
     if (isFirstRound) {
-      if (firstRoundPhase === 'revealing') {
-        const allDone = firstRoundRevealOrder.every(n => revealedTeams.has(n));
+      if (phaseState === 'revealing') {
+        const allDone = phaseRevealOrder.every(n => phaseRevealed.has(n));
         return (
           <>
             <button onClick={revealNext} disabled={isRevealing || allDone}
@@ -317,10 +368,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
           </>
         );
       }
-      if (firstRoundPhase === 'allRevealed') {
+      if (phaseState === 'allRevealed') {
         return (
           <>
-            <button onClick={() => setFirstRoundPhase(firstRoundData.hazurePicks.length > 0 ? 'lotteryShown' : 'complete')}
+            <button onClick={() => setPhaseState('lotteryShown')}
               className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
               抽選を行う
             </button>
@@ -328,12 +379,25 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
           </>
         );
       }
-      if (firstRoundPhase === 'lotteryShown') {
+      if (phaseState === 'lotteryShown') {
+        const loserCount = currentPhase.lotteryResults.reduce((sum, lr) => sum + lr.competitors.length - 1, 0);
+        const hasMore = phaseIdx < firstRoundData.phases.length - 1;
         return (
           <>
-            <button onClick={() => setFirstRoundPhase('complete')}
+            <button onClick={() => settleAndAdvance(true)}
               className="bg-red-600 hover:bg-red-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
-              外れ1位を発表
+              {hasMore ? `外れ${loserCount}チーム 再指名へ` : '1巡目確定'}
+            </button>
+            <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
+          </>
+        );
+      }
+      if (phaseState === 'noLotteryDone') {
+        return (
+          <>
+            <button onClick={() => settleAndAdvance(false)}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-blue-500/30 active:scale-95">
+              確定
             </button>
             <button onClick={onComplete} className="text-gray-500 hover:text-gray-300 text-xs transition underline">スキップ</button>
           </>
@@ -349,11 +413,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
         </>
       );
     }
-    // ウェーバー巡
     if (!roundComplete) {
       return (
         <>
-          <button onClick={revealNext} disabled={isRevealing || allWaiverRevealed}
+          <button onClick={revealNext} disabled={isRevealing || waiverRevealOrder.every(n => waiverRevealed.has(n))}
             className="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 shadow-lg hover:shadow-red-500/30 active:scale-95">
             次の指名を発表
           </button>
@@ -373,18 +436,15 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
     );
   };
 
-  // === 抽選情報パネル ===
   const renderLotteryPanel = () => {
     if (!isFirstRound || !hasLottery) return null;
-    const showResults = firstRoundPhase === 'lotteryShown' || firstRoundPhase === 'complete';
-
-    if (firstRoundPhase === 'allRevealed') {
+    if (phaseState === 'allRevealed') {
       return (
         <div className="max-w-3xl mx-auto mb-4">
           <div className="bg-white/90 rounded-lg p-4 shadow-lg">
             <h3 className="text-gray-900 font-black text-base mb-3 text-center">競合指名</h3>
             <div className="space-y-2">
-              {firstRoundData.lotteryResults.map((lr, idx) => (
+              {currentPhase.lotteryResults.map((lr, idx) => (
                 <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap">
                   <span className="text-gray-900 font-black text-sm">{lr.playerName}</span>
                   <span className="text-gray-400 text-xs">←</span>
@@ -400,13 +460,13 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
         </div>
       );
     }
-    if (showResults) {
+    if (phaseState === 'lotteryShown') {
       return (
         <div className="max-w-3xl mx-auto mb-4">
           <div className="bg-white/90 rounded-lg p-4 shadow-lg">
             <h3 className="text-gray-900 font-black text-base mb-3 text-center">抽選結果</h3>
             <div className="space-y-2">
-              {firstRoundData.lotteryResults.map((lr, idx) => {
+              {currentPhase.lotteryResults.map((lr, idx) => {
                 const winnerInfo = getTeamInfo(lr.winner);
                 return (
                   <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap">
@@ -429,18 +489,19 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
     return null;
   };
 
-  // === ステータスバー ===
   const statusText = () => {
     if (isFirstRound) {
-      if (firstRoundPhase === 'revealing') {
-        const revealed = firstRoundRevealOrder.filter(n => revealedTeams.has(n)).length;
-        return `${revealed} / ${firstRoundRevealOrder.length} 球団発表済み`;
+      const phaseLabel = phaseIdx === 0 ? '' : `外れ${'外れ'.repeat(phaseIdx - 1)}1位 — `;
+      if (phaseState === 'revealing') {
+        const count = phaseRevealOrder.filter(n => phaseRevealed.has(n)).length;
+        return `${phaseLabel}${count} / ${phaseRevealOrder.length} 球団発表済み`;
       }
-      if (firstRoundPhase === 'allRevealed') return '競合あり — 抽選待ち';
-      if (firstRoundPhase === 'lotteryShown') return '外れ1位指名待ち';
+      if (phaseState === 'allRevealed') return `${phaseLabel}競合あり — 抽選待ち`;
+      if (phaseState === 'lotteryShown') return `${phaseLabel}抽選結果`;
+      if (phaseState === 'noLotteryDone') return `${phaseLabel}全チーム確定`;
       return '1巡目確定';
     }
-    return `${revealedTeams.size} / ${teamsWithPicks.length} 球団発表済み`;
+    return `${waiverRevealed.size} / ${waiverRevealOrder.length} 球団発表済み`;
   };
 
   return (
@@ -463,7 +524,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
             currentRound === 'ドラフト1位' ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' :
             currentRound === '育成指名' ? 'bg-gray-600 text-white' :
             'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
-          }`}>{currentRound}</span>
+          }`}>
+            {currentRound}
+            {isFirstRound && phaseIdx > 0 && ` (外れ${'外れ'.repeat(phaseIdx - 1)}1位)`}
+          </span>
           <div className="h-px w-16 bg-gradient-to-l from-transparent to-red-500/60" />
         </div>
         <div className="text-gray-500 text-xs mt-1.5">
@@ -474,7 +538,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
       </div>
 
       <div className="max-w-5xl mx-auto grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
-        {gridOrder.map(team => renderCard(team))}
+        {gridOrder.map(team => isFirstRound ? renderFirstRoundCard(team) : renderWaiverCard(team))}
       </div>
 
       {renderLotteryPanel()}

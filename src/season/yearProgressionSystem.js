@@ -460,107 +460,122 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const shuffledTeams = [...NPB_TEAMS].sort(() => Math.random() - 0.5);
   const takenIds = new Set();
 
-  // === 1巡目: 同時指名 + 抽選（重複は最大8チーム）===
-  const firstRoundData = { initialPicks: [], lotteryResults: [], hazurePicks: [] };
+  // === 1巡目: 同時指名 + 抽選 + 外れ再指名ループ ===
+  const firstRoundData = { phases: [] };
   const MAX_CONTESTED = 8;
+  const MAX_PHASES = 5;
 
-  const teamInitialPick = {};
-  shuffledTeams.forEach(team => {
-    let bestCand = null, bestPref = -Infinity;
-    for (const c of eligible) {
-      const noise = (Math.random() - 0.5) * 30;
-      const pref = c.score + noise;
-      if (pref > bestPref) { bestPref = pref; bestCand = c; }
-    }
-    teamInitialPick[team] = bestCand;
-  });
+  const settledTeams = {};
+  let teamsToProcess = [...shuffledTeams];
 
-  const playerCompetitors = {};
-  for (const [team, cand] of Object.entries(teamInitialPick)) {
-    if (!cand) continue;
-    const id = cand.player.id;
-    if (!playerCompetitors[id]) playerCompetitors[id] = [];
-    playerCompetitors[id].push(team);
-  }
+  for (let phaseI = 0; phaseI < MAX_PHASES && teamsToProcess.length > 0; phaseI++) {
+    const phase = { picks: [], lotteryResults: [] };
 
-  const countContested = () => {
-    let c = 0;
-    for (const teams of Object.values(playerCompetitors)) {
-      if (teams.length > 1) c += teams.length;
-    }
-    return c;
-  };
-  const allPickedIds = new Set(Object.values(teamInitialPick).filter(Boolean).map(c => c.player.id));
-
-  while (countContested() > MAX_CONTESTED) {
-    let maxId = null, maxLen = 0;
-    for (const [id, teams] of Object.entries(playerCompetitors)) {
-      if (teams.length > maxLen) { maxLen = teams.length; maxId = id; }
-    }
-    if (!maxId || maxLen <= 1) break;
-    const team = playerCompetitors[maxId].pop();
-    let bestCand = null, bestScore = -Infinity;
-    for (const c of eligible) {
-      if (allPickedIds.has(c.player.id)) continue;
-      if (c.score > bestScore) { bestScore = c.score; bestCand = c; }
-    }
-    if (!bestCand) break;
-    allPickedIds.add(bestCand.player.id);
-    teamInitialPick[team] = bestCand;
-    if (!playerCompetitors[bestCand.player.id]) playerCompetitors[bestCand.player.id] = [];
-    playerCompetitors[bestCand.player.id].push(team);
-  }
-
-  for (const team of shuffledTeams) {
-    const cand = teamInitialPick[team];
-    if (!cand) continue;
-    const id = cand.player.id;
-    const contested = (playerCompetitors[id]?.length || 0) > 1;
-    firstRoundData.initialPicks.push({
-      npbTeam: team, name: cand.player.name, position: cand.player.position,
-      teamName: cand.teamName, source: cand.source, playerId: id, contested,
+    const teamPick = {};
+    teamsToProcess.forEach(team => {
+      let bestCand = null, bestPref = -Infinity;
+      for (const c of eligible) {
+        if (takenIds.has(c.player.id)) continue;
+        const noise = (Math.random() - 0.5) * 30;
+        const pref = c.score + noise;
+        if (pref > bestPref) { bestPref = pref; bestCand = c; }
+      }
+      teamPick[team] = bestCand;
     });
-  }
 
-  const lotteryLosers = new Set();
-  for (const [playerId, teams] of Object.entries(playerCompetitors)) {
-    if (teams.length <= 1) continue;
-    const winner = teams[Math.floor(Math.random() * teams.length)];
-    teams.filter(t => t !== winner).forEach(t => lotteryLosers.add(t));
-    firstRoundData.lotteryResults.push({
-      playerName: teamInitialPick[teams[0]].player.name,
-      playerId: parseInt(playerId),
-      competitors: [...teams], winner,
-    });
-  }
-
-  const round1Winners = {};
-  for (const team of shuffledTeams) {
-    if (!lotteryLosers.has(team) && teamInitialPick[team]) {
-      round1Winners[team] = teamInitialPick[team];
-      takenIds.add(teamInitialPick[team].player.id);
+    const playerCompetitors = {};
+    for (const [team, cand] of Object.entries(teamPick)) {
+      if (!cand) continue;
+      const id = cand.player.id;
+      if (!playerCompetitors[id]) playerCompetitors[id] = [];
+      playerCompetitors[id].push(team);
     }
-  }
 
-  const sortedLosers = [...lotteryLosers];
-  for (const team of sortedLosers) {
-    let bestCand = null, bestScore = -Infinity;
-    for (const c of eligible) {
-      if (takenIds.has(c.player.id)) continue;
-      if (c.score > bestScore) { bestScore = c.score; bestCand = c; }
+    if (phaseI === 0) {
+      const allPickedIds = new Set(Object.values(teamPick).filter(Boolean).map(c => c.player.id));
+      const countContested = () => {
+        let c = 0;
+        for (const teams of Object.values(playerCompetitors)) {
+          if (teams.length > 1) c += teams.length;
+        }
+        return c;
+      };
+      while (countContested() > MAX_CONTESTED) {
+        let maxId = null, maxLen = 0;
+        for (const [id, teams] of Object.entries(playerCompetitors)) {
+          if (teams.length > maxLen) { maxLen = teams.length; maxId = id; }
+        }
+        if (!maxId || maxLen <= 1) break;
+        const team = playerCompetitors[maxId].pop();
+        let bestCand = null, bestScore = -Infinity;
+        for (const c of eligible) {
+          if (allPickedIds.has(c.player.id) || takenIds.has(c.player.id)) continue;
+          if (c.score > bestScore) { bestScore = c.score; bestCand = c; }
+        }
+        if (!bestCand) break;
+        allPickedIds.add(bestCand.player.id);
+        teamPick[team] = bestCand;
+        if (!playerCompetitors[bestCand.player.id]) playerCompetitors[bestCand.player.id] = [];
+        playerCompetitors[bestCand.player.id].push(team);
+      }
     }
-    if (bestCand) {
-      round1Winners[team] = bestCand;
-      takenIds.add(bestCand.player.id);
-      firstRoundData.hazurePicks.push({
-        npbTeam: team, name: bestCand.player.name, position: bestCand.player.position,
-        teamName: bestCand.teamName, source: bestCand.source, playerId: bestCand.player.id,
+
+    for (const team of teamsToProcess) {
+      const cand = teamPick[team];
+      if (!cand) continue;
+      const id = cand.player.id;
+      const contested = (playerCompetitors[id]?.length || 0) > 1;
+      phase.picks.push({
+        npbTeam: team, name: cand.player.name, position: cand.player.position,
+        teamName: cand.teamName, source: cand.source, playerId: id, contested,
       });
     }
+
+    const phaseLosers = new Set();
+    for (const [playerId, teams] of Object.entries(playerCompetitors)) {
+      if (teams.length <= 1) continue;
+      const winner = teams[Math.floor(Math.random() * teams.length)];
+      teams.filter(t => t !== winner).forEach(t => phaseLosers.add(t));
+      phase.lotteryResults.push({
+        playerName: teamPick[teams[0]].player.name,
+        playerId: parseInt(playerId),
+        competitors: [...teams], winner,
+      });
+    }
+
+    for (const team of teamsToProcess) {
+      if (!phaseLosers.has(team) && teamPick[team]) {
+        settledTeams[team] = teamPick[team];
+        takenIds.add(teamPick[team].player.id);
+      }
+    }
+
+    firstRoundData.phases.push(phase);
+    teamsToProcess = [...phaseLosers];
+  }
+
+  if (teamsToProcess.length > 0) {
+    const fallbackPhase = { picks: [], lotteryResults: [] };
+    for (const team of teamsToProcess) {
+      let bestCand = null, bestScore = -Infinity;
+      for (const c of eligible) {
+        if (takenIds.has(c.player.id)) continue;
+        if (c.score > bestScore) { bestScore = c.score; bestCand = c; }
+      }
+      if (bestCand) {
+        settledTeams[team] = bestCand;
+        takenIds.add(bestCand.player.id);
+        fallbackPhase.picks.push({
+          npbTeam: team, name: bestCand.player.name, position: bestCand.player.position,
+          teamName: bestCand.teamName, source: bestCand.source, playerId: bestCand.player.id, contested: false,
+        });
+      }
+    }
+    if (fallbackPhase.picks.length > 0) firstRoundData.phases.push(fallbackPhase);
   }
 
   for (const team of shuffledTeams) {
-    const cand = round1Winners[team];
+    const cand = settledTeams[team];
     if (!cand) continue;
     draftedPlayers.push(createDraftEntry(cand, team, 'ドラフト1位'));
   }
