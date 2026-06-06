@@ -187,8 +187,8 @@ function getUniversityScoutPool(currentYear) {
     const yr = parseInt(enrollYear);
     cohort.forEach((entry, idx) => {
       const yearsIn = currentYear - yr;
-      // 3年生以上（在学2年以上）がスカウト対象
-      if (yearsIn >= 2) {
+      // 4年生のみスカウト対象（在学3年以上 = 4年目）
+      if (yearsIn >= 3) {
         pool.push({
           player: entry.player,
           source: 'university',
@@ -425,7 +425,10 @@ export function calculateRecruitSuccessRate(player, teamData) {
   // 調査ボーナス: 1回調査ごとに+7%
   const investigationBonus = ((player._investigationCount || 0) * 0.07);
 
-  const rate = baseRate - qualityPenalty + negotiationBonus + rankBonus + investigationBonus;
+  // お気に入りボーナス: 週ごとに+3%蓄積
+  const favBonus = (getFavoriteBonus(teamData, player.id) / 100);
+
+  const rate = baseRate - qualityPenalty + negotiationBonus + rankBonus + investigationBonus + favBonus;
   return Math.max(5, Math.min(95, Math.round(rate * 100)));
 }
 
@@ -704,6 +707,133 @@ export function startInvestigation(teamData, playerId, playerName, staffId, curr
   });
 
   return { success: true, message: `${staff.name}が${playerName}の調査を開始しました（${returnDate.month}/${returnDate.day}完了）` };
+}
+
+/**
+ * 自動調査フィルタを設定し、条件に合う選手を順次調査する
+ * フィルタ: 年齢範囲、ポジション、能力値範囲
+ * スカウトが空いていれば自動的に次の対象を調査開始
+ */
+export function setAutoInvestigationFilter(teamData, filter) {
+  const cd = teamData?.corporateData;
+  if (!cd) return;
+  cd.autoInvestFilter = filter; // { ageMin, ageMax, positions, abilityMin, abilityMax }
+}
+
+export function getAutoInvestigationFilter(teamData) {
+  return teamData?.corporateData?.autoInvestFilter || null;
+}
+
+/**
+ * 自動調査を実行: フィルタ条件に合う未調査の選手を探して調査開始
+ */
+export function processAutoInvestigation(teamData, currentDate) {
+  const cd = teamData?.corporateData;
+  if (!cd?.autoInvestFilter || !cd.scoutMissions) return [];
+
+  const filter = cd.autoInvestFilter;
+  const allPlayers = getAllScoutedPlayers(cd);
+  const busyIds = new Set(cd.scoutMissions.filter(m => !m.completed).map(m => m.staffId));
+  const pendingInvIds = new Set(cd.scoutMissions.filter(m => m.type === 'investigation' && !m.completed).map(m => m.targetPlayerId));
+  const availableStaff = (cd.staff || []).filter(s => !busyIds.has(s.id));
+
+  if (availableStaff.length === 0) return [];
+
+  const targets = allPlayers.filter(p => {
+    if ((p._revealLevel || 0) >= 2) return false;
+    if (pendingInvIds.has(p.id)) return false;
+    if (filter.ageMin && p.age < filter.ageMin) return false;
+    if (filter.ageMax && p.age > filter.ageMax) return false;
+    if (filter.positions && filter.positions.length > 0 && !filter.positions.includes(p.position)) return false;
+    if (filter.abilityMin != null || filter.abilityMax != null) {
+      const score = evaluatePlayerScore(p);
+      if (filter.abilityMin != null && score < filter.abilityMin) return false;
+      if (filter.abilityMax != null && score > filter.abilityMax) return false;
+    }
+    return true;
+  });
+
+  const started = [];
+  for (const target of targets) {
+    if (availableStaff.length === 0) break;
+    const scout = availableStaff.shift();
+    const result = startInvestigation(teamData, target.id, target.name, scout.id, currentDate);
+    if (result.success) started.push({ playerName: target.name, staffName: scout.name });
+  }
+  return started;
+}
+
+/**
+ * 選手をお気に入りに指定（毎週+3%交渉ボーナス蓄積）
+ */
+export function toggleFavoritePlayer(teamData, playerId) {
+  const cd = teamData?.corporateData;
+  if (!cd) return;
+  if (!cd.favoritePlayerIds) cd.favoritePlayerIds = {};
+  if (cd.favoritePlayerIds[playerId]) {
+    delete cd.favoritePlayerIds[playerId];
+  } else {
+    cd.favoritePlayerIds[playerId] = { startDate: null, bonus: 0 };
+  }
+}
+
+/**
+ * お気に入り選手の週次ボーナス加算（日付進行で毎週呼ぶ）
+ */
+export function advanceFavoriteBonus(teamData, currentDate) {
+  const cd = teamData?.corporateData;
+  if (!cd?.favoritePlayerIds) return;
+
+  const dayNum = currentDate.year * 10000 + currentDate.month * 100 + currentDate.day;
+  for (const [pid, info] of Object.entries(cd.favoritePlayerIds)) {
+    if (!info.startDate) {
+      info.startDate = dayNum;
+      info.lastAdvance = dayNum;
+      continue;
+    }
+    if (!info.lastAdvance) info.lastAdvance = info.startDate;
+    const daysSince = dateDiffDays(info.lastAdvance, dayNum);
+    if (daysSince >= 7) {
+      const weeks = Math.floor(daysSince / 7);
+      info.bonus = (info.bonus || 0) + weeks * 3;
+      info.lastAdvance = dayNum;
+    }
+  }
+}
+
+function dateDiffDays(d1Num, d2Num) {
+  const y1 = Math.floor(d1Num / 10000), m1 = Math.floor((d1Num % 10000) / 100), day1 = d1Num % 100;
+  const y2 = Math.floor(d2Num / 10000), m2 = Math.floor((d2Num % 10000) / 100), day2 = d2Num % 100;
+  const a = new Date(y1, m1 - 1, day1);
+  const b = new Date(y2, m2 - 1, day2);
+  return Math.round((b - a) / 86400000);
+}
+
+/**
+ * お気に入りボーナスを取得
+ */
+export function getFavoriteBonus(teamData, playerId) {
+  const cd = teamData?.corporateData;
+  if (!cd?.favoritePlayerIds?.[playerId]) return 0;
+  return cd.favoritePlayerIds[playerId].bonus || 0;
+}
+
+/**
+ * 全スカウトレポートから発見済み選手を統合取得
+ */
+export function getAllScoutedPlayers(cd) {
+  const players = [];
+  const seenIds = new Set();
+  (cd.scoutMissions || []).forEach(m => {
+    if (m.type === 'investigation' || !m.results) return;
+    m.results.forEach(p => {
+      if (!seenIds.has(p.id)) {
+        seenIds.add(p.id);
+        players.push(p);
+      }
+    });
+  });
+  return players;
 }
 
 /**

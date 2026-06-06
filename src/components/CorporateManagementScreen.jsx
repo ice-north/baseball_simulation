@@ -5,7 +5,7 @@ import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudget
 import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
-import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation } from '../corporate/scoutingSystem.js';
+import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers } from '../corporate/scoutingSystem.js';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -23,6 +23,13 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [investigateTargetId, setInvestigateTargetId] = useState(null);
   const [, setRefreshTick] = useState(0);
+  const [playerSortKey, setPlayerSortKey] = useState('name');
+  const [playerSortAsc, setPlayerSortAsc] = useState(true);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [filterDraft, setFilterDraft] = useState(() => {
+    const f = getAutoInvestigationFilter(teamData);
+    return f || { ageMin: '', ageMax: '', positions: [], abilityMin: '', abilityMax: '' };
+  });
 
   if (!cd) {
     return (
@@ -361,7 +368,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 ) : (
                   <p className="text-gray-500 text-xs">まだ大学プールが生成されていません</p>
                 )}
-                <p className="text-[10px] text-gray-600 mt-2">3年生以上がスカウト対象</p>
+                <p className="text-[10px] text-gray-600 mt-2">4年生のみスカウト対象</p>
               </div>
 
               <div className="bg-gray-750 rounded p-3">
@@ -482,148 +489,279 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               );
             })()}
 
-            {/* 発見選手一覧（全レポート統合） */}
-            {(() => {
-              const missions = cd.scoutMissions || [];
-              const completedMissions = missions.filter(m => m.completed && m.results);
-              if (completedMissions.length === 0) return null;
+            {/* 自動調査フィルタ */}
+            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-bold text-gray-300">自動調査フィルタ</h2>
+                <div className="flex gap-2">
+                  {cd.autoInvestFilter && (
+                    <span className="text-[10px] text-green-400 font-bold bg-green-900/30 px-2 py-0.5 rounded">有効</span>
+                  )}
+                  <button
+                    onClick={() => setShowFilterPanel(!showFilterPanel)}
+                    className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs font-bold"
+                  >
+                    {showFilterPanel ? '閉じる' : '設定'}
+                  </button>
+                </div>
+              </div>
+              {cd.autoInvestFilter && !showFilterPanel && (
+                <div className="text-[10px] text-gray-400 flex gap-3 flex-wrap">
+                  {(cd.autoInvestFilter.ageMin || cd.autoInvestFilter.ageMax) && (
+                    <span>年齢: {cd.autoInvestFilter.ageMin || '?'}〜{cd.autoInvestFilter.ageMax || '?'}歳</span>
+                  )}
+                  {cd.autoInvestFilter.positions?.length > 0 && (
+                    <span>ポジション: {cd.autoInvestFilter.positions.map(p => POSITION_NAMES[p] || p).join(', ')}</span>
+                  )}
+                  <button onClick={() => { setAutoInvestigationFilter(teamData, null); setRefreshTick(t => t + 1); }}
+                    className="text-red-400 hover:text-red-300">解除</button>
+                </div>
+              )}
+              {showFilterPanel && (
+                <div className="mt-2 bg-gray-900/60 rounded p-3 border border-cyan-500/20 space-y-3">
+                  <p className="text-[10px] text-gray-500">条件に合う未調査の選手をスタッフが空き次第自動で調査します</p>
+                  <div className="flex gap-4 items-end">
+                    <div>
+                      <label className="text-[10px] text-gray-400 block mb-0.5">年齢（最小）</label>
+                      <input type="number" min="15" max="40" value={filterDraft.ageMin}
+                        onChange={e => setFilterDraft(f => ({ ...f, ageMin: e.target.value ? parseInt(e.target.value) : '' }))}
+                        className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                        placeholder="--" />
+                    </div>
+                    <span className="text-gray-500 text-xs pb-1">〜</span>
+                    <div>
+                      <label className="text-[10px] text-gray-400 block mb-0.5">年齢（最大）</label>
+                      <input type="number" min="15" max="40" value={filterDraft.ageMax}
+                        onChange={e => setFilterDraft(f => ({ ...f, ageMax: e.target.value ? parseInt(e.target.value) : '' }))}
+                        className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                        placeholder="--" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">ポジション</label>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'].map(pos => (
+                        <button key={pos}
+                          onClick={() => setFilterDraft(f => ({
+                            ...f,
+                            positions: (f.positions || []).includes(pos)
+                              ? f.positions.filter(p => p !== pos)
+                              : [...(f.positions || []), pos]
+                          }))}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                            (filterDraft.positions || []).includes(pos)
+                              ? 'bg-cyan-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          }`}
+                        >
+                          {POSITION_NAMES[pos] || pos}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => {
+                      const f = {
+                        ageMin: filterDraft.ageMin || null,
+                        ageMax: filterDraft.ageMax || null,
+                        positions: (filterDraft.positions || []).length > 0 ? filterDraft.positions : null,
+                      };
+                      setAutoInvestigationFilter(teamData, f);
+                      setShowFilterPanel(false);
+                      setRefreshTick(t => t + 1);
+                    }} className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded text-xs font-bold">
+                      フィルタを適用
+                    </button>
+                    <button onClick={() => {
+                      setAutoInvestigationFilter(teamData, null);
+                      setFilterDraft({ ageMin: '', ageMax: '', positions: [] });
+                      setShowFilterPanel(false);
+                      setRefreshTick(t => t + 1);
+                    }} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs">
+                      フィルタ解除
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
-              const renderAbility = (label, val) => {
-                if (val === '?' || val === undefined) return <span className="text-gray-600">{label} <span className="font-bold">?</span></span>;
-                const numVal = typeof val === 'number' ? val : parseInt(val);
-                return <span className="text-gray-400">{label}<span className={`font-bold ml-0.5 ${getAbilityColor(numVal)}`}>{val}{label === '球速' ? 'km' : ''}</span></span>;
+            {/* 発見選手一覧（ソート可能テーブル） */}
+            {(() => {
+              const allPlayers = getAllScoutedPlayers(cd);
+              if (allPlayers.length === 0) return null;
+
+              const favIds = cd.favoritePlayerIds || {};
+              const missions = cd.scoutMissions || [];
+
+              const getAbilityVal = (p, key) => {
+                const sa = p.scoutedAbilities || {};
+                const map = {
+                  velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
+                  meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
+                  speed: sa.physical?.speed, defense: sa.fielding?.defense,
+                };
+                const v = map[key];
+                return (v === '?' || v === undefined) ? -1 : (typeof v === 'number' ? v : parseInt(v));
               };
 
-              const allPlayers = [];
-              const seenIds = new Set();
-              completedMissions.forEach(mission => {
-                (mission.results || []).forEach(p => {
-                  if (!seenIds.has(p.id)) {
-                    seenIds.add(p.id);
-                    allPlayers.push(p);
-                  }
-                });
+              const sorted = [...allPlayers].sort((a, b) => {
+                let va, vb;
+                switch (playerSortKey) {
+                  case 'name': va = a.name; vb = b.name; return playerSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+                  case 'age': va = a.age || 0; vb = b.age || 0; break;
+                  case 'position': va = a.position; vb = b.position; return playerSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+                  case 'reveal': va = a._revealLevel || 0; vb = b._revealLevel || 0; break;
+                  case 'investigation': va = (a._investigationCount || 0); vb = (b._investigationCount || 0); break;
+                  case 'favorite': va = favIds[a.id] ? 1 : 0; vb = favIds[b.id] ? 1 : 0; break;
+                  case 'fame': va = a.fame || 0; vb = b.fame || 0; break;
+                  default: va = getAbilityVal(a, playerSortKey); vb = getAbilityVal(b, playerSortKey); break;
+                }
+                return playerSortAsc ? va - vb : vb - va;
               });
 
+              const handleSort = (key) => {
+                if (playerSortKey === key) setPlayerSortAsc(!playerSortAsc);
+                else { setPlayerSortKey(key); setPlayerSortAsc(key === 'name'); }
+              };
+
+              const SortHeader = ({ k, label, w }) => (
+                <th onClick={() => handleSort(k)}
+                  className={`py-1 px-1 cursor-pointer hover:text-white transition select-none ${w || ''} ${playerSortKey === k ? 'text-cyan-400' : 'text-gray-500'}`}>
+                  {label}{playerSortKey === k ? (playerSortAsc ? ' ▲' : ' ▼') : ''}
+                </th>
+              );
+
+              const renderVal = (val, isVelocity) => {
+                if (val === '?' || val === undefined) return <span className="text-gray-600">?</span>;
+                const n = typeof val === 'number' ? val : parseInt(val);
+                return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 120) * 2) : n)}`}>{val}{isVelocity ? '' : ''}</span>;
+              };
+
               return (
-                <div>
+                <div className="bg-gray-800 rounded-lg p-4 mb-4">
                   <h3 className="text-xs font-bold text-yellow-400 mb-2">
                     発見選手一覧（{allPlayers.length}名）
-                    <span className="text-[10px] text-gray-500 font-normal ml-2">
-                      {completedMissions.length}件のレポートから統合
-                    </span>
                   </h3>
-                  <div className="space-y-1.5">
-                    {allPlayers.map((p, pi) => {
-                      const sa = p.scoutedAbilities || {};
-                      const revealLevel = p._revealLevel || 0;
-                      const revealLabel = ['概要', '詳細', '完全'][revealLevel];
-                      return (
-                        <div key={pi} className="bg-gray-800/80 rounded p-2 text-xs">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-white font-bold">{p.name}</span>
-                            <span className="text-gray-400">{p.age}歳</span>
-                            <span className="text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</span>
-                            <span className="text-gray-500">{p._scoutSource}</span>
-                            {p._poolRef?.teamName && (
-                              <span className="text-emerald-400 text-[10px]">所属: {p._poolRef.teamName}</span>
-                            )}
-                            {(p.fame || 0) > 0 && (
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                p.fame >= 50 ? 'bg-yellow-600/30 text-yellow-300' : 'bg-gray-700 text-gray-400'
-                              }`}>
-                                知名度{p.fame}
-                              </span>
-                            )}
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                              revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
-                              revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
-                              'bg-gray-700 text-gray-400'
-                            }`}>
-                              {revealLabel}
-                            </span>
-                            {(p._investigationCount || 0) > 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-cyan-900/40 text-cyan-400">
-                                交渉+{(p._investigationCount || 0) * 7}%
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex gap-3 mt-1.5 text-[10px] flex-wrap">
-                            {p.position === 'pitcher' ? (<>
-                              {renderAbility('球速', sa.pitching?.velocity)}
-                              {renderAbility('制球', sa.pitching?.control)}
-                              {renderAbility('スタ', sa.pitching?.stamina)}
-                            </>) : (<>
-                              {renderAbility('ミート', sa.batting?.meet)}
-                              {renderAbility('パワー', sa.batting?.power)}
-                              {renderAbility('選球眼', sa.batting?.eye)}
-                              {renderAbility('走力', sa.physical?.speed)}
-                              {renderAbility('守備', sa.fielding?.defense)}
-                            </>)}
-                          </div>
-                          {revealLevel < 2 && (() => {
-                            const missions = cd.scoutMissions || [];
-                            const activeInv = missions.find(m =>
-                              m.type === 'investigation' && !m.completed && m.targetPlayerId === p.id
-                            );
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[10px]">
+                      <thead className="border-b border-gray-700">
+                        <tr className="text-left">
+                          <SortHeader k="favorite" label="★" w="w-6" />
+                          <SortHeader k="name" label="選手名" w="w-20" />
+                          <SortHeader k="age" label="齢" w="w-8" />
+                          <SortHeader k="position" label="ポジ" w="w-10" />
+                          <th className="py-1 px-1 text-gray-600 w-14">出身</th>
+                          <SortHeader k="meet" label="ミート" w="w-10" />
+                          <SortHeader k="power" label="パワー" w="w-10" />
+                          <SortHeader k="eye" label="選球" w="w-8" />
+                          <SortHeader k="speed" label="走力" w="w-8" />
+                          <SortHeader k="defense" label="守備" w="w-8" />
+                          <SortHeader k="velocity" label="球速" w="w-10" />
+                          <SortHeader k="control" label="制球" w="w-8" />
+                          <SortHeader k="stamina" label="スタ" w="w-8" />
+                          <SortHeader k="reveal" label="調査" w="w-8" />
+                          <SortHeader k="fame" label="知名" w="w-8" />
+                          <th className="py-1 px-1 text-gray-600 w-12">状況</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map(p => {
+                          const sa = p.scoutedAbilities || {};
+                          const revealLevel = p._revealLevel || 0;
+                          const isFav = !!favIds[p.id];
+                          const favBonusVal = getFavoriteBonus(teamData, p.id);
+                          const isPitcher = p.position === 'pitcher';
+                          const activeInv = missions.find(m => m.type === 'investigation' && !m.completed && m.targetPlayerId === p.id);
+                          const invCount = p._investigationCount || 0;
 
-                            if (activeInv) {
-                              return (
-                                <div className="mt-1.5 text-[10px] text-yellow-400 flex items-center gap-1.5">
-                                  <span>🔍 {activeInv.staffName}が調査中...</span>
-                                  <span className="text-gray-500">({activeInv.returnDate.month}/{activeInv.returnDate.day}完了)</span>
-                                </div>
-                              );
-                            }
-
-                            if (investigateTargetId === p.id) {
-                              const busyIds = new Set(missions.filter(m => !m.completed).map(m => m.staffId));
-                              const availScouts = staff.filter(s => !busyIds.has(s.id));
-                              return (
-                                <div className="mt-1.5 bg-gray-900/60 rounded p-2 border border-cyan-500/30">
-                                  <div className="text-[10px] text-cyan-400 mb-1.5">調査するスカウトを選んでください</div>
-                                  {availScouts.length === 0 ? (
-                                    <p className="text-[10px] text-gray-500">全スタッフが任務中です</p>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      {availScouts.map(s => (
-                                        <div key={s.id} className="flex items-center gap-2 bg-gray-800/80 rounded p-1.5">
-                                          <span className="text-white text-[10px] font-bold">{s.name}</span>
-                                          <span className="text-gray-400 text-[10px]">眼{s.abilities?.scoutingEye || 0}</span>
-                                          <button
-                                            onClick={() => {
-                                              const result = startInvestigation(teamData, p.id, p.name, s.id, seasonData.currentDate);
-                                              setDispatchMessage({ text: result.message, ok: result.success });
-                                              setInvestigateTargetId(null);
-                                              setRefreshTick(t => t + 1);
-                                              setTimeout(() => setDispatchMessage(null), 3000);
-                                            }}
-                                            className="ml-auto px-2 py-0.5 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
-                                          >
-                                            調査開始
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                  <button onClick={() => setInvestigateTargetId(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-1.5">キャンセル</button>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <button
-                                onClick={() => setInvestigateTargetId(p.id)}
-                                className="mt-1.5 px-2.5 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition"
-                              >
-                                🔍 調査する（{revealLevel === 0 ? '詳細を調べる' : '全能力を調べる'}）
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      );
-                    })}
+                          return (
+                            <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-750/50 transition">
+                              <td className="py-1 px-1 text-center">
+                                <button onClick={() => { toggleFavoritePlayer(teamData, p.id); setRefreshTick(t => t + 1); }}
+                                  className={`text-sm ${isFav ? 'text-yellow-400' : 'text-gray-600 hover:text-gray-400'} transition`}
+                                  title={isFav ? `お気に入り (交渉+${favBonusVal}%)` : 'お気に入りに追加'}>
+                                  {isFav ? '★' : '☆'}
+                                </button>
+                              </td>
+                              <td className="py-1 px-1 text-white font-bold truncate max-w-[80px]">{p.name}</td>
+                              <td className="py-1 px-1 text-gray-400 text-center">{p.age}</td>
+                              <td className="py-1 px-1 text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</td>
+                              <td className="py-1 px-1 text-gray-500 truncate max-w-[56px]">{p._scoutSource}</td>
+                              <td className="py-1 px-1 text-center">{renderVal(sa.batting?.meet)}</td>
+                              <td className="py-1 px-1 text-center">{renderVal(sa.batting?.power)}</td>
+                              <td className="py-1 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
+                              <td className="py-1 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
+                              <td className="py-1 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
+                              <td className="py-1 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
+                              <td className="py-1 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
+                              <td className="py-1 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                              <td className="py-1 px-1 text-center">
+                                <span className={`px-1 py-0.5 rounded font-bold ${
+                                  revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
+                                  revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
+                                  'bg-gray-700 text-gray-400'
+                                }`}>
+                                  {['概要', '詳細', '完全'][revealLevel]}
+                                </span>
+                              </td>
+                              <td className="py-1 px-1 text-center">
+                                {(p.fame || 0) > 0 ? (
+                                  <span className={p.fame >= 50 ? 'text-yellow-400 font-bold' : 'text-gray-400'}>{p.fame}</span>
+                                ) : <span className="text-gray-600">-</span>}
+                              </td>
+                              <td className="py-1 px-1">
+                                {activeInv ? (
+                                  <span className="text-yellow-400">調査中</span>
+                                ) : invCount > 0 ? (
+                                  <span className="text-cyan-400">+{invCount * 7}%</span>
+                                ) : revealLevel < 2 ? (
+                                  <button onClick={() => setInvestigateTargetId(investigateTargetId === p.id ? null : p.id)}
+                                    className="text-cyan-400 hover:text-cyan-300">調査</button>
+                                ) : (
+                                  <span className="text-green-400">完了</span>
+                                )}
+                                {isFav && favBonusVal > 0 && (
+                                  <span className="ml-0.5 text-yellow-400">+{favBonusVal}%</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
+
+                  {/* 調査スカウト選択パネル */}
+                  {investigateTargetId && (() => {
+                    const target = allPlayers.find(p => p.id === investigateTargetId);
+                    if (!target) return null;
+                    const busyIds = new Set(missions.filter(m => !m.completed).map(m => m.staffId));
+                    const availScouts = staff.filter(s => !busyIds.has(s.id));
+                    return (
+                      <div className="mt-2 bg-gray-900/60 rounded p-3 border border-cyan-500/30">
+                        <div className="text-xs text-cyan-400 mb-1.5 font-bold">{target.name}を調査するスカウトを選択</div>
+                        {availScouts.length === 0 ? (
+                          <p className="text-[10px] text-gray-500">全スタッフが任務中です</p>
+                        ) : (
+                          <div className="flex gap-2 flex-wrap">
+                            {availScouts.map(s => (
+                              <button key={s.id}
+                                onClick={() => {
+                                  const result = startInvestigation(teamData, target.id, target.name, s.id, seasonData.currentDate);
+                                  setDispatchMessage({ text: result.message, ok: result.success });
+                                  setInvestigateTargetId(null);
+                                  setRefreshTick(t => t + 1);
+                                  setTimeout(() => setDispatchMessage(null), 3000);
+                                }}
+                                className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition">
+                                {s.name} (眼{s.abilities?.scoutingEye || 0})
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <button onClick={() => setInvestigateTargetId(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-1.5 block">キャンセル</button>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}

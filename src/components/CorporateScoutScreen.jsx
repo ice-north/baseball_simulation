@@ -7,6 +7,7 @@ import {
   negotiateWithCompetition,
   processAIScoutRecruitment,
   investigatePlayer,
+  getFavoriteBonus,
 } from '../corporate/scoutingSystem.js';
 
 const getRankColor = (rank) => {
@@ -396,6 +397,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                       {scoutBonus > 0 && <span className="text-green-400 text-[9px] ml-0.5">+{scoutBonus}</span>}
                       {(player._investigationCount || 0) > 0 && (
                         <span className="text-cyan-400 text-[9px] ml-0.5">調+{(player._investigationCount || 0) * 7}</span>
+                      )}
+                      {getFavoriteBonus(teamData, player.id) > 0 && (
+                        <span className="text-yellow-400 text-[9px] ml-0.5">★+{getFavoriteBonus(teamData, player.id)}</span>
                       )}
                     </td>
                     <td className="px-1.5 py-1 text-cyan-400 text-[10px] whitespace-nowrap">{player._scoutSource}</td>

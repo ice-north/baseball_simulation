@@ -12,7 +12,7 @@ import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
-import { checkScoutMissionCompletion, SCOUT_TARGETS } from '../corporate/scoutingSystem.js';
+import { checkScoutMissionCompletion, SCOUT_TARGETS, processAutoInvestigation, advanceFavoriteBonus } from '../corporate/scoutingSystem.js';
 
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
@@ -692,7 +692,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       newSeasonData = { ...newSeasonData, clubSenshuken: cs };
     }
 
-    // スカウト派遣の完了チェック
+    // スカウト派遣の完了チェック + 自動調査 + お気に入りボーナス
     if (seasonData.settings?.corporateMode) {
       const userTeam = TEAMS_DATA[userTeamName];
       if (userTeam?.corporateData?.scoutMissions) {
@@ -700,7 +700,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         if (completedMissions.length > 0) {
           setScoutReportNotifications(prev => [...prev, ...completedMissions]);
         }
+        processAutoInvestigation(userTeam, newSeasonData.currentDate);
       }
+      advanceFavoriteBonus(userTeam, newSeasonData.currentDate);
     }
 
     if (newSeasonData.currentDate.month !== selectedMonth) setSelectedMonth(newSeasonData.currentDate.month);
