@@ -837,17 +837,24 @@ export function processAutoInvestigation(teamData, currentDate) {
 /**
  * 選手をお気に入りに指定（担当スカウト付き、毎週交渉ボーナス蓄積）
  * assignedStaff: { id, name, negotiation } - 担当スカウト情報
+ * 解除時はボーナスを保持し、再登録時に引き継ぐ
  */
 export function toggleFavoritePlayer(teamData, playerId, assignedStaff) {
   const cd = teamData?.corporateData;
   if (!cd) return;
   if (!cd.favoritePlayerIds) cd.favoritePlayerIds = {};
+  if (!cd._favoriteHistory) cd._favoriteHistory = {};
+
   if (cd.favoritePlayerIds[playerId]) {
+    // 解除: ボーナスを履歴に退避してから削除
+    cd._favoriteHistory[playerId] = cd.favoritePlayerIds[playerId].bonus || 0;
     delete cd.favoritePlayerIds[playerId];
   } else {
+    // 登録: 過去のボーナスがあれば引き継ぐ
+    const prevBonus = cd._favoriteHistory[playerId] || 0;
     cd.favoritePlayerIds[playerId] = {
       startDate: null,
-      bonus: 0,
+      bonus: prevBonus,
       staffId: assignedStaff?.id || null,
       staffName: assignedStaff?.name || null,
       staffNegotiation: assignedStaff?.negotiation || 0,
@@ -899,12 +906,14 @@ function dateDiffDays(d1Num, d2Num) {
 }
 
 /**
- * お気に入りボーナスを取得
+ * お気に入りボーナスを取得（解除中でも蓄積分は残る）
  */
 export function getFavoriteBonus(teamData, playerId) {
   const cd = teamData?.corporateData;
-  if (!cd?.favoritePlayerIds?.[playerId]) return 0;
-  return cd.favoritePlayerIds[playerId].bonus || 0;
+  if (cd?.favoritePlayerIds?.[playerId]) {
+    return cd.favoritePlayerIds[playerId].bonus || 0;
+  }
+  return cd?._favoriteHistory?.[playerId] || 0;
 }
 
 /**
