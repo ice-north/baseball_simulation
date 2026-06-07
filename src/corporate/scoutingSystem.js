@@ -383,19 +383,31 @@ function obscureAbilities(player, accuracy, stage = 'full') {
   const isPitcher = player.position === 'pitcher';
 
   if (stage === 'primary') {
-    // 概要: 投手は球速のみ、野手はミート・パワーのみ。他は隠す
+    // 概要: 全能力からランダムに2つだけ見える
+    const pitcherKeys = ['velocity', 'control', 'stamina'];
+    const hitterKeys = ['meet', 'power', 'eye', 'speed', 'defense'];
+    const pool = isPitcher ? pitcherKeys : hitterKeys;
+    // ランダムに2つ選出
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const visible = new Set(shuffled.slice(0, 2));
+
     return {
       batting: {
-        meet: isPitcher ? hidden : blur(player.batting?.meet || 0),
-        power: isPitcher ? hidden : blur(player.batting?.power || 0),
-        eye: hidden,
+        meet: visible.has('meet') ? blur(player.batting?.meet || 0) : hidden,
+        power: visible.has('power') ? blur(player.batting?.power || 0) : hidden,
+        eye: visible.has('eye') ? blur(player.batting?.eye || 0) : hidden,
       },
-      physical: { speed: hidden, arm: hidden },
-      fielding: { defense: hidden },
+      physical: {
+        speed: visible.has('speed') ? blur(player.physical?.speed || 0) : hidden,
+        arm: hidden,
+      },
+      fielding: {
+        defense: visible.has('defense') ? blur(player.fielding?.defense || 0) : hidden,
+      },
       pitching: {
-        velocity: isPitcher ? blur(player.pitching?.velocity || 130, 165) : hidden,
-        control: isPitcher ? blur(player.pitching?.control || 30) : hidden,
-        stamina: hidden,
+        velocity: visible.has('velocity') ? blur(player.pitching?.velocity || 130, 165) : hidden,
+        control: visible.has('control') ? blur(player.pitching?.control || 30) : hidden,
+        stamina: visible.has('stamina') ? blur(player.pitching?.stamina || 60, 200) : hidden,
       },
     };
   }
@@ -699,8 +711,27 @@ export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
         if (m.type === 'investigation' || !m.results) continue;
         const found = m.results.find(p => p.id === targetId);
         if (found) {
+          const prevAbilities = JSON.parse(JSON.stringify(found.scoutedAbilities || {}));
           investigatePlayer(found);
           found.recruitRate = calculateRecruitSuccessRate(found, teamData);
+          // 新たに判明した能力を記録
+          const newAbilities = found.scoutedAbilities || {};
+          const revealed = [];
+          const abilityLabels = { meet: 'ミート', power: 'パワー', eye: '選球眼', speed: '走力', defense: '守備', velocity: '球速', control: '制球', stamina: 'スタミナ' };
+          const checkPairs = [
+            ['batting', 'meet'], ['batting', 'power'], ['batting', 'eye'],
+            ['physical', 'speed'], ['fielding', 'defense'],
+            ['pitching', 'velocity'], ['pitching', 'control'], ['pitching', 'stamina'],
+          ];
+          for (const [cat, key] of checkPairs) {
+            const prev = prevAbilities[cat]?.[key];
+            const curr = newAbilities[cat]?.[key];
+            if ((prev === '?' || prev === undefined) && curr !== '?' && curr !== undefined) {
+              revealed.push(abilityLabels[key] || key);
+            }
+          }
+          mission._revealedAbilities = revealed;
+          mission._newRevealLevel = found._revealLevel;
           break;
         }
       }

@@ -2490,7 +2490,10 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <div key={`scout-${i}`} className="flex items-start gap-1.5 bg-cyan-900/30 rounded-lg px-2.5 py-1.5 border border-cyan-700/30">
                     <span className="text-sm shrink-0">🔍</span>
                     <span className="text-xs text-cyan-300">
-                      {mission.staffName}のスカウトが{SCOUT_TARGETS[mission.target]?.label || mission.target}から帰還 — {mission.results?.length || 0}名の候補選手を発見
+                      {mission.type === 'investigation'
+                        ? `${mission.targetPlayerName}の${(mission._revealedAbilities || []).join('・') || '能力'}を調査完了（${mission.staffName}）`
+                        : `${mission.staffName}が${SCOUT_TARGETS[mission.target]?.label || mission.target}から帰還 — ${mission.results?.length || 0}名の候補選手を発見`
+                      }
                     </span>
                   </div>
                 ))}
