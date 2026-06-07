@@ -155,7 +155,7 @@ export function executeDepartures(allTeams, retiredIds, releases, currentYear) {
 /**
  * プールから選手の総合力を算出（スカウト候補のソート用）
  */
-function evaluatePlayerScore(player) {
+export function evaluatePlayerScore(player) {
   const isPitcher = player.position === 'pitcher';
   const gp = player.growthPotential || 1.0;
 
@@ -174,6 +174,51 @@ function evaluatePlayerScore(player) {
     score = m + p + spd * 0.5 + def * 0.3 + arm * 0.3;
   }
   return score + (gp - 0.9) * 30;
+}
+
+/**
+ * スカウトおすすめ度をS〜Fで算出
+ * 能力スコア + 成長力 + 若さ + 知名度を総合評価
+ */
+export function getScoutRecommendation(player) {
+  const score = evaluatePlayerScore(player);
+  const gp = player.growthPotential || 1.0;
+  const age = player.age || 22;
+  const fame = player.fame || 0;
+
+  // 若さボーナス: 18歳=+20, 22歳=+10, 26歳=0, 30歳=-10
+  const youthBonus = Math.max(-15, (24 - age) * 5);
+  // 成長力ボーナス: gp 1.3=+20, 1.0=0, 0.7=-20
+  const gpBonus = (gp - 1.0) * 60;
+  // 知名度: 知名度高い=実績ある=高評価
+  const fameBonus = fame * 0.1;
+
+  const total = score + youthBonus + gpBonus + fameBonus;
+
+  if (total >= 100) return 'S';
+  if (total >= 80) return 'A';
+  if (total >= 60) return 'B';
+  if (total >= 45) return 'C';
+  if (total >= 30) return 'D';
+  return 'F';
+}
+
+/**
+ * 他球団の推定接触数を算出（決定論的、レンダリング安定）
+ * 選手のスコアと知名度からライバル数を推定
+ */
+export function estimateRivalCount(player) {
+  const score = evaluatePlayerScore(player);
+  const fame = player.fame || 0;
+  const interest = score * 0.5 + fame * 0.3;
+  // idのハッシュで微小ノイズ（安定的なランダム）
+  const hash = (player.id || 0) % 10;
+  const adjusted = interest + hash * 0.5;
+
+  if (adjusted >= 65) return 3;
+  if (adjusted >= 50) return 2;
+  if (adjusted >= 35) return 1;
+  return 0;
 }
 
 /**
@@ -739,16 +784,31 @@ export function processAutoInvestigation(teamData, currentDate) {
 
   if (availableStaff.length === 0) return [];
 
+  const getVisibleVal = (p, key) => {
+    const sa = p.scoutedAbilities || {};
+    const map = {
+      velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
+      meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
+      speed: sa.physical?.speed, defense: sa.fielding?.defense,
+    };
+    const v = map[key];
+    return (v === '?' || v === undefined) ? null : (typeof v === 'number' ? v : parseInt(v));
+  };
+
   const targets = allPlayers.filter(p => {
     if ((p._revealLevel || 0) >= 2) return false;
     if (pendingInvIds.has(p.id)) return false;
     if (filter.ageMin && p.age < filter.ageMin) return false;
     if (filter.ageMax && p.age > filter.ageMax) return false;
     if (filter.positions && filter.positions.length > 0 && !filter.positions.includes(p.position)) return false;
-    if (filter.abilityMin != null || filter.abilityMax != null) {
-      const score = evaluatePlayerScore(p);
-      if (filter.abilityMin != null && score < filter.abilityMin) return false;
-      if (filter.abilityMax != null && score > filter.abilityMax) return false;
+    // 個別能力フィルタ（見えている値で判定）
+    if (filter.abilities) {
+      for (const [key, range] of Object.entries(filter.abilities)) {
+        const val = getVisibleVal(p, key);
+        if (val === null) continue;
+        if (range.min != null && val < range.min) return false;
+        if (range.max != null && val > range.max) return false;
+      }
     }
     return true;
   });
@@ -764,21 +824,30 @@ export function processAutoInvestigation(teamData, currentDate) {
 }
 
 /**
- * 選手をお気に入りに指定（毎週+3%交渉ボーナス蓄積）
+ * 選手をお気に入りに指定（担当スカウト付き、毎週交渉ボーナス蓄積）
+ * assignedStaff: { id, name, negotiation } - 担当スカウト情報
  */
-export function toggleFavoritePlayer(teamData, playerId) {
+export function toggleFavoritePlayer(teamData, playerId, assignedStaff) {
   const cd = teamData?.corporateData;
   if (!cd) return;
   if (!cd.favoritePlayerIds) cd.favoritePlayerIds = {};
   if (cd.favoritePlayerIds[playerId]) {
     delete cd.favoritePlayerIds[playerId];
   } else {
-    cd.favoritePlayerIds[playerId] = { startDate: null, bonus: 0 };
+    cd.favoritePlayerIds[playerId] = {
+      startDate: null,
+      bonus: 0,
+      staffId: assignedStaff?.id || null,
+      staffName: assignedStaff?.name || null,
+      staffNegotiation: assignedStaff?.negotiation || 0,
+    };
   }
 }
 
 /**
  * お気に入り選手の週次ボーナス加算（日付進行で毎週呼ぶ）
+ * 担当スカウトの交渉力が高いほどボーナス蓄積が大きい
+ * 基本+3%/週、交渉力50以上で+4%、80以上で+5%
  */
 export function advanceFavoriteBonus(teamData, currentDate) {
   const cd = teamData?.corporateData;
@@ -791,11 +860,20 @@ export function advanceFavoriteBonus(teamData, currentDate) {
       info.lastAdvance = dayNum;
       continue;
     }
+    // 担当スカウトが退団していないか確認し、最新の交渉力を反映
+    if (info.staffId) {
+      const assignedStaff = (cd.staff || []).find(s => s.id === info.staffId);
+      if (assignedStaff) {
+        info.staffNegotiation = assignedStaff.abilities?.negotiation || 0;
+      }
+    }
     if (!info.lastAdvance) info.lastAdvance = info.startDate;
     const daysSince = dateDiffDays(info.lastAdvance, dayNum);
     if (daysSince >= 7) {
       const weeks = Math.floor(daysSince / 7);
-      info.bonus = (info.bonus || 0) + weeks * 3;
+      const neg = info.staffNegotiation || 0;
+      const weeklyRate = neg >= 80 ? 5 : neg >= 50 ? 4 : 3;
+      info.bonus = (info.bonus || 0) + weeks * weeklyRate;
       info.lastAdvance = dayNum;
     }
   }

@@ -5,7 +5,7 @@ import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudget
 import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
-import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers } from '../corporate/scoutingSystem.js';
+import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount } from '../corporate/scoutingSystem.js';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -26,9 +26,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const [playerSortKey, setPlayerSortKey] = useState('name');
   const [playerSortAsc, setPlayerSortAsc] = useState(true);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [favoriteSelectId, setFavoriteSelectId] = useState(null);
   const [filterDraft, setFilterDraft] = useState(() => {
     const f = getAutoInvestigationFilter(teamData);
-    return f || { ageMin: '', ageMax: '', positions: [], abilityMin: '', abilityMax: '' };
+    return f || { ageMin: '', ageMax: '', positions: [], abilities: {} };
   });
 
   if (!cd) {
@@ -513,6 +514,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                   {cd.autoInvestFilter.positions?.length > 0 && (
                     <span>ポジション: {cd.autoInvestFilter.positions.map(p => POSITION_NAMES[p] || p).join(', ')}</span>
                   )}
+                  {cd.autoInvestFilter.abilities && Object.entries(cd.autoInvestFilter.abilities).map(([k, v]) => {
+                    const labels = { velocity: '球速', meet: 'ミート', power: 'パワー', eye: '選球眼', speed: '走力', defense: '守備', control: '制球', stamina: 'スタミナ' };
+                    return (v.min || v.max) ? <span key={k}>{labels[k]}: {v.min || '?'}〜{v.max || '?'}</span> : null;
+                  })}
                   <button onClick={() => { setAutoInvestigationFilter(teamData, null); setRefreshTick(t => t + 1); }}
                     className="text-red-400 hover:text-red-300">解除</button>
                 </div>
@@ -558,12 +563,58 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       ))}
                     </div>
                   </div>
+                  {/* 能力値フィルタ */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1">能力値（見えている値で判定）</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { key: 'velocity', label: '球速', max: 165 },
+                        { key: 'control', label: '制球' },
+                        { key: 'meet', label: 'ミート' },
+                        { key: 'power', label: 'パワー' },
+                        { key: 'eye', label: '選球眼' },
+                        { key: 'speed', label: '走力' },
+                        { key: 'defense', label: '守備' },
+                        { key: 'stamina', label: 'スタミナ' },
+                      ].map(({ key, label, max }) => {
+                        const ab = (filterDraft.abilities || {})[key] || {};
+                        return (
+                          <div key={key} className="flex items-center gap-1">
+                            <span className="text-[9px] text-gray-500 w-10 shrink-0">{label}</span>
+                            <input type="number" min="0" max={max || 99}
+                              value={ab.min ?? ''}
+                              onChange={e => setFilterDraft(f => ({
+                                ...f,
+                                abilities: { ...(f.abilities || {}), [key]: { ...(f.abilities?.[key] || {}), min: e.target.value ? parseInt(e.target.value) : null } }
+                              }))}
+                              className="w-12 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-[10px] text-white"
+                              placeholder="下限" />
+                            <span className="text-gray-600 text-[9px]">〜</span>
+                            <input type="number" min="0" max={max || 99}
+                              value={ab.max ?? ''}
+                              onChange={e => setFilterDraft(f => ({
+                                ...f,
+                                abilities: { ...(f.abilities || {}), [key]: { ...(f.abilities?.[key] || {}), max: e.target.value ? parseInt(e.target.value) : null } }
+                              }))}
+                              className="w-12 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-[10px] text-white"
+                              placeholder="上限" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <div className="flex gap-3">
                     <button onClick={() => {
+                      const ab = filterDraft.abilities || {};
+                      const cleanAb = {};
+                      Object.entries(ab).forEach(([k, v]) => {
+                        if (v.min != null || v.max != null) cleanAb[k] = v;
+                      });
                       const f = {
                         ageMin: filterDraft.ageMin || null,
                         ageMax: filterDraft.ageMax || null,
                         positions: (filterDraft.positions || []).length > 0 ? filterDraft.positions : null,
+                        abilities: Object.keys(cleanAb).length > 0 ? cleanAb : null,
                       };
                       setAutoInvestigationFilter(teamData, f);
                       setShowFilterPanel(false);
@@ -573,7 +624,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     </button>
                     <button onClick={() => {
                       setAutoInvestigationFilter(teamData, null);
-                      setFilterDraft({ ageMin: '', ageMax: '', positions: [] });
+                      setFilterDraft({ ageMin: '', ageMax: '', positions: [], abilities: {} });
                       setShowFilterPanel(false);
                       setRefreshTick(t => t + 1);
                     }} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs">
@@ -591,6 +642,9 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
               const favIds = cd.favoritePlayerIds || {};
               const missions = cd.scoutMissions || [];
+
+              const recGradeOrder = { S: 6, A: 5, B: 4, C: 3, D: 2, F: 1 };
+              const recColor = (g) => ({ S: 'text-red-400', A: 'text-orange-400', B: 'text-yellow-400', C: 'text-green-400', D: 'text-blue-400', F: 'text-gray-500' }[g] || 'text-gray-500');
 
               const getAbilityVal = (p, key) => {
                 const sa = p.scoutedAbilities || {};
@@ -610,7 +664,9 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                   case 'age': va = a.age || 0; vb = b.age || 0; break;
                   case 'position': va = a.position; vb = b.position; return playerSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
                   case 'reveal': va = a._revealLevel || 0; vb = b._revealLevel || 0; break;
-                  case 'investigation': va = (a._investigationCount || 0); vb = (b._investigationCount || 0); break;
+                  case 'rate': va = calculateRecruitSuccessRate(a, teamData); vb = calculateRecruitSuccessRate(b, teamData); break;
+                  case 'rec': va = recGradeOrder[getScoutRecommendation(a)] || 0; vb = recGradeOrder[getScoutRecommendation(b)] || 0; break;
+                  case 'rivals': va = estimateRivalCount(a); vb = estimateRivalCount(b); break;
                   case 'favorite': va = favIds[a.id] ? 1 : 0; vb = favIds[b.id] ? 1 : 0; break;
                   case 'fame': va = a.fame || 0; vb = b.fame || 0; break;
                   default: va = getAbilityVal(a, playerSortKey); vb = getAbilityVal(b, playerSortKey); break;
@@ -633,8 +689,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               const renderVal = (val, isVelocity) => {
                 if (val === '?' || val === undefined) return <span className="text-gray-600">?</span>;
                 const n = typeof val === 'number' ? val : parseInt(val);
-                return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 120) * 2) : n)}`}>{val}{isVelocity ? '' : ''}</span>;
+                return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 120) * 2) : n)}`}>{val}</span>;
               };
+
+              const getRateColor = (r) => r >= 70 ? 'text-green-400' : r >= 50 ? 'text-blue-400' : r >= 30 ? 'text-yellow-400' : 'text-red-400';
 
               return (
                 <div className="bg-gray-800 rounded-lg p-4 mb-4">
@@ -646,21 +704,23 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       <thead className="border-b border-gray-700">
                         <tr className="text-left">
                           <SortHeader k="favorite" label="★" w="w-6" />
+                          <SortHeader k="rec" label="推薦" w="w-8" />
                           <SortHeader k="name" label="選手名" w="w-20" />
-                          <SortHeader k="age" label="齢" w="w-8" />
-                          <SortHeader k="position" label="ポジ" w="w-10" />
-                          <th className="py-1 px-1 text-gray-600 w-14">出身</th>
-                          <SortHeader k="meet" label="ミート" w="w-10" />
-                          <SortHeader k="power" label="パワー" w="w-10" />
-                          <SortHeader k="eye" label="選球" w="w-8" />
-                          <SortHeader k="speed" label="走力" w="w-8" />
-                          <SortHeader k="defense" label="守備" w="w-8" />
-                          <SortHeader k="velocity" label="球速" w="w-10" />
-                          <SortHeader k="control" label="制球" w="w-8" />
-                          <SortHeader k="stamina" label="スタ" w="w-8" />
+                          <SortHeader k="age" label="齢" w="w-6" />
+                          <SortHeader k="position" label="ポジ" w="w-8" />
+                          <th className="py-1 px-1 text-gray-600 w-12">出身</th>
+                          <SortHeader k="meet" label="ミ" w="w-6" />
+                          <SortHeader k="power" label="パ" w="w-6" />
+                          <SortHeader k="eye" label="眼" w="w-6" />
+                          <SortHeader k="speed" label="走" w="w-6" />
+                          <SortHeader k="defense" label="守" w="w-6" />
+                          <SortHeader k="velocity" label="球速" w="w-8" />
+                          <SortHeader k="control" label="制" w="w-6" />
+                          <SortHeader k="stamina" label="ス" w="w-6" />
+                          <SortHeader k="rate" label="交渉%" w="w-10" />
+                          <SortHeader k="rivals" label="他球団" w="w-8" />
                           <SortHeader k="reveal" label="調査" w="w-8" />
-                          <SortHeader k="fame" label="知名" w="w-8" />
-                          <th className="py-1 px-1 text-gray-600 w-12">状況</th>
+                          <th className="py-1 px-1 text-gray-600 w-16">状況</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -668,24 +728,38 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           const sa = p.scoutedAbilities || {};
                           const revealLevel = p._revealLevel || 0;
                           const isFav = !!favIds[p.id];
+                          const favInfo = favIds[p.id];
                           const favBonusVal = getFavoriteBonus(teamData, p.id);
-                          const isPitcher = p.position === 'pitcher';
                           const activeInv = missions.find(m => m.type === 'investigation' && !m.completed && m.targetPlayerId === p.id);
                           const invCount = p._investigationCount || 0;
+                          const rate = calculateRecruitSuccessRate(p, teamData);
+                          const rec = getScoutRecommendation(p);
+                          const rivals = estimateRivalCount(p);
 
                           return (
                             <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-750/50 transition">
                               <td className="py-1 px-1 text-center">
-                                <button onClick={() => { toggleFavoritePlayer(teamData, p.id); setRefreshTick(t => t + 1); }}
-                                  className={`text-sm ${isFav ? 'text-yellow-400' : 'text-gray-600 hover:text-gray-400'} transition`}
-                                  title={isFav ? `お気に入り (交渉+${favBonusVal}%)` : 'お気に入りに追加'}>
-                                  {isFav ? '★' : '☆'}
-                                </button>
+                                {isFav ? (
+                                  <button onClick={() => { toggleFavoritePlayer(teamData, p.id); setRefreshTick(t => t + 1); }}
+                                    className="text-sm text-yellow-400 transition"
+                                    title={`担当: ${favInfo?.staffName || '未定'} / 交渉+${favBonusVal}%`}>
+                                    ★
+                                  </button>
+                                ) : (
+                                  <button onClick={() => setFavoriteSelectId(favoriteSelectId === p.id ? null : p.id)}
+                                    className="text-sm text-gray-600 hover:text-gray-400 transition"
+                                    title="お気に入りに追加（担当スカウト選択）">
+                                    ☆
+                                  </button>
+                                )}
+                              </td>
+                              <td className="py-1 px-1 text-center">
+                                <span className={`font-bold ${recColor(rec)}`}>{rec}</span>
                               </td>
                               <td className="py-1 px-1 text-white font-bold truncate max-w-[80px]">{p.name}</td>
                               <td className="py-1 px-1 text-gray-400 text-center">{p.age}</td>
                               <td className="py-1 px-1 text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</td>
-                              <td className="py-1 px-1 text-gray-500 truncate max-w-[56px]">{p._scoutSource}</td>
+                              <td className="py-1 px-1 text-gray-500 truncate max-w-[48px]">{p._scoutSource}</td>
                               <td className="py-1 px-1 text-center">{renderVal(sa.batting?.meet)}</td>
                               <td className="py-1 px-1 text-center">{renderVal(sa.batting?.power)}</td>
                               <td className="py-1 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
@@ -695,6 +769,16 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                               <td className="py-1 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
                               <td className="py-1 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
                               <td className="py-1 px-1 text-center">
+                                <span className={`font-bold ${getRateColor(rate)}`}>{rate}%</span>
+                              </td>
+                              <td className="py-1 px-1 text-center">
+                                {rivals > 0 ? (
+                                  <span className={`font-bold ${rivals >= 3 ? 'text-red-400' : rivals >= 2 ? 'text-orange-400' : 'text-yellow-400'}`}>
+                                    {rivals}社
+                                  </span>
+                                ) : <span className="text-gray-600">-</span>}
+                              </td>
+                              <td className="py-1 px-1 text-center">
                                 <span className={`px-1 py-0.5 rounded font-bold ${
                                   revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
                                   revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
@@ -703,24 +787,21 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                   {['概要', '詳細', '完全'][revealLevel]}
                                 </span>
                               </td>
-                              <td className="py-1 px-1 text-center">
-                                {(p.fame || 0) > 0 ? (
-                                  <span className={p.fame >= 50 ? 'text-yellow-400 font-bold' : 'text-gray-400'}>{p.fame}</span>
-                                ) : <span className="text-gray-600">-</span>}
-                              </td>
-                              <td className="py-1 px-1">
+                              <td className="py-1 px-1 text-[9px]">
                                 {activeInv ? (
                                   <span className="text-yellow-400">調査中</span>
-                                ) : invCount > 0 ? (
-                                  <span className="text-cyan-400">+{invCount * 7}%</span>
                                 ) : revealLevel < 2 ? (
                                   <button onClick={() => setInvestigateTargetId(investigateTargetId === p.id ? null : p.id)}
                                     className="text-cyan-400 hover:text-cyan-300">調査</button>
                                 ) : (
                                   <span className="text-green-400">完了</span>
                                 )}
+                                {invCount > 0 && <span className="ml-0.5 text-cyan-400">調+{invCount * 7}%</span>}
                                 {isFav && favBonusVal > 0 && (
-                                  <span className="ml-0.5 text-yellow-400">+{favBonusVal}%</span>
+                                  <span className="ml-0.5 text-yellow-400">★+{favBonusVal}%</span>
+                                )}
+                                {isFav && favInfo?.staffName && (
+                                  <span className="ml-0.5 text-purple-400">{favInfo.staffName}</span>
                                 )}
                               </td>
                             </tr>
@@ -729,6 +810,43 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* お気に入り担当スカウト選択パネル */}
+                  {favoriteSelectId && (() => {
+                    const target = allPlayers.find(p => p.id === favoriteSelectId);
+                    if (!target) return null;
+                    return (
+                      <div className="mt-2 bg-gray-900/60 rounded p-3 border border-yellow-500/30">
+                        <div className="text-xs text-yellow-400 mb-1.5 font-bold">{target.name}の担当スカウトを選択</div>
+                        <p className="text-[10px] text-gray-500 mb-2">担当スカウトが常に連絡を取り、交渉ボーナスを蓄積します。交渉力が高いほど効果大。</p>
+                        <div className="flex gap-2 flex-wrap">
+                          {staff.map(s => {
+                            const neg = s.abilities?.negotiation || 0;
+                            const weeklyRate = neg >= 80 ? 5 : neg >= 50 ? 4 : 3;
+                            return (
+                              <button key={s.id}
+                                onClick={() => {
+                                  toggleFavoritePlayer(teamData, target.id, {
+                                    id: s.id,
+                                    name: s.name,
+                                    negotiation: neg,
+                                  });
+                                  setFavoriteSelectId(null);
+                                  setRefreshTick(t => t + 1);
+                                }}
+                                className="px-2 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white text-[10px] font-bold rounded transition flex flex-col items-center">
+                                <span>{s.name}</span>
+                                <span className="text-[9px] text-yellow-200 font-normal">
+                                  交渉{neg} (+{weeklyRate}%/週)
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button onClick={() => setFavoriteSelectId(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-1.5 block">キャンセル</button>
+                      </div>
+                    );
+                  })()}
 
                   {/* 調査スカウト選択パネル */}
                   {investigateTargetId && (() => {
