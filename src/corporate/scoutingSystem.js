@@ -178,11 +178,10 @@ export function evaluatePlayerScore(player) {
 
 /**
  * スカウトおすすめ度をS〜Fで算出
- * 「自チームのランクに対して実力が上回っており、かつ競合が少ない選手」を高評価
- * 単純に良い選手ではなく、獲得可能性のある掘り出し物を推薦する
+ * 「自チームのランクに対して実力が上回っており、競合が少なく、交渉成功率が高い選手」を高評価
  */
 const RANK_BASELINE = { S: 90, A: 75, B: 60, C: 48, D: 35 };
-export function getScoutRecommendation(player, teamRank) {
+export function getScoutRecommendation(player, teamRank, teamData) {
   const rank = teamRank || 'C';
   const score = evaluatePlayerScore(player);
   const gp = player.growthPotential || 1.0;
@@ -190,21 +189,24 @@ export function getScoutRecommendation(player, teamRank) {
   const rivals = estimateRivalCount(player);
   const baseline = RANK_BASELINE[rank] || 55;
 
-  // 自チーム基準との差分: チームランクより能力が高いほど加点
-  // D(35基準)の選手がscore60 → +25, S(90基準)の選手がscore60 → -30
+  // 自チーム基準との差分
   const aboveTeamBonus = (score - baseline) * 1.2;
 
-  // 競合ペナルティ: ライバルが多いほど大幅減点（獲れる見込みが薄い）
-  // 0社=+15, 1社=0, 2社=-20, 3社=-40
+  // 競合ペナルティ
   const rivalPenalty = rivals === 0 ? 15 : rivals === 1 ? 0 : rivals === 2 ? -20 : -40;
 
-  // 若さボーナス（育成余地）: 18歳=+12, 22歳=+4, 26歳=0, 30歳=-8
+  // 若さボーナス
   const youthBonus = Math.max(-10, (26 - age) * 2);
 
-  // 成長力ボーナス: gp 1.3=+15, 1.0=0, 0.7=-15
+  // 成長力ボーナス
   const gpBonus = (gp - 1.0) * 50;
 
-  const total = aboveTeamBonus + rivalPenalty + youthBonus + gpBonus;
+  // 交渉成功率による補正: 低いほどランクダウン
+  // 50%=±0, 30%=-10, 10%=-20, 1%=-25, 70%=+5, 90%=+10
+  const rate = teamData ? calculateRecruitSuccessRate(player, teamData) : 50;
+  const ratePenalty = (rate - 50) * 0.5;
+
+  const total = aboveTeamBonus + rivalPenalty + youthBonus + gpBonus + ratePenalty;
 
   if (total >= 35) return 'S';
   if (total >= 20) return 'A';
@@ -485,7 +487,7 @@ export function calculateRecruitSuccessRate(player, teamData) {
   const favBonus = (getFavoriteBonus(teamData, player.id) / 100);
 
   const rate = baseRate - qualityPenalty + negotiationBonus + rankBonus + investigationBonus + favBonus;
-  return Math.max(5, Math.min(95, Math.round(rate * 100)));
+  return Math.max(1, Math.min(95, Math.round(rate * 100)));
 }
 
 /**

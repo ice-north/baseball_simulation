@@ -665,7 +665,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                   case 'position': va = a.position; vb = b.position; return playerSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
                   case 'reveal': va = a._revealLevel || 0; vb = b._revealLevel || 0; break;
                   case 'rate': va = calculateRecruitSuccessRate(a, teamData); vb = calculateRecruitSuccessRate(b, teamData); break;
-                  case 'rec': va = recGradeOrder[getScoutRecommendation(a, teamRank)] || 0; vb = recGradeOrder[getScoutRecommendation(b, teamRank)] || 0; break;
+                  case 'rec': va = recGradeOrder[getScoutRecommendation(a, teamRank, teamData)] || 0; vb = recGradeOrder[getScoutRecommendation(b, teamRank, teamData)] || 0; break;
                   case 'rivals': va = estimateRivalCount(a); vb = estimateRivalCount(b); break;
                   case 'favorite': va = favIds[a.id] ? 1 : 0; vb = favIds[b.id] ? 1 : 0; break;
                   case 'fame': va = a.fame || 0; vb = b.fame || 0; break;
@@ -733,7 +733,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           const activeInv = missions.find(m => m.type === 'investigation' && !m.completed && m.targetPlayerId === p.id);
                           const invCount = p._investigationCount || 0;
                           const rate = calculateRecruitSuccessRate(p, teamData);
-                          const rec = getScoutRecommendation(p, teamRank);
+                          const rec = getScoutRecommendation(p, teamRank, teamData);
                           const rivals = estimateRivalCount(p);
 
                           return (
