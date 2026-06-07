@@ -201,19 +201,21 @@ export function getScoutRecommendation(player, teamRank, teamData) {
   // 成長力ボーナス
   const gpBonus = (gp - 1.0) * 50;
 
-  // 交渉成功率による補正: 低いほどランクダウン
-  // 50%=±0, 30%=-10, 10%=-20, 1%=-25, 70%=+5, 90%=+10
+  // 交渉成功率による補正
   const rate = teamData ? calculateRecruitSuccessRate(player, teamData) : 50;
   const ratePenalty = (rate - 50) * 0.5;
 
   const total = aboveTeamBonus + rivalPenalty + youthBonus + gpBonus + ratePenalty;
 
-  if (total >= 35) return 'S';
-  if (total >= 20) return 'A';
-  if (total >= 8) return 'B';
-  if (total >= -5) return 'C';
-  if (total >= -20) return 'D';
-  return 'F';
+  // 交渉成功率が低い場合、スコアに関係なく推薦ランクに上限を設ける
+  // 獲れない選手を推薦しても意味がない
+  const maxByRate = rate < 5 ? 'D' : rate < 15 ? 'C' : rate < 30 ? 'B' : rate < 50 ? 'A' : 'S';
+  const grades = ['F', 'D', 'C', 'B', 'A', 'S'];
+  const rawGrade = total >= 35 ? 'S' : total >= 20 ? 'A' : total >= 8 ? 'B' : total >= -5 ? 'C' : total >= -20 ? 'D' : 'F';
+  const rawIdx = grades.indexOf(rawGrade);
+  const capIdx = grades.indexOf(maxByRate);
+
+  return grades[Math.min(rawIdx, capIdx)];
 }
 
 /**
