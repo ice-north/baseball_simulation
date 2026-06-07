@@ -25,7 +25,24 @@ const shuffle = (arr) => {
   return a;
 };
 
-const buildGridOrder = () => {
+const buildGridOrder = (npbStandings) => {
+  if (npbStandings && npbStandings.length === 12) {
+    // npbStandings = [CE1位, PA1位, CE2位, PA2位, ..., CE6位, PA6位]
+    // グリッド配置:
+    // CE1  PA1  CE4  PA4
+    // CE2  PA2  CE5  PA5
+    // CE3  PA3  CE6  PA6
+    const grid = [];
+    for (let row = 0; row < 3; row++) {
+      grid.push(
+        NPB_TEAMS_INFO.find(t => t.name === npbStandings[row * 2]) || NPB_TEAMS_INFO[0],
+        NPB_TEAMS_INFO.find(t => t.name === npbStandings[row * 2 + 1]) || NPB_TEAMS_INFO[1],
+        NPB_TEAMS_INFO.find(t => t.name === npbStandings[(row + 3) * 2]) || NPB_TEAMS_INFO[6],
+        NPB_TEAMS_INFO.find(t => t.name === npbStandings[(row + 3) * 2 + 1]) || NPB_TEAMS_INFO[7],
+      );
+    }
+    return grid;
+  }
   const ce = shuffle(NPB_TEAMS_INFO.filter(t => t.league === 'ce'));
   const pa = shuffle(NPB_TEAMS_INFO.filter(t => t.league === 'pa'));
   const [left, right] = Math.random() < 0.5 ? [ce, pa] : [pa, ce];
@@ -100,9 +117,9 @@ const PlayerCardContent = ({ name, position, teamName }) => (
   </div>
 );
 
-const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) => {
+const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, onComplete }) => {
   const [currentRoundIdx, setCurrentRoundIdx] = useState(0);
-  const [gridOrder] = useState(() => buildGridOrder());
+  const [gridOrder] = useState(() => buildGridOrder(npbStandings));
   const timerRef = useRef(null);
 
   const [waiverRevealed, setWaiverRevealed] = useState(new Set());
@@ -150,6 +167,16 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
   const currentTeamMap = currentRound ? roundData[currentRound] : null;
   const isFirstRound = currentRound === 'ドラフト1位' && firstRoundData?.phases?.length > 0;
   const isIkuRound = currentRound?.startsWith('育成');
+
+  const rankLabels = useMemo(() => {
+    if (!npbStandings || npbStandings.length !== 12) return {};
+    const labels = {};
+    for (let i = 0; i < 6; i++) {
+      labels[npbStandings[i * 2]] = `セ${i + 1}位`;
+      labels[npbStandings[i * 2 + 1]] = `パ${i + 1}位`;
+    }
+    return labels;
+  }, [npbStandings]);
 
   const currentPhase = isFirstRound ? (firstRoundData.phases[phaseIdx] || null) : null;
   const hasLottery = currentPhase?.lotteryResults?.length > 0;
@@ -282,12 +309,14 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
     const phasePick = currentPhase?.picks?.find(p => p.npbTeam === team.name);
     const isInPhase = !!phasePick;
     const revealed = phaseRevealed.has(team.name);
+    const rank = rankLabels[team.name];
 
     if (settledPick) {
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
           <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
             {team.short}
+            {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
           </div>
           <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
             <PlayerCardContent name={settledPick.name} position={settledPick.position} teamName={settledPick.teamName} />
@@ -317,6 +346,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
           <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
             {team.short}
+            {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
           </div>
           <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ height: CARD_BODY_HEIGHT }}>
             {!revealed ? (
@@ -349,6 +379,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
         <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
           {team.short}
+          {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
         </div>
         <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
           <div className="text-gray-200 text-xs text-center">—</div>
@@ -361,10 +392,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
     const picks = currentTeamMap[team.name] || [];
     const hasPick = picks.length > 0;
     const revealed = waiverRevealed.has(team.name);
+    const rank = rankLabels[team.name];
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
         <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
           {team.short}
+          {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
         </div>
         <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
           {!hasPick ? (
@@ -568,7 +601,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
         <div className="text-gray-500 text-xs mt-1.5">
           {currentRoundIdx + 1} / {activeRounds.length} ラウンド
           {isFirstRound && ' (入札制)'}
-          {!isFirstRound && ' (ウェーバー制)'}
+          {!isFirstRound && currentRoundIdx % 2 === 1 && ' (ウェーバー制 ← 下位球団から)'}
+          {!isFirstRound && currentRoundIdx % 2 === 0 && ' (逆ウェーバー制 → 上位球団から)'}
         </div>
       </div>
 
@@ -587,8 +621,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, onComplete }) =
   );
 };
 
-const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, onContinue }) => {
-  const [summaryGrid] = useState(() => buildGridOrder());
+const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, onContinue }) => {
+  const [summaryGrid] = useState(() => buildGridOrder(npbStandings));
   const teamPicks = useMemo(() => {
     const map = {};
     NPB_TEAMS_INFO.forEach(t => { map[t.name] = []; });
@@ -854,7 +888,7 @@ const DraftTitleOverlay = ({ onComplete }) => {
   );
 };
 
-const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, userTeamName, onContinue }) => {
+const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, npbStandings, userTeamName, onContinue }) => {
   const hasDrafted = draftedPlayers && draftedPlayers.length > 0;
   const [phase, setPhase] = useState(() => hasDrafted ? 'title' : 'summary');
   const [showTitleOverlay, setShowTitleOverlay] = useState(() => hasDrafted);
@@ -869,10 +903,10 @@ const DraftResultScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftByS
   return (
     <>
       {conferenceVisible && (
-        <DraftConferenceScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} onComplete={() => setPhase('teamSummary')} />
+        <DraftConferenceScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} npbStandings={npbStandings} onComplete={() => setPhase('teamSummary')} />
       )}
       {phase === 'teamSummary' && hasDrafted && (
-        <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} onContinue={() => setPhase('summary')} />
+        <DraftTeamSummaryScreen draftedPlayers={draftedPlayers} firstRoundData={firstRoundData} npbStandings={npbStandings} onContinue={() => setPhase('summary')} />
       )}
       {phase === 'summary' && (
         <DraftSummaryScreen draftedPlayers={draftedPlayers} nearMissPlayers={nearMissPlayers} proBonus={proBonus}

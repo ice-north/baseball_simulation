@@ -234,14 +234,17 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     return { isDraftEligible: false, reasons: [], totalScore: 0 };
   }
 
-  // 年齢ボーナス（若い高校生・大学生を大幅に優遇）
-  const ageBonusMap = { 18: 40, 19: 35, 20: 25, 21: 18, 22: 10, 23: 0, 24: -8, 25: -15, 26: -22, 27: -30, 28: -40, 29: -50 };
-  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 40 : -50);
+  // 年齢ボーナス（NPBスカウトは若い選手の将来性を重視）
+  const ageBonusMap = { 18: 55, 19: 45, 20: 30, 21: 20, 22: 8, 23: 0, 24: -10, 25: -22, 26: -35, 27: -48, 28: -60, 29: -75 };
+  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 55 : -75);
+
+  // 将来性投影倍率（若い選手の能力を伸びしろ込みで評価）
+  const potentialMult = age <= 18 ? 1.25 : age <= 19 ? 1.15 : age <= 20 ? 1.08 : age <= 21 ? 1.04 : 1.0;
 
   // 成長力ボーナス（若い選手ほど成長力が大きく評価される）
   const gp = player.growthPotential || 1.0;
-  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.7) * 50)
-               : age <= 22 ? Math.max(0, (gp - 0.8) * 40)
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.7) * 65)
+               : age <= 22 ? Math.max(0, (gp - 0.8) * 50)
                : Math.max(0, (gp - 1.0) * 15);
 
   // 知名度ボーナス
@@ -258,10 +261,11 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const bestBreaking = arsenal.filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
 
     const velocityScore = Math.max(0, (velocity - 125) * 2.2);
-    baseScore = velocityScore + control + stamina * 0.5 + bestBreaking * 0.5 + ageBonus + gpBonus + fameBonus;
+    const abilityScore = (velocityScore + control + stamina * 0.5 + bestBreaking * 0.5) * potentialMult;
+    baseScore = abilityScore + ageBonus + gpBonus + fameBonus;
     const totalScore = baseScore + awardBonus;
 
-    reasons.push(`投手力${Math.round(baseScore - fameBonus)}pt`);
+    reasons.push(`投手力${Math.round(abilityScore)}pt`);
     if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
     if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
     reasons.push(`総合${Math.round(totalScore)}pt`);
@@ -277,10 +281,11 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const defense = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
 
-    baseScore = meet * 1.2 + power * 1.1 + eye * 0.6 + speed * 0.4 + defense * 0.4 + arm * 0.3 + ageBonus + gpBonus + fameBonus;
+    const abilityScore = (meet * 1.2 + power * 1.1 + eye * 0.6 + speed * 0.4 + defense * 0.4 + arm * 0.3) * potentialMult;
+    baseScore = abilityScore + ageBonus + gpBonus + fameBonus;
     const totalScore = baseScore + awardBonus;
 
-    reasons.push(`野手力${Math.round(baseScore - fameBonus)}pt`);
+    reasons.push(`野手力${Math.round(abilityScore)}pt`);
     if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
     if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
     reasons.push(`総合${Math.round(totalScore)}pt`);
@@ -460,6 +465,24 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const shuffledTeams = [...NPB_TEAMS].sort(() => Math.random() - 0.5);
   const takenIds = new Set();
 
+  // セ・パ別に順位をランダム決定（NPBシーズンは未シミュレーションのため）
+  const CE_TEAMS = NPB_TEAMS.slice(0, 6);
+  const PA_TEAMS = NPB_TEAMS.slice(6, 12);
+  const ceStandings = [...CE_TEAMS].sort(() => Math.random() - 0.5);
+  const paStandings = [...PA_TEAMS].sort(() => Math.random() - 0.5);
+  // グリッド表示用（セ1位,パ1位,セ2位,パ2位,...の順）
+  const npbStandings = [];
+  for (let i = 0; i < 6; i++) {
+    npbStandings.push(ceStandings[i], paStandings[i]);
+  }
+  // ウェーバー制: 下位球団から指名（パ6位,セ6位,パ5位,...）
+  const waiverOrder = [];
+  for (let i = 5; i >= 0; i--) {
+    waiverOrder.push(paStandings[i], ceStandings[i]);
+  }
+  // 逆ウェーバー制: 上位球団から指名（セ1位,パ1位,セ2位,...）
+  const reverseWaiverOrder = [...npbStandings];
+
   // === 1巡目: 同時指名 + 抽選 + 外れ再指名ループ ===
   const firstRoundData = { phases: [] };
   const MAX_CONTESTED = 8;
@@ -580,13 +603,13 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     draftedPlayers.push(createDraftEntry(cand, team, 'ドラフト1位'));
   }
 
-  // === 2巡目以降: ウェーバー制 ===
+  // === 2巡目以降: ウェーバー/逆ウェーバー交互制 ===
   let eligibleIdx = 0;
   for (let round = 1; round < mainRounds + (ikuSlots > 0 ? Math.ceil(ikuSlots / numTeams) : 0); round++) {
     const isIku = round >= mainRounds;
     const ikuRound = round - mainRounds + 1;
     const roundLabel = isIku ? `育成${ikuRound}巡目` : DRAFT_ROUND_LABELS[Math.min(6, 6 - round)];
-    const teamOrder = round % 2 === 1 ? shuffledTeams : [...shuffledTeams].reverse();
+    const teamOrder = round % 2 === 1 ? waiverOrder : reverseWaiverOrder;
 
     for (let t = 0; t < numTeams; t++) {
       while (eligibleIdx < eligible.length && takenIds.has(eligible[eligibleIdx].player.id)) eligibleIdx++;
@@ -697,7 +720,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     total: draftedPlayers.length,
   };
 
-  return { draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, highSchoolDrafted: draftBySource.highschool };
+  return { draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, npbStandings, highSchoolDrafted: draftBySource.highschool };
 }
 
 /**

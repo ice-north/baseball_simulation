@@ -130,6 +130,7 @@ const ManagementScreen = ({
     proBonus={draftResults?.proBonus || []}
     draftBySource={draftResults?.draftBySource || null}
     firstRoundData={draftResults?.firstRoundData || null}
+    npbStandings={draftResults?.npbStandings || null}
     userTeamName={userTeamName}
     onContinue={() => {
       setDraftResults(null);
