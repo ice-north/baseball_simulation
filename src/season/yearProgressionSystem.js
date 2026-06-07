@@ -470,17 +470,20 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const PA_TEAMS = NPB_TEAMS.slice(6, 12);
   const ceStandings = [...CE_TEAMS].sort(() => Math.random() - 0.5);
   const paStandings = [...PA_TEAMS].sort(() => Math.random() - 0.5);
-  // グリッド表示用（セ1位,パ1位,セ2位,パ2位,...の順）
+  // セパの左右配置を半々でランダム決定
+  const ceFirst = Math.random() < 0.5;
+  // グリッド表示用（セ1位,パ1位,セ2位,パ2位,...の順 or パ1位,セ1位,...の順）
   const npbStandings = [];
   for (let i = 0; i < 6; i++) {
-    npbStandings.push(ceStandings[i], paStandings[i]);
+    if (ceFirst) {
+      npbStandings.push(ceStandings[i], paStandings[i]);
+    } else {
+      npbStandings.push(paStandings[i], ceStandings[i]);
+    }
   }
-  // ウェーバー制: 下位球団から指名（パ6位,セ6位,パ5位,...）
-  const waiverOrder = [];
-  for (let i = 5; i >= 0; i--) {
-    waiverOrder.push(paStandings[i], ceStandings[i]);
-  }
-  // 逆ウェーバー制: 上位球団から指名（セ1位,パ1位,セ2位,...）
+  // ウェーバー制: 右下→左上（下位球団から指名）
+  const waiverOrder = [...npbStandings].reverse();
+  // 逆ウェーバー制: 左上→右下（上位球団から指名）
   const reverseWaiverOrder = [...npbStandings];
 
   // === 1巡目: 同時指名 + 抽選 + 外れ再指名ループ ===

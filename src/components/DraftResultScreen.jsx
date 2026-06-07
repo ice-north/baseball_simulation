@@ -27,21 +27,14 @@ const shuffle = (arr) => {
 
 const buildGridOrder = (npbStandings) => {
   if (npbStandings && npbStandings.length === 12) {
-    // npbStandings = [CE1位, PA1位, CE2位, PA2位, ..., CE6位, PA6位]
-    // グリッド配置:
-    // CE1  PA1  CE4  PA4
-    // CE2  PA2  CE5  PA5
-    // CE3  PA3  CE6  PA6
-    const grid = [];
-    for (let row = 0; row < 3; row++) {
-      grid.push(
-        NPB_TEAMS_INFO.find(t => t.name === npbStandings[row * 2]) || NPB_TEAMS_INFO[0],
-        NPB_TEAMS_INFO.find(t => t.name === npbStandings[row * 2 + 1]) || NPB_TEAMS_INFO[1],
-        NPB_TEAMS_INFO.find(t => t.name === npbStandings[(row + 3) * 2]) || NPB_TEAMS_INFO[6],
-        NPB_TEAMS_INFO.find(t => t.name === npbStandings[(row + 3) * 2 + 1]) || NPB_TEAMS_INFO[7],
-      );
-    }
-    return grid;
+    // npbStandings = [セ1位, パ1位, セ2位, パ2位, ..., セ6位, パ6位] (or パ先)
+    // グリッド配置（そのまま4列×3行）:
+    // セ1位  パ1位  セ2位  パ2位
+    // セ3位  パ3位  セ4位  パ4位
+    // セ5位  パ5位  セ6位  パ6位
+    return npbStandings.map(name =>
+      NPB_TEAMS_INFO.find(t => t.name === name) || NPB_TEAMS_INFO[0]
+    );
   }
   const ce = shuffle(NPB_TEAMS_INFO.filter(t => t.league === 'ce'));
   const pa = shuffle(NPB_TEAMS_INFO.filter(t => t.league === 'pa'));
@@ -171,9 +164,11 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   const rankLabels = useMemo(() => {
     if (!npbStandings || npbStandings.length !== 12) return {};
     const labels = {};
-    for (let i = 0; i < 6; i++) {
-      labels[npbStandings[i * 2]] = `セ${i + 1}位`;
-      labels[npbStandings[i * 2 + 1]] = `パ${i + 1}位`;
+    for (let i = 0; i < 12; i++) {
+      const rank = Math.floor(i / 2) + 1;
+      const info = NPB_TEAMS_INFO.find(t => t.name === npbStandings[i]);
+      const league = info?.league === 'ce' ? 'セ' : 'パ';
+      labels[npbStandings[i]] = `${league}${rank}位`;
     }
     return labels;
   }, [npbStandings]);
