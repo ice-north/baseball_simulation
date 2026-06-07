@@ -178,28 +178,39 @@ export function evaluatePlayerScore(player) {
 
 /**
  * スカウトおすすめ度をS〜Fで算出
- * 能力スコア + 成長力 + 若さ + 知名度を総合評価
+ * 「自チームのランクに対して実力が上回っており、かつ競合が少ない選手」を高評価
+ * 単純に良い選手ではなく、獲得可能性のある掘り出し物を推薦する
  */
-export function getScoutRecommendation(player) {
+const RANK_BASELINE = { S: 90, A: 75, B: 60, C: 48, D: 35 };
+export function getScoutRecommendation(player, teamRank) {
+  const rank = teamRank || 'C';
   const score = evaluatePlayerScore(player);
   const gp = player.growthPotential || 1.0;
   const age = player.age || 22;
-  const fame = player.fame || 0;
+  const rivals = estimateRivalCount(player);
+  const baseline = RANK_BASELINE[rank] || 55;
 
-  // 若さボーナス: 18歳=+20, 22歳=+10, 26歳=0, 30歳=-10
-  const youthBonus = Math.max(-15, (24 - age) * 5);
-  // 成長力ボーナス: gp 1.3=+20, 1.0=0, 0.7=-20
-  const gpBonus = (gp - 1.0) * 60;
-  // 知名度: 知名度高い=実績ある=高評価
-  const fameBonus = fame * 0.1;
+  // 自チーム基準との差分: チームランクより能力が高いほど加点
+  // D(35基準)の選手がscore60 → +25, S(90基準)の選手がscore60 → -30
+  const aboveTeamBonus = (score - baseline) * 1.2;
 
-  const total = score + youthBonus + gpBonus + fameBonus;
+  // 競合ペナルティ: ライバルが多いほど大幅減点（獲れる見込みが薄い）
+  // 0社=+15, 1社=0, 2社=-20, 3社=-40
+  const rivalPenalty = rivals === 0 ? 15 : rivals === 1 ? 0 : rivals === 2 ? -20 : -40;
 
-  if (total >= 100) return 'S';
-  if (total >= 80) return 'A';
-  if (total >= 60) return 'B';
-  if (total >= 45) return 'C';
-  if (total >= 30) return 'D';
+  // 若さボーナス（育成余地）: 18歳=+12, 22歳=+4, 26歳=0, 30歳=-8
+  const youthBonus = Math.max(-10, (26 - age) * 2);
+
+  // 成長力ボーナス: gp 1.3=+15, 1.0=0, 0.7=-15
+  const gpBonus = (gp - 1.0) * 50;
+
+  const total = aboveTeamBonus + rivalPenalty + youthBonus + gpBonus;
+
+  if (total >= 35) return 'S';
+  if (total >= 20) return 'A';
+  if (total >= 8) return 'B';
+  if (total >= -5) return 'C';
+  if (total >= -20) return 'D';
   return 'F';
 }
 
