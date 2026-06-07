@@ -811,42 +811,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     </table>
                   </div>
 
-                  {/* お気に入り担当スカウト選択パネル */}
-                  {favoriteSelectId && (() => {
-                    const target = allPlayers.find(p => p.id === favoriteSelectId);
-                    if (!target) return null;
-                    return (
-                      <div className="mt-2 bg-gray-900/60 rounded p-3 border border-yellow-500/30">
-                        <div className="text-xs text-yellow-400 mb-1.5 font-bold">{target.name}の担当スカウトを選択</div>
-                        <p className="text-[10px] text-gray-500 mb-2">担当スカウトが常に連絡を取り、交渉ボーナスを蓄積します。交渉力が高いほど効果大。</p>
-                        <div className="flex gap-2 flex-wrap">
-                          {staff.map(s => {
-                            const neg = s.abilities?.negotiation || 0;
-                            const weeklyRate = neg >= 80 ? 5 : neg >= 50 ? 4 : 3;
-                            return (
-                              <button key={s.id}
-                                onClick={() => {
-                                  toggleFavoritePlayer(teamData, target.id, {
-                                    id: s.id,
-                                    name: s.name,
-                                    negotiation: neg,
-                                  });
-                                  setFavoriteSelectId(null);
-                                  setRefreshTick(t => t + 1);
-                                }}
-                                className="px-2 py-1.5 bg-yellow-700 hover:bg-yellow-600 text-white text-[10px] font-bold rounded transition flex flex-col items-center">
-                                <span>{s.name}</span>
-                                <span className="text-[9px] text-yellow-200 font-normal">
-                                  交渉{neg} (+{weeklyRate}%/週)
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <button onClick={() => setFavoriteSelectId(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-1.5 block">キャンセル</button>
-                      </div>
-                    );
-                  })()}
+                  {/* お気に入り担当スカウト選択パネル → モーダル化 */}
 
                   {/* 調査スカウト選択パネル */}
                   {investigateTargetId && (() => {
@@ -1171,6 +1136,59 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
         </div>
       )}
+
+      {/* お気に入り担当スカウト選択モーダル */}
+      {favoriteSelectId && (() => {
+        const allPlayers = getAllScoutedPlayers(cd);
+        const target = allPlayers.find(p => p.id === favoriteSelectId);
+        if (!target) return null;
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setFavoriteSelectId(null)}>
+            <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-white mb-1">担当スカウトを選択</h3>
+              <p className="text-sm text-gray-300 mb-1">
+                <span className="text-yellow-400 font-bold">{target.name}</span>
+                <span className="text-gray-400 ml-2">{target.age}歳 {POSITION_NAMES[target.position] || target.position}</span>
+              </p>
+              <p className="text-[10px] text-gray-500 mb-4">担当スカウトが選手と常に連絡を取り、交渉ボーナスが毎週蓄積します。交渉力が高いほど効果大。</p>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {staff.map(s => {
+                  const neg = s.abilities?.negotiation || 0;
+                  const weeklyRate = neg >= 80 ? 5 : neg >= 50 ? 4 : 3;
+                  return (
+                    <button key={s.id}
+                      onClick={() => {
+                        toggleFavoritePlayer(teamData, target.id, {
+                          id: s.id,
+                          name: s.name,
+                          negotiation: neg,
+                        });
+                        setFavoriteSelectId(null);
+                        setRefreshTick(t => t + 1);
+                      }}
+                      className="w-full flex items-center justify-between p-3 bg-gray-750 hover:bg-gray-700 rounded-lg transition text-left">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
+                          <span className="text-white text-sm font-bold">{s.name}</span>
+                        </div>
+                        <div className="flex gap-3 mt-0.5 text-[10px]">
+                          <span className="text-gray-400">交渉<span className={`font-bold ml-0.5 ${getAbilityColor(neg)}`}>{neg}</span></span>
+                          <span className="text-gray-400">眼<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.scoutingEye || 0)}`}>{s.abilities?.scoutingEye || 0}</span></span>
+                        </div>
+                      </div>
+                      <span className="text-yellow-400 text-xs font-bold">+{weeklyRate}%/週</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={() => setFavoriteSelectId(null)} className="mt-3 w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm">
+                キャンセル
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
