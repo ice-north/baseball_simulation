@@ -260,8 +260,8 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const arsenal = player.pitching?.arsenal || [];
     const bestBreaking = arsenal.filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
 
-    const velocityScore = Math.max(0, (velocity - 125) * 2.2);
-    const abilityScore = (velocityScore + control + stamina * 0.5 + bestBreaking * 0.5) * potentialMult;
+    const velocityScore = Math.max(0, (velocity - 100) * 1.2);
+    const abilityScore = (velocityScore + control * 1.2 + stamina * 0.6 + bestBreaking * 0.7) * potentialMult;
     baseScore = abilityScore + ageBonus + gpBonus + fameBonus;
     const totalScore = baseScore + awardBonus;
 
