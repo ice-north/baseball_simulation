@@ -388,6 +388,9 @@ export function processNPBDraft(allTeams, gameYear = 1) {
                  : 'independent';
     team.players.forEach(player => {
       if (player.age >= 30) return;
+      // 年齢制限: 独立リーグは19歳以上、社会人は21歳以上（高卒3年目縛り）
+      if (source === 'independent' && player.age < 19) return;
+      if (source === 'corporate' && player.age < 21) return;
       const bonus = awardBonusMap[player.id]?.bonus || 0;
       const awards = awardBonusMap[player.id]?.awards || [];
       const { totalScore } = checkNPBDraftEligibility(player, bonus);
