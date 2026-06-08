@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations, releasedPlayersPool } from '../teams-data.js';
 import { SEASON_PHASES } from '../season/seasonManager.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
@@ -65,6 +65,7 @@ const ManagementScreen = ({
   handleProgressToNextGame,
   handleProgressToNextPhase
 }) => {
+  const [draftedIds, setDraftedIds] = useState([]);
   if (managementView === 'schedule') return <ScheduleScreen
     seasonData={seasonData}
     selectedMonth={selectedMonth}
@@ -112,7 +113,7 @@ const ManagementScreen = ({
   if (managementView === 'corporate_scout') return <CorporateScoutScreen
     seasonData={seasonData}
     allTeams={allTeams}
-    draftedPlayerIds={draftResults?.draftedPlayers?.map(d => d.playerId) || []}
+    draftedPlayerIds={draftedIds}
     onComplete={() => {
       // 完了済みスカウトミッションをクリア（翌年の派遣用にリセット）
       const ut = TEAMS_DATA[userTeamName];
@@ -133,6 +134,9 @@ const ManagementScreen = ({
     npbStandings={draftResults?.npbStandings || null}
     userTeamName={userTeamName}
     onContinue={() => {
+      if (draftResults?.draftedPlayers) {
+        setDraftedIds(draftResults.draftedPlayers.map(d => d.playerId));
+      }
       setDraftResults(null);
       setManagementView('dateprogress');
     }}
