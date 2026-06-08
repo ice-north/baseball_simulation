@@ -315,7 +315,6 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           </div>
           <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
             <PlayerCardContent name={settledPick.name} position={settledPick.position} teamName={settledPick.teamName} />
-            <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 確定</div>
           </div>
         </div>
       );
@@ -852,7 +851,7 @@ const DraftTitleOverlay = ({ onComplete }) => {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center cursor-pointer transition-opacity duration-[600ms] ${fading ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center pl-56 cursor-pointer transition-opacity duration-[600ms] ${fading ? 'opacity-0' : 'opacity-100'}`}
       style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
       onClick={() => setFading(true)}
     >
