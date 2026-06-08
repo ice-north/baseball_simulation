@@ -33,10 +33,10 @@ export const clearHighSchoolPool = () => {
  * 高卒世代を一括生成（毎年1回、ドラフト前に実行）
  * NPBに指名されるレベルの選手は少数。残りが大学・社会人・独立に流れる。
  * @param {number} year - ゲーム内年度
- * @param {number} count - 生成人数（デフォルト800。実装初期は少なめ）
+ * @param {number} count - 生成人数（デフォルト1000）
  * @returns {Array} 生成された高卒選手の配列
  */
-export function generateHighSchoolClass(year, count = 800) {
+export function generateHighSchoolClass(year, count = 1000) {
   const players = [];
   const idBase = year * 100000 + 50000;
 
