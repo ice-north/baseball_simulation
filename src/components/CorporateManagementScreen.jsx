@@ -681,7 +681,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
               const SortHeader = ({ k, label, w }) => (
                 <th onClick={() => handleSort(k)}
-                  className={`py-1 px-1 cursor-pointer hover:text-white transition select-none ${w || ''} ${playerSortKey === k ? 'text-cyan-400' : 'text-gray-500'}`}>
+                  className={`py-1.5 px-1.5 cursor-pointer hover:text-white transition select-none whitespace-nowrap ${w || ''} ${playerSortKey === k ? 'text-cyan-400' : 'text-gray-500'}`}>
                   {label}{playerSortKey === k ? (playerSortAsc ? ' ▲' : ' ▼') : ''}
                 </th>
               );
@@ -696,11 +696,11 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
               return (
                 <div className="bg-gray-800 rounded-lg p-4 mb-4">
-                  <h3 className="text-xs font-bold text-yellow-400 mb-2">
+                  <h3 className="text-sm font-bold text-yellow-400 mb-3">
                     発見選手一覧（{allPlayers.length}名）
                   </h3>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[10px]">
+                    <table className="w-full text-sm">
                       <thead className="border-b border-gray-700">
                         <tr className="text-left">
                           <SortHeader k="favorite" label="★" w="w-6" />
@@ -738,48 +738,48 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
                           return (
                             <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-750/50 transition">
-                              <td className="py-1 px-1 text-center">
+                              <td className="py-1.5 px-1.5 text-center">
                                 {isFav ? (
                                   <button onClick={() => { toggleFavoritePlayer(teamData, p.id); setRefreshTick(t => t + 1); }}
-                                    className="text-sm text-yellow-400 transition"
+                                    className="text-base text-yellow-400 transition"
                                     title={`担当: ${favInfo?.staffName || '未定'} / 交渉+${favBonusVal}%`}>
                                     ★
                                   </button>
                                 ) : (
                                   <button onClick={() => setFavoriteSelectId(favoriteSelectId === p.id ? null : p.id)}
-                                    className="text-sm text-gray-600 hover:text-gray-400 transition"
+                                    className="text-base text-gray-600 hover:text-gray-400 transition"
                                     title="お気に入りに追加（担当スカウト選択）">
                                     ☆
                                   </button>
                                 )}
                               </td>
-                              <td className="py-1 px-1 text-center">
+                              <td className="py-1.5 px-1.5 text-center">
                                 <span className={`font-bold ${recColor(rec)}`}>{rec}</span>
                               </td>
-                              <td className="py-1 px-1 text-white font-bold truncate max-w-[80px]">{p.name}</td>
-                              <td className="py-1 px-1 text-gray-400 text-center">{p.age}</td>
-                              <td className="py-1 px-1 text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</td>
-                              <td className="py-1 px-1 text-gray-500 truncate max-w-[48px]">{p._scoutSource}</td>
-                              <td className="py-1 px-1 text-center">{renderVal(sa.batting?.meet)}</td>
-                              <td className="py-1 px-1 text-center">{renderVal(sa.batting?.power)}</td>
-                              <td className="py-1 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
-                              <td className="py-1 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
-                              <td className="py-1 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
-                              <td className="py-1 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
-                              <td className="py-1 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
-                              <td className="py-1 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
-                              <td className="py-1 px-1 text-center">
+                              <td className="py-1.5 px-1.5 text-white font-bold truncate max-w-[100px]">{p.name}</td>
+                              <td className="py-1.5 px-1.5 text-gray-400 text-center">{p.age}</td>
+                              <td className="py-1.5 px-1.5 text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</td>
+                              <td className="py-1.5 px-1.5 text-gray-500 truncate max-w-[60px]">{p._scoutSource}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.batting?.meet)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.batting?.power)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.batting?.eye)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.physical?.speed)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.fielding?.defense)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.control)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                              <td className="py-1.5 px-1.5 text-center">
                                 <span className={`font-bold ${getRateColor(rate)}`}>{rate}%</span>
                               </td>
-                              <td className="py-1 px-1 text-center">
+                              <td className="py-1.5 px-1.5 text-center">
                                 {rivals > 0 ? (
                                   <span className={`font-bold ${rivals >= 3 ? 'text-red-400' : rivals >= 2 ? 'text-orange-400' : 'text-yellow-400'}`}>
                                     {rivals}社
                                   </span>
                                 ) : <span className="text-gray-600">-</span>}
                               </td>
-                              <td className="py-1 px-1 text-center">
-                                <span className={`px-1 py-0.5 rounded font-bold ${
+                              <td className="py-1.5 px-1.5 text-center">
+                                <span className={`px-1.5 py-0.5 rounded font-bold ${
                                   revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
                                   revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
                                   'bg-gray-700 text-gray-400'
@@ -787,7 +787,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                   {['概要', '詳細', '完全'][revealLevel]}
                                 </span>
                               </td>
-                              <td className="py-1 px-1 text-[9px]">
+                              <td className="py-1.5 px-1.5 text-xs">
                                 {activeInv ? (
                                   <span className="text-yellow-400">調査中</span>
                                 ) : revealLevel < 2 ? (
@@ -796,12 +796,12 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                 ) : (
                                   <span className="text-green-400">完了</span>
                                 )}
-                                {invCount > 0 && <span className="ml-0.5 text-cyan-400">調+{invCount * 7}%</span>}
+                                {invCount > 0 && <span className="ml-1 text-cyan-400">調+{invCount * 7}%</span>}
                                 {isFav && favBonusVal > 0 && (
-                                  <span className="ml-0.5 text-yellow-400">★+{favBonusVal}%</span>
+                                  <span className="ml-1 text-yellow-400">★+{favBonusVal}%</span>
                                 )}
                                 {isFav && favInfo?.staffName && (
-                                  <span className="ml-0.5 text-purple-400">{favInfo.staffName}</span>
+                                  <span className="ml-1 text-purple-400">{favInfo.staffName}</span>
                                 )}
                               </td>
                             </tr>

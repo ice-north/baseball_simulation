@@ -1,23 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES, getAbilityRank, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import {
   getScoutedCandidates,
   generateRivalInterest,
   negotiateWithCompetition,
   processAIScoutRecruitment,
-  investigatePlayer,
   getFavoriteBonus,
+  calculateRecruitSuccessRate,
+  estimateRivalCount,
+  getScoutRecommendation,
 } from '../corporate/scoutingSystem.js';
-
-const getRankColor = (rank) => {
-  if (rank === 'S') return 'text-red-400';
-  if (rank === 'A') return 'text-orange-400';
-  if (rank === 'B') return 'text-yellow-400';
-  if (rank === 'C') return 'text-green-400';
-  if (rank === 'D') return 'text-blue-400';
-  return 'text-gray-500';
-};
 
 const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -39,6 +32,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     (s.abilities?.scoutingEye || 0) >= 30 || (s.abilities?.negotiation || 0) >= 30
   );
   const selectedScout = scouts.find(s => s.id === selectedScoutId) || null;
+  const teamRank = teamData?.corporateData?.rank || 'C';
 
   useEffect(() => {
     if (candidates.length > 0) return;
@@ -55,12 +49,13 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   };
 
   const getRateColor = (rate) => {
-    if (rate >= 80) return 'text-green-400';
-    if (rate >= 60) return 'text-blue-400';
-    if (rate >= 40) return 'text-yellow-400';
-    if (rate >= 20) return 'text-orange-400';
+    if (rate >= 70) return 'text-green-400';
+    if (rate >= 50) return 'text-blue-400';
+    if (rate >= 30) return 'text-yellow-400';
     return 'text-red-400';
   };
+
+  const recColor = (g) => ({ S: 'text-red-400', A: 'text-orange-400', B: 'text-yellow-400', C: 'text-green-400', D: 'text-blue-400', F: 'text-gray-500' }[g] || 'text-gray-500');
 
   const getScoutNegotiationBonus = (scout) => {
     if (!scout) return 0;
@@ -122,20 +117,26 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     }
   };
 
-  const getSortValue = (p, key) => {
+  const getAbilityVal = (p, key) => {
     const sa = p.scoutedAbilities || {};
+    const map = {
+      velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
+      meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
+      speed: sa.physical?.speed, defense: sa.fielding?.defense,
+    };
+    const v = map[key];
+    return (v === '?' || v === undefined) ? -1 : (typeof v === 'number' ? v : parseInt(v));
+  };
+
+  const getSortValue = (p, key) => {
+    const recGradeOrder = { S: 6, A: 5, B: 4, C: 3, D: 2, F: 1 };
     switch (key) {
       case 'rate': return p.recruitRate || 0;
       case 'age': return p.age || 99;
-      case 'growth': return p.growthPotential || 1;
       case 'name': return p.name || '';
-      case 'meet': return sa.batting?.meet ?? p.batting?.meet ?? 0;
-      case 'power': return sa.batting?.power ?? p.batting?.power ?? 0;
-      case 'speed': return sa.physical?.speed ?? p.physical?.speed ?? 0;
-      case 'defense': return sa.fielding?.defense ?? p.fielding?.defense ?? 0;
-      case 'velocity': return sa.pitching?.velocity ?? p.pitching?.velocity ?? 0;
-      case 'control': return sa.pitching?.control ?? p.pitching?.control ?? 0;
-      default: return 0;
+      case 'rec': return recGradeOrder[getScoutRecommendation(p, teamRank, teamData)] || 0;
+      case 'rivals': return estimateRivalCount(p);
+      default: return getAbilityVal(p, key);
     }
   };
 
@@ -153,154 +154,149 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   const totalAcquired = allResults.filter(r => r.success).length;
   const totalAiRecruited = aiResults ? Object.values(aiResults).reduce((sum, arr) => sum + arr.length, 0) : 0;
 
-  const SortHeader = ({ label, sortId, className = '' }) => (
-    <th
-      className={`px-1.5 py-1.5 cursor-pointer hover:text-white select-none whitespace-nowrap ${className}`}
-      onClick={() => handleSort(sortId)}
-    >
-      {label}{sortKey === sortId ? (sortAsc ? ' ▲' : ' ▼') : ''}
+  const SortHeader = ({ k, label, w }) => (
+    <th onClick={() => handleSort(k)}
+      className={`py-1.5 px-1.5 cursor-pointer hover:text-white transition select-none whitespace-nowrap ${w || ''} ${sortKey === k ? 'text-cyan-400' : 'text-gray-500'}`}>
+      {label}{sortKey === k ? (sortAsc ? ' ▲' : ' ▼') : ''}
     </th>
   );
 
-  const renderVal = (val) => {
-    if (val === '?' || val === undefined || val === null) return <span className="text-gray-600">?</span>;
+  const renderVal = (val, isVelocity) => {
+    if (val === '?' || val === undefined) return <span className="text-gray-600">?</span>;
     const n = typeof val === 'number' ? val : parseInt(val);
     if (isNaN(n)) return <span className="text-gray-600">?</span>;
-    const r = getAbilityRank(n);
-    return <span className={getRankColor(r)}>{r}</span>;
+    return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 120) * 2) : n)}`}>{val}</span>;
   };
 
-  const renderVel = (val) => {
-    if (val === '?' || val === undefined || val === null) return <span className="text-gray-600">?</span>;
-    const n = typeof val === 'number' ? val : parseInt(val);
-    if (isNaN(n)) return <span className="text-gray-600">?</span>;
-    return <span className={n >= 145 ? 'text-red-400' : n >= 135 ? 'text-orange-400' : 'text-gray-300'}>{n}</span>;
-  };
-
-  // 交渉結果画面
   if (phase === 'results') {
     const successes = negotiationResults.filter(r => r.success);
     const remaining = candidates.length;
 
     return (
       <div className="p-4 bg-gray-900 min-h-screen">
-        <h1 className="text-xl font-bold text-white mb-1">交渉結果</h1>
-        <p className="text-xs text-gray-500 mb-4">
+        <h1 className="text-2xl font-bold text-white mb-2">交渉結果</h1>
+        <p className="text-sm text-gray-400 mb-5">
           {negotiationResults.length}名に打診 → {successes.length}名が入団承諾
           {totalAcquired > 0 && <span className="text-green-400 ml-2">(累計{totalAcquired}名獲得)</span>}
         </p>
 
-        <div className="space-y-2 mb-6">
-          {negotiationResults.map(({ player: p, success, rate, rivalResult, scoutName }) => (
-            <div key={p.id} className={`p-3 rounded border ${
-              success ? 'bg-green-900/20 border-green-700' : 'bg-red-900/10 border-red-900/30'
-            }`}>
-              <div className="flex items-center gap-2 text-sm">
-                <span className={`font-bold text-lg w-8 text-center ${success ? 'text-green-400' : 'text-red-400'}`}>
-                  {success ? 'O' : 'X'}
-                </span>
-                <span className="text-yellow-400 font-bold">{POSITION_NAMES[p.position]}</span>
-                <span className="text-white font-medium">{p.name}</span>
-                <span className="text-gray-500 text-xs">({p.age}歳)</span>
-                {scoutName && <span className="text-cyan-400 text-xs">担当: {scoutName}</span>}
-                <span className={`ml-auto text-xs ${getRateColor(rate)}`}>
-                  獲得率{rate}%
-                </span>
+        <div className="space-y-3 mb-6">
+          {negotiationResults.map(({ player: p, success, rate, rivalResult, scoutName }) => {
+            const favBonus = getFavoriteBonus(teamData, p.id);
+            const invBonus = (p._investigationCount || 0) * 7;
+            return (
+              <div key={p.id} className={`p-4 rounded-lg border ${
+                success ? 'bg-green-900/20 border-green-700' : 'bg-red-900/10 border-red-900/30'
+              }`}>
+                <div className="flex items-center gap-3 text-base">
+                  <span className={`font-black text-xl w-8 text-center ${success ? 'text-green-400' : 'text-red-400'}`}>
+                    {success ? 'O' : 'X'}
+                  </span>
+                  <span className="text-yellow-400 font-bold">{POSITION_NAMES[p.position]}</span>
+                  <span className="text-white font-bold text-lg">{p.name}</span>
+                  <span className="text-gray-400 text-sm">({p.age}歳)</span>
+                  <span className="text-gray-500 text-sm">{p._scoutSource}</span>
+                </div>
+                <div className="ml-11 mt-2 flex items-center gap-4 flex-wrap text-sm">
+                  <span className={`font-bold ${getRateColor(rate)}`}>
+                    交渉成功率 {rate}%
+                  </span>
+                  {scoutName && <span className="text-cyan-400">担当: {scoutName}</span>}
+                  {invBonus > 0 && <span className="text-cyan-400">調査+{invBonus}%</span>}
+                  {favBonus > 0 && <span className="text-yellow-400">★絆+{favBonus}%</span>}
+                </div>
+                <div className="ml-11 mt-1.5 text-sm">
+                  {success ? (
+                    <span className="text-green-400 font-bold">入団が決まりました! キャンプから合流します。</span>
+                  ) : rivalResult === 'declined' ? (
+                    <span className="text-gray-500">本人が入団を辞退しました</span>
+                  ) : rivalResult ? (
+                    <span className="text-gray-500">{rivalResult}ランクのチームへの入団が決まりました</span>
+                  ) : (
+                    <span className="text-gray-500">条件面で折り合いがつきませんでした</span>
+                  )}
+                </div>
               </div>
-              <div className="ml-10 mt-1 text-xs">
-                {success ? (
-                  <span className="text-green-400">入団が決まりました! キャンプから合流します。</span>
-                ) : rivalResult === 'declined' ? (
-                  <span className="text-gray-500">本人が入団を辞退しました</span>
-                ) : rivalResult ? (
-                  <span className="text-gray-500">{rivalResult}ランクのチームへの入団が決まりました</span>
-                ) : (
-                  <span className="text-gray-500">条件面で折り合いがつきませんでした</span>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-4">
           {remaining > 0 && (
             <button onClick={handleContinue}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-sm"
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm"
             >追加交渉する (残り{remaining}名)</button>
           )}
           <button onClick={handleFinalize}
-            className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-bold text-sm"
+            className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-sm"
           >交渉を終了する</button>
         </div>
       </div>
     );
   }
 
-  // 最終確認画面
   if (phase === 'confirmed') {
     return (
       <div className="p-4 bg-gray-900 min-h-screen">
-        <h1 className="text-xl font-bold text-white mb-3">スカウト入団完了</h1>
+        <h1 className="text-2xl font-bold text-white mb-4">スカウト入団完了</h1>
         {totalAcquired > 0 ? (
-          <div className="mb-4">
-            <p className="text-green-400 text-sm mb-2">今シーズンは{totalAcquired}名を獲得しました</p>
-            <div className="space-y-1">
+          <div className="mb-5">
+            <p className="text-green-400 text-base mb-3">今シーズンは{totalAcquired}名を獲得しました</p>
+            <div className="space-y-2">
               {allResults.filter(r => r.success).map(({ player: p }, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs bg-green-900/20 border border-green-700/30 rounded p-2">
+                <div key={i} className="flex items-center gap-3 text-sm bg-green-900/20 border border-green-700/30 rounded-lg p-3">
                   <span className="text-yellow-400 font-bold">{POSITION_NAMES[p.position]}</span>
-                  <span className="text-white font-medium">{p.name}</span>
-                  <span className="text-gray-500">({p.age}歳)</span>
+                  <span className="text-white font-bold text-base">{p.name}</span>
+                  <span className="text-gray-400">({p.age}歳)</span>
                   <span className="text-cyan-400">{p._scoutSource}</span>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <p className="text-gray-400 text-sm mb-4">今シーズンは選手を獲得しませんでした。</p>
+          <p className="text-gray-400 text-base mb-5">今シーズンは選手を獲得しませんでした。</p>
         )}
 
         {totalAiRecruited > 0 && (
-          <div className="mb-4">
-            <h2 className="text-sm font-bold text-blue-400 mb-2">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
+          <div className="mb-5">
+            <h2 className="text-base font-bold text-blue-400 mb-3">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
             {Object.entries(aiResults).map(([team, players]) => (
-              <div key={team} className="text-xs text-gray-400 mb-1">
+              <div key={team} className="text-sm text-gray-400 mb-1.5">
                 {team}: {players.map(p => `${p.name}(${POSITION_NAMES[p.position]})`).join(', ')}
               </div>
             ))}
           </div>
         )}
 
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-sm text-gray-500 mb-4">
           現在のロスター: {teamData?.players?.length || 0}名
           {totalAcquired > 0 && <span className="text-green-400 ml-2">(入団した選手はキャンプから合流します)</span>}
         </p>
         <button onClick={onComplete}
-          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
+          className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-base"
         >完了</button>
       </div>
     );
   }
 
-  // メインのスカウト交渉画面
   return (
-    <div className="p-3 bg-gray-900 min-h-screen">
-      <h1 className="text-xl font-bold text-white mb-1">スカウト交渉 - {seasonData?.year || 1}年目</h1>
-      <div className="flex items-center gap-4 text-[10px] text-gray-500 mb-2">
-        <span>注目度: <span className={reputation >= 50 ? 'text-yellow-400' : 'text-gray-400'}>{reputation}</span></span>
-        <span>ランク: <span className="text-white">{rank}</span></span>
+    <div className="p-4 bg-gray-900 min-h-screen">
+      <h1 className="text-2xl font-bold text-white mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
+      <div className="flex items-center gap-5 text-sm text-gray-400 mb-3">
+        <span>注目度: <span className={reputation >= 50 ? 'text-yellow-400 font-bold' : 'text-gray-300'}>{reputation}</span></span>
+        <span>ランク: <span className="text-white font-bold">{rank}</span></span>
         <span>ロスター: {teamData?.players?.length || 0}名</span>
         <span>選択中: <span className="text-green-400 font-bold">{selectedIds.length}名</span></span>
-        {totalAcquired > 0 && <span className="text-green-400">獲得済: {totalAcquired}名</span>}
+        {totalAcquired > 0 && <span className="text-green-400 font-bold">獲得済: {totalAcquired}名</span>}
       </div>
 
-      {/* 担当スカウト選択 */}
       {scouts.length > 0 && (
-        <div className="mb-2 p-2 bg-gray-800 rounded border border-gray-700">
-          <div className="text-[10px] text-gray-400 mb-1">担当スカウト (交渉成功率に影響)</div>
-          <div className="flex gap-1.5 flex-wrap">
+        <div className="mb-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
+          <div className="text-sm text-gray-300 mb-2 font-bold">担当スカウト (交渉成功率に影響)</div>
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setSelectedScoutId(null)}
-              className={`px-2 py-1 rounded text-[10px] font-bold transition ${
+              className={`px-3 py-1.5 rounded text-sm font-bold transition ${
                 !selectedScoutId ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-white'
               }`}
             >指定なし</button>
@@ -310,16 +306,16 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                 <button
                   key={s.id}
                   onClick={() => setSelectedScoutId(s.id)}
-                  className={`px-2 py-1 rounded text-[10px] font-bold transition ${
+                  className={`px-3 py-1.5 rounded text-sm font-bold transition ${
                     selectedScoutId === s.id ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-white'
                   }`}
                 >
                   {s.name}
-                  <span className="text-gray-500 ml-1">{s.grade}級</span>
-                  <span className={`ml-1 ${bonus > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                  <span className="text-gray-500 ml-1.5">{s.grade}級</span>
+                  <span className={`ml-1.5 ${bonus > 0 ? 'text-green-400' : 'text-gray-500'}`}>
                     交渉{s.abilities?.negotiation || 0}
                   </span>
-                  {bonus > 0 && <span className="text-green-400 ml-0.5">+{bonus}%</span>}
+                  {bonus > 0 && <span className="text-green-400 ml-1">+{bonus}%</span>}
                 </button>
               );
             })}
@@ -328,81 +324,85 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       )}
 
       {candidates.length > 0 ? (
-        <div className="overflow-x-auto mb-3">
-          <table className="w-full text-[11px] border-collapse">
-            <thead className="bg-gray-700 text-gray-400 text-[10px]">
-              <tr>
-                <th className="px-1 py-1.5 w-6"></th>
-                <SortHeader label="名前" sortId="name" className="text-left" />
-                <SortHeader label="齢" sortId="age" />
-                <th className="px-1.5 py-1.5 whitespace-nowrap">守備</th>
-                <SortHeader label="ミ" sortId="meet" />
-                <SortHeader label="パ" sortId="power" />
-                <SortHeader label="走" sortId="speed" />
-                <SortHeader label="守" sortId="defense" />
-                <SortHeader label="球速" sortId="velocity" />
-                <SortHeader label="制球" sortId="control" />
-                <SortHeader label="成長" sortId="growth" />
-                <SortHeader label="成功率" sortId="rate" />
-                <th className="px-1.5 py-1.5 whitespace-nowrap">出身</th>
+        <div className="overflow-x-auto mb-4">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-gray-800 border-b border-gray-700">
+              <tr className="text-left">
+                <th className="px-1.5 py-2 w-8"></th>
+                <SortHeader k="rec" label="推薦" />
+                <SortHeader k="name" label="選手名" />
+                <SortHeader k="age" label="齢" />
+                <th className="px-1.5 py-2 text-gray-500 whitespace-nowrap">守備</th>
+                <th className="px-1.5 py-2 text-gray-500 whitespace-nowrap">出身</th>
+                <SortHeader k="meet" label="ミ" />
+                <SortHeader k="power" label="パ" />
+                <SortHeader k="eye" label="眼" />
+                <SortHeader k="speed" label="走" />
+                <SortHeader k="defense" label="守" />
+                <SortHeader k="velocity" label="球速" />
+                <SortHeader k="control" label="制" />
+                <SortHeader k="stamina" label="ス" />
+                <SortHeader k="rate" label="交渉%" />
+                <SortHeader k="rivals" label="他球団" />
               </tr>
             </thead>
             <tbody>
               {sortedCandidates.map(player => {
                 const selected = selectedIds.includes(player.id);
                 const sa = player.scoutedAbilities || {};
-                const isPitcher = player.position === 'pitcher';
                 const rate = player.recruitRate || 0;
                 const scoutBonus = getScoutNegotiationBonus(selectedScout);
                 const adjustedRate = Math.min(95, rate + scoutBonus);
-                const gp = player.growthPotential;
+                const favBonus = getFavoriteBonus(teamData, player.id);
+                const invBonus = (player._investigationCount || 0) * 7;
+                const rec = getScoutRecommendation(player, teamRank, teamData);
+                const rivals = estimateRivalCount(player);
 
                 return (
                   <tr
                     key={player.id}
                     onClick={() => toggleSelect(player.id)}
                     className={`cursor-pointer border-b border-gray-800 transition ${
-                      selected
-                        ? 'bg-green-900/30'
-                        : 'hover:bg-gray-800/80'
+                      selected ? 'bg-green-900/30' : 'hover:bg-gray-800/80'
                     }`}
                   >
-                    <td className="px-1 py-1 text-center">
-                      <span className={`inline-block w-3.5 h-3.5 rounded border text-[9px] leading-[14px] text-center ${
+                    <td className="px-1.5 py-2 text-center">
+                      <span className={`inline-block w-4 h-4 rounded border text-xs leading-4 text-center ${
                         selected ? 'bg-green-600 border-green-500 text-white' : 'border-gray-600'
                       }`}>
                         {selected ? '✓' : ''}
                       </span>
                     </td>
-                    <td className="px-1.5 py-1 text-white font-bold whitespace-nowrap">{player.name}</td>
-                    <td className="px-1.5 py-1 text-gray-400 text-center">{player.age}</td>
-                    <td className="px-1.5 py-1 text-yellow-400 text-center font-bold">{POSITION_NAMES[player.position]}</td>
-                    <td className="px-1.5 py-1 text-center">{renderVal(sa.batting?.meet ?? (isPitcher ? null : player.batting?.meet))}</td>
-                    <td className="px-1.5 py-1 text-center">{renderVal(sa.batting?.power ?? (isPitcher ? null : player.batting?.power))}</td>
-                    <td className="px-1.5 py-1 text-center">{renderVal(sa.physical?.speed ?? (isPitcher ? null : player.physical?.speed))}</td>
-                    <td className="px-1.5 py-1 text-center">{renderVal(sa.fielding?.defense ?? (isPitcher ? null : player.fielding?.defense))}</td>
-                    <td className="px-1.5 py-1 text-center">{renderVel(sa.pitching?.velocity ?? (isPitcher ? player.pitching?.velocity : null))}</td>
-                    <td className="px-1.5 py-1 text-center">{renderVal(sa.pitching?.control ?? (isPitcher ? player.pitching?.control : null))}</td>
-                    <td className="px-1.5 py-1 text-center">
-                      {gp != null ? (
-                        <span className={gp >= 1.1 ? 'text-yellow-400 font-bold' : gp >= 0.95 ? 'text-gray-300' : 'text-gray-500'}>
-                          {gp.toFixed(2)}
-                        </span>
-                      ) : <span className="text-gray-600">?</span>}
+                    <td className="px-1.5 py-2 text-center">
+                      <span className={`font-bold ${recColor(rec)}`}>{rec}</span>
                     </td>
-                    <td className="px-1.5 py-1 text-center whitespace-nowrap">
+                    <td className="px-1.5 py-2 text-white font-bold whitespace-nowrap">{player.name}</td>
+                    <td className="px-1.5 py-2 text-gray-400 text-center">{player.age}</td>
+                    <td className="px-1.5 py-2 text-yellow-400 text-center font-bold">{POSITION_NAMES[player.position]}</td>
+                    <td className="px-1.5 py-2 text-cyan-400 whitespace-nowrap">{player._scoutSource}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.batting?.meet)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.batting?.power)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.batting?.eye)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.physical?.speed)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.fielding?.defense)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.control)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                    <td className="px-1.5 py-2 text-center whitespace-nowrap">
                       <span className={`font-bold ${getRateColor(adjustedRate)}`}>
                         {adjustedRate}%
                       </span>
-                      {scoutBonus > 0 && <span className="text-green-400 text-[9px] ml-0.5">+{scoutBonus}</span>}
-                      {(player._investigationCount || 0) > 0 && (
-                        <span className="text-cyan-400 text-[9px] ml-0.5">調+{(player._investigationCount || 0) * 7}</span>
-                      )}
-                      {getFavoriteBonus(teamData, player.id) > 0 && (
-                        <span className="text-yellow-400 text-[9px] ml-0.5">★+{getFavoriteBonus(teamData, player.id)}</span>
-                      )}
+                      {scoutBonus > 0 && <span className="text-green-400 text-xs ml-1">+{scoutBonus}</span>}
+                      {invBonus > 0 && <span className="text-cyan-400 text-xs ml-1">調+{invBonus}</span>}
+                      {favBonus > 0 && <span className="text-yellow-400 text-xs ml-1">★+{favBonus}</span>}
                     </td>
-                    <td className="px-1.5 py-1 text-cyan-400 text-[10px] whitespace-nowrap">{player._scoutSource}</td>
+                    <td className="px-1.5 py-2 text-center">
+                      {rivals > 0 ? (
+                        <span className={`font-bold ${rivals >= 3 ? 'text-red-400' : rivals >= 2 ? 'text-orange-400' : 'text-yellow-400'}`}>
+                          {rivals}社
+                        </span>
+                      ) : <span className="text-gray-600">-</span>}
+                    </td>
                   </tr>
                 );
               })}
@@ -410,9 +410,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           </table>
         </div>
       ) : (
-        <div className="bg-gray-800/50 rounded-lg p-6 text-center mb-4">
-          <p className="text-gray-400 text-sm mb-2">スカウト候補者がいません</p>
-          <p className="text-gray-500 text-xs">シーズン中にチーム運営画面からスカウトを派遣してください</p>
+        <div className="bg-gray-800/50 rounded-lg p-8 text-center mb-4">
+          <p className="text-gray-400 text-base mb-2">スカウト候補者がいません</p>
+          <p className="text-gray-500 text-sm">シーズン中にチーム運営画面からスカウトを派遣してください</p>
         </div>
       )}
 
@@ -420,14 +420,14 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         <button
           onClick={handleNegotiate}
           disabled={selectedIds.length === 0}
-          className={`px-5 py-2 rounded font-bold text-sm ${
+          className={`px-6 py-2.5 rounded-lg font-bold text-base ${
             selectedIds.length > 0
               ? 'bg-green-600 hover:bg-green-700 text-white'
               : 'bg-gray-700 text-gray-500 cursor-not-allowed'
           }`}
         >交渉開始 ({selectedIds.length}名)</button>
         <button onClick={handleSkip}
-          className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm"
+          className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm"
         >獲得なしで進む</button>
       </div>
     </div>
