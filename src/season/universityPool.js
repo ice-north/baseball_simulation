@@ -622,7 +622,7 @@ export function seedInitialUniversityClasses(gameYear) {
 
   const classesNeeded = 4;
   for (let i = 0; i < classesNeeded; i++) {
-    const enrollYear = gameYear - classesNeeded + i;
+    const enrollYear = gameYear - classesNeeded + i + 1;
     const yearsInUni = gameYear - enrollYear;
     const count = 200 + Math.floor(Math.random() * 50);
     const idBase = (enrollYear + 10000) * 100000 + 70000;
