@@ -295,6 +295,32 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
         <SaveSlotSelector />
 
+        {/* 大学モード: 卒業・入部レポート */}
+        {seasonData.universityGraduationReport && (() => {
+          const r = seasonData.universityGraduationReport;
+          return (
+            <div className="mb-4 p-4 bg-amber-900/20 border border-amber-700/40 rounded-xl">
+              <h3 className="text-sm font-bold text-amber-400 mb-2">🎓 卒業・入部レポート</h3>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="bg-gray-800/60 rounded-lg p-2">
+                  <div className="text-gray-400 mb-1">卒業生</div>
+                  <div className="text-white font-bold text-lg">{r.graduated.length}名</div>
+                  <div className="text-gray-500 mt-1">
+                    社会人→{r.postGradPaths.corporate} / 独立→{r.postGradPaths.independent} / 引退→{r.postGradPaths.retired}
+                  </div>
+                </div>
+                <div className="bg-gray-800/60 rounded-lg p-2">
+                  <div className="text-gray-400 mb-1">新入生</div>
+                  <div className="text-white font-bold text-lg">{r.recruited.length}名</div>
+                  <div className="text-gray-500 mt-1">
+                    推薦{r.recruited.filter(p => p.type === 'recommended').length}名 / 一般{r.recruited.filter(p => p.type === 'general').length}名
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {(() => {
           const uniSummary = getUniversityPoolSummary();
           if (uniSummary.totalStudents > 0) {

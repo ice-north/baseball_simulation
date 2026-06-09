@@ -54,6 +54,7 @@ export const saveGameToSlot = (slotIndex, gameState) => {
         champion: WORLD_DATA.corporateToshitaikou.champion,
         runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
       } : null,
+      universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
     } : null;
 
     const saveData = {
@@ -152,6 +153,7 @@ export const loadGameFromSlot = (slotIndex) => {
       }
       WORLD_DATA.draft = wd.draft || { draftedPlayers: [], history: [] };
       WORLD_DATA.corporateToshitaikou = wd.corporateToshitaikou || null;
+      WORLD_DATA.universityLeague = wd.universityLeague || null;
     }
 
     // 大学プール復元

@@ -230,6 +230,8 @@ const ManagementScreen = ({
     onStartNextSeason={() => {
       if (gameMode === 'sandbox') {
         setManagementView('sandbox_next_regulations');
+      } else if (gameMode === 'university') {
+        setManagementView('camp');
       } else {
         setManagementView('regulations_next');
       }

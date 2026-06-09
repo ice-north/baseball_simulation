@@ -10,11 +10,13 @@ import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStat
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates } from './universityPool.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
+import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { updateAllTeamReputations, advanceSponsors } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
+import { generateRandomPlayerName } from '../data/playerNames.js';
 export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience, applyMotivationEffect, applyBatteryMentalEffect } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining } from './dispatchSystem.js';
 
@@ -380,17 +382,19 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   // === 全ソースから候補を収集し、統一スコアで評価 ===
   const allCandidates = [];
 
-  // 1. チーム選手（社会人 / 独立リーグ）
+  // 1. チーム選手（社会人 / 独立リーグ / 大学）
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team.players) return;
     const source = team.corporateData ? 'corporate'
+                 : team.universityData ? 'university_team'
                  : team.independentLeagueId ? 'independent'
                  : 'independent';
     team.players.forEach(player => {
       if (player.age >= 30) return;
-      // 年齢制限: 独立リーグは19歳以上、社会人は21歳以上（高卒3年目縛り）
+      // 年齢制限: 独立リーグは19歳以上、社会人は21歳以上、大学は3年生以上(20歳以上)
       if (source === 'independent' && player.age < 19) return;
       if (source === 'corporate' && player.age < 21) return;
+      if (source === 'university_team' && player.age < 20) return;
       const bonus = awardBonusMap[player.id]?.bonus || 0;
       const awards = awardBonusMap[player.id]?.awards || [];
       const { totalScore } = checkNPBDraftEligibility(player, bonus);
@@ -447,7 +451,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     const isPitcher = player.position === 'pitcher';
     const reasons = [];
     if (source === 'highschool') reasons.push(`高卒ドラフト: 潜在能力${Math.round(score)}pt`);
-    else if (source === 'university') reasons.push(`大卒ドラフト: 総合力${Math.round(score)}pt`);
+    else if (source === 'university' || source === 'university_team') reasons.push(`大卒ドラフト: 総合力${Math.round(score)}pt`);
     else reasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(score)}pt`);
     if (bonus > 0) reasons.push(`成績ボーナス+${bonus}pt`);
     return {
@@ -694,7 +698,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
 
   // === 各プールから指名者を除去 ===
   draftedPlayers.forEach(({ playerId, teamName, source }) => {
-    if (source === 'corporate' || source === 'independent') {
+    if (source === 'corporate' || source === 'independent' || source === 'university_team') {
       const team = allTeams[teamName];
       if (team) {
         cleanupPlayerReferences(team, playerId);
@@ -720,7 +724,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
 
   const draftBySource = {
     highschool: draftedPlayers.filter(d => d.source === 'highschool').length,
-    university: draftedPlayers.filter(d => d.source === 'university').length,
+    university: draftedPlayers.filter(d => d.source === 'university' || d.source === 'university_team').length,
     corporate: draftedPlayers.filter(d => d.source === 'corporate').length,
     independent: draftedPlayers.filter(d => d.source === 'independent').length,
     total: draftedPlayers.length,
@@ -1114,6 +1118,208 @@ export function updateGrowthModifiers(allTeams, awards) {
 }
 
 /**
+ * 大学モード: TEAMS_DATA上のチームから4年生を卒業させ、新入生を補充
+ * - 4年生(age>=22)は卒業 → NPBドラフト済みは除去済み、残りは進路振り分け
+ * - 全チームに推薦入学+一般入部で新1年生を補充
+ */
+function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
+  const report = {
+    graduated: [],
+    recruited: [],
+    npbDrafted: [],
+    postGradPaths: { corporate: 0, independent: 0, retired: 0 },
+  };
+
+  for (const [teamName, teamData] of Object.entries(allTeams)) {
+    if (!teamData?.players || !teamData.universityData) continue;
+    const rank = teamData.universityData.rank || 'C';
+
+    // 4年生を特定（年齢22歳以上、または universityYear >= 4）
+    const graduates = [];
+    const remaining = [];
+    teamData.players.forEach(p => {
+      if (p.age >= 22 || (p.universityYear && p.universityYear >= 4)) {
+        graduates.push(p);
+      } else {
+        remaining.push(p);
+      }
+    });
+
+    // 卒業生の進路振り分け
+    graduates.forEach(grad => {
+      const score = grad.position === 'pitcher'
+        ? ((grad.pitching?.velocity || 120) - 120) * 1.5 + (grad.pitching?.control || 0) + (grad.pitching?.stamina || 0) * 0.4
+        : (grad.batting?.meet || 0) + (grad.batting?.power || 0) + (grad.batting?.eye || 0) * 0.5 + (grad.physical?.speed || 0) * 0.3;
+
+      grad.isStarter = false;
+      grad.battingOrder = 0;
+      grad.origin = 'university';
+      grad.isReleasedCandidate = true;
+
+      if (score >= 120) {
+        grad.postGradPath = 'corporate';
+        report.postGradPaths.corporate++;
+        releasedPlayersPool.push(grad);
+      } else if (score >= 80) {
+        grad.postGradPath = 'independent';
+        report.postGradPaths.independent++;
+        releasedPlayersPool.push(grad);
+      } else {
+        grad.postGradPath = 'retired';
+        report.postGradPaths.retired++;
+      }
+
+      report.graduated.push({
+        name: grad.name,
+        team: teamName,
+        position: grad.position,
+        age: grad.age,
+        path: grad.postGradPath,
+      });
+    });
+
+    // 在校生の学年を進める
+    remaining.forEach(p => {
+      if (p.universityYear) p.universityYear++;
+    });
+
+    // 新入生を補充（卒業人数分 + ロスター下限調整）
+    const targetSize = getUniversityTargetRosterSize(rank);
+    const neededCount = Math.max(graduates.length, targetSize - remaining.length);
+    const newPlayers = generateUniversityFreshmen(neededCount, rank, teamName, teamData, currentYear);
+
+    report.recruited.push(...newPlayers.map(p => ({
+      name: p.name,
+      team: teamName,
+      position: p.position,
+      type: p.recruitType,
+    })));
+
+    // ロスター更新（splice方式でTEAMS_DATAを直接変更）
+    teamData.players.splice(0, teamData.players.length, ...remaining, ...newPlayers);
+  }
+
+  return report;
+}
+
+// ランク別目標ロスターサイズ
+function getUniversityTargetRosterSize(rank) {
+  const sizes = { S: 30, A: 27, B: 24, C: 22, D: 20 };
+  return sizes[rank] || 22;
+}
+
+// 新入生を生成（推薦入学 + 一般入部）
+function generateUniversityFreshmen(count, rank, teamName, teamData, currentYear) {
+  const newPlayers = [];
+  const maxId = Object.values(TEAMS_DATA).flatMap(t => t.players || []).reduce((max, p) => Math.max(max, p.id || 0), 0);
+
+  // 推薦枠: ランクに応じて(S: 40%, A: 30%, B: 20%, C: 15%, D: 10%)
+  const recommendRate = { S: 0.4, A: 0.3, B: 0.2, C: 0.15, D: 0.1 };
+  const recCount = Math.max(1, Math.round(count * (recommendRate[rank] || 0.15)));
+  const genCount = count - recCount;
+
+  for (let i = 0; i < count; i++) {
+    const isRecommended = i < recCount;
+    const player = generateFreshmanPlayer(maxId + newPlayers.length + 1, rank, isRecommended);
+    player.universityTeamId = teamData.universityTeamId;
+    player.universityTeamName = teamName;
+    player.universityYear = 1;
+    player.recruitType = isRecommended ? 'recommended' : 'general';
+    if (!player.careerHistory) player.careerHistory = [];
+    player.careerHistory.push({ type: 'university', year: currentYear + 1, label: teamName });
+    newPlayers.push(player);
+  }
+
+  return newPlayers;
+}
+
+// 新入生1人を生成
+function generateFreshmanPlayer(id, teamRank, isRecommended) {
+  const name = generateRandomPlayerName();
+
+  const isPitcher = Math.random() < 0.35;
+  const position = isPitcher ? 'pitcher' : ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'][Math.floor(Math.random() * 8)];
+
+  const handRoll = Math.random() * 100;
+  let throws, bats;
+  if (handRoll < 42) { throws = 'right'; bats = 'right'; }
+  else if (handRoll < 72) { throws = 'right'; bats = 'left'; }
+  else if (handRoll < 82) { throws = 'right'; bats = 'switch'; }
+  else if (handRoll < 94) { throws = 'left'; bats = 'left'; }
+  else if (handRoll < 97) { throws = 'left'; bats = 'switch'; }
+  else { throws = 'left'; bats = 'right'; }
+
+  // 推薦入学は能力が高い、一般入部は低め
+  const rankBase = { S: 40, A: 35, B: 30, C: 25, D: 20 };
+  const base = (rankBase[teamRank] || 25) + (isRecommended ? 10 : 0);
+  const variance = () => Math.floor(Math.random() * 15) - 5;
+
+  const meet = Math.max(5, base + variance());
+  const power = Math.max(5, base + variance());
+  const eye = Math.max(5, base - 5 + variance());
+  const speed = Math.max(5, base + variance());
+  const arm = Math.max(5, base + variance());
+  const defense = Math.max(5, base + variance());
+  const steal = Math.max(5, base - 10 + variance());
+
+  const velBase = { S: 138, A: 135, B: 131, C: 127, D: 123 };
+  const velocity = (velBase[teamRank] || 128) + (isRecommended ? 3 : 0) + Math.floor(Math.random() * 6) - 2;
+  const control = Math.max(10, base + variance());
+  const stamina = 60 + Math.floor(Math.random() * 40);
+
+  const forms = ['overhand', 'three_quarter', 'sidearm', 'underhand'];
+  const formWeights = [50, 30, 15, 5];
+  let formRoll = Math.random() * 100, formIdx = 0;
+  for (let i = 0; i < formWeights.length; i++) {
+    formRoll -= formWeights[i];
+    if (formRoll <= 0) { formIdx = i; break; }
+  }
+
+  const pitchTypes = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'cutter', 'shoot'];
+  const arsenal = [{ id: 1, type: pitchTypes[Math.floor(Math.random() * pitchTypes.length)], level: 15 + Math.floor(Math.random() * 25) }];
+  if (Math.random() < 0.4) {
+    let second = pitchTypes[Math.floor(Math.random() * pitchTypes.length)];
+    if (second !== arsenal[0].type) arsenal.push({ id: 2, type: second, level: 10 + Math.floor(Math.random() * 20) });
+  }
+
+  const positionFitness = { pitcher: 0, catcher: 0, first: 0, second: 0, third: 0, short: 0, left: 0, center: 0, right: 0 };
+  positionFitness[position] = 80 + Math.floor(Math.random() * 21);
+  if (!isPitcher && Math.random() < 0.3) {
+    const subPos = ['first', 'second', 'third', 'short', 'left', 'center', 'right'].filter(p => p !== position);
+    positionFitness[subPos[Math.floor(Math.random() * subPos.length)]] = 30 + Math.floor(Math.random() * 30);
+  }
+
+  const norm = () => Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18)));
+  const growthPotential = 0.7 + Math.random() * 0.6;
+
+  return {
+    id,
+    name,
+    age: 18,
+    position,
+    battingOrder: 0,
+    isStarter: false,
+    isTwoWay: false,
+    batting: { meet, power, eye, bats, steal, bunt: Math.max(5, Math.round(meet * 0.4 + speed * 0.3 + Math.random() * 15)) },
+    physical: { speed, arm, throws, bodyStamina: 40 + Math.floor(Math.random() * 20), recovery: 40 + Math.floor(Math.random() * 20), muscle: 30 + Math.floor(Math.random() * 20), dexterity: 30 + Math.floor(Math.random() * 20) },
+    fielding: { defense },
+    catching: { lead: position === 'catcher' ? 30 + Math.floor(Math.random() * 20) : 10 },
+    pitching: { velocity, control, stamina, form: forms[formIdx], arsenal },
+    traits: [],
+    positionFitness,
+    personality: { discipline: norm(), mental: norm() },
+    growthPotential,
+    growthModifier: 0,
+    fame: 0,
+    experience: 0,
+    fatigue: 0,
+    seasonStats: { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 } },
+    careerStats: { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } },
+    careerHistory: [{ type: 'highschool', label: '高校卒' }],
+  };
+}
+
+/**
  * 次年度への完全移行
  * @param {Object} seasonData - 現在のシーズンデータ
  * @param {Object} allTeams - 全チームデータ
@@ -1219,6 +1425,12 @@ export function advanceToNextYear(seasonData, allTeams) {
     });
   }
 
+  // 5.7. 大学モード: 4年生卒業＋ロスター入れ替え（TEAMS_DATA上のチーム）
+  let universityGraduationReport = null;
+  if (seasonData.settings?.universityMode) {
+    universityGraduationReport = processUniversityTeamGraduation(teamsAfterRetirement, seasonData, currentYear);
+  }
+
   // 6. 新シーズンデータ作成
   const newYear = seasonData.year + 1;
   const newSeasonData = createSeasonData(newYear);
@@ -1262,6 +1474,30 @@ export function advanceToNextYear(seasonData, allTeams) {
       yearRecord.club = { champion: cs.champion, runnerUp: cs.runnerUp };
     }
     newSeasonData.tournamentHistory = [...prevHistory, yearRecord];
+  } else if (seasonData.settings?.universityMode) {
+    // 大学モード: 新シーズンのスケジュール・順位表を大学リーグから取得
+    const regionId = seasonData.settings.universityRegion;
+    newSeasonData.schedule = [];
+    newSeasonData.standings = [];
+    // 大会結果アーカイブ
+    const prevHistory = seasonData.tournamentHistory || [];
+    const yearRecord = { year: seasonData.year, calendarYear: seasonData.currentDate?.year };
+    if (seasonData.universityChampionship?.phase === 'done') {
+      yearRecord.universityChampionship = {
+        champion: seasonData.universityChampionship.champion,
+        runnerUp: seasonData.universityChampionship.runnerUp,
+      };
+    }
+    if (seasonData.meijiJingu?.phase === 'done') {
+      yearRecord.meijiJingu = {
+        champion: seasonData.meijiJingu.champion,
+        runnerUp: seasonData.meijiJingu.runnerUp,
+      };
+    }
+    newSeasonData.tournamentHistory = [...prevHistory, yearRecord];
+    if (universityGraduationReport) {
+      newSeasonData.universityGraduationReport = universityGraduationReport;
+    }
   } else {
     // 独立リーグモード: スケジュールはレギュレーション設定後に生成
     const teams = Object.keys(teamsAfterRetirement);
@@ -1291,6 +1527,14 @@ export function advanceToNextYear(seasonData, allTeams) {
     initializeUniversityLeagues(newSeasonData.currentDate?.year || 2024);
   }
 
+  // 大学モード: リーグ再初期化後にスケジュール・順位表を設定
+  if (seasonData.settings?.universityMode) {
+    const regionId = seasonData.settings.universityRegion;
+    const teamNames = Object.keys(teamsAfterRetirement);
+    newSeasonData.schedule = getUniversityLeagueSchedule(regionId);
+    newSeasonData.standings = getUniversityLeagueStandings(regionId, teamNames);
+  }
+
   // ランク変動レポートを新シーズンデータに保存
   if (rankChanges.length > 0) {
     newSeasonData.rankChanges = rankChanges;
@@ -1307,7 +1551,8 @@ export function advanceToNextYear(seasonData, allTeams) {
     awards,
     retirements,
     ageReports,
-    rankChanges
+    rankChanges,
+    universityGraduationReport,
   };
 };
 
