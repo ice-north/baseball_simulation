@@ -2641,7 +2641,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-1.5 cursor-pointer select-none"
                   onClick={() => setShowOtherLeagues(prev => !prev)}
                 >
-                  <span>🌐</span> 他リーグ状況
+                  <span>🌐</span> 独立リーグ状況
                   <span className="text-[10px] text-gray-500 ml-auto">{showOtherLeagues ? '▲' : '▼'}</span>
                 </h2>
                 {showOtherLeagues && <div className="space-y-2">
