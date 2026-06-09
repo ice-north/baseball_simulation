@@ -102,7 +102,7 @@ export const UNIVERSITY_TEAMS = [
   { id: 93, name: '旭川市立大学', region: 'hokkaido', rank: 'C', budget: 45 },
   { id: 94, name: '釧路公立大学', region: 'hokkaido', rank: 'C', budget: 40 },
   { id: 95, name: '帯広畜産大学', region: 'hokkaido', rank: 'D', budget: 35 },
-  { id: 96, name: '苫小牧駒澤大学', region: 'hokkaido', rank: 'B', budget: 55 },
+  { id: 96, name: '北洋大学', region: 'hokkaido', rank: 'B', budget: 55 },
 
   // ========== 北東北大学（入替制）==========
   { id: 49, name: '富士大学', region: 'tohoku_n', rank: 'A', budget: 65 },
