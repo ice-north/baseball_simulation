@@ -2065,48 +2065,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
         {/* 右カラム: 順位表 or トーナメント */}
         <div className="flex-1 min-w-[420px]">
-          {/* 大学モード: 順位表 + トーナメント */}
+          {/* 大学モード: トーナメント表示（順位表は共通のものを使用） */}
           {seasonData.settings?.universityMode && (() => {
-            const standings = seasonData.standings || [];
-            const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
             const uc = seasonData.universityChampionship;
             const mj = seasonData.meijiJingu;
-            const regionName = UNIVERSITY_REGIONS.find(r => r.id === seasonData.settings?.universityRegion)?.name || 'リーグ';
+            if (!uc?.generated && !mj?.generated) return null;
 
             return (
-              <div className="space-y-3">
-                {/* リーグ順位表 */}
-                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-amber-700/30">
-                  <h2 className="text-sm font-bold text-amber-400 mb-2">{regionName} 順位表</h2>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-gray-400 text-xs border-b border-gray-700">
-                        <th className="text-left py-1 px-1 w-6">#</th>
-                        <th className="text-left py-1 px-2">チーム</th>
-                        <th className="text-center py-1 px-1">試</th>
-                        <th className="text-center py-1 px-1">勝</th>
-                        <th className="text-center py-1 px-1">敗</th>
-                        <th className="text-center py-1 px-1">率</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sorted.map((s, i) => {
-                        const isUser = s.team === userTeamName;
-                        return (
-                          <tr key={s.team} className={`border-b border-gray-800 ${isUser ? 'bg-amber-900/20' : ''}`}>
-                            <td className="py-1 px-1 text-gray-500 text-xs">{i + 1}</td>
-                            <td className={`py-1 px-2 font-bold ${isUser ? 'text-amber-400' : 'text-white'}`}>{s.team}</td>
-                            <td className="text-center py-1 px-1 text-gray-400">{s.gamesPlayed || 0}</td>
-                            <td className="text-center py-1 px-1 text-white">{s.wins || 0}</td>
-                            <td className="text-center py-1 px-1 text-gray-400">{s.losses || 0}</td>
-                            <td className="text-center py-1 px-1 text-amber-300">{(s.winRate || 0).toFixed(3)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
+              <div className="space-y-3 mb-3">
                 {/* 全日本大学野球選手権大会 */}
                 {uc?.generated && (
                   <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-orange-700/30">

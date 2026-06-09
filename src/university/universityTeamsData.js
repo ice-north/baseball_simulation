@@ -98,11 +98,11 @@ export const UNIVERSITY_TEAMS = [
 
   // ========== 北海道学生（入替制）==========
   { id: 91, name: '東農大北海道オホーツク', region: 'hokkaido', rank: 'A', budget: 70 },
-  { id: 92, name: '東海大学札幌', region: 'hokkaido', rank: 'A', budget: 65 },
-  { id: 93, name: '北翔大学', region: 'hokkaido', rank: 'B', budget: 55 },
-  { id: 94, name: '札幌大学', region: 'hokkaido', rank: 'C', budget: 45 },
-  { id: 95, name: '旭川大学', region: 'hokkaido', rank: 'C', budget: 40 },
-  { id: 96, name: '北海道教育大学', region: 'hokkaido', rank: 'D', budget: 35 },
+  { id: 92, name: '函館大学', region: 'hokkaido', rank: 'B', budget: 55 },
+  { id: 93, name: '旭川市立大学', region: 'hokkaido', rank: 'C', budget: 45 },
+  { id: 94, name: '釧路公立大学', region: 'hokkaido', rank: 'C', budget: 40 },
+  { id: 95, name: '帯広畜産大学', region: 'hokkaido', rank: 'D', budget: 35 },
+  { id: 96, name: '北洋大学', region: 'hokkaido', rank: 'D', budget: 35 },
 
   // ========== 北東北大学（入替制）==========
   { id: 49, name: '富士大学', region: 'tohoku_n', rank: 'A', budget: 65 },

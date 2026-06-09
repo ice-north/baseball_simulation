@@ -28,12 +28,12 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
 
         <div className="flex flex-col items-center space-y-6">
           <button
-            onClick={onSelectIndependent}
-            className="group w-96 bg-gradient-to-r from-green-700 to-emerald-700 hover:from-green-600 hover:to-emerald-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
+            onClick={onSelectUniversity}
+            className="group w-96 bg-gradient-to-r from-amber-700 to-orange-700 hover:from-amber-600 hover:to-orange-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
           >
-            <div className="text-2xl mb-1">独立リーグ</div>
-            <div className="text-sm font-normal text-green-200">
-              リーグを立ち上げ、トライアウトで選手を集める。経験が選手を育てる。
+            <div className="text-2xl mb-1">大学野球</div>
+            <div className="text-sm font-normal text-amber-200">
+              大学チームの監督として春季・秋季リーグを戦い、選手をプロへ送り出す。
             </div>
           </button>
 
@@ -48,12 +48,12 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
           </button>
 
           <button
-            onClick={onSelectUniversity}
-            className="group w-96 bg-gradient-to-r from-amber-700 to-orange-700 hover:from-amber-600 hover:to-orange-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
+            onClick={onSelectIndependent}
+            className="group w-96 bg-gradient-to-r from-green-700 to-emerald-700 hover:from-green-600 hover:to-emerald-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
           >
-            <div className="text-2xl mb-1">大学野球</div>
-            <div className="text-sm font-normal text-amber-200">
-              大学チームの監督として春季・秋季リーグを戦い、選手をプロへ送り出す。
+            <div className="text-2xl mb-1">独立リーグ</div>
+            <div className="text-sm font-normal text-green-200">
+              リーグを立ち上げ、トライアウトで選手を集める。経験が選手を育てる。
             </div>
           </button>
         </div>
