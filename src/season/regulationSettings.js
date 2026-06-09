@@ -157,6 +157,18 @@ export const REGULATION_PRESETS = {
       maxExtraInnings: 12,
       roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
     }
+  },
+  kansai: {
+    name: '関西独立リーグ',
+    description: '年間60試合、1位vs2位の3戦2勝制プレーオフ',
+    regulations: {
+      useDH: false,
+      gamesPerSeason: 60,
+      teamsCount: 6,
+      playoffFormat: 'short',
+      maxExtraInnings: 12,
+      roster: { starters: 9, benchFielders: 8, benchPitchers: 7 }
+    }
   }
 };
 

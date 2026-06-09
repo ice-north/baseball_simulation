@@ -5,7 +5,7 @@ import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
-import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues } from '../corporate/parallelWorldManager.js';
+import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues, generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
 import { generateAprilHighSchoolClass } from '../season/yearProgressionSystem.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
@@ -299,6 +299,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         WORLD_DATA.corporateToshitaikou.champion = mainTournament.champion;
         WORLD_DATA.corporateToshitaikou.runnerUp = mainTournament.runnerUp;
         WORLD_DATA.corporateToshitaikou.mainDone = true;
+      }
+    }
+
+    // 独立リーグモード: グランドチャンピオンシップ（10月1日〜）
+    if (!isCorporate && !isUniversity && WORLD_DATA.initialized && month >= 10 && !newData.grandChampionship?.generated) {
+      const gc = generateGrandChampionship(
+        WORLD_DATA.userLeagueId,
+        newData.standings
+      );
+      if (gc) {
+        autoPlayGrandChampionship(gc);
+        newData = { ...newData, grandChampionship: gc };
       }
     }
 
@@ -2715,6 +2727,36 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       </div>
                     </div>
                   )}
+                  {seasonData.grandChampionship?.done && (() => {
+                    const gc = seasonData.grandChampionship;
+                    const leagueNameMap = {};
+                    for (const c of gc.champions || []) {
+                      const ld = INDEPENDENT_LEAGUES[c.league];
+                      leagueNameMap[c.team] = ld?.name || c.league;
+                    }
+                    return (
+                      <div className="bg-orange-900/20 rounded-lg p-2 border border-orange-700/30">
+                        <div className="text-xs font-bold text-orange-400 mb-1">🏆 グランドチャンピオンシップ</div>
+                        <div className="text-[11px] text-gray-300 mb-1">
+                          <span className="text-orange-300 font-bold">優勝: {gc.bracket.champion}</span>
+                          {gc.bracket.runnerUp && <span className="text-gray-500 ml-2">準優勝: {gc.bracket.runnerUp}</span>}
+                        </div>
+                        <div className="space-y-0.5">
+                          {gc.bracket.rounds.map((round, ri) => (
+                            <div key={ri}>
+                              {round.filter(m => !m.isBye).map((m, mi) => (
+                                <div key={mi} className="flex items-center text-[10px] gap-1">
+                                  <span className={`flex-1 truncate ${m.winner === m.team1 ? 'text-orange-300 font-bold' : 'text-gray-500'}`}>{m.team1}</span>
+                                  <span className="text-gray-600 font-mono">{m.score || ''}</span>
+                                  <span className={`flex-1 truncate text-right ${m.winner === m.team2 ? 'text-orange-300 font-bold' : 'text-gray-500'}`}>{m.team2}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>}
               </div>
             );

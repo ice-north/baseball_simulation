@@ -1,6 +1,6 @@
 // ============================================================
 // 独立リーグ定義データ
-// 4リーグ計20チーム（地名ベースの自動生成名）
+// 5リーグ計26チーム（地名ベースの自動生成名）
 // ============================================================
 
 export const INDEPENDENT_LEAGUES = {
@@ -63,6 +63,22 @@ export const INDEPENDENT_LEAGUES = {
       { id: 'il_hokkaido_2', name: '美唄ブラックダイヤモンズ', abbreviation: '美唄', city: '美唄', rank: 'C' },
       { id: 'il_hokkaido_3', name: '士別サムライブレイズ', abbreviation: '士別', city: '士別', rank: 'D' },
       { id: 'il_hokkaido_4', name: '別海パイロットスピリッツ', abbreviation: '別海', city: '別海', rank: 'D' },
+    ],
+  },
+  kansai: {
+    id: 'kansai',
+    name: '関西独立リーグ',
+    useDH: false,
+    gamesPerSeason: 60,
+    leagueFormat: 'single',
+    playoffFormat: 'short',
+    teams: [
+      { id: 'il_kansai_1', name: '大阪ゼロロクブルズ', abbreviation: '大阪', city: '大阪', rank: 'B' },
+      { id: 'il_kansai_2', name: '兵庫ブレイバーズ', abbreviation: '兵庫', city: '神戸', rank: 'B' },
+      { id: 'il_kansai_3', name: '和歌山ウェイブス', abbreviation: '和歌', city: '和歌山', rank: 'C' },
+      { id: 'il_kansai_4', name: '堺シュライクス', abbreviation: '堺', city: '堺', rank: 'B' },
+      { id: 'il_kansai_5', name: '姫路イーグレッターズ', abbreviation: '姫路', city: '姫路', rank: 'C' },
+      { id: 'il_kansai_6', name: '淡路島ウォリアーズ', abbreviation: '淡路', city: '洲本', rank: 'C' },
     ],
   },
 };

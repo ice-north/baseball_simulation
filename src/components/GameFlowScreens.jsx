@@ -81,6 +81,7 @@ const GameFlowScreens = ({
       { key: 'bc', icon: '⚾' },
       { key: 'kyushu', icon: '🌸' },
       { key: 'hokkaido', icon: '🐻' },
+      { key: 'kansai', icon: '🏯' },
     ];
     return (
       <div className="p-8 bg-gray-900 min-h-screen">
