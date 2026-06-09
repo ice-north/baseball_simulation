@@ -3,26 +3,31 @@
 // 東都のみ2部制(12校) + 15リーグ×6校 = 102校
 // 首都圏7リーグ(48校) + 地方9リーグ(54校)
 // ============================================================
+// divisions: 部制の数（1=単独リーグ, 2=2部制）。デフォルト1。
+// 2部制の場合、UNIVERSITY_TEAMSの同region内で先頭から teamCount/divisions 人が1部。
+// 将来のリーグ追加: UNIVERSITY_REGIONS に追加 + UNIVERSITY_TEAMS にチーム追加するだけ。
+// 将来の3部制: divisions: 3 にして、チームを18校登録すれば自動で3分割。
+// ============================================================
 
 export const UNIVERSITY_REGIONS = [
   // === 首都圏 ===
-  { id: 'tokyo_big6', name: '東京六大学', teamCount: 6 },
-  { id: 'tokyoto', name: '東都大学', teamCount: 12 },
-  { id: 'shuto', name: '首都大学', teamCount: 6 },
-  { id: 'tokyo_new', name: '東京新大学', teamCount: 6 },
-  { id: 'chiba_ken', name: '千葉県大学', teamCount: 6 },
-  { id: 'kanagawa', name: '神奈川大学', teamCount: 6 },
-  { id: 'kankoshin', name: '関甲新', teamCount: 6 },
+  { id: 'tokyo_big6', name: '東京六大学', teamCount: 6, divisions: 1 },
+  { id: 'tokyoto', name: '東都大学', teamCount: 12, divisions: 2 },
+  { id: 'shuto', name: '首都大学', teamCount: 6, divisions: 1 },
+  { id: 'tokyo_new', name: '東京新大学', teamCount: 6, divisions: 1 },
+  { id: 'chiba_ken', name: '千葉県大学', teamCount: 6, divisions: 1 },
+  { id: 'kanagawa', name: '神奈川大学', teamCount: 6, divisions: 1 },
+  { id: 'kankoshin', name: '関甲新', teamCount: 6, divisions: 1 },
   // === 地方 ===
-  { id: 'hokkaido', name: '札幌学生', teamCount: 6 },
-  { id: 'tohoku_n', name: '北東北大学', teamCount: 6 },
-  { id: 'tohoku', name: '仙台六大学', teamCount: 6 },
-  { id: 'aichi', name: '愛知大学', teamCount: 6 },
-  { id: 'kansai', name: '関西学生', teamCount: 6 },
-  { id: 'kansai_rk', name: '関西六大学', teamCount: 6 },
-  { id: 'hiroshima_rk', name: '広島六大学', teamCount: 6 },
-  { id: 'shikoku', name: '四国地区', teamCount: 6 },
-  { id: 'fukuoka_rk', name: '福岡六大学', teamCount: 6 },
+  { id: 'hokkaido', name: '北海道学生', teamCount: 6, divisions: 1 },
+  { id: 'tohoku_n', name: '北東北大学', teamCount: 6, divisions: 1 },
+  { id: 'tohoku', name: '仙台六大学', teamCount: 6, divisions: 1 },
+  { id: 'aichi', name: '愛知大学', teamCount: 6, divisions: 1 },
+  { id: 'kansai', name: '関西学生', teamCount: 6, divisions: 1 },
+  { id: 'kansai_rk', name: '関西六大学', teamCount: 6, divisions: 1 },
+  { id: 'keiji', name: '京滋大学', teamCount: 6, divisions: 1 },
+  { id: 'hiroshima_rk', name: '広島六大学', teamCount: 6, divisions: 1 },
+  { id: 'fukuoka_rk', name: '福岡六大学', teamCount: 6, divisions: 1 },
 ];
 
 // rank: S=超強豪, A=強豪, B=中堅, C=育成型, D=弱小
@@ -91,12 +96,12 @@ export const UNIVERSITY_TEAMS = [
   { id: 47, name: '作新学院大学', region: 'kankoshin', rank: 'C', budget: 45 },
   { id: 48, name: '高崎健康福祉大学', region: 'kankoshin', rank: 'C', budget: 45 },
 
-  // ========== 札幌学生（入替制）==========
-  { id: 91, name: '東海大学札幌', region: 'hokkaido', rank: 'A', budget: 70 },
-  { id: 92, name: '北海学園大学', region: 'hokkaido', rank: 'B', budget: 55 },
-  { id: 93, name: '北星学園大学', region: 'hokkaido', rank: 'C', budget: 45 },
+  // ========== 北海道学生（入替制）==========
+  { id: 91, name: '東農大北海道オホーツク', region: 'hokkaido', rank: 'A', budget: 70 },
+  { id: 92, name: '東海大学札幌', region: 'hokkaido', rank: 'A', budget: 65 },
+  { id: 93, name: '北翔大学', region: 'hokkaido', rank: 'B', budget: 55 },
   { id: 94, name: '札幌大学', region: 'hokkaido', rank: 'C', budget: 45 },
-  { id: 95, name: '酪農学園大学', region: 'hokkaido', rank: 'D', budget: 35 },
+  { id: 95, name: '旭川大学', region: 'hokkaido', rank: 'C', budget: 40 },
   { id: 96, name: '北海道教育大学', region: 'hokkaido', rank: 'D', budget: 35 },
 
   // ========== 北東北大学（入替制）==========
@@ -147,13 +152,13 @@ export const UNIVERSITY_TEAMS = [
   { id: 83, name: '近畿大学工学部', region: 'hiroshima_rk', rank: 'C', budget: 45 },
   { id: 84, name: '広島大学', region: 'hiroshima_rk', rank: 'D', budget: 40 },
 
-  // ========== 四国地区（入替制）==========
-  { id: 97, name: '四国学院大学', region: 'shikoku', rank: 'B', budget: 55 },
-  { id: 98, name: '松山大学', region: 'shikoku', rank: 'B', budget: 55 },
-  { id: 99, name: '高知工科大学', region: 'shikoku', rank: 'C', budget: 45 },
-  { id: 100, name: '徳島大学', region: 'shikoku', rank: 'C', budget: 40 },
-  { id: 101, name: '愛媛大学', region: 'shikoku', rank: 'D', budget: 40 },
-  { id: 102, name: '香川大学', region: 'shikoku', rank: 'D', budget: 35 },
+  // ========== 京滋大学（入替制）==========
+  { id: 97, name: '佛教大学', region: 'keiji', rank: 'A', budget: 70 },
+  { id: 98, name: 'びわこ成蹊スポーツ大学', region: 'keiji', rank: 'B', budget: 55 },
+  { id: 99, name: '花園大学', region: 'keiji', rank: 'B', budget: 55 },
+  { id: 100, name: '京都先端科学大学', region: 'keiji', rank: 'C', budget: 45 },
+  { id: 101, name: '大谷大学', region: 'keiji', rank: 'C', budget: 40 },
+  { id: 102, name: '京都教育大学', region: 'keiji', rank: 'D', budget: 35 },
 
   // ========== 福岡六大学（固定制）==========
   { id: 85, name: '九州産業大学', region: 'fukuoka_rk', rank: 'A', budget: 70 },

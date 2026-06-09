@@ -2803,18 +2803,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         {isExpanded && <div className="mt-1 space-y-0.5">
                           {league.divisions ? (
                             <div className="space-y-1.5">
-                              <div>
-                                <div className="text-[9px] text-blue-400/60 font-bold mb-0.5">1部</div>
-                                <div className="space-y-0.5">
-                                  {(league.standings.div1 || []).map((s, i) => renderStandingsRow(s, i))}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-[9px] text-gray-500 font-bold mb-0.5">2部</div>
-                                <div className="space-y-0.5">
-                                  {(league.standings.div2 || []).map((s, i) => renderStandingsRow(s, i))}
-                                </div>
-                              </div>
+                              {Array.from({ length: league.numDivisions || 2 }, (_, d) => {
+                                const divKey = `div${d + 1}`;
+                                const divLabel = `${d + 1}部`;
+                                const divColor = d === 0 ? 'text-blue-400/60' : 'text-gray-500';
+                                return (
+                                  <div key={divKey}>
+                                    <div className={`text-[9px] ${divColor} font-bold mb-0.5`}>{divLabel}</div>
+                                    <div className="space-y-0.5">
+                                      {(league.standings[divKey] || []).map((s, i) => renderStandingsRow(s, i))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           ) : (
                             <div className="space-y-0.5">

@@ -48,8 +48,10 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
                         <span key={r} className={RANK_COLORS[r]}>{r}:{rankCounts[r]}</span>
                       ) : null)}
                     </div>
-                    {region.id === 'tokyoto' && (
-                      <div className="text-xs text-gray-500 mt-1">1部6校 + 2部6校（入替制）</div>
+                    {(region.divisions || 1) >= 2 && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {Array.from({ length: region.divisions }, (_, d) => `${d + 1}部${Math.floor(region.teamCount / region.divisions)}校`).join(' + ')}（入替制）
+                      </div>
                     )}
                   </button>
                 );
@@ -94,8 +96,9 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
 
   // チーム選択画面
   const teams = UNIVERSITY_TEAMS.filter(t => t.region === selectedRegion.id);
-  const div1Teams = selectedRegion.id === 'tokyoto' ? teams.filter((_, i) => i < 6) : null;
-  const div2Teams = selectedRegion.id === 'tokyoto' ? teams.filter((_, i) => i >= 6) : null;
+  const numDivisions = selectedRegion.divisions || 1;
+  const perDiv = numDivisions >= 2 ? Math.floor(teams.length / numDivisions) : 0;
+  const hasDivisions = numDivisions >= 2;
 
   const renderTeamButton = (team) => (
     <button key={team.id}
@@ -118,16 +121,20 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
         <h1 className="text-3xl font-bold text-white mb-1">{selectedRegion.name}</h1>
         <p className="text-gray-400 text-sm mb-6">監督を務めるチームを選んでください</p>
 
-        {div1Teams ? (
+        {hasDivisions ? (
           <>
-            <h3 className="text-sm font-bold text-amber-400 mb-2">1部</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-              {div1Teams.map(renderTeamButton)}
-            </div>
-            <h3 className="text-sm font-bold text-gray-400 mb-2">2部</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-              {div2Teams.map(renderTeamButton)}
-            </div>
+            {Array.from({ length: numDivisions }, (_, d) => {
+              const divTeams = teams.slice(d * perDiv, (d + 1) * perDiv);
+              const divColor = d === 0 ? 'text-amber-400' : 'text-gray-400';
+              return (
+                <div key={d}>
+                  <h3 className={`text-sm font-bold ${divColor} mb-2`}>{d + 1}部</h3>
+                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${d < numDivisions - 1 ? 'mb-4' : 'mb-6'}`}>
+                    {divTeams.map(renderTeamButton)}
+                  </div>
+                </div>
+              );
+            })}
           </>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">

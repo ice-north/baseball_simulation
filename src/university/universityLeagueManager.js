@@ -1,6 +1,7 @@
 // ============================================================
 // 大学リーグマネージャー
-// 14リーグの春季・秋季リーグ戦スケジュール生成・試合シミュレーション
+// 16リーグの春季・秋季リーグ戦スケジュール生成・試合シミュレーション
+// divisions対応: UNIVERSITY_REGIONSのdivisionsフィールドで自動分割
 // ============================================================
 
 import { UNIVERSITY_REGIONS, UNIVERSITY_TEAMS } from './universityTeamsData.js';
@@ -125,34 +126,36 @@ export function initializeUniversityLeagues(year) {
   for (const region of UNIVERSITY_REGIONS) {
     const teams = UNIVERSITY_TEAMS.filter(t => t.region === region.id);
     const teamNames = teams.map(t => t.name);
+    const numDivisions = region.divisions || 1;
 
-    // 東都は2部制: 1部6校 + 2部6校
-    if (region.id === 'tokyoto') {
-      const div1 = teams.filter((_, i) => i < 6).map(t => t.name);
-      const div2 = teams.filter((_, i) => i >= 6).map(t => t.name);
+    if (numDivisions >= 2) {
+      const perDiv = Math.floor(teams.length / numDivisions);
+      const divTeams = {};
+      for (let d = 1; d <= numDivisions; d++) {
+        divTeams[d] = teams.slice((d - 1) * perDiv, d * perDiv).map(t => t.name);
+      }
+
+      const makeSeason = (season) => {
+        let schedule = [];
+        const standings = {};
+        for (let d = 1; d <= numDivisions; d++) {
+          schedule = schedule.concat(generateLeagueSchedule(divTeams[d], year, season));
+          standings[`standings${d}`] = divTeams[d].map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }));
+        }
+        return { schedule, ...standings, done: false };
+      };
 
       WORLD_DATA.universityLeagues[region.id] = {
         name: region.name,
         regionId: region.id,
         teams: teamNames,
         divisions: true,
-        div1Teams: div1,
-        div2Teams: div2,
-        spring: {
-          schedule: [
-            ...generateLeagueSchedule(div1, year, 'spring'),
-            ...generateLeagueSchedule(div2, year, 'spring'),
-          ],
-          standings1: div1.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 })),
-          standings2: div2.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 })),
-          done: false,
-        },
-        fall: {
-          schedule: generateLeagueSchedule(div1, year, 'fall').concat(generateLeagueSchedule(div2, year, 'fall')),
-          standings1: div1.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 })),
-          standings2: div2.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 })),
-          done: false,
-        },
+        numDivisions,
+        div1Teams: divTeams[1],
+        div2Teams: divTeams[2],
+        divTeams,
+        spring: makeSeason('spring'),
+        fall: makeSeason('fall'),
         results: [],
       };
     } else {
@@ -161,6 +164,7 @@ export function initializeUniversityLeagues(year) {
         regionId: region.id,
         teams: teamNames,
         divisions: false,
+        numDivisions: 1,
         spring: {
           schedule: generateLeagueSchedule(teamNames, year, 'spring'),
           standings: teamNames.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 })),
@@ -201,9 +205,13 @@ export function simulateUniversityLeagueDate(currentDate) {
         const result = simulateUniversityGame(game.home, game.away);
         game.result = result;
 
-        if (league.divisions) {
-          const isDivision1 = league.div1Teams.includes(game.home);
-          const standings = isDivision1 ? seasonData.standings1 : seasonData.standings2;
+        if (league.divisions && league.divTeams) {
+          const numDiv = league.numDivisions || 2;
+          let divIdx = 1;
+          for (let d = 1; d <= numDiv; d++) {
+            if (league.divTeams[d]?.includes(game.home)) { divIdx = d; break; }
+          }
+          const standings = seasonData[`standings${divIdx}`];
           updateStandings(standings, game.home, game.away, result.homeScore, result.awayScore);
         } else {
           updateStandings(seasonData.standings, game.home, game.away, result.homeScore, result.awayScore);
@@ -250,17 +258,17 @@ export function getAllUniversityLeagues() {
 
     const seasonData = data[displayKey];
     let standings, totalGames, playedGames;
+    totalGames = seasonData?.schedule?.length || 0;
+    playedGames = seasonData?.schedule?.filter(g => g.result)?.length || 0;
+
     if (data.divisions) {
-      standings = {
-        div1: seasonData?.standings1 || [],
-        div2: seasonData?.standings2 || [],
-      };
-      totalGames = seasonData?.schedule?.length || 0;
-      playedGames = seasonData?.schedule?.filter(g => g.result)?.length || 0;
+      const numDiv = data.numDivisions || 2;
+      standings = {};
+      for (let d = 1; d <= numDiv; d++) {
+        standings[`div${d}`] = seasonData?.[`standings${d}`] || [];
+      }
     } else {
       standings = seasonData?.standings || [];
-      totalGames = seasonData?.schedule?.length || 0;
-      playedGames = seasonData?.schedule?.filter(g => g.result)?.length || 0;
     }
 
     return {
@@ -268,6 +276,7 @@ export function getAllUniversityLeagues() {
       name: data.name,
       teams: data.teams,
       divisions: data.divisions,
+      numDivisions: data.numDivisions || 1,
       currentSeason: seasonLabel,
       standings,
       totalGames,
