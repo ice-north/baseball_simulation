@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, generateScoutComment } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES_FULL, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor } from '../utils/constants.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
   const [tryoutCandidates, setTryoutCandidates] = useState([]);
@@ -638,7 +638,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                           )}
                         </td>
                         <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{player.age}</td>
-                        <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{getPositionName(player.position).charAt(0)}</td>
+                        <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{POSITION_NAMES[player.position] || player.position}</td>
                         <td className="px-1 py-1 text-gray-400 text-center whitespace-nowrap">{throwLabel}{batLabel}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.batting?.meet||0))}`}>{getAbilityRank(player.batting?.meet||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.batting?.power||0))}`}>{getAbilityRank(player.batting?.power||0)}</td>
