@@ -3,7 +3,7 @@ import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regul
 import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 
-const NewGameRegulationsScreen = ({ onComplete, selectedLeague = null }) => {
+const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null }) => {
   const initialPreset = selectedLeague ? REGULATION_PRESETS[selectedLeague] : null;
   const initialRegs = initialPreset?.regulations || {};
   const initialCount = initialRegs.teamsCount || 4;
@@ -350,7 +350,12 @@ const NewGameRegulationsScreen = ({ onComplete, selectedLeague = null }) => {
           <p className="text-gray-500 text-xs mt-3">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表・ランキングで使用されます</p>
         </div>
 
-        <div className="text-center">
+        <div className="flex items-center justify-center gap-6">
+          {onBack && (
+            <button onClick={onBack} className="text-gray-400 hover:text-white text-sm transition">
+              ← 戻る
+            </button>
+          )}
           <button onClick={handleStart} className="bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-lg font-bold text-xl transition">
             設定完了 - トライアウトへ
           </button>

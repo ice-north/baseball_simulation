@@ -340,6 +340,7 @@ const GameFlowScreens = ({
   if (gameFlowState === 'newgame_regulations') {
     return <NewGameRegulationsScreen
       selectedLeague={selectedIndependentLeague}
+      onBack={() => setGameFlowState('newgame_league_select')}
       onComplete={(regulations) => {
         const presetKey = selectedIndependentLeague || regulations.preset;
         initializeNewGame({ ...regulations, preset: presetKey });
