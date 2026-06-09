@@ -1326,6 +1326,138 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
   };
 }
 
+// ============================================================
+// 独立リーグAIチームのロスター補充
+// リリースプール（高卒/大卒/社会人/元チーム選手）から獲得し、
+// 不足分は新規生成で埋める
+// ============================================================
+
+const TARGET_ROSTER_SIZE = 24;
+const MIN_ROSTER_SIZE = 20;
+
+function replenishIndependentLeagueRosters(allTeams, currentYear) {
+  const userTeamName = Object.keys(allTeams)[0];
+
+  for (const [teamName, team] of Object.entries(allTeams)) {
+    if (teamName === userTeamName) continue;
+    if (!team?.players || !team.independentLeagueId) continue;
+
+    const currentSize = team.players.length;
+    if (currentSize >= MIN_ROSTER_SIZE) continue;
+
+    const needed = TARGET_ROSTER_SIZE - currentSize;
+    let recruited = 0;
+
+    // リリースプールからの獲得（能力順、独立候補を優先）
+    const poolCandidates = releasedPlayersPool
+      .map((p, idx) => {
+        const score = p.position === 'pitcher'
+          ? ((p.pitching?.velocity || 130) - 115) * 2 + (p.pitching?.control || 0) + (p.pitching?.stamina || 0) * 0.3
+          : ((p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) + (p.fielding?.defense || 0)) / 4;
+        const originBonus = (p.origin === 'independent_candidate' || p.postGradPath === 'independent') ? 20 : 0;
+        return { player: p, idx, score: score + originBonus };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const recruitedIds = [];
+    for (const candidate of poolCandidates) {
+      if (recruited >= needed) break;
+      const p = JSON.parse(JSON.stringify(candidate.player));
+      p.isStarter = false;
+      p.battingOrder = 0;
+      p.seasonStats = { batting: {}, pitching: {}, fielding: {} };
+      p.careerHistory = p.careerHistory || [];
+      p.careerHistory.push({ type: 'independent', label: `${teamName}入団`, year: currentYear + 1 });
+      team.players.push(p);
+      recruitedIds.push(candidate.player.id);
+      recruited++;
+    }
+
+    // プールから獲得した選手を削除
+    for (let i = releasedPlayersPool.length - 1; i >= 0; i--) {
+      if (recruitedIds.includes(releasedPlayersPool[i].id)) {
+        releasedPlayersPool.splice(i, 1);
+      }
+    }
+
+    // プールで足りなければ新規選手を生成
+    while (recruited < needed) {
+      const id = (currentYear + 1) * 10000 + 8000 + Math.floor(Math.random() * 2000);
+      const newPlayer = generateIndependentNewcomer(id, currentYear + 1);
+      newPlayer.careerHistory = [{ type: 'independent', label: `${teamName}入団`, year: currentYear + 1 }];
+      team.players.push(newPlayer);
+      recruited++;
+    }
+  }
+}
+
+function generateIndependentNewcomer(id, year) {
+  const isPitcher = Math.random() < 0.45;
+  const age = 18 + Math.floor(Math.random() * 5);
+  const nameObj = generateRandomPlayerName();
+
+  const baseAbility = () => 20 + Math.floor(Math.random() * 30);
+  const lowAbility = () => 10 + Math.floor(Math.random() * 25);
+
+  if (isPitcher) {
+    return {
+      id,
+      name: nameObj.last + nameObj.first,
+      age,
+      position: 'pitcher',
+      throws: Math.random() < 0.3 ? 'left' : 'right',
+      bats: Math.random() < 0.4 ? 'left' : 'right',
+      pitching: {
+        velocity: 125 + Math.floor(Math.random() * 15),
+        control: baseAbility(),
+        stamina: 50 + Math.floor(Math.random() * 40),
+        breakingBalls: [
+          { type: 'slider', level: 20 + Math.floor(Math.random() * 30) },
+          ...(Math.random() < 0.5 ? [{ type: 'curve', level: 15 + Math.floor(Math.random() * 25) }] : []),
+        ],
+      },
+      batting: { meet: lowAbility(), power: lowAbility(), eye: lowAbility() },
+      physical: { speed: baseAbility(), arm: baseAbility(), stamina: 50 + Math.floor(Math.random() * 30), bodyStamina: 40 + Math.floor(Math.random() * 30), recovery: 40 + Math.floor(Math.random() * 30) },
+      fielding: { defense: lowAbility(), catcher: 0, positionFitness: {} },
+      experience: 0,
+      growthPotential: 0.7 + Math.random() * 0.6,
+      growthModifier: 0,
+      fame: 0,
+      seasonStats: { batting: {}, pitching: {}, fielding: {} },
+      careerStats: { batting: {}, pitching: {}, fielding: {} },
+      form: Math.random() < 0.85 ? 'overhand' : (Math.random() < 0.5 ? 'sidearm' : 'threeQuarter'),
+      isStarter: false,
+      battingOrder: 0,
+      traits: [],
+    };
+  }
+
+  const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  const position = fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
+
+  return {
+    id,
+    name: nameObj.last + nameObj.first,
+    age,
+    position,
+    throws: Math.random() < 0.15 ? 'left' : 'right',
+    bats: Math.random() < 0.35 ? 'left' : (Math.random() < 0.1 ? 'switch' : 'right'),
+    pitching: { velocity: 110 + Math.floor(Math.random() * 15), control: lowAbility(), stamina: 30 + Math.floor(Math.random() * 20), breakingBalls: [] },
+    batting: { meet: baseAbility(), power: baseAbility(), eye: baseAbility() },
+    physical: { speed: baseAbility(), arm: baseAbility(), stamina: 50 + Math.floor(Math.random() * 30), bodyStamina: 40 + Math.floor(Math.random() * 30), recovery: 40 + Math.floor(Math.random() * 30) },
+    fielding: { defense: baseAbility(), catcher: position === 'catcher' ? 30 + Math.floor(Math.random() * 30) : 0, positionFitness: { [position]: 80 + Math.floor(Math.random() * 20) } },
+    experience: 0,
+    growthPotential: 0.7 + Math.random() * 0.6,
+    growthModifier: 0,
+    fame: 0,
+    seasonStats: { batting: {}, pitching: {}, fielding: {} },
+    careerStats: { batting: {}, pitching: {}, fielding: {} },
+    isStarter: false,
+    battingOrder: 0,
+    traits: [],
+  };
+}
+
 /**
  * 次年度への完全移行
  * @param {Object} seasonData - 現在のシーズンデータ
@@ -1436,6 +1568,11 @@ export function advanceToNextYear(seasonData, allTeams) {
   let universityGraduationReport = null;
   if (seasonData.settings?.universityMode) {
     universityGraduationReport = processUniversityTeamGraduation(teamsAfterRetirement, seasonData, currentYear);
+  }
+
+  // 5.8. 独立リーグAIチームの補充（リリースプールから獲得＋新人生成）
+  if (!seasonData.settings?.corporateMode && !seasonData.settings?.universityMode) {
+    replenishIndependentLeagueRosters(teamsAfterRetirement, currentYear);
   }
 
   // 6. 新シーズンデータ作成
