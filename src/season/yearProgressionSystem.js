@@ -1333,60 +1333,94 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
 // ============================================================
 
 const TARGET_ROSTER_SIZE = 24;
-const MIN_ROSTER_SIZE = 20;
+
+function scorePlayerForRecruitment(p) {
+  const base = p.position === 'pitcher'
+    ? ((p.pitching?.velocity || 130) - 115) * 2 + (p.pitching?.control || 0) + (p.pitching?.stamina || 0) * 0.3
+    : ((p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) + (p.fielding?.defense || 0)) / 4;
+  const originBonus = (p.origin === 'independent_candidate' || p.postGradPath === 'independent') ? 15 : 0;
+  return base + originBonus;
+}
 
 function replenishIndependentLeagueRosters(allTeams, currentYear) {
   const userTeamName = Object.keys(allTeams)[0];
 
+  // 補充が必要なAI独立リーグチームを収集（ユーザーのリーグのライバルも含む）
+  const teamsNeedingPlayers = [];
   for (const [teamName, team] of Object.entries(allTeams)) {
     if (teamName === userTeamName) continue;
-    if (!team?.players || !team.independentLeagueId) continue;
+    if (!team?.players) continue;
+    // 社会人チーム・大学チームは除外
+    if (team.corporateTeamId || team.corporateData || team.universityData) continue;
 
-    const currentSize = team.players.length;
-    if (currentSize >= MIN_ROSTER_SIZE) continue;
+    const needed = Math.max(0, TARGET_ROSTER_SIZE - team.players.length);
+    if (needed > 0) {
+      teamsNeedingPlayers.push({ teamName, team, needed });
+    }
+  }
 
-    const needed = TARGET_ROSTER_SIZE - currentSize;
-    let recruited = 0;
+  if (teamsNeedingPlayers.length === 0) return;
 
-    // リリースプールからの獲得（能力順、独立候補を優先）
-    const poolCandidates = releasedPlayersPool
-      .map((p, idx) => {
-        const score = p.position === 'pitcher'
-          ? ((p.pitching?.velocity || 130) - 115) * 2 + (p.pitching?.control || 0) + (p.pitching?.stamina || 0) * 0.3
-          : ((p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) + (p.fielding?.defense || 0)) / 4;
-        const originBonus = (p.origin === 'independent_candidate' || p.postGradPath === 'independent') ? 20 : 0;
-        return { player: p, idx, score: score + originBonus };
-      })
-      .sort((a, b) => b.score - a.score);
+  // プール候補をスコア順にソート
+  const poolCandidates = releasedPlayersPool
+    .map(p => ({ player: p, score: scorePlayerForRecruitment(p) }))
+    .sort((a, b) => b.score - a.score);
 
-    const recruitedIds = [];
-    for (const candidate of poolCandidates) {
-      if (recruited >= needed) break;
+  // プールの60%をAIチームに配分、40%はユーザーのトライアウト用に残す
+  const maxTake = Math.floor(poolCandidates.length * 0.6);
+  const totalNeeded = teamsNeedingPlayers.reduce((sum, t) => sum + t.needed, 0);
+  const availableFromPool = Math.min(maxTake, totalNeeded);
+
+  // チーム順をシャッフルして公平に配分（ラウンドロビン）
+  const shuffled = [...teamsNeedingPlayers].sort(() => Math.random() - 0.5);
+  const recruitedIds = new Set();
+  let taken = 0;
+  let candidateIdx = 0;
+
+  // ラウンドロビン: 各チームに1人ずつ順番に配る
+  let anyRecruited = true;
+  while (anyRecruited && taken < availableFromPool) {
+    anyRecruited = false;
+    for (const teamInfo of shuffled) {
+      if (teamInfo.needed <= 0) continue;
+      // 次のまだ獲得されていない候補を探す
+      while (candidateIdx < poolCandidates.length && recruitedIds.has(poolCandidates[candidateIdx].player.id)) {
+        candidateIdx++;
+      }
+      if (candidateIdx >= poolCandidates.length) break;
+      if (taken >= availableFromPool) break;
+
+      const candidate = poolCandidates[candidateIdx];
       const p = JSON.parse(JSON.stringify(candidate.player));
       p.isStarter = false;
       p.battingOrder = 0;
       p.seasonStats = { batting: {}, pitching: {}, fielding: {} };
       p.careerHistory = p.careerHistory || [];
-      p.careerHistory.push({ type: 'independent', label: `${teamName}入団`, year: currentYear + 1 });
-      team.players.push(p);
-      recruitedIds.push(candidate.player.id);
-      recruited++;
+      p.careerHistory.push({ type: 'independent', label: `${teamInfo.teamName}入団`, year: currentYear + 1 });
+      teamInfo.team.players.push(p);
+      recruitedIds.add(candidate.player.id);
+      teamInfo.needed--;
+      taken++;
+      candidateIdx++;
+      anyRecruited = true;
     }
+  }
 
-    // プールから獲得した選手を削除
-    for (let i = releasedPlayersPool.length - 1; i >= 0; i--) {
-      if (recruitedIds.includes(releasedPlayersPool[i].id)) {
-        releasedPlayersPool.splice(i, 1);
-      }
+  // プールから獲得した選手を削除（残りはユーザーのトライアウト候補として残る）
+  for (let i = releasedPlayersPool.length - 1; i >= 0; i--) {
+    if (recruitedIds.has(releasedPlayersPool[i].id)) {
+      releasedPlayersPool.splice(i, 1);
     }
+  }
 
-    // プールで足りなければ新規選手を生成
-    while (recruited < needed) {
-      const id = (currentYear + 1) * 10000 + 8000 + Math.floor(Math.random() * 2000);
-      const newPlayer = generateIndependentNewcomer(id, currentYear + 1);
-      newPlayer.careerHistory = [{ type: 'independent', label: `${teamName}入団`, year: currentYear + 1 }];
-      team.players.push(newPlayer);
-      recruited++;
+  // プールで足りない分は新規選手を生成
+  let nextId = (currentYear + 1) * 10000 + 8000;
+  for (const teamInfo of shuffled) {
+    while (teamInfo.needed > 0) {
+      const newPlayer = generateIndependentNewcomer(nextId++, currentYear + 1);
+      newPlayer.careerHistory = [{ type: 'independent', label: `${teamInfo.teamName}入団`, year: currentYear + 1 }];
+      teamInfo.team.players.push(newPlayer);
+      teamInfo.needed--;
     }
   }
 }
