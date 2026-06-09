@@ -13,6 +13,8 @@ import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS }
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
 import { checkScoutMissionCompletion, SCOUT_TARGETS, processAutoInvestigation, advanceFavoriteBonus } from '../corporate/scoutingSystem.js';
+import { generateUniversityChampionship, generateMeijiJinguTournament, simulateUniversityTournamentOnDate, autoPlayUniversityTournament, getUserUniversityTournamentMatchOnDate, getUniversityTournamentDatesForCalendar } from '../university/universityTournament.js';
+import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
@@ -297,6 +299,52 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         WORLD_DATA.corporateToshitaikou.champion = mainTournament.champion;
         WORLD_DATA.corporateToshitaikou.runnerUp = mainTournament.runnerUp;
         WORLD_DATA.corporateToshitaikou.mainDone = true;
+      }
+    }
+
+    // 大学モード: 全日本大学野球選手権大会（6月）
+    if (isUniversity && month === 6 && day >= 5 && !newData.universityChampionship?.generated) {
+      const calYear = newData.currentDate.year;
+      const tournament = generateUniversityChampionship(newData, calYear);
+      if (tournament) {
+        if (tournament.userQualified) {
+          newData = { ...newData, universityChampionship: { ...tournament, generated: true } };
+          setSeasonData(newData);
+          return newData;
+        } else {
+          autoPlayUniversityTournament(tournament);
+          newData = { ...newData, universityChampionship: { ...tournament, generated: true } };
+        }
+      }
+    }
+
+    // 大学モード: 明治神宮野球大会（11月）
+    if (isUniversity && month === 11 && day >= 5 && !newData.meijiJingu?.generated) {
+      const calYear = newData.currentDate.year;
+      const tournament = generateMeijiJinguTournament(newData, calYear);
+      if (tournament) {
+        if (tournament.userQualified) {
+          newData = { ...newData, meijiJingu: { ...tournament, generated: true } };
+          setSeasonData(newData);
+          return newData;
+        } else {
+          autoPlayUniversityTournament(tournament);
+          newData = { ...newData, meijiJingu: { ...tournament, generated: true } };
+        }
+      }
+    }
+
+    // 大学モード: トーナメント日付ベース進行
+    if (isUniversity) {
+      if (newData.universityChampionship?.generated && newData.universityChampionship.phase !== 'done') {
+        const uc = JSON.parse(JSON.stringify(newData.universityChampionship));
+        simulateUniversityTournamentOnDate(uc, seasonData.currentDate, userTeamName);
+        newData = { ...newData, universityChampionship: uc };
+      }
+      if (newData.meijiJingu?.generated && newData.meijiJingu.phase !== 'done') {
+        const mj = JSON.parse(JSON.stringify(newData.meijiJingu));
+        simulateUniversityTournamentOnDate(mj, seasonData.currentDate, userTeamName);
+        newData = { ...newData, meijiJingu: mj };
       }
     }
 
@@ -628,6 +676,22 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
+    // 大学トーナメントのユーザー試合チェック
+    if (seasonData.universityChampionship?.generated && seasonData.universityChampionship.phase !== 'done') {
+      const ucMatch = getUserUniversityTournamentMatchOnDate(seasonData.universityChampionship, seasonData.currentDate, userTeamName);
+      if (ucMatch) {
+        setShowTournamentMatchModal({ ...ucMatch, type: 'university_championship' });
+        return;
+      }
+    }
+    if (seasonData.meijiJingu?.generated && seasonData.meijiJingu.phase !== 'done') {
+      const mjMatch = getUserUniversityTournamentMatchOnDate(seasonData.meijiJingu, seasonData.currentDate, userTeamName);
+      if (mjMatch) {
+        setShowTournamentMatchModal({ ...mjMatch, type: 'meiji_jingu' });
+        return;
+      }
+    }
+
     // ユーザーチームの試合があるかチェック
     const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
     const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
@@ -749,16 +813,22 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const isNS = matchInfo.bracketType === 'nihon_senshuken' || matchInfo.bracketType === 'nihon_senshuken_qualifier' || matchInfo.bracketType === 'nihon_senshuken_qualifier_losers';
     const isCS = matchInfo.bracketType === 'club_senshuken' || matchInfo.bracketType === 'club_senshuken_qualifier' || matchInfo.bracketType === 'club_senshuken_qualifier_losers';
     const isRT = matchInfo.bracketType === 'regional_tournament';
+    const isUC = matchInfo.type === 'university_championship';
+    const isMJ = matchInfo.type === 'meiji_jingu';
     const pendingMatch = {
       regionId: matchInfo.regionId,
       roundIdx: matchInfo.roundIdx,
       matchIdx: matchInfo.matchIdx,
       opponentName: oppName,
-      bracketType: matchInfo.bracketType || 'main',
+      bracketType: matchInfo.bracketType || matchInfo.type || 'main',
     };
 
     let updatedData;
-    if (isRT) {
+    if (isUC) {
+      updatedData = { ...seasonData, universityChampionship: { ...seasonData.universityChampionship, pendingMatch } };
+    } else if (isMJ) {
+      updatedData = { ...seasonData, meijiJingu: { ...seasonData.meijiJingu, pendingMatch } };
+    } else if (isRT) {
       updatedData = { ...seasonData, regionalTournament: { ...seasonData.regionalTournament, pendingMatch } };
     } else if (isCS) {
       updatedData = { ...seasonData, clubSenshuken: { ...seasonData.clubSenshuken, pendingMatch } };
@@ -769,7 +839,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
     setSeasonData(updatedData);
 
-    const prefix = isRT ? 'regional_tournament' : isCS ? 'club_senshuken' : isNS ? 'nihon_senshuken' : 'toshitaikou';
+    const prefix = isUC ? 'university_championship' : isMJ ? 'meiji_jingu' : isRT ? 'regional_tournament' : isCS ? 'club_senshuken' : isNS ? 'nihon_senshuken' : 'toshitaikou';
     onSetupManagedGame({
       gameId: `${prefix}_${matchInfo.bracketType}_${matchInfo.roundIdx}_${matchInfo.matchIdx}`,
       home: userTeamName,
@@ -807,6 +877,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (seasonData.clubSenshuken?.generated) {
       allDates.push(...getNihonSenshukenDatesForCalendar(seasonData.clubSenshuken, userTeamName));
     }
+    if (seasonData.universityChampionship?.generated) {
+      allDates.push(...getUniversityTournamentDatesForCalendar(seasonData.universityChampionship, userTeamName));
+    }
+    if (seasonData.meijiJingu?.generated) {
+      allDates.push(...getUniversityTournamentDatesForCalendar(seasonData.meijiJingu, userTeamName));
+    }
     const dateMap = {};
     allDates.forEach(d => {
       const key = `${d.date.month}-${d.date.day}`;
@@ -814,7 +890,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       dateMap[key].push(d);
     });
     return dateMap;
-  }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.clubSenshuken, seasonData.regionalTournament, userTeamName]);
+  }, [seasonData.toshitaikou, seasonData.nihonSenshuken, seasonData.clubSenshuken, seasonData.regionalTournament, seasonData.universityChampionship, seasonData.meijiJingu, userTeamName]);
 
   const calendarCells = useMemo(() => {
     const cells = [];
@@ -1987,8 +2063,80 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           })()}
         </div>
 
-        {/* 右カラム: 順位表 or 都市対抗トーナメント */}
+        {/* 右カラム: 順位表 or トーナメント */}
         <div className="flex-1 min-w-[420px]">
+          {/* 大学モード: 順位表 + トーナメント */}
+          {seasonData.settings?.universityMode && (() => {
+            const standings = seasonData.standings || [];
+            const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+            const uc = seasonData.universityChampionship;
+            const mj = seasonData.meijiJingu;
+            const regionName = UNIVERSITY_REGIONS.find(r => r.id === seasonData.settings?.universityRegion)?.name || 'リーグ';
+
+            return (
+              <div className="space-y-3">
+                {/* リーグ順位表 */}
+                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-amber-700/30">
+                  <h2 className="text-sm font-bold text-amber-400 mb-2">{regionName} 順位表</h2>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-gray-400 text-xs border-b border-gray-700">
+                        <th className="text-left py-1 px-1 w-6">#</th>
+                        <th className="text-left py-1 px-2">チーム</th>
+                        <th className="text-center py-1 px-1">試</th>
+                        <th className="text-center py-1 px-1">勝</th>
+                        <th className="text-center py-1 px-1">敗</th>
+                        <th className="text-center py-1 px-1">率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map((s, i) => {
+                        const isUser = s.team === userTeamName;
+                        return (
+                          <tr key={s.team} className={`border-b border-gray-800 ${isUser ? 'bg-amber-900/20' : ''}`}>
+                            <td className="py-1 px-1 text-gray-500 text-xs">{i + 1}</td>
+                            <td className={`py-1 px-2 font-bold ${isUser ? 'text-amber-400' : 'text-white'}`}>{s.team}</td>
+                            <td className="text-center py-1 px-1 text-gray-400">{s.gamesPlayed || 0}</td>
+                            <td className="text-center py-1 px-1 text-white">{s.wins || 0}</td>
+                            <td className="text-center py-1 px-1 text-gray-400">{s.losses || 0}</td>
+                            <td className="text-center py-1 px-1 text-amber-300">{(s.winRate || 0).toFixed(3)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 全日本大学野球選手権大会 */}
+                {uc?.generated && (
+                  <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-orange-700/30">
+                    <h2 className="text-sm font-bold text-orange-400 mb-2">全日本大学野球選手権大会</h2>
+                    {uc.champion && (
+                      <div className="bg-orange-900/30 border border-orange-700/50 rounded-lg p-2 mb-2 text-center">
+                        <span className="text-orange-400 font-bold">優勝: {uc.champion}</span>
+                        {uc.runnerUp && <span className="text-gray-400 ml-2">準優勝: {uc.runnerUp}</span>}
+                      </div>
+                    )}
+                    {uc.bracket && renderBracketWithLines(uc.bracket)}
+                  </div>
+                )}
+
+                {/* 明治神宮野球大会 */}
+                {mj?.generated && (
+                  <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-red-700/30">
+                    <h2 className="text-sm font-bold text-red-400 mb-2">明治神宮野球大会</h2>
+                    {mj.champion && (
+                      <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-2 mb-2 text-center">
+                        <span className="text-red-400 font-bold">優勝: {mj.champion}</span>
+                        {mj.runnerUp && <span className="text-gray-400 ml-2">準優勝: {mj.runnerUp}</span>}
+                      </div>
+                    )}
+                    {mj.bracket && renderBracketWithLines(mj.bracket)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {seasonData.settings?.corporateMode ? (() => {
             const td = seasonData.toshitaikou;
             const rtData = seasonData.regionalTournament;

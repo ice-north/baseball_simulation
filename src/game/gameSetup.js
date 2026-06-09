@@ -485,6 +485,34 @@ export function executeHandleManagedGameEnd(ctx) {
     });
   }
 
+  // 大学トーナメントの結果処理（全日本大学野球選手権 / 明治神宮大会）
+  for (const tournamentKey of ['universityChampionship', 'meijiJingu']) {
+    const utPending = updatedSeasonData[tournamentKey]?.pendingMatch;
+    if (utPending && info.isTournament) {
+      const ut = { ...updatedSeasonData[tournamentKey] };
+      const userWon = finalScore.home > finalScore.away;
+      const winnerName = userWon ? htn : atn;
+      const scoreArr = [finalScore.home, finalScore.away];
+
+      recordResult(ut.bracket, utPending.roundIdx, utPending.matchIdx, winnerName, scoreArr);
+      if (isBracketComplete(ut.bracket)) {
+        ut.champion = ut.bracket.champion;
+        const finalRound = ut.bracket.rounds[ut.bracket.rounds.length - 1];
+        ut.runnerUp = finalRound?.[0]?.loser || null;
+        ut.phase = 'done';
+      }
+
+      ut.pendingMatch = null;
+      updatedSeasonData = { ...updatedSeasonData, [tournamentKey]: ut };
+      setSeasonData(updatedSeasonData);
+      setManagedGameInfo(null);
+      managedGameInfoRef.current = null;
+      setScreenMode('management');
+      setManagementView('dateprogress');
+      return;
+    }
+  }
+
   // 地域トーナメントの結果処理
   const rtPending = updatedSeasonData.regionalTournament?.pendingMatch;
   if (rtPending && info.isTournament) {

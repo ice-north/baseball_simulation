@@ -8,9 +8,9 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 
 const RANK_STRENGTH = { S: 78, A: 65, B: 50, C: 38, D: 25 };
 
-// 春季: 4/5〜6/10, 秋季: 9/6〜11/5
-const SPRING = { startMonth: 4, startDay: 5, endMonth: 6, endDay: 10 };
-const FALL   = { startMonth: 9, startDay: 6, endMonth: 11, endDay: 5 };
+// 春季: 4/5〜5/31, 秋季: 9/6〜10/20（ドラフト前に終了）
+const SPRING = { startMonth: 4, startDay: 5, endMonth: 5, endDay: 31 };
+const FALL   = { startMonth: 9, startDay: 6, endMonth: 10, endDay: 20 };
 
 function generateRoundRobin(teams) {
   const n = teams.length;
