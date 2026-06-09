@@ -304,6 +304,7 @@ export function simulateQuickMatch(team1Def, team2Def) {
 // teamDefsMap: { [teamName]: teamDef } チーム名→定義のマップ
 // excludeTeam: このチーム名が含まれる試合はスキップ
 export function autoPlayBracket(bracket, teamDefsMap, excludeTeam = null) {
+  if (!bracket?.rounds) return;
   let changed = true;
   while (changed) {
     changed = false;
@@ -548,6 +549,10 @@ export function createMainTournament(qualifiedByRegion, defendingChampionName, c
 }
 
 export function autoPlayMainTournament(tournament) {
+  if (!tournament?.bracket) {
+    if (tournament) tournament.phase = 'done';
+    return tournament;
+  }
   autoPlayBracket(tournament.bracket, tournament.teamDefsMap);
   const rankings = getBracketRankings(tournament.bracket);
   tournament.champion = rankings[0] || null;
