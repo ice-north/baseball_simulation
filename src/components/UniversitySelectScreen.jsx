@@ -14,137 +14,121 @@ const RANK_LABELS = {
 };
 
 const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
-  const [selectedRegion, setSelectedRegion] = useState(null);
+  const [expandedLeague, setExpandedLeague] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
-
-  const capitalRegions = UNIVERSITY_REGIONS.filter((_, i) => i < 7);
-  const localRegions = UNIVERSITY_REGIONS.filter((_, i) => i >= 7);
-
-  if (!selectedRegion) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
-          <p className="text-gray-400 text-sm mb-8">所属するリーグを選んでください</p>
-
-          <div className="mb-6">
-            <h2 className="text-lg font-bold text-amber-400 mb-3">首都圏リーグ</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {capitalRegions.map(region => {
-                const teams = UNIVERSITY_TEAMS.filter(t => t.region === region.id);
-                const rankCounts = {};
-                teams.forEach(t => { rankCounts[t.rank] = (rankCounts[t.rank] || 0) + 1; });
-                return (
-                  <button key={region.id}
-                    onClick={() => setSelectedRegion(region)}
-                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-500 rounded-xl p-4 text-left transition group"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-lg font-bold text-white group-hover:text-amber-400 transition">{region.name}</div>
-                      <div className="text-xs text-gray-500">{teams.length}校</div>
-                    </div>
-                    <div className="flex gap-2 text-xs">
-                      {['S','A','B','C','D'].map(r => rankCounts[r] ? (
-                        <span key={r} className={RANK_COLORS[r]}>{r}:{rankCounts[r]}</span>
-                      ) : null)}
-                    </div>
-                    {(region.divisions || 1) >= 2 && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {Array.from({ length: region.divisions }, (_, d) => `${d + 1}部${Math.floor(region.teamCount / region.divisions)}校`).join(' + ')}（入替制）
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <h2 className="text-lg font-bold text-amber-400 mb-3">地方リーグ</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {localRegions.map(region => {
-                const teams = UNIVERSITY_TEAMS.filter(t => t.region === region.id);
-                const rankCounts = {};
-                teams.forEach(t => { rankCounts[t.rank] = (rankCounts[t.rank] || 0) + 1; });
-                return (
-                  <button key={region.id}
-                    onClick={() => setSelectedRegion(region)}
-                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-500 rounded-xl p-4 text-left transition group"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-lg font-bold text-white group-hover:text-amber-400 transition">{region.name}</div>
-                      <div className="text-xs text-gray-500">{teams.length}校</div>
-                    </div>
-                    <div className="flex gap-2 text-xs">
-                      {['S','A','B','C','D'].map(r => rankCounts[r] ? (
-                        <span key={r} className={RANK_COLORS[r]}>{r}:{rankCounts[r]}</span>
-                      ) : null)}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="text-center mt-6">
-            <button onClick={onBack} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // チーム選択画面
-  const teams = UNIVERSITY_TEAMS.filter(t => t.region === selectedRegion.id);
-  const numDivisions = selectedRegion.divisions || 1;
-  const perDiv = numDivisions >= 2 ? Math.floor(teams.length / numDivisions) : 0;
-  const hasDivisions = numDivisions >= 2;
-
-  const renderTeamButton = (team) => (
-    <button key={team.id}
-      onClick={() => setSelectedTeam(team)}
-      className={`bg-gray-800 hover:bg-gray-700 border rounded-lg p-4 text-left transition group ${
-        selectedTeam?.id === team.id ? 'border-amber-400 bg-gray-700' : 'border-gray-700 hover:border-amber-500'
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="text-base font-bold text-white group-hover:text-amber-400 transition">{team.name}</div>
-        <span className={`text-sm font-bold ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
-      </div>
-      <div className="text-xs text-gray-500 mt-1">{RANK_LABELS[team.rank]}</div>
-    </button>
-  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-1">{selectedRegion.name}</h1>
-        <p className="text-gray-400 text-sm mb-6">監督を務めるチームを選んでください</p>
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-2">大学野球 - リーグ・チーム選択</h1>
+        <p className="text-gray-400 text-sm mb-6">リーグを選び、監督を務めるチームを選んでください</p>
 
-        {hasDivisions ? (
-          <>
-            {Array.from({ length: numDivisions }, (_, d) => {
-              const divTeams = teams.slice(d * perDiv, (d + 1) * perDiv);
-              const divColor = d === 0 ? 'text-amber-400' : 'text-gray-400';
-              return (
-                <div key={d}>
-                  <h3 className={`text-sm font-bold ${divColor} mb-2`}>{d + 1}部</h3>
-                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${d < numDivisions - 1 ? 'mb-4' : 'mb-6'}`}>
-                    {divTeams.map(renderTeamButton)}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {UNIVERSITY_REGIONS.map(region => {
+            const teams = UNIVERSITY_TEAMS.filter(t => t.region === region.id);
+            const isExpanded = expandedLeague === region.id;
+            const numDivisions = region.divisions || 1;
+            const perDiv = numDivisions >= 2 ? Math.floor(teams.length / numDivisions) : 0;
+
+            return (
+              <div key={region.id} className={`rounded-xl border transition ${
+                isExpanded
+                  ? 'border-amber-500 bg-gray-800 md:col-span-2'
+                  : 'border-gray-700 bg-gray-800 hover:border-amber-500/50'
+              }`}>
+                <button
+                  onClick={() => {
+                    setExpandedLeague(isExpanded ? null : region.id);
+                    if (isExpanded) setSelectedTeam(null);
+                  }}
+                  className="w-full p-4 text-left"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className={`text-base font-bold transition ${isExpanded ? 'text-amber-400' : 'text-white'}`}>
+                      {region.name}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">{teams.length}校</span>
+                      <span className="text-gray-500 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-            {teams.map(renderTeamButton)}
-          </div>
-        )}
+                  {!isExpanded && (
+                    <div className="flex flex-wrap gap-1 text-xs text-gray-400">
+                      {teams.map(t => (
+                        <span key={t.id} className="bg-gray-700/50 px-1.5 py-0.5 rounded">{t.name}</span>
+                      ))}
+                    </div>
+                  )}
+                  {numDivisions >= 2 && !isExpanded && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      {Array.from({ length: numDivisions }, (_, d) => `${d + 1}部${perDiv}校`).join(' + ')}（入替制）
+                    </div>
+                  )}
+                </button>
 
-        <div className="flex justify-between items-center">
-          <button onClick={() => { setSelectedRegion(null); setSelectedTeam(null); }}
-            className="text-gray-400 hover:text-white text-sm transition">← リーグ選択に戻る</button>
+                {isExpanded && (
+                  <div className="px-4 pb-4">
+                    {numDivisions >= 2 ? (
+                      Array.from({ length: numDivisions }, (_, d) => {
+                        const divTeams = teams.slice(d * perDiv, (d + 1) * perDiv);
+                        const divColor = d === 0 ? 'text-amber-400' : 'text-gray-400';
+                        return (
+                          <div key={d} className={d < numDivisions - 1 ? 'mb-3' : ''}>
+                            <h4 className={`text-xs font-bold ${divColor} mb-1.5`}>{d + 1}部</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                              {divTeams.map(team => (
+                                <button key={team.id}
+                                  onClick={(e) => { e.stopPropagation(); setSelectedTeam(team); }}
+                                  className={`p-3 rounded-lg border text-left transition ${
+                                    selectedTeam?.id === team.id
+                                      ? 'border-amber-400 bg-amber-900/30'
+                                      : 'border-gray-600 bg-gray-700/50 hover:border-amber-500/50 hover:bg-gray-700'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-bold text-white">{team.name}</span>
+                                    <span className={`text-xs font-bold ${RANK_COLORS[team.rank]}`}>
+                                      {team.rank}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-0.5">{RANK_LABELS[team.rank]}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {teams.map(team => (
+                          <button key={team.id}
+                            onClick={(e) => { e.stopPropagation(); setSelectedTeam(team); }}
+                            className={`p-3 rounded-lg border text-left transition ${
+                              selectedTeam?.id === team.id
+                                ? 'border-amber-400 bg-amber-900/30'
+                                : 'border-gray-600 bg-gray-700/50 hover:border-amber-500/50 hover:bg-gray-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold text-white">{team.name}</span>
+                              <span className={`text-xs font-bold ${RANK_COLORS[team.rank]}`}>
+                                {team.rank}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">{RANK_LABELS[team.rank]}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex justify-between items-center mt-6">
+          <button onClick={onBack} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
           {selectedTeam && (
             <button onClick={() => onSelect(selectedTeam)}
               className="bg-amber-600 hover:bg-amber-500 text-white px-6 py-2 rounded-lg font-bold transition">
