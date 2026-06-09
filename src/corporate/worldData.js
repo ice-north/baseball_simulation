@@ -5,8 +5,8 @@
 // グローバルミュータブルオブジェクト（TEAMS_DATAと同じパターン）
 export const WORLD_DATA = {
   initialized: false,
-  mode: null,            // 'independent' | 'corporate'
-  userLeagueId: null,    // ユーザーが所属するリーグID ('shikoku','bc','kyushu','hokkaido','corporate')
+  mode: null,            // 'independent' | 'corporate' | 'university'
+  userLeagueId: null,    // ユーザーが所属するリーグID ('shikoku','bc','kyushu','hokkaido','corporate','tokyo_big6',...)
   year: 1,
 
   // 独立リーグの状態（リーグIDごとに管理）

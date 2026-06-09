@@ -8,6 +8,7 @@ import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 import { initializeCorporateGame, initializeParallelWorldForIndependent } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { initializeUniversityGame, getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 
 let selectedIndependentLeague = null;
 
@@ -17,6 +18,7 @@ import NewGameRegulationsScreen from './NewGameRegulationsScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
 import CampScreen from './CampScreen.jsx';
 import SandboxSetupScreen from './SandboxSetupScreen.jsx';
+import UniversityTeamSelectScreen from './UniversitySelectScreen.jsx';
 import { ModeSelectScreen, CorporateTeamSelectScreen, CorporateNameEditScreen } from './CorporateSelectScreen.jsx';
 
 // ゲームフロースタート画面群
@@ -62,11 +64,12 @@ const GameFlowScreens = ({
     />;
   }
 
-  // MODE SELECT: 独立リーグ / 社会人野球 選択
+  // MODE SELECT: 独立リーグ / 社会人野球 / 大学野球 選択
   if (gameFlowState === 'newgame_mode_select') {
     return <ModeSelectScreen
       onSelectIndependent={() => setGameFlowState('newgame_league_select')}
       onSelectCorporate={() => setGameFlowState('newgame_corporate_select')}
+      onSelectUniversity={() => setGameFlowState('newgame_university_select')}
       onBack={() => setGameFlowState('title')}
     />;
   }
@@ -223,6 +226,96 @@ const GameFlowScreens = ({
           currentDate: { year: calYear, month: 4, day: 1 },
           phase: SEASON_PHASES.REGULAR_SEASON,
           regionalTournament: { ...rt, generated: true },
+        }));
+        setSelectedMonth(4);
+        setManagementView('dateprogress');
+        setScreenMode('management');
+        setGameFlowState('season');
+      }}
+    />;
+  }
+
+  // UNIVERSITY: リーグ・チーム選択
+  if (gameFlowState === 'newgame_university_select') {
+    return <UniversityTeamSelectScreen
+      onSelect={(team) => {
+        setGameMode('university');
+        setGameFlowState('university_loading');
+        setTimeout(() => {
+          const result = initializeUniversityGame(team);
+
+          setLeagueConfig({
+            format: 'single',
+            teamsPerLeague: result.allTeamNames.length,
+            leagues: [{ name: result.leagueName, teams: result.allTeamNames }]
+          });
+
+          const newSeasonData = createSeasonData(1);
+          newSeasonData.settings = {
+            teamsCount: result.allTeamNames.length,
+            teamNames: result.allTeamNames,
+            teamAbbreviations: result.allTeamNames.map(n => n.slice(0, 3)),
+            gamesPerSeason: 30,
+            useDH: false,
+            leagueFormat: 'single',
+            universityMode: true,
+            universityTeamId: team.id,
+            universityRegion: team.region,
+          };
+
+          const uniSchedule = getUniversityLeagueSchedule(team.region);
+          newSeasonData.schedule = uniSchedule;
+          newSeasonData.standings = getUniversityLeagueStandings(team.region, result.allTeamNames);
+          setSeasonData(newSeasonData);
+          setGameFlowState('university_camp');
+        }, 50);
+      }}
+      onBack={() => setGameFlowState('newgame_mode_select')}
+    />;
+  }
+
+  // UNIVERSITY: ローディング画面
+  if (gameFlowState === 'university_loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">🎓</div>
+          <div className="text-white text-xl font-bold mb-2">大学野球の世界を構築中...</div>
+          <div className="text-gray-400 text-sm">リーグチームと並行世界を生成しています</div>
+          <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
+            <div className="h-full bg-amber-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // UNIVERSITY: キャンプ
+  if (gameFlowState === 'university_camp') {
+    return <CampScreen
+      seasonData={seasonData}
+      allTeams={allTeams}
+      onComplete={() => {
+        initializeAllPlayersCondition();
+        Object.keys(TEAMS_DATA).forEach(teamName => {
+          const teamData = TEAMS_DATA[teamName];
+          if (teamData && teamData.players && teamData.players.length > 0) {
+            if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+              generatePitchingRotation(teamName);
+            }
+            if (teamName === userTeamName) {
+              setRecommendedLineup(teamData, teamName);
+            } else {
+              generateAILineup(teamData, teamName);
+            }
+          }
+        });
+
+        const calYear = 2024 + (seasonData?.year || 1) - 1;
+        setSeasonData(prev => ({
+          ...prev,
+          currentDate: { year: calYear, month: 4, day: 1 },
+          phase: SEASON_PHASES.REGULAR_SEASON,
         }));
         setSelectedMonth(4);
         setManagementView('dateprogress');

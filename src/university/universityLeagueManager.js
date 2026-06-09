@@ -181,7 +181,11 @@ export function simulateUniversityLeagueDate(currentDate) {
   const leagues = WORLD_DATA.universityLeagues;
   if (!leagues) return;
 
-  for (const [, league] of Object.entries(leagues)) {
+  // 大学モードではユーザーのリーグをスキップ（seasonData.schedule経由で管理）
+  const userRegion = WORLD_DATA.mode === 'university' ? WORLD_DATA.userLeagueId : null;
+
+  for (const [regionId, league] of Object.entries(leagues)) {
+    if (regionId === userRegion) continue;
     for (const seasonKey of ['spring', 'fall']) {
       const seasonData = league[seasonKey];
       if (!seasonData || seasonData.done) continue;

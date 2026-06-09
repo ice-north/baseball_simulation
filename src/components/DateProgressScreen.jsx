@@ -35,6 +35,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const userTeamName = Object.keys(TEAMS_DATA || {})[0] || 'チームA';
   const isCorporate = !!seasonData.settings?.corporateMode;
+  const isUniversity = !!seasonData.settings?.universityMode;
   const currentPhase = seasonData.phase || 'off_season';
   const phaseInfo = PHASE_INFO[currentPhase] || { name: '', color: 'bg-gray-100', description: '' };
 
@@ -305,16 +306,24 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return null;
     }
     if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
-      setSeasonData(newData);
-      if (onForceEvent) onForceEvent(isCorporate ? 'corporate_departure' : 'contract');
-      return null;
+      if (isUniversity) {
+        // 大学モード: 契約更改なし → オフシーズンへ直行
+      } else {
+        setSeasonData(newData);
+        if (onForceEvent) onForceEvent(isCorporate ? 'corporate_departure' : 'contract');
+        return null;
+      }
     }
     if (month === 11 && day === 10 && newPhase === SEASON_PHASES.TRYOUT) {
-      setSeasonData(newData);
-      if (onForceEvent) onForceEvent(isCorporate ? 'corporate_scout' : 'tryout');
-      return null;
+      if (isUniversity) {
+        // 大学モード: トライアウトなし → オフシーズンへ直行
+      } else {
+        setSeasonData(newData);
+        if (onForceEvent) onForceEvent(isCorporate ? 'corporate_scout' : 'tryout');
+        return null;
+      }
     }
-    if (month >= 12 || (month === 11 && day >= 30)) {
+    if (month >= 12 || (month === 11 && day >= 30) || (isUniversity && month === 11 && day >= 15)) {
       newData = { ...newData, phase: SEASON_PHASES.OFF_SEASON };
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('offseason');

@@ -19,7 +19,7 @@ const RANK_LABELS = {
   S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興',
 };
 
-const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onBack }) => {
+const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniversity, onBack }) => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
       <div className="text-center max-w-2xl mx-auto px-4">
@@ -44,6 +44,16 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onBack }) =>
             <div className="text-2xl mb-1">社会人野球</div>
             <div className="text-sm font-normal text-blue-200">
               企業チームの監督に就任。スカウトで選手を獲得し、コーチの力で育てる。
+            </div>
+          </button>
+
+          <button
+            onClick={onSelectUniversity}
+            className="group w-96 bg-gradient-to-r from-amber-700 to-orange-700 hover:from-amber-600 hover:to-orange-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
+          >
+            <div className="text-2xl mb-1">大学野球</div>
+            <div className="text-sm font-normal text-amber-200">
+              大学チームの監督として春季・秋季リーグを戦い、選手をプロへ送り出す。
             </div>
           </button>
         </div>
