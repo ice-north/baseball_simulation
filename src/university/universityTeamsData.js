@@ -1,7 +1,7 @@
 // ============================================================
-// 大学野球 全チームデータ（全日本大学野球連盟 / 14リーグ）
-// 東都のみ2部制(12校) + 13リーグ×6校 = 90校
-// 首都圏7リーグ(48校) + 地方7リーグ(42校)
+// 大学野球 全チームデータ（全日本大学野球連盟 / 16リーグ）
+// 東都のみ2部制(12校) + 15リーグ×6校 = 102校
+// 首都圏7リーグ(48校) + 地方9リーグ(54校)
 // ============================================================
 
 export const UNIVERSITY_REGIONS = [
@@ -14,12 +14,14 @@ export const UNIVERSITY_REGIONS = [
   { id: 'kanagawa', name: '神奈川大学', teamCount: 6 },
   { id: 'kankoshin', name: '関甲新', teamCount: 6 },
   // === 地方 ===
+  { id: 'hokkaido', name: '札幌学生', teamCount: 6 },
   { id: 'tohoku_n', name: '北東北大学', teamCount: 6 },
   { id: 'tohoku', name: '仙台六大学', teamCount: 6 },
   { id: 'aichi', name: '愛知大学', teamCount: 6 },
   { id: 'kansai', name: '関西学生', teamCount: 6 },
   { id: 'kansai_rk', name: '関西六大学', teamCount: 6 },
   { id: 'hiroshima_rk', name: '広島六大学', teamCount: 6 },
+  { id: 'shikoku', name: '四国地区', teamCount: 6 },
   { id: 'fukuoka_rk', name: '福岡六大学', teamCount: 6 },
 ];
 
@@ -89,6 +91,14 @@ export const UNIVERSITY_TEAMS = [
   { id: 47, name: '作新学院大学', region: 'kankoshin', rank: 'C', budget: 45 },
   { id: 48, name: '高崎健康福祉大学', region: 'kankoshin', rank: 'C', budget: 45 },
 
+  // ========== 札幌学生（入替制）==========
+  { id: 91, name: '東海大学札幌', region: 'hokkaido', rank: 'A', budget: 70 },
+  { id: 92, name: '北海学園大学', region: 'hokkaido', rank: 'B', budget: 55 },
+  { id: 93, name: '北星学園大学', region: 'hokkaido', rank: 'C', budget: 45 },
+  { id: 94, name: '札幌大学', region: 'hokkaido', rank: 'C', budget: 45 },
+  { id: 95, name: '酪農学園大学', region: 'hokkaido', rank: 'D', budget: 35 },
+  { id: 96, name: '北海道教育大学', region: 'hokkaido', rank: 'D', budget: 35 },
+
   // ========== 北東北大学（入替制）==========
   { id: 49, name: '富士大学', region: 'tohoku_n', rank: 'A', budget: 65 },
   { id: 50, name: '八戸学院大学', region: 'tohoku_n', rank: 'B', budget: 55 },
@@ -136,6 +146,14 @@ export const UNIVERSITY_TEAMS = [
   { id: 82, name: '広島国際大学', region: 'hiroshima_rk', rank: 'C', budget: 40 },
   { id: 83, name: '近畿大学工学部', region: 'hiroshima_rk', rank: 'C', budget: 45 },
   { id: 84, name: '広島大学', region: 'hiroshima_rk', rank: 'D', budget: 40 },
+
+  // ========== 四国地区（入替制）==========
+  { id: 97, name: '四国学院大学', region: 'shikoku', rank: 'B', budget: 55 },
+  { id: 98, name: '松山大学', region: 'shikoku', rank: 'B', budget: 55 },
+  { id: 99, name: '高知工科大学', region: 'shikoku', rank: 'C', budget: 45 },
+  { id: 100, name: '徳島大学', region: 'shikoku', rank: 'C', budget: 40 },
+  { id: 101, name: '愛媛大学', region: 'shikoku', rank: 'D', budget: 40 },
+  { id: 102, name: '香川大学', region: 'shikoku', rank: 'D', budget: 35 },
 
   // ========== 福岡六大学（固定制）==========
   { id: 85, name: '九州産業大学', region: 'fukuoka_rk', rank: 'A', budget: 70 },
