@@ -11,23 +11,23 @@
 
 export const UNIVERSITY_REGIONS = [
   // === 首都圏 ===
-  { id: 'tokyo_big6', name: '東京六大学', teamCount: 6, divisions: 1 },
-  { id: 'tokyoto', name: '東都大学', teamCount: 12, divisions: 2 },
-  { id: 'shuto', name: '首都大学', teamCount: 6, divisions: 1 },
-  { id: 'tokyo_new', name: '東京新大学', teamCount: 6, divisions: 1 },
-  { id: 'chiba_ken', name: '千葉県大学', teamCount: 6, divisions: 1 },
-  { id: 'kanagawa', name: '神奈川大学', teamCount: 6, divisions: 1 },
-  { id: 'kankoshin', name: '関甲新', teamCount: 6, divisions: 1 },
+  { id: 'tokyo_big6', name: '東京六大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'tokyoto', name: '東都大学野球連盟', teamCount: 12, divisions: 2 },
+  { id: 'shuto', name: '首都大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'tokyo_new', name: '東京新大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'chiba_ken', name: '千葉県大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'kanagawa', name: '神奈川大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'kankoshin', name: '関甲新学生野球連盟', teamCount: 6, divisions: 1 },
   // === 地方 ===
-  { id: 'hokkaido', name: '北海道学生', teamCount: 6, divisions: 1 },
-  { id: 'tohoku_n', name: '北東北大学', teamCount: 6, divisions: 1 },
-  { id: 'tohoku', name: '仙台六大学', teamCount: 6, divisions: 1 },
-  { id: 'aichi', name: '愛知大学', teamCount: 6, divisions: 1 },
-  { id: 'kansai', name: '関西学生', teamCount: 6, divisions: 1 },
-  { id: 'kansai_rk', name: '関西六大学', teamCount: 6, divisions: 1 },
-  { id: 'keiji', name: '京滋大学', teamCount: 6, divisions: 1 },
-  { id: 'hiroshima_rk', name: '広島六大学', teamCount: 6, divisions: 1 },
-  { id: 'fukuoka_rk', name: '福岡六大学', teamCount: 6, divisions: 1 },
+  { id: 'hokkaido', name: '北海道学生野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'tohoku_n', name: '北東北大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'tohoku', name: '仙台六大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'aichi', name: '愛知大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'kansai', name: '関西学生野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'kansai_rk', name: '関西六大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'keiji', name: '京滋大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'hiroshima_rk', name: '広島六大学野球連盟', teamCount: 6, divisions: 1 },
+  { id: 'fukuoka_rk', name: '福岡六大学野球連盟', teamCount: 6, divisions: 1 },
 ];
 
 // rank: S=超強豪, A=強豪, B=中堅, C=育成型, D=弱小

@@ -53,9 +53,11 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
                     </div>
                   </div>
                   {!isExpanded && (
-                    <div className="flex flex-wrap gap-1 text-xs text-gray-400">
+                    <div className="flex flex-wrap gap-1 text-xs">
                       {teams.map(t => (
-                        <span key={t.id} className="bg-gray-700/50 px-1.5 py-0.5 rounded">{t.name}</span>
+                        <span key={t.id} className="bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-400">
+                          {t.name}<span className={`ml-1 ${RANK_COLORS[t.rank]}`}>{t.rank}</span>
+                        </span>
                       ))}
                     </div>
                   )}
