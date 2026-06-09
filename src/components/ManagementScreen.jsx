@@ -177,6 +177,16 @@ const ManagementScreen = ({
         if (Object.keys(preUpdate).length > 0) setSeasonData(prev => ({ ...prev, ...preUpdate }));
         const results = processNPBDraft(TEAMS_DATA, seasonData.year);
         setDraftResults(results);
+        // 大学モード: ドラフト指名された大学チーム選手をseasonDataに記録
+        if (seasonData.settings?.universityMode && results.draftedPlayers.length > 0) {
+          const uniTeamNames = new Set(seasonData.settings.teamNames || []);
+          const uniDrafted = results.draftedPlayers
+            .filter(d => uniTeamNames.has(d.teamName) || d.source === 'university_team')
+            .map(d => ({ name: d.name, team: d.teamName, position: d.position, npbTeam: d.npbTeam, draftRound: d.draftRound }));
+          if (uniDrafted.length > 0) {
+            setSeasonData(prev => ({ ...prev, universityNpbDrafted: uniDrafted }));
+          }
+        }
         if (results.draftedPlayers.length > 0) {
           setHallOfFamePlayers(prev => [...prev, ...results.draftedPlayers.map(d => {
             const p = d.player;

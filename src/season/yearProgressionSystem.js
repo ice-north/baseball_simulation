@@ -1175,6 +1175,13 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
         position: grad.position,
         age: grad.age,
         path: grad.postGradPath,
+        stats: grad.position === 'pitcher'
+          ? { velocity: grad.pitching?.velocity, control: grad.pitching?.control, stamina: grad.pitching?.stamina }
+          : { meet: grad.batting?.meet, power: grad.batting?.power, eye: grad.batting?.eye, speed: grad.physical?.speed },
+        careerStats: grad.careerStats ? {
+          batting: { atBats: grad.careerStats.batting?.atBats || 0, hits: grad.careerStats.batting?.hits || 0, homeruns: grad.careerStats.batting?.homeruns || 0 },
+          pitching: { wins: grad.careerStats.pitching?.wins || 0, saves: grad.careerStats.pitching?.saves || 0, inningsPitched: grad.careerStats.pitching?.inningsPitched || 0 },
+        } : null,
       });
     });
 

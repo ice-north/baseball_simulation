@@ -8,6 +8,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   const [processing, setProcessing] = useState(false);
   const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [graduationReport, setGraduationReport] = useState(null);
 
   const handleSaveToSlot = () => {
     if (onSave) {
@@ -115,6 +116,15 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         }));
         onAddHallOfFamePlayers(retiredPlayers);
       }
+      // 大学モード: 卒業レポートを表示してから次へ進む
+      if (gameMode === 'university' && result.universityGraduationReport) {
+        setGraduationReport({
+          ...result.universityGraduationReport,
+          npbDrafted: seasonData.universityNpbDrafted || [],
+        });
+        setProcessing(false);
+        return;
+      }
       if (onStartNextSeason) onStartNextSeason();
     } catch (error) {
       console.error('年度進行エラー:', error);
@@ -162,6 +172,157 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       )}
     </div>
   );
+
+  // 大学モード: 卒業レポート画面
+  if (graduationReport) {
+    const r = graduationReport;
+    const npbDrafted = r.npbDrafted || [];
+    const pathLabel = { corporate: '社会人', independent: '独立L', retired: '引退' };
+    const posLabel = POSITION_NAMES || {};
+    // チーム別にグループ化
+    const teamGroups = {};
+    r.graduated.forEach(g => {
+      if (!teamGroups[g.team]) teamGroups[g.team] = [];
+      teamGroups[g.team].push(g);
+    });
+    return (
+      <div className="p-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="mb-6">
+            <p className="text-gray-400 text-sm font-semibold tracking-[0.15em] uppercase">Graduation Report</p>
+            <h1 className="text-3xl font-black text-white">🎓 卒業・入部レポート</h1>
+          </div>
+
+          {/* サマリー */}
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="bg-gray-800/60 rounded-xl p-3 text-center border border-gray-700/40">
+              <div className="text-gray-400 text-xs mb-1">卒業生</div>
+              <div className="text-white font-black text-2xl">{r.graduated.length}</div>
+            </div>
+            <div className="bg-red-900/20 rounded-xl p-3 text-center border border-red-800/30">
+              <div className="text-red-400 text-xs mb-1">NPB指名</div>
+              <div className="text-red-300 font-black text-2xl">{npbDrafted.length}</div>
+            </div>
+            <div className="bg-emerald-900/20 rounded-xl p-3 text-center border border-emerald-800/30">
+              <div className="text-emerald-400 text-xs mb-1">新入生</div>
+              <div className="text-emerald-300 font-black text-2xl">{r.recruited.length}</div>
+            </div>
+          </div>
+
+          {/* NPB指名 */}
+          {npbDrafted.length > 0 && (
+            <div className="bg-red-900/15 border border-red-800/30 rounded-xl p-4 mb-5">
+              <h3 className="text-sm font-black text-red-400 mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                NPBドラフト指名
+              </h3>
+              <div className="space-y-1.5">
+                {npbDrafted.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-red-900/25 rounded-lg px-3 py-2 text-sm">
+                    <span className="text-red-300/70 text-xs font-bold w-20 shrink-0">{d.draftRound}</span>
+                    <span className="text-white font-bold flex-1">{d.name}</span>
+                    <span className="text-gray-400 text-xs">{posLabel[d.position] || d.position}</span>
+                    <span className="text-gray-500 text-xs">{d.team}</span>
+                    <span className="text-red-300 font-bold text-xs shrink-0">→ {d.npbTeam}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 卒業生進路一覧（チーム別） */}
+          {r.graduated.length > 0 && (
+            <div className="bg-amber-900/15 border border-amber-700/30 rounded-xl p-4 mb-5">
+              <h3 className="text-sm font-black text-amber-400 mb-1 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                卒業生の進路
+              </h3>
+              <p className="text-xs text-gray-500 mb-3">
+                社会人 {r.postGradPaths.corporate}名 / 独立リーグ {r.postGradPaths.independent}名 / 引退 {r.postGradPaths.retired}名
+              </p>
+              {Object.entries(teamGroups).map(([team, grads]) => (
+                <div key={team} className="mb-3 last:mb-0">
+                  <div className="text-xs font-bold text-gray-400 mb-1 px-1">{team}</div>
+                  <div className="space-y-1">
+                    {grads.map((g, i) => (
+                      <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
+                        g.path === 'corporate' ? 'bg-blue-900/20' :
+                        g.path === 'independent' ? 'bg-green-900/20' :
+                        'bg-gray-800/30'
+                      }`}>
+                        <span className={`font-bold text-[10px] w-14 text-center rounded px-1 py-0.5 ${
+                          g.path === 'corporate' ? 'bg-blue-800/50 text-blue-300' :
+                          g.path === 'independent' ? 'bg-green-800/50 text-green-300' :
+                          'bg-gray-700/50 text-gray-400'
+                        }`}>{pathLabel[g.path]}</span>
+                        <span className="text-white font-bold flex-1">{g.name}</span>
+                        <span className="text-gray-400 text-xs w-6 text-center">{posLabel[g.position] || g.position}</span>
+                        {g.stats && (
+                          <span className="text-gray-500 text-[10px] tabular-nums w-28 text-right">
+                            {g.position === 'pitcher'
+                              ? `${g.stats.velocity}km / 制球${g.stats.control}`
+                              : `M${g.stats.meet} P${g.stats.power} E${g.stats.eye} S${g.stats.speed}`
+                            }
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 新入生 */}
+          {r.recruited.length > 0 && (() => {
+            const recTeamGroups = {};
+            r.recruited.forEach(p => {
+              if (!recTeamGroups[p.team]) recTeamGroups[p.team] = [];
+              recTeamGroups[p.team].push(p);
+            });
+            return (
+              <div className="bg-emerald-900/15 border border-emerald-700/30 rounded-xl p-4 mb-5">
+                <h3 className="text-sm font-black text-emerald-400 mb-1 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  新入生
+                </h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  推薦入学 {r.recruited.filter(p => p.type === 'recommended').length}名 / 一般入部 {r.recruited.filter(p => p.type === 'general').length}名
+                </p>
+                {Object.entries(recTeamGroups).map(([team, players]) => (
+                  <div key={team} className="mb-2 last:mb-0">
+                    <div className="text-xs font-bold text-gray-400 mb-1 px-1">{team}</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {players.map((p, i) => (
+                        <span key={i} className={`text-xs rounded px-2 py-1 ${
+                          p.type === 'recommended'
+                            ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/40'
+                            : 'bg-gray-800/60 text-gray-400'
+                        }`}>
+                          {p.name}
+                          <span className="text-gray-500 ml-1">{posLabel[p.position] || p.position}</span>
+                          {p.type === 'recommended' && <span className="ml-1 text-emerald-500 font-bold">推</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          <div className="text-center">
+            <button
+              onClick={() => { if (onStartNextSeason) onStartNextSeason(); }}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:shadow-green-900/40 hover:scale-105 active:scale-95"
+            >
+              キャンプへ進む →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4">
@@ -295,31 +456,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
 
         <SaveSlotSelector />
 
-        {/* 大学モード: 卒業・入部レポート */}
-        {seasonData.universityGraduationReport && (() => {
-          const r = seasonData.universityGraduationReport;
-          return (
-            <div className="mb-4 p-4 bg-amber-900/20 border border-amber-700/40 rounded-xl">
-              <h3 className="text-sm font-bold text-amber-400 mb-2">🎓 卒業・入部レポート</h3>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-gray-800/60 rounded-lg p-2">
-                  <div className="text-gray-400 mb-1">卒業生</div>
-                  <div className="text-white font-bold text-lg">{r.graduated.length}名</div>
-                  <div className="text-gray-500 mt-1">
-                    社会人→{r.postGradPaths.corporate} / 独立→{r.postGradPaths.independent} / 引退→{r.postGradPaths.retired}
-                  </div>
-                </div>
-                <div className="bg-gray-800/60 rounded-lg p-2">
-                  <div className="text-gray-400 mb-1">新入生</div>
-                  <div className="text-white font-bold text-lg">{r.recruited.length}名</div>
-                  <div className="text-gray-500 mt-1">
-                    推薦{r.recruited.filter(p => p.type === 'recommended').length}名 / 一般{r.recruited.filter(p => p.type === 'general').length}名
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        {/* 大学モード: 卒業レポートは年度進行後に専用画面で表示 */}
 
         {(() => {
           const uniSummary = getUniversityPoolSummary();
