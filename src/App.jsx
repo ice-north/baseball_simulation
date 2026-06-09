@@ -121,8 +121,19 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
         // チーム数に応じてリーグ構成を更新
         const teamCount = regulations.teamsCount || 4;
-        const customNames = regulations.teamNames || null;
-        const customAbbreviations = regulations.teamAbbreviations || null;
+        let customNames = regulations.teamNames ? [...regulations.teamNames] : null;
+        let customAbbreviations = regulations.teamAbbreviations ? [...regulations.teamAbbreviations] : null;
+
+        // 選択チームを先頭に並べ替え（既存リーグでチーム選択した場合）
+        if (regulations.selectedTeamIndex != null && regulations.selectedTeamIndex > 0 && customNames) {
+          const idx = regulations.selectedTeamIndex;
+          const [name] = customNames.splice(idx, 1);
+          customNames.unshift(name);
+          if (customAbbreviations) {
+            const [abbr] = customAbbreviations.splice(idx, 1);
+            customAbbreviations.unshift(abbr);
+          }
+        }
 
         // 動的にチームを作成（カスタム名・略称対応）
         const teamNames = initializeTeamsForCount(teamCount, customNames, customAbbreviations);

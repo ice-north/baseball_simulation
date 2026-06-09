@@ -90,27 +90,30 @@ const GameFlowScreens = ({
           <p className="text-gray-400 text-sm mb-6">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {leagueList.map(({ key, icon }) => {
-              const preset = REGULATION_PRESETS[key];
               const leagueDef = INDEPENDENT_LEAGUES[key];
               return (
                 <button key={key}
                   onClick={() => {
                     selectedIndependentLeague = key;
-                    setGameFlowState('newgame_regulations');
+                    setGameFlowState('newgame_team_select');
                   }}
                   className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group"
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-3xl">{icon}</span>
                     <div>
-                      <div className="text-lg font-bold text-white group-hover:text-blue-400 transition">{leagueDef?.name || preset?.name}</div>
-                      <div className="text-xs text-gray-400">{preset?.description}</div>
+                      <div className="text-lg font-bold text-white group-hover:text-blue-400 transition">{leagueDef?.name}</div>
                     </div>
                   </div>
-                  <div className="flex gap-3 text-xs text-gray-500 mt-2">
-                    <span>{preset?.regulations?.teamsCount || 4}チーム</span>
-                    <span>{preset?.regulations?.gamesPerSeason || 60}試合</span>
-                    <span>{preset?.regulations?.leagueFormat === 'two' ? '2リーグ制' : '1リーグ制'}</span>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-2">
+                    <span>{leagueDef?.teams?.length || 4}チーム</span>
+                    <span>{leagueDef?.gamesPerSeason || 60}試合</span>
+                    <span>{leagueDef?.leagueFormat === 'two' ? '2リーグ制' : '1リーグ制'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {leagueDef?.teams?.map(t => (
+                      <span key={t.id} className="text-xs text-gray-400 bg-gray-700/50 px-1.5 py-0.5 rounded">{t.abbreviation}</span>
+                    ))}
                   </div>
                 </button>
               );
@@ -131,12 +134,71 @@ const GameFlowScreens = ({
               </div>
               <div className="flex gap-3 text-xs text-gray-500 mt-2">
                 <span>カスタム設定</span>
-                <span>全4リーグ平行世界あり</span>
+                <span>全5リーグ平行世界あり</span>
               </div>
             </button>
           </div>
           <div className="mt-6 text-center">
             <button onClick={() => setGameFlowState('newgame_mode_select')} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // TEAM SELECT: 既存リーグのチーム選択
+  if (gameFlowState === 'newgame_team_select') {
+    const leagueDef = INDEPENDENT_LEAGUES[selectedIndependentLeague];
+    const teams = leagueDef?.teams || [];
+    const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
+    const RANK_LABELS = { S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興' };
+    return (
+      <div className="p-8 bg-gray-900 min-h-screen">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-2">{leagueDef?.name}</h1>
+          <p className="text-gray-400 text-sm mb-6">監督を務めるチームを選んでください</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {teams.map((team) => (
+              <button key={team.id}
+                onClick={() => {
+                  const regulations = {
+                    useDH: leagueDef.useDH || false,
+                    gamesPerSeason: leagueDef.gamesPerSeason,
+                    teamsCount: teams.length,
+                    leagueFormat: leagueDef.leagueFormat || 'single',
+                    leagueNames: leagueDef.leagueNames || null,
+                    playoffFormat: leagueDef.playoffFormat || 'short',
+                    maxExtraInnings: 12,
+                    teamNames: teams.map(t => t.name),
+                    teamAbbreviations: teams.map(t => t.abbreviation),
+                    preset: selectedIndependentLeague,
+                    selectedTeamIndex: teams.indexOf(team),
+                  };
+                  initializeNewGame(regulations);
+                  setGameFlowState('independent_loading');
+                  setTimeout(() => {
+                    const teamNames = Object.keys(TEAMS_DATA).filter(name => {
+                      const t = TEAMS_DATA[name];
+                      return t && !t.corporateTeamId && !t.independentLeagueId;
+                    });
+                    initializeParallelWorldForIndependent(selectedIndependentLeague, teamNames);
+                    setGameFlowState('newgame_tryout');
+                  }, 50);
+                }}
+                className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-green-500 rounded-xl p-5 text-left transition group"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-lg font-bold text-white group-hover:text-green-400 transition">{team.name}</div>
+                  <span className={`text-xs font-bold ${RANK_COLORS[team.rank] || 'text-gray-400'}`}>
+                    {team.rank} ({RANK_LABELS[team.rank] || ''})
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500">{team.city}</div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-6 text-center">
+            <button onClick={() => setGameFlowState('newgame_league_select')} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
@@ -336,13 +398,13 @@ const GameFlowScreens = ({
     return <CorporateNameEditScreen onBack={() => setGameFlowState('title')} />;
   }
 
-  // NEW GAME: レギュレーション設定
+  // NEW GAME: レギュレーション設定（カスタムリーグ専用）
   if (gameFlowState === 'newgame_regulations') {
     return <NewGameRegulationsScreen
-      selectedLeague={selectedIndependentLeague}
+      selectedLeague={null}
       onBack={() => setGameFlowState('newgame_league_select')}
       onComplete={(regulations) => {
-        const presetKey = selectedIndependentLeague || regulations.preset;
+        const presetKey = regulations.preset;
         initializeNewGame({ ...regulations, preset: presetKey });
         setGameFlowState('independent_loading');
         setTimeout(() => {
