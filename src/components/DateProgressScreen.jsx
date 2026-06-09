@@ -4,7 +4,7 @@ import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } 
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
-import { generateToshitaikou, createMainTournament, autoPlayMainTournament, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
+import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
 import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues, generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
 import { generateAprilHighSchoolClass } from '../season/yearProgressionSystem.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
@@ -282,23 +282,31 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return newData;
     }
 
-    // 独立リーグモード: 社会人都市対抗をバックグラウンドで自動処理
+    // 独立リーグモード: 社会人都市対抗を一括自動処理（5月に予選+本戦まで完了）
     if (!isCorporate && WORLD_DATA.initialized && WORLD_DATA.mode === 'independent') {
-      if (month >= 5 && !WORLD_DATA.corporateToshitaikou?.generated) {
-        const calYear = newData.currentDate.year;
-        const tournament = generateToshitaikou({ userTeamName: null, calendarYear: calYear });
-        if (!WORLD_DATA.corporateToshitaikou) WORLD_DATA.corporateToshitaikou = {};
-        WORLD_DATA.corporateToshitaikou = { ...tournament, generated: true, qualifiersDone: true, mainDone: false };
-      }
-      if (month >= 7 && WORLD_DATA.corporateToshitaikou?.generated && !WORLD_DATA.corporateToshitaikou?.mainDone) {
-        const td = WORLD_DATA.corporateToshitaikou;
-        const calYear = newData.currentDate.year;
-        const mainTournament = createMainTournament(td.qualifiers, null, calYear);
-        autoPlayMainTournament(mainTournament);
-        WORLD_DATA.corporateToshitaikou.mainTournament = mainTournament;
-        WORLD_DATA.corporateToshitaikou.champion = mainTournament.champion;
-        WORLD_DATA.corporateToshitaikou.runnerUp = mainTournament.runnerUp;
-        WORLD_DATA.corporateToshitaikou.mainDone = true;
+      if (month >= 5 && !WORLD_DATA.corporateToshitaikou?.mainDone) {
+        try {
+          const calYear = newData.currentDate.year;
+          const tournament = generateToshitaikou({ userTeamName: null, calendarYear: calYear });
+          // 全地域予選を自動消化
+          for (const regionId of Object.keys(tournament.qualifiers || {})) {
+            autoPlayQualifier(tournament.qualifiers[regionId], null);
+          }
+          // 本戦を自動消化
+          const mainTournament = createMainTournament(tournament.qualifiers, null, calYear);
+          autoPlayMainTournament(mainTournament);
+          WORLD_DATA.corporateToshitaikou = {
+            ...tournament,
+            mainTournament,
+            champion: mainTournament?.champion || null,
+            runnerUp: mainTournament?.runnerUp || null,
+            generated: true,
+            qualifiersDone: true,
+            mainDone: true,
+          };
+        } catch (_) {
+          WORLD_DATA.corporateToshitaikou = { generated: true, qualifiersDone: true, mainDone: true };
+        }
       }
     }
 
