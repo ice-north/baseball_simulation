@@ -197,6 +197,10 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
       if (seasonData.settings?.corporateMode) {
         break;
       }
+      // 独立リーグモードはグランドチャンピオンシップに置き換え→リーグ戦プレーオフはスキップ
+      if (!seasonData.settings?.universityMode) {
+        break;
+      }
       // プレーオフ開始時：上位チームを取得してプレーオフスケジュールを生成
       let topTeams;
       const playoffFormat = seasonData.settings.playoffFormat;

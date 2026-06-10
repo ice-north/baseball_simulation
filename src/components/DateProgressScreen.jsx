@@ -314,7 +314,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (!isCorporate && !isUniversity && WORLD_DATA.initialized && month >= 10 && !newData.grandChampionship?.generated) {
       const gc = generateGrandChampionship(
         WORLD_DATA.userLeagueId,
-        newData.standings
+        newData.standings,
+        newData.settings
       );
       if (gc) {
         autoPlayGrandChampionship(gc);
@@ -923,7 +924,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       let eventLabel = null;
       if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
-      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'プレーオフ';
+      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate && !isUniversity) eventLabel = 'グランドCS';
+      else if (phase === SEASON_PHASES.PLAYOFFS && isUniversity) eventLabel = 'プレーオフ';
       else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
       else if (phase === SEASON_PHASES.CONTRACT) eventLabel = isCorporate ? '退団' : '契約更改';
       else if (phase === SEASON_PHASES.TRYOUT) eventLabel = isCorporate ? 'スカウト入団' : 'トライアウト';
@@ -2737,30 +2739,42 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   )}
                   {seasonData.grandChampionship?.done && (() => {
                     const gc = seasonData.grandChampionship;
-                    const leagueNameMap = {};
+                    const champLeagueMap = {};
                     for (const c of gc.champions || []) {
-                      const ld = INDEPENDENT_LEAGUES[c.league];
-                      leagueNameMap[c.team] = ld?.name || c.league;
+                      champLeagueMap[c.team] = c.leagueName || c.league;
                     }
+                    const roundLabels = { 1: '決勝', 2: '準決勝', 3: '準々決勝', 4: '1回戦' };
+                    const numRounds = gc.bracket.rounds.length;
                     return (
                       <div className="bg-orange-900/20 rounded-lg p-2 border border-orange-700/30">
-                        <div className="text-xs font-bold text-orange-400 mb-1">🏆 グランドチャンピオンシップ</div>
+                        <div className="text-xs font-bold text-orange-400 mb-1">🏆 独立リーググランドチャンピオンシップ</div>
                         <div className="text-[11px] text-gray-300 mb-1">
                           <span className="text-orange-300 font-bold">優勝: {gc.bracket.champion}</span>
                           {gc.bracket.runnerUp && <span className="text-gray-500 ml-2">準優勝: {gc.bracket.runnerUp}</span>}
                         </div>
-                        <div className="space-y-0.5">
-                          {gc.bracket.rounds.map((round, ri) => (
-                            <div key={ri}>
-                              {round.filter(m => !m.isBye).map((m, mi) => (
-                                <div key={mi} className="flex items-center text-[10px] gap-1">
-                                  <span className={`flex-1 truncate ${m.winner === m.team1 ? 'text-orange-300 font-bold' : 'text-gray-500'}`}>{m.team1}</span>
-                                  <span className="text-gray-600 font-mono">{m.score || ''}</span>
-                                  <span className={`flex-1 truncate text-right ${m.winner === m.team2 ? 'text-orange-300 font-bold' : 'text-gray-500'}`}>{m.team2}</span>
-                                </div>
-                              ))}
-                            </div>
+                        <div className="text-[10px] text-gray-400 mb-1 flex flex-wrap gap-x-2">
+                          {gc.champions.map((c, ci) => (
+                            <span key={ci}><span className="text-gray-500">{champLeagueMap[c.team]}:</span> {c.team}</span>
                           ))}
+                        </div>
+                        <div className="space-y-1">
+                          {gc.bracket.rounds.map((round, ri) => {
+                            const realMatches = round.filter(m => !m.isBye);
+                            if (realMatches.length === 0) return null;
+                            const label = roundLabels[numRounds - ri] || `${ri + 1}回戦`;
+                            return (
+                              <div key={ri}>
+                                <div className="text-[9px] text-orange-600 font-bold">{label}</div>
+                                {realMatches.map((m, mi) => (
+                                  <div key={mi} className="flex items-center text-[10px] gap-1">
+                                    <span className={`flex-1 truncate ${m.winner === m.team1 ? 'text-orange-300 font-bold' : 'text-gray-500'}`}>{m.team1}</span>
+                                    <span className="text-gray-600 font-mono">{m.score || ''}</span>
+                                    <span className={`flex-1 truncate text-right ${m.winner === m.team2 ? 'text-orange-300 font-bold' : 'text-gray-500'}`}>{m.team2}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );

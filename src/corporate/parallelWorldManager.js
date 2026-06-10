@@ -109,29 +109,60 @@ export const getAllParallelLeagues = () => {
 
 // ============================================================
 // グランドチャンピオンシップ
-// 各独立リーグの1位チームによるトーナメント（9月末〜10月初）
+// 各独立リーグの優勝チームによる単一トーナメント（最大16チーム）
+// 2リーグ制のリーグは各サブリーグから1チームずつ出場
 // ============================================================
 
-export const generateGrandChampionship = (userLeagueId, userStandings) => {
+const extractLeagueChampions = (standings, teamOrder, leagueId, leagueDef, fallbackName) => {
+  if (!standings || standings.length === 0) return [];
+  const results = [];
+  const format = leagueDef?.leagueFormat || 'single';
+
+  if (format === 'two' && teamOrder && teamOrder.length >= 4) {
+    const half = Math.floor(teamOrder.length / 2);
+    const l1Set = new Set(teamOrder.slice(0, half));
+    const l2Set = new Set(teamOrder.slice(half));
+    const subNames = leagueDef?.leagueNames || ['第1リーグ', '第2リーグ'];
+
+    const l1 = [...standings].filter(s => l1Set.has(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+    const l2 = [...standings].filter(s => l2Set.has(s.team)).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+
+    if (l1[0]) results.push({ team: l1[0].team, league: leagueId, leagueName: subNames[0] });
+    if (l2[0]) results.push({ team: l2[0].team, league: leagueId, leagueName: subNames[1] });
+  } else {
+    const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+    if (sorted[0]) results.push({ team: sorted[0].team, league: leagueId, leagueName: fallbackName || leagueId });
+  }
+  return results;
+};
+
+export const generateGrandChampionship = (userLeagueId, userStandings, userSettings = null) => {
   const champions = [];
 
-  // ユーザーのリーグの1位
+  // ユーザーのリーグ
   if (userStandings && userStandings.length > 0) {
-    const sorted = [...userStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-    champions.push({ team: sorted[0].team, league: userLeagueId });
+    const leagueDef = userLeagueId ? INDEPENDENT_LEAGUES[userLeagueId] : null;
+    const teamOrder = userSettings?.teamNames || userStandings.map(s => s.team);
+    const effectiveFormat = userSettings?.leagueFormat || leagueDef?.leagueFormat || 'single';
+    const effectiveDef = leagueDef || { leagueFormat: effectiveFormat, leagueNames: userSettings?.leagueNames };
+    const name = leagueDef?.name || userSettings?.leagueName || 'ユーザーリーグ';
+    champions.push(...extractLeagueChampions(userStandings, teamOrder, userLeagueId || '__user__', effectiveDef, name));
   }
 
-  // 他リーグの1位
+  // 他の独立リーグ（平行世界）
   for (const [leagueId, leagueData] of Object.entries(WORLD_DATA.independentLeagues)) {
     if (!leagueData?.standings || leagueData.standings.length === 0) continue;
-    const sorted = [...leagueData.standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-    champions.push({ team: sorted[0].team, league: leagueId });
+    const leagueDef = INDEPENDENT_LEAGUES[leagueId];
+    champions.push(...extractLeagueChampions(leagueData.standings, leagueData.teams, leagueId, leagueDef, leagueData.name));
   }
 
   if (champions.length < 2) return null;
 
+  // ブラケット生成（最大16チーム）
   const teamNames = champions.map(c => c.team);
-  const size = Math.pow(2, Math.ceil(Math.log2(teamNames.length)));
+  const maxBracketSize = 16;
+  const rawSize = Math.pow(2, Math.ceil(Math.log2(Math.max(2, teamNames.length))));
+  const size = Math.min(maxBracketSize, rawSize);
   const rounds = [];
   const numRounds = Math.log2(size);
 
@@ -148,7 +179,6 @@ export const generateGrandChampionship = (userLeagueId, userStandings) => {
     else rounds[0][matchIdx].team2 = teamNames[i] || null;
   }
 
-  // BYE処理
   for (const match of rounds[0]) {
     if (match.team1 && !match.team2) {
       match.winner = match.team1;
