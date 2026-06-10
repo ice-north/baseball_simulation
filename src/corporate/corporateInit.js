@@ -834,6 +834,43 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
 };
 
 // ============================================================
+// 社会人＋独立リーグの並行世界生成（大学モード等から呼ばれる）
+// ============================================================
+
+export const initializeCorporateParallelWorld = (existingTeamNames = []) => {
+  corporatePlayerIdBase = 20000;
+  const allCorpDefs = getAllTeamsEffective();
+  const corpTeamNames = [];
+  for (const def of allCorpDefs) {
+    const name = def.displayName || def.name;
+    if (TEAMS_DATA[name]) continue;
+    const roster = generateCorporateRoster(def, 1);
+    const staff = generateInitialStaff(def.rank);
+    TEAMS_DATA[name] = {
+      name,
+      abbreviation: makeAbbreviation(name),
+      players: roster,
+      pitchingRotation: null,
+      corporateTeamId: def.id,
+      corporateData: {
+        rank: def.rank, region: def.region, city: def.city, type: def.type,
+        budget: BUDGET_BY_RANK[def.rank] || 12000,
+        staff,
+        reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
+        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,
+        tournamentBudgetBonus: 0, sponsors: [],
+      },
+    };
+    corpTeamNames.push(name);
+  }
+  WORLD_DATA.corporateLeague.teams = {};
+  for (const name of corpTeamNames) {
+    WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
+  }
+  initializeIndependentLeagues(null, [...existingTeamNames, ...corpTeamNames]);
+};
+
+// ============================================================
 // 注目度システム
 // 勝つ → 注目度UP → 資金UP → 良いスタッフ → 良い選手 → 勝つ
 // ============================================================

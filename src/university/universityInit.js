@@ -7,7 +7,7 @@ import { TEAMS_DATA, clearReleasedPlayersPool, initializeAllPitchingRotations } 
 import { WORLD_DATA, initializeWorld } from '../corporate/worldData.js';
 import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from './universityTeamsData.js';
 import { initializeUniversityLeagues } from './universityLeagueManager.js';
-import { generateCorporateRoster, initializeIndependentLeagues } from '../corporate/corporateInit.js';
+import { generateCorporateRoster, initializeCorporateParallelWorld } from '../corporate/corporateInit.js';
 import { seedInitialUniversityClasses, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
 
 // 大学チームのランク別ロスターサイズ（社会人より小さめ）
@@ -170,9 +170,9 @@ export const initializeUniversityGame = (teamDef) => {
   };
 };
 
-// 社会人・独立リーグを並行世界として生成（大学モード用、ロスターのみ）
+// 社会人・独立リーグを並行世界として生成（大学モード用）
 const initializeCorporateWorldForUniversity = () => {
-  initializeIndependentLeagues(null, Object.keys(TEAMS_DATA));
+  initializeCorporateParallelWorld(Object.keys(TEAMS_DATA));
 };
 
 // ユーザーのリーグスケジュールをseasonData.schedule形式で取得
