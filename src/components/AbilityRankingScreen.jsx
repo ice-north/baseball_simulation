@@ -39,52 +39,106 @@ const TYPE_LABEL = {
   highschool: { text: '高校', color: 'text-pink-400' },
 };
 
-const NPB_TEAMS = [
-  { full: '読売ジャイアンツ', abbr: '巨人' },
-  { full: '阪神タイガース', abbr: '阪神' },
-  { full: '広島東洋カープ', abbr: '広島' },
-  { full: '中日ドラゴンズ', abbr: '中日' },
-  { full: '横浜DeNAベイスターズ', abbr: '横浜' },
-  { full: 'ヤクルトスワローズ', abbr: 'ヤクルト' },
-  { full: 'ソフトバンクホークス', abbr: 'ソフト' },
-  { full: '日本ハムファイターズ', abbr: '日ハム' },
-  { full: '楽天ゴールデンイーグルス', abbr: '楽天' },
-  { full: '西武ライオンズ', abbr: '西武' },
-  { full: '千葉ロッテマリーンズ', abbr: 'ロッテ' },
-  { full: 'オリックス・バファローズ', abbr: 'オリックス' },
+const toSource = (tt) => tt === 'user' ? 'independent' : tt;
+
+// 12球団ドラフト戦略プロファイル（実際の傾向に基づく）
+const SCOUT_PROFILES = [
+  // ① 素材・長期育成型
+  { abbr: 'オリックス', topN: 15, bias: (p, src) => {
+    let b = src === 'highschool' ? 30 : src === 'university' ? 5 : src === 'corporate' ? -10 : -25;
+    if (p.age <= 19) b += 18;
+    if (p.position === 'pitcher' && (p.pitching?.velocity || 0) >= 145) b += 18;
+    else if (p.position !== 'pitcher' && (p.physical?.speed || 0) >= 60) b += 10;
+    if ((p.growthPotential || 1) >= 1.1) b += 15;
+    return b;
+  }},
+  { abbr: '広島', topN: 14, bias: (p, src) => {
+    let b = src === 'highschool' ? 22 : src === 'university' ? 10 : src === 'corporate' ? -5 : -20;
+    if (p.age <= 20) b += 12;
+    if ((p.growthPotential || 1) >= 1.05) b += 12;
+    if (p.position === 'pitcher' && (p.pitching?.velocity || 0) >= 143) b += 10;
+    if (p.fame >= 15) b += 8;
+    return b;
+  }},
+  // ② 即戦力・センターライン型
+  { abbr: '阪神', topN: 15, bias: (p, src) => {
+    let b = src === 'university' ? 28 : src === 'corporate' ? 22 : src === 'highschool' ? -12 : -22;
+    if (p.age >= 22) b += 12;
+    if (['catcher', 'second', 'short', 'center'].includes(p.position)) b += 12;
+    if (p.position === 'pitcher' && (p.pitching?.velocity || 0) >= 150) b += 15;
+    if (p.position !== 'pitcher' && (p.batting?.meet || 0) >= 55) b += 10;
+    if (p.position !== 'pitcher' && (p.fielding?.defense || 0) >= 55) b += 8;
+    return b;
+  }},
+  { abbr: '横浜', topN: 15, bias: (p, src) => {
+    let b = src === 'university' ? 28 : src === 'corporate' ? 18 : src === 'highschool' ? -10 : -22;
+    if (p.age >= 22) b += 10;
+    if (p.position !== 'pitcher' && (p.batting?.meet || 0) >= 50) b += 12;
+    if (p.position !== 'pitcher' && (p.fielding?.defense || 0) >= 55) b += 10;
+    if (['second', 'short', 'center'].includes(p.position)) b += 8;
+    return b;
+  }},
+  // ③ 資金力・ハイブリッド型
+  { abbr: 'ソフト', topN: 18, bias: (p, src) => {
+    let b = src === 'highschool' ? 18 : src === 'university' ? 12 : src === 'corporate' ? 5 : -18;
+    if ((p.growthPotential || 1) >= 1.15) b += 18;
+    if (p.age <= 19) b += 12;
+    if (p.fame >= 20) b += 10;
+    return b;
+  }},
+  { abbr: '巨人', topN: 16, bias: (p, src) => {
+    let b = src === 'university' ? 22 : src === 'highschool' ? 12 : src === 'corporate' ? 12 : -18;
+    if (p.fame >= 15) b += 12;
+    if (p.age <= 22 && p.age >= 20) b += 8;
+    if (p.position === 'pitcher' && (p.pitching?.velocity || 0) >= 148) b += 10;
+    return b;
+  }},
+  // ④ ピンポイント・弱点補強型
+  { abbr: 'ヤクルト', topN: 14, bias: (p, src) => {
+    let b = src === 'university' ? 18 : src === 'corporate' ? 12 : src === 'highschool' ? 0 : -18;
+    if (p.position !== 'pitcher' && (p.batting?.power || 0) >= 55) b += 15;
+    if (['first', 'second', 'short', 'third'].includes(p.position)) b += 8;
+    if (p.age >= 22) b += 5;
+    return b;
+  }},
+  { abbr: '中日', topN: 14, bias: (p, src) => {
+    let b = src === 'university' ? 18 : src === 'corporate' ? 12 : src === 'highschool' ? 5 : -15;
+    if (p.position === 'pitcher' && (p.pitching?.velocity || 0) >= 148) b += 12;
+    if (p.position === 'pitcher' && (p.pitching?.control || 0) >= 55) b += 10;
+    if (p.position !== 'pitcher' && (p.batting?.power || 0) >= 50) b += 8;
+    return b;
+  }},
+  { abbr: '楽天', topN: 14, bias: (p, src) => {
+    let b = src === 'university' ? 16 : src === 'corporate' ? 12 : src === 'highschool' ? 5 : -15;
+    if (p.position === 'pitcher' && (p.pitching?.velocity || 0) >= 145) b += 12;
+    if (p.position === 'pitcher' && (p.pitching?.stamina || 0) >= 70) b += 8;
+    if (p.position !== 'pitcher' && (p.batting?.meet || 0) >= 50) b += 8;
+    return b;
+  }},
+  { abbr: '西武', topN: 14, bias: (p, src) => {
+    let b = src === 'university' ? 16 : src === 'corporate' ? 12 : src === 'highschool' ? 5 : -15;
+    if (['catcher', 'second', 'short'].includes(p.position)) b += 10;
+    if (p.position !== 'pitcher' && (p.fielding?.defense || 0) >= 55) b += 8;
+    if (p.position === 'pitcher' && (p.pitching?.velocity || 0) >= 148) b += 10;
+    return b;
+  }},
+  // ⑤ 独自データ・市場連動型
+  { abbr: '日ハム', topN: 15, bias: (p, src) => {
+    let b = src === 'university' ? 12 : src === 'highschool' ? 12 : src === 'corporate' ? 5 : -8;
+    if ((p.physical?.speed || 0) >= 60) b += 15;
+    if ((p.fielding?.defense || 0) >= 55) b += 10;
+    if (['second', 'short', 'center'].includes(p.position)) b += 10;
+    if (p.position === 'pitcher' && (p.pitching?.control || 0) >= 60) b += 8;
+    return b;
+  }},
+  { abbr: 'ロッテ', topN: 15, bias: (p, src) => {
+    let b = src === 'highschool' ? 22 : src === 'university' ? 10 : src === 'corporate' ? 5 : -15;
+    if (p.position === 'pitcher' && (p.pitching?.velocity || 0) >= 148) b += 20;
+    if (p.age <= 19 && p.position === 'pitcher') b += 12;
+    if ((p.growthPotential || 1) >= 1.1) b += 8;
+    return b;
+  }},
 ];
-
-const simpleHash = (id, salt) => ((id * 2654435761 + salt * 40503) >>> 0) % 1000;
-
-const getScoutInterest = (playerId, draftScore) => {
-  if (draftScore < 85) return [];
-  let count = 0;
-  if (draftScore >= 150) count = 5 + (simpleHash(playerId, 1) % 3);
-  else if (draftScore >= 130) count = 3 + (simpleHash(playerId, 1) % 3);
-  else if (draftScore >= 110) count = 2 + (simpleHash(playerId, 1) % 2);
-  else if (draftScore >= 95) count = 1 + (simpleHash(playerId, 1) % 2);
-  else count = simpleHash(playerId, 1) % 2;
-  if (count === 0) return [];
-
-  const shuffled = [...NPB_TEAMS].sort((a, b) =>
-    simpleHash(playerId, a.abbr.charCodeAt(0)) - simpleHash(playerId, b.abbr.charCodeAt(0))
-  );
-  return shuffled.slice(0, Math.min(count, 8)).map(t => t.abbr);
-};
-
-const getAmScoutInterest = (playerId, overall, age) => {
-  const labels = [];
-  if (age > 22) return labels;
-  if (overall >= 35) {
-    const uniChance = simpleHash(playerId, 99);
-    if (overall >= 50 || uniChance < 400) labels.push('大学');
-  }
-  if (overall >= 30) {
-    const corpChance = simpleHash(playerId, 77);
-    if (overall >= 45 || corpChance < 350) labels.push('社会人');
-  }
-  return labels;
-};
 
 const getBestBreaking = (player) => {
   const arsenal = player.pitching?.arsenal || [];
@@ -96,7 +150,7 @@ const getBestBreaking = (player) => {
 const ScoutBadges = ({ npbScouts, amScouts }) => {
   if ((!npbScouts || npbScouts.length === 0) && (!amScouts || amScouts.length === 0)) return null;
   return (
-    <div className="flex flex-wrap gap-0.5 mt-0.5">
+    <div className="flex flex-wrap gap-0.5">
       {npbScouts?.map(t => (
         <span key={t} className="text-[9px] px-1 py-0 rounded bg-red-900/40 text-red-300 leading-tight">{t}</span>
       ))}
@@ -124,8 +178,7 @@ const AbilityRankingScreen = () => {
       const rank = team.corporateData?.rank || team.universityData?.rank || null;
 
       const teamEntry = {
-        name: teamName,
-        abbr: getTeamAbbreviation(teamName),
+        name: teamName, abbr: getTeamAbbreviation(teamName),
         type, rank,
         count: 0, total: 0,
         pitchers: 0, pitcherTotal: 0,
@@ -136,10 +189,8 @@ const AbilityRankingScreen = () => {
       for (const p of team.players) {
         const overall = calcPlayerOverall(p);
         const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
-        const npbScouts = getScoutInterest(p.id, draftScore);
-        const entry = { ...p, teamName, teamAbbr: teamEntry.abbr, teamType: type, overall, draftScore, npbScouts };
+        const entry = { ...p, teamName, teamAbbr: teamEntry.abbr, teamType: type, overall, draftScore };
         players.push(entry);
-
         teamEntry.count++;
         teamEntry.total += overall;
         if (p.position === 'pitcher') { teamEntry.pitchers++; teamEntry.pitcherTotal += overall; }
@@ -178,10 +229,8 @@ const AbilityRankingScreen = () => {
         const p = entry.player;
         const overall = calcPlayerOverall(p);
         const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
-        const npbScouts = getScoutInterest(p.id, draftScore);
-        const pEntry = { ...p, teamName: tName, teamAbbr: tName, teamType: 'university', overall, draftScore, npbScouts };
+        const pEntry = { ...p, teamName: tName, teamAbbr: tName, teamType: 'university', overall, draftScore };
         players.push(pEntry);
-
         te.count++;
         te.total += overall;
         if (p.position === 'pitcher') { te.pitchers++; te.pitcherTotal += overall; }
@@ -201,9 +250,30 @@ const AbilityRankingScreen = () => {
     const hs = (highSchoolPool.players || []).map(p => {
       const overall = calcPlayerOverall(p);
       const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
-      const npbScouts = getScoutInterest(p.id, draftScore);
-      const amScouts = getAmScoutInterest(p.id, overall, p.age || 18);
-      return { ...p, teamName: '高校', teamAbbr: '高校', teamType: 'highschool', overall, draftScore, npbScouts, amScouts };
+      return { ...p, teamName: '高校', teamAbbr: '高校', teamType: 'highschool', overall, draftScore };
+    });
+
+    // === 12球団スカウト注目マップ（球団戦略に基づく上位N名選出）===
+    const allCandidates = [...players, ...hs].filter(c => c.draftScore >= 80);
+    const scoutMap = {};
+    for (const profile of SCOUT_PROFILES) {
+      const scored = allCandidates
+        .map(c => ({ id: c.id, score: c.draftScore + profile.bias(c, toSource(c.teamType)) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, profile.topN);
+      for (const { id } of scored) {
+        if (!scoutMap[id]) scoutMap[id] = [];
+        scoutMap[id].push(profile.abbr);
+      }
+    }
+
+    players.forEach(p => { p.npbScouts = scoutMap[p.id] || []; });
+    hs.forEach(p => {
+      p.npbScouts = scoutMap[p.id] || [];
+      const amScouts = [];
+      if (p.overall >= 38 || (p.growthPotential || 1) >= 1.05) amScouts.push('大学');
+      if (p.overall >= 42 || p.fame >= 10) amScouts.push('社会人');
+      p.amScouts = amScouts;
     });
 
     return { allPlayers: players, allTeamStats: Object.values(teamMap), hsPlayers: hs };
