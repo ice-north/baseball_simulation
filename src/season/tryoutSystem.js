@@ -195,7 +195,7 @@ export function updateReleasedPoolAfterTryout(draftedIds) {
  * @param {boolean} isInitial - 初回トライアウトかどうか
  * @returns {Array} トライアウト候補者の配列
  */
-export function generateTryoutCandidates(year, teamCount, isInitial = false) {
+export function generateTryoutCandidates(year, teamCount, isInitial = false, independentLeagueRank = null) {
   // 初回は30人/チーム、それ以外は15人/チーム
   const candidatesPerTeam = isInitial ? 30 : 15;
   const totalCandidates = teamCount * candidatesPerTeam;
@@ -392,6 +392,28 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false) {
         pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
       }
     };
+
+    // 独立リーグモード: 並行世界と同等の能力キャップを適用
+    if (independentLeagueRank) {
+      const ilr = independentLeagueRank;
+      const IL_VEL_CAP = { B: 140, C: 133, D: 126 };
+      const IL_CTRL_CAP = { B: 58, C: 48, D: 38 };
+      const IL_BAT_CAP = { B: 52, C: 44, D: 36 };
+      const IL_SCALE = { B: 0.80, C: 0.70, D: 0.58 };
+      const vc = IL_VEL_CAP[ilr] || 145;
+      const cc = IL_CTRL_CAP[ilr] || 55;
+      const bc = IL_BAT_CAP[ilr] || 50;
+      const sc = IL_SCALE[ilr] || 0.85;
+      if (isPitcher) {
+        player.pitching.velocity = Math.min(player.pitching.velocity, vc + Math.floor(Math.random() * 4));
+        player.pitching.control = Math.min(player.pitching.control, cc + Math.floor(Math.random() * 4));
+      }
+      player.batting.meet = Math.min(player.batting.meet, bc + Math.floor(Math.random() * 4));
+      player.batting.power = Math.min(player.batting.power, bc + Math.floor(Math.random() * 4));
+      player.batting.eye = Math.min(player.batting.eye, bc + Math.floor(Math.random() * 3));
+      player.fielding.defense = Math.round(player.fielding.defense * sc);
+      player.physical.speed = Math.round(player.physical.speed * sc);
+    }
 
     player.scoutComment = generateScoutComment(player);
     candidates.push(player);

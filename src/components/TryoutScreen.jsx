@@ -3,6 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, generateScoutComment } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
   const [tryoutCandidates, setTryoutCandidates] = useState([]);
@@ -35,7 +36,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
     const year = isInitialTryout ? 1 : (seasonData?.year || 1);
     const teamCount = seasonData?.settings?.teamsCount || Object.keys(allTeams).length || 4;
-    let candidates = generateTryoutCandidates(year, teamCount, isInitialTryout);
+    const preset = seasonData?.settings?.preset;
+    const leagueDef = preset ? INDEPENDENT_LEAGUES[preset] : null;
+    const ilRank = leagueDef ? (leagueDef.teams?.[0]?.rank || 'B') : null;
+    let candidates = generateTryoutCandidates(year, teamCount, isInitialTryout, ilRank);
     if (!isInitialTryout) {
       candidates = applyReputationBonus(candidates, allTeams);
     }

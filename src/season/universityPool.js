@@ -497,6 +497,35 @@ export function processUniversityYear(currentYear) {
 }
 
 /**
+ * 大学入学時の一括底上げ（seedInitialUniversityClasses用）
+ * 高校生品質のベースを大学在籍レベルまで引き上げる
+ */
+function applyUniversityEntranceBoost(player, universityRank) {
+  const boostMap = { S: 12, A: 9, B: 6, C: 4, D: 2 };
+  const base = boostMap[universityRank] || 4;
+  const gp = player.growthPotential || 1.0;
+  const r = () => Math.floor(Math.random() * 5) - 2;
+  const isPitcher = player.position === 'pitcher';
+  const boost = (v, amount, cap = 99) => Math.min(cap, v + Math.round(amount * (0.8 + gp * 0.4)) + r());
+
+  if (isPitcher) {
+    player.pitching.velocity = boost(player.pitching.velocity, base * 0.8, 158);
+    player.pitching.control = boost(player.pitching.control, base * 1.2);
+    player.pitching.stamina = boost(player.pitching.stamina, base * 1.5, 200);
+    player.physical.arm = boost(player.physical.arm, base * 0.8);
+  } else {
+    player.batting.meet = boost(player.batting.meet, base * 1.0);
+    player.batting.power = boost(player.batting.power, base * 0.8);
+    player.batting.eye = boost(player.batting.eye, base * 0.8);
+    player.physical.speed = boost(player.physical.speed, base * 0.6);
+    player.physical.arm = boost(player.physical.arm, base * 0.5);
+    player.fielding.defense = boost(player.fielding.defense, base * 0.8);
+  }
+  player.physical.bodyStamina = boost(player.physical.bodyStamina || 40, base * 0.6);
+  player.physical.recovery = boost(player.physical.recovery || 40, base * 0.4);
+}
+
+/**
  * 大学での1年間の成長を適用
  * キャンプの練習とは異なり、バランス型の緩やかな成長
  * @param {Object} player - 選手オブジェクト
@@ -657,6 +686,10 @@ export function seedInitialUniversityClasses(gameYear) {
 
     const cohort = universityPool[enrollYear];
     if (cohort) {
+      // 入学時ブースト: 高校生品質→大学チーム在籍品質への底上げ
+      cohort.forEach(entry => {
+        applyUniversityEntranceBoost(entry.player, entry.universityRank);
+      });
       for (let y = 0; y < yearsInUni; y++) {
         cohort.forEach(entry => {
           applyUniversityGrowth(entry.player, entry.universityRank);
