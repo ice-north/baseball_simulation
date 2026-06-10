@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
+import { universityPool } from '../season/universityPool.js';
 
 const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
 const RANK_BG = { S: 'bg-yellow-900/30 border-yellow-700/50', A: 'bg-red-900/20 border-red-700/50', B: 'bg-blue-900/20 border-blue-700/50', C: 'bg-green-900/20 border-green-700/50', D: 'bg-gray-800 border-gray-700/50' };
@@ -83,6 +84,48 @@ const AbilityRankingScreen = () => {
       teamMap[teamName] = teamEntry;
     }
 
+    // 大学プールからチーム別に集計
+    const uniTeamMap = {};
+    Object.values(universityPool).forEach(cohort => {
+      if (!cohort) return;
+      cohort.forEach(entry => {
+        const tName = entry.universityTeamName;
+        if (!tName) return;
+        if (!uniTeamMap[tName]) {
+          uniTeamMap[tName] = {
+            name: tName, abbr: tName, type: 'university',
+            rank: entry.universityRank || null,
+            count: 0, total: 0,
+            pitchers: 0, pitcherTotal: 0,
+            fielders: 0, fielderTotal: 0,
+            topPlayers: [],
+          };
+        }
+        const te = uniTeamMap[tName];
+        if (entry.universityRank && (!te.rank || 'SABCD'.indexOf(entry.universityRank) < 'SABCD'.indexOf(te.rank))) {
+          te.rank = entry.universityRank;
+        }
+        const p = entry.player;
+        const overall = calcPlayerOverall(p);
+        const pEntry = { ...p, teamName: tName, teamAbbr: tName, teamType: 'university', overall };
+        players.push(pEntry);
+
+        te.count++;
+        te.total += overall;
+        if (p.position === 'pitcher') { te.pitchers++; te.pitcherTotal += overall; }
+        else { te.fielders++; te.fielderTotal += overall; }
+        te.topPlayers.push({ name: p.name, position: p.position, overall, age: p.age });
+      });
+    });
+    Object.values(uniTeamMap).forEach(te => {
+      te.avg = te.count > 0 ? te.total / te.count : 0;
+      te.pitcherAvg = te.pitchers > 0 ? te.pitcherTotal / te.pitchers : 0;
+      te.fielderAvg = te.fielders > 0 ? te.fielderTotal / te.fielders : 0;
+      te.topPlayers.sort((a, b) => b.overall - a.overall);
+      te.topPlayers = te.topPlayers.slice(0, 5);
+      teamMap[`uni_${te.name}`] = te;
+    });
+
     return { allPlayers: players, allTeamStats: Object.values(teamMap) };
   }, [Object.keys(TEAMS_DATA).length]);
 
@@ -115,6 +158,7 @@ const AbilityRankingScreen = () => {
       if (teamRankFilter === 'user') list = list.filter(t => t.type === 'user');
       else if (teamRankFilter === 'independent') list = list.filter(t => t.type === 'independent' || t.type === 'user');
       else if (teamRankFilter === 'corporate') list = list.filter(t => t.type === 'corporate');
+      else if (teamRankFilter === 'university') list = list.filter(t => t.type === 'university');
       else list = list.filter(t => t.rank === teamRankFilter);
     }
     return [...list].sort((a, b) => b.avg - a.avg);
@@ -249,6 +293,7 @@ const AbilityRankingScreen = () => {
               { key: 'all', label: '全チーム' },
               { key: 'independent', label: '独立リーグ' },
               { key: 'corporate', label: '社会人' },
+              { key: 'university', label: '大学' },
               { key: 'S', label: 'Sランク' },
               { key: 'A', label: 'Aランク' },
               { key: 'B', label: 'Bランク' },
