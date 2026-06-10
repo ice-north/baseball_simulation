@@ -41,6 +41,29 @@ const TYPE_LABEL = {
 
 const toSource = (tt) => tt === 'user' ? 'independent' : tt;
 
+const IL_PREFIX = { shikoku: 'IL', bc: 'BC', kyushu: 'KL', hokkaido: 'FL', kansai: 'KI' };
+
+const makeDisplayAbbr = (teamName, team) => {
+  if (team?.independentLeagueId) {
+    const prefix = IL_PREFIX[team.independentLeagueId] || 'IL';
+    return `${prefix}${team.abbreviation || teamName.slice(0, 2)}`;
+  }
+  if (team?.universityData || team?.universityTeamId) {
+    return normalizeUniAbbr(teamName);
+  }
+  return team?.abbreviation || teamName.slice(0, 3);
+};
+
+const normalizeUniAbbr = (name) => {
+  let s = name;
+  if (s.endsWith('大学')) s = s.slice(0, -1);
+  const daiIdx = s.indexOf('大');
+  if (daiIdx >= 0 && daiIdx <= 4) s = s.slice(0, daiIdx + 1);
+  else if (!s.endsWith('大')) s = s.slice(0, 3) + '大';
+  if (s.length > 5) s = s.slice(0, 4) + '大';
+  return s;
+};
+
 // 12球団ドラフト戦略プロファイル（実際の傾向に基づく）
 const SCOUT_PROFILES = [
   // ① 素材・長期育成型
@@ -177,8 +200,9 @@ const AbilityRankingScreen = () => {
       const type = getTeamType(team);
       const rank = team.corporateData?.rank || team.universityData?.rank || null;
 
+      const displayAbbr = makeDisplayAbbr(teamName, team);
       const teamEntry = {
-        name: teamName, abbr: getTeamAbbreviation(teamName),
+        name: teamName, abbr: displayAbbr,
         type, rank,
         count: 0, total: 0,
         pitchers: 0, pitcherTotal: 0,
@@ -215,7 +239,7 @@ const AbilityRankingScreen = () => {
         if (!tName || teamsDataNames.has(tName)) return;
         if (!uniTeamMap[tName]) {
           uniTeamMap[tName] = {
-            name: tName, abbr: tName, type: 'university',
+            name: tName, abbr: normalizeUniAbbr(tName), type: 'university',
             rank: entry.universityRank || null,
             count: 0, total: 0,
             pitchers: 0, pitcherTotal: 0,
@@ -230,7 +254,7 @@ const AbilityRankingScreen = () => {
         const p = entry.player;
         const overall = calcPlayerOverall(p);
         const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
-        const pEntry = { ...p, teamName: tName, teamAbbr: tName, teamType: 'university', overall, draftScore };
+        const pEntry = { ...p, teamName: tName, teamAbbr: normalizeUniAbbr(tName), teamType: 'university', overall, draftScore };
         players.push(pEntry);
         te.count++;
         te.total += overall;
@@ -373,9 +397,6 @@ const AbilityRankingScreen = () => {
   };
 
   const renderPlayerTable = (playerList, showAmScouts = false) => {
-    const showFielder = category === 'all' || category === 'fielder';
-    const showPitcher = category === 'all' || category === 'pitcher';
-
     return (
       <div className="bg-gray-800 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -387,19 +408,15 @@ const AbilityRankingScreen = () => {
               <th className="px-1.5 py-2 text-center">年</th>
               <th className="px-1.5 py-2 text-left">所属</th>
               <th className="px-1.5 py-2 text-center font-bold">総合</th>
-              {showFielder && <>
-                <th className="px-1 py-2 text-center">ミ</th>
-                <th className="px-1 py-2 text-center">パ</th>
-                <th className="px-1 py-2 text-center">走</th>
-                <th className="px-1 py-2 text-center">守</th>
-                <th className="px-1 py-2 text-center">眼</th>
-              </>}
-              {showPitcher && <>
-                <th className="px-1 py-2 text-center">球速</th>
-                <th className="px-1 py-2 text-center">制球</th>
-                <th className="px-1 py-2 text-center">変</th>
-                <th className="px-1 py-2 text-center">ス</th>
-              </>}
+              <th className="px-1 py-2 text-center">ミ</th>
+              <th className="px-1 py-2 text-center">パ</th>
+              <th className="px-1 py-2 text-center">走</th>
+              <th className="px-1 py-2 text-center">守</th>
+              <th className="px-1 py-2 text-center">眼</th>
+              <th className="px-1 py-2 text-center">球速</th>
+              <th className="px-1 py-2 text-center">制球</th>
+              <th className="px-1 py-2 text-center">変</th>
+              <th className="px-1 py-2 text-center">ス</th>
               <th className="px-1 py-2 text-left">スカウト注目</th>
             </tr>
           </thead>
@@ -418,19 +435,15 @@ const AbilityRankingScreen = () => {
                     <span className={typeInfo.color}>{p.teamAbbr}</span>
                   </td>
                   <td className={`px-1.5 py-1.5 text-center font-bold ${getOverallColor(p.overall)}`}>{p.overall}</td>
-                  {showFielder && <>
-                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.meet || 0)}`}>{isPitcher ? '-' : p.batting?.meet || 0}</td>
-                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.power || 0)}`}>{isPitcher ? '-' : p.batting?.power || 0}</td>
-                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.physical?.speed || 0)}`}>{isPitcher ? '-' : p.physical?.speed || 0}</td>
-                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.fielding?.defense || 0)}`}>{isPitcher ? '-' : p.fielding?.defense || 0}</td>
-                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.eye || 0)}`}>{isPitcher ? '-' : p.batting?.eye || 0}</td>
-                  </>}
-                  {showPitcher && <>
-                    <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor((p.pitching?.velocity || 130) - 100)}`}>{!isPitcher ? '-' : p.pitching?.velocity || 130}</td>
-                    <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor(p.pitching?.control || 0)}`}>{!isPitcher ? '-' : p.pitching?.control || 0}</td>
-                    <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor(bestBrk)}`}>{!isPitcher ? '-' : bestBrk}</td>
-                    <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor(p.pitching?.stamina || 0)}`}>{!isPitcher ? '-' : p.pitching?.stamina || 0}</td>
-                  </>}
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.batting?.meet || 0)}`}>{p.batting?.meet || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.batting?.power || 0)}`}>{p.batting?.power || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.physical?.speed || 0)}`}>{p.physical?.speed || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.fielding?.defense || 0)}`}>{p.fielding?.defense || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.batting?.eye || 0)}`}>{p.batting?.eye || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-600' : getStatColor((p.pitching?.velocity || 130) - 100)}`}>{p.pitching?.velocity || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-600' : getStatColor(p.pitching?.control || 0)}`}>{p.pitching?.control || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-600' : getStatColor(bestBrk)}`}>{bestBrk}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-600' : getStatColor(p.pitching?.stamina || 0)}`}>{p.pitching?.stamina || 0}</td>
                   <td className="px-1 py-1 text-xs">
                     <ScoutBadges npbScouts={p.npbScouts} amScouts={showAmScouts ? p.amScouts : null} />
                   </td>
