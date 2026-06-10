@@ -1706,7 +1706,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                 return <div className={`text-[9px] font-bold leading-tight ${hasAnyDone ? 'text-gray-500' : 'text-orange-400'}`}>都市対抗</div>;
                               }
                               return userRegionEvents.map((t, ti) => {
-                                const label = t.type === 'main' ? `本戦${t.label}` : t.label || '予選';
+                                const label = t.type === 'main' ? (t.label || '本戦') : t.label || '予選';
                                 const color = t.isUserMatch ? 'text-yellow-400' : t.done ? 'text-gray-500' : 'text-orange-400';
                                 return <div key={ti} className={`text-[9px] font-bold leading-tight ${color}`}>{label}{t.isUserMatch ? '⚾' : ''}</div>;
                               });
@@ -2870,6 +2870,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const isNsType = tm.bracketType === 'nihon_senshuken' || tm.bracketType === 'nihon_senshuken_qualifier' || tm.bracketType === 'nihon_senshuken_qualifier_losers';
         const isCsType = tm.bracketType === 'club_senshuken' || tm.bracketType === 'club_senshuken_qualifier' || tm.bracketType === 'club_senshuken_qualifier_losers';
         const isRtType = tm.bracketType === 'regional_tournament';
+        const isUcType = tm.type === 'university_championship';
+        const isMjType = tm.type === 'meiji_jingu';
         const isQualifier = tm.type === 'qualifier' || tm.type === 'nihon_senshuken_qualifier';
         const td = seasonData.toshitaikou;
         const ns = seasonData.nihonSenshuken;
@@ -2877,7 +2879,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const rt = seasonData.regionalTournament;
         let oppDef, bracket, modalTitle, modalSubtitle;
 
-        if (isRtType) {
+        if (isUcType || isMjType) {
+          const source = isUcType ? seasonData.universityChampionship : seasonData.meijiJingu;
+          oppDef = source?.teamDefsMap?.[oppName];
+          bracket = source?.bracket;
+          modalTitle = isUcType ? '全日本大学野球選手権大会' : '明治神宮野球大会';
+          const roundName = bracket ? getRoundName(bracket, tm.roundIdx) : '';
+          modalSubtitle = roundName;
+        } else if (isRtType) {
           const region = rt?.brackets?.[tm.regionId];
           oppDef = region?.teamDefsMap?.[oppName];
           bracket = region?.bracket;
@@ -2920,8 +2929,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className={`bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border ${isRtType ? 'border-green-600/50' : isCsType ? 'border-purple-600/50' : isNsType ? 'border-red-600/50' : 'border-yellow-600/50'}`}>
-              <h2 className={`text-xl font-bold text-center mb-1 ${isRtType ? 'text-green-400' : isCsType ? 'text-purple-400' : isNsType ? 'text-red-400' : 'text-yellow-400'}`}>
+            <div className={`bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border ${(isUcType || isMjType) ? 'border-blue-600/50' : isRtType ? 'border-green-600/50' : isCsType ? 'border-purple-600/50' : isNsType ? 'border-red-600/50' : 'border-yellow-600/50'}`}>
+              <h2 className={`text-xl font-bold text-center mb-1 ${(isUcType || isMjType) ? 'text-blue-400' : isRtType ? 'text-green-400' : isCsType ? 'text-purple-400' : isNsType ? 'text-red-400' : 'text-yellow-400'}`}>
                 {modalTitle}
               </h2>
               <div className="text-center text-sm text-gray-400 mb-4">
@@ -2953,7 +2962,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <button
                   onClick={() => {
                     setShowTournamentMatchModal(null);
-                    if (isRtType) {
+                    if (isUcType || isMjType) {
+                      const dataKey = isUcType ? 'universityChampionship' : 'meijiJingu';
+                      const srcData = { ...seasonData[dataKey] };
+                      if (srcData.bracket && srcData.teamDefsMap) {
+                        const def1 = srcData.teamDefsMap[tm.match.team1];
+                        const def2 = srcData.teamDefsMap[tm.match.team2];
+                        if (def1 && def2) {
+                          const result = simulateQuickMatch(def1, def2);
+                          recordTournamentResult(srcData.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                        }
+                      }
+                      setSeasonData(prev => ({ ...prev, [dataKey]: srcData }));
+                    } else if (isRtType) {
                       const rtData = { ...seasonData.regionalTournament };
                       const region = rtData.brackets?.[tm.regionId];
                       if (region) {

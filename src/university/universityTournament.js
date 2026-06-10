@@ -221,6 +221,7 @@ export function getUniversityTournamentDatesForCalendar(tournament, userTeamName
         label: `${tournament.name} ${roundName}`,
         isUserMatch,
         done: !!match.winner,
+        type: 'main',
       });
     }
   }
