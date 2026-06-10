@@ -207,11 +207,12 @@ const AbilityRankingScreen = () => {
     }
 
     const uniTeamMap = {};
+    const teamsDataNames = new Set(Object.keys(TEAMS_DATA));
     Object.values(universityPool).forEach(cohort => {
       if (!cohort) return;
       cohort.forEach(entry => {
         const tName = entry.universityTeamName;
-        if (!tName) return;
+        if (!tName || teamsDataNames.has(tName)) return;
         if (!uniTeamMap[tName]) {
           uniTeamMap[tName] = {
             name: tName, abbr: tName, type: 'university',
@@ -554,7 +555,7 @@ const AbilityRankingScreen = () => {
               const bgClass = rankKey ? RANK_BG[rankKey] : 'bg-gray-800 border-gray-700/50';
 
               return (
-                <div key={team.name} className={`rounded-lg border p-3 ${bgClass}`}>
+                <div key={`${team.type}_${team.name}`} className={`rounded-lg border p-3 ${bgClass}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-500 text-xs w-6">{i + 1}.</span>
