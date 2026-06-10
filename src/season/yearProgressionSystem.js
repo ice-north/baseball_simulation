@@ -30,7 +30,7 @@ export function generateAprilHighSchoolClass(year) {
   if (highSchoolPool.year === year && highSchoolPool.players.length > 0) {
     return highSchoolPool.players.length;
   }
-  const players = generateHighSchoolClass(year, 1500);
+  const players = generateHighSchoolClass(year, 3000);
   highSchoolPool.players = players;
   highSchoolPool.year = year;
   return players.length;

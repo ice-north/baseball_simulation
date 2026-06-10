@@ -37,7 +37,7 @@ export const clearHighSchoolPool = () => {
  * @param {number} count - 生成人数（デフォルト1000）
  * @returns {Array} 生成された高卒選手の配列
  */
-export function generateHighSchoolClass(year, count = 1500) {
+export function generateHighSchoolClass(year, count = 3000) {
   const players = [];
   const idBase = year * 100000 + 50000;
 
@@ -669,7 +669,7 @@ export function seedInitialUniversityClasses(gameYear) {
   for (let i = 0; i < classesNeeded; i++) {
     const enrollYear = gameYear - classesNeeded + i + 1;
     const yearsInUni = gameYear - enrollYear;
-    const count = Math.floor(totalUniSlots * 1.4);
+    const count = Math.floor(totalUniSlots * 2.5);
     const idBase = (enrollYear + 10000) * 100000 + 70000;
     const players = [];
     for (let j = 0; j < count; j++) {
