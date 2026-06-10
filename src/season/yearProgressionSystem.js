@@ -236,6 +236,11 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     return { isDraftEligible: false, reasons: [], totalScore: 0 };
   }
 
+  // 大学所属選手: 4年生(22歳)のみ指名対象
+  if (player.universityTeamId || player.universityYear) {
+    if (age < 22) return { isDraftEligible: false, reasons: ['大学4年生のみ指名可'], totalScore: 0 };
+  }
+
   // 年齢ボーナス（NPBスカウトは若い選手の将来性を重視）
   const ageBonusMap = { 18: 55, 19: 45, 20: 30, 21: 20, 22: 8, 23: 0, 24: -10, 25: -22, 26: -35, 27: -48, 28: -60, 29: -75 };
   const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 55 : -75);
@@ -392,10 +397,19 @@ export function processNPBDraft(allTeams, gameYear = 1) {
                  : 'independent';
     team.players.forEach(player => {
       if (player.age >= 30) return;
-      // 年齢制限: 独立リーグは19歳以上、社会人は21歳以上、大学は3年生以上(20歳以上)
-      if (source === 'independent' && player.age < 19) return;
-      if (source === 'corporate' && player.age < 21) return;
-      if (source === 'university_team' && player.age < 20) return;
+      if (source === 'university_team') {
+        // 大学: 4年生（22歳）のみ指名対象
+        if (player.age < 22 || (player.universityYear && player.universityYear < 4)) return;
+      } else if (source === 'corporate') {
+        // 社会人: 高卒3年目(21歳〜)、大卒2年目(24歳〜)
+        const hasUniHistory = player.careerHistory?.some(h => h.type === 'university');
+        if (hasUniHistory) {
+          if (player.age < 24) return;
+        } else {
+          if (player.age < 21) return;
+        }
+      }
+      // 独立リーグ: 年齢制限なし（1年目から指名対象）
       const bonus = awardBonusMap[player.id]?.bonus || 0;
       const awards = awardBonusMap[player.id]?.awards || [];
       const { totalScore } = checkNPBDraftEligibility(player, bonus);
@@ -415,13 +429,13 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     });
   });
 
-  // 3. 大学3〜4年生
+  // 3. 大学4年生（22歳）のみ
   Object.entries(universityPool).forEach(([enrollYear, cohort]) => {
     if (!cohort) return;
     const ey = parseInt(enrollYear);
     cohort.forEach(entry => {
       const yearsInUni = gameYear - ey;
-      if (yearsInUni >= 3) {
+      if (yearsInUni >= 4 || entry.player.age >= 22) {
         const { totalScore } = checkNPBDraftEligibility(entry.player, 0);
         allCandidates.push({
           player: entry.player, teamName: entry.universityTeamName || '大学', score: totalScore,
