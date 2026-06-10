@@ -54,6 +54,17 @@ export const saveGameToSlot = (slotIndex, gameState) => {
         champion: WORLD_DATA.corporateToshitaikou.champion,
         runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
       } : null,
+      corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken ? {
+        done: WORLD_DATA.corporateNihonSenshuken.done,
+        champion: WORLD_DATA.corporateNihonSenshuken.champion,
+        runnerUp: WORLD_DATA.corporateNihonSenshuken.runnerUp,
+      } : null,
+      corporateClubSenshuken: WORLD_DATA.corporateClubSenshuken ? {
+        done: WORLD_DATA.corporateClubSenshuken.done,
+        champion: WORLD_DATA.corporateClubSenshuken.champion,
+        runnerUp: WORLD_DATA.corporateClubSenshuken.runnerUp,
+      } : null,
+      corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? { done: true } : null,
       universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
     } : null;
 
@@ -153,6 +164,9 @@ export const loadGameFromSlot = (slotIndex) => {
       }
       WORLD_DATA.draft = wd.draft || { draftedPlayers: [], history: [] };
       WORLD_DATA.corporateToshitaikou = wd.corporateToshitaikou || null;
+      WORLD_DATA.corporateNihonSenshuken = wd.corporateNihonSenshuken || null;
+      WORLD_DATA.corporateClubSenshuken = wd.corporateClubSenshuken || null;
+      WORLD_DATA.corporateRegionalTournament = wd.corporateRegionalTournament || null;
       WORLD_DATA.universityLeague = wd.universityLeague || null;
     }
 

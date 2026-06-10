@@ -378,6 +378,10 @@ export const Sidebar = ({
       <SidebarButton view="halloffame" icon="🏆" label="資料室" color="yellow" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
+      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">デバッグ</div>
+      <SidebarButton view="debug_players" icon="🔍" label="デバッグ用閲覧" color="yellow" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+
+      <div className="border-t border-gray-700/40 my-2"></div>
       <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">システム</div>
       <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />

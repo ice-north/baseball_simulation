@@ -30,6 +30,7 @@ import CorporateDepartureScreen from './CorporateDepartureScreen.jsx';
 import AbilityRankingScreen from './AbilityRankingScreen.jsx';
 import CorporateScoutScreen from './CorporateScoutScreen.jsx';
 import CorporateManagementScreen from './CorporateManagementScreen.jsx';
+import DebugPlayerViewScreen from './DebugPlayerViewScreen.jsx';
 
 const ManagementScreen = ({
   managementView,
@@ -145,6 +146,9 @@ const ManagementScreen = ({
   if (managementView === 'corporate_management') return <CorporateManagementScreen
     seasonData={seasonData}
     gameMode={gameMode}
+  />;
+  if (managementView === 'debug_players') return <DebugPlayerViewScreen
+    onBack={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'roster') return <RosterScreen />;
   if (managementView === 'teaminfo') return <TeamInfoScreen />;

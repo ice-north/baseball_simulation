@@ -41,4 +41,8 @@ export const initializeWorld = (mode, userLeagueId = null) => {
   WORLD_DATA.universityLeagues = {};
   WORLD_DATA.corporateLeague = { teams: {}, userTeam: null };
   WORLD_DATA.draft = { draftedPlayers: [], history: [] };
+  WORLD_DATA.corporateToshitaikou = null;
+  WORLD_DATA.corporateNihonSenshuken = null;
+  WORLD_DATA.corporateClubSenshuken = null;
+  WORLD_DATA.corporateRegionalTournament = null;
 };
