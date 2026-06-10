@@ -250,7 +250,8 @@ const AbilityRankingScreen = () => {
     const hs = (highSchoolPool.players || []).map(p => {
       const overall = calcPlayerOverall(p);
       const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
-      return { ...p, teamName: '高校', teamAbbr: '高校', teamType: 'highschool', overall, draftScore };
+      const schoolLabel = p.highSchool ? p.highSchool.name : '無名校';
+      return { ...p, teamName: schoolLabel, teamAbbr: schoolLabel, teamType: 'highschool', overall, draftScore };
     });
 
     // === 12球団スカウト注目マップ（球団戦略に基づく上位N名選出）===

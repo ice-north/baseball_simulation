@@ -7,6 +7,7 @@
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
+import { assignHighSchool } from '../data/highSchoolData.js';
 
 /**
  * 大学プール: グローバルミュータブル
@@ -180,6 +181,8 @@ function generateHighSchoolPlayer(id) {
     fame = r(1, 10);
   }
 
+  const highSchool = assignHighSchool(tier);
+
   return {
     id,
     name,
@@ -212,9 +215,10 @@ function generateHighSchoolPlayer(id) {
     },
     positionFitness: generatePositionFitness(position),
     fame,
+    highSchool: highSchool ? { name: highSchool.name, rank: highSchool.rank, pref: highSchool.pref } : null,
     fatigue: 0,
     experience: 0,
-    careerHistory: [{ type: 'highschool', year: null, label: '高校卒' }],
+    careerHistory: [{ type: 'highschool', year: null, label: highSchool ? `${highSchool.name}` : '高校卒' }],
     seasonStats: createEmptyStats(),
     careerStats: createEmptyStats()
   };

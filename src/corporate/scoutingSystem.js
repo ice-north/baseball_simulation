@@ -1214,7 +1214,7 @@ export function getScoutedCandidates(teamData) {
 }
 
 function getSourceLabel(entry) {
-  if (entry.source === 'highschool') return '高校3年';
+  if (entry.source === 'highschool') return entry.player?.highSchool?.name ? `${entry.player.highSchool.name}` : '高校3年';
   if (entry.source === 'university') return `大学${(entry.yearsInUni || 0) + 1}年`;
   if (entry.source === 'independent') return `独立L(${entry.teamName || ''})`;
   if (entry.source === 'corporate_team') return `社会人(${entry.teamName || ''})`;
