@@ -27,6 +27,7 @@ import SaveLoadScreen from './SaveLoadScreen.jsx';
 import EditScreen from './EditScreen.jsx';
 import { ToshitaikouQualifierScreen, ToshitaikouMainScreen } from './ToshitaikouScreen.jsx';
 import CorporateDepartureScreen from './CorporateDepartureScreen.jsx';
+import AbilityRankingScreen from './AbilityRankingScreen.jsx';
 import CorporateScoutScreen from './CorporateScoutScreen.jsx';
 import CorporateManagementScreen from './CorporateManagementScreen.jsx';
 
@@ -481,6 +482,7 @@ const ManagementScreen = ({
     allTeams={allTeams}
     userTeamName={userTeamName}
   />;
+  if (managementView === 'ranking') return <AbilityRankingScreen />;
   if (managementView === 'halloffame') return <HallOfFameScreen
     hallOfFamePlayers={hallOfFamePlayers}
     allTeams={TEAMS_DATA}

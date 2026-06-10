@@ -39,11 +39,11 @@ import { seedInitialUniversityClasses } from '../season/universityPool.js';
 
 const RANK_CONFIG = {
   S: {
-    teamOffset: 10,        // 社会人強豪は独立リーグより大幅に上
+    teamOffset: 12,        // 社会人強豪は独立リーグより大幅に上
     starCount: [4, 5],     // プロ注目選手（スカウトが視察するレベル）
     starBoost: [12, 18],   // 注目選手の能力追加（確実に頭一つ抜ける）
     starGrowth: 0.10,
-    eliteChance: 0.20,     // 注目選手のうち20%が真のドラフト候補
+    eliteChance: 0.22,     // 注目選手のうち22%が真のドラフト候補
     eliteBoost: [10, 15],  // エリートへの追加ブースト
     eliteGrowth: 0.15,
   },
@@ -87,43 +87,37 @@ const RANK_CONFIG = {
   },
 };
 
-// 独立リーグ専用設定（プロを目指す選手の集まり → 社会人より高いスター率）
-// 20チーム ~515人から年15名前後のNPB指名を目標
-//   B 10×2星 ×20%エリート = ~4名
-//   C 8チーム  星0-1 + 覚醒12% = ~4-5名
-//   D 2チーム  覚醒8%          = ~0-1名
-//   + シーズン中のfame/成績ボーナスで +5-6名
-//   合計 ≒ 13-16名
+// 独立リーグ専用設定（社会人より一段下の能力帯）
+// 社会人からプロは年40-50名、独立からは年5-10名程度が現実的
+// 初期能力を抑えめにし、シーズン中のfame蓄積＋成長でドラフト候補に浮上する設計
 const INDEPENDENT_RANK_CONFIG = {
   B: {
-    teamOffset: 4,
-    starCount: [1, 3],
-    starBoost: [10, 16],
-    starGrowth: 0.08,
-    eliteChance: 0.20,
-    eliteBoost: [10, 15],
-    eliteGrowth: 0.12,
-  },
-  C: {
     teamOffset: 1,
-    starCount: [0, 1],
-    starBoost: [8, 14],
+    starCount: [0, 2],
+    starBoost: [8, 13],
     starGrowth: 0.06,
-    eliteChance: 0.08,
+    eliteChance: 0.10,
     eliteBoost: [8, 12],
     eliteGrowth: 0.08,
-    proChance: 0.12,
-    proBoost: [10, 16],
-    proGrowth: 0.08,
   },
-  D: {
-    teamOffset: -3,
-    starCount: [0, 0],
+  C: {
+    teamOffset: -2,
+    starCount: [0, 1],
+    starBoost: [6, 12],
+    starGrowth: 0.05,
+    eliteChance: 0.04,
+    eliteBoost: [6, 10],
+    eliteGrowth: 0.06,
     proChance: 0.08,
     proBoost: [8, 14],
     proGrowth: 0.06,
-    standoutCount: [1, 2],
-    standoutTargetRank: 'B',
+  },
+  D: {
+    teamOffset: -5,
+    starCount: [0, 0],
+    proChance: 0.05,
+    proBoost: [6, 12],
+    proGrowth: 0.04,
   },
 };
 
@@ -263,7 +257,8 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   // キャップ付近に集中しないよう、スケール係数はキャップの60-70%あたりを中央に設定
   // S: 中央45前後(cap72), A: 中央42(cap66), B: 中央37(cap60), C: 中央32(cap52), D: 中央27(cap45)
   const RANK_SCALE = { S: 0.95, A: 0.88, B: 0.80, C: 0.70, D: 0.58 };
-  const scale = RANK_SCALE[rank] || 0.70;
+  const INDEPENDENT_RANK_SCALE = { B: 0.73, C: 0.63, D: 0.52 };
+  const scale = (isIndependent ? INDEPENDENT_RANK_SCALE[rank] : null) || RANK_SCALE[rank] || 0.70;
 
   // 三角分布ジッター（2つのrandIntの合算で中央寄り正規分布に近似）
   const scaleAndJitter = (val, jitter = 5) => {
