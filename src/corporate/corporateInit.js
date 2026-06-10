@@ -87,37 +87,37 @@ const RANK_CONFIG = {
   },
 };
 
-// 独立リーグ専用設定（社会人より一段下の能力帯）
-// 社会人からプロは年40-50名、独立からは年5-10名程度が現実的
-// 初期能力を抑えめにし、シーズン中のfame蓄積＋成長でドラフト候補に浮上する設計
+// 独立リーグ専用設定（社会人より二段下の能力帯）
+// 現実: 独立→NPBは年5-10名、最高でドラフト2位（10年に1人）、大半は育成〜5位
+// 初期能力を大幅に抑え、シーズン中のfame蓄積＋成長でドラフト下位候補に浮上する設計
 const INDEPENDENT_RANK_CONFIG = {
   B: {
-    teamOffset: 1,
-    starCount: [0, 2],
-    starBoost: [8, 13],
-    starGrowth: 0.06,
-    eliteChance: 0.10,
-    eliteBoost: [8, 12],
-    eliteGrowth: 0.08,
+    teamOffset: -1,
+    starCount: [0, 1],
+    starBoost: [5, 10],
+    starGrowth: 0.04,
+    eliteChance: 0.05,
+    eliteBoost: [5, 8],
+    eliteGrowth: 0.05,
   },
   C: {
-    teamOffset: -2,
-    starCount: [0, 1],
-    starBoost: [6, 12],
-    starGrowth: 0.05,
-    eliteChance: 0.04,
-    eliteBoost: [6, 10],
-    eliteGrowth: 0.06,
-    proChance: 0.08,
-    proBoost: [8, 14],
-    proGrowth: 0.06,
+    teamOffset: -4,
+    starCount: [0, 0],
+    starBoost: [4, 8],
+    starGrowth: 0.03,
+    eliteChance: 0.02,
+    eliteBoost: [4, 7],
+    eliteGrowth: 0.04,
+    proChance: 0.05,
+    proBoost: [5, 10],
+    proGrowth: 0.04,
   },
   D: {
-    teamOffset: -5,
+    teamOffset: -7,
     starCount: [0, 0],
-    proChance: 0.05,
-    proBoost: [6, 12],
-    proGrowth: 0.04,
+    proChance: 0.03,
+    proBoost: [4, 8],
+    proGrowth: 0.03,
   },
 };
 
@@ -244,20 +244,26 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   corporatePlayerIdBase += 1000;
   candidates.forEach((p, i) => { p.id = corporatePlayerIdBase + i; });
 
-  const velReduction = RANK_VELOCITY_REDUCTION[rank] || 0;
-  const velCap = RANK_VELOCITY_CAP[rank] || 155;
+  // 独立リーグは球速・制球・変化球すべて社会人より低い
+  const IL_VEL_CAP = { B: 140, C: 133, D: 126 };
+  const IL_VEL_FLOOR = { B: 115, C: 108, D: 100 };
+  const IL_VEL_REDUCTION = { B: -8, C: -12, D: -20 };
+  const IL_CONTROL_OFFSET = { B: -5, C: -10, D: -20 };
+  const IL_CONTROL_CAP = { B: 58, C: 48, D: 38 };
+  const IL_ARSENAL_MULT = { B: 0.70, C: 0.55, D: 0.35 };
 
-  const velFloor = RANK_VELOCITY_FLOOR[rank] || 120;
-
-  const controlOffset = RANK_CONTROL_OFFSET[rank] || 0;
-  const controlCap = RANK_CONTROL_CAP[rank] || 65;
-  const arsenalMult = RANK_ARSENAL_MULT[rank] || 1.0;
+  const velReduction = (isIndependent ? IL_VEL_REDUCTION[rank] : null) ?? (RANK_VELOCITY_REDUCTION[rank] || 0);
+  const velCap = (isIndependent ? IL_VEL_CAP[rank] : null) ?? (RANK_VELOCITY_CAP[rank] || 155);
+  const velFloor = (isIndependent ? IL_VEL_FLOOR[rank] : null) ?? (RANK_VELOCITY_FLOOR[rank] || 120);
+  const controlOffset = (isIndependent ? IL_CONTROL_OFFSET[rank] : null) ?? (RANK_CONTROL_OFFSET[rank] || 0);
+  const controlCap = (isIndependent ? IL_CONTROL_CAP[rank] : null) ?? (RANK_CONTROL_CAP[rank] || 65);
+  const arsenalMult = (isIndependent ? IL_ARSENAL_MULT[rank] : null) ?? (RANK_ARSENAL_MULT[rank] || 1.0);
 
   // ランク別能力スケーリング（乗算式）
   // キャップ付近に集中しないよう、スケール係数はキャップの60-70%あたりを中央に設定
   // S: 中央45前後(cap72), A: 中央42(cap66), B: 中央37(cap60), C: 中央32(cap52), D: 中央27(cap45)
   const RANK_SCALE = { S: 0.95, A: 0.88, B: 0.80, C: 0.70, D: 0.58 };
-  const INDEPENDENT_RANK_SCALE = { B: 0.73, C: 0.63, D: 0.52 };
+  const INDEPENDENT_RANK_SCALE = { B: 0.63, C: 0.53, D: 0.42 };
   const scale = (isIndependent ? INDEPENDENT_RANK_SCALE[rank] : null) || RANK_SCALE[rank] || 0.70;
 
   // 三角分布ジッター（2つのrandIntの合算で中央寄り正規分布に近似）
@@ -481,7 +487,8 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
 
   // ソフトキャップ: キャップを超過した分を確率的に削減（上限に張り付かない自然な分布）
   const ctrlMax = controlCap + 8;
-  const batCap = RANK_BATTING_CAP[rank] || 52;
+  const IL_BATTING_CAP = { B: 52, C: 44, D: 36 };
+  const batCap = (isIndependent ? IL_BATTING_CAP[rank] : null) ?? (RANK_BATTING_CAP[rank] || 52);
   const softCap = (val, cap) => {
     if (val <= cap) return val;
     const excess = val - cap;
@@ -501,6 +508,12 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     p.batting.meet = Math.max(p.batting.meet, batFloor);
     p.batting.power = Math.max(p.batting.power, batFloor);
     p.batting.eye = Math.max(p.batting.eye, batFloor);
+
+    // 独立リーグ: 成長力を抑制（プロに届かなかった選手が大半）
+    if (isIndependent) {
+      const gpCap = rank === 'B' ? 1.15 : rank === 'C' ? 1.05 : 0.95;
+      p.growthPotential = Math.min(p.growthPotential || 1.0, gpCap);
+    }
 
     p.scoutComment = generateScoutComment(p);
     if (!p.careerHistory) p.careerHistory = [];

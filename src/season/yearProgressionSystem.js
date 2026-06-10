@@ -362,8 +362,8 @@ function computeSeasonAwardBonuses(allTeams) {
  * 各ソースの比率は選手の質から自然に決まる。
  *
  * 目標比率（タレント調整の指標）:
- *   1位: 高校+大学80%, 社会人20%, 独立ほぼ0%
- *   全体: 高校30%, 大学35%, 社会人20%, 独立14%
+ *   高校30%, 大学35%, 社会人20%, 独立14%, その他1%
+ *   1位は高校+大学80%, 社会人20%が自然に実現される（生成能力差による）
  *
  * @param {Object} allTeams - TEAMS_DATA
  * @param {number} gameYear - 現在のゲーム年度
@@ -430,21 +430,6 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         });
       }
     });
-  });
-
-  // === ソース別ドラフト評価補正（現実の指名傾向を反映） ===
-  // 高校・大学: NPBスカウトの主要ターゲット（1位の約80%）
-  // 社会人: 即戦力評価で1位の約20%
-  // 独立: 歴史的に最高2位（10年に1人程度）、大半は3位以下
-  const SOURCE_SCORE_ADJUST = {
-    highschool: 0,
-    university: 5,
-    university_team: 5,
-    corporate: 12,
-    independent: -30,
-  };
-  allCandidates.forEach(c => {
-    c.score += SOURCE_SCORE_ADJUST[c.source] || 0;
   });
 
   // === スコア順にソートし、上位~120名を指名 ===
