@@ -1151,14 +1151,14 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                         <td className="py-1 px-1 text-center text-[10px]">
                           {(() => {
                             const d = player.personality?.discipline ?? 50;
-                            const c = d >= 80 ? 'text-green-400' : d >= 60 ? 'text-blue-400' : d >= 40 ? 'text-gray-400' : d >= 20 ? 'text-orange-400' : 'text-red-400';
+                            const c = d >= 80 ? 'text-red-400' : d >= 60 ? 'text-orange-400' : d >= 40 ? 'text-yellow-400' : d >= 20 ? 'text-blue-400' : 'text-gray-400';
                             return <span className={c}>{d}</span>;
                           })()}
                         </td>
                         <td className="py-1 px-1 text-center text-[10px]">
                           {(() => {
                             const m = player.personality?.mental ?? 50;
-                            const c = m >= 80 ? 'text-green-400' : m >= 60 ? 'text-blue-400' : m >= 40 ? 'text-gray-400' : m >= 20 ? 'text-orange-400' : 'text-red-400';
+                            const c = m >= 80 ? 'text-red-400' : m >= 60 ? 'text-orange-400' : m >= 40 ? 'text-yellow-400' : m >= 20 ? 'text-blue-400' : 'text-gray-400';
                             return <span className={c}>{m}</span>;
                           })()}
                         </td>
