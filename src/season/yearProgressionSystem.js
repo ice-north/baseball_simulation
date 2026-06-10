@@ -487,6 +487,36 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const shuffledTeams = [...NPB_TEAMS].sort(() => Math.random() - 0.5);
   const takenIds = new Set();
 
+  // === 球団別好み（チーム固有の選手評価バイアス） ===
+  // 各球団がランダムに好みを持ち、1巡目・2巡目以降の指名に影響
+  const teamPreferences = {};
+  NPB_TEAMS.forEach(team => {
+    const pitcherBias = (Math.random() - 0.5) * 30;   // -15〜+15: 投手好き/野手好き
+    const youthBias = (Math.random() - 0.5) * 20;     // -10〜+10: 若手好き/即戦力好き
+    const powerBias = (Math.random() - 0.5) * 16;     // -8〜+8: パワー重視/技巧重視
+    const speedBias = (Math.random() - 0.5) * 12;     // -6〜+6: 俊足重視/鈍足許容
+    const sourceBias = {};
+    ['highschool', 'university', 'university_team', 'corporate', 'independent'].forEach(s => {
+      sourceBias[s] = (Math.random() - 0.5) * 14;     // -7〜+7: ソース別好み
+    });
+    teamPreferences[team] = { pitcherBias, youthBias, powerBias, speedBias, sourceBias };
+  });
+
+  const getTeamPreferenceScore = (team, candidate) => {
+    const pref = teamPreferences[team];
+    if (!pref) return 0;
+    const p = candidate.player;
+    let bonus = 0;
+    bonus += p.position === 'pitcher' ? pref.pitcherBias : -pref.pitcherBias;
+    bonus += (p.age <= 20 ? pref.youthBias : p.age >= 24 ? -pref.youthBias : 0);
+    if (p.position !== 'pitcher') {
+      bonus += ((p.batting?.power || 0) >= 55 ? pref.powerBias : -pref.powerBias * 0.5);
+      bonus += ((p.physical?.speed || 0) >= 65 ? pref.speedBias : -pref.speedBias * 0.5);
+    }
+    bonus += pref.sourceBias[candidate.source] || 0;
+    return bonus;
+  };
+
   // セ・パ別に順位をランダム決定（NPBシーズンは未シミュレーションのため）
   const CE_TEAMS = NPB_TEAMS.slice(0, 6);
   const PA_TEAMS = NPB_TEAMS.slice(6, 12);
@@ -522,10 +552,12 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     const teamPick = {};
     teamsToProcess.forEach(team => {
       let bestCand = null, bestPref = -Infinity;
-      for (const c of eligible) {
-        if (takenIds.has(c.player.id)) continue;
-        const noise = (Math.random() - 0.5) * 30;
-        const pref = c.score + noise;
+      // 上位候補に絞って評価（全候補を見るのは不要）
+      const topN = eligible.filter(c => !takenIds.has(c.player.id)).slice(0, 40);
+      for (const c of topN) {
+        const prefBonus = getTeamPreferenceScore(team, c);
+        const noise = (Math.random() - 0.5) * 20;
+        const pref = c.score + prefBonus + noise;
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
       }
       teamPick[team] = bestCand;
@@ -555,10 +587,12 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         }
         if (!maxId || maxLen <= 1) break;
         const team = playerCompetitors[maxId].pop();
+        const altCands = eligible.filter(c => !allPickedIds.has(c.player.id) && !takenIds.has(c.player.id)).slice(0, 30);
         let bestCand = null, bestScore = -Infinity;
-        for (const c of eligible) {
-          if (allPickedIds.has(c.player.id) || takenIds.has(c.player.id)) continue;
-          if (c.score > bestScore) { bestScore = c.score; bestCand = c; }
+        for (const c of altCands) {
+          const prefBonus = getTeamPreferenceScore(team, c);
+          const pref = c.score + prefBonus + (Math.random() - 0.5) * 15;
+          if (pref > bestScore) { bestScore = pref; bestCand = c; }
         }
         if (!bestCand) break;
         allPickedIds.add(bestCand.player.id);
@@ -605,10 +639,12 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   if (teamsToProcess.length > 0) {
     const fallbackPhase = { picks: [], lotteryResults: [] };
     for (const team of teamsToProcess) {
+      const remaining = eligible.filter(c => !takenIds.has(c.player.id)).slice(0, 30);
       let bestCand = null, bestScore = -Infinity;
-      for (const c of eligible) {
-        if (takenIds.has(c.player.id)) continue;
-        if (c.score > bestScore) { bestScore = c.score; bestCand = c; }
+      for (const c of remaining) {
+        const prefBonus = getTeamPreferenceScore(team, c);
+        const pref = c.score + prefBonus + (Math.random() - 0.5) * 15;
+        if (pref > bestScore) { bestScore = pref; bestCand = c; }
       }
       if (bestCand) {
         settledTeams[team] = bestCand;
@@ -628,8 +664,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     draftedPlayers.push(createDraftEntry(cand, team, 'ドラフト1位'));
   }
 
-  // === 2巡目以降: ウェーバー/逆ウェーバー交互制 ===
-  let eligibleIdx = 0;
+  // === 2巡目以降: ウェーバー/逆ウェーバー交互制（球団好みで選択） ===
   for (let round = 1; round < mainRounds + (ikuSlots > 0 ? Math.ceil(ikuSlots / numTeams) : 0); round++) {
     const isIku = round >= mainRounds;
     const ikuRound = round - mainRounds + 1;
@@ -637,13 +672,21 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     const teamOrder = round % 2 === 1 ? waiverOrder : reverseWaiverOrder;
 
     for (let t = 0; t < numTeams; t++) {
-      while (eligibleIdx < eligible.length && takenIds.has(eligible[eligibleIdx].player.id)) eligibleIdx++;
-      if (eligibleIdx >= eligible.length) break;
       const npbTeam = teamOrder[t % numTeams];
-      const candidate = eligible[eligibleIdx];
-      takenIds.add(candidate.player.id);
-      eligibleIdx++;
-      draftedPlayers.push(createDraftEntry(candidate, npbTeam, roundLabel));
+      // 残り候補の上位から球団好み込みで選択
+      const remaining = eligible.filter(c => !takenIds.has(c.player.id));
+      if (remaining.length === 0) break;
+      const searchWindow = remaining.slice(0, Math.max(8, Math.ceil(remaining.length * 0.15)));
+      let bestCand = null, bestPref = -Infinity;
+      for (const c of searchWindow) {
+        const prefBonus = getTeamPreferenceScore(npbTeam, c);
+        const noise = (Math.random() - 0.5) * 10;
+        const pref = c.score + prefBonus * 0.7 + noise;
+        if (pref > bestPref) { bestPref = pref; bestCand = c; }
+      }
+      if (!bestCand) break;
+      takenIds.add(bestCand.player.id);
+      draftedPlayers.push(createDraftEntry(bestCand, npbTeam, roundLabel));
     }
   }
 
