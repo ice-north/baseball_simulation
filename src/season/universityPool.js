@@ -37,7 +37,7 @@ export const clearHighSchoolPool = () => {
  * @param {number} count - 生成人数（デフォルト1000）
  * @returns {Array} 生成された高卒選手の配列
  */
-export function generateHighSchoolClass(year, count = 1000) {
+export function generateHighSchoolClass(year, count = 1500) {
   const players = [];
   const idBase = year * 100000 + 50000;
 
@@ -319,13 +319,20 @@ function evaluatePlayerPotential(player) {
 // ============================================================
 
 // 各ランクの受け入れ割合（高校生全体に対する比率）
-const RANK_DISTRIBUTION = {
-  S: { ratio: 0.08, uniRatio: 0.70, corpRatio: 0.20, indRatio: 0.10 },
-  A: { ratio: 0.12, uniRatio: 0.65, corpRatio: 0.20, indRatio: 0.15 },
-  B: { ratio: 0.15, uniRatio: 0.55, corpRatio: 0.25, indRatio: 0.20 },
-  C: { ratio: 0.15, uniRatio: 0.45, corpRatio: 0.30, indRatio: 0.25 },
-  D: { ratio: 0.10, uniRatio: 0.35, corpRatio: 0.30, indRatio: 0.35 },
-};
+// 大学は各ランクのチーム数×1チームあたり受け入れ数で算出
+const UNI_PER_TEAM = { S: 15, A: 13, B: 11, C: 9, D: 7 };
+const RANK_CORP_RATIO = { S: 0.10, A: 0.08, B: 0.06, C: 0.04, D: 0.03 };
+const RANK_IND_RATIO  = { S: 0.05, A: 0.04, B: 0.04, C: 0.03, D: 0.03 };
+
+function getUniversitySlotsByRank() {
+  const teamCounts = {};
+  UNIVERSITY_TEAMS.forEach(t => { teamCounts[t.rank] = (teamCounts[t.rank] || 0) + 1; });
+  const slots = {};
+  for (const rank of ['S', 'A', 'B', 'C', 'D']) {
+    slots[rank] = (teamCounts[rank] || 0) * (UNI_PER_TEAM[rank] || 7);
+  }
+  return slots;
+}
 
 /**
  * NPBドラフトで高校生プールから有力選手を除去
@@ -406,16 +413,18 @@ export function distributeHighSchoolGraduates(enrollYear) {
   const independent = [];
   let cursor = 0;
 
+  const uniSlots = getUniversitySlotsByRank();
+
   // ランクS→Dの順に上位から取っていく
   for (const rank of ['S', 'A', 'B', 'C', 'D']) {
-    const cfg = RANK_DISTRIBUTION[rank];
-    const slotCount = Math.floor(total * cfg.ratio);
+    const uniCount = Math.min(uniSlots[rank] || 0, total - cursor);
+    const corpRatio = RANK_CORP_RATIO[rank] || 0.25;
+    const indRatio = RANK_IND_RATIO[rank] || 0.20;
+    const corpCount = Math.floor(uniCount * corpRatio / (1 - corpRatio - indRatio));
+    const indCount = Math.floor(uniCount * indRatio / (1 - corpRatio - indRatio));
+    const slotCount = Math.min(uniCount + corpCount + indCount, total - cursor);
     const slice = scored.slice(cursor, cursor + slotCount);
     cursor += slotCount;
-
-    // 各ランク内で大学/社会人/独立に分配
-    const uniCount = Math.floor(slice.length * cfg.uniRatio);
-    const corpCount = Math.floor(slice.length * cfg.corpRatio);
 
     slice.forEach((entry, i) => {
       const p = entry.player;
@@ -654,10 +663,13 @@ export function seedInitialUniversityClasses(gameYear) {
   if (existingCount > 0) return;
 
   const classesNeeded = 4;
+  const uniSlots = getUniversitySlotsByRank();
+  const totalUniSlots = Object.values(uniSlots).reduce((s, v) => s + v, 0);
+
   for (let i = 0; i < classesNeeded; i++) {
     const enrollYear = gameYear - classesNeeded + i + 1;
     const yearsInUni = gameYear - enrollYear;
-    const count = 200 + Math.floor(Math.random() * 50);
+    const count = Math.floor(totalUniSlots * 1.4);
     const idBase = (enrollYear + 10000) * 100000 + 70000;
     const players = [];
     for (let j = 0; j < count; j++) {
@@ -671,12 +683,10 @@ export function seedInitialUniversityClasses(gameYear) {
     const uniPlayers = { S: [], A: [], B: [], C: [], D: [] };
     let cursor = 0;
     for (const rank of ['S', 'A', 'B', 'C', 'D']) {
-      const cfg = RANK_DISTRIBUTION[rank];
-      const slotCount = Math.floor(scored.length * cfg.ratio);
+      const slotCount = uniSlots[rank] || 0;
       const slice = scored.slice(cursor, cursor + slotCount);
       cursor += slotCount;
-      const uniCount = Math.floor(slice.length * cfg.uniRatio);
-      slice.slice(0, uniCount).forEach(entry => {
+      slice.forEach(entry => {
         entry.player._destinationRank = rank;
         uniPlayers[rank].push(entry.player);
       });

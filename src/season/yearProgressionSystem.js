@@ -13,7 +13,7 @@ import { initializeUniversityLeagues } from '../university/universityLeagueManag
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
-import { updateAllTeamReputations, advanceSponsors } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, updateAllRanks, advanceSponsors } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
@@ -30,7 +30,7 @@ export function generateAprilHighSchoolClass(year) {
   if (highSchoolPool.year === year && highSchoolPool.players.length > 0) {
     return highSchoolPool.players.length;
   }
-  const players = generateHighSchoolClass(year, 1000);
+  const players = generateHighSchoolClass(year, 1500);
   highSchoolPool.players = players;
   highSchoolPool.year = year;
   return players.length;
@@ -1510,11 +1510,11 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
   updateGrowthModifiers(updatedTeams, awards);
 
-  // 2.6. 社会人モード: 全チームの注目度・ランクを更新 + スポンサー契約更新 + スタッフ年次更新
+  // 2.6. 全チームの注目度・ランクを更新（社会人＋独立＋大学）
   let rankChanges = [];
   let staffRetirements = [];
+  rankChanges = updateAllRanks(seasonData);
   if (seasonData.settings?.corporateMode) {
-    rankChanges = updateAllTeamReputations(seasonData);
     const userTeamName = Object.keys(updatedTeams)[0];
     for (const [teamName, teamData] of Object.entries(updatedTeams)) {
       if (teamData?.corporateData) {

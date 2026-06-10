@@ -30,6 +30,7 @@ import { INDEPENDENT_LEAGUES, ALL_INDEPENDENT_LEAGUE_IDS } from './independentLe
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
+import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 import { seedInitialUniversityClasses } from '../season/universityPool.js';
 
 // ============================================================
@@ -1180,6 +1181,165 @@ export const updateAllTeamReputations = (seasonData) => {
     updateReputation(teamData, seasonResults);
     const change = updateRankFromReputation(teamData);
     if (change) rankChanges.push(change);
+  }
+
+  return rankChanges;
+};
+
+// ============================================================
+// 大学・独立リーグ向けランク変動システム
+// ============================================================
+
+const UNI_REPUTATION_GAINS = {
+  win: 0.3,
+  highWinRate: 3,
+  dominantSeason: 5,
+  seasonChampion: 8,
+  tournamentEntry: 5,
+  tournamentRoundWin: 2,
+  tournamentSF: 4,
+  tournamentRunnerUp: 7,
+  tournamentWin: 10,
+  proDrafted: 12,
+};
+const UNI_REPUTATION_DECAY = 2;
+
+export const updateUniversityReputation = (teamData, seasonResults) => {
+  const ud = teamData.universityData;
+  if (!ud) return;
+  let gain = 0;
+  gain += (seasonResults.wins || 0) * UNI_REPUTATION_GAINS.win;
+  if (seasonResults.winRate >= 0.700) gain += UNI_REPUTATION_GAINS.dominantSeason;
+  if (seasonResults.winRate >= 0.600) gain += UNI_REPUTATION_GAINS.highWinRate;
+  if (seasonResults.isChampion) gain += UNI_REPUTATION_GAINS.seasonChampion;
+  const tWins = seasonResults.tournamentMainWins || 0;
+  if (tWins > 0) gain += UNI_REPUTATION_GAINS.tournamentEntry;
+  gain += tWins * UNI_REPUTATION_GAINS.tournamentRoundWin;
+  if (tWins >= 2) gain += UNI_REPUTATION_GAINS.tournamentSF;
+  if (seasonResults.tournamentChampion) gain += UNI_REPUTATION_GAINS.tournamentWin;
+  else if (seasonResults.tournamentRunnerUp) gain += UNI_REPUTATION_GAINS.tournamentRunnerUp;
+  if (seasonResults.proDraftedCount) gain += seasonResults.proDraftedCount * UNI_REPUTATION_GAINS.proDrafted;
+  ud.reputation = clamp(ud.reputation + gain - UNI_REPUTATION_DECAY, 0, 100);
+  ud.proDraftCount = (ud.proDraftCount || 0) + (seasonResults.proDraftedCount || 0);
+  ud.tournamentWins = (ud.tournamentWins || 0) + (seasonResults.tournamentChampion ? 1 : 0);
+};
+
+export const updateUniversityRankFromReputation = (teamData) => {
+  const ud = teamData.universityData;
+  if (!ud) return null;
+  const rep = ud.reputation;
+  const oldRank = ud.rank;
+  let newRank;
+  if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';
+  else if (rep >= RANK_PROMOTE_THRESHOLD.A) newRank = 'A';
+  else if (rep >= RANK_PROMOTE_THRESHOLD.B) newRank = 'B';
+  else if (rep >= RANK_PROMOTE_THRESHOLD.C) newRank = 'C';
+  else newRank = 'D';
+  const rankOrder = ['D', 'C', 'B', 'A', 'S'];
+  const oldIdx = rankOrder.indexOf(oldRank);
+  const newIdx = rankOrder.indexOf(newRank);
+  if (newIdx < oldIdx) {
+    const dt = oldRank === 'S' ? RANK_DEMOTE_THRESHOLD.S
+      : oldRank === 'A' ? RANK_DEMOTE_THRESHOLD.A
+      : oldRank === 'B' ? RANK_DEMOTE_THRESHOLD.B
+      : RANK_DEMOTE_THRESHOLD.C;
+    if (rep >= dt) newRank = oldRank;
+  }
+  if (newRank !== oldRank) {
+    ud.rank = newRank;
+    return { team: teamData.name, from: oldRank, to: newRank, reputation: rep, type: 'university' };
+  }
+  return null;
+};
+
+// 全チーム（社会人＋独立＋大学）のランク変動を一括処理
+export const updateAllRanks = (seasonData) => {
+  const rankChanges = [];
+
+  // 社会人・独立リーグ（corporateData持ち）
+  const corpChanges = updateAllTeamReputations(seasonData);
+  rankChanges.push(...corpChanges);
+
+  // 大学チーム（universityData持ち、TEAMS_DATA内）
+  const standings = seasonData.standings || [];
+  const standingsMap = {};
+  standings.forEach(s => { standingsMap[s.team] = s; });
+  const uniChampion = standings.length > 0
+    ? [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)[0]?.team
+    : null;
+
+  // 大学トーナメント結果
+  const ucChampion = seasonData.universityChampionship?.champion || null;
+  const ucRunnerUp = seasonData.universityChampionship?.runnerUp || null;
+  const mjChampion = seasonData.meijiJingu?.champion || null;
+  const mjRunnerUp = seasonData.meijiJingu?.runnerUp || null;
+  const ucWins = seasonData.universityChampionship?.bracket ? countBracketWins(seasonData.universityChampionship.bracket) : {};
+  const mjWins = seasonData.meijiJingu?.bracket ? countBracketWins(seasonData.meijiJingu.bracket) : {};
+
+  for (const teamName of Object.keys(TEAMS_DATA)) {
+    const teamData = TEAMS_DATA[teamName];
+    if (!teamData?.universityData) continue;
+    const s = standingsMap[teamName];
+    const tWins = (ucWins[teamName] || 0) + (mjWins[teamName] || 0);
+    const results = {
+      wins: s?.wins || 0,
+      winRate: s?.winRate || 0,
+      isChampion: teamName === uniChampion,
+      tournamentMainWins: tWins,
+      tournamentChampion: teamName === ucChampion || teamName === mjChampion,
+      tournamentRunnerUp: teamName === ucRunnerUp || teamName === mjRunnerUp,
+      proDraftedCount: 0,
+    };
+    updateUniversityReputation(teamData, results);
+    const change = updateUniversityRankFromReputation(teamData);
+    if (change) rankChanges.push(change);
+  }
+
+  // WORLD_DATA内の他リーグ大学チームも簡易更新
+  const uniLeagues = WORLD_DATA.universityLeagues;
+  if (uniLeagues) {
+    for (const [regionId, league] of Object.entries(uniLeagues)) {
+      for (const seasonKey of ['spring', 'fall']) {
+        const sd = league[seasonKey];
+        if (!sd?.done) continue;
+        const allStandings = league.divisions
+          ? [...(sd.standings1 || []), ...(sd.standings2 || [])]
+          : (sd.standings || []);
+        if (allStandings.length === 0) continue;
+        const leagueChamp = [...allStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)[0]?.team;
+        for (const st of allStandings) {
+          const teamDef = UNIVERSITY_TEAMS.find(t => t.name === st.team);
+          if (!teamDef) continue;
+          let rep = { S: 85, A: 65, B: 40, C: 20, D: 5 }[teamDef.rank] || 20;
+          rep += (st.wins || 0) * 0.3;
+          if (st.winRate >= 0.700) rep += 5;
+          if (st.winRate >= 0.600) rep += 3;
+          if (st.team === leagueChamp) rep += 8;
+          const tW = (ucWins[st.team] || 0) + (mjWins[st.team] || 0);
+          if (tW > 0) rep += 5 + tW * 2;
+          if (st.team === ucChampion || st.team === mjChampion) rep += 10;
+          rep = clamp(rep - UNI_REPUTATION_DECAY, 0, 100);
+          let newRank = teamDef.rank;
+          if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';
+          else if (rep >= RANK_PROMOTE_THRESHOLD.A) newRank = 'A';
+          else if (rep >= RANK_PROMOTE_THRESHOLD.B) newRank = 'B';
+          else if (rep >= RANK_PROMOTE_THRESHOLD.C) newRank = 'C';
+          else newRank = 'D';
+          const rankOrder = ['D', 'C', 'B', 'A', 'S'];
+          if (rankOrder.indexOf(newRank) < rankOrder.indexOf(teamDef.rank)) {
+            const dt2 = teamDef.rank === 'S' ? RANK_DEMOTE_THRESHOLD.S
+              : teamDef.rank === 'A' ? RANK_DEMOTE_THRESHOLD.A
+              : teamDef.rank === 'B' ? RANK_DEMOTE_THRESHOLD.B
+              : RANK_DEMOTE_THRESHOLD.C;
+            if (rep >= dt2) newRank = teamDef.rank;
+          }
+          if (newRank !== teamDef.rank) {
+            rankChanges.push({ team: st.team, from: teamDef.rank, to: newRank, reputation: rep, type: 'university' });
+            teamDef.rank = newRank;
+          }
+        }
+      }
+    }
   }
 
   return rankChanges;

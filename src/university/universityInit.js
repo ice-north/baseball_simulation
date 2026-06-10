@@ -125,6 +125,9 @@ export const initializeUniversityGame = (teamDef) => {
         region: def.region,
         budget: def.budget,
         leagueName: UNIVERSITY_REGIONS.find(r => r.id === def.region)?.name || '',
+        reputation: { S: 85, A: 65, B: 40, C: 20, D: 5 }[def.rank] || 20,
+        proDraftCount: 0,
+        tournamentWins: 0,
       },
     };
     allTeamNames.push(name);
