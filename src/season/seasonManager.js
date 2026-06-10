@@ -78,8 +78,22 @@ export const getDaysInMonth = (year, month) => {
 
 /**
  * 現在のフェーズを取得
+ * @param {number} month
+ * @param {number} day
+ * @param {Object} [options] - { universityMode: bool }
  */
-export const getCurrentPhase = (month, day) => {
+export const getCurrentPhase = (month, day, options) => {
+  if (options?.universityMode) {
+    // 大学モード: プレーオフ/契約更改/トライアウトなし
+    if (month >= 1 && month <= 3) return SEASON_PHASES.SPRING_CAMP;
+    if (month >= 4 && month <= 9) return SEASON_PHASES.REGULAR_SEASON;
+    if (month === 10 && day < 24) return SEASON_PHASES.REGULAR_SEASON;
+    if (month === 10 && day === 24) return SEASON_PHASES.DRAFT;
+    if (month === 10 && day > 24) return SEASON_PHASES.REGULAR_SEASON;
+    if (month === 11 && day <= 14) return SEASON_PHASES.REGULAR_SEASON;
+    return SEASON_PHASES.OFF_SEASON;
+  }
+
   if (month >= 1 && month <= 3) {
     return SEASON_PHASES.SPRING_CAMP;
   } else if (month >= 4 && month <= 9) {

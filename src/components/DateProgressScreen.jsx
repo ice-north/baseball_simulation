@@ -920,12 +920,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const dateObj = { year, month: selectedMonth, day };
       const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
       const isToday = seasonData.currentDate.year === year && seasonData.currentDate.month === selectedMonth && seasonData.currentDate.day === day;
-      const phase = getCurrentPhase(selectedMonth, day);
+      const phaseOpts = isUniversity ? { universityMode: true } : undefined;
+      const phase = getCurrentPhase(selectedMonth, day, phaseOpts);
       let eventLabel = null;
       if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
-      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate && !isUniversity) eventLabel = 'グランドCS';
-      else if (phase === SEASON_PHASES.PLAYOFFS && isUniversity) eventLabel = 'プレーオフ';
+      else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'グランドCS';
       else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
       else if (phase === SEASON_PHASES.CONTRACT) eventLabel = isCorporate ? '退団' : '契約更改';
       else if (phase === SEASON_PHASES.TRYOUT) eventLabel = isCorporate ? 'スカウト入団' : 'トライアウト';

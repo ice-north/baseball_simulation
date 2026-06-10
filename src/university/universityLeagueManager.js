@@ -9,9 +9,9 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 
 const RANK_STRENGTH = { S: 78, A: 65, B: 50, C: 38, D: 25 };
 
-// 春季: 4/5〜5/31, 秋季: 9/6〜10/20（ドラフト前に終了）
-const SPRING = { startMonth: 4, startDay: 5, endMonth: 5, endDay: 31 };
-const FALL   = { startMonth: 9, startDay: 6, endMonth: 10, endDay: 20 };
+// 春季: 4/5〜6/5, 秋季: 9/6〜11/5（秋季リーグ→明治神宮大会前に終了）
+const SPRING = { startMonth: 4, startDay: 5, endMonth: 6, endDay: 5 };
+const FALL   = { startMonth: 9, startDay: 6, endMonth: 11, endDay: 5 };
 
 function generateRoundRobin(teams) {
   const n = teams.length;
@@ -64,9 +64,12 @@ function generateLeagueSchedule(teamNames, year, season) {
   }
 
   const schedule = [];
-  let dateIdx = 0;
-  // 1日あたり最大試合数（6チーム→3試合、12チーム→6試合）
   const maxPerDay = Math.floor(teamNames.length / 2);
+  const totalDaysNeeded = Math.ceil(allGames.length / maxPerDay);
+  const step = Math.max(1, Math.floor(dates.length / totalDaysNeeded));
+
+  let dateIdx = 0;
+  let gamesOnCurrentDate = 0;
 
   for (let i = 0; i < allGames.length; i++) {
     if (dateIdx >= dates.length) dateIdx = dates.length - 1;
@@ -78,7 +81,11 @@ function generateLeagueSchedule(teamNames, year, season) {
       result: null,
       season,
     });
-    if ((i + 1) % maxPerDay === 0) dateIdx++;
+    gamesOnCurrentDate++;
+    if (gamesOnCurrentDate >= maxPerDay) {
+      gamesOnCurrentDate = 0;
+      dateIdx += step;
+    }
   }
 
   return schedule;

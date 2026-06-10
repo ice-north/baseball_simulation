@@ -16,7 +16,8 @@ import { updateAllPlayersCondition } from '../game/condition.js';
  */
 export const progressDate = (seasonData, days = 1) => {
   const newDate = advanceDate(seasonData.currentDate, days);
-  const newPhase = getCurrentPhase(newDate.month, newDate.day);
+  const phaseOpts = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
+  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts);
 
   // 投手の疲労を回復（1日あたり20）+ コンディション更新
   for (let i = 0; i < days; i++) {
@@ -46,7 +47,8 @@ export const progressToNextGame = (seasonData, teamName = null) => {
   }
 
   const newDate = { ...nextGame.date };
-  const newPhase = getCurrentPhase(newDate.month, newDate.day);
+  const phaseOpts = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
+  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts);
 
   return {
     ...seasonData,
@@ -72,8 +74,13 @@ export const progressToNextPhase = (seasonData) => {
       break;
 
     case SEASON_PHASES.REGULAR_SEASON:
-      // レギュラーシーズン → プレーオフ（10月10日）
-      targetDate = { year: seasonData.currentDate.year, month: 10, day: 10 };
+      if (seasonData.settings?.universityMode) {
+        // 大学モード: レギュラーシーズン → ドラフト（10月24日）
+        targetDate = { year: seasonData.currentDate.year, month: 10, day: 24 };
+      } else {
+        // レギュラーシーズン → プレーオフ（10月10日）
+        targetDate = { year: seasonData.currentDate.year, month: 10, day: 10 };
+      }
       break;
 
     case SEASON_PHASES.PLAYOFFS:
@@ -82,8 +89,13 @@ export const progressToNextPhase = (seasonData) => {
       break;
 
     case SEASON_PHASES.DRAFT:
-      // ドラフト → 契約更改（11月9日）
-      targetDate = { year: seasonData.currentDate.year, month: 11, day: 9 };
+      if (seasonData.settings?.universityMode) {
+        // 大学モード: ドラフト → オフシーズン（11月15日）
+        targetDate = { year: seasonData.currentDate.year, month: 11, day: 15 };
+      } else {
+        // ドラフト → 契約更改（11月9日）
+        targetDate = { year: seasonData.currentDate.year, month: 11, day: 9 };
+      }
       break;
 
     case SEASON_PHASES.CONTRACT:
@@ -106,7 +118,8 @@ export const progressToNextPhase = (seasonData) => {
       targetDate = advanceDate(seasonData.currentDate, 1);
   }
 
-  const newPhase = getCurrentPhase(targetDate.month, targetDate.day);
+  const phaseOpts2 = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
+  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts2);
 
   return {
     ...seasonData,
@@ -123,7 +136,8 @@ export const progressToNextPhase = (seasonData) => {
  * @returns {Object} 更新されたシーズンデータ
  */
 export const progressToDate = (seasonData, targetDate) => {
-  const newPhase = getCurrentPhase(targetDate.month, targetDate.day);
+  const phaseOpts3 = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
+  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts3);
 
   return {
     ...seasonData,
@@ -197,10 +211,8 @@ export const handlePhaseTransition = (seasonData, newPhase) => {
       if (seasonData.settings?.corporateMode) {
         break;
       }
-      // 独立リーグモードはグランドチャンピオンシップに置き換え→リーグ戦プレーオフはスキップ
-      if (!seasonData.settings?.universityMode) {
-        break;
-      }
+      // 独立リーグ・大学モードはリーグ戦プレーオフなし
+      break;
       // プレーオフ開始時：上位チームを取得してプレーオフスケジュールを生成
       let topTeams;
       const playoffFormat = seasonData.settings.playoffFormat;

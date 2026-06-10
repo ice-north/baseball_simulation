@@ -132,8 +132,9 @@ export const simulateAllRemainingGames = (seasonData) => {
       }
     }
   } else {
+    const phaseOpts = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
     const phaseGames = seasonData.schedule.filter(game => {
-      const gamePhase = getCurrentPhase(game.date.month, game.date.day);
+      const gamePhase = getCurrentPhase(game.date.month, game.date.day, phaseOpts);
       return gamePhase === currentPhase && !game.result;
     });
     phaseGames.forEach(game => {
