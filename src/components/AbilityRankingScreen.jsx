@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
-import { universityPool } from '../season/universityPool.js';
+import { universityPool, highSchoolPool } from '../season/universityPool.js';
+import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 
 const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
 const RANK_BG = { S: 'bg-yellow-900/30 border-yellow-700/50', A: 'bg-red-900/20 border-red-700/50', B: 'bg-blue-900/20 border-blue-700/50', C: 'bg-green-900/20 border-green-700/50', D: 'bg-gray-800 border-gray-700/50' };
@@ -35,6 +36,75 @@ const TYPE_LABEL = {
   university: { text: '大学', color: 'text-amber-400' },
   independent: { text: '独立', color: 'text-green-400' },
   user: { text: '自チーム', color: 'text-emerald-400' },
+  highschool: { text: '高校', color: 'text-pink-400' },
+};
+
+const NPB_TEAMS = [
+  { full: '読売ジャイアンツ', abbr: '巨人' },
+  { full: '阪神タイガース', abbr: '阪神' },
+  { full: '広島東洋カープ', abbr: '広島' },
+  { full: '中日ドラゴンズ', abbr: '中日' },
+  { full: '横浜DeNAベイスターズ', abbr: '横浜' },
+  { full: 'ヤクルトスワローズ', abbr: 'ヤクルト' },
+  { full: 'ソフトバンクホークス', abbr: 'ソフト' },
+  { full: '日本ハムファイターズ', abbr: '日ハム' },
+  { full: '楽天ゴールデンイーグルス', abbr: '楽天' },
+  { full: '西武ライオンズ', abbr: '西武' },
+  { full: '千葉ロッテマリーンズ', abbr: 'ロッテ' },
+  { full: 'オリックス・バファローズ', abbr: 'オリックス' },
+];
+
+const simpleHash = (id, salt) => ((id * 2654435761 + salt * 40503) >>> 0) % 1000;
+
+const getScoutInterest = (playerId, draftScore) => {
+  if (draftScore < 85) return [];
+  let count = 0;
+  if (draftScore >= 150) count = 5 + (simpleHash(playerId, 1) % 3);
+  else if (draftScore >= 130) count = 3 + (simpleHash(playerId, 1) % 3);
+  else if (draftScore >= 110) count = 2 + (simpleHash(playerId, 1) % 2);
+  else if (draftScore >= 95) count = 1 + (simpleHash(playerId, 1) % 2);
+  else count = simpleHash(playerId, 1) % 2;
+  if (count === 0) return [];
+
+  const shuffled = [...NPB_TEAMS].sort((a, b) =>
+    simpleHash(playerId, a.abbr.charCodeAt(0)) - simpleHash(playerId, b.abbr.charCodeAt(0))
+  );
+  return shuffled.slice(0, Math.min(count, 8)).map(t => t.abbr);
+};
+
+const getAmScoutInterest = (playerId, overall, age) => {
+  const labels = [];
+  if (age > 22) return labels;
+  if (overall >= 35) {
+    const uniChance = simpleHash(playerId, 99);
+    if (overall >= 50 || uniChance < 400) labels.push('大学');
+  }
+  if (overall >= 30) {
+    const corpChance = simpleHash(playerId, 77);
+    if (overall >= 45 || corpChance < 350) labels.push('社会人');
+  }
+  return labels;
+};
+
+const getBestBreaking = (player) => {
+  const arsenal = player.pitching?.arsenal || [];
+  return arsenal
+    .filter(a => a.type !== 'straight')
+    .reduce((max, a) => Math.max(max, a.level || 0), 0);
+};
+
+const ScoutBadges = ({ npbScouts, amScouts }) => {
+  if ((!npbScouts || npbScouts.length === 0) && (!amScouts || amScouts.length === 0)) return null;
+  return (
+    <div className="flex flex-wrap gap-0.5 mt-0.5">
+      {npbScouts?.map(t => (
+        <span key={t} className="text-[9px] px-1 py-0 rounded bg-red-900/40 text-red-300 leading-tight">{t}</span>
+      ))}
+      {amScouts?.map(t => (
+        <span key={t} className="text-[9px] px-1 py-0 rounded bg-purple-900/40 text-purple-300 leading-tight">{t}</span>
+      ))}
+    </div>
+  );
 };
 
 const AbilityRankingScreen = () => {
@@ -44,7 +114,7 @@ const AbilityRankingScreen = () => {
   const [limit, setLimit] = useState(50);
   const [teamRankFilter, setTeamRankFilter] = useState('all');
 
-  const { allPlayers, allTeamStats } = useMemo(() => {
+  const { allPlayers, allTeamStats, hsPlayers } = useMemo(() => {
     const players = [];
     const teamMap = {};
 
@@ -56,8 +126,7 @@ const AbilityRankingScreen = () => {
       const teamEntry = {
         name: teamName,
         abbr: getTeamAbbreviation(teamName),
-        type,
-        rank,
+        type, rank,
         count: 0, total: 0,
         pitchers: 0, pitcherTotal: 0,
         fielders: 0, fielderTotal: 0,
@@ -66,7 +135,9 @@ const AbilityRankingScreen = () => {
 
       for (const p of team.players) {
         const overall = calcPlayerOverall(p);
-        const entry = { ...p, teamName, teamAbbr: teamEntry.abbr, teamType: type, overall };
+        const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
+        const npbScouts = getScoutInterest(p.id, draftScore);
+        const entry = { ...p, teamName, teamAbbr: teamEntry.abbr, teamType: type, overall, draftScore, npbScouts };
         players.push(entry);
 
         teamEntry.count++;
@@ -84,7 +155,6 @@ const AbilityRankingScreen = () => {
       teamMap[teamName] = teamEntry;
     }
 
-    // 大学プールからチーム別に集計
     const uniTeamMap = {};
     Object.values(universityPool).forEach(cohort => {
       if (!cohort) return;
@@ -107,7 +177,9 @@ const AbilityRankingScreen = () => {
         }
         const p = entry.player;
         const overall = calcPlayerOverall(p);
-        const pEntry = { ...p, teamName: tName, teamAbbr: tName, teamType: 'university', overall };
+        const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
+        const npbScouts = getScoutInterest(p.id, draftScore);
+        const pEntry = { ...p, teamName: tName, teamAbbr: tName, teamType: 'university', overall, draftScore, npbScouts };
         players.push(pEntry);
 
         te.count++;
@@ -126,7 +198,15 @@ const AbilityRankingScreen = () => {
       teamMap[`uni_${te.name}`] = te;
     });
 
-    return { allPlayers: players, allTeamStats: Object.values(teamMap) };
+    const hs = (highSchoolPool.players || []).map(p => {
+      const overall = calcPlayerOverall(p);
+      const { totalScore: draftScore } = checkNPBDraftEligibility(p, 0);
+      const npbScouts = getScoutInterest(p.id, draftScore);
+      const amScouts = getAmScoutInterest(p.id, overall, p.age || 18);
+      return { ...p, teamName: '高校', teamAbbr: '高校', teamType: 'highschool', overall, draftScore, npbScouts, amScouts };
+    });
+
+    return { allPlayers: players, allTeamStats: Object.values(teamMap), hsPlayers: hs };
   }, [Object.keys(TEAMS_DATA).length]);
 
   const filteredPlayers = useMemo(() => {
@@ -135,22 +215,49 @@ const AbilityRankingScreen = () => {
     else if (category === 'fielder') list = list.filter(p => p.position !== 'pitcher');
 
     list = [...list].sort((a, b) => {
-      if (sortKey === 'overall') return b.overall - a.overall;
-      if (sortKey === 'meet') return (b.batting?.meet || 0) - (a.batting?.meet || 0);
-      if (sortKey === 'power') return (b.batting?.power || 0) - (a.batting?.power || 0);
-      if (sortKey === 'speed') return (b.physical?.speed || 0) - (a.physical?.speed || 0);
-      if (sortKey === 'defense') return (b.fielding?.defense || 0) - (a.fielding?.defense || 0);
-      if (sortKey === 'eye') return (b.batting?.eye || 0) - (a.batting?.eye || 0);
-      if (sortKey === 'arm') return (b.physical?.arm || 0) - (a.physical?.arm || 0);
-      if (sortKey === 'velocity') return (b.pitching?.velocity || 0) - (a.pitching?.velocity || 0);
-      if (sortKey === 'control') return (b.pitching?.control || 0) - (a.pitching?.control || 0);
-      if (sortKey === 'stamina') return (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0);
-      if (sortKey === 'age') return (a.age || 99) - (b.age || 99);
-      return b.overall - a.overall;
+      let diff = 0;
+      if (sortKey === 'overall') diff = b.overall - a.overall;
+      else if (sortKey === 'meet') diff = (b.batting?.meet || 0) - (a.batting?.meet || 0);
+      else if (sortKey === 'power') diff = (b.batting?.power || 0) - (a.batting?.power || 0);
+      else if (sortKey === 'speed') diff = (b.physical?.speed || 0) - (a.physical?.speed || 0);
+      else if (sortKey === 'defense') diff = (b.fielding?.defense || 0) - (a.fielding?.defense || 0);
+      else if (sortKey === 'eye') diff = (b.batting?.eye || 0) - (a.batting?.eye || 0);
+      else if (sortKey === 'arm') diff = (b.physical?.arm || 0) - (a.physical?.arm || 0);
+      else if (sortKey === 'velocity') diff = (b.pitching?.velocity || 0) - (a.pitching?.velocity || 0);
+      else if (sortKey === 'control') diff = (b.pitching?.control || 0) - (a.pitching?.control || 0);
+      else if (sortKey === 'stamina') diff = (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0);
+      else if (sortKey === 'breaking') diff = getBestBreaking(b) - getBestBreaking(a);
+      else if (sortKey === 'age') diff = (a.age || 99) - (b.age || 99);
+      else if (sortKey === 'draft') diff = (b.draftScore || 0) - (a.draftScore || 0);
+      else diff = b.overall - a.overall;
+      return diff !== 0 ? diff : b.overall - a.overall;
     });
 
     return list.slice(0, limit);
   }, [allPlayers, category, sortKey, limit]);
+
+  const filteredHsPlayers = useMemo(() => {
+    let list = hsPlayers;
+    if (category === 'pitcher') list = list.filter(p => p.position === 'pitcher');
+    else if (category === 'fielder') list = list.filter(p => p.position !== 'pitcher');
+
+    list = [...list].sort((a, b) => {
+      let diff = 0;
+      if (sortKey === 'draft') diff = (b.draftScore || 0) - (a.draftScore || 0);
+      else if (sortKey === 'overall') diff = b.overall - a.overall;
+      else if (sortKey === 'velocity') diff = (b.pitching?.velocity || 0) - (a.pitching?.velocity || 0);
+      else if (sortKey === 'control') diff = (b.pitching?.control || 0) - (a.pitching?.control || 0);
+      else if (sortKey === 'breaking') diff = getBestBreaking(b) - getBestBreaking(a);
+      else if (sortKey === 'meet') diff = (b.batting?.meet || 0) - (a.batting?.meet || 0);
+      else if (sortKey === 'power') diff = (b.batting?.power || 0) - (a.batting?.power || 0);
+      else if (sortKey === 'speed') diff = (b.physical?.speed || 0) - (a.physical?.speed || 0);
+      else if (sortKey === 'defense') diff = (b.fielding?.defense || 0) - (a.fielding?.defense || 0);
+      else diff = b.overall - a.overall;
+      return diff !== 0 ? diff : b.overall - a.overall;
+    });
+
+    return list.slice(0, limit);
+  }, [hsPlayers, category, sortKey, limit]);
 
   const filteredTeams = useMemo(() => {
     let list = allTeamStats;
@@ -164,39 +271,134 @@ const AbilityRankingScreen = () => {
     return [...list].sort((a, b) => b.avg - a.avg);
   }, [allTeamStats, teamRankFilter]);
 
-  const sortOptions = category === 'pitcher'
-    ? [{ key: 'overall', label: '総合' }, { key: 'velocity', label: '球速' }, { key: 'control', label: '制球' }, { key: 'stamina', label: 'スタミナ' }, { key: 'age', label: '年齢' }]
-    : category === 'fielder'
-    ? [{ key: 'overall', label: '総合' }, { key: 'meet', label: 'ミート' }, { key: 'power', label: 'パワー' }, { key: 'speed', label: '走力' }, { key: 'defense', label: '守備' }, { key: 'eye', label: '選球眼' }, { key: 'age', label: '年齢' }]
-    : [{ key: 'overall', label: '総合' }, { key: 'age', label: '年齢' }];
+  const getSortOptions = (forMode) => {
+    if (forMode === 'highschool') {
+      if (category === 'pitcher') return [
+        { key: 'draft', label: 'ドラフト' }, { key: 'overall', label: '総合' },
+        { key: 'velocity', label: '球速' }, { key: 'control', label: '制球' },
+        { key: 'breaking', label: '変化球' },
+      ];
+      if (category === 'fielder') return [
+        { key: 'draft', label: 'ドラフト' }, { key: 'overall', label: '総合' },
+        { key: 'meet', label: 'ミート' }, { key: 'power', label: 'パワー' },
+        { key: 'speed', label: '走力' }, { key: 'defense', label: '守備' },
+      ];
+      return [{ key: 'draft', label: 'ドラフト' }, { key: 'overall', label: '総合' }];
+    }
+    if (category === 'pitcher') return [
+      { key: 'overall', label: '総合' }, { key: 'velocity', label: '球速' },
+      { key: 'control', label: '制球' }, { key: 'breaking', label: '変化球' },
+      { key: 'stamina', label: 'スタミナ' }, { key: 'draft', label: 'ドラフト' },
+      { key: 'age', label: '年齢' },
+    ];
+    if (category === 'fielder') return [
+      { key: 'overall', label: '総合' }, { key: 'meet', label: 'ミート' },
+      { key: 'power', label: 'パワー' }, { key: 'speed', label: '走力' },
+      { key: 'defense', label: '守備' }, { key: 'eye', label: '選球眼' },
+      { key: 'draft', label: 'ドラフト' }, { key: 'age', label: '年齢' },
+    ];
+    return [{ key: 'overall', label: '総合' }, { key: 'draft', label: 'ドラフト' }, { key: 'age', label: '年齢' }];
+  };
+
+  const renderPlayerTable = (playerList, showAmScouts = false) => {
+    const showFielder = category === 'all' || category === 'fielder';
+    const showPitcher = category === 'all' || category === 'pitcher';
+
+    return (
+      <div className="bg-gray-800 rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-gray-400 text-xs border-b border-gray-700">
+              <th className="px-1.5 py-2 text-left w-6">#</th>
+              <th className="px-1.5 py-2 text-left">選手</th>
+              <th className="px-1.5 py-2 text-center">守</th>
+              <th className="px-1.5 py-2 text-center">年</th>
+              <th className="px-1.5 py-2 text-left">所属</th>
+              <th className="px-1.5 py-2 text-center font-bold">総合</th>
+              {showFielder && <>
+                <th className="px-1 py-2 text-center">ミ</th>
+                <th className="px-1 py-2 text-center">パ</th>
+                <th className="px-1 py-2 text-center">走</th>
+                <th className="px-1 py-2 text-center">守</th>
+                <th className="px-1 py-2 text-center">眼</th>
+              </>}
+              {showPitcher && <>
+                <th className="px-1 py-2 text-center">球速</th>
+                <th className="px-1 py-2 text-center">制球</th>
+                <th className="px-1 py-2 text-center">変</th>
+                <th className="px-1 py-2 text-center">ス</th>
+              </>}
+              <th className="px-1 py-2 text-left">スカウト注目</th>
+            </tr>
+          </thead>
+          <tbody>
+            {playerList.map((p, i) => {
+              const isPitcher = p.position === 'pitcher';
+              const typeInfo = TYPE_LABEL[p.teamType] || TYPE_LABEL.user;
+              const bestBrk = getBestBreaking(p);
+              return (
+                <tr key={`${p.id}-${i}`} className={`border-b border-gray-700/30 hover:bg-gray-700/30 ${i < 3 ? 'bg-gray-700/20' : ''}`}>
+                  <td className="px-1.5 py-1.5 text-gray-500 text-xs">{i + 1}</td>
+                  <td className="px-1.5 py-1.5 font-bold text-white text-xs">{p.name}</td>
+                  <td className="px-1.5 py-1.5 text-center text-gray-400 text-xs">{POSITION_NAMES[p.position] || p.position}</td>
+                  <td className="px-1.5 py-1.5 text-center text-gray-400 text-xs">{p.age}</td>
+                  <td className="px-1.5 py-1.5 text-xs">
+                    <span className={typeInfo.color}>{p.teamAbbr}</span>
+                  </td>
+                  <td className={`px-1.5 py-1.5 text-center font-bold ${getOverallColor(p.overall)}`}>{p.overall}</td>
+                  {showFielder && <>
+                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.meet || 0)}`}>{isPitcher ? '-' : p.batting?.meet || 0}</td>
+                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.power || 0)}`}>{isPitcher ? '-' : p.batting?.power || 0}</td>
+                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.physical?.speed || 0)}`}>{isPitcher ? '-' : p.physical?.speed || 0}</td>
+                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.fielding?.defense || 0)}`}>{isPitcher ? '-' : p.fielding?.defense || 0}</td>
+                    <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.eye || 0)}`}>{isPitcher ? '-' : p.batting?.eye || 0}</td>
+                  </>}
+                  {showPitcher && <>
+                    <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor((p.pitching?.velocity || 130) - 100)}`}>{!isPitcher ? '-' : p.pitching?.velocity || 130}</td>
+                    <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor(p.pitching?.control || 0)}`}>{!isPitcher ? '-' : p.pitching?.control || 0}</td>
+                    <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor(bestBrk)}`}>{!isPitcher ? '-' : bestBrk}</td>
+                    <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor(p.pitching?.stamina || 0)}`}>{!isPitcher ? '-' : p.pitching?.stamina || 0}</td>
+                  </>}
+                  <td className="px-1 py-1 text-xs">
+                    <ScoutBadges npbScouts={p.npbScouts} amScouts={showAmScouts ? p.amScouts : null} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const currentSortOptions = getSortOptions(mode);
 
   return (
     <div className="p-4 bg-gray-900 min-h-screen text-white">
       <h1 className="text-2xl font-bold mb-1">📰 総合ランキング</h1>
-      <p className="text-gray-400 text-xs mb-4">全チーム・全選手の能力ランキング。注目度が高いほどドラフト上位指名の可能性あり</p>
+      <p className="text-gray-400 text-xs mb-4">全チーム・全選手の能力ランキング</p>
 
-      {/* モード切替: 選手 / チーム */}
       <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setMode('player')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-            mode === 'player' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
-          }`}
-        >選手ランキング</button>
-        <button
-          onClick={() => setMode('team')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-            mode === 'team' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
-          }`}
-        >チームランキング</button>
+        {[
+          { key: 'player', label: '選手ランキング' },
+          { key: 'team', label: 'チームランキング' },
+          { key: 'highschool', label: `高校3年生${hsPlayers.length > 0 ? ` (${hsPlayers.length})` : ''}` },
+        ].map(t => (
+          <button key={t.key}
+            onClick={() => { setMode(t.key); setCategory('all'); setSortKey(t.key === 'highschool' ? 'draft' : 'overall'); }}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
+              mode === t.key ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+          >{t.label}</button>
+        ))}
       </div>
 
-      {mode === 'player' ? (
+      {(mode === 'player' || mode === 'highschool') && (
         <>
           <div className="flex gap-1 mb-3">
             {[{ key: 'all', label: '全選手' }, { key: 'pitcher', label: '投手' }, { key: 'fielder', label: '野手' }].map(t => (
               <button key={t.key}
-                onClick={() => { setCategory(t.key); setSortKey('overall'); }}
+                onClick={() => { setCategory(t.key); setSortKey(mode === 'highschool' ? 'draft' : 'overall'); }}
                 className={`px-3 py-1.5 rounded text-sm font-bold transition ${
                   category === t.key ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
                 }`}
@@ -207,7 +409,7 @@ const AbilityRankingScreen = () => {
           <div className="flex items-center gap-3 mb-3">
             <span className="text-xs text-gray-500">ソート:</span>
             <div className="flex flex-wrap gap-1">
-              {sortOptions.map(o => (
+              {currentSortOptions.map(o => (
                 <button key={o.key}
                   onClick={() => setSortKey(o.key)}
                   className={`px-2 py-1 rounded text-xs font-bold transition ${
@@ -225,69 +427,32 @@ const AbilityRankingScreen = () => {
             </div>
           </div>
 
-          <div className="bg-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-gray-400 text-xs border-b border-gray-700">
-                  <th className="px-2 py-2 text-left w-8">#</th>
-                  <th className="px-2 py-2 text-left">選手</th>
-                  <th className="px-2 py-2 text-center">守</th>
-                  <th className="px-2 py-2 text-center">年</th>
-                  <th className="px-2 py-2 text-left">所属</th>
-                  <th className="px-2 py-2 text-center font-bold">総合</th>
-                  {(category === 'all' || category === 'fielder') && <>
-                    <th className="px-2 py-2 text-center">ミ</th>
-                    <th className="px-2 py-2 text-center">パ</th>
-                    <th className="px-2 py-2 text-center">走</th>
-                    <th className="px-2 py-2 text-center">守</th>
-                    <th className="px-2 py-2 text-center">眼</th>
-                  </>}
-                  {(category === 'all' || category === 'pitcher') && <>
-                    <th className="px-2 py-2 text-center">球速</th>
-                    <th className="px-2 py-2 text-center">制球</th>
-                    <th className="px-2 py-2 text-center">ス</th>
-                  </>}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPlayers.map((p, i) => {
-                  const isPitcher = p.position === 'pitcher';
-                  const typeInfo = TYPE_LABEL[p.teamType] || TYPE_LABEL.user;
-                  return (
-                    <tr key={`${p.id}-${i}`} className={`border-b border-gray-700/30 hover:bg-gray-700/30 ${i < 3 ? 'bg-gray-700/20' : ''}`}>
-                      <td className="px-2 py-1.5 text-gray-500 text-xs">{i + 1}</td>
-                      <td className="px-2 py-1.5 font-bold text-white text-xs">{p.name}</td>
-                      <td className="px-2 py-1.5 text-center text-gray-400 text-xs">{POSITION_NAMES[p.position] || p.position}</td>
-                      <td className="px-2 py-1.5 text-center text-gray-400 text-xs">{p.age}</td>
-                      <td className="px-2 py-1.5 text-xs">
-                        <span className={typeInfo.color}>{p.teamAbbr}</span>
-                      </td>
-                      <td className={`px-2 py-1.5 text-center font-bold ${getOverallColor(p.overall)}`}>{p.overall}</td>
-                      {(category === 'all' || category === 'fielder') && <>
-                        <td className={`px-2 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.meet || 0)}`}>{isPitcher ? '-' : p.batting?.meet || 0}</td>
-                        <td className={`px-2 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.power || 0)}`}>{isPitcher ? '-' : p.batting?.power || 0}</td>
-                        <td className={`px-2 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.physical?.speed || 0)}`}>{isPitcher ? '-' : p.physical?.speed || 0}</td>
-                        <td className={`px-2 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.fielding?.defense || 0)}`}>{isPitcher ? '-' : p.fielding?.defense || 0}</td>
-                        <td className={`px-2 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-700' : getStatColor(p.batting?.eye || 0)}`}>{isPitcher ? '-' : p.batting?.eye || 0}</td>
-                      </>}
-                      {(category === 'all' || category === 'pitcher') && <>
-                        <td className={`px-2 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor((p.pitching?.velocity || 130) - 100)}`}>{!isPitcher ? '-' : p.pitching?.velocity || 130}</td>
-                        <td className={`px-2 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor(p.pitching?.control || 0)}`}>{!isPitcher ? '-' : p.pitching?.control || 0}</td>
-                        <td className={`px-2 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-700' : getStatColor(p.pitching?.stamina || 0)}`}>{!isPitcher ? '-' : p.pitching?.stamina || 0}</td>
-                      </>}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="text-xs text-gray-500 mt-2">
-            全{allPlayers.length}選手中 上位{Math.min(limit, filteredPlayers.length)}名を表示
-          </div>
+          {mode === 'player' ? (
+            <>
+              {renderPlayerTable(filteredPlayers, false)}
+              <div className="text-xs text-gray-500 mt-2">
+                全{allPlayers.length}選手中 上位{Math.min(limit, filteredPlayers.length)}名を表示
+              </div>
+            </>
+          ) : (
+            <>
+              {hsPlayers.length === 0 ? (
+                <div className="text-gray-500 text-center py-8">高校3年生はまだ生成されていません（4月に生成されます）</div>
+              ) : (
+                <>
+                  {renderPlayerTable(filteredHsPlayers, true)}
+                  <div className="text-xs text-gray-500 mt-2">
+                    全{hsPlayers.length}名中 上位{Math.min(limit, filteredHsPlayers.length)}名を表示
+                  </div>
+                </>
+              )}
+            </>
+          )}
         </>
-      ) : (
+      )}
+
+      {mode === 'team' && (
         <>
-          {/* チームランキング: ランク別フィルタ */}
           <div className="flex flex-wrap gap-1 mb-4">
             {[
               { key: 'all', label: '全チーム' },
