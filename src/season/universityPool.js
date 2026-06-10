@@ -128,11 +128,11 @@ function generateHighSchoolPlayer(id) {
       power: cl(r(3, 18) + Math.round(off * 0.3) + tri(3), 3, 35),
       eye: cl(r(8, 25) + Math.round(off * 0.3) + tri(3), 5, 45),
       steal: cl(r(8, 25) + tri(3), 1, 50),
-      speed: cl(r(22, 48) + Math.round(off * 0.5) + tri(4), 1, 70),
+      speed: cl(r(22, 52) + tri(6), 1, 80),
       arm: cl(r(30, 58) + Math.round(off * 0.5) + tri(4), 15, 80),
       defense: cl(r(22, 42) + Math.round(off * 0.4) + tri(3), 1, 65),
-      bodyStamina: cl(r(30, 55) + Math.round(off * 0.3) + tri(3), 20, 75),
-      recovery: cl(r(30, 55) + Math.round(off * 0.3) + tri(3), 20, 70),
+      bodyStamina: cl(r(30, 60) + tri(5), 20, 80),
+      recovery: cl(r(28, 58) + tri(5), 20, 75),
       velocity: cl(velocity, 95, 163),
       control: cl(control, 5, 80),
       stamina: cl(stamina, 25, 120)
@@ -141,7 +141,7 @@ function generateHighSchoolPlayer(id) {
     let meet = r(8, 30) + off + tri(5);
     let power = r(5, 25) + off + tri(5);
     let eye = r(8, 28) + Math.round(off * 0.8) + tri(4);
-    let speed = r(18, 48) + Math.round(off * 0.6) + tri(5);
+    let speed = r(18, 52) + tri(6);
     let defense = r(15, 42) + Math.round(off * 0.6) + tri(4);
     let arm = r(15, 48) + Math.round(off * 0.5) + tri(4);
     let steal = r(8, 35) + Math.round(off * 0.4) + tri(4);
@@ -157,20 +157,20 @@ function generateHighSchoolPlayer(id) {
       eye: cl(eye, 10, 65), steal: cl(steal, 5, 70),
       speed: cl(speed, 1, 85), arm: cl(arm, 1, 80),
       defense: cl(defense, 1, 75),
-      bodyStamina: cl(r(30, 58) + Math.round(off * 0.3) + tri(3), 20, 75),
-      recovery: cl(r(28, 55) + Math.round(off * 0.3) + tri(3), 20, 70),
+      bodyStamina: cl(r(30, 62) + tri(5), 20, 80),
+      recovery: cl(r(28, 58) + tri(5), 20, 75),
       velocity: cl(r(100, 128) + Math.round(off * 0.4) + tri(3), 90, 145),
       control: cl(r(10, 30) + Math.round(off * 0.3) + tri(3), 5, 50),
       stamina: cl(r(30, 55) + Math.round(off * 0.3) + tri(3), 20, 70)
     };
   }
 
-  // 成長力: ランクと緩く相関（低ランクでも大器晩成型が出現）
-  const gpCenter = { S: 1.15, A: 1.05, B: 0.95, C: 0.85, D: 0.78, E: 0.70 };
+  // 成長力: ランクにほぼ依存しない（生まれ持った素質）
+  const gpCenter = { S: 1.02, A: 0.98, B: 0.95, C: 0.92, D: 0.90, E: 0.88 };
   const u1 = Math.random() || 0.001;
   const u2 = Math.random();
   const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  const growthPotential = cl(gpCenter[tier] + normal * 0.22, 0.35, 1.50);
+  const growthPotential = cl(gpCenter[tier] + normal * 0.28, 0.35, 1.50);
 
   let fame = 0;
   if (tier === 'S') {

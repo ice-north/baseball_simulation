@@ -197,12 +197,11 @@ const applyBoost = (player, boostRange, growthBonus) => {
     player.batting.meet = clamp(player.batting.meet + boost, 1, 99);
     player.batting.power = clamp(player.batting.power + Math.floor(boost * 0.85), 1, 99);
     player.batting.eye = clamp(player.batting.eye + Math.floor(boost * 0.8), 1, 99);
-    player.physical.speed = clamp(player.physical.speed + Math.floor(boost * 0.5), 1, 99);
+    // 走力はブーストしない（生まれ持った身体能力）
     player.fielding.defense = clamp(player.fielding.defense + Math.floor(boost * 0.6), 1, 99);
     player.physical.arm = clamp(player.physical.arm + Math.floor(boost * 0.5), 1, 99);
   }
-
-  player.growthPotential = clamp((player.growthPotential || 1.0) + growthBonus, 0.5, 1.5);
+  // 成長力はブーストしない（生まれ持った素質）
 };
 
 const adjustCorporateAge = (player, isIndependent = false) => {
@@ -278,9 +277,12 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     p.batting.power = scaleAndJitter(p.batting.power, 6);
     p.batting.eye = scaleAndJitter(p.batting.eye, 5);
     p.batting.steal = scaleAndJitter(p.batting.steal, 5);
-    p.physical.speed = scaleAndJitter(p.physical.speed, 5);
+    // 走力・体力・回復はランクに依存しない（生まれ持った身体能力）
+    p.physical.speed = clamp(p.physical.speed + randInt(-8, 8) + randInt(-5, 5), 1, 99);
     p.physical.arm = scaleAndJitter(p.physical.arm, 5);
     p.fielding.defense = scaleAndJitter(p.fielding.defense, 5);
+    p.physical.bodyStamina = clamp((p.physical.bodyStamina || 50) + randInt(-8, 8) + randInt(-5, 5), 15, 99);
+    p.physical.recovery = clamp((p.physical.recovery || 50) + randInt(-8, 8) + randInt(-5, 5), 15, 99);
 
     adjustCorporateAge(p, isIndependent);
 
