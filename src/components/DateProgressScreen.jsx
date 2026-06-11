@@ -3021,162 +3021,108 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           modalSubtitle = isTdQualifier ? `地区予選 ${td?.qualifiers?.[tm.regionId]?.regionName}${tm.bracketType === 'losers' ? ' 敗者復活' : ''} - ${roundName}` : `本戦 - ${roundName}`;
         }
 
-        return (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className={`bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl border ${(isUcType || isMjType) ? 'border-blue-600/50' : isRtType ? 'border-green-600/50' : isCsType ? 'border-purple-600/50' : isNsType ? 'border-red-600/50' : 'border-yellow-600/50'}`}>
-              <h2 className={`text-xl font-bold text-center mb-1 ${(isUcType || isMjType) ? 'text-blue-400' : isRtType ? 'text-green-400' : isCsType ? 'text-purple-400' : isNsType ? 'text-red-400' : 'text-yellow-400'}`}>
-                {modalTitle}
-              </h2>
-              <div className="text-center text-sm text-gray-400 mb-4">
-                {modalSubtitle}
-              </div>
-              <div className="flex items-center justify-center gap-6 mb-4">
-                <div className="text-center">
-                  <div className="font-bold text-lg text-yellow-300">{userTeamName}</div>
-                </div>
-                <div className="text-2xl text-gray-500 font-bold">VS</div>
-                <div className="text-center">
-                  <div className="font-bold text-lg text-white">{oppName}</div>
-                  {oppDef?.rank && <div className="text-xs text-gray-500">ランク: {oppDef.rank}</div>}
-                </div>
-              </div>
-              {/* 簡易スタメン表示 */}
-              {(() => {
-                const userTeam = TEAMS_DATA[userTeamName];
-                if (!userTeam?.players) return null;
-                const settings = userTeam.lineupSettings;
-                const rotation = userTeam.pitchingRotation;
-                const starterPitcher = getStartingPitcher(userTeamName);
-                const starters = settings?.battingOrder?.length > 0
-                  ? settings.battingOrder
-                    .sort((a, b) => a.battingOrder - b.battingOrder)
-                    .map(entry => {
-                      if (entry.position === 'pitcher' && starterPitcher) {
-                        return { ...starterPitcher, _pos: 'pitcher', _order: entry.battingOrder };
-                      }
-                      const p = userTeam.players.find(pl => pl.id === entry.playerId);
-                      return p ? { ...p, _pos: entry.position, _order: entry.battingOrder } : null;
-                    }).filter(Boolean)
-                  : [];
-                if (starters.length === 0) return null;
-                return (
-                  <div className="bg-gray-800/80 rounded-lg p-2 mb-4 border border-gray-700/50">
-                    <div className="text-[10px] text-gray-500 mb-1 font-medium">スタメン</div>
-                    <div className="space-y-0.5">
-                      {starters.map((p, i) => (
-                        <div key={i} className="flex items-center gap-1 text-[11px]">
-                          <span className="text-gray-500 w-3 text-right">{p._order}</span>
-                          <span className="text-gray-400 w-6 text-center">{POSITION_NAMES[p._pos] || p._pos}</span>
-                          <span className="text-white">{p.name}</span>
-                          {p._pos === 'pitcher' && p.pitching?.velocity && (
-                            <span className="text-gray-500 ml-auto">{p.pitching.velocity}km</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowTournamentMatchModal(null);
-                    startTournamentMatch(oppName, oppDef, {
-                      regionId: tm.regionId || null,
-                      roundIdx: tm.roundIdx,
-                      matchIdx: tm.matchIdx,
-                      bracketType: tm.bracketType,
-                    });
-                  }}
-                  className="flex-1 py-3 bg-yellow-600 hover:bg-yellow-500 text-black font-bold rounded-xl transition text-sm"
-                >采配で試合</button>
-                <button
-                  onClick={() => {
-                    setShowTournamentMatchModal(null);
-                    if (isUcType || isMjType) {
-                      const dataKey = isUcType ? 'universityChampionship' : 'meijiJingu';
-                      const srcData = { ...seasonData[dataKey] };
-                      if (srcData.bracket && srcData.teamDefsMap) {
-                        const def1 = srcData.teamDefsMap[tm.match.team1];
-                        const def2 = srcData.teamDefsMap[tm.match.team2];
-                        if (def1 && def2) {
-                          const result = simulateQuickMatch(def1, def2);
-                          recordTournamentResult(srcData.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
-                        }
-                      }
-                      setSeasonData(prev => ({ ...prev, [dataKey]: srcData }));
-                    } else if (isRtType) {
-                      const rtData = { ...seasonData.regionalTournament };
-                      const region = rtData.brackets?.[tm.regionId];
-                      if (region) {
-                        const def1 = region.teamDefsMap[tm.match.team1];
-                        const def2 = region.teamDefsMap[tm.match.team2];
-                        if (def1 && def2) {
-                          const result = simulateQuickMatch(def1, def2);
-                          recordTournamentResult(region.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
-                        }
-                      }
-                      setSeasonData(prev => ({ ...prev, regionalTournament: rtData }));
-                    } else if (isNsType || isCsType) {
-                      const dataKey = isCsType ? 'clubSenshuken' : 'nihonSenshuken';
-                      const srcData = { ...seasonData[dataKey] };
-                      const mainBt = isCsType ? 'club_senshuken' : 'nihon_senshuken';
-                      let targetBracket, teamDefsMap;
-                      if (tm.bracketType === mainBt) {
-                        targetBracket = srcData.mainTournament?.bracket;
-                        teamDefsMap = srcData.mainTournament?.teamDefsMap;
-                      } else if (tm.bracketType.includes('losers')) {
-                        targetBracket = srcData.qualifiers?.[tm.regionId]?.losersBracket;
-                        teamDefsMap = srcData.qualifiers?.[tm.regionId]?.teamDefsMap;
-                      } else {
-                        targetBracket = srcData.qualifiers?.[tm.regionId]?.mainBracket;
-                        teamDefsMap = srcData.qualifiers?.[tm.regionId]?.teamDefsMap;
-                      }
-                      if (targetBracket && teamDefsMap) {
-                        const def1 = teamDefsMap[tm.match.team1];
-                        const def2 = teamDefsMap[tm.match.team2];
-                        if (def1 && def2) {
-                          const result = simulateQuickMatch(def1, def2);
-                          recordTournamentResult(targetBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
-                        }
-                      }
-                      setSeasonData(prev => ({ ...prev, [dataKey]: srcData }));
-                    } else {
-                      const td = { ...seasonData.toshitaikou };
-                      if (tm.type === 'qualifier' && tm.regionId) {
-                        const q = td.qualifiers[tm.regionId];
-                        if (q) {
-                          const targetBracket = tm.bracketType === 'losers' ? q.losersBracket : q.mainBracket;
-                          const def1 = q.teamDefsMap[tm.match.team1];
-                          const def2 = q.teamDefsMap[tm.match.team2];
-                          if (targetBracket && def1 && def2) {
-                            const result = simulateQuickMatch(def1, def2);
-                            recordTournamentResult(targetBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
-                          }
-                        }
-                      } else if (tm.type === 'main' && td.mainTournament) {
-                        const mt = td.mainTournament;
-                        const def1 = mt.teamDefsMap[tm.match.team1];
-                        const def2 = mt.teamDefsMap[tm.match.team2];
-                        if (def1 && def2) {
-                          const result = simulateQuickMatch(def1, def2);
-                          recordTournamentResult(mt.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
-                        }
-                      }
-                      setSeasonData(prev => ({ ...prev, toshitaikou: td }));
-                    }
-                    executeSkipDay(1);
-                  }}
-                  className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-xl transition text-sm"
-                >自動消化</button>
-              </div>
-              <button
-                onClick={() => setShowTournamentMatchModal(null)}
-                className="w-full mt-2 py-2 text-gray-500 hover:text-white text-xs transition"
-              >閉じる</button>
-            </div>
-          </div>
-        );
+        const titleColor = (isUcType || isMjType) ? 'text-blue-400' : isRtType ? 'text-green-400' : isCsType ? 'text-purple-400' : isNsType ? 'text-red-400' : 'text-yellow-400';
+
+        const handleTournamentChoice = (choice) => {
+          setShowTournamentMatchModal(null);
+          if (choice === 'manage') {
+            startTournamentMatch(oppName, oppDef, {
+              regionId: tm.regionId || null,
+              roundIdx: tm.roundIdx,
+              matchIdx: tm.matchIdx,
+              bracketType: tm.bracketType,
+            });
+          } else {
+            if (isUcType || isMjType) {
+              const dataKey = isUcType ? 'universityChampionship' : 'meijiJingu';
+              const srcData = { ...seasonData[dataKey] };
+              if (srcData.bracket && srcData.teamDefsMap) {
+                const def1 = srcData.teamDefsMap[tm.match.team1];
+                const def2 = srcData.teamDefsMap[tm.match.team2];
+                if (def1 && def2) {
+                  const result = simulateQuickMatch(def1, def2);
+                  recordTournamentResult(srcData.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                }
+              }
+              setSeasonData(prev => ({ ...prev, [dataKey]: srcData }));
+            } else if (isRtType) {
+              const rtData = { ...seasonData.regionalTournament };
+              const region = rtData.brackets?.[tm.regionId];
+              if (region) {
+                const def1 = region.teamDefsMap[tm.match.team1];
+                const def2 = region.teamDefsMap[tm.match.team2];
+                if (def1 && def2) {
+                  const result = simulateQuickMatch(def1, def2);
+                  recordTournamentResult(region.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                }
+              }
+              setSeasonData(prev => ({ ...prev, regionalTournament: rtData }));
+            } else if (isNsType || isCsType) {
+              const dataKey = isCsType ? 'clubSenshuken' : 'nihonSenshuken';
+              const srcData = { ...seasonData[dataKey] };
+              const mainBt = isCsType ? 'club_senshuken' : 'nihon_senshuken';
+              let targetBracket, teamDefsMap;
+              if (tm.bracketType === mainBt) {
+                targetBracket = srcData.mainTournament?.bracket;
+                teamDefsMap = srcData.mainTournament?.teamDefsMap;
+              } else if (tm.bracketType.includes('losers')) {
+                targetBracket = srcData.qualifiers?.[tm.regionId]?.losersBracket;
+                teamDefsMap = srcData.qualifiers?.[tm.regionId]?.teamDefsMap;
+              } else {
+                targetBracket = srcData.qualifiers?.[tm.regionId]?.mainBracket;
+                teamDefsMap = srcData.qualifiers?.[tm.regionId]?.teamDefsMap;
+              }
+              if (targetBracket && teamDefsMap) {
+                const def1 = teamDefsMap[tm.match.team1];
+                const def2 = teamDefsMap[tm.match.team2];
+                if (def1 && def2) {
+                  const result = simulateQuickMatch(def1, def2);
+                  recordTournamentResult(targetBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                }
+              }
+              setSeasonData(prev => ({ ...prev, [dataKey]: srcData }));
+            } else {
+              const td = { ...seasonData.toshitaikou };
+              if (tm.type === 'qualifier' && tm.regionId) {
+                const q = td.qualifiers[tm.regionId];
+                if (q) {
+                  const targetBracket = tm.bracketType === 'losers' ? q.losersBracket : q.mainBracket;
+                  const def1 = q.teamDefsMap[tm.match.team1];
+                  const def2 = q.teamDefsMap[tm.match.team2];
+                  if (targetBracket && def1 && def2) {
+                    const result = simulateQuickMatch(def1, def2);
+                    recordTournamentResult(targetBracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                  }
+                }
+              } else if (tm.type === 'main' && td.mainTournament) {
+                const mt = td.mainTournament;
+                const def1 = mt.teamDefsMap[tm.match.team1];
+                const def2 = mt.teamDefsMap[tm.match.team2];
+                if (def1 && def2) {
+                  const result = simulateQuickMatch(def1, def2);
+                  recordTournamentResult(mt.bracket, tm.roundIdx, tm.matchIdx, result.winner, result.score);
+                }
+              }
+              setSeasonData(prev => ({ ...prev, toshitaikou: td }));
+            }
+            executeSkipDay(1);
+          }
+        };
+
+        return <PreGameModal
+          seasonData={seasonData}
+          userTeamName={userTeamName}
+          formatDate={formatDate}
+          getStartingPitcher={getStartingPitcher}
+          handleGameChoice={handleTournamentChoice}
+          setShowGameChoiceModal={() => setShowTournamentMatchModal(null)}
+          tournamentInfo={{
+            opponentName: oppName,
+            title: modalTitle,
+            subtitle: modalSubtitle,
+            titleColor,
+          }}
+        />;
       })()}
 
       {/* 試合選択モーダル */}
@@ -3193,15 +3139,22 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 };
 
 /** 試合前モーダル：先発投手選択・スタメン簡易変更・相手ラインナップ確認 */
-const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher, handleGameChoice, setShowGameChoiceModal }) => {
+const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher, handleGameChoice, setShowGameChoiceModal, tournamentInfo }) => {
   const [swapTarget, setSwapTarget] = useState(null);
   const [, setTick] = useState(0);
   const [benchFilter, setBenchFilter] = useState('fielder');
 
-  const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
-  const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
-  const opponentName = userGame ? (userGame.home === userTeamName ? userGame.away : userGame.home) : '';
-  const isHome = userGame ? userGame.home === userTeamName : true;
+  const isTournament = !!tournamentInfo;
+  let opponentName, isHome;
+  if (isTournament) {
+    opponentName = tournamentInfo.opponentName;
+    isHome = true;
+  } else {
+    const todayGames = getScheduleByDate(seasonData.schedule, seasonData.currentDate);
+    const userGame = todayGames.find(g => !g.result && (g.home === userTeamName || g.away === userTeamName));
+    opponentName = userGame ? (userGame.home === userTeamName ? userGame.away : userGame.home) : '';
+    isHome = userGame ? userGame.home === userTeamName : true;
+  }
   const userTeam = TEAMS_DATA[userTeamName];
   const opponentTeam = TEAMS_DATA[opponentName];
   const FORM_LABELS = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
@@ -3426,7 +3379,12 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
       <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-4 max-w-5xl w-full mx-4 shadow-2xl border border-gray-600/50 my-4">
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold text-white">{formatDate(seasonData.currentDate)} の試合</h2>
+          <div>
+            <h2 className="text-lg font-bold text-white">{formatDate(seasonData.currentDate)} の試合</h2>
+            {isTournament && tournamentInfo.title && (
+              <div className={`text-sm font-bold ${tournamentInfo.titleColor || 'text-yellow-400'}`}>{tournamentInfo.title}{tournamentInfo.subtitle ? ` - ${tournamentInfo.subtitle}` : ''}</div>
+            )}
+          </div>
           <div className="flex items-center gap-4">
             <span className={`font-bold ${isHome ? 'text-blue-400' : 'text-red-400'}`}>{isHome ? '🏠' : '✈️'} {userTeamName}</span>
             <span className="text-xl text-gray-500 font-bold">VS</span>
