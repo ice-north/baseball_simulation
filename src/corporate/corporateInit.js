@@ -1380,25 +1380,7 @@ export const applyBudgetDeficitPenalty = (teamData) => {
     }
   }
 
-  // 3. 選手のコンディション低下（練習環境悪化）
-  const conditionPenalty = Math.min(15, Math.round(deficitRate * 15));
-  if (conditionPenalty > 0 && teamData.players) {
-    for (const p of teamData.players) {
-      p.fatigue = Math.min(100, (p.fatigue || 0) + conditionPenalty);
-    }
-    penalties.push({ type: 'fatigue', value: conditionPenalty });
-  }
-
-  // 4. 成長率低下（練習環境・設備投資不足）
-  const growthPenalty = Math.min(0.05, deficitRate * 0.04);
-  if (growthPenalty > 0 && teamData.players) {
-    for (const p of teamData.players) {
-      p.growthModifier = (p.growthModifier || 0) - growthPenalty;
-    }
-    penalties.push({ type: 'growth', value: -growthPenalty });
-  }
-
-  // 5. スカウト制限（契約更改時に既に適用済み、レポートに含める）
+  // 3. スカウト制限（契約更改時に既に適用済み、レポートに含める）
   const scoutReduction = cd.scoutPenalty || 0;
   if (scoutReduction > 0) {
     penalties.push({ type: 'scout', value: -scoutReduction });

@@ -543,11 +543,9 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
             ⚠️ 予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です
           </p>
           <div className="text-[10px] text-red-300 space-y-0.5">
-            <p>赤字のまま確定すると来季に以下のペナルティが発生します:</p>
+            <p>赤字のまま確定すると以下のペナルティが発生します:</p>
             <p>• 注目度低下（最大-15）</p>
             <p>• スポンサー離脱リスク</p>
-            <p>• 選手の疲労増加（練習環境悪化）</p>
-            <p>• 成長率低下（設備投資不足）</p>
             <p>• スカウト候補数の減少</p>
           </div>
         </div>

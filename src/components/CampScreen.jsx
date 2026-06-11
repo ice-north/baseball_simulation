@@ -922,8 +922,6 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                 <div key={idx} className="text-xs text-gray-300">
                   {p.type === 'reputation' && `注目度が ${Math.abs(p.value)} 低下しました`}
                   {p.type === 'sponsor_loss' && `スポンサー「${p.names.join('」「')}」が撤退しました`}
-                  {p.type === 'fatigue' && `練習環境の悪化により全選手の疲労が +${p.value} 増加しました`}
-                  {p.type === 'growth' && `設備投資不足により全選手の成長率が低下しました`}
                   {p.type === 'scout' && `スカウト活動が制限されました（候補数 ${Math.abs(p.value)} 人減少）`}
                 </div>
               ))}
