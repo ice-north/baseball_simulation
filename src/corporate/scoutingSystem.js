@@ -344,11 +344,11 @@ export function generateScoutCandidates(teamData, year) {
     p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear, teamName: entry.teamName };
     // 出身表示用
     if (entry.source === 'highschool') {
-      p._scoutSource = '高校3年';
+      p._scoutSource = p.highSchool?.name || '高校3年';
     } else if (entry.source === 'university') {
-      p._scoutSource = `大学${entry.yearsInUni + 1}年`;
+      p._scoutSource = p.universityTeamName || `大学${entry.yearsInUni + 1}年`;
     } else {
-      p._scoutSource = p.origin === 'university' ? '大学卒'
+      p._scoutSource = p.origin === 'university' ? (p.universityTeamName ? `${p.universityTeamName}卒` : '大学卒')
         : p.origin === 'corporate_candidate' ? '社会人候補'
         : p.origin === 'independent_candidate' ? '独立L候補'
         : p.previousTeam ? `元${p.previousTeam}` : 'フリー';
@@ -1304,8 +1304,8 @@ export function getScoutedCandidates(teamData) {
 }
 
 function getSourceLabel(entry) {
-  if (entry.source === 'highschool') return entry.player?.highSchool?.name ? `${entry.player.highSchool.name}` : '高校3年';
-  if (entry.source === 'university') return `大学${(entry.yearsInUni || 0) + 1}年`;
+  if (entry.source === 'highschool') return entry.player?.highSchool?.name || '高校3年';
+  if (entry.source === 'university') return entry.player?.universityTeamName || `大学${(entry.yearsInUni || 0) + 1}年`;
   if (entry.source === 'independent') return `独立L(${entry.teamName || ''})`;
   if (entry.source === 'corporate_team') return `社会人(${entry.teamName || ''})`;
   return 'フリー';
