@@ -1360,7 +1360,7 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
   return {
     id,
     name,
-    age: 18,
+    age: 19,
     position,
     battingOrder: 0,
     isStarter: false,

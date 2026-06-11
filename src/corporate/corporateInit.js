@@ -208,13 +208,13 @@ const adjustCorporateAge = (player, isIndependent = false) => {
   const roll = Math.random();
   let targetAge;
   if (isIndependent) {
-    // 独立リーグ: 若手中心（18-28）
-    if (roll < 0.15) targetAge = 18 + Math.floor(Math.random() * 2);      // 18-19 (15%)
-    else if (roll < 0.35) targetAge = 20 + Math.floor(Math.random() * 2); // 20-21 (20%)
-    else if (roll < 0.60) targetAge = 22 + Math.floor(Math.random() * 2); // 22-23 (25%)
-    else if (roll < 0.80) targetAge = 24 + Math.floor(Math.random() * 2); // 24-25 (20%)
-    else if (roll < 0.92) targetAge = 26 + Math.floor(Math.random() * 2); // 26-27 (12%)
-    else targetAge = 28 + Math.floor(Math.random() * 2);                  // 28-29 (8%)
+    // 独立リーグ: 若手中心（19-29）
+    if (roll < 0.15) targetAge = 19 + Math.floor(Math.random() * 2);      // 19-20 (15%)
+    else if (roll < 0.35) targetAge = 21 + Math.floor(Math.random() * 2); // 21-22 (20%)
+    else if (roll < 0.60) targetAge = 23 + Math.floor(Math.random() * 2); // 23-24 (25%)
+    else if (roll < 0.80) targetAge = 25 + Math.floor(Math.random() * 2); // 25-26 (20%)
+    else if (roll < 0.92) targetAge = 27 + Math.floor(Math.random() * 2); // 27-28 (12%)
+    else targetAge = 29 + Math.floor(Math.random() * 2);                  // 29-30 (8%)
   } else {
     // 社会人: 幅広い年齢層（22-34）
     if (roll < 0.10) targetAge = 22 + Math.floor(Math.random() * 2);      // 22-23 (10%)

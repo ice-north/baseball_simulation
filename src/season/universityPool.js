@@ -114,12 +114,12 @@ function generateHighSchoolPlayer(id) {
 
   let abilities;
   if (isPitcher) {
-    const velRanges = { S: [143, 158], A: [133, 148], B: [122, 140], C: [112, 132], D: [103, 124], E: [96, 116] };
+    const velRanges = { S: [135, 149], A: [127, 142], B: [118, 135], C: [110, 128], D: [103, 120], E: [96, 113] };
     let velocity = r(velRanges[tier][0], velRanges[tier][1]) + tri(3);
     let control = r(12, 35) + off + controlAdjust + tri(5);
     let stamina = r(40, 75) + Math.round(off * 1.5) + tri(5);
 
-    if (specialty === 'power_arm') velocity += r(5, 12);
+    if (specialty === 'power_arm') velocity += r(3, 8);
     else if (specialty === 'technician') control += r(10, 20);
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
@@ -133,7 +133,7 @@ function generateHighSchoolPlayer(id) {
       defense: cl(r(22, 42) + Math.round(off * 0.4) + tri(3), 1, 65),
       bodyStamina: cl(r(30, 60) + tri(5), 20, 80),
       recovery: cl(r(28, 58) + tri(5), 20, 75),
-      velocity: cl(velocity, 95, 163),
+      velocity: cl(velocity, 95, 155),
       control: cl(control, 5, 80),
       stamina: cl(stamina, 25, 120)
     };
@@ -428,6 +428,7 @@ export function distributeHighSchoolGraduates(enrollYear) {
 
     slice.forEach((entry, i) => {
       const p = entry.player;
+      p.age = Math.max(p.age || 18, 19);
       if (i < uniCount) {
         p._destinationRank = rank;
         university[rank].push(p);
@@ -479,8 +480,8 @@ export function processUniversityYear(currentYear) {
       // 在学年数
       const yearsInUni = currentYear - entry.enrollYear;
 
-      // 卒業判定: 4年経過 or 年齢22歳以上
-      if (yearsInUni >= 4 || player.age >= 22) {
+      // 卒業判定: 4年経過 or 年齢23歳以上
+      if (yearsInUni >= 4 || player.age >= 23) {
         player.universityTeamId = entry.universityTeamId;
         player.universityTeamName = entry.universityTeamName;
         player.universityRank = entry.universityRank;
@@ -518,7 +519,7 @@ function applyUniversityEntranceBoost(player, universityRank) {
   const boost = (v, amount, cap = 99) => Math.min(cap, v + Math.round(amount * (0.8 + gp * 0.4)) + r());
 
   if (isPitcher) {
-    player.pitching.velocity = boost(player.pitching.velocity, base * 0.8, 158);
+    player.pitching.velocity = boost(player.pitching.velocity, base * 0.5, 155);
     player.pitching.control = boost(player.pitching.control, base * 1.2);
     player.pitching.stamina = boost(player.pitching.stamina, base * 1.5, 200);
     player.physical.arm = boost(player.physical.arm, base * 0.8);
@@ -554,10 +555,8 @@ function applyUniversityGrowth(player, universityRank = null) {
     player.pitching.control = grow(player.pitching.control, 3);
     player.pitching.stamina = grow(player.pitching.stamina, 4, 200);
     player.physical.arm = grow(player.physical.arm, 2);
-    // 球速: 直接成長 + arm連動の高い方を採用
-    const directVel = grow(player.pitching.velocity, 1.5, 170);
-    const armDerivedVel = Math.round(95 + Math.pow(player.physical.arm / 100, 1.2) * 69);
-    player.pitching.velocity = Math.max(directVel, armDerivedVel);
+    // 球速: 直接成長（大学での年間成長は控えめ、上限158km）
+    player.pitching.velocity = grow(player.pitching.velocity, 1.0, 158);
     if (player.pitching.arsenal) {
       player.pitching.arsenal.forEach(pitch => {
         if (pitch.type !== 'straight') {
@@ -628,6 +627,7 @@ export function enrollInUniversity(players, enrollYear) {
       const rank = player._destinationRank || 'C';
       const team = assignTeam(rank);
       addUniHistory(player, team);
+      player.age = Math.max(player.age || 18, 19);
       universityPool[enrollYear].push({
         player, enrollYear, graduateYear: enrollYear + 4,
         universityRank: rank,
@@ -641,6 +641,7 @@ export function enrollInUniversity(players, enrollYear) {
       players[rank].forEach(player => {
         const team = assignTeam(rank);
         addUniHistory(player, team);
+        player.age = Math.max(player.age || 18, 19);
         universityPool[enrollYear].push({
           player, enrollYear, graduateYear: enrollYear + 4,
           universityRank: rank,
@@ -674,7 +675,7 @@ export function seedInitialUniversityClasses(gameYear) {
     const players = [];
     for (let j = 0; j < count; j++) {
       const p = generateHighSchoolPlayer(idBase + j);
-      p.age = 18 + yearsInUni;
+      p.age = 19 + yearsInUni;
       players.push(p);
     }
 
