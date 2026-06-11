@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { processCorporateRetirements, executeDepartures } from '../corporate/scoutingSystem.js';
 import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES } from '../corporate/staffData.js';
 import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
@@ -86,7 +86,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     switch (key) {
       case 'name': return player.name;
       case 'age': return player.age || 0;
-      case 'position': return POSITION_NAMES[player.position] || '';
+      case 'position': return getPositionSortIndex(player.position);
       case 'salary': return getPlayerSalary(player);
       case 'meet': return player.batting?.meet || 0;
       case 'power': return player.batting?.power || 0;

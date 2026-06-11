@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, generateScoutComment } from '../season/tryoutSystem.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
@@ -213,7 +213,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     switch(key) {
       case 'name': return p.name;
       case 'age': return p.age || 20;
-      case 'position': return p.position;
+      case 'position': return getPositionSortIndex(p.position);
       case 'meet': return p.batting?.meet || 0;
       case 'power': return p.batting?.power || 0;
       case 'speed': return p.physical?.speed || 0;

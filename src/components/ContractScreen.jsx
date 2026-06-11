@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
-import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { finalizePlayerSeason } from '../season/yearProgressionSystem.js';
 
 // AI自動解雇のロスター調整パラメータ
@@ -98,7 +98,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
       case 'name': return player.name;
       case 'age': return player.age || 0;
       case 'growth': return Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0)));
-      case 'position': return POSITION_NAMES[player.position] || '';
+      case 'position': return getPositionSortIndex(player.position);
       case 'meet': return player.batting?.meet || 0;
       case 'power': return player.batting?.power || 0;
       case 'speed': return player.physical?.speed || 0;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityRank, getRankColor, POSITION_ORDER } from '../utils/constants.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 
 const MAX_CAMP_ROUNDS = 4;
@@ -678,7 +678,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
     setUpdateKey(prev => prev + 1); // 再レンダリング
   };
 
-  const POSITION_ORDER = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  // POSITION_ORDER imported from constants
   const sortedPlayers = [...(userTeam?.players || [])].sort((a, b) => {
     const posA = POSITION_ORDER.indexOf(a.position);
     const posB = POSITION_ORDER.indexOf(b.position);

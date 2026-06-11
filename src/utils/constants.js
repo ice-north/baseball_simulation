@@ -154,6 +154,9 @@ export const FORM_PITCH_SYNERGY = {
   submarine: ['sinker', 'curve', 'palm']                    // 浮き上がり系
 };
 
+export const POSITION_ORDER = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+export const getPositionSortIndex = (pos) => { const i = POSITION_ORDER.indexOf(pos); return i >= 0 ? i : 99; };
+
 /**
  * ポジション名（日本語表記）
  */

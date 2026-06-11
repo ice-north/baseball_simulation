@@ -188,7 +188,21 @@ const TeamInfoScreen = () => {
               <StatBar label="守備" value={player.fielding?.defense || 0} />
               <StatBar label="選球眼" value={player.batting?.eye || 0} />
               <StatBar label="盗塁" value={player.batting?.steal || 0} />
-              <StatBar label="体力" value={player.physical?.bodyStamina || 50} />
+              <StatBar label="バント" value={player.batting?.bunt || 0} />
+              <div className="border-t border-gray-600 mt-2 pt-2">
+                <StatBar label="体力" value={player.physical?.bodyStamina || 50} />
+                <StatBar label="回復" value={player.physical?.recovery || 50} />
+              </div>
+              <div className="border-t border-gray-600 mt-2 pt-2">
+                <StatBar label="プロ意識" value={player.personality?.discipline || 50} />
+                <StatBar label="精神力" value={player.personality?.mental || 50} />
+              </div>
+              <div className="mt-2 text-xs text-gray-400 grid grid-cols-2 gap-1">
+                <div>体格: <span className="text-white">{player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}</span></div>
+                <div>成長: <span className={`font-bold ${(player.growthPotential ?? 1.0) >= 1.1 ? 'text-orange-400' : 'text-white'}`}>
+                  {Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0))).toFixed(2)}
+                </span></div>
+              </div>
             </div>
 
             {/* 投手能力 */}

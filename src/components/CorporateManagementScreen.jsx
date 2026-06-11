@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus, STAFF_GRADE_CAP, canHireGrade } from '../corporate/staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
-import { getAbilityColor, POSITION_NAMES } from '../utils/constants.js';
+import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
 import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount } from '../corporate/scoutingSystem.js';
@@ -662,7 +662,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 switch (playerSortKey) {
                   case 'name': va = a.name; vb = b.name; return playerSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
                   case 'age': va = a.age || 0; vb = b.age || 0; break;
-                  case 'position': va = a.position; vb = b.position; return playerSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+                  case 'position': va = getPositionSortIndex(a.position); vb = getPositionSortIndex(b.position); break;
                   case 'reveal': va = a._revealLevel || 0; vb = b._revealLevel || 0; break;
                   case 'rate': va = calculateRecruitSuccessRate(a, teamData); vb = calculateRecruitSuccessRate(b, teamData); break;
                   case 'rec': va = recGradeOrder[getScoutRecommendation(a, teamRank, teamData)] || 0; vb = recGradeOrder[getScoutRecommendation(b, teamRank, teamData)] || 0; break;
