@@ -117,40 +117,44 @@ function generateHighSchoolPlayer(id) {
   }
 
   let abilities;
+  // g: 正規分布ベース能力生成。mu=中心値, sigma=散らばり, tf=ランクoffの倍率, floor=下限
+  const g = (mu, sigma, tf = 0, floor = 1) =>
+    Math.max(floor, Math.round(nrm(mu, sigma) + off * tf));
+
   if (isPitcher) {
     // 球速: 正規分布 N(126,9)。1200投手/年で 160km≈10年に1人, 155km≈年1人, 150km≈年5人
     const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
     let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
     if (isSideOrUnder) velocity -= 3;
-    let control = r(12, 35) + off + controlAdjust + tri(5);
-    let stamina = r(40, 75) + Math.round(off * 1.5) + tri(5);
+    let control = Math.round(nrm(24, 9) + off + controlAdjust);
+    let stamina = Math.round(nrm(58, 12) + off * 1.5);
 
     if (specialty === 'power_arm') velocity += r(5, 10);
     else if (specialty === 'technician') control += r(10, 20);
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
     abilities = {
-      meet: cl(r(5, 22) + Math.round(off * 0.3) + tri(3), 5, 40),
-      power: cl(r(3, 18) + Math.round(off * 0.3) + tri(3), 3, 35),
-      eye: cl(r(8, 25) + Math.round(off * 0.3) + tri(3), 5, 45),
-      steal: cl(r(8, 25) + tri(3), 1, 50),
-      speed: cl(r(22, 52) + tri(6), 1, 80),
-      arm: cl(r(30, 58) + Math.round(off * 0.5) + tri(4), 15, 80),
-      defense: cl(r(22, 42) + Math.round(off * 0.4) + tri(3), 1, 65),
-      bodyStamina: cl(r(30, 60) + tri(5), 20, 80),
-      recovery: cl(r(28, 58) + tri(5), 20, 75),
+      meet: g(14, 6, 0.3, 3),
+      power: g(10, 5, 0.3, 3),
+      eye: g(16, 6, 0.3, 5),
+      steal: g(16, 7, 0, 1),
+      speed: g(37, 10, 0, 1),
+      arm: g(44, 10, 0.5, 10),
+      defense: g(32, 8, 0.4, 1),
+      bodyStamina: g(45, 10, 0, 15),
+      recovery: g(43, 10, 0, 15),
       velocity: Math.max(95, velocity),
-      control: cl(control, 5, 80),
-      stamina: cl(stamina, 25, 120)
+      control: Math.max(5, control),
+      stamina: Math.max(25, stamina)
     };
   } else {
-    let meet = r(8, 30) + off + tri(5);
-    let power = r(5, 25) + off + tri(5);
-    let eye = r(8, 28) + Math.round(off * 0.8) + tri(4);
-    let speed = r(18, 52) + tri(6);
-    let defense = r(15, 42) + Math.round(off * 0.6) + tri(4);
-    let arm = r(15, 48) + Math.round(off * 0.5) + tri(4);
-    let steal = r(8, 35) + Math.round(off * 0.4) + tri(4);
+    let meet = Math.round(nrm(19, 9) + off);
+    let power = Math.round(nrm(15, 10) + off);
+    let eye = Math.round(nrm(18, 8) + off * 0.8);
+    let speed = Math.round(nrm(35, 12));
+    let defense = Math.round(nrm(28, 10) + off * 0.6);
+    let arm = Math.round(nrm(32, 11) + off * 0.5);
+    let steal = Math.round(nrm(22, 9) + off * 0.4);
 
     if (specialty === 'speedster') { speed += r(12, 22); steal += r(8, 15); }
     else if (specialty === 'slugger') power += r(12, 22);
@@ -159,15 +163,15 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'cannon') arm += r(15, 25);
 
     abilities = {
-      meet: cl(meet, 10, 80), power: cl(power, 8, 75),
-      eye: cl(eye, 10, 65), steal: cl(steal, 5, 70),
-      speed: cl(speed, 1, 85), arm: cl(arm, 1, 80),
-      defense: cl(defense, 1, 75),
-      bodyStamina: cl(r(30, 62) + tri(5), 20, 80),
-      recovery: cl(r(28, 58) + tri(5), 20, 75),
-      velocity: cl(r(100, 128) + Math.round(off * 0.4) + tri(3), 90, 145),
-      control: cl(r(10, 30) + Math.round(off * 0.3) + tri(3), 5, 50),
-      stamina: cl(r(30, 55) + Math.round(off * 0.3) + tri(3), 20, 70)
+      meet: Math.max(5, meet), power: Math.max(3, power),
+      eye: Math.max(5, eye), steal: Math.max(1, steal),
+      speed: Math.max(1, speed), arm: Math.max(1, arm),
+      defense: Math.max(1, defense),
+      bodyStamina: g(46, 10, 0, 15),
+      recovery: g(43, 10, 0, 15),
+      velocity: g(115, 7, 0.3, 90),
+      control: g(20, 7, 0.3, 5),
+      stamina: g(42, 8, 0.3, 20)
     };
   }
 
