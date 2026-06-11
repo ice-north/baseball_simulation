@@ -211,13 +211,14 @@ const GameFlowScreens = ({
       onSelect={(team) => {
         setGameMode('corporate');
         setGameFlowState('corporate_loading');
+        const isClubTeam = team.type === 'club';
         setTimeout(() => {
           const result = initializeCorporateGame(team);
 
           setLeagueConfig({
             format: 'tournament',
             teamsPerLeague: result.allTeamNames.length,
-            leagues: [{ name: '社会人野球', teams: [result.userTeamName] }]
+            leagues: [{ name: isClubTeam ? 'クラブ野球' : '社会人野球', teams: [result.userTeamName] }]
           });
 
           const newSeasonData = createSeasonData(1);
@@ -229,6 +230,7 @@ const GameFlowScreens = ({
             useDH: true,
             leagueFormat: 'tournament',
             corporateMode: true,
+            clubMode: isClubTeam,
             corporateTeamId: team.id,
             allCorporateTeamNames: result.allTeamNames,
           };
@@ -236,7 +238,36 @@ const GameFlowScreens = ({
           newSeasonData.schedule = [];
           newSeasonData.standings = [];
           setSeasonData(newSeasonData);
-          setGameFlowState('corporate_camp');
+
+          if (isClubTeam) {
+            // クラブチームはキャンプなし → 直接シーズンへ
+            initializeAllPlayersCondition();
+            Object.keys(TEAMS_DATA).forEach(teamName => {
+              const teamData = TEAMS_DATA[teamName];
+              if (teamData && teamData.players && teamData.players.length > 0) {
+                if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+                  generatePitchingRotation(teamName);
+                }
+                if (teamName === result.userTeamName) {
+                  setRecommendedLineup(teamData, teamName);
+                } else {
+                  generateAILineup(teamData, teamName);
+                }
+              }
+            });
+            const calYear = 2024;
+            const rt = generateRegionalTournament({ userTeamName: result.userTeamName, calendarYear: calYear, seeds: null });
+            newSeasonData.currentDate = { year: calYear, month: 4, day: 1 };
+            newSeasonData.phase = SEASON_PHASES.REGULAR_SEASON;
+            newSeasonData.regionalTournament = { ...rt, generated: true };
+            setSeasonData(newSeasonData);
+            setSelectedMonth(4);
+            setManagementView('dateprogress');
+            setScreenMode('management');
+            setGameFlowState('season');
+          } else {
+            setGameFlowState('corporate_camp');
+          }
         }, 50);
       }}
       onBack={() => setGameFlowState('newgame_mode_select')}

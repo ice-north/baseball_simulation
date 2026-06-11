@@ -43,7 +43,7 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
           >
             <div className="text-2xl mb-1">社会人野球</div>
             <div className="text-sm font-normal text-blue-200">
-              企業チームの監督に就任。スカウトで選手を獲得し、コーチの力で育てる。
+              企業チームまたはクラブチームの監督に就任。企業はスカウトとコーチで強化、クラブは入部希望者と自然成長で戦う。
             </div>
           </button>
 
@@ -83,8 +83,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   const regionTeams = selectedRegion
     ? getTeamsByRegion(selectedRegion)
     : [];
-  // 企業チームのみ選択可能（クラブチームは対戦相手として表示のみ）
-  const selectableTeams = regionTeams.filter(t => t.type === 'corporate' || t.isCustom);
+  const selectableTeams = regionTeams;
 
   const startEditName = (e, team) => {
     e.stopPropagation();
@@ -188,20 +187,18 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
             return (
               <div
                 key={team.id}
-                onClick={() => { if (!isClub && editingNameId !== team.id) setSelectedTeam(team); }}
+                onClick={() => { if (editingNameId !== team.id) setSelectedTeam(team); }}
                 className={`w-full flex items-center justify-between p-3 rounded-lg border transition ${
-                  isClub
-                    ? 'bg-gray-800/50 border-gray-800 opacity-50 cursor-default'
-                    : isSelected
-                      ? 'bg-blue-900/50 border-blue-500 cursor-pointer'
-                      : 'bg-gray-800 border-gray-700 hover:border-gray-500 cursor-pointer'
+                  isSelected
+                    ? (isClub ? 'bg-green-900/50 border-green-500 cursor-pointer' : 'bg-blue-900/50 border-blue-500 cursor-pointer')
+                    : 'bg-gray-800 border-gray-700 hover:border-gray-500 cursor-pointer'
                 }`}
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <span className={`font-bold text-lg w-6 shrink-0 ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${typeInfo.color}`}>{typeInfo.label}</span>
                   <div className="text-left min-w-0">
-                    {editingNameId === team.id && !isClub ? (
+                    {editingNameId === team.id ? (
                       <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                         <input
                           type="text"
@@ -216,7 +213,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={isClub ? 'text-gray-500' : 'text-white font-bold'}>{team.displayName}</span>
+                        <span className="text-white font-bold">{team.displayName}</span>
                         <span className="text-gray-500 text-xs">({team.city})</span>
                         {team.displayName !== team.name && (
                           <span className="text-gray-600 text-xs">元:{team.name}</span>
@@ -226,14 +223,14 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  {!isClub && editingNameId !== team.id && !team.isCustom && (
+                  {editingNameId !== team.id && !team.isCustom && (
                     <button onClick={(e) => startEditName(e, team)} className="text-gray-600 hover:text-blue-400 text-xs">名前変更</button>
                   )}
                   {team.displayName !== team.name && editingNameId !== team.id && (
                     <button onClick={(e) => handleResetName(e, team.id)} className="text-gray-600 hover:text-yellow-400 text-xs">リセット</button>
                   )}
                   <span className="text-gray-500 text-xs w-16 text-right">
-                    {isClub ? '対戦相手' : RANK_LABELS[team.rank]}
+                    {RANK_LABELS[team.rank]}
                   </span>
                 </div>
               </div>

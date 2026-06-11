@@ -8,6 +8,7 @@ import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.j
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
 import { processNPBDraft, processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 import { generateExpansionRoster } from '../season/tryoutSystem.js';
+import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 
 import ScheduleScreen from './ScheduleScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
@@ -30,6 +31,7 @@ import CorporateDepartureScreen from './CorporateDepartureScreen.jsx';
 import AbilityRankingScreen from './AbilityRankingScreen.jsx';
 import CorporateScoutScreen from './CorporateScoutScreen.jsx';
 import CorporateManagementScreen from './CorporateManagementScreen.jsx';
+import ClubRecruitScreen from './ClubRecruitScreen.jsx';
 import DebugPlayerViewScreen from './DebugPlayerViewScreen.jsx';
 
 const ManagementScreen = ({
@@ -109,7 +111,7 @@ const ManagementScreen = ({
     onComplete={() => {
       const newData = progressDate(seasonData, 1);
       setSeasonData({ ...newData, phase: 'tryout' });
-      setManagementView('corporate_scout');
+      setManagementView(seasonData?.settings?.clubMode ? 'club_recruit' : 'corporate_scout');
     }}
   />;
   if (managementView === 'corporate_scout') return <CorporateScoutScreen
@@ -122,6 +124,14 @@ const ManagementScreen = ({
       if (ut?.corporateData?.scoutMissions) {
         ut.corporateData.scoutMissions = [];
       }
+      const newData = { ...seasonData, currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
+      setSeasonData(newData);
+      setManagementView('dateprogress');
+    }}
+  />;
+  if (managementView === 'club_recruit') return <ClubRecruitScreen
+    seasonData={seasonData}
+    onComplete={() => {
       const newData = { ...seasonData, currentDate: { ...seasonData.currentDate, month: 11, day: 11 }, phase: 'off_season' };
       setSeasonData(newData);
       setManagementView('dateprogress');
@@ -162,7 +172,7 @@ const ManagementScreen = ({
     onSetupManagedGame={setupManagedGame}
     onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
     onForceEvent={(eventType) => {
-      if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout')) {
+      if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit')) {
         const update = {};
         if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
@@ -173,6 +183,7 @@ const ManagementScreen = ({
       if (eventType === 'contract') setManagementView('contract');
       else if (eventType === 'corporate_departure') setManagementView('corporate_departure');
       else if (eventType === 'corporate_scout') setManagementView('corporate_scout');
+      else if (eventType === 'club_recruit') setManagementView('club_recruit');
       else if (eventType === 'tryout') setManagementView('tryout');
       else if (eventType === 'draft') {
         // プロ指名で選手が消える前にランキング・表彰を確定する
@@ -246,7 +257,39 @@ const ManagementScreen = ({
       if (gameMode === 'sandbox') {
         setManagementView('sandbox_next_regulations');
       } else if (gameMode === 'university' || gameMode === 'corporate') {
-        setManagementView('camp');
+        if (seasonData?.settings?.clubMode) {
+          // クラブチームはキャンプなし → 直接シーズンへ
+          initializeAllPlayersCondition();
+          Object.keys(TEAMS_DATA).forEach(teamName => {
+            const teamData = TEAMS_DATA[teamName];
+            if (teamData && teamData.players && teamData.players.length > 0) {
+              if (!teamData.pitchingRotation || !teamData.pitchingRotation.starters?.length) {
+                generatePitchingRotation(teamName);
+              }
+              if (teamName === userTeamName) {
+                if (!teamData.lineupSettings || !teamData.lineupSettings.battingOrder?.length) {
+                  setRecommendedLineup(teamData, teamName);
+                }
+              } else {
+                generateAILineup(teamData, teamName);
+              }
+            }
+          });
+          snapshotAbilityHistory(TEAMS_DATA, seasonData.year);
+          const calYear = 2024 + (seasonData?.year || 1) - 1;
+          const rtSeeds = seasonData?.tournamentSeeds || null;
+          const rt = generateRegionalTournament({ userTeamName, calendarYear: calYear, seeds: rtSeeds });
+          setSeasonData(prev => ({
+            ...prev,
+            currentDate: { year: calYear, month: 4, day: 1 },
+            phase: SEASON_PHASES.REGULAR_SEASON,
+            regionalTournament: { ...rt, generated: true },
+          }));
+          setSelectedMonth(4);
+          setManagementView('dateprogress');
+        } else {
+          setManagementView('camp');
+        }
       } else {
         setManagementView('regulations_next');
       }

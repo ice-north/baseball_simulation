@@ -731,7 +731,8 @@ export const initializeCorporateGame = (teamDef) => {
   const createTeamEntry = (def) => {
     const name = def.displayName || def.name;
     const roster = generateCorporateRoster(def, 1);
-    const staff = generateInitialStaff(def.rank);
+    const isClub = def.type === 'club';
+    const staff = isClub ? [] : generateInitialStaff(def.rank);
     TEAMS_DATA[name] = {
       name,
       abbreviation: makeAbbreviation(name),
@@ -740,7 +741,7 @@ export const initializeCorporateGame = (teamDef) => {
       corporateTeamId: def.id,
       corporateData: {
         rank: def.rank, region: def.region, city: def.city, type: def.type,
-        budget: BUDGET_BY_RANK[def.rank] || 12000,
+        budget: isClub ? 0 : (BUDGET_BY_RANK[def.rank] || 12000),
         staff,
         reputation: RANK_INITIAL_REPUTATION[def.rank] || 5,
         proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0,

@@ -436,7 +436,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         // 大学モード: トライアウトなし → オフシーズンへ直行
       } else {
         setSeasonData(newData);
-        if (onForceEvent) onForceEvent(isCorporate ? 'corporate_scout' : 'tryout');
+        const isClub = seasonData?.settings?.clubMode;
+        if (onForceEvent) onForceEvent(isCorporate ? (isClub ? 'club_recruit' : 'corporate_scout') : 'tryout');
         return null;
       }
     }

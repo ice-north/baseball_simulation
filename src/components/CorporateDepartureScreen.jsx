@@ -30,6 +30,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const teamData = TEAMS_DATA[userTeamName];
   const cd = teamData?.corporateData;
+  const isClub = cd?.type === 'club';
   const players = teamData?.players || [];
   const staff = cd?.staff || [];
 
@@ -172,14 +173,16 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
     executeDepartures(TEAMS_DATA, allRetiredIds, allReleases, currentYear);
 
-    // 赤字額を記録（年度移行時にペナルティ適用）
-    if (budgetBalance < 0 && cd) {
-      cd.budgetDeficit = Math.abs(budgetBalance);
-      const deficitRate = Math.min(1, Math.abs(budgetBalance) / (baseBudget || 13000));
-      cd.scoutPenalty = Math.min(4, Math.round(deficitRate * 5));
-    } else if (cd) {
-      cd.budgetDeficit = 0;
-      cd.scoutPenalty = 0;
+    // 赤字額を記録（年度移行時にペナルティ適用、クラブチームは予算なし）
+    if (!isClub) {
+      if (budgetBalance < 0 && cd) {
+        cd.budgetDeficit = Math.abs(budgetBalance);
+        const deficitRate = Math.min(1, Math.abs(budgetBalance) / (baseBudget || 13000));
+        cd.scoutPenalty = Math.min(4, Math.round(deficitRate * 5));
+      } else if (cd) {
+        cd.budgetDeficit = 0;
+        cd.scoutPenalty = 0;
+      }
     }
 
     // スタッフ転向処理
@@ -308,17 +311,19 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         )}
         <div className="mb-4 bg-gray-800 rounded p-3">
           <div className="text-xs text-gray-400">来季ロスター: <span className="text-white font-bold">{contractCount}名</span></div>
-          <div className="text-xs text-gray-400 mt-1">
-            来季予算残: <span className={`font-bold ${budgetBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {budgetBalance >= 0 ? '+' : ''}{budgetBalance.toLocaleString()}万円
-            </span>
-          </div>
+          {!isClub && (
+            <div className="text-xs text-gray-400 mt-1">
+              来季予算残: <span className={`font-bold ${budgetBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {budgetBalance >= 0 ? '+' : ''}{budgetBalance.toLocaleString()}万円
+              </span>
+            </div>
+          )}
         </div>
         <button
           onClick={onComplete}
           className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
         >
-          スカウト入団へ進む
+          {isClub ? '入部希望者の受付へ進む' : 'スカウト入団へ進む'}
         </button>
       </div>
     );
@@ -329,8 +334,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目 11月末</h1>
       <p className="text-gray-400 text-xs mb-2">選手をクリックして「契約 → 解雇 → 引退」を切り替えてください</p>
 
-      {/* 予算サマリー */}
-      <div className="mb-3 bg-gray-800 rounded-lg p-3">
+      {/* 予算サマリー（クラブチームは予算なし） */}
+      {!isClub && <div className="mb-3 bg-gray-800 rounded-lg p-3">
         <div className="flex items-center gap-4 text-xs">
           <div>
             <span className="text-gray-400">総予算: </span>
@@ -355,10 +360,10 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           {tournamentBonus > 0 && <span className="text-yellow-500">+大会{tournamentBonus.toLocaleString()}</span>}
           {currentSponsorIncome > 0 && <span className="text-purple-500">+スポンサー{currentSponsorIncome.toLocaleString()}</span>}
         </div>
-      </div>
+      </div>}
 
       {/* スポンサーオファー */}
-      {sponsorOffers && sponsorOffers.length > 0 && (
+      {!isClub && sponsorOffers && sponsorOffers.length > 0 && (
         <div className="mb-3 bg-purple-900/20 border border-purple-700/50 rounded-lg p-3">
           <h2 className="text-sm font-bold text-purple-300 mb-2">スポンサーオファー</h2>
           <div className="space-y-1.5">
@@ -406,7 +411,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                         <span className="text-yellow-300 text-xs">{POSITION_NAMES[r.position]}</span>
                         <span className="text-gray-300 text-xs font-medium">{r.name}</span>
                         <span className="text-gray-500 text-[10px]">{r.age}歳 / {r.reason}</span>
-                        <button
+                        {!isClub && <button
                           onClick={() => {
                             if (player) toggleStaffConversion(r.id);
                           }}
@@ -417,7 +422,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                           }`}
                         >
                           {isConverting ? 'コーチ就任' : 'スタッフ転向'}
-                        </button>
+                        </button>}
                       </div>
                       {isConverting && preview && (
                         <StaffPreview preview={preview} />
@@ -447,7 +452,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
               <SortHeader label="名前" sortKeyVal="name" />
               <SortHeader label="年齢" sortKeyVal="age" />
               <SortHeader label="守" sortKeyVal="position" />
-              <SortHeader label="年俸" sortKeyVal="salary" />
+              {!isClub && <SortHeader label="年俸" sortKeyVal="salary" />}
               <SortHeader label="ミ" sortKeyVal="meet" />
               <SortHeader label="パ" sortKeyVal="power" />
               <SortHeader label="走" sortKeyVal="speed" />
@@ -482,9 +487,9 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                   <td className={`py-0.5 px-1 font-medium ${decision !== 'contract' ? 'line-through' : ''}`}>{player.name}</td>
                   <td className="py-0.5 px-1 text-center">{player.age}</td>
                   <td className="py-0.5 px-1 text-center">{POSITION_NAMES[player.position]}</td>
-                  <td className={`py-0.5 px-1 text-right ${decision === 'contract' ? 'text-yellow-400' : 'text-gray-600'}`}>
+                  {!isClub && <td className={`py-0.5 px-1 text-right ${decision === 'contract' ? 'text-yellow-400' : 'text-gray-600'}`}>
                     {salary.toLocaleString()}万
-                  </td>
+                  </td>}
                   <td className={`py-0.5 px-1 text-center ${isPitcher ? 'text-gray-600' : getAbilityColor(player.batting?.meet)}`}>
                     {player.batting?.meet || 0}
                   </td>
@@ -537,7 +542,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       </div>
 
       {/* 予算超過警告 */}
-      {budgetBalance < 0 && (
+      {!isClub && budgetBalance < 0 && (
         <div className="mb-2 p-2 bg-red-900/30 border border-red-700 rounded">
           <p className="text-red-400 text-xs font-bold mb-1">
             ⚠️ 予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です
@@ -556,12 +561,12 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         <button
           onClick={handleConfirm}
           className={`px-5 py-2 rounded font-bold text-sm ${
-            budgetBalance < 0
+            !isClub && budgetBalance < 0
               ? 'bg-red-700 hover:bg-red-600 text-white'
               : 'bg-blue-600 hover:bg-blue-700 text-white'
           }`}
         >
-          {budgetBalance < 0 ? '赤字のまま確定' : '契約更改を確定'}
+          {!isClub && budgetBalance < 0 ? '赤字のまま確定' : '契約更改を確定'}
         </button>
         <div className="text-xs text-gray-400 space-x-3">
           <span className="text-green-400">契約{contractCount}名</span>
