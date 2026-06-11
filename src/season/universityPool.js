@@ -53,6 +53,17 @@ export function generateHighSchoolClass(year, count = 3000) {
  * 才能ランク（S～E）で基礎能力が決まり、一芸特化で個性を付与。
  * 成長力はランクと緩く相関するが、低ランクでも大器晩成型が出現する。
  */
+function weightedPick(weights) {
+  const entries = Object.entries(weights);
+  const total = entries.reduce((s, [, w]) => s + Math.max(1, w), 0);
+  let roll = Math.random() * total;
+  for (const [key, w] of entries) {
+    roll -= Math.max(1, w);
+    if (roll <= 0) return key;
+  }
+  return entries[entries.length - 1][0];
+}
+
 function generateHighSchoolPlayer(id) {
   const name = generateRandomPlayerName();
 
@@ -64,17 +75,18 @@ function generateHighSchoolPlayer(id) {
   else if (handRoll < 98) { throws = 'right'; bats = 'switch'; }
   else { throws = 'left'; bats = 'right'; }
 
-  const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
-  let isPitcher = Math.random() < 0.40;
-  let position;
+  // === 体格 ===
+  const buildRoll = Math.random();
+  let build;
+  if (buildRoll < 0.25) build = 'large';
+  else if (buildRoll < 0.75) build = 'medium';
+  else build = 'small';
 
-  if (throws === 'left') {
-    const leftPos = ['pitcher', 'first', 'left', 'center', 'right'];
-    position = leftPos[Math.floor(Math.random() * leftPos.length)];
-    isPitcher = position === 'pitcher';
-  } else {
-    position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
-  }
+  const buildMod = {
+    large:  { power: 6, arm: 5, speed: -5, defense: -3, steal: -3, bodyStamina: 3 },
+    medium: { power: 0, arm: 0, speed: 0, defense: 0, steal: 0, bodyStamina: 0 },
+    small:  { power: -5, arm: -3, speed: 5, defense: 3, steal: 4, bodyStamina: -2 }
+  }[build];
 
   const formRand = Math.random() * 100;
   let pitchingForm;
@@ -87,11 +99,6 @@ function generateHighSchoolPlayer(id) {
   const controlAdjust = isSideOrUnder ? 8 : 0;
 
   const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-  const tri = (spread) => {
-    const a = Math.floor(Math.random() * (spread * 2 + 1)) - spread;
-    const b = Math.floor(Math.random() * (spread * 2 + 1)) - spread;
-    return a + b;
-  };
   const cl = (val, lo, hi) => Math.max(lo, Math.min(hi, val));
   const nrm = (mu, sigma) => {
     const a = Math.random() || 0.001, b = Math.random();
@@ -108,6 +115,42 @@ function generateHighSchoolPlayer(id) {
   else if (talentRoll < 68)  { tier = 'D'; off = 0; }
   else                       { tier = 'E'; off = -4; }
 
+  // === Phase 2: 基礎身体能力を先に生成（投手/野手決定の材料）===
+  let baseArm = Math.max(1, Math.round(nrm(38, 12) + off * 0.5 + buildMod.arm));
+  let baseSpeed = Math.max(1, Math.round(nrm(35, 12) + buildMod.speed));
+
+  // === Phase 3: 投手/野手を肩力ベースで決定 ===
+  // 肩が強いほど投手になる確率が上がる（全体で約40%が投手）
+  let pitcherChance = cl(0.12 + baseArm * 0.007, 0.10, 0.75);
+  if (throws === 'left') pitcherChance = cl(pitcherChance + 0.10, 0.10, 0.80);
+  const isPitcher = Math.random() < pitcherChance;
+
+  // === Phase 4: ポジションを能力・体格から決定 ===
+  let position;
+  if (isPitcher) {
+    position = 'pitcher';
+  } else if (throws === 'left') {
+    const w = {
+      first:  20 + (build === 'large' ? 15 : 0) + Math.max(0, 40 - baseSpeed) * 0.3,
+      left:   20 + (build === 'large' ? 8 : 0),
+      center: 15 + Math.max(0, baseSpeed - 35) * 0.5 + (build === 'small' ? 10 : 0),
+      right:  15 + Math.max(0, baseArm - 35) * 0.4
+    };
+    position = weightedPick(w);
+  } else {
+    const w = {
+      catcher: 12 + Math.max(0, baseArm - 35) * 0.4 + (build === 'large' ? 5 : build === 'small' ? -5 : 0),
+      first:   10 + (build === 'large' ? 10 : build === 'small' ? -3 : 0) + Math.max(0, 40 - baseSpeed) * 0.3,
+      second:  12 + Math.max(0, baseSpeed - 30) * 0.3 + (build === 'small' ? 8 : build === 'large' ? -5 : 0),
+      third:   12 + Math.max(0, baseArm - 30) * 0.3 + (build === 'large' ? 3 : 0),
+      short:   10 + Math.max(0, baseSpeed - 35) * 0.4 + Math.max(0, baseArm - 35) * 0.3 + (build === 'small' ? 5 : build === 'large' ? -8 : 0),
+      left:    10 + (build === 'large' ? 5 : 0) + Math.max(0, 35 - baseArm) * 0.2,
+      center:  10 + Math.max(0, baseSpeed - 35) * 0.5 + (build === 'small' ? 5 : build === 'large' ? -3 : 0),
+      right:   10 + Math.max(0, baseArm - 35) * 0.4 + Math.max(0, baseSpeed - 30) * 0.2
+    };
+    position = weightedPick(w);
+  }
+
   // === 一芸特化（25%）===
   let specialty = null;
   if (Math.random() < 0.25) {
@@ -116,16 +159,16 @@ function generateHighSchoolPlayer(id) {
       : ['speedster', 'slugger', 'contact', 'glove', 'cannon'][r(0, 4)];
   }
 
-  let abilities;
-  // g: 正規分布ベース能力生成。mu=中心値, sigma=散らばり, tf=ランクoffの倍率, floor=下限
+  // === Phase 5: 能力生成 ===
   const g = (mu, sigma, tf = 0, floor = 1) =>
     Math.max(floor, Math.round(nrm(mu, sigma) + off * tf));
 
+  let abilities;
   if (isPitcher) {
-    // 球速: 正規分布 N(126,9)。1200投手/年で 160km≈10年に1人, 155km≈年1人, 150km≈年5人
     const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
     let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
     if (isSideOrUnder) velocity -= 3;
+    if (throws === 'left') velocity -= 3;
     let control = Math.round(nrm(24, 9) + off + controlAdjust);
     let stamina = Math.round(nrm(58, 12) + off * 1.5);
 
@@ -135,41 +178,51 @@ function generateHighSchoolPlayer(id) {
 
     abilities = {
       meet: g(14, 6, 0.3, 3),
-      power: g(10, 5, 0.3, 3),
+      power: g(10 + buildMod.power * 0.3, 5, 0.3, 3),
       eye: g(16, 6, 0.3, 5),
-      steal: g(16, 7, 0, 1),
-      speed: g(37, 10, 0, 1),
-      arm: g(44, 10, 0.5, 10),
+      steal: Math.max(1, Math.round(nrm(16, 7) + buildMod.steal * 0.5)),
+      speed: baseSpeed,
+      arm: Math.max(10, baseArm + r(2, 8)),
       defense: g(32, 8, 0.4, 1),
-      bodyStamina: g(45, 10, 0, 15),
+      bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(43, 10, 0, 15),
       velocity: Math.max(95, velocity),
       control: Math.max(5, control),
       stamina: Math.max(25, stamina)
     };
   } else {
-    let meet = Math.round(nrm(19, 9) + off);
-    let power = Math.round(nrm(15, 10) + off);
-    let eye = Math.round(nrm(18, 8) + off * 0.8);
-    let speed = Math.round(nrm(35, 12));
-    let defense = Math.round(nrm(28, 10) + off * 0.6);
-    let arm = Math.round(nrm(32, 11) + off * 0.5);
-    let steal = Math.round(nrm(22, 9) + off * 0.4);
+    // ポジション別補正
+    const pm = {
+      catcher: { meet: -2, power: 0, eye: 0, defense: 4, steal: -5 },
+      first:   { meet: 1, power: 5, eye: 1, defense: -4, steal: -4 },
+      second:  { meet: 2, power: -3, eye: 2, defense: 3, steal: 2 },
+      short:   { meet: 0, power: -3, eye: 1, defense: 5, steal: 1 },
+      third:   { meet: 0, power: 3, eye: 0, defense: 2, steal: -2 },
+      left:    { meet: 2, power: 4, eye: 1, defense: -3, steal: -1 },
+      center:  { meet: 1, power: -3, eye: 1, defense: 4, steal: 3 },
+      right:   { meet: 0, power: 2, eye: 0, defense: 1, steal: 0 }
+    }[position] || { meet: 0, power: 0, eye: 0, defense: 0, steal: 0 };
 
-    if (specialty === 'speedster') { speed += r(12, 22); steal += r(8, 15); }
+    let meet = Math.round(nrm(19, 9) + off + pm.meet);
+    let power = Math.round(nrm(15, 10) + off + buildMod.power + pm.power);
+    let eye = Math.round(nrm(18, 8) + off * 0.8 + pm.eye);
+    let defense = Math.round(nrm(28, 10) + off * 0.6 + buildMod.defense + pm.defense);
+    let steal = Math.round(nrm(22, 9) + off * 0.4 + buildMod.steal + pm.steal);
+
+    if (specialty === 'speedster') { baseSpeed += r(12, 22); steal += r(8, 15); }
     else if (specialty === 'slugger') power += r(12, 22);
     else if (specialty === 'contact') { meet += r(12, 20); eye += r(8, 15); }
     else if (specialty === 'glove') defense += r(12, 20);
-    else if (specialty === 'cannon') arm += r(15, 25);
+    else if (specialty === 'cannon') baseArm += r(15, 25);
 
     abilities = {
       meet: Math.max(5, meet), power: Math.max(3, power),
       eye: Math.max(5, eye), steal: Math.max(1, steal),
-      speed: Math.max(1, speed), arm: Math.max(1, arm),
+      speed: Math.max(1, baseSpeed), arm: Math.max(1, baseArm),
       defense: Math.max(1, defense),
-      bodyStamina: g(46, 10, 0, 15),
+      bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(43, 10, 0, 15),
-      velocity: g(115, 7, 0.3, 90),
+      velocity: Math.max(90, Math.round(nrm(85 + baseArm * 0.6, 5))),
       control: g(20, 7, 0.3, 5),
       stamina: g(42, 8, 0.3, 20)
     };
@@ -203,9 +256,10 @@ function generateHighSchoolPlayer(id) {
       bats, steal: abilities.steal, bunt: r(10, 40)
     },
     physical: {
-      speed: abilities.speed, arm: abilities.arm, throws,
+      speed: abilities.speed, arm: abilities.arm, throws, build,
       bodyStamina: abilities.bodyStamina, recovery: abilities.recovery,
-      muscle: r(25, 60), dexterity: r(25, 60)
+      muscle: Math.max(5, Math.round(nrm(build === 'large' ? 55 : build === 'small' ? 30 : 42, 10))),
+      dexterity: Math.max(5, Math.round(nrm(build === 'large' ? 35 : build === 'small' ? 55 : 42, 10)))
     },
     fielding: { defense: abilities.defense },
     catching: {
