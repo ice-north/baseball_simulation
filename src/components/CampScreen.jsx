@@ -913,6 +913,25 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
           </div>
         )}
 
+        {/* 赤字ペナルティ通知 */}
+        {currentRound === 1 && seasonData?.deficitPenalties?.length > 0 && (
+          <div className="mb-2 p-3 rounded-xl border bg-red-900/30 border-red-500/40">
+            <div className="text-sm font-bold text-red-400 mb-1">⚠️ 予算超過ペナルティ</div>
+            <div className="space-y-0.5">
+              {seasonData.deficitPenalties.map((p, idx) => (
+                <div key={idx} className="text-xs text-gray-300">
+                  {p.type === 'reputation' && `注目度が ${Math.abs(p.value)} 低下しました`}
+                  {p.type === 'sponsor_loss' && `スポンサー「${p.names.join('」「')}」が撤退しました`}
+                  {p.type === 'fatigue' && `練習環境の悪化により全選手の疲労が +${p.value} 増加しました`}
+                  {p.type === 'growth' && `設備投資不足により全選手の成長率が低下しました`}
+                  {p.type === 'scout' && `スカウト活動が制限されました（候補数 ${Math.abs(p.value)} 人減少）`}
+                </div>
+              ))}
+            </div>
+            <div className="text-[10px] text-gray-500 mt-1">来季は予算内での運営を心がけましょう</div>
+          </div>
+        )}
+
         {viewMode === 'select' && (
           <>
             {/* スタッフ指導効果 */}

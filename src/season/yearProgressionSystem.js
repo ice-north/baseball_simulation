@@ -13,7 +13,7 @@ import { initializeUniversityLeagues } from '../university/universityLeagueManag
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
-import { updateAllTeamReputations, updateAllRanks, advanceSponsors } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyBudgetDeficitPenalty } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
@@ -1571,6 +1571,7 @@ export function advanceToNextYear(seasonData, allTeams) {
   let rankChanges = [];
   let staffRetirements = [];
   rankChanges = updateAllRanks(seasonData);
+  let deficitPenalties = null;
   if (seasonData.settings?.corporateMode) {
     const userTeamName = Object.keys(updatedTeams)[0];
     for (const [teamName, teamData] of Object.entries(updatedTeams)) {
@@ -1580,6 +1581,9 @@ export function advanceToNextYear(seasonData, allTeams) {
         const retired = advanceStaffYear(teamData.corporateData.staff, !isUser, teamData.corporateData.rank);
         if (isUser && retired.length > 0) {
           staffRetirements = retired;
+        }
+        if (isUser) {
+          deficitPenalties = applyBudgetDeficitPenalty(teamData);
         }
         teamData.corporateData.scoutMissions = [];
         teamData.corporateData.scoutTasks = {};
@@ -1787,6 +1791,11 @@ export function advanceToNextYear(seasonData, allTeams) {
   // スタッフ退職レポートを新シーズンデータに保存
   if (staffRetirements.length > 0) {
     newSeasonData.staffRetirements = staffRetirements;
+  }
+
+  // 赤字ペナルティレポート
+  if (deficitPenalties && deficitPenalties.length > 0) {
+    newSeasonData.deficitPenalties = deficitPenalties;
   }
 
   return {

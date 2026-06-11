@@ -172,6 +172,16 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
     executeDepartures(TEAMS_DATA, allRetiredIds, allReleases, currentYear);
 
+    // 赤字額を記録（年度移行時にペナルティ適用）
+    if (budgetBalance < 0 && cd) {
+      cd.budgetDeficit = Math.abs(budgetBalance);
+      const deficitRate = Math.min(1, Math.abs(budgetBalance) / (baseBudget || 13000));
+      cd.scoutPenalty = Math.min(4, Math.round(deficitRate * 5));
+    } else if (cd) {
+      cd.budgetDeficit = 0;
+      cd.scoutPenalty = 0;
+    }
+
     // スタッフ転向処理
     Object.entries(staffConversions).forEach(([pid, enabled]) => {
       if (!enabled) return;
@@ -529,9 +539,17 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       {/* 予算超過警告 */}
       {budgetBalance < 0 && (
         <div className="mb-2 p-2 bg-red-900/30 border border-red-700 rounded">
-          <p className="text-red-400 text-xs font-bold">
-            予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です。選手を解雇するかスタッフ転向を見直してください。
+          <p className="text-red-400 text-xs font-bold mb-1">
+            ⚠️ 予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です
           </p>
+          <div className="text-[10px] text-red-300 space-y-0.5">
+            <p>赤字のまま確定すると来季に以下のペナルティが発生します:</p>
+            <p>• 注目度低下（最大-15）</p>
+            <p>• スポンサー離脱リスク</p>
+            <p>• 選手の疲労増加（練習環境悪化）</p>
+            <p>• 成長率低下（設備投資不足）</p>
+            <p>• スカウト候補数の減少</p>
+          </div>
         </div>
       )}
 

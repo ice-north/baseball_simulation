@@ -300,10 +300,11 @@ export function generateScoutCandidates(teamData, year) {
   const scoutEye = staffBonus.scoutingEye || 50;
   const reputation = teamData.corporateData?.reputation || 30;
 
-  // 候補者数: スカウト能力で6〜12人
+  // 候補者数: スカウト能力で6〜12人（赤字ペナルティで減少）
   const baseCount = 6;
   const bonusCount = Math.floor(scoutEye / 20);
-  const candidateCount = baseCount + bonusCount;
+  const scoutPenalty = teamData.corporateData?.scoutPenalty || 0;
+  const candidateCount = Math.max(3, baseCount + bonusCount - scoutPenalty);
 
   // 注目度が高いほど上位選手にアクセスしやすい
   const reputationMult = getReputationScoutBonus(reputation);

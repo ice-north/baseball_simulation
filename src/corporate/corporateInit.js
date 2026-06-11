@@ -130,7 +130,7 @@ const RANK_STAFF_CONFIG = {
   D: { coach: 2, manager: 1, trainer: 0 },
 };
 
-export const BUDGET_BY_RANK = { S: 24000, A: 21000, B: 18000, C: 15000, D: 12000 };
+export const BUDGET_BY_RANK = { S: 25000, A: 22000, B: 19000, C: 16000, D: 13000 };
 
 // ランク×種別ごとのロースターサイズ [min, max]
 const ROSTER_SIZE = {
@@ -1345,4 +1345,67 @@ export const updateAllRanks = (seasonData) => {
   }
 
   return rankChanges;
+};
+
+// 赤字ペナルティを適用（年度移行時に呼ばれる）
+export const applyBudgetDeficitPenalty = (teamData) => {
+  const cd = teamData?.corporateData;
+  if (!cd || !cd.budgetDeficit || cd.budgetDeficit <= 0) return null;
+
+  const deficit = cd.budgetDeficit;
+  const totalBudget = cd.budget || 13000;
+  const deficitRate = Math.min(1, deficit / totalBudget);
+  const penalties = [];
+
+  // 1. 注目度低下（赤字額/1000 * 3、最大-15）
+  const repPenalty = Math.min(15, Math.round((deficit / 1000) * 3));
+  if (repPenalty > 0) {
+    cd.reputation = Math.max(0, (cd.reputation || 0) - repPenalty);
+    penalties.push({ type: 'reputation', value: -repPenalty });
+  }
+
+  // 2. スポンサー離脱リスク（赤字率 × 60%の確率で各スポンサーが離脱）
+  if (cd.sponsors && cd.sponsors.length > 0) {
+    const lostSponsors = [];
+    cd.sponsors = cd.sponsors.filter(s => {
+      const leaveChance = deficitRate * 0.6;
+      if (Math.random() < leaveChance) {
+        lostSponsors.push(s.name);
+        return false;
+      }
+      return true;
+    });
+    if (lostSponsors.length > 0) {
+      penalties.push({ type: 'sponsor_loss', names: lostSponsors });
+    }
+  }
+
+  // 3. 選手のコンディション低下（練習環境悪化）
+  const conditionPenalty = Math.min(15, Math.round(deficitRate * 15));
+  if (conditionPenalty > 0 && teamData.players) {
+    for (const p of teamData.players) {
+      p.fatigue = Math.min(100, (p.fatigue || 0) + conditionPenalty);
+    }
+    penalties.push({ type: 'fatigue', value: conditionPenalty });
+  }
+
+  // 4. 成長率低下（練習環境・設備投資不足）
+  const growthPenalty = Math.min(0.05, deficitRate * 0.04);
+  if (growthPenalty > 0 && teamData.players) {
+    for (const p of teamData.players) {
+      p.growthModifier = (p.growthModifier || 0) - growthPenalty;
+    }
+    penalties.push({ type: 'growth', value: -growthPenalty });
+  }
+
+  // 5. スカウト制限（契約更改時に既に適用済み、レポートに含める）
+  const scoutReduction = cd.scoutPenalty || 0;
+  if (scoutReduction > 0) {
+    penalties.push({ type: 'scout', value: -scoutReduction });
+  }
+
+  cd.budgetDeficit = 0;
+  cd.scoutPenalty = 0;
+  cd.lastDeficitPenalties = penalties;
+  return penalties;
 };
