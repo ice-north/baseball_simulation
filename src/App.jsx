@@ -31,7 +31,7 @@ import { autoSimulateGame } from './game/autoSimulation.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
-import { readSaveSlots, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, exportTeam, importTeam } from './game/saveSystem.js';
+import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, exportTeam, importTeam } from './game/saveSystem.js';
 
 // Game controls imports
 import { executeResetGame, executeMultiPitch, executeStartSimMode } from './game/gameControls.js';
@@ -171,15 +171,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const [teamHistory, setTeamHistory] = useState([]); // 年度別チーム成績履歴
       const [draftResults, setDraftResults] = useState(null); // { draftedPlayers, nearMissPlayers }
 
-      const refreshSaveSlots = () => {
-        const slots = readSaveSlots();
+      const refreshSaveSlots = async () => {
+        const slots = await readSaveSlots();
+        setCachedSlots(slots);
         setSaveSlots(slots);
         setHasSaveData(slots.some(s => s !== null));
       };
 
       useEffect(() => {
         refreshSaveSlots();
-        if (migrateOldSaveData()) refreshSaveSlots();
       }, []);
 
       // LEAGUE_SETTINGSをseasonDataと同期
@@ -187,17 +187,17 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         LEAGUE_SETTINGS.useDH = seasonData?.settings?.useDH || false;
       }, [seasonData?.settings?.useDH]);
 
-      const saveGame = (slotIndex = 0) => {
-        const result = saveGameToSlot(slotIndex, {
+      const saveGame = async (slotIndex = 0) => {
+        const result = await saveGameToSlot(slotIndex, {
           seasonData, leagueConfig, screenMode, managementView,
           gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory
         });
-        if (result.success) refreshSaveSlots();
+        if (result.success) await refreshSaveSlots();
         return result;
       };
 
-      const loadGame = (slotIndex = 0) => {
-        const result = loadGameFromSlot(slotIndex);
+      const loadGame = async (slotIndex = 0) => {
+        const result = await loadGameFromSlot(slotIndex);
         if (!result.success) return result;
 
         const saveData = result.data;
@@ -216,9 +216,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         return result;
       };
 
-      const deleteSave = (slotIndex = 0) => {
-        const result = deleteSaveSlot(slotIndex);
-        if (result) refreshSaveSlots();
+      const deleteSave = async (slotIndex = 0) => {
+        const result = await deleteSaveSlot(slotIndex);
+        if (result) await refreshSaveSlots();
         return result;
       };
 

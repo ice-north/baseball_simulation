@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onReturnToTitle }) => {
   const [saveStatus, setSaveStatus] = useState(null);
 
-  const handleSave = (slotIndex) => {
-    const result = onSave(slotIndex);
+  const handleSave = async (slotIndex) => {
+    setSaveStatus({ type: 'saving' });
+    const result = await onSave(slotIndex);
     if (result?.success) {
       setSaveStatus({ type: 'saved' });
     } else {
@@ -14,9 +15,10 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
     setTimeout(() => setSaveStatus(null), 4000);
   };
 
-  const handleLoad = (slotIndex) => {
+  const handleLoad = async (slotIndex) => {
     if (window.confirm('現在の進行データは失われます。ロードしますか？')) {
-      const result = onLoad(slotIndex);
+      setSaveStatus({ type: 'loading' });
+      const result = await onLoad(slotIndex);
       if (result?.success) {
         setSaveStatus({ type: 'loaded' });
       } else {
@@ -26,9 +28,9 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
     }
   };
 
-  const handleDelete = (slotIndex) => {
+  const handleDelete = async (slotIndex) => {
     if (window.confirm('セーブデータを削除しますか？この操作は取り消せません。')) {
-      const success = onDelete(slotIndex);
+      const success = await onDelete(slotIndex);
       setSaveStatus(success ? { type: 'deleted' } : { type: 'error', message: '削除に失敗しました' });
       setTimeout(() => setSaveStatus(null), 4000);
     }
@@ -61,11 +63,14 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
       {/* ステータスメッセージ */}
       {saveStatus && (
         <div className={`mb-6 p-4 rounded-lg font-bold text-center ${
+          saveStatus.type === 'saving' || saveStatus.type === 'loading' ? 'bg-gray-600 text-white animate-pulse' :
           saveStatus.type === 'saved' ? 'bg-green-600 text-white' :
           saveStatus.type === 'loaded' ? 'bg-blue-600 text-white' :
           saveStatus.type === 'deleted' ? 'bg-yellow-600 text-white' :
           'bg-red-600 text-white'
         }`}>
+          {saveStatus.type === 'saving' && '💾 セーブ中...'}
+          {saveStatus.type === 'loading' && '📂 ロード中...'}
           {saveStatus.type === 'saved' && '✅ セーブしました'}
           {saveStatus.type === 'loaded' && '✅ ロードしました'}
           {saveStatus.type === 'deleted' && '🗑️ 削除しました'}

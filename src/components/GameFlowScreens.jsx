@@ -45,12 +45,12 @@ const GameFlowScreens = ({
     return <StartScreen
       onNewGame={() => { setGameMode('normal'); setGameFlowState('newgame_mode_select'); }}
       onSandbox={() => { setGameMode('sandbox'); setGameFlowState('sandbox_regulations'); }}
-      onContinue={(slotIndex) => {
-        const result = loadGame(slotIndex);
+      onContinue={async (slotIndex) => {
+        const result = await loadGame(slotIndex);
         if (!result?.success) alert(result?.error || 'ロードに失敗しました');
       }}
-      onEdit={(slotIndex) => {
-        const result = loadGame(slotIndex);
+      onEdit={async (slotIndex) => {
+        const result = await loadGame(slotIndex);
         if (result?.success) {
           setManagementView('edit');
         } else {

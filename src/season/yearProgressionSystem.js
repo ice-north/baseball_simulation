@@ -1581,6 +1581,10 @@ export function advanceToNextYear(seasonData, allTeams) {
         if (isUser && retired.length > 0) {
           staffRetirements = retired;
         }
+        teamData.corporateData.scoutMissions = [];
+        teamData.corporateData.scoutTasks = {};
+        teamData.corporateData.favoritePlayerIds = {};
+        teamData.corporateData.autoInvestFilter = null;
       }
     }
   }

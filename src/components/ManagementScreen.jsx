@@ -240,7 +240,7 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     gameMode={gameMode}
-    onSave={(slotIndex) => { saveGame(slotIndex); refreshSaveSlots(); }}
+    onSave={async (slotIndex) => { await saveGame(slotIndex); }}
     saveSlots={saveSlots}
     onStartNextSeason={() => {
       if (gameMode === 'sandbox') {

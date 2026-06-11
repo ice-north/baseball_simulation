@@ -10,9 +10,9 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   const [saveStatus, setSaveStatus] = useState(null);
   const [graduationReport, setGraduationReport] = useState(null);
 
-  const handleSaveToSlot = () => {
+  const handleSaveToSlot = async () => {
     if (onSave) {
-      onSave(selectedSaveSlot);
+      await onSave(selectedSaveSlot);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus(null), 3000);
     }
