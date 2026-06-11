@@ -580,23 +580,32 @@ function applyUniversityEntranceBoost(player, universityRank) {
   const gp = player.growthPotential || 1.0;
   const r = () => Math.floor(Math.random() * 5) - 2;
   const isPitcher = player.position === 'pitcher';
-  const boost = (v, amount, cap = 99) => Math.min(cap, v + Math.round(amount * (0.8 + gp * 0.4)) + r());
+
+  const decayMult = (current, threshold, rate) => {
+    if (current < threshold) return 1.0;
+    return Math.max(0.10, 1.0 - (current - threshold) * rate);
+  };
+  const boost = (v, amount, cap = 99, threshold = null, rate = 0.05) => {
+    let raw = amount * (0.8 + gp * 0.4);
+    if (threshold != null) raw *= decayMult(v, threshold, rate);
+    return Math.min(cap, v + Math.round(raw) + r());
+  };
 
   if (isPitcher) {
-    player.pitching.velocity = boost(player.pitching.velocity, base * 0.5, 155);
-    player.pitching.control = boost(player.pitching.control, base * 1.2);
-    player.pitching.stamina = boost(player.pitching.stamina, base * 1.5, 200);
-    player.physical.arm = boost(player.physical.arm, base * 0.8);
+    player.pitching.velocity = boost(player.pitching.velocity, base * 0.5, 155, 145, 0.20);
+    player.pitching.control = boost(player.pitching.control, base * 1.2, 99, 70, 0.05);
+    player.pitching.stamina = boost(player.pitching.stamina, base * 1.5, 200, 80, 0.03);
+    player.physical.arm = boost(player.physical.arm, base * 0.8, 99, 80, 0.03);
   } else {
-    player.batting.meet = boost(player.batting.meet, base * 1.0);
-    player.batting.power = boost(player.batting.power, base * 0.8);
-    player.batting.eye = boost(player.batting.eye, base * 0.8);
-    player.physical.speed = boost(player.physical.speed, base * 0.6);
-    player.physical.arm = boost(player.physical.arm, base * 0.5);
-    player.fielding.defense = boost(player.fielding.defense, base * 0.8);
+    player.batting.meet = boost(player.batting.meet, base * 1.0, 99, 70, 0.05);
+    player.batting.power = boost(player.batting.power, base * 0.8, 99, 70, 0.05);
+    player.batting.eye = boost(player.batting.eye, base * 0.8, 99, 70, 0.05);
+    player.physical.speed = boost(player.physical.speed, base * 0.6, 99, 80, 0.03);
+    player.physical.arm = boost(player.physical.arm, base * 0.5, 99, 80, 0.03);
+    player.fielding.defense = boost(player.fielding.defense, base * 0.8, 99, 70, 0.05);
   }
-  player.physical.bodyStamina = boost(player.physical.bodyStamina || 40, base * 0.6);
-  player.physical.recovery = boost(player.physical.recovery || 40, base * 0.4);
+  player.physical.bodyStamina = boost(player.physical.bodyStamina || 40, base * 0.6, 99, 80, 0.03);
+  player.physical.recovery = boost(player.physical.recovery || 40, base * 0.4, 99, 80, 0.03);
 }
 
 /**
@@ -610,17 +619,25 @@ function applyUniversityGrowth(player, universityRank = null) {
   const rankMult = getUniversityGrowthMultiplier(universityRank);
   const isPitcher = player.position === 'pitcher';
 
-  const grow = (current, base, cap = 99) => {
-    const amount = Math.round(base * gp * rankMult * (0.7 + Math.random() * 0.6));
-    return Math.min(cap, current + amount);
+  // 高能力値の成長減衰（キャンプと同じルール）
+  const decayMult = (current, threshold, rate, floor = 0.10) => {
+    if (current < threshold) return 1.0;
+    return Math.max(floor, 1.0 - (current - threshold) * rate);
+  };
+
+  const grow = (current, base, cap = 99, threshold = null, rate = 0.05) => {
+    let amount = base * gp * rankMult * (0.7 + Math.random() * 0.6);
+    if (threshold != null) {
+      amount *= decayMult(current, threshold, rate);
+    }
+    return Math.min(cap, current + Math.round(amount));
   };
 
   if (isPitcher) {
-    player.pitching.control = grow(player.pitching.control, 3);
-    player.pitching.stamina = grow(player.pitching.stamina, 4, 200);
-    player.physical.arm = grow(player.physical.arm, 2);
-    // 球速: 直接成長（大学での年間成長は控えめ、上限158km）
-    player.pitching.velocity = grow(player.pitching.velocity, 1.0, 158);
+    player.pitching.control = grow(player.pitching.control, 3, 99, 70, 0.05);
+    player.pitching.stamina = grow(player.pitching.stamina, 4, 200, 80, 0.03);
+    player.physical.arm = grow(player.physical.arm, 2, 99, 80, 0.03);
+    player.pitching.velocity = grow(player.pitching.velocity, 1.0, 165, 150, 0.20);
     if (player.pitching.arsenal) {
       player.pitching.arsenal.forEach(pitch => {
         if (pitch.type !== 'straight') {
@@ -628,21 +645,21 @@ function applyUniversityGrowth(player, universityRank = null) {
         }
       });
     }
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 2);
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 2, 99, 80, 0.03);
   } else {
-    player.batting.meet = grow(player.batting.meet, 3);
-    player.batting.power = grow(player.batting.power, 2);
-    player.batting.eye = grow(player.batting.eye, 2);
-    player.physical.speed = grow(player.physical.speed, 1);
-    player.fielding.defense = grow(player.fielding.defense, 2);
-    player.physical.arm = grow(player.physical.arm, 1);
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 2);
+    player.batting.meet = grow(player.batting.meet, 3, 99, 70, 0.05);
+    player.batting.power = grow(player.batting.power, 2, 99, 70, 0.05);
+    player.batting.eye = grow(player.batting.eye, 2, 99, 70, 0.05);
+    player.physical.speed = grow(player.physical.speed, 1, 99, 80, 0.03);
+    player.fielding.defense = grow(player.fielding.defense, 2, 99, 70, 0.05);
+    player.physical.arm = grow(player.physical.arm, 1, 99, 80, 0.03);
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 2, 99, 80, 0.03);
   }
 
   // フィジカル共通
-  player.physical.muscle = grow(player.physical.muscle || 40, 2);
-  player.physical.dexterity = grow(player.physical.dexterity || 40, 2);
-  player.physical.recovery = grow(player.physical.recovery || 40, 1);
+  player.physical.muscle = grow(player.physical.muscle || 40, 2, 99, 80, 0.03);
+  player.physical.dexterity = grow(player.physical.dexterity || 40, 2, 99, 80, 0.03);
+  player.physical.recovery = grow(player.physical.recovery || 40, 1, 99, 80, 0.03);
 }
 
 // ============================================================
