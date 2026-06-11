@@ -1664,6 +1664,59 @@ export function advanceToNextYear(seasonData, allTeams) {
     });
   }
 
+  // 5.65. クラブチームへの選手供給（大学・企業・独立に入れなかった選手の受け皿）
+  const clubTeamEntries = Object.entries(teamsAfterRetirement).filter(([, t]) => t.corporateData?.type === 'club');
+  if (clubTeamEntries.length > 0) {
+    // 引退扱いの高校卒・大学卒からクラブチームへ振り分け
+    const clubCandidates = [];
+    // 大学卒で「引退」判定の選手の一部
+    gradScored.forEach(entry => {
+      if (entry.player.postGradPath === 'retired' && Math.random() < 0.3) {
+        clubCandidates.push(entry.player);
+      }
+    });
+    // 高校卒で「引退」判定の選手の一部
+    if (hsDistribution.retired) {
+      hsDistribution.retired.forEach(p => {
+        if (Math.random() < 0.15) {
+          clubCandidates.push(p);
+        }
+      });
+    }
+    // リリースプールからも一部をクラブチームへ（企業・独立からの退団者）
+    const releaseForClub = [];
+    for (let i = releasedPlayersPool.length - 1; i >= 0; i--) {
+      const p = releasedPlayersPool[i];
+      if (p.age && p.age <= 30 && Math.random() < 0.1) {
+        releaseForClub.push(p);
+        releasedPlayersPool.splice(i, 1);
+      }
+    }
+    clubCandidates.push(...releaseForClub);
+
+    // 選手をランダムにクラブチームへ配分（ロスターが少ないチーム優先）
+    if (clubCandidates.length > 0) {
+      const sortedClubs = clubTeamEntries
+        .map(([name, team]) => ({ name, team, count: team.players?.length || 0 }))
+        .sort((a, b) => a.count - b.count);
+
+      clubCandidates.forEach(p => {
+        const target = sortedClubs[Math.floor(Math.random() * Math.min(5, sortedClubs.length))];
+        if (target && target.team.players) {
+          const player = { ...p };
+          player.isStarter = false;
+          player.battingOrder = 0;
+          if (!player.careerHistory) player.careerHistory = [];
+          player.careerHistory.push({ type: 'club_join', year: currentYear + 1, label: `${target.name}入部` });
+          target.team.players.push(player);
+          target.count++;
+        }
+        // sortedClubs を再ソート（少ないチームに優先的に配分）
+        sortedClubs.sort((a, b) => a.count - b.count);
+      });
+    }
+  }
+
   // 5.7. 大学モード: 4年生卒業＋ロスター入れ替え（TEAMS_DATA上のチーム）
   let universityGraduationReport = null;
   if (seasonData.settings?.universityMode) {

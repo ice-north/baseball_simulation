@@ -545,7 +545,7 @@ function removeFromPool(player) {
   } else if (ref.source === 'released') {
     const idx = releasedPlayersPool.findIndex(p => p.id === player.id);
     if (idx >= 0) releasedPlayersPool.splice(idx, 1);
-  } else if ((ref.source === 'independent' || ref.source === 'corporate_team') && ref.teamName) {
+  } else if ((ref.source === 'independent' || ref.source === 'corporate_team' || ref.source === 'club_team') && ref.teamName) {
     const srcTeam = TEAMS_DATA[ref.teamName];
     if (srcTeam?.players) {
       const idx = srcTeam.players.findIndex(p => p.id === player.id);
@@ -1078,7 +1078,7 @@ function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
   } else if (target === 'independent') {
     pool = getIndependentScoutPool(teamData);
   } else if (target === 'corporate') {
-    pool = getCorporateScoutPool(teamData);
+    pool = [...getCorporateScoutPool(teamData), ...getClubScoutPool(teamData)];
   }
 
   if (pool.length === 0) return [];
@@ -1181,16 +1181,34 @@ function getIndependentScoutPool(excludeTeam) {
 }
 
 /**
- * 社会人チームの選手プールを取得
+ * 社会人チーム（企業チーム）の選手プールを取得
  */
 function getCorporateScoutPool(excludeTeam) {
   const pool = [];
   const excludeName = Object.keys(TEAMS_DATA)[0];
   Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
     if (!team?.players || !team.corporateData) return;
+    if (team.corporateData.type === 'club') return;
     if (teamName === excludeName) return;
     team.players.forEach((p, idx) => {
       pool.push({ player: p, source: 'corporate_team', teamName, poolIndex: idx });
+    });
+  });
+  return pool;
+}
+
+/**
+ * クラブチームの選手プールを取得（社会人視察で発見可能）
+ */
+function getClubScoutPool(excludeTeam) {
+  const pool = [];
+  const excludeName = Object.keys(TEAMS_DATA)[0];
+  Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+    if (!team?.players || !team.corporateData) return;
+    if (team.corporateData.type !== 'club') return;
+    if (teamName === excludeName) return;
+    team.players.forEach((p, idx) => {
+      pool.push({ player: p, source: 'club_team', teamName, poolIndex: idx });
     });
   });
   return pool;
@@ -1309,6 +1327,7 @@ function getSourceLabel(entry) {
   if (entry.source === 'university') return entry.player?.universityTeamName || `大学${(entry.yearsInUni || 0) + 1}年`;
   if (entry.source === 'independent') return `独立L(${entry.teamName || ''})`;
   if (entry.source === 'corporate_team') return `社会人(${entry.teamName || ''})`;
+  if (entry.source === 'club_team') return `クラブ(${entry.teamName || ''})`;
   return 'フリー';
 }
 
