@@ -93,6 +93,10 @@ function generateHighSchoolPlayer(id) {
     return a + b;
   };
   const cl = (val, lo, hi) => Math.max(lo, Math.min(hi, val));
+  const nrm = (mu, sigma) => {
+    const a = Math.random() || 0.001, b = Math.random();
+    return mu + sigma * Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * b);
+  };
 
   // === 才能ランク（連続分布）===
   const talentRoll = Math.random() * 100;
@@ -114,12 +118,14 @@ function generateHighSchoolPlayer(id) {
 
   let abilities;
   if (isPitcher) {
-    const velRanges = { S: [135, 149], A: [127, 142], B: [118, 135], C: [110, 128], D: [103, 120], E: [96, 113] };
-    let velocity = r(velRanges[tier][0], velRanges[tier][1]) + tri(3);
+    // 球速: 正規分布 N(126,9)。1200投手/年で 160km≈10年に1人, 155km≈年1人, 150km≈年5人
+    const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
+    let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
+    if (isSideOrUnder) velocity -= 3;
     let control = r(12, 35) + off + controlAdjust + tri(5);
     let stamina = r(40, 75) + Math.round(off * 1.5) + tri(5);
 
-    if (specialty === 'power_arm') velocity += r(3, 8);
+    if (specialty === 'power_arm') velocity += r(5, 10);
     else if (specialty === 'technician') control += r(10, 20);
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
@@ -133,7 +139,7 @@ function generateHighSchoolPlayer(id) {
       defense: cl(r(22, 42) + Math.round(off * 0.4) + tri(3), 1, 65),
       bodyStamina: cl(r(30, 60) + tri(5), 20, 80),
       recovery: cl(r(28, 58) + tri(5), 20, 75),
-      velocity: cl(velocity, 95, 155),
+      velocity: Math.max(95, velocity),
       control: cl(control, 5, 80),
       stamina: cl(stamina, 25, 120)
     };
