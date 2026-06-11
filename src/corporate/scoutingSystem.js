@@ -648,6 +648,85 @@ const SCOUT_TARGETS = {
 
 export { SCOUT_TARGETS };
 
+// ============================================================
+// スカウト継続タスクシステム
+// 各スカウトに「巡回」「自動調査」タスクを割り当て
+// キャンセルされるまで自動で繰り返す
+// ============================================================
+
+export const MAX_FAVORITES_PER_SCOUT = 3;
+
+/**
+ * スカウトに継続タスクを割り当て、初回ミッションを開始する
+ * @param {'dispatch'|'investigation'} taskType
+ * @param {Object} params - dispatch: { target }, investigation: {}
+ */
+export function assignScoutTask(teamData, staffId, taskType, params, currentDate, gameYear) {
+  const cd = teamData?.corporateData;
+  if (!cd) return { success: false, message: '社会人チームではありません' };
+
+  const staff = (cd.staff || []).find(s => s.id === staffId);
+  if (!staff) return { success: false, message: 'スタッフが見つかりません' };
+
+  if (!cd.scoutTasks) cd.scoutTasks = {};
+
+  if (cd.scoutTasks[staffId]) {
+    cancelScoutTask(teamData, staffId);
+  }
+
+  cd.scoutTasks[staffId] = {
+    type: taskType,
+    target: params?.target || null,
+    active: true,
+    staffName: staff.name,
+    assignedDate: currentDate ? { ...currentDate } : null,
+  };
+
+  if (taskType === 'dispatch') {
+    const result = dispatchScout(teamData, params.target, staffId, currentDate);
+    if (!result.success) {
+      delete cd.scoutTasks[staffId];
+      return result;
+    }
+    const targetLabel = SCOUT_TARGETS[params.target]?.label || params.target;
+    return { success: true, message: `${staff.name}を${targetLabel}の巡回に配置しました` };
+  } else if (taskType === 'investigation') {
+    const result = autoStartNextInvestigation(teamData, staffId, currentDate);
+    if (result?.success) {
+      return { success: true, message: `${staff.name}の自動調査を開始しました` };
+    }
+    return { success: true, message: `${staff.name}を自動調査に配置しました（調査対象が見つかり次第開始）` };
+  }
+
+  return { success: true };
+}
+
+/**
+ * スカウトの継続タスクをキャンセル（進行中ミッションも中止）
+ */
+export function cancelScoutTask(teamData, staffId) {
+  const cd = teamData?.corporateData;
+  if (!cd?.scoutTasks) return;
+  delete cd.scoutTasks[staffId];
+
+  if (cd.scoutMissions) {
+    cd.scoutMissions.forEach(m => {
+      if (m.staffId === staffId && !m.completed) {
+        m.completed = true;
+        m.cancelled = true;
+      }
+    });
+  }
+}
+
+export function getScoutTask(teamData, staffId) {
+  return teamData?.corporateData?.scoutTasks?.[staffId] || null;
+}
+
+export function getAllScoutTasks(teamData) {
+  return teamData?.corporateData?.scoutTasks || {};
+}
+
 /**
  * スカウト派遣を開始（スタッフ指定）
  * @param {Object} teamData - TEAMS_DATA[teamName]
@@ -739,6 +818,16 @@ export function checkScoutMissionCompletion(teamData, currentDate, gameYear) {
       mission.results = generateScoutReport(teamData, mission.target, mission.staffScoutEye, gameYear);
     }
     completed.push(mission);
+
+    // Auto-restart for continuous tasks
+    const task = cd.scoutTasks?.[mission.staffId];
+    if (task?.active && !mission.cancelled) {
+      if (task.type === 'dispatch' && !mission.type) {
+        dispatchScoutInternal(teamData, task.target, mission.staffId, currentDate);
+      } else if (task.type === 'investigation' && mission.type === 'investigation') {
+        autoStartNextInvestigation(teamData, mission.staffId, currentDate);
+      }
+    }
   });
 
   return completed;
@@ -816,50 +905,44 @@ export function getAutoInvestigationFilter(teamData) {
 }
 
 /**
- * 自動調査を実行: フィルタ条件に合う未調査の選手を探して調査開始
+ * 自動調査を実行
+ * 1. 継続調査タスクを持つ待機中スカウトの次ターゲットを開始
+ * 2. グローバルフィルタでタスク未割当スカウトも調査開始
  */
 export function processAutoInvestigation(teamData, currentDate) {
   const cd = teamData?.corporateData;
-  if (!cd?.autoInvestFilter || !cd.scoutMissions) return [];
+  if (!cd) return [];
+  if (!cd.scoutMissions) cd.scoutMissions = [];
 
-  const filter = cd.autoInvestFilter;
-  const allPlayers = getAllScoutedPlayers(cd);
   const busyIds = new Set(cd.scoutMissions.filter(m => !m.completed).map(m => m.staffId));
-  const pendingInvIds = new Set(cd.scoutMissions.filter(m => m.type === 'investigation' && !m.completed).map(m => m.targetPlayerId));
-  const availableStaff = (cd.staff || []).filter(s => !busyIds.has(s.id));
+  const started = [];
 
-  if (availableStaff.length === 0) return [];
+  // 1. 継続調査タスクを持つ待機中スカウト
+  if (cd.scoutTasks) {
+    for (const [staffIdStr, task] of Object.entries(cd.scoutTasks)) {
+      if (task.type !== 'investigation' || !task.active) continue;
+      const staffId = parseInt(staffIdStr);
+      if (busyIds.has(staffId)) continue;
 
-  const getVisibleVal = (p, key) => {
-    const sa = p.scoutedAbilities || {};
-    const map = {
-      velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
-      meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
-      speed: sa.physical?.speed, defense: sa.fielding?.defense,
-    };
-    const v = map[key];
-    return (v === '?' || v === undefined) ? null : (typeof v === 'number' ? v : parseInt(v));
-  };
-
-  const targets = allPlayers.filter(p => {
-    if ((p._revealLevel || 0) >= 2) return false;
-    if (pendingInvIds.has(p.id)) return false;
-    if (filter.ageMin && p.age < filter.ageMin) return false;
-    if (filter.ageMax && p.age > filter.ageMax) return false;
-    if (filter.positions && filter.positions.length > 0 && !filter.positions.includes(p.position)) return false;
-    // 個別能力フィルタ（見えている値で判定）
-    if (filter.abilities) {
-      for (const [key, range] of Object.entries(filter.abilities)) {
-        const val = getVisibleVal(p, key);
-        if (val === null) continue;
-        if (range.min != null && val < range.min) return false;
-        if (range.max != null && val > range.max) return false;
+      const result = autoStartNextInvestigation(teamData, staffId, currentDate);
+      if (result?.success) {
+        busyIds.add(staffId);
+        started.push({ playerName: result._targetName || '?', staffName: task.staffName });
       }
     }
-    return true;
-  });
+  }
 
-  const started = [];
+  // 2. グローバルフィルタ（タスク未割当スカウトのみ）
+  if (!cd.autoInvestFilter) return started;
+  const filter = cd.autoInvestFilter;
+  const allPlayers = getAllScoutedPlayers(cd);
+  const pendingInvIds = new Set(cd.scoutMissions.filter(m => m.type === 'investigation' && !m.completed).map(m => m.targetPlayerId));
+  const availableStaff = (cd.staff || []).filter(s => !busyIds.has(s.id) && !(cd.scoutTasks || {})[s.id]);
+
+  if (availableStaff.length === 0) return started;
+
+  const targets = filterInvestigationTargets(allPlayers, pendingInvIds, filter);
+
   for (const target of targets) {
     if (availableStaff.length === 0) break;
     const scout = availableStaff.shift();
@@ -876,16 +959,22 @@ export function processAutoInvestigation(teamData, currentDate) {
  */
 export function toggleFavoritePlayer(teamData, playerId, assignedStaff) {
   const cd = teamData?.corporateData;
-  if (!cd) return;
+  if (!cd) return { success: false, message: '社会人チームではありません' };
   if (!cd.favoritePlayerIds) cd.favoritePlayerIds = {};
   if (!cd._favoriteHistory) cd._favoriteHistory = {};
 
   if (cd.favoritePlayerIds[playerId]) {
-    // 解除: ボーナスを履歴に退避してから削除
     cd._favoriteHistory[playerId] = cd.favoritePlayerIds[playerId].bonus || 0;
     delete cd.favoritePlayerIds[playerId];
+    return { success: true, action: 'removed' };
   } else {
-    // 登録: 過去のボーナスがあれば引き継ぐ
+    if (assignedStaff?.id) {
+      const assignmentCount = Object.values(cd.favoritePlayerIds)
+        .filter(f => f.staffId === assignedStaff.id).length;
+      if (assignmentCount >= MAX_FAVORITES_PER_SCOUT) {
+        return { success: false, message: `${assignedStaff.name}は既に${MAX_FAVORITES_PER_SCOUT}人の選手を担当しています` };
+      }
+    }
     const prevBonus = cd._favoriteHistory[playerId] || 0;
     cd.favoritePlayerIds[playerId] = {
       startDate: null,
@@ -894,6 +983,7 @@ export function toggleFavoritePlayer(teamData, playerId, assignedStaff) {
       staffName: assignedStaff?.name || null,
       staffNegotiation: assignedStaff?.negotiation || 0,
     };
+    return { success: true, action: 'added' };
   }
 }
 
@@ -1219,6 +1309,85 @@ function getSourceLabel(entry) {
   if (entry.source === 'independent') return `独立L(${entry.teamName || ''})`;
   if (entry.source === 'corporate_team') return `社会人(${entry.teamName || ''})`;
   return 'フリー';
+}
+
+// ============================================================
+// 継続タスク内部ヘルパー
+// ============================================================
+
+function dispatchScoutInternal(teamData, target, staffId, currentDate) {
+  const cd = teamData?.corporateData;
+  if (!cd) return;
+  const targetDef = SCOUT_TARGETS[target];
+  if (!targetDef) return;
+  const staff = (cd.staff || []).find(s => s.id === staffId);
+  if (!staff) return;
+  if (!cd.scoutMissions) cd.scoutMissions = [];
+
+  const returnDate = addDays(currentDate, targetDef.days);
+  cd.scoutMissions.push({
+    target,
+    staffId,
+    staffName: staff.name,
+    staffScoutEye: staff.abilities?.scoutingEye || 30,
+    dispatchDate: { ...currentDate },
+    returnDate,
+    completed: false,
+    results: null,
+    isAutoRedispatch: true,
+  });
+}
+
+function autoStartNextInvestigation(teamData, staffId, currentDate) {
+  const cd = teamData?.corporateData;
+  if (!cd) return null;
+
+  const filter = cd.autoInvestFilter;
+  const allPlayers = getAllScoutedPlayers(cd);
+  const pendingInvIds = new Set(
+    (cd.scoutMissions || [])
+      .filter(m => m.type === 'investigation' && !m.completed)
+      .map(m => m.targetPlayerId)
+  );
+
+  const targets = filterInvestigationTargets(allPlayers, pendingInvIds, filter);
+  if (targets.length === 0) return null;
+
+  const target = targets[0];
+  const result = startInvestigation(teamData, target.id, target.name, staffId, currentDate);
+  if (result) result._targetName = target.name;
+  return result;
+}
+
+function filterInvestigationTargets(allPlayers, pendingInvIds, filter) {
+  const getVisibleVal = (p, key) => {
+    const sa = p.scoutedAbilities || {};
+    const map = {
+      velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
+      meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
+      speed: sa.physical?.speed, defense: sa.fielding?.defense,
+    };
+    const v = map[key];
+    return (v === '?' || v === undefined) ? null : (typeof v === 'number' ? v : parseInt(v));
+  };
+
+  return allPlayers.filter(p => {
+    if ((p._revealLevel || 0) >= 2) return false;
+    if (pendingInvIds.has(p.id)) return false;
+    if (!filter) return true;
+    if (filter.ageMin && p.age < filter.ageMin) return false;
+    if (filter.ageMax && p.age > filter.ageMax) return false;
+    if (filter.positions && filter.positions.length > 0 && !filter.positions.includes(p.position)) return false;
+    if (filter.abilities) {
+      for (const [key, range] of Object.entries(filter.abilities)) {
+        const val = getVisibleVal(p, key);
+        if (val === null) continue;
+        if (range.min != null && val < range.min) return false;
+        if (range.max != null && val > range.max) return false;
+      }
+    }
+    return true;
+  });
 }
 
 function addDays(date, days) {

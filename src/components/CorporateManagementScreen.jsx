@@ -5,7 +5,7 @@ import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudget
 import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/constants.js';
 import { universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
-import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount } from '../corporate/scoutingSystem.js';
+import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount, assignScoutTask, cancelScoutTask, getAllScoutTasks, MAX_FAVORITES_PER_SCOUT } from '../corporate/scoutingSystem.js';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -401,10 +401,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             </div>
           </div>
 
-          {/* スカウト派遣 */}
+          {/* スカウト指示状況 */}
           <div className="bg-gray-800 rounded-lg p-4 mb-4">
-            <h2 className="text-sm font-bold text-gray-300 mb-3">スカウトを派遣する</h2>
-            <p className="text-[10px] text-gray-500 mb-3">スタッフを選んで派遣先に送ると、一定期間後に候補選手をリストアップして帰還します</p>
+            <h2 className="text-sm font-bold text-gray-300 mb-3">スカウト指示状況</h2>
+            <p className="text-[10px] text-gray-500 mb-3">各スカウトにタスクを割り当てると、中止するまで繰り返し行動します</p>
 
             {dispatchMessage && (
               <div className={`text-xs p-2 rounded mb-3 ${dispatchMessage.ok ? 'bg-green-900/40 text-green-400 border border-green-700/50' : 'bg-red-900/40 text-red-400 border border-red-700/50'}`}>
@@ -412,86 +412,152 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               </div>
             )}
 
-            {/* 派遣先カード */}
-            <div className="grid grid-cols-4 gap-2 mb-4">
+            {/* 派遣先概要 */}
+            <div className="grid grid-cols-4 gap-2 mb-3">
               {Object.entries(SCOUT_TARGETS).map(([key, def]) => {
-                const missions = cd.scoutMissions || [];
-                const active = missions.find(m => !m.completed && m.target === key);
+                const tasks = cd.scoutTasks || {};
+                const activeTask = Object.entries(tasks).find(
+                  ([, t]) => t.type === 'dispatch' && t.target === key && t.active
+                );
                 return (
-                  <div key={key} className={`bg-gray-750 rounded-lg p-3 text-center border transition ${
-                    dispatchTarget === key ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700/50'
-                  }`}>
-                    <div className="text-sm font-bold text-white mb-1">{def.label}</div>
-                    <div className="text-[10px] text-gray-500 mb-2">{def.days}日間</div>
-                    {active ? (
-                      <div className="text-[10px] text-yellow-400 font-bold">
-                        {active.staffName} 派遣中
-                        <div className="text-gray-500 font-normal">{active.returnDate.month}/{active.returnDate.day} 帰還</div>
-                      </div>
+                  <div key={key} className="bg-gray-750 rounded p-2 text-center border border-gray-700/50">
+                    <div className="text-xs font-bold text-white">{def.label}</div>
+                    <div className="text-[10px] text-gray-500">{def.days}日/回</div>
+                    {activeTask ? (
+                      <div className="text-[10px] text-blue-400 mt-0.5">{tasks[activeTask[0]]?.staffName} 巡回中</div>
                     ) : (
-                      <button
-                        onClick={() => setDispatchTarget(dispatchTarget === key ? null : key)}
-                        className="px-3 py-1.5 rounded text-xs font-bold transition bg-blue-600 hover:bg-blue-500 text-white"
-                      >
-                        {dispatchTarget === key ? '選択中…' : '派遣先に選択'}
-                      </button>
+                      <div className="text-[10px] text-gray-600 mt-0.5">未配置</div>
                     )}
                   </div>
                 );
               })}
             </div>
 
-            {/* スタッフ選択パネル */}
-            {dispatchTarget && (() => {
-              const missions = cd.scoutMissions || [];
-              const dispatchedIds = new Set(missions.filter(m => !m.completed).map(m => m.staffId));
-              const availableStaff = staff.filter(s => !dispatchedIds.has(s.id));
-              const targetDef = SCOUT_TARGETS[dispatchTarget];
+            {/* 各スカウトのタスク状況 */}
+            <div className="space-y-2">
+              {staff.map(s => {
+                const task = (cd.scoutTasks || {})[s.id];
+                const activeMission = (cd.scoutMissions || []).find(m => !m.completed && !m.cancelled && m.staffId === s.id);
+                const hasTask = !!task?.active;
+                const isBusy = !!activeMission;
+                const favCount = Object.values(cd.favoritePlayerIds || {}).filter(f => f.staffId === s.id).length;
 
-              return (
-                <div className="bg-gray-750 rounded-lg p-3 mb-4 border border-blue-500/30">
-                  <div className="text-xs font-bold text-blue-400 mb-2">
-                    {targetDef?.label}に派遣するスタッフを選んでください
-                  </div>
-                  {availableStaff.length === 0 ? (
-                    <p className="text-xs text-gray-500">派遣可能なスタッフがいません（全員派遣中）</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {availableStaff.map(s => (
-                        <div key={s.id} className="flex items-center gap-3 bg-gray-800/80 rounded-lg p-2 hover:bg-gray-700/60 transition">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
-                              <span className="text-yellow-400 text-xs">{roleLabel(s.role)}</span>
-                              <span className="text-white text-sm font-bold">{s.name}</span>
-                            </div>
-                            <div className="flex gap-3 mt-0.5 text-[10px]">
-                              <span className="text-gray-400">スカウト眼<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.scoutingEye || 0)}`}>{s.abilities?.scoutingEye || 0}</span></span>
-                              <span className="text-gray-400">交渉<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.negotiation || 0)}`}>{s.abilities?.negotiation || 0}</span></span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              const result = dispatchScout(teamData, dispatchTarget, s.id, seasonData.currentDate);
-                              setDispatchMessage({ text: result.message, ok: result.success });
-                              setDispatchTarget(null);
-                              setTimeout(() => setDispatchMessage(null), 3000);
-                            }}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition"
-                          >
-                            派遣する
-                          </button>
-                        </div>
-                      ))}
+                return (
+                  <div key={s.id} className="bg-gray-750 rounded-lg p-3 border border-gray-700/50">
+                    {/* Header */}
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
+                      <span className="text-white text-sm font-bold">{s.name}</span>
+                      <span className="text-[10px] text-gray-500">
+                        眼<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.scoutingEye || 0)}`}>{s.abilities?.scoutingEye || 0}</span>
+                        {' '}交渉<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.negotiation || 0)}`}>{s.abilities?.negotiation || 0}</span>
+                      </span>
+                      {favCount > 0 && (
+                        <span className="text-[10px] text-yellow-400 ml-auto">★担当{favCount}/{MAX_FAVORITES_PER_SCOUT}</span>
+                      )}
                     </div>
-                  )}
-                  <button onClick={() => setDispatchTarget(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-2">キャンセル</button>
-                </div>
-              );
-            })()}
 
-            {/* 自動調査フィルタ */}
-            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                    {/* Task status */}
+                    {hasTask ? (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {task.type === 'dispatch' ? (
+                          <>
+                            <span className="text-blue-400 text-xs font-bold">
+                              {SCOUT_TARGETS[task.target]?.label || task.target}巡回中
+                            </span>
+                            {activeMission && (
+                              <span className="text-[10px] text-gray-500">
+                                帰還: {activeMission.returnDate.month}/{activeMission.returnDate.day}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-cyan-400 text-xs font-bold">自動調査中</span>
+                            {activeMission?.type === 'investigation' ? (
+                              <span className="text-[10px] text-gray-500">
+                                {activeMission.targetPlayerName}を調査中 ({activeMission.returnDate.month}/{activeMission.returnDate.day}完了)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-gray-500">調査対象待ち</span>
+                            )}
+                          </>
+                        )}
+                        <button
+                          onClick={() => {
+                            cancelScoutTask(teamData, s.id);
+                            setRefreshTick(t => t + 1);
+                            setDispatchMessage({ text: `${s.name}のタスクを中止しました`, ok: true });
+                            setTimeout(() => setDispatchMessage(null), 3000);
+                          }}
+                          className="ml-auto px-2.5 py-1 bg-red-800 hover:bg-red-700 text-red-200 rounded text-[10px] font-bold transition"
+                        >
+                          中止
+                        </button>
+                      </div>
+                    ) : isBusy ? (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-yellow-400 text-xs">
+                          {activeMission.type === 'investigation'
+                            ? `${activeMission.targetPlayerName}を調査中`
+                            : `${SCOUT_TARGETS[activeMission.target]?.label || '?'}に派遣中`
+                          }
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          {activeMission.returnDate.month}/{activeMission.returnDate.day} 帰還
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className="text-[10px] text-gray-500 mr-1">待機中</span>
+                        {Object.entries(SCOUT_TARGETS).map(([key, def]) => {
+                          const tasks = cd.scoutTasks || {};
+                          const occupied = Object.entries(tasks).find(
+                            ([sid, t]) => t.type === 'dispatch' && t.target === key && t.active && parseInt(sid) !== s.id
+                          );
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                const result = assignScoutTask(teamData, s.id, 'dispatch', { target: key }, seasonData.currentDate, seasonData.year || 1);
+                                setDispatchMessage({ text: result.message, ok: result.success });
+                                setRefreshTick(t => t + 1);
+                                setTimeout(() => setDispatchMessage(null), 3000);
+                              }}
+                              disabled={!!occupied}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                                occupied
+                                  ? 'bg-gray-700 text-gray-600 cursor-not-allowed'
+                                  : 'bg-blue-700 hover:bg-blue-600 text-white'
+                              }`}
+                              title={occupied ? `${tasks[occupied[0]]?.staffName}が巡回中` : `${def.label}を巡回（${def.days}日/回）`}
+                            >
+                              {def.label}
+                            </button>
+                          );
+                        })}
+                        <span className="text-gray-600 mx-0.5">|</span>
+                        <button
+                          onClick={() => {
+                            const result = assignScoutTask(teamData, s.id, 'investigation', {}, seasonData.currentDate, seasonData.year || 1);
+                            setDispatchMessage({ text: result.message, ok: result.success });
+                            setRefreshTick(t => t + 1);
+                            setTimeout(() => setDispatchMessage(null), 3000);
+                          }}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-700 hover:bg-cyan-600 text-white transition"
+                        >
+                          自動調査
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 自動調査フィルタ */}
+          <div className="bg-gray-800 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-gray-300">自動調査フィルタ</h2>
                 <div className="flex gap-2">
@@ -848,7 +914,6 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 </div>
               );
             })()}
-          </div>
 
           {/* スカウト入団スケジュール */}
           <div className="bg-gray-800 rounded-lg p-4">
@@ -1150,34 +1215,56 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <span className="text-yellow-400 font-bold">{target.name}</span>
                 <span className="text-gray-400 ml-2">{target.age}歳 {POSITION_NAMES[target.position] || target.position}</span>
               </p>
-              <p className="text-[10px] text-gray-500 mb-4">担当スカウトが選手と常に連絡を取り、交渉ボーナスが毎週蓄積します。交渉力が高いほど効果大。</p>
+              <p className="text-[10px] text-gray-500 mb-4">担当スカウトが選手と常に連絡を取り、交渉ボーナスが毎週蓄積します。1人のスカウトは最大{MAX_FAVORITES_PER_SCOUT}人まで。</p>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {staff.map(s => {
                   const neg = s.abilities?.negotiation || 0;
                   const weeklyRate = neg >= 80 ? 5 : neg >= 50 ? 4 : 3;
+                  const currentFavCount = Object.values(cd.favoritePlayerIds || {}).filter(f => f.staffId === s.id).length;
+                  const isFull = currentFavCount >= MAX_FAVORITES_PER_SCOUT;
                   return (
                     <button key={s.id}
                       onClick={() => {
-                        toggleFavoritePlayer(teamData, target.id, {
+                        if (isFull) {
+                          setDispatchMessage({ text: `${s.name}は既に${MAX_FAVORITES_PER_SCOUT}人の選手を担当しています`, ok: false });
+                          setTimeout(() => setDispatchMessage(null), 3000);
+                          return;
+                        }
+                        const result = toggleFavoritePlayer(teamData, target.id, {
                           id: s.id,
                           name: s.name,
                           negotiation: neg,
                         });
+                        if (!result?.success) {
+                          setDispatchMessage({ text: result?.message || '登録に失敗しました', ok: false });
+                          setTimeout(() => setDispatchMessage(null), 3000);
+                          return;
+                        }
                         setFavoriteSelectId(null);
                         setRefreshTick(t => t + 1);
                       }}
-                      className="w-full flex items-center justify-between p-3 bg-gray-750 hover:bg-gray-700 rounded-lg transition text-left">
+                      disabled={isFull}
+                      className={`w-full flex items-center justify-between p-3 rounded-lg transition text-left ${
+                        isFull ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-750 hover:bg-gray-700'
+                      }`}>
                       <div>
                         <div className="flex items-center gap-2">
                           <span className={`text-xs font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
-                          <span className="text-white text-sm font-bold">{s.name}</span>
+                          <span className={`text-sm font-bold ${isFull ? 'text-gray-500' : 'text-white'}`}>{s.name}</span>
+                          {currentFavCount > 0 && (
+                            <span className={`text-[10px] ${isFull ? 'text-red-400' : 'text-yellow-400'}`}>
+                              ★{currentFavCount}/{MAX_FAVORITES_PER_SCOUT}
+                            </span>
+                          )}
                         </div>
                         <div className="flex gap-3 mt-0.5 text-[10px]">
                           <span className="text-gray-400">交渉<span className={`font-bold ml-0.5 ${getAbilityColor(neg)}`}>{neg}</span></span>
                           <span className="text-gray-400">眼<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.scoutingEye || 0)}`}>{s.abilities?.scoutingEye || 0}</span></span>
                         </div>
                       </div>
-                      <span className="text-yellow-400 text-xs font-bold">+{weeklyRate}%/週</span>
+                      <span className={`text-xs font-bold ${isFull ? 'text-gray-600' : 'text-yellow-400'}`}>
+                        {isFull ? '定員' : `+${weeklyRate}%/週`}
+                      </span>
                     </button>
                   );
                 })}
