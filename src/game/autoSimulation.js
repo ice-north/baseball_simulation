@@ -311,38 +311,54 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   const useDH = LEAGUE_SETTINGS.useDH;
   const pitcherBattingOrder = useDH ? 0 : 9;
 
-  // 投手ローテーションから先発投手を選択
+  // 投手ローテーションから先発投手を選択（疲労チェック付き）
   const selectStarterFromRotation = (teamData, teamName) => {
     const rotation = teamData.pitchingRotation;
     if (!rotation || !rotation.starters || rotation.starters.length === 0) {
-      return teamData.players.find(p => p.position === 'pitcher');
+      const fallback = teamData.players.filter(p => isPitcherPlayer(p)).sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0))[0];
+      if (fallback) {
+        fallback.battingOrder = pitcherBattingOrder;
+        fallback.position = 'pitcher';
+      }
+      return fallback;
     }
 
-    // ローテーションインデックスを取得
     const index = rotation.currentStarterIndex || 0;
-    const starterId = rotation.starters[index];
-    const starter = teamData.players.find(p => p.id === starterId);
+    let starter = null;
+    let chosenIdx = index;
+
+    for (let i = 0; i < rotation.starters.length; i++) {
+      const candidateIdx = (index + i) % rotation.starters.length;
+      const candidateId = rotation.starters[candidateIdx];
+      const candidate = teamData.players.find(p => p.id === candidateId);
+      if (candidate && (candidate.fatigue || 0) < 80) {
+        starter = candidate;
+        chosenIdx = candidateIdx;
+        break;
+      }
+    }
+
+    if (!starter) {
+      const allPitchers = teamData.players.filter(p => isPitcherPlayer(p));
+      allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
+      starter = allPitchers[0];
+    }
 
     if (starter) {
-
-      // 次回のローテーションインデックスを更新
       TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
-        (index + 1) % rotation.starters.length;
+        (chosenIdx + 1) % rotation.starters.length;
 
-      // 先発投手を設定（DH制では打順0＝打席に立たない）
       teamData.players.forEach(p => {
-        if (p.id === starterId) {
+        if (p.id === starter.id) {
           p.battingOrder = pitcherBattingOrder;
           p.position = 'pitcher';
-        } else if (!useDH && p.battingOrder === 9 && p.id !== starterId) {
+        } else if (!useDH && p.battingOrder === 9 && p.id !== starter.id) {
           p.battingOrder = 0;
         }
       });
-
-      return starter;
     }
 
-    return teamData.players.find(p => p.position === 'pitcher');
+    return starter;
   };
 
   selectStarterFromRotation(homeTeamData, homeTeamName);

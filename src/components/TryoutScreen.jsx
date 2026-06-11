@@ -475,7 +475,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
             <h2 className="text-lg font-bold text-white mb-4">ドラフト指名結果</h2>
             {draftHistory.length > 0 ? (
-              <div className="space-y-1 max-h-[500px] overflow-y-auto">
+              <div className="space-y-1 max-h-[520px] overflow-y-auto">
                 {draftHistory.map((entry, index) => {
                   const teamsArray = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
                   const isUserTeam = entry.team === teamsArray[0];

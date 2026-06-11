@@ -1500,7 +1500,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const ha = (a.text.length * 17 + seed) % 97;
       const hb = (b.text.length * 17 + seed) % 97;
       return ha - hb;
-    }).slice(0, 6);
+    }).slice(0, 5);
 
     return shuffled;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3023,14 +3023,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className={`bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border ${(isUcType || isMjType) ? 'border-blue-600/50' : isRtType ? 'border-green-600/50' : isCsType ? 'border-purple-600/50' : isNsType ? 'border-red-600/50' : 'border-yellow-600/50'}`}>
+            <div className={`bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl border ${(isUcType || isMjType) ? 'border-blue-600/50' : isRtType ? 'border-green-600/50' : isCsType ? 'border-purple-600/50' : isNsType ? 'border-red-600/50' : 'border-yellow-600/50'}`}>
               <h2 className={`text-xl font-bold text-center mb-1 ${(isUcType || isMjType) ? 'text-blue-400' : isRtType ? 'text-green-400' : isCsType ? 'text-purple-400' : isNsType ? 'text-red-400' : 'text-yellow-400'}`}>
                 {modalTitle}
               </h2>
               <div className="text-center text-sm text-gray-400 mb-4">
                 {modalSubtitle}
               </div>
-              <div className="flex items-center justify-center gap-6 mb-5">
+              <div className="flex items-center justify-center gap-6 mb-4">
                 <div className="text-center">
                   <div className="font-bold text-lg text-yellow-300">{userTeamName}</div>
                 </div>
@@ -3040,6 +3040,43 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   {oppDef?.rank && <div className="text-xs text-gray-500">ランク: {oppDef.rank}</div>}
                 </div>
               </div>
+              {/* 簡易スタメン表示 */}
+              {(() => {
+                const userTeam = TEAMS_DATA[userTeamName];
+                if (!userTeam?.players) return null;
+                const settings = userTeam.lineupSettings;
+                const rotation = userTeam.pitchingRotation;
+                const starterPitcher = getStartingPitcher(userTeamName);
+                const starters = settings?.battingOrder?.length > 0
+                  ? settings.battingOrder
+                    .sort((a, b) => a.battingOrder - b.battingOrder)
+                    .map(entry => {
+                      if (entry.position === 'pitcher' && starterPitcher) {
+                        return { ...starterPitcher, _pos: 'pitcher', _order: entry.battingOrder };
+                      }
+                      const p = userTeam.players.find(pl => pl.id === entry.playerId);
+                      return p ? { ...p, _pos: entry.position, _order: entry.battingOrder } : null;
+                    }).filter(Boolean)
+                  : [];
+                if (starters.length === 0) return null;
+                return (
+                  <div className="bg-gray-800/80 rounded-lg p-2 mb-4 border border-gray-700/50">
+                    <div className="text-[10px] text-gray-500 mb-1 font-medium">スタメン</div>
+                    <div className="space-y-0.5">
+                      {starters.map((p, i) => (
+                        <div key={i} className="flex items-center gap-1 text-[11px]">
+                          <span className="text-gray-500 w-3 text-right">{p._order}</span>
+                          <span className="text-gray-400 w-6 text-center">{POSITION_NAMES[p._pos] || p._pos}</span>
+                          <span className="text-white">{p.name}</span>
+                          {p._pos === 'pitcher' && p.pitching?.velocity && (
+                            <span className="text-gray-500 ml-auto">{p.pitching.velocity}km</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="flex gap-3">
                 <button
                   onClick={() => {
