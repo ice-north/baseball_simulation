@@ -241,16 +241,16 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     if (age < 22) return { isDraftEligible: false, reasons: ['大学4年生のみ指名可'], totalScore: 0 };
   }
 
-  // 年齢ボーナス（若い選手の将来性を評価するが、即戦力の大学・社会人も高く評価）
-  const ageBonusMap = { 18: 20, 19: 18, 20: 15, 21: 12, 22: 10, 23: 5, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
-  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 20 : -65);
+  // 年齢ボーナス（若い選手の将来性を評価、高校生の潜在能力を高く見積もる）
+  const ageBonusMap = { 18: 38, 19: 32, 20: 20, 21: 15, 22: 10, 23: 5, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
+  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 38 : -65);
 
   // 将来性投影倍率（若い選手の能力を伸びしろ込みで評価）
-  const potentialMult = age <= 18 ? 1.12 : age <= 19 ? 1.08 : age <= 20 ? 1.05 : age <= 21 ? 1.02 : 1.0;
+  const potentialMult = age <= 18 ? 1.25 : age <= 19 ? 1.18 : age <= 20 ? 1.08 : age <= 21 ? 1.03 : 1.0;
 
   // 成長力ボーナス（若い選手ほど成長力が大きく評価される）
   const gp = player.growthPotential || 1.0;
-  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.7) * 35)
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.6) * 45)
                : age <= 22 ? Math.max(0, (gp - 0.8) * 30)
                : Math.max(0, (gp - 1.0) * 15);
 

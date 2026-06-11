@@ -94,7 +94,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     //    c) 3イニング以上投げた
     const scoreDiff = Math.abs(gameResult.homeScore - gameResult.awayScore);
     if (winPitchers.length > 1) {
-      const lastPitcher = winPitchers[winPitchers.length - 1];
+      // pitcherAppearancesから最後に登板した投手を特定（roster順ではなく登板順）
+      const teamKey = isHomeWin ? 'home' : 'away';
+      const appearances = gameResult.pitcherAppearances?.[teamKey] || [];
+      let lastPitcher;
+      if (appearances.length > 0) {
+        const lastApp = appearances[appearances.length - 1];
+        lastPitcher = winPitchers.find(p => p.id === lastApp.id);
+      }
+      if (!lastPitcher) {
+        // フォールバック: 先発が完投した場合は先発がlast
+        lastPitcher = winStarter;
+      }
       if (lastPitcher && lastPitcher !== decisions.winningPitcher) {
         const outs = lastPitcher.gameStats.pitching.outs;
         if ((scoreDiff <= 3 && outs >= 3) || outs >= 9) {
@@ -1657,7 +1668,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       reports.push({ icon: '💤', text: `${names}の疲労が蓄積しつつある。もうすぐ成長率低下ラインに達する。`, color: 'text-yellow-400' });
     }
 
-    return reports.slice(0, 8);
+    return reports.slice(0, 5);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seasonData.results?.length, seasonData.standings]);
 
@@ -2680,7 +2691,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <span className="text-yellow-400">📰</span> {todaysGames.length === 0 ? '直近のトピック' : '主なトピック'}
               </h2>
               <div className="space-y-1">
-                {scoutReportNotifications.map((mission, i) => (
+                {scoutReportNotifications.slice(0, 2).map((mission, i) => (
                   <div key={`scout-${i}`} className="flex items-start gap-1.5 bg-cyan-900/30 rounded-lg px-2.5 py-1.5 border border-cyan-700/30">
                     <span className="text-sm shrink-0">🔍</span>
                     <span className="text-xs text-cyan-300">
@@ -2691,7 +2702,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     </span>
                   </div>
                 ))}
-                {cachedTopics.map((t, i) => (
+                {cachedTopics.slice(0, Math.max(0, 5 - Math.min(2, scoutReportNotifications.length))).map((t, i) => (
                   <div key={i} className="flex items-start gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1.5">
                     <span className="text-sm shrink-0">{t.icon}</span>
                     <span className={`text-xs ${t.color}`}>{t.text}</span>

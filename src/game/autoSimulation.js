@@ -313,6 +313,23 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
   // 投手ローテーションから先発投手を選択（疲労チェック付き）
   const selectStarterFromRotation = (teamData, teamName) => {
+    // ユーザーが簡易スタメンで先発投手を指定済みならそちらを優先
+    const pitcherEntry = teamData.lineupSettings?.battingOrder?.find(e => e.position === 'pitcher');
+    if (pitcherEntry) {
+      const userPitcher = teamData.players.find(p => p.id === pitcherEntry.playerId);
+      if (userPitcher) {
+        const rot = teamData.pitchingRotation;
+        if (rot?.starters) {
+          const idx = rot.starters.indexOf(userPitcher.id);
+          if (idx >= 0) {
+            TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
+              (idx + 1) % rot.starters.length;
+          }
+        }
+        return userPitcher;
+      }
+    }
+
     const rotation = teamData.pitchingRotation;
     if (!rotation || !rotation.starters || rotation.starters.length === 0) {
       const fallback = teamData.players.filter(p => isPitcherPlayer(p)).sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0))[0];
@@ -2271,7 +2288,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     winner,
     homeTeam: gameState.homeTeam,
     awayTeam: gameState.awayTeam,
-    pitcherChanges: gameState.pitcherChanges
+    pitcherChanges: gameState.pitcherChanges,
+    pitcherAppearances: gameState.pitcherAppearances
   };
 };
 
