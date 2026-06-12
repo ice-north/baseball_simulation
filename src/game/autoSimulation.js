@@ -47,17 +47,33 @@ export const generateAILineup = (teamData, teamName) => {
 
   if (rotation?.starters?.length > 0) {
     const index = rotation.currentStarterIndex || 0;
-    for (let i = 0; i < rotation.starters.length; i++) {
-      const candidateIdx = (index + i) % rotation.starters.length;
-      const candidateId = rotation.starters[candidateIdx];
-      const candidate = allPitchers.find(p => p.id === candidateId);
-      if (candidate && (candidate.fatigue || 0) < 80) {
+
+    if (rotation._userSelectedStarter) {
+      // ユーザーが簡易スタメンで指定した先発を優先（疲労チェックなし）
+      const starterId = rotation.starters[index];
+      const candidate = allPitchers.find(p => p.id === starterId);
+      if (candidate) {
         starter = candidate;
         if (TEAMS_DATA[teamName]?.pitchingRotation) {
           TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
-            (candidateIdx + 1) % rotation.starters.length;
+            (index + 1) % rotation.starters.length;
         }
-        break;
+      }
+    }
+
+    if (!starter) {
+      for (let i = 0; i < rotation.starters.length; i++) {
+        const candidateIdx = (index + i) % rotation.starters.length;
+        const candidateId = rotation.starters[candidateIdx];
+        const candidate = allPitchers.find(p => p.id === candidateId);
+        if (candidate && (candidate.fatigue || 0) < 80) {
+          starter = candidate;
+          if (TEAMS_DATA[teamName]?.pitchingRotation) {
+            TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
+              (candidateIdx + 1) % rotation.starters.length;
+          }
+          break;
+        }
       }
     }
   }
@@ -314,16 +330,20 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   // 投手ローテーションから先発投手を選択
   const selectStarterFromRotation = (teamData, teamName) => {
     const rotation = teamData.pitchingRotation;
-    const isUserTeam = teamData.lineupSettings?.battingOrder?.length > 0;
+    const userSelected = rotation?._userSelectedStarter;
 
-    // ユーザーチーム: gameSetup.jsと同じ挙動（疲労スキップなし、currentStarterIndexをそのまま使う）
-    if (isUserTeam && rotation?.starters?.length > 0) {
+    // ユーザー指定 or カスタムラインナップ: currentStarterIndexをそのまま使う（疲労チェックなし）
+    if ((userSelected || teamData.lineupSettings?.battingOrder?.length > 0) && rotation?.starters?.length > 0) {
       const index = rotation.currentStarterIndex || 0;
       const starterId = rotation.starters[index];
       const starter = teamData.players.find(p => p.id === starterId);
       if (starter) {
-        TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
-          (index + 1) % rotation.starters.length;
+        // generateAILineupで既にindex進行済みの場合があるので、重複進行を防止
+        const teamsRot = TEAMS_DATA[teamName]?.pitchingRotation;
+        if (teamsRot) {
+          teamsRot.currentStarterIndex = (index + 1) % rotation.starters.length;
+          delete teamsRot._userSelectedStarter;
+        }
         teamData.players.forEach(p => {
           if (p.id === starter.id) {
             p.battingOrder = pitcherBattingOrder;

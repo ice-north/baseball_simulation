@@ -3267,6 +3267,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
     const idx = rotation.starters.indexOf(pitcherId);
     if (idx >= 0) {
       rotation.currentStarterIndex = idx;
+      rotation._userSelectedStarter = true;
       setTick(t => t + 1);
     }
   };
