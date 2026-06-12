@@ -242,11 +242,11 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
   }
 
   // 年齢ボーナス（若い選手の将来性を評価、高校生の潜在能力を高く見積もる）
-  const ageBonusMap = { 18: 38, 19: 32, 20: 20, 21: 15, 22: 10, 23: 5, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
-  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 38 : -65);
+  const ageBonusMap = { 18: 35, 19: 30, 20: 20, 21: 15, 22: 10, 23: 5, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
+  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 35 : -65);
 
   // 将来性投影倍率（若い選手の能力を伸びしろ込みで評価）
-  const potentialMult = age <= 18 ? 1.25 : age <= 19 ? 1.18 : age <= 20 ? 1.08 : age <= 21 ? 1.03 : 1.0;
+  const potentialMult = age <= 18 ? 1.22 : age <= 19 ? 1.16 : age <= 20 ? 1.08 : age <= 21 ? 1.03 : 1.0;
 
   // 成長力ボーナス（若い選手ほど成長力が大きく評価される）
   const gp = player.growthPotential || 1.0;
@@ -424,7 +424,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   highSchoolPool.players.forEach(player => {
     const { totalScore } = checkNPBDraftEligibility(player, 0);
     allCandidates.push({
-      player, teamName: player.highSchool?.name || '高校', score: totalScore, bonus: 0, awards: [],
+      player, teamName: (player.highSchool?.name || '高校') + '高', score: totalScore, bonus: 0, awards: [],
       source: 'highschool',
     });
   });
