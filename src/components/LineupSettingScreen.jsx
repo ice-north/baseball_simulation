@@ -170,11 +170,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const handleChangePosition = (battingOrder, newPosition) => {
     const entry = lineup.find(e => e.battingOrder === battingOrder);
     if (!entry) return;
-    // 投手枠（9番投手）の場合は投手から変更不可
-    const isPitcherSlot = entry.position === 'pitcher' && lineup.filter(e => e.position === 'pitcher').length === 1;
-    if (isPitcherSlot && newPosition !== 'pitcher') {
-      alert('投手枠は投手のまま維持する必要があります');
-      return;
+    // 投手枠（非DH制の9番投手）の場合は投手から変更不可
+    if (!useDH) {
+      const isPitcherSlot = entry.position === 'pitcher' && lineup.filter(e => e.position === 'pitcher').length === 1;
+      if (isPitcherSlot && newPosition !== 'pitcher') {
+        alert('投手枠は投手のまま維持する必要があります');
+        return;
+      }
     }
     const existingEntry = lineup.find(e => e.position === newPosition && e.battingOrder !== battingOrder);
     if (existingEntry) {
@@ -740,7 +742,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 className="bg-gray-700/70 border border-gray-600/50 text-white rounded px-1 py-0 text-xs"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <option value="pitcher">投手</option>
+                                {!useDH && <option value="pitcher">投手</option>}
                                 <option value="catcher">捕手</option>
                                 <option value="first">一塁</option>
                                 <option value="second">二塁</option>

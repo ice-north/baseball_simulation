@@ -70,7 +70,7 @@ const ManagementScreen = ({
   handleProgressToNextGame,
   handleProgressToNextPhase
 }) => {
-  const [draftedIds, setDraftedIds] = useState([]);
+  const draftedIds = seasonData?.draftedPlayerIds || [];
   if (managementView === 'schedule') return <ScheduleScreen
     seasonData={seasonData}
     selectedMonth={selectedMonth}
@@ -160,7 +160,8 @@ const ManagementScreen = ({
     userTeamName={userTeamName}
     onContinue={() => {
       if (draftResults?.draftedPlayers) {
-        setDraftedIds(draftResults.draftedPlayers.map(d => d.playerId));
+        const ids = draftResults.draftedPlayers.map(d => d.playerId);
+        setSeasonData(prev => ({ ...prev, draftedPlayerIds: ids }));
       }
       setDraftResults(null);
       setManagementView('dateprogress');
