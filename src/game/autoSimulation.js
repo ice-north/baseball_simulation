@@ -211,12 +211,17 @@ export const generateAILineup = (teamData, teamName) => {
     battingOrder.push({ ...remaining.shift(), battingOrder: nextOrder++ });
   }
 
-  // 打順を選手に適用
+  // 打順を選手に適用（DHは打順のみ設定し、選手の守備ポジションは変更しない）
   battingOrder.forEach(entry => {
     const player = teamData.players.find(p => p.id === entry.player.id);
     if (player) {
       player.battingOrder = entry.battingOrder;
-      player.position = entry.position;
+      if (entry.position === 'dh') {
+        player._isDH = true;
+      } else {
+        player.position = entry.position;
+        delete player._isDH;
+      }
     }
   });
 
@@ -311,12 +316,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     // まず全員の打順を0にリセット
     teamData.players.forEach(p => { p.battingOrder = 0; });
 
-    // lineupSettingsから打順と守備位置を適用
+    // lineupSettingsから打順と守備位置を適用（DHは打順のみ、ポジション変更しない）
     settings.battingOrder.forEach(entry => {
       const player = teamData.players.find(p => p.id === entry.playerId);
       if (player) {
         player.battingOrder = entry.battingOrder;
-        player.position = entry.position;
+        if (entry.position === 'dh') {
+          player._isDH = true;
+        } else {
+          player.position = entry.position;
+          delete player._isDH;
+        }
       }
     });
   };
@@ -533,7 +543,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     // DH制: 投手はbattingOrder=0だが守備参加、DHはbattingOrder>0だが守備不参加
     const currentPitcherForDef = getCurrentPitcher(team);
     team.players.filter(p =>
-      (p.battingOrder > 0 && p.battingOrder <= 9 && p.position !== 'dh') ||
+      (p.battingOrder > 0 && p.battingOrder <= 9 && !p._isDH) ||
       (p.position === 'pitcher' && p.id === currentPitcherForDef?.id)
     ).forEach(player => {
       const fitness = getPositionFitness(player, player.position);
@@ -1027,7 +1037,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     // 1. 7回以降リード時: 守備力が低いスタメンを守備固め（閾値緩め）
     if (gameState.inning >= 7 && isLeading) {
       defenseTeam.players.forEach(starter => {
-        if (starter.battingOrder > 0 && starter.position !== 'pitcher' && starter.position !== 'dh') {
+        if (starter.battingOrder > 0 && starter.position !== 'pitcher' && !starter._isDH) {
           const starterDef = starter.fielding?.defense || 50;
           if (starterDef < 60) {
             const replacement = benchFielders.find(p =>
@@ -1081,7 +1091,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         }, activeBench[0]);
 
         // 打撃が最も弱いスタメンと交代（投手・DHは守備固め対象外）
-        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.position !== 'pitcher' && p.position !== 'dh');
+        const starters = defenseTeam.players.filter(p => p.battingOrder > 0 && p.position !== 'pitcher' && !p._isDH);
         if (starters.length > 0) {
           const weakest = starters.reduce((w, p) => {
             const wBat = (w.batting?.meet || 0) + (w.batting?.power || 0);

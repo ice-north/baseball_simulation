@@ -245,6 +245,11 @@ export const loadGameFromSlot = async (slotIndex) => {
             const norm = () => Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18)));
             p.personality = { discipline: norm(), mental: norm() };
           }
+          if (p.position === 'dh') {
+            const fitness = p.positionFitness || {};
+            const bestPos = Object.entries(fitness).sort((a, b) => b[1] - a[1])[0];
+            p.position = bestPos ? bestPos[0] : 'first';
+          }
         });
       }
     });

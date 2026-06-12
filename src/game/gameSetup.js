@@ -54,7 +54,12 @@ export function executeSetupManagedGame(ctx, gameInfo) {
         const player = players.find(p => p.id === entry.playerId);
         if (player) {
           player.battingOrder = entry.battingOrder;
-          player.position = entry.position;
+          if (entry.position === 'dh') {
+            player._isDH = true;
+          } else {
+            player.position = entry.position;
+            delete player._isDH;
+          }
         }
       });
     } else {
@@ -116,7 +121,7 @@ export function executeSetupManagedGame(ctx, gameInfo) {
           });
 
           // 二刀流：空いた野手スロットをベンチから補充
-          if (hadNonPitcherSlot && starterOldPos && starterOldPos !== 'dh') {
+          if (hadNonPitcherSlot && starterOldPos && !starterPlayer?._isDH) {
             const startersInLineup = new Set(players.filter(p => p.battingOrder > 0).map(p => p.id));
             const benchFielders = players.filter(p =>
               p.battingOrder === 0 && !startersInLineup.has(p.id) && p.position !== 'pitcher'

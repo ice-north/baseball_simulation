@@ -140,7 +140,12 @@ export const generateOptimalLineup = (teamName) => {
     const teamPlayer = team.players.find(p => p.id === entry.player.id);
     if (teamPlayer) {
       teamPlayer.battingOrder = index + 1;
-      teamPlayer.position = entry.position;
+      if (entry.position === 'dh') {
+        teamPlayer._isDH = true;
+      } else {
+        teamPlayer.position = entry.position;
+        delete teamPlayer._isDH;
+      }
     }
   });
 };
