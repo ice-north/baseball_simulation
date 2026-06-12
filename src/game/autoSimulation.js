@@ -2257,12 +2257,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
 
         // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
+        // 先発は登板基礎疲労(30) + 投球数ベース疲労で、4-5日間隔のローテーションが必要になる
         const isStarterPitcher = p.outs >= 15;
         const bodyStamina = playerData.physical?.bodyStamina || 50;
         const staminaBonus = (bodyStamina / 100) * 1.5;
-        const baseDivisor = isStarterPitcher ? 2 : 3;
+        const baseDivisor = isStarterPitcher ? 1.5 : 3;
         const pitchFatigue = Math.floor(p.pitches / (baseDivisor + staminaBonus));
-        const fatigueGain = isStarterPitcher ? pitchFatigue : Math.max(11, pitchFatigue);
+        const startBonus = isStarterPitcher ? 30 : 0;
+        const fatigueGain = isStarterPitcher ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
         playerData.fatigue = (playerData.fatigue || 0) + fatigueGain;
 
         // 成長率変動: 先発はイニング数ベース、リリーフは登板数ベース

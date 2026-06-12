@@ -337,9 +337,10 @@ export function executeHandleManagedGameEnd(ctx) {
         const pitcherRoles = teamData.pitchingRotation?.pitcherRoles || {};
         const starterIds = new Set(teamData.pitchingRotation?.starters || []);
         const isStarter = starterIds.has(p.id);
-        const baseDivisor = isStarter ? 2 : 3;
+        const baseDivisor = isStarter ? 1.5 : 3;
         const pitchFatigue = Math.floor((ps.pitches || 0) / (baseDivisor + staminaBonus));
-        const fatigue = isStarter ? pitchFatigue : Math.max(11, pitchFatigue);
+        const startBonus = isStarter ? 30 : 0;
+        const fatigue = isStarter ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
         playerData.fatigue = (playerData.fatigue || 0) + fatigue;
         if (isStarter) {
           // 先発: 15イニング(45アウト)ごとに+0.01

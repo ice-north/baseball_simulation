@@ -424,7 +424,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   highSchoolPool.players.forEach(player => {
     const { totalScore } = checkNPBDraftEligibility(player, 0);
     allCandidates.push({
-      player, teamName: (player.highSchool?.name || '高校') + '高', score: totalScore, bonus: 0, awards: [],
+      player, teamName: player.highSchool?.name ? player.highSchool.name + '高' : '高校', score: totalScore, bonus: 0, awards: [],
       source: 'highschool',
     });
   });

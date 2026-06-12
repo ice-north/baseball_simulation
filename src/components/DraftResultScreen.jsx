@@ -76,7 +76,7 @@ const COLLISION_STYLES = [
   { bg: 'bg-purple-100', border: 'border-2 border-purple-300', label: 'text-purple-600' },
 ];
 
-const CARD_BODY_HEIGHT = 120;
+const CARD_BODY_HEIGHT = 200;
 
 const getTeamInfo = (name) => NPB_TEAMS_INFO.find(t => t.name === name) || { short: name, color: '#666', textColor: '#fff' };
 
@@ -310,7 +310,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
           <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-            {team.short}
+            {team.name}
             {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
           </div>
           <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
@@ -339,7 +339,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
           <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-            {team.short}
+            {team.name}
             {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
           </div>
           <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ height: CARD_BODY_HEIGHT }}>
@@ -372,7 +372,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
         <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-          {team.short}
+          {team.name}
           {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
         </div>
         <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
@@ -390,7 +390,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
         <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-          {team.short}
+          {team.name}
           {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
         </div>
         <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
@@ -648,7 +648,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
           return (
             <div key={team.name} className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="px-3 py-2 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-                {team.short} ({picks.length}名)
+                {team.name} ({picks.length}名)
               </div>
               <div className="divide-y divide-gray-200">
                 {sorted.map((entry, idx) => {
