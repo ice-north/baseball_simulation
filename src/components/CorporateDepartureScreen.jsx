@@ -173,17 +173,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
     executeDepartures(TEAMS_DATA, allRetiredIds, allReleases, currentYear);
 
-    // 赤字額を記録（年度移行時にペナルティ適用、クラブチームは予算なし）
-    if (!isClub) {
-      if (budgetBalance < 0 && cd) {
-        cd.budgetDeficit = Math.abs(budgetBalance);
-        const deficitRate = Math.min(1, Math.abs(budgetBalance) / (baseBudget || 13000));
-        cd.scoutPenalty = Math.min(4, Math.round(deficitRate * 5));
-      } else if (cd) {
-        cd.budgetDeficit = 0;
-        cd.scoutPenalty = 0;
-      }
-    }
+    // 赤字判定は11/30の年度末決算で行う（退団・入団・スタッフ・スポンサー確定後）
 
     // スタッフ転向処理
     Object.entries(staffConversions).forEach(([pid, enabled]) => {

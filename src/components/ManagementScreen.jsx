@@ -32,6 +32,7 @@ import AbilityRankingScreen from './AbilityRankingScreen.jsx';
 import CorporateScoutScreen from './CorporateScoutScreen.jsx';
 import CorporateManagementScreen from './CorporateManagementScreen.jsx';
 import ClubRecruitScreen from './ClubRecruitScreen.jsx';
+import BudgetSettlementScreen from './BudgetSettlementScreen.jsx';
 import DebugPlayerViewScreen from './DebugPlayerViewScreen.jsx';
 
 const ManagementScreen = ({
@@ -137,6 +138,18 @@ const ManagementScreen = ({
       setManagementView('dateprogress');
     }}
   />;
+  if (managementView === 'budget_settlement') return <BudgetSettlementScreen
+    seasonData={seasonData}
+    onComplete={(penalties) => {
+      const newData = {
+        ...seasonData,
+        phase: 'off_season',
+        ...(penalties && penalties.length > 0 ? { deficitPenalties: penalties } : {}),
+      };
+      setSeasonData(newData);
+      setManagementView('offseason');
+    }}
+  />;
   if (managementView === 'draft') return <DraftResultScreen
     draftedPlayers={draftResults?.draftedPlayers || []}
     nearMissPlayers={draftResults?.nearMissPlayers || []}
@@ -172,7 +185,7 @@ const ManagementScreen = ({
     onSetupManagedGame={setupManagedGame}
     onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
     onForceEvent={(eventType) => {
-      if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit')) {
+      if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement')) {
         const update = {};
         if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
@@ -184,6 +197,7 @@ const ManagementScreen = ({
       else if (eventType === 'corporate_departure') setManagementView('corporate_departure');
       else if (eventType === 'corporate_scout') setManagementView('corporate_scout');
       else if (eventType === 'club_recruit') setManagementView('club_recruit');
+      else if (eventType === 'budget_settlement') setManagementView('budget_settlement');
       else if (eventType === 'tryout') setManagementView('tryout');
       else if (eventType === 'draft') {
         // プロ指名で選手が消える前にランキング・表彰を確定する

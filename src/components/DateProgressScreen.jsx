@@ -452,6 +452,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         return null;
       }
     }
+    if (month === 11 && day === 30 && isCorporate && !seasonData?.settings?.clubMode) {
+      setSeasonData(newData);
+      if (onForceEvent) onForceEvent('budget_settlement');
+      return null;
+    }
     if (month >= 12 || (month === 11 && day >= 30) || (isUniversity && month === 11 && day >= 15)) {
       newData = { ...newData, phase: SEASON_PHASES.OFF_SEASON };
       setSeasonData(newData);
