@@ -378,8 +378,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     return starter;
   };
 
-  selectStarterFromRotation(homeTeamData, homeTeamName);
-  selectStarterFromRotation(awayTeamData, awayTeamName);
+  const homeStarter = selectStarterFromRotation(homeTeamData, homeTeamName);
+  const awayStarter = selectStarterFromRotation(awayTeamData, awayTeamName);
 
   // 先発投手を確認
   const homePitchers = homeTeamData.players.filter(p => p.position === 'pitcher' && (p.battingOrder === pitcherBattingOrder || p.battingOrder === 9));
@@ -453,7 +453,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
     // 投手登板記録（セーブ・ホールド判定用）
     pitcherAppearances: { home: [], away: [] },
     // 投手交代記録（理由表示用）
-    pitcherChanges: []
+    pitcherChanges: [],
+    // 現在の投手ID（DH制で複数pitcher判別用）
+    currentPitcherId: { home: homeStarter?.id || null, away: awayStarter?.id || null }
   };
 
   // 現在の打者を取得
@@ -471,8 +473,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
   };
 
   const getCurrentPitcher = (team) => {
-    // DH制: 投手は打順0でposition='pitcher'
-    // 非DH制: 投手は打順9でposition='pitcher'
+    // currentPitcherIdで追跡（DH制で複数pitcherがbattingOrder=0を持つ問題を回避）
+    const teamKey = team === gameState.homeTeam ? 'home' : 'away';
+    const currentId = gameState.currentPitcherId?.[teamKey];
+    if (currentId) {
+      const tracked = team.players.find(p => p.id === currentId);
+      if (tracked) return tracked;
+    }
+    // フォールバック: position + battingOrder
     const pitcher = team.players.find(p => p.position === 'pitcher' && (p.battingOrder === pitcherBattingOrder || p.battingOrder === 9));
     if (pitcher) return pitcher;
 
@@ -1356,6 +1364,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       reliefTrack.relieverBattersFaced = 0;
       reliefTrack.relieverInningRuns = 0;
 
+      // currentPitcherId を更新
+      const pitcherTeamKey = defenseTeam === gs.homeTeam ? 'home' : 'away';
+      gs.currentPitcherId[pitcherTeamKey] = reliever.id;
+
       if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
         TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
           (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 30;
@@ -2082,6 +2094,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               reliefTrack.relieverOutsPitched = 0;
               reliefTrack.relieverBattersFaced = 0;
       reliefTrack.relieverInningRuns = 0;
+
+              // currentPitcherId を更新
+              const pitcherTeamKey2 = team === gameState.homeTeam ? 'home' : 'away';
+              gameState.currentPitcherId[pitcherTeamKey2] = reliever.id;
 
               if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
                 TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
