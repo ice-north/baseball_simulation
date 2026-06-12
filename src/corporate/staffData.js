@@ -90,9 +90,9 @@ export const canHireGrade = (teamRank, staffGrade) => {
   return GRADE_ORDER.indexOf(staffGrade) <= GRADE_ORDER.indexOf(cap);
 };
 
-// 給与計算（選手・スタッフ共通）: 高卒1年目400万、年齢+1ごとに+40万
+// 給与計算（選手・スタッフ共通）: 高卒1年目400万、年齢+1ごとに+20万
 const BASE_SALARY = 400;
-const SALARY_PER_AGE = 40;
+const SALARY_PER_AGE = 20;
 
 export const getStaffSalary = (staff) =>
   BASE_SALARY + ((staff.age || 35) - 18) * SALARY_PER_AGE;
