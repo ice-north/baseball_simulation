@@ -63,9 +63,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const losePitchers = losingTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
     if (winPitchers.length === 0 || losePitchers.length === 0) return decisions;
 
+    // 先発投手を特定: pitcherAppearancesはリリーフのみ記録されるため、
+    // リリーフリストに含まれない投手で投球イニングがある投手＝先発投手
+    const winTeamKey = isHomeWin ? 'home' : 'away';
+    const loseTeamKey = isHomeWin ? 'away' : 'home';
+    const winReliefIds = new Set(gameResult.pitcherAppearances?.[winTeamKey]?.map(a => a.id) || []);
+    const loseReliefIds = new Set(gameResult.pitcherAppearances?.[loseTeamKey]?.map(a => a.id) || []);
+    const winStarter = winPitchers.find(p => !winReliefIds.has(p.id)) || winPitchers[0];
+
     // 勝ち投手: 先発が5回以上投げてチームが最後までリードを守れば先発の勝ち
     // そうでなければ、リードを奪った時点で投げていたリリーフ（最多投球回の中継ぎ）
-    const winStarter = winPitchers.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
     if (winStarter && winStarter.gameStats.pitching.outs >= 15) {
       decisions.winningPitcher = winStarter;
     } else {
@@ -79,7 +86,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
 
     // 負け投手: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
-    const loseStarter = losePitchers.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
+    const loseStarter = losePitchers.find(p => !loseReliefIds.has(p.id)) || losePitchers[0];
     if (loseStarter && (loseStarter.gameStats?.pitching?.runsAllowed || 0) > 0) {
       decisions.losingPitcher = loseStarter;
     } else {
