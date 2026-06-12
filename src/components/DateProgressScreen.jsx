@@ -139,7 +139,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const teamData = TEAMS_DATA[teamName];
     if (teamData) {
       const p = teamData.players.find(pl => pl.id === pitcher.id);
-      if (p) { p.seasonStats.pitching[stat] = (p.seasonStats.pitching[stat] || 0) + 1; }
+      if (p) {
+        if (!p.seasonStats) p.seasonStats = { batting: {}, pitching: {} };
+        if (!p.seasonStats.pitching) p.seasonStats.pitching = {};
+        p.seasonStats.pitching[stat] = (p.seasonStats.pitching[stat] || 0) + 1;
+      }
     }
   };
 
@@ -158,12 +162,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const result = autoSimulateGame(game.home, game.away);
       const decisions = determinePitcherDecisions(result, homeTeam, awayTeam);
       const isHomeWin = result.homeScore > result.awayScore;
+      console.log(`[投手判定] ${game.home} vs ${game.away}: ${result.homeScore}-${result.awayScore}`,
+        'W:', decisions.winningPitcher?.name || 'なし',
+        'L:', decisions.losingPitcher?.name || 'なし',
+        'S:', decisions.savePitcher?.name || 'なし',
+        'H:', decisions.holdPitchers.length);
       if (decisions.winningPitcher) recordPitcherDecision(decisions.winningPitcher, 'wins', game.home, game.away, isHomeWin);
       if (decisions.losingPitcher) recordPitcherDecision(decisions.losingPitcher, 'losses', game.home, game.away, isHomeWin);
       if (decisions.savePitcher) recordPitcherDecision(decisions.savePitcher, 'saves', game.home, game.away, isHomeWin);
       decisions.holdPitchers.forEach(hp => recordPitcherDecision(hp, 'holds', game.home, game.away, isHomeWin));
       const scheduleIndex = updatedSchedule.findIndex(g => g.id === game.id);
-      const resultWithChanges = { ...result, pitcherChanges: result.pitcherChanges || [] };
+      const decisionsForDisplay = {
+        winningPitcher: decisions.winningPitcher ? { id: decisions.winningPitcher.id, name: decisions.winningPitcher.name } : null,
+        losingPitcher: decisions.losingPitcher ? { id: decisions.losingPitcher.id, name: decisions.losingPitcher.name } : null,
+        savePitcher: decisions.savePitcher ? { id: decisions.savePitcher.id, name: decisions.savePitcher.name } : null,
+        holdPitchers: decisions.holdPitchers.map(p => ({ id: p.id, name: p.name }))
+      };
+      const resultWithChanges = { ...result, pitcherChanges: result.pitcherChanges || [], decisions: decisionsForDisplay };
       if (scheduleIndex !== -1) updatedSchedule[scheduleIndex] = { ...game, result: resultWithChanges };
       gameResults.push({ gameId: game.id, home: game.home, away: game.away, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.winner, decisions, pitcherChanges: result.pitcherChanges || [] });
       updatedResults.push({ gameId: game.id, date: { ...sData.currentDate }, home: game.home, away: game.away, result: resultWithChanges });
@@ -1951,7 +1966,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                             </div>
                             {/* 勝敗投手・セーブ表示 */}
                             {(() => {
-                              const dec = determinePitcherDecisions(game.result,
+                              const dec = game.result.decisions || determinePitcherDecisions(game.result,
                                 TEAMS_DATA[game.home], TEAMS_DATA[game.away]);
                               const parts = [];
                               if (dec.winningPitcher) parts.push(<span key="w" className="text-green-400">○{dec.winningPitcher.name}</span>);
