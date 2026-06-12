@@ -9,7 +9,6 @@ import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup
 import { processNPBDraft, processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
 import { generateExpansionRoster } from '../season/tryoutSystem.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
-import { computeTournamentBonuses } from '../corporate/corporateInit.js';
 
 import ScheduleScreen from './ScheduleScreen.jsx';
 import TryoutScreen from './TryoutScreen.jsx';
@@ -198,10 +197,7 @@ const ManagementScreen = ({
       else if (eventType === 'corporate_departure') setManagementView('corporate_departure');
       else if (eventType === 'corporate_scout') setManagementView('corporate_scout');
       else if (eventType === 'club_recruit') setManagementView('club_recruit');
-      else if (eventType === 'budget_settlement') {
-        computeTournamentBonuses(seasonData);
-        setManagementView('budget_settlement');
-      }
+      else if (eventType === 'budget_settlement') setManagementView('budget_settlement');
       else if (eventType === 'tryout') setManagementView('tryout');
       else if (eventType === 'draft') {
         // プロ指名で選手が消える前にランキング・表彰を確定する
