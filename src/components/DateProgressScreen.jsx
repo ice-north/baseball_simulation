@@ -1542,7 +1542,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const ha = (a.text.length * 17 + seed) % 97;
       const hb = (b.text.length * 17 + seed) % 97;
       return ha - hb;
-    }).slice(0, 8);
+    }).slice(0, 5);
 
     return shuffled;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2734,7 +2734,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     </span>
                   </div>
                 ))}
-                {cachedTopics.slice(0, Math.max(0, 8 - Math.min(2, scoutReportNotifications.length))).map((t, i) => (
+                {cachedTopics.slice(0, Math.max(0, 5 - Math.min(2, scoutReportNotifications.length))).map((t, i) => (
                   <div key={i} className="flex items-start gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1.5">
                     <span className="text-sm shrink-0">{t.icon}</span>
                     <span className={`text-xs ${t.color}`}>{t.text}</span>
