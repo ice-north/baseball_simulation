@@ -49,10 +49,13 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   };
 
   const getRateColor = (rate) => {
-    if (rate >= 70) return 'text-green-400';
-    if (rate >= 50) return 'text-blue-400';
-    if (rate >= 30) return 'text-yellow-400';
-    return 'text-red-400';
+    if (rate >= 80) return 'text-pink-400';
+    if (rate >= 70) return 'text-red-400';
+    if (rate >= 60) return 'text-orange-400';
+    if (rate >= 50) return 'text-yellow-400';
+    if (rate >= 40) return 'text-green-400';
+    if (rate >= 30) return 'text-blue-400';
+    return 'text-gray-400';
   };
 
   const recColor = (g) => ({ S: 'text-red-400', A: 'text-orange-400', B: 'text-yellow-400', C: 'text-green-400', D: 'text-blue-400', F: 'text-gray-500' }[g] || 'text-gray-500');

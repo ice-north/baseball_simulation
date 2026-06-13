@@ -225,14 +225,22 @@ export function getScoutRecommendation(player, teamRank, teamData) {
 export function estimateRivalCount(player) {
   const score = evaluatePlayerScore(player);
   const fame = player.fame || 0;
-  const interest = score * 0.5 + fame * 0.3;
+  const age = player.age || 22;
+  const interest = score * 0.6 + fame * 0.4;
   // idのハッシュで微小ノイズ（安定的なランダム）
-  const hash = (player.id || 0) % 10;
-  const adjusted = interest + hash * 0.5;
+  const hash = (player.id || 0) % 17;
+  const adjusted = interest + hash * 1.5 - 8;
+  // 若い選手ほど注目度が高い
+  const ageBonus = age <= 20 ? 10 : age <= 23 ? 5 : age >= 30 ? -8 : 0;
+  const final = adjusted + ageBonus;
 
-  if (adjusted >= 65) return 3;
-  if (adjusted >= 50) return 2;
-  if (adjusted >= 35) return 1;
+  if (final >= 80) return 7;
+  if (final >= 70) return 6;
+  if (final >= 60) return 5;
+  if (final >= 50) return 4;
+  if (final >= 40) return 3;
+  if (final >= 30) return 2;
+  if (final >= 20) return 1;
   return 0;
 }
 
@@ -1222,23 +1230,27 @@ export function generateRivalInterest(scoutedPlayers) {
   return scoutedPlayers.map(player => {
     const score = evaluatePlayerScore(player);
     const fame = player.fame || 0;
+    const age = player.age || 22;
 
-    // 有力選手ほど多くのチームが関心を寄せる（0〜3チーム）
-    const interestScore = score * 0.5 + fame * 0.3;
+    const interestScore = score * 0.6 + fame * 0.4;
+    const ageBonus = age <= 20 ? 12 : age <= 23 ? 6 : age >= 30 ? -10 : 0;
+    const adjusted = interestScore + ageBonus;
+
     let rivalCount;
-    if (interestScore >= 60) rivalCount = 2 + (Math.random() < 0.5 ? 1 : 0);
-    else if (interestScore >= 40) rivalCount = 1 + (Math.random() < 0.4 ? 1 : 0);
-    else if (interestScore >= 25) rivalCount = Math.random() < 0.5 ? 1 : 0;
+    if (adjusted >= 75) rivalCount = 5 + Math.floor(Math.random() * 3);
+    else if (adjusted >= 60) rivalCount = 3 + Math.floor(Math.random() * 3);
+    else if (adjusted >= 45) rivalCount = 2 + Math.floor(Math.random() * 2);
+    else if (adjusted >= 30) rivalCount = 1 + (Math.random() < 0.5 ? 1 : 0);
+    else if (adjusted >= 15) rivalCount = Math.random() < 0.4 ? 1 : 0;
     else rivalCount = 0;
 
     const rivals = [];
     for (let i = 0; i < rivalCount; i++) {
-      // 有力選手には高ランクチームが来る
       const roll = Math.random() * 100;
       let rank;
-      if (interestScore >= 50) {
+      if (adjusted >= 60) {
         rank = roll < 20 ? 'S' : roll < 55 ? 'A' : roll < 80 ? 'B' : roll < 95 ? 'C' : 'D';
-      } else if (interestScore >= 30) {
+      } else if (adjusted >= 35) {
         rank = roll < 5 ? 'S' : roll < 25 ? 'A' : roll < 55 ? 'B' : roll < 85 ? 'C' : 'D';
       } else {
         rank = roll < 10 ? 'B' : roll < 50 ? 'C' : 'D';

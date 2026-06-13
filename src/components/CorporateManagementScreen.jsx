@@ -714,10 +714,21 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
               const getAbilityVal = (p, key) => {
                 const sa = p.scoutedAbilities || {};
+                const revealLevel = p._revealLevel || 0;
+                if (key === 'mental') {
+                  if (revealLevel < 1) return -1;
+                  const v = p.personality?.mental;
+                  return (v === undefined || v === null) ? -1 : (typeof v === 'number' ? v : parseInt(v));
+                }
+                if (key === 'growth') {
+                  if (revealLevel < 1) return -1;
+                  const v = p.growthPotential;
+                  return (v === undefined || v === null) ? -1 : (typeof v === 'number' ? v : parseInt(v));
+                }
                 const map = {
                   velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
                   meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
-                  speed: sa.physical?.speed, defense: sa.fielding?.defense,
+                  speed: sa.physical?.speed, defense: sa.fielding?.defense, arm: sa.physical?.arm,
                 };
                 const v = map[key];
                 return (v === '?' || v === undefined) ? -1 : (typeof v === 'number' ? v : parseInt(v));
@@ -758,7 +769,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 120) * 2) : n)}`}>{val}</span>;
               };
 
-              const getRateColor = (r) => r >= 70 ? 'text-green-400' : r >= 50 ? 'text-blue-400' : r >= 30 ? 'text-yellow-400' : 'text-red-400';
+              const getRateColor = (r) => r >= 80 ? 'text-pink-400' : r >= 70 ? 'text-red-400' : r >= 60 ? 'text-orange-400' : r >= 50 ? 'text-yellow-400' : r >= 40 ? 'text-green-400' : r >= 30 ? 'text-blue-400' : 'text-gray-400';
 
               return (
                 <div className="bg-gray-800 rounded-lg p-4 mb-4">
@@ -780,12 +791,15 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           <SortHeader k="eye" label="眼" w="w-6" />
                           <SortHeader k="speed" label="走" w="w-6" />
                           <SortHeader k="defense" label="守" w="w-6" />
+                          <SortHeader k="arm" label="肩" w="w-6" />
                           <SortHeader k="velocity" label="球速" w="w-8" />
                           <SortHeader k="control" label="制" w="w-6" />
                           <SortHeader k="stamina" label="ス" w="w-6" />
+                          <SortHeader k="mental" label="精" w="w-6" />
+                          <SortHeader k="growth" label="成" w="w-6" />
                           <SortHeader k="rate" label="交渉%" w="w-10" />
                           <SortHeader k="rivals" label="他球団" w="w-8" />
-                          <SortHeader k="reveal" label="調査" w="w-8" />
+                          <SortHeader k="reveal" label="調査" w="w-16" />
                           <th className="py-1 px-1 text-gray-600 w-16">状況</th>
                         </tr>
                       </thead>
@@ -831,21 +845,24 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.batting?.eye)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.physical?.speed)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.fielding?.defense)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{renderVal(sa.physical?.arm)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.control)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                              <td className="py-1.5 px-1.5 text-center">{revealLevel >= 1 ? renderVal(p.personality?.mental) : <span className="text-gray-600">?</span>}</td>
+                              <td className="py-1.5 px-1.5 text-center">{revealLevel >= 1 ? renderVal(p.growthPotential) : <span className="text-gray-600">?</span>}</td>
                               <td className="py-1.5 px-1.5 text-center">
                                 <span className={`font-bold ${getRateColor(rate)}`}>{rate}%</span>
                               </td>
                               <td className="py-1.5 px-1.5 text-center">
                                 {rivals > 0 ? (
-                                  <span className={`font-bold ${rivals >= 3 ? 'text-red-400' : rivals >= 2 ? 'text-orange-400' : 'text-yellow-400'}`}>
+                                  <span className={`font-bold ${rivals >= 6 ? 'text-pink-400' : rivals >= 4 ? 'text-red-400' : rivals >= 3 ? 'text-orange-400' : rivals >= 2 ? 'text-yellow-400' : 'text-green-400'}`}>
                                     {rivals}社
                                   </span>
                                 ) : <span className="text-gray-600">-</span>}
                               </td>
                               <td className="py-1.5 px-1.5 text-center">
-                                <span className={`px-1.5 py-0.5 rounded font-bold ${
+                                <span className={`inline-block min-w-[2.5rem] text-center px-1.5 py-0.5 rounded font-bold whitespace-nowrap ${
                                   revealLevel === 2 ? 'bg-green-900/40 text-green-400' :
                                   revealLevel === 1 ? 'bg-blue-900/40 text-blue-400' :
                                   'bg-gray-700 text-gray-400'

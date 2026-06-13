@@ -57,11 +57,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const isHomeWin = gameResult.homeScore > gameResult.awayScore;
     const winningTeam = isHomeWin ? gameResult.homeTeam : gameResult.awayTeam;
     const losingTeam = isHomeWin ? gameResult.awayTeam : gameResult.homeTeam;
-    if (!winningTeam || !losingTeam) return decisions;
+    if (!winningTeam?.players || !losingTeam?.players) return decisions;
 
     const winPitchers = winningTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
     const losePitchers = losingTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
-    if (winPitchers.length === 0 || losePitchers.length === 0) return decisions;
+    if (winPitchers.length === 0 || losePitchers.length === 0) {
+      console.warn('[投手判定] 投球記録のある投手が見つかりません', { winPitchers: winPitchers.length, losePitchers: losePitchers.length, homeScore: gameResult.homeScore, awayScore: gameResult.awayScore });
+      return decisions;
+    }
 
     // 先発投手を特定: pitcherAppearancesはリリーフのみ記録されるため、
     // リリーフリストに含まれない投手で投球イニングがある投手＝先発投手
@@ -135,16 +138,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   };
 
   const recordPitcherDecision = (pitcher, stat, gameHome, gameAway, isHomeWin) => {
+    if (!pitcher?.id) { console.warn('[投手記録] pitcher が無効:', pitcher); return; }
     const teamName = stat === 'losses' ? (isHomeWin ? gameAway : gameHome) : (isHomeWin ? gameHome : gameAway);
     const teamData = TEAMS_DATA[teamName];
-    if (teamData) {
-      const p = teamData.players.find(pl => pl.id === pitcher.id);
-      if (p) {
-        if (!p.seasonStats) p.seasonStats = { batting: {}, pitching: {} };
-        if (!p.seasonStats.pitching) p.seasonStats.pitching = {};
-        p.seasonStats.pitching[stat] = (p.seasonStats.pitching[stat] || 0) + 1;
-      }
-    }
+    if (!teamData) { console.warn('[投手記録] チーム未発見:', teamName); return; }
+    const p = teamData.players.find(pl => pl.id === pitcher.id);
+    if (!p) { console.warn('[投手記録] 選手未発見:', pitcher.name, pitcher.id, 'in', teamName); return; }
+    if (!p.seasonStats) p.seasonStats = { batting: {}, pitching: {} };
+    if (!p.seasonStats.pitching) p.seasonStats.pitching = {};
+    const prev = p.seasonStats.pitching[stat] || 0;
+    p.seasonStats.pitching[stat] = (isNaN(prev) ? 0 : prev) + 1;
   };
 
   const simulateGamesOnDate = (sData) => {
@@ -1539,11 +1542,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const ha = (a.text.length * 17 + seed) % 97;
       const hb = (b.text.length * 17 + seed) % 97;
       return ha - hb;
-    }).slice(0, 5);
+    }).slice(0, 8);
 
     return shuffled;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonData.results?.length]);
+  }, [seasonData.results?.length, seasonData.standings]);
 
   // 自チーム専用レポート（監督・コーチ視点の状況報告）
   const teamReport = useMemo(() => {
@@ -1701,9 +1704,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const getEventColor = (label) => {
     if (label === 'シーズン終了') return 'text-red-400';
-    if (label === 'プレーオフ') return 'text-yellow-400';
+    if (label === 'プレーオフ' || label === 'グランドCS') return 'text-yellow-400';
     if (label === '契約更改') return 'text-teal-400';
+    if (label === '退団') return 'text-red-400';
     if (label === 'トライアウト') return 'text-orange-400';
+    if (label === 'スカウト入団') return 'text-cyan-400';
     if (label === 'オフシーズン') return 'text-gray-400';
     if (label === 'キャンプ') return 'text-green-400';
     if (label === 'ドラフト') return 'text-purple-400';
@@ -2729,7 +2734,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     </span>
                   </div>
                 ))}
-                {cachedTopics.slice(0, Math.max(0, 5 - Math.min(2, scoutReportNotifications.length))).map((t, i) => (
+                {cachedTopics.slice(0, Math.max(0, 8 - Math.min(2, scoutReportNotifications.length))).map((t, i) => (
                   <div key={i} className="flex items-start gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1.5">
                     <span className="text-sm shrink-0">{t.icon}</span>
                     <span className={`text-xs ${t.color}`}>{t.text}</span>

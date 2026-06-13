@@ -104,6 +104,8 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
       case 'speed': return player.physical?.speed || 0;
       case 'arm': return player.physical?.arm || 0;
       case 'defense': return player.fielding?.defense || 0;
+      case 'eye': return player.batting?.eye || 0;
+      case 'steal': return player.batting?.steal || 0;
       case 'velocity': return player.pitching?.velocity || 0;
       case 'control': return player.pitching?.control || 0;
       case 'stamina': return player.pitching?.stamina || 0;
@@ -211,7 +213,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           <div className="mb-3">
             <table className="w-full text-left">
               <thead className="bg-gray-800">
-                <tr className="border-b border-gray-600 text-[10px] text-gray-400">
+                <tr className="border-b border-gray-600 text-xs text-gray-400">
                   <th className="py-1 px-1">状態</th>
                   <SortHeader label="名前" sortKeyVal="name" />
                   <SortHeader label="齢" sortKeyVal="age" />
@@ -222,6 +224,8 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                   <SortHeader label="走" sortKeyVal="speed" className="text-center" />
                   <SortHeader label="肩" sortKeyVal="arm" className="text-center" />
                   <SortHeader label="守" sortKeyVal="defense" className="text-center" />
+                  <SortHeader label="眼" sortKeyVal="eye" className="text-center" />
+                  <SortHeader label="盗" sortKeyVal="steal" className="text-center" />
                   <SortHeader label="速" sortKeyVal="velocity" className="text-center" />
                   <SortHeader label="制" sortKeyVal="control" className="text-center" />
                   <SortHeader label="ス" sortKeyVal="stamina" className="text-center" />
@@ -250,15 +254,15 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                       className={`border-b border-gray-700/50 cursor-pointer transition ${isReleased ? 'bg-red-900/30 opacity-60' : 'hover:bg-gray-700/50'}`}
                       onClick={() => toggleRelease(player.id)}
                     >
-                      <td className="py-0.5 px-1">
+                      <td className="py-1 px-1">
                         {isReleased
-                          ? <span className="text-red-400 font-bold text-[10px]">解雇</span>
-                          : <span className="text-green-400 text-[10px]">契約</span>
+                          ? <span className="text-red-400 font-bold text-xs">解雇</span>
+                          : <span className="text-green-400 text-xs">契約</span>
                         }
                       </td>
-                      <td className="py-0.5 px-1 text-xs text-white font-bold">{player.name}</td>
-                      <td className="py-0.5 px-1 text-[10px] text-gray-300 text-center">{player.age || '?'}</td>
-                      <td className="py-0.5 px-1 text-[10px] text-center">
+                      <td className="py-1 px-1 text-sm text-white font-bold">{player.name}</td>
+                      <td className="py-1 px-1 text-xs text-gray-300 text-center">{player.age || '?'}</td>
+                      <td className="py-1 px-1 text-xs text-center">
                         {(() => {
                           const base = player.growthPotential ?? 1.0;
                           const mod = player.growthModifier || 0;
@@ -271,17 +275,19 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                           );
                         })()}
                       </td>
-                      <td className="py-0.5 px-1 text-[10px] text-gray-300 text-center">{POSITION_NAMES[player.position] || player.position}</td>
-                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.batting?.meet || 0)}`}>{player.batting?.meet || 0}</td>
-                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.batting?.power || 0)}`}>{player.batting?.power || 0}</td>
-                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.physical?.speed || 0)}`}>{player.physical?.speed || 0}</td>
-                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.physical?.arm || 0)}`}>{player.physical?.arm || 0}</td>
-                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.fielding?.defense || 0)}`}>{player.fielding?.defense || 0}</td>
-                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.pitching?.velocity || 0)}`}>{player.pitching?.velocity || 0}</td>
-                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
-                      <td className={`py-0.5 px-1 text-[10px] text-center ${getAbilityColor(player.pitching?.stamina || 0)}`}>{player.pitching?.stamina || 0}</td>
-                      <td className="py-0.5 px-1 text-[10px] text-center text-gray-300">{games}</td>
-                      <td className="py-0.5 px-1 text-[10px] text-gray-300 whitespace-nowrap">{statsStr}</td>
+                      <td className="py-1 px-1 text-xs text-gray-300 text-center">{POSITION_NAMES[player.position] || player.position}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.meet || 0)}`}>{player.batting?.meet || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.power || 0)}`}>{player.batting?.power || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.physical?.speed || 0)}`}>{player.physical?.speed || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.physical?.arm || 0)}`}>{player.physical?.arm || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.fielding?.defense || 0)}`}>{player.fielding?.defense || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.eye || 0)}`}>{player.batting?.eye || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.steal || 0)}`}>{player.batting?.steal || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.velocity || 0)}`}>{player.pitching?.velocity || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.stamina || 0)}`}>{player.pitching?.stamina || 0}</td>
+                      <td className="py-1 px-1 text-xs text-center text-gray-300">{games}</td>
+                      <td className="py-1 px-1 text-xs text-gray-300 whitespace-nowrap">{statsStr}</td>
                     </tr>
                   );
                 })}

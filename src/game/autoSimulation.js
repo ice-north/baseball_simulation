@@ -2197,20 +2197,25 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       const playerData = teamData.players.find(p => p.id === player.id);
       if (!playerData) return;
 
+      // seasonStats が未初期化の場合（新加入選手など）に安全に初期化
+      if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
+      if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
+      if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
+
       // 打撃成績の集計
       if (player.gameStats.batting.atBats > 0) {
         const b = player.gameStats.batting;
         const season = playerData.seasonStats.batting;
 
-        season.games++;
-        season.atBats += b.atBats;
-        season.hits += b.hits;
+        season.games = (season.games || 0) + 1;
+        season.atBats = (season.atBats || 0) + b.atBats;
+        season.hits = (season.hits || 0) + b.hits;
         season.doubles = (season.doubles || 0) + (b.doubles || 0);
         season.triples = (season.triples || 0) + (b.triples || 0);
-        season.homeruns += b.homeruns;
-        season.rbis += b.rbis;
-        season.walks += b.walks;
-        season.strikeouts += b.strikeouts;
+        season.homeruns = (season.homeruns || 0) + b.homeruns;
+        season.rbis = (season.rbis || 0) + b.rbis;
+        season.walks = (season.walks || 0) + b.walks;
+        season.strikeouts = (season.strikeouts || 0) + b.strikeouts;
         season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
         season.sacrificeBunts = (season.sacrificeBunts || 0) + (b.sacrificeBunts || 0);
 
@@ -2253,15 +2258,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
         const p = player.gameStats.pitching;
         const season = playerData.seasonStats.pitching;
 
-        season.games++;
-        season.inningsPitched += p.outs;
-        season.runsAllowed += p.runsAllowed;
-        season.earnedRuns += p.runsAllowed; // 簡易版：全て自責点とする
+        season.games = (season.games || 0) + 1;
+        season.inningsPitched = (season.inningsPitched || 0) + p.outs;
+        season.runsAllowed = (season.runsAllowed || 0) + p.runsAllowed;
+        season.earnedRuns = (season.earnedRuns || 0) + p.runsAllowed; // 簡易版：全て自責点とする
         season.hits = (season.hits || 0) + (p.hits || 0);
         season.homeruns = (season.homeruns || 0) + (p.homeruns || 0);
-        season.strikeouts += p.strikeouts;
-        season.walks += p.walks;
-        season.pitches += p.pitches;
+        season.strikeouts = (season.strikeouts || 0) + p.strikeouts;
+        season.walks = (season.walks || 0) + p.walks;
+        season.pitches = (season.pitches || 0) + p.pitches;
 
         // 成長率変動: 疲労50超で登板なら-0.01
         if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);

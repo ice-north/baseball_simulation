@@ -487,6 +487,70 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const shuffledTeams = [...NPB_TEAMS].sort(() => Math.random() - 0.5);
   const takenIds = new Set();
 
+  // === チーム構成バランス追跡 ===
+  const teamDraftTracker = {};
+  NPB_TEAMS.forEach(team => {
+    teamDraftTracker[team] = { pitchers: 0, batters: 0, highschool: 0, university: 0, corporate: 0, independent: 0, total: 0, ageYoung: 0, ageMid: 0, ageOld: 0 };
+  });
+
+  const updateDraftTracker = (team, candidate) => {
+    const tracker = teamDraftTracker[team];
+    if (!tracker) return;
+    tracker.total++;
+    if (candidate.player.position === 'pitcher') {
+      tracker.pitchers++;
+    } else {
+      tracker.batters++;
+    }
+    const src = candidate.source === 'university_team' ? 'university' : candidate.source;
+    if (tracker[src] !== undefined) tracker[src]++;
+    // 年齢グループ追跡
+    const age = candidate.player.age || 20;
+    if (age <= 19) tracker.ageYoung++;
+    else if (age <= 22) tracker.ageMid++;
+    else tracker.ageOld++;
+  };
+
+  const getBalancePenalty = (team, candidate, tracker) => {
+    const t = tracker[team];
+    if (!t || t.total < 2) return 0;
+    let penalty = 0;
+    const isPitcher = candidate.player.position === 'pitcher';
+    const pitcherRatio = t.pitchers / t.total;
+    const batterRatio = t.batters / t.total;
+
+    // 投手/野手バランス: 65%超で強ペナルティ、75%超でさらに強化
+    if (isPitcher && t.total >= 2) {
+      if (pitcherRatio >= 0.75) penalty += -40 - (t.pitchers - 2) * 15;
+      else if (pitcherRatio >= 0.65) penalty += -20;
+    }
+    if (!isPitcher && t.total >= 2) {
+      if (batterRatio >= 0.75) penalty += -40 - (t.batters - 2) * 15;
+      else if (batterRatio >= 0.65) penalty += -20;
+    }
+
+    // ソース別バランス: 60%超で同一ソース偏りペナルティ、75%超でさらに強化
+    const src = candidate.source === 'university_team' ? 'university' : candidate.source;
+    const srcCount = t[src] || 0;
+    if (t.total >= 2 && srcCount >= 2) {
+      const sourceRatio = srcCount / t.total;
+      if (sourceRatio >= 0.75) penalty += -35 - (srcCount - 2) * 10;
+      else if (sourceRatio >= 0.60) penalty += -15;
+    }
+
+    // 年齢グループバランス: 60%超で偏りペナルティ、75%超でさらに強化
+    const age = candidate.player.age || 20;
+    const ageGroup = age <= 19 ? 'ageYoung' : age <= 22 ? 'ageMid' : 'ageOld';
+    const ageCount = t[ageGroup] || 0;
+    if (t.total >= 2 && ageCount >= 2) {
+      const ageRatio = ageCount / t.total;
+      if (ageRatio >= 0.75) penalty += -30 - (ageCount - 2) * 10;
+      else if (ageRatio >= 0.60) penalty += -12;
+    }
+
+    return penalty;
+  };
+
   // === 球団別好み（チーム固有の選手評価バイアス） ===
   // 各球団がランダムに好みを持ち、1巡目・2巡目以降の指名に影響
   const teamPreferences = {};
@@ -662,6 +726,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     const cand = settledTeams[team];
     if (!cand) continue;
     draftedPlayers.push(createDraftEntry(cand, team, 'ドラフト1位'));
+    updateDraftTracker(team, cand);
   }
 
   // === 2巡目以降: ウェーバー/逆ウェーバー交互制（球団好みで選択） ===
@@ -680,13 +745,15 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       let bestCand = null, bestPref = -Infinity;
       for (const c of searchWindow) {
         const prefBonus = getTeamPreferenceScore(npbTeam, c);
+        const balancePenalty = getBalancePenalty(npbTeam, c, teamDraftTracker);
         const noise = (Math.random() - 0.5) * 10;
-        const pref = c.score + prefBonus * 0.7 + noise;
+        const pref = c.score + prefBonus * 0.7 + noise + balancePenalty;
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
       }
       if (!bestCand) break;
       takenIds.add(bestCand.player.id);
       draftedPlayers.push(createDraftEntry(bestCand, npbTeam, roundLabel));
+      updateDraftTracker(npbTeam, bestCand);
     }
   }
 
