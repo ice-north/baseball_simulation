@@ -69,11 +69,12 @@ export const DISPATCH_LIMITS = {
 
 /**
  * 派遣可能かどうか判定
- * 大学派遣: パイプのある大学ごとにOB人数で枠が決まる
- * プロ研修: 従来通り各チーム1人
+ * 社会人モード大学派遣: パイプのある大学ごとにOB人数で枠が決まる
+ * 独立リーグ大学派遣: 固定1枠（パイプ不要）
+ * プロ研修: 各チーム1人（独立リーグのみ）
  * @param {Object} player - 選手データ
  * @param {string} destKey - 派遣先キー ('university' or 'proCamp')
- * @param {Object} options - { teamPlayers, allTeams, teamData, universityId }
+ * @param {Object} options - { teamPlayers, allTeams, teamData, universityId, gameMode }
  * @returns {{ eligible: boolean, reason: string }}
  */
 export function checkDispatchEligibility(player, destKey, options = {}) {
@@ -87,22 +88,34 @@ export function checkDispatchEligibility(player, destKey, options = {}) {
   if (overall > dest.maxOverall) return { eligible: false, reason: `総合力${dest.maxOverall}以下のみ (現在${overall})` };
 
   if (destKey === 'university') {
-    const teamData = options.teamData;
-    if (!teamData) return { eligible: false, reason: 'チームデータなし' };
-    const pipes = getAvailableUniversityDispatches(teamData);
-    if (pipes.length === 0) return { eligible: false, reason: 'OBのいる大学がありません' };
-    const universityId = options.universityId;
-    if (universityId) {
-      const remaining = getRemainingDispatchSlots(teamData, universityId);
-      if (remaining <= 0) {
-        const uni = getUniversityTeamById(universityId);
-        return { eligible: false, reason: `${uni?.name || '大学'}の派遣枠が満員` };
+    const gameMode = options.gameMode;
+
+    if (gameMode === 'corporate') {
+      // 社会人: パイプベース（OBのいる大学に枠数分）
+      const teamData = options.teamData;
+      if (!teamData) return { eligible: false, reason: 'チームデータなし' };
+      const pipes = getAvailableUniversityDispatches(teamData);
+      if (pipes.length === 0) return { eligible: false, reason: 'OBのいる大学がありません' };
+      if (options.universityId) {
+        const remaining = getRemainingDispatchSlots(teamData, options.universityId);
+        if (remaining <= 0) {
+          const uni = getUniversityTeamById(options.universityId);
+          return { eligible: false, reason: `${uni?.name || '大学'}の派遣枠が満員` };
+        }
       }
+      return { eligible: true, reason: '' };
+    }
+
+    // 独立リーグ: 固定1枠
+    const teamPlayers = options.teamPlayers || [];
+    const uniCount = teamPlayers.filter(p => p.dispatchedThisCamp === 'university').length;
+    if (uniCount >= 1) {
+      return { eligible: false, reason: '大学野球留学の枠は各チーム1人まで' };
     }
     return { eligible: true, reason: '' };
   }
 
-  // プロ研修: 従来通り
+  // プロ研修: 各チーム1人
   const teamPlayers = options.teamPlayers || [];
   const teamDestCount = teamPlayers.filter(p => p.dispatchedThisCamp === destKey).length;
   if (teamDestCount >= DISPATCH_LIMITS.perTeamPerDest) {

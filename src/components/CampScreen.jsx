@@ -768,20 +768,30 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
           if (Math.random() > 0.3) return;
 
           if (aiDispatchKeys.includes('university')) {
-            const uniOpts = getUniversityDispatchOptions(aiTeam);
-            const availableUnis = uniOpts.filter(u => u.remaining > 0);
-            if (availableUnis.length > 0) {
-              const { eligible } = checkDispatchEligibility(p, 'university', { teamData: aiTeam });
+            if (gameMode === 'corporate') {
+              // 社会人: パイプのある大学からランダム選択
+              const uniOpts = getUniversityDispatchOptions(aiTeam);
+              const availableUnis = uniOpts.filter(u => u.remaining > 0);
+              if (availableUnis.length > 0) {
+                const { eligible } = checkDispatchEligibility(p, 'university', { teamData: aiTeam, gameMode });
+                if (eligible) {
+                  const pick = availableUnis[Math.floor(Math.random() * availableUnis.length)];
+                  executeDispatchTraining(p, 'university', { universityId: pick.universityId });
+                  return;
+                }
+              }
+            } else {
+              // 独立リーグ: 固定1枠
+              const { eligible } = checkDispatchEligibility(p, 'university', { teamPlayers: aiTeam.players, gameMode });
               if (eligible) {
-                const pick = availableUnis[Math.floor(Math.random() * availableUnis.length)];
-                executeDispatchTraining(p, 'university', { universityId: pick.universityId });
+                executeDispatchTraining(p, 'university');
                 return;
               }
             }
           }
 
           if (aiDispatchKeys.includes('proCamp')) {
-            const { eligible } = checkDispatchEligibility(p, 'proCamp', { teamPlayers: aiTeam.players, allTeams: TEAMS_DATA });
+            const { eligible } = checkDispatchEligibility(p, 'proCamp', { teamPlayers: aiTeam.players, allTeams: TEAMS_DATA, gameMode });
             if (eligible) {
               executeDispatchTraining(p, 'proCamp');
             }
@@ -847,7 +857,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
           const dest = DISPATCH_DESTINATIONS[dispatchConfirm.destKey];
           if (!player || !dest) return null;
 
-          if (dispatchConfirm.destKey === 'university' && !dispatchConfirm.universityId) {
+          {/* 社会人モード: 大学派遣はパイプのある大学を選択 */}
+          if (gameMode === 'corporate' && dispatchConfirm.destKey === 'university' && !dispatchConfirm.universityId) {
             const uniOptions = getUniversityDispatchOptions(userTeam);
             return (
               <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -1398,6 +1409,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                                   teamPlayers: userTeam?.players || [],
                                   allTeams: TEAMS_DATA,
                                   teamData: userTeam,
+                                  gameMode,
                                 });
                                 return (
                                   <button
