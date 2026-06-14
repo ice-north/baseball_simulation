@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor, POSITION_ORDER } from '../utils/constants.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
@@ -608,7 +608,7 @@ function generateTrainingSuggestions(team) {
   return deduped.slice(0, 12);
 }
 
-const CampScreen = ({ onComplete, allTeams, seasonData }) => {
+const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
   const userTeamName = teamNames[0] || 'チームA';
   const userTeam = TEAMS_DATA[userTeamName];
@@ -762,26 +762,29 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
 
       // AIチーム: 第1クールで適格な若手を30%の確率で派遣
       if (currentRound === 1 && currentYear > 1) {
+        const aiDispatchKeys = getAvailableDispatchKeys(gameMode);
         aiTeam.players.forEach(p => {
           if (p.dispatchedThisCamp) return;
           if (Math.random() > 0.3) return;
 
-          // 大学派遣: パイプのある大学からランダム選択
-          const uniOpts = getUniversityDispatchOptions(aiTeam);
-          const availableUnis = uniOpts.filter(u => u.remaining > 0);
-          if (availableUnis.length > 0) {
-            const { eligible } = checkDispatchEligibility(p, 'university', { teamData: aiTeam });
-            if (eligible) {
-              const pick = availableUnis[Math.floor(Math.random() * availableUnis.length)];
-              executeDispatchTraining(p, 'university', { universityId: pick.universityId });
-              return;
+          if (aiDispatchKeys.includes('university')) {
+            const uniOpts = getUniversityDispatchOptions(aiTeam);
+            const availableUnis = uniOpts.filter(u => u.remaining > 0);
+            if (availableUnis.length > 0) {
+              const { eligible } = checkDispatchEligibility(p, 'university', { teamData: aiTeam });
+              if (eligible) {
+                const pick = availableUnis[Math.floor(Math.random() * availableUnis.length)];
+                executeDispatchTraining(p, 'university', { universityId: pick.universityId });
+                return;
+              }
             }
           }
 
-          // プロ研修
-          const { eligible } = checkDispatchEligibility(p, 'proCamp', { teamPlayers: aiTeam.players, allTeams: TEAMS_DATA });
-          if (eligible) {
-            executeDispatchTraining(p, 'proCamp');
+          if (aiDispatchKeys.includes('proCamp')) {
+            const { eligible } = checkDispatchEligibility(p, 'proCamp', { teamPlayers: aiTeam.players, allTeams: TEAMS_DATA });
+            if (eligible) {
+              executeDispatchTraining(p, 'proCamp');
+            }
           }
         });
       }
@@ -1208,7 +1211,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                     ))}
                     <th className="py-1.5 px-2 text-left w-28">メイン</th>
                     <th className="py-1.5 px-2 text-left w-28">サブ</th>
-                    {currentYear > 1 && <th className="py-1.5 px-1 text-center w-16">派遣</th>}
+                    {currentYear > 1 && getAvailableDispatchKeys(gameMode).length > 0 && <th className="py-1.5 px-1 text-center w-16">派遣</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1386,10 +1389,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData }) => {
                             )}
                           </div>
                         </td>
-                        {currentYear > 1 && (
+                        {currentYear > 1 && getAvailableDispatchKeys(gameMode).length > 0 && (
                           <td className="py-1 px-1 text-center">
                             <div className="flex gap-0.5 justify-center">
-                              {Object.entries(DISPATCH_DESTINATIONS).map(([destKey, dest]) => {
+                              {getAvailableDispatchKeys(gameMode).map(destKey => {
+                                const dest = DISPATCH_DESTINATIONS[destKey];
                                 const { eligible, reason } = checkDispatchEligibility(player, destKey, {
                                   teamPlayers: userTeam?.players || [],
                                   allTeams: TEAMS_DATA,

@@ -510,6 +510,7 @@ const ManagementScreen = ({
   if (managementView === 'camp') return <CampScreen
     seasonData={seasonData}
     allTeams={allTeams}
+    gameMode={gameMode}
     onComplete={() => {
       Object.keys(TEAMS_DATA).forEach(teamName => {
         const teamData = TEAMS_DATA[teamName];

@@ -30,6 +30,18 @@ export const DISPATCH_DESTINATIONS = {
 };
 
 /**
+ * ゲームモードごとの派遣可能先
+ * 独立リーグ: プロ研修OK、大学OK
+ * 社会人: 大学のみ（プロとアマの交わりは禁止）
+ * 大学: 派遣なし
+ */
+export function getAvailableDispatchKeys(gameMode) {
+  if (gameMode === 'university') return [];
+  if (gameMode === 'corporate') return ['university'];
+  return ['university', 'proCamp'];
+}
+
+/**
  * 選手の総合力を計算（派遣適格判定用）
  * 投手: (velocity-115)*1.5 + control + stamina/3 を3で割った平均
  * 野手: (meet + power + speed + defense) / 4
