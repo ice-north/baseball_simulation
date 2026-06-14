@@ -6,7 +6,7 @@
 import { getNestedValue, setNestedValueMut } from './growthUtils.js';
 import { getPitchTypeName } from './campTraining.js';
 import { getAvailableUniversityDispatches, getRemainingDispatchSlots } from '../university/universityPipeSystem.js';
-import { getUniversityTeamById, getSpecialtyLabel, SPECIALTY_LABELS } from '../university/universityTeamsData.js';
+import { getUniversityTeamById, getSpecialtyLabel, SPECIALTY_LABELS, SPECIALTY_RANK_BOOST, hasUniversitySpecialty } from '../university/universityTeamsData.js';
 
 
 /** 派遣先の定義 */
@@ -178,8 +178,8 @@ export function executeDispatchTraining(player, destKey, options = {}) {
 
 /**
  * キャンプ終了時に派遣結果を適用し、成長レポートを返す
- * 大学派遣: 派遣先大学の得意分野で成長
- * プロ研修: 技術系で成長
+ * 大学派遣: 全能力が成長。得意分野はランク別ブースト、非得意は80%
+ * プロ研修: 技術系メインで成長
  * @param {Object} player - 派遣済みの選手データ（直接変更）
  * @returns {{ growthReport: Array, outcome: string, universityName: string|null }}
  */
@@ -192,49 +192,74 @@ export function resolveDispatchTraining(player) {
   const growthReport = [];
   const universityName = player.dispatchUniversityName || null;
 
-  // 大学派遣: 得意分野に応じた成長プロファイルを決定
-  let growthProfile = dest.growthProfile;
-  let specialties = [];
-  if (destKey === 'university' && player.dispatchUniversityId) {
-    const uni = getUniversityTeamById(player.dispatchUniversityId);
-    if (uni?.specialties) {
-      specialties = uni.specialties;
-      const hasTech = specialties.some(s => ['meet', 'eye', 'control', 'defense'].includes(s));
-      const hasPhys = specialties.some(s => ['velocity', 'power', 'speed', 'arm', 'stamina'].includes(s));
-      if (hasTech && !hasPhys) growthProfile = 'technical';
-      else if (hasPhys && !hasTech) growthProfile = 'physical';
-      else growthProfile = 'balanced';
-    }
-  }
-
-  // 球速成長キャップ用に派遣前の球速を記録（投手のみ）
   const initialVelocity = player.position === 'pitcher' ? (player.pitching?.velocity || 0) : null;
 
-  // 飛躍: 1.5倍、成長: 1.0倍、微成長: 0.5倍（失敗なし）
   const multiplier = outcome === 'great_success' ? 1.5
                    : outcome === 'minor' ? 0.5
                    : 1.0;
-
   const applyGrowthMult = (base) => Math.floor(base * multiplier);
 
-  // 大学の得意分野かどうかでボーナス
-  const hasSpecialty = (stat) => specialties.length === 0 || specialties.includes(stat);
-  const specBonus = (stat, base) => hasSpecialty(stat) ? base : Math.floor(base * 0.5);
+  if (destKey === 'university') {
+    // 大学派遣: 得意項目はランク別ブースト、非得意は80%
+    let specialties = [];
+    let rankBoost = 1.0;
+    if (player.dispatchUniversityId) {
+      const uni = getUniversityTeamById(player.dispatchUniversityId);
+      if (uni) {
+        specialties = uni.specialties || [];
+        rankBoost = SPECIALTY_RANK_BOOST[uni.rank] || 1.0;
+      }
+    }
 
-  // 得意分野に応じた成長量計算ヘルパー
-  const growStat = (stat, base, max = 99) => {
-    const adjusted = specBonus(stat, base);
-    return applyGrowthMult(Math.floor(Math.random() * adjusted) + Math.ceil(adjusted * 0.6));
-  };
+    // 'pitching' specialtyは球速・制球・スタミナに適用
+    const getStatMult = (statKey) => {
+      if (specialties.length === 0) return 1.0;
+      const specKey = ['velocity', 'control', 'stamina'].includes(statKey) ? 'pitching' : statKey;
+      return specialties.includes(specKey) ? rankBoost : 0.8;
+    };
+    const applyStatGrowth = (statKey, base) => applyGrowthMult(Math.max(1, Math.round(base * getStatMult(statKey))));
 
-  if (player.position === 'pitcher') {
-    if (growthProfile === 'technical') {
-      const ctrlGrowth = applyGrowthMult(specBonus('control', Math.floor(Math.random() * 6) + 4));
+    if (player.position === 'pitcher') {
+      const velGrowth = applyStatGrowth('velocity', Math.floor(Math.random() * 3) + 1);
+      const vBefore = player.pitching.velocity;
+      player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
+      growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
+
+      const ctrlGrowth = applyStatGrowth('control', Math.floor(Math.random() * 4) + 2);
+      const cBefore = player.pitching.control;
+      player.pitching.control = Math.min(99, cBefore + ctrlGrowth);
+      growthReport.push({ statName: '制球', before: cBefore, after: player.pitching.control, growth: player.pitching.control - cBefore });
+
+      const staGrowth = applyStatGrowth('stamina', Math.floor(Math.random() * 8) + 5);
+      const staBefore = player.pitching.stamina;
+      player.pitching.stamina = Math.min(200, staBefore + staGrowth);
+      growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
+    } else {
+      const stats = [
+        { key: 'meet', name: 'ミート', base: () => Math.floor(Math.random() * 4) + 2, get: () => player.batting.meet, set: v => { player.batting.meet = v; }, max: 99 },
+        { key: 'power', name: 'パワー', base: () => Math.floor(Math.random() * 5) + 3, get: () => player.batting.power, set: v => { player.batting.power = v; }, max: 99 },
+        { key: 'speed', name: '走力', base: () => Math.floor(Math.random() * 4) + 2, get: () => player.physical.speed, set: v => { player.physical.speed = v; }, max: 99 },
+        { key: 'defense', name: '守備', base: () => Math.floor(Math.random() * 3) + 2, get: () => player.fielding.defense, set: v => { player.fielding.defense = v; }, max: 99 },
+        { key: 'arm', name: '肩力', base: () => Math.floor(Math.random() * 3) + 1, get: () => player.physical.arm, set: v => { player.physical.arm = v; }, max: 99 },
+        { key: 'eye', name: '選球眼', base: () => Math.floor(Math.random() * 3) + 2, get: () => player.batting.eye, set: v => { player.batting.eye = v; }, max: 99 },
+      ];
+      for (const stat of stats) {
+        const growth = applyStatGrowth(stat.key, stat.base());
+        const before = stat.get() || 30;
+        const newVal = Math.min(stat.max, before + growth);
+        stat.set(newVal);
+        growthReport.push({ statName: stat.name, before, after: newVal, growth: newVal - before });
+      }
+    }
+  } else {
+    // プロ研修: 技術系メイン
+    if (player.position === 'pitcher') {
+      const ctrlGrowth = applyGrowthMult(Math.floor(Math.random() * 6) + 4);
       const before = player.pitching.control;
       player.pitching.control = Math.min(99, before + ctrlGrowth);
       growthReport.push({ statName: '制球', before, after: player.pitching.control, growth: player.pitching.control - before });
 
-      const velGrowth = applyGrowthMult(specBonus('velocity', Math.floor(Math.random() * 2) + 1));
+      const velGrowth = applyGrowthMult(Math.floor(Math.random() * 2) + 1);
       const vBefore = player.pitching.velocity;
       player.pitching.velocity = Math.max(vBefore, Math.min(155, vBefore + velGrowth));
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
@@ -248,106 +273,29 @@ export function resolveDispatchTraining(player) {
       });
 
       const staBefore = player.pitching.stamina;
-      const staGrowth = applyGrowthMult(specBonus('stamina', Math.floor(Math.random() * 6) + 3));
-      player.pitching.stamina = Math.min(200, staBefore + staGrowth);
-      growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
-    } else if (growthProfile === 'balanced') {
-      // 大学派遣(balanced): 得意分野に応じてバランス良く成長
-      const velGrowth = applyGrowthMult(specBonus('velocity', Math.floor(Math.random() * 3) + 1));
-      const vBefore = player.pitching.velocity;
-      player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
-      growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
-
-      const ctrlGrowth = applyGrowthMult(specBonus('control', Math.floor(Math.random() * 4) + 2));
-      const cBefore = player.pitching.control;
-      player.pitching.control = Math.min(99, cBefore + ctrlGrowth);
-      growthReport.push({ statName: '制球', before: cBefore, after: player.pitching.control, growth: player.pitching.control - cBefore });
-
-      const staGrowth = applyGrowthMult(specBonus('stamina', Math.floor(Math.random() * 6) + 3));
-      const staBefore = player.pitching.stamina;
+      const staGrowth = applyGrowthMult(Math.floor(Math.random() * 6) + 3);
       player.pitching.stamina = Math.min(200, staBefore + staGrowth);
       growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
     } else {
-      // physical: 球速UP、スタミナも
-      const velGrowth = applyGrowthMult(specBonus('velocity', Math.floor(Math.random() * 3) + 1));
-      const vBefore = player.pitching.velocity;
-      player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
-      growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
-
-      const staGrowth = applyGrowthMult(specBonus('stamina', Math.floor(Math.random() * 8) + 5));
-      const staBefore = player.pitching.stamina;
-      player.pitching.stamina = Math.min(200, staBefore + staGrowth);
-      growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
-
-      const ctrlGrowth = applyGrowthMult(specBonus('control', Math.floor(Math.random() * 3) + 1));
-      const cBefore = player.pitching.control;
-      player.pitching.control = Math.min(99, cBefore + ctrlGrowth);
-      growthReport.push({ statName: '制球', before: cBefore, after: player.pitching.control, growth: player.pitching.control - cBefore });
-    }
-  } else {
-    // 野手
-    if (growthProfile === 'technical') {
-      const meetGrowth = applyGrowthMult(specBonus('meet', Math.floor(Math.random() * 6) + 4));
+      const meetGrowth = applyGrowthMult(Math.floor(Math.random() * 6) + 4);
       const mBefore = player.batting.meet;
       player.batting.meet = Math.min(99, mBefore + meetGrowth);
       growthReport.push({ statName: 'ミート', before: mBefore, after: player.batting.meet, growth: player.batting.meet - mBefore });
 
-      const eyeGrowth = applyGrowthMult(specBonus('eye', Math.floor(Math.random() * 5) + 3));
+      const eyeGrowth = applyGrowthMult(Math.floor(Math.random() * 5) + 3);
       const eBefore = player.batting.eye;
       player.batting.eye = Math.min(99, eBefore + eyeGrowth);
       growthReport.push({ statName: '選球眼', before: eBefore, after: player.batting.eye, growth: player.batting.eye - eBefore });
 
-      const defGrowth = applyGrowthMult(specBonus('defense', Math.floor(Math.random() * 4) + 3));
+      const defGrowth = applyGrowthMult(Math.floor(Math.random() * 4) + 3);
       const dBefore = player.fielding.defense;
       player.fielding.defense = Math.min(99, dBefore + defGrowth);
       growthReport.push({ statName: '守備', before: dBefore, after: player.fielding.defense, growth: player.fielding.defense - dBefore });
 
-      const powGrowth = applyGrowthMult(specBonus('power', Math.floor(Math.random() * 2) + 1));
+      const powGrowth = applyGrowthMult(Math.floor(Math.random() * 2) + 1);
       const pBefore = player.batting.power;
       player.batting.power = Math.min(99, pBefore + powGrowth);
       growthReport.push({ statName: 'パワー', before: pBefore, after: player.batting.power, growth: player.batting.power - pBefore });
-    } else if (growthProfile === 'balanced') {
-      // 大学派遣(balanced): 得意分野に応じてバランス良く成長
-      const meetGrowth = applyGrowthMult(specBonus('meet', Math.floor(Math.random() * 4) + 2));
-      const mBefore = player.batting.meet;
-      player.batting.meet = Math.min(99, mBefore + meetGrowth);
-      growthReport.push({ statName: 'ミート', before: mBefore, after: player.batting.meet, growth: player.batting.meet - mBefore });
-
-      const powGrowth = applyGrowthMult(specBonus('power', Math.floor(Math.random() * 4) + 2));
-      const pBefore = player.batting.power;
-      player.batting.power = Math.min(99, pBefore + powGrowth);
-      growthReport.push({ statName: 'パワー', before: pBefore, after: player.batting.power, growth: player.batting.power - pBefore });
-
-      const spdGrowth = applyGrowthMult(specBonus('speed', Math.floor(Math.random() * 3) + 2));
-      const sBefore = player.physical.speed;
-      player.physical.speed = Math.min(99, sBefore + spdGrowth);
-      growthReport.push({ statName: '走力', before: sBefore, after: player.physical.speed, growth: player.physical.speed - sBefore });
-
-      const defGrowth = applyGrowthMult(specBonus('defense', Math.floor(Math.random() * 3) + 1));
-      const dBefore = player.fielding.defense;
-      player.fielding.defense = Math.min(99, dBefore + defGrowth);
-      growthReport.push({ statName: '守備', before: dBefore, after: player.fielding.defense, growth: player.fielding.defense - dBefore });
-    } else {
-      // physical: パワー・走力・肩がUP
-      const powGrowth = applyGrowthMult(specBonus('power', Math.floor(Math.random() * 6) + 4));
-      const pBefore = player.batting.power;
-      player.batting.power = Math.min(99, pBefore + powGrowth);
-      growthReport.push({ statName: 'パワー', before: pBefore, after: player.batting.power, growth: player.batting.power - pBefore });
-
-      const spdGrowth = applyGrowthMult(specBonus('speed', Math.floor(Math.random() * 5) + 3));
-      const sBefore = player.physical.speed;
-      player.physical.speed = Math.min(99, sBefore + spdGrowth);
-      growthReport.push({ statName: '走力', before: sBefore, after: player.physical.speed, growth: player.physical.speed - sBefore });
-
-      const armGrowth = applyGrowthMult(specBonus('arm', Math.floor(Math.random() * 4) + 2));
-      const aBefore = player.physical.arm;
-      player.physical.arm = Math.min(99, aBefore + armGrowth);
-      growthReport.push({ statName: '肩力', before: aBefore, after: player.physical.arm, growth: player.physical.arm - aBefore });
-
-      const meetGrowth = applyGrowthMult(specBonus('meet', Math.floor(Math.random() * 2) + 1));
-      const mBefore = player.batting.meet;
-      player.batting.meet = Math.min(99, mBefore + meetGrowth);
-      growthReport.push({ statName: 'ミート', before: mBefore, after: player.batting.meet, growth: player.batting.meet - mBefore });
     }
   }
 
