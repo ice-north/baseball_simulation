@@ -32,6 +32,7 @@ import { initializeStandings } from '../season/seasonManager.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 import { seedInitialUniversityClasses } from '../season/universityPool.js';
+import { assignInitialUniversityBackgrounds } from '../university/universityPipeSystem.js';
 
 // ============================================================
 // ランク別チーム構成
@@ -537,7 +538,6 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
       const p = young[i];
       p.isTwoWay = true;
       p.twoWaySubPosition = p.position;
-      // 投球能力を付与（野手ベースの二刀流）
       p.pitching.velocity = clamp(p.pitching.velocity + randInt(5, 15), 120, velCap);
       p.pitching.control = clamp(p.pitching.control + randInt(5, 15), 20, controlCap);
       p.pitching.stamina = clamp(p.pitching.stamina + randInt(10, 30), 50, 120);
@@ -558,6 +558,7 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     }
   }
 
+  assignInitialUniversityBackgrounds(roster, { teamRank: rank });
   return roster;
 };
 

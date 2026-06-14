@@ -6,7 +6,7 @@
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.js';
-import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
+import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
 
 /**
@@ -546,9 +546,11 @@ export function processUniversityYear(currentYear) {
 
       // 卒業判定: 4年経過 or 年齢23歳以上
       if (yearsInUni >= 4 || player.age >= 23) {
-        player.universityTeamId = entry.universityTeamId;
-        player.universityTeamName = entry.universityTeamName;
-        player.universityRank = entry.universityRank;
+        if (entry.universityTeamId) {
+          player.universityTeamId = entry.universityTeamId;
+          player.universityName = entry.universityTeamName;
+          player.universityRank = entry.universityRank;
+        }
         graduates.push(player);
         report.graduated++;
         return;
