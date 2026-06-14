@@ -31,12 +31,16 @@ export const DISPATCH_DESTINATIONS = {
 
 /**
  * ゲームモードごとの派遣可能先
- * 独立リーグ: プロ研修OK、大学OK
- * 社会人: 大学のみ（プロとアマの交わりは禁止）
- * 大学: 派遣なし
+ * 独立リーグ: プロ研修OK、大学OK（各1枠固定）
+ * 社会人: 大学のみ（パイプベース、プロとアマの交わりは禁止）
+ * クラブチーム: 派遣なし（高いプロ意識と成長率で自力成長）
+ * 大学: 派遣なし（高品質キャンプで成長）
+ * @param {string} gameMode
+ * @param {boolean} clubMode
  */
-export function getAvailableDispatchKeys(gameMode) {
+export function getAvailableDispatchKeys(gameMode, clubMode) {
   if (gameMode === 'university') return [];
+  if (gameMode === 'corporate' && clubMode) return [];
   if (gameMode === 'corporate') return ['university'];
   return ['university', 'proCamp'];
 }

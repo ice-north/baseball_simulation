@@ -762,7 +762,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
 
       // AIチーム: 第1クールで適格な若手を30%の確率で派遣
       if (currentRound === 1 && currentYear > 1) {
-        const aiDispatchKeys = getAvailableDispatchKeys(gameMode);
+        const aiDispatchKeys = getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode);
         aiTeam.players.forEach(p => {
           if (p.dispatchedThisCamp) return;
           if (Math.random() > 0.3) return;
@@ -1222,7 +1222,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                     ))}
                     <th className="py-1.5 px-2 text-left w-28">メイン</th>
                     <th className="py-1.5 px-2 text-left w-28">サブ</th>
-                    {currentYear > 1 && getAvailableDispatchKeys(gameMode).length > 0 && <th className="py-1.5 px-1 text-center w-16">派遣</th>}
+                    {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && <th className="py-1.5 px-1 text-center w-16">派遣</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1400,10 +1400,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                             )}
                           </div>
                         </td>
-                        {currentYear > 1 && getAvailableDispatchKeys(gameMode).length > 0 && (
+                        {currentYear > 1 && getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).length > 0 && (
                           <td className="py-1 px-1 text-center">
                             <div className="flex gap-0.5 justify-center">
-                              {getAvailableDispatchKeys(gameMode).map(destKey => {
+                              {getAvailableDispatchKeys(gameMode, seasonData?.settings?.clubMode).map(destKey => {
                                 const dest = DISPATCH_DESTINATIONS[destKey];
                                 const { eligible, reason } = checkDispatchEligibility(player, destKey, {
                                   teamPlayers: userTeam?.players || [],
