@@ -6,8 +6,9 @@
 import { getNestedValue, setNestedValueMut } from './growthUtils.js';
 import { getPitchTypeName } from './campTraining.js';
 import { getAvailableUniversityDispatches, getRemainingDispatchSlots } from '../university/universityPipeSystem.js';
-import { getUniversityTeamById, getSpecialtyLabel, SPECIALTY_LABELS, SPECIALTY_RANK_BOOST, hasUniversitySpecialty } from '../university/universityTeamsData.js';
+import { getUniversityTeamById, getSpecialtyLabel, SPECIALTY_LABELS, SPECIALTY_RANK_BOOST } from '../university/universityTeamsData.js';
 
+const POSITION_NAMES_SHORT = { catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
 
 /** 派遣先の定義 */
 export const DISPATCH_DESTINATIONS = {
@@ -200,7 +201,9 @@ export function resolveDispatchTraining(player) {
   const applyGrowthMult = (base) => Math.floor(base * multiplier);
 
   if (destKey === 'university') {
-    // 大学派遣: 得意項目はランク別ブースト、非得意は80%
+    // 大学派遣: 7カテゴリの得意/非得意でブースト
+    // technique:技巧, power:パワー, stamina:体力, defense:守備,
+    // versatility:適応, athletic:身体, mental:精神
     let specialties = [];
     let rankBoost = 1.0;
     if (player.dispatchUniversityId) {
@@ -211,44 +214,156 @@ export function resolveDispatchTraining(player) {
       }
     }
 
-    // 'pitching' specialtyは球速・制球・スタミナに適用
-    const getStatMult = (statKey) => {
+    const specMult = (category) => {
       if (specialties.length === 0) return 1.0;
-      const specKey = ['velocity', 'control', 'stamina'].includes(statKey) ? 'pitching' : statKey;
-      return specialties.includes(specKey) ? rankBoost : 0.8;
+      return specialties.includes(category) ? rankBoost : 0.8;
     };
-    const applyStatGrowth = (statKey, base) => applyGrowthMult(Math.max(1, Math.round(base * getStatMult(statKey))));
+    const sg = (category, base) => applyGrowthMult(Math.max(1, Math.round(base * specMult(category))));
 
     if (player.position === 'pitcher') {
-      const velGrowth = applyStatGrowth('velocity', Math.floor(Math.random() * 3) + 1);
-      const vBefore = player.pitching.velocity;
-      player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
-      growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
-
-      const ctrlGrowth = applyStatGrowth('control', Math.floor(Math.random() * 4) + 2);
+      // technique → 制球
+      const ctrlGrowth = sg('technique', Math.floor(Math.random() * 4) + 2);
       const cBefore = player.pitching.control;
       player.pitching.control = Math.min(99, cBefore + ctrlGrowth);
       growthReport.push({ statName: '制球', before: cBefore, after: player.pitching.control, growth: player.pitching.control - cBefore });
 
-      const staGrowth = applyStatGrowth('stamina', Math.floor(Math.random() * 8) + 5);
+      // power → 球速
+      const velGrowth = sg('power', Math.floor(Math.random() * 3) + 1);
+      const vBefore = player.pitching.velocity;
+      player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
+      growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
+
+      // stamina → スタミナ
+      const staGrowth = sg('stamina', Math.floor(Math.random() * 8) + 5);
       const staBefore = player.pitching.stamina;
       player.pitching.stamina = Math.min(200, staBefore + staGrowth);
       growthReport.push({ statName: 'スタミナ', before: staBefore, after: player.pitching.stamina, growth: player.pitching.stamina - staBefore });
+
+      // defense → 変化球Lv UP
+      const arsenal = player.pitching?.arsenal || [];
+      const breakings = arsenal.filter(p => p.type !== 'straight');
+      if (breakings.length > 0) {
+        for (const pitch of breakings) {
+          const pGrowth = sg('defense', Math.floor(Math.random() * 3) + 1);
+          const pBefore = pitch.level;
+          pitch.level = pBefore + pGrowth;
+          growthReport.push({ statName: `${getPitchTypeName(pitch.type)}`, before: pBefore, after: pitch.level, growth: pitch.level - pBefore });
+        }
+      }
+
+      // versatility → 新球種習得チャンス
+      const versMult = specMult('versatility');
+      const newPitchChance = versMult >= 1.0 ? 0.25 : 0.10;
+      if (Math.random() < newPitchChance) {
+        const existing = arsenal.map(p => p.type);
+        const ALL_TYPES = ['slider', 'curve', 'fork', 'sinker', 'cutter', 'changeup', 'screwball', 'knuckle', 'palmball', 'shuuto'];
+        const candidates = ALL_TYPES.filter(t => !existing.includes(t));
+        if (candidates.length > 0) {
+          const newType = candidates[Math.floor(Math.random() * candidates.length)];
+          const newLevel = Math.floor(Math.random() * 20) + 20;
+          arsenal.push({ type: newType, level: newLevel });
+          growthReport.push({ statName: `${getPitchTypeName(newType)}(習得!)`, before: 0, after: newLevel, growth: newLevel, isAwakening: true });
+        }
+      }
+
+      // athletic → 肩力・回復力
+      const armGrowth = sg('athletic', Math.floor(Math.random() * 3) + 1);
+      const aBefore = player.physical?.arm || 50;
+      player.physical = player.physical || {};
+      player.physical.arm = Math.min(99, aBefore + armGrowth);
+      growthReport.push({ statName: '肩力', before: aBefore, after: player.physical.arm, growth: player.physical.arm - aBefore });
+
+      const recGrowth = sg('athletic', Math.floor(Math.random() * 2) + 1);
+      const rBefore = player.physical?.recovery || 50;
+      player.physical.recovery = Math.min(99, rBefore + recGrowth);
+      growthReport.push({ statName: '回復力', before: rBefore, after: player.physical.recovery, growth: player.physical.recovery - rBefore });
+
+      // mental → 精神・プロ意識
+      const menGrowth = sg('mental', Math.floor(Math.random() * 2) + 1);
+      const mnBefore = player.mental || 50;
+      player.mental = Math.min(99, mnBefore + menGrowth);
+      growthReport.push({ statName: '精神力', before: mnBefore, after: player.mental, growth: player.mental - mnBefore });
+
+      const proGrowth = sg('mental', Math.floor(Math.random() * 2) + 1);
+      const prBefore = player.professionalism || 50;
+      player.professionalism = Math.min(99, prBefore + proGrowth);
+      growthReport.push({ statName: 'プロ意識', before: prBefore, after: player.professionalism, growth: player.professionalism - prBefore });
     } else {
-      const stats = [
-        { key: 'meet', name: 'ミート', base: () => Math.floor(Math.random() * 4) + 2, get: () => player.batting.meet, set: v => { player.batting.meet = v; }, max: 99 },
-        { key: 'power', name: 'パワー', base: () => Math.floor(Math.random() * 5) + 3, get: () => player.batting.power, set: v => { player.batting.power = v; }, max: 99 },
-        { key: 'speed', name: '走力', base: () => Math.floor(Math.random() * 4) + 2, get: () => player.physical.speed, set: v => { player.physical.speed = v; }, max: 99 },
-        { key: 'defense', name: '守備', base: () => Math.floor(Math.random() * 3) + 2, get: () => player.fielding.defense, set: v => { player.fielding.defense = v; }, max: 99 },
-        { key: 'arm', name: '肩力', base: () => Math.floor(Math.random() * 3) + 1, get: () => player.physical.arm, set: v => { player.physical.arm = v; }, max: 99 },
-        { key: 'eye', name: '選球眼', base: () => Math.floor(Math.random() * 3) + 2, get: () => player.batting.eye, set: v => { player.batting.eye = v; }, max: 99 },
-      ];
-      for (const stat of stats) {
-        const growth = applyStatGrowth(stat.key, stat.base());
-        const before = stat.get() || 30;
-        const newVal = Math.min(stat.max, before + growth);
-        stat.set(newVal);
-        growthReport.push({ statName: stat.name, before, after: newVal, growth: newVal - before });
+      // 野手
+      // technique → ミート
+      const meetGrowth = sg('technique', Math.floor(Math.random() * 4) + 2);
+      const mBefore = player.batting.meet;
+      player.batting.meet = Math.min(99, mBefore + meetGrowth);
+      growthReport.push({ statName: 'ミート', before: mBefore, after: player.batting.meet, growth: player.batting.meet - mBefore });
+
+      // power → パワー
+      const powGrowth = sg('power', Math.floor(Math.random() * 5) + 3);
+      const pBefore = player.batting.power;
+      player.batting.power = Math.min(99, pBefore + powGrowth);
+      growthReport.push({ statName: 'パワー', before: pBefore, after: player.batting.power, growth: player.batting.power - pBefore });
+
+      // stamina → 体力
+      const bsGrowth = sg('stamina', Math.floor(Math.random() * 3) + 2);
+      const bsBefore = player.physical?.bodyStamina || 50;
+      player.physical = player.physical || {};
+      player.physical.bodyStamina = Math.min(99, bsBefore + bsGrowth);
+      growthReport.push({ statName: '体力', before: bsBefore, after: player.physical.bodyStamina, growth: player.physical.bodyStamina - bsBefore });
+
+      // defense → 守備
+      const defGrowth = sg('defense', Math.floor(Math.random() * 3) + 2);
+      const dBefore = player.fielding.defense;
+      player.fielding.defense = Math.min(99, dBefore + defGrowth);
+      growthReport.push({ statName: '守備', before: dBefore, after: player.fielding.defense, growth: player.fielding.defense - dBefore });
+
+      // versatility → サブポジ適性UP
+      const versMult = specMult('versatility');
+      const subPosChance = versMult >= 1.0 ? 0.40 : 0.15;
+      if (Math.random() < subPosChance) {
+        const positions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+        const candidates = positions.filter(pos => pos !== player.position);
+        const target = candidates[Math.floor(Math.random() * candidates.length)];
+        player.positionFitness = player.positionFitness || {};
+        const fBefore = player.positionFitness[target] || 0;
+        const fGrowth = Math.floor(Math.random() * 10) + 8;
+        player.positionFitness[target] = Math.min(100, fBefore + fGrowth);
+        growthReport.push({ statName: `適性:${POSITION_NAMES_SHORT[target] || target}`, before: fBefore, after: player.positionFitness[target], growth: player.positionFitness[target] - fBefore, isAwakening: true });
+      }
+
+      // athletic → 走力・盗塁
+      const spdGrowth = sg('athletic', Math.floor(Math.random() * 4) + 2);
+      const sBefore = player.physical.speed;
+      player.physical.speed = Math.min(99, sBefore + spdGrowth);
+      growthReport.push({ statName: '走力', before: sBefore, after: player.physical.speed, growth: player.physical.speed - sBefore });
+
+      const stlGrowth = sg('athletic', Math.floor(Math.random() * 3) + 1);
+      const stlBefore = player.fielding?.steal || 30;
+      player.fielding = player.fielding || {};
+      player.fielding.steal = Math.min(99, stlBefore + stlGrowth);
+      growthReport.push({ statName: '盗塁', before: stlBefore, after: player.fielding.steal, growth: player.fielding.steal - stlBefore });
+
+      // mental → 選球眼・精神・プロ意識
+      const eyeGrowth = sg('mental', Math.floor(Math.random() * 3) + 2);
+      const eBefore = player.batting.eye;
+      player.batting.eye = Math.min(99, eBefore + eyeGrowth);
+      growthReport.push({ statName: '選球眼', before: eBefore, after: player.batting.eye, growth: player.batting.eye - eBefore });
+
+      const menGrowth = sg('mental', Math.floor(Math.random() * 2) + 1);
+      const mnBefore = player.mental || 50;
+      player.mental = Math.min(99, mnBefore + menGrowth);
+      growthReport.push({ statName: '精神力', before: mnBefore, after: player.mental, growth: player.mental - mnBefore });
+
+      const proGrowth = sg('mental', Math.floor(Math.random() * 2) + 1);
+      const prBefore = player.professionalism || 50;
+      player.professionalism = Math.min(99, prBefore + proGrowth);
+      growthReport.push({ statName: 'プロ意識', before: prBefore, after: player.professionalism, growth: player.professionalism - prBefore });
+
+      // Cリード（捕手のみ）
+      if (player.position === 'catcher') {
+        const clGrowth = sg('mental', Math.floor(Math.random() * 2) + 1);
+        const clBefore = player.catching?.lead || 30;
+        player.catching = player.catching || {};
+        player.catching.lead = Math.min(99, clBefore + clGrowth);
+        growthReport.push({ statName: 'Cリード', before: clBefore, after: player.catching.lead, growth: player.catching.lead - clBefore });
       }
     }
   } else {
