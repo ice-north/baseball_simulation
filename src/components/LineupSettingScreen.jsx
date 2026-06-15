@@ -945,6 +945,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             setUpdateTrigger(prev => prev + 1);
           };
 
+          const isStarterRole = (r) => ['ace','complete','short','quality','auto_s'].includes(r);
+          const isReliefRole = (r) => ['long','onepoint','ace_relief','mopup','behind','auto_r'].includes(r);
+
           // クリックで投手を入れ替える
           const handlePitcherClick = (clickedId) => {
             if (selectedPitcherId === null) {
@@ -952,67 +955,72 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               return;
             }
             if (selectedPitcherId === clickedId) {
-              // 同じ選手をもう一度 → 詳細モーダル
               const p = allPlayers.find(pl => pl.id === clickedId);
               if (p) setDetailPlayer(p);
               setSelectedPitcherId(null);
               return;
             }
-            // 2人目クリック → ロールと配列上の位置を入れ替え
+
             const rotation = team.pitchingRotation;
             const roleA = getPitcherRole(selectedPitcherId);
             const roleB = getPitcherRole(clickedId);
+            const bothStarters = isStarterRole(roleA) && isStarterRole(roleB);
 
-            // ロールを交換
-            if (rotation.pitcherRoles) {
+            if (bothStarters) {
+              // 先発同士 → ローテーション順番のみ入替（ロールは維持）
+              const starters = rotation.starters || [];
+              const idxA = starters.indexOf(selectedPitcherId);
+              const idxB = starters.indexOf(clickedId);
+              if (idxA !== -1 && idxB !== -1) {
+                starters[idxA] = clickedId;
+                starters[idxB] = selectedPitcherId;
+              }
+            } else {
+              // 異なるグループ間 → ロールごと入替
+              if (!rotation.pitcherRoles) rotation.pitcherRoles = {};
               if (roleA !== 'none') rotation.pitcherRoles[clickedId] = roleA;
               else delete rotation.pitcherRoles[clickedId];
               if (roleB !== 'none') rotation.pitcherRoles[selectedPitcherId] = roleB;
               else delete rotation.pitcherRoles[selectedPitcherId];
+
+              // レガシー配列内のIDを入替
+              const swapInArray = (arr) => {
+                if (!arr) return;
+                const idxA = arr.indexOf(selectedPitcherId);
+                const idxB = arr.indexOf(clickedId);
+                if (idxA !== -1) arr[idxA] = clickedId;
+                if (idxB !== -1) arr[idxB] = selectedPitcherId;
+              };
+              swapInArray(rotation.starters);
+              swapInArray(rotation.middleRelievers);
+              swapInArray(rotation.setupMen);
+
+              if (rotation.closer === selectedPitcherId) rotation.closer = clickedId;
+              else if (rotation.closer === clickedId) rotation.closer = selectedPitcherId;
+
+              // 配列の整合性を再構築
+              [selectedPitcherId, clickedId].forEach(pid => {
+                const newRole = getPitcherRole(pid);
+                if (isStarterRole(newRole) && !(rotation.starters || []).includes(pid)) {
+                  rotation.starters = rotation.starters || [];
+                  rotation.starters.push(pid);
+                } else if (!isStarterRole(newRole)) {
+                  rotation.starters = (rotation.starters || []).filter(id => id !== pid);
+                }
+                if (isReliefRole(newRole) && !(rotation.middleRelievers || []).includes(pid)) {
+                  rotation.middleRelievers = rotation.middleRelievers || [];
+                  rotation.middleRelievers.push(pid);
+                } else if (!isReliefRole(newRole) && newRole !== 'setup' && newRole !== 'closer') {
+                  rotation.middleRelievers = (rotation.middleRelievers || []).filter(id => id !== pid);
+                }
+                if (newRole === 'setup' && !(rotation.setupMen || []).includes(pid)) {
+                  rotation.setupMen = rotation.setupMen || [];
+                  rotation.setupMen.push(pid);
+                } else if (newRole !== 'setup') {
+                  rotation.setupMen = (rotation.setupMen || []).filter(id => id !== pid);
+                }
+              });
             }
-
-            // レガシー配列内のIDも入れ替え
-            const swapInArray = (arr) => {
-              if (!arr) return;
-              const idxA = arr.indexOf(selectedPitcherId);
-              const idxB = arr.indexOf(clickedId);
-              if (idxA !== -1) arr[idxA] = clickedId;
-              if (idxB !== -1) arr[idxB] = selectedPitcherId;
-            };
-            swapInArray(rotation.starters);
-            swapInArray(rotation.middleRelievers);
-            swapInArray(rotation.setupMen);
-
-            // closer特殊処理
-            if (rotation.closer === selectedPitcherId) rotation.closer = clickedId;
-            else if (rotation.closer === clickedId) rotation.closer = selectedPitcherId;
-
-            // 先発配列の整合性: 新しいロールに合わせて配列を再構築
-            const isStarterRole = (r) => ['ace','complete','short','quality','auto_s'].includes(r);
-            const isReliefRole = (r) => ['long','onepoint','ace_relief','mopup','behind','auto_r'].includes(r);
-
-            // A→先発, B→リリーフの場合: Aをstartersから除去しBを追加（逆も同様）
-            [selectedPitcherId, clickedId].forEach(pid => {
-              const newRole = getPitcherRole(pid);
-              if (isStarterRole(newRole) && !(rotation.starters || []).includes(pid)) {
-                rotation.starters = rotation.starters || [];
-                rotation.starters.push(pid);
-              } else if (!isStarterRole(newRole)) {
-                rotation.starters = (rotation.starters || []).filter(id => id !== pid);
-              }
-              if (isReliefRole(newRole) && !(rotation.middleRelievers || []).includes(pid)) {
-                rotation.middleRelievers = rotation.middleRelievers || [];
-                rotation.middleRelievers.push(pid);
-              } else if (!isReliefRole(newRole) && newRole !== 'setup' && newRole !== 'closer') {
-                rotation.middleRelievers = (rotation.middleRelievers || []).filter(id => id !== pid);
-              }
-              if (newRole === 'setup' && !(rotation.setupMen || []).includes(pid)) {
-                rotation.setupMen = rotation.setupMen || [];
-                rotation.setupMen.push(pid);
-              } else if (newRole !== 'setup') {
-                rotation.setupMen = (rotation.setupMen || []).filter(id => id !== pid);
-              }
-            });
 
             setSelectedPitcherId(null);
             setUpdateTrigger(prev => prev + 1);

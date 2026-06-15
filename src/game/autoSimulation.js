@@ -233,8 +233,15 @@ export const setRecommendedLineup = (teamData, teamName) => {
   const players = teamData.players || [];
   if (players.length === 0) return;
 
+  // generateAILineupはcurrentStarterIndexを進めてしまうので保存・復元
+  const savedIndex = TEAMS_DATA[teamName]?.pitchingRotation?.currentStarterIndex || 0;
+
   // 一旦AIロジックでスタメンを組む
   generateAILineup(teamData, teamName);
+
+  if (TEAMS_DATA[teamName]?.pitchingRotation) {
+    TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex = savedIndex;
+  }
 
   // 結果をlineupSettingsに保存
   if (!teamData.lineupSettings) {

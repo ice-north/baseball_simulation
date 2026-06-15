@@ -549,6 +549,7 @@ export function processUniversityYear(currentYear) {
         if (entry.universityTeamId) {
           player.universityTeamId = entry.universityTeamId;
           player.universityName = entry.universityTeamName;
+          player.universityTeamName = entry.universityTeamName;
           player.universityRank = entry.universityRank;
         }
         graduates.push(player);

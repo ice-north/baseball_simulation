@@ -772,7 +772,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                               <td className="py-1.5 px-1.5 text-white font-bold truncate max-w-[100px]">{p.name}</td>
                               <td className="py-1.5 px-1.5 text-gray-400 text-center">{p.age}</td>
                               <td className="py-1.5 px-1.5 text-blue-400 font-semibold">{POSITION_NAMES[p.position] || p.position}</td>
-                              <td className="py-1.5 px-1.5 text-gray-500 truncate max-w-[90px]" title={p._scoutSource}>{p._scoutSource}</td>
+                              <td className="py-1.5 px-1.5 text-gray-500 truncate max-w-[120px]" title={p._scoutSource}>{p._scoutSource}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.batting?.meet)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.batting?.power)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.batting?.eye)}</td>

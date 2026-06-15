@@ -337,7 +337,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                 <SortHeader k="name" label="選手名" />
                 <SortHeader k="age" label="齢" />
                 <th className="px-1.5 py-2 text-gray-500 whitespace-nowrap">守備</th>
-                <th className="px-1.5 py-2 text-gray-500 whitespace-nowrap">出身</th>
+                <th className="px-1.5 py-2 text-gray-500 whitespace-nowrap min-w-[5rem]">出身</th>
                 <SortHeader k="meet" label="ミ" />
                 <SortHeader k="power" label="パ" />
                 <SortHeader k="eye" label="眼" />

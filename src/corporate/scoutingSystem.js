@@ -257,6 +257,9 @@ function getUniversityScoutPool(currentYear) {
       const yearsIn = currentYear - yr;
       // 4年生のみスカウト対象（在学3年以上 = 4年目）
       if (yearsIn >= 3) {
+        if (entry.universityTeamName) {
+          entry.player.universityTeamName = entry.universityTeamName;
+        }
         pool.push({
           player: entry.player,
           source: 'university',
