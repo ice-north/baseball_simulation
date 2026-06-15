@@ -2,6 +2,8 @@
 // 社会人野球 スタッフデータ（コーチ・マネージャー・トレーナー）
 // ============================================================
 
+import { getRandomSurname, getRandomGivenName } from '../data/playerNames.js';
+
 // スタッフ能力項目（10項目）
 export const STAFF_ABILITIES = {
   battingCoach:    { name: '打撃指導', category: 'coaching' },
@@ -387,19 +389,18 @@ export const advanceStaffYear = (staffList, autoReplenish = false, teamRank = nu
 // ユーティリティ
 // ============================================================
 
-const STAFF_LAST_NAMES = [
-  '山田', '田中', '佐藤', '鈴木', '高橋', '渡辺', '中村', '小林', '加藤', '吉田',
-  '松本', '井上', '木村', '林', '清水', '山口', '池田', '橋本', '阿部', '森',
-  '石川', '前田', '藤田', '小川', '後藤', '岡田', '長谷川', '村上', '近藤', '石井',
-];
-const STAFF_FIRST_NAMES = [
-  '太郎', '一郎', '正義', '浩二', '秀樹', '勝', '和夫', '茂', '博', '誠',
-  '修', '豊', '清', '進', '弘', '明', '実', '隆', '昭', '幸男',
-];
+const usedStaffNames = new Set();
 
-const generateStaffName = () =>
-  STAFF_LAST_NAMES[Math.floor(Math.random() * STAFF_LAST_NAMES.length)] +
-  STAFF_FIRST_NAMES[Math.floor(Math.random() * STAFF_FIRST_NAMES.length)];
+const generateStaffName = () => {
+  for (let i = 0; i < 20; i++) {
+    const name = getRandomSurname() + ' ' + getRandomGivenName();
+    if (!usedStaffNames.has(name)) {
+      usedStaffNames.add(name);
+      return name;
+    }
+  }
+  return getRandomSurname() + ' ' + getRandomGivenName();
+};
 
 const PERSONALITIES = ['熱血', '冷静', '理論派', '経験派', '面倒見', '厳格', '温和', '情熱家', '策士', '堅実'];
 
