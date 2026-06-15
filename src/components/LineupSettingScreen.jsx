@@ -3,6 +3,7 @@ import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
+import { generateOptimalLineup } from '../game/lineupGenerator.js';
 
 const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup');
@@ -643,19 +644,38 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           <div className="grid grid-cols-3 gap-4">
             {/* 左側: スタメン (1/3) */}
             <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-1 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-700/50 flex items-center gap-2">
-                <h2 className="font-semibold text-white text-sm">スタメン設定</h2>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                  lineup.filter(e => e.position !== 'pitcher').length === maxFielderSlots
-                    ? 'bg-green-900/60 text-green-400 border border-green-700/40'
-                    : 'bg-gray-700 text-gray-400'
-                }`}>
-                  {lineup.filter(e => e.position !== 'pitcher').length}/{maxFielderSlots}
-                </span>
-                {useDH && <span className="text-[10px] text-purple-400 font-medium">DH制</span>}
-                {(swapSource !== null || selectedBenchPlayer !== null) && (
-                  <span className="text-blue-400 text-[10px] ml-auto">→ 入替先を選択</span>
-                )}
+              <div className="px-4 py-3 border-b border-gray-700/50">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-white text-sm">スタメン設定</h2>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                    lineup.filter(e => e.position !== 'pitcher').length === maxFielderSlots
+                      ? 'bg-green-900/60 text-green-400 border border-green-700/40'
+                      : 'bg-gray-700 text-gray-400'
+                  }`}>
+                    {lineup.filter(e => e.position !== 'pitcher').length}/{maxFielderSlots}
+                  </span>
+                  {useDH && <span className="text-[10px] text-purple-400 font-medium">DH制</span>}
+                  {(swapSource !== null || selectedBenchPlayer !== null) && (
+                    <span className="text-blue-400 text-[10px] ml-auto">→ 入替先を選択</span>
+                  )}
+                </div>
+                <div className="flex gap-1 mt-2">
+                  {[
+                    { mode: 'standard', label: '標準', color: 'bg-gray-600 hover:bg-gray-500' },
+                    { mode: 'offense', label: '打撃重視', color: 'bg-red-800 hover:bg-red-700' },
+                    { mode: 'defense', label: '守備重視', color: 'bg-blue-800 hover:bg-blue-700' },
+                  ].map(({ mode, label, color }) => (
+                    <button key={mode} onClick={() => {
+                      generateOptimalLineup(teamName, mode);
+                      setSwapSource(null);
+                      setSelectedBenchPlayer(null);
+                      setSelectedBattingOrder(null);
+                      setUpdateTrigger(prev => prev + 1);
+                    }} className={`${color} text-white text-[10px] px-2 py-1 rounded font-medium transition`}>
+                      自動: {label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="p-2 space-y-1">
                 {(useDH ? [1,2,3,4,5,6,7,8,9] : [1,2,3,4,5,6,7,8,9]).map(order => {

@@ -3,15 +3,39 @@ import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 // ポジション別の攻守バランス重み
 // 守備負担が大きいポジションほどdefenseWeight高、打撃依存ポジションほどoffenseWeight高
 const POSITION_WEIGHTS = {
-  catcher:  { offenseWeight: 0.35, defenseWeight: 0.65 },
-  short:    { offenseWeight: 0.40, defenseWeight: 0.60 },
-  center:   { offenseWeight: 0.45, defenseWeight: 0.55 },
-  second:   { offenseWeight: 0.45, defenseWeight: 0.55 },
-  third:    { offenseWeight: 0.55, defenseWeight: 0.45 },
-  right:    { offenseWeight: 0.60, defenseWeight: 0.40 },
-  left:     { offenseWeight: 0.65, defenseWeight: 0.35 },
-  first:    { offenseWeight: 0.75, defenseWeight: 0.25 },
-  dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
+  standard: {
+    catcher:  { offenseWeight: 0.35, defenseWeight: 0.65 },
+    short:    { offenseWeight: 0.40, defenseWeight: 0.60 },
+    center:   { offenseWeight: 0.45, defenseWeight: 0.55 },
+    second:   { offenseWeight: 0.45, defenseWeight: 0.55 },
+    third:    { offenseWeight: 0.55, defenseWeight: 0.45 },
+    right:    { offenseWeight: 0.60, defenseWeight: 0.40 },
+    left:     { offenseWeight: 0.65, defenseWeight: 0.35 },
+    first:    { offenseWeight: 0.75, defenseWeight: 0.25 },
+    dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
+  },
+  offense: {
+    catcher:  { offenseWeight: 0.55, defenseWeight: 0.45 },
+    short:    { offenseWeight: 0.60, defenseWeight: 0.40 },
+    center:   { offenseWeight: 0.65, defenseWeight: 0.35 },
+    second:   { offenseWeight: 0.65, defenseWeight: 0.35 },
+    third:    { offenseWeight: 0.75, defenseWeight: 0.25 },
+    right:    { offenseWeight: 0.80, defenseWeight: 0.20 },
+    left:     { offenseWeight: 0.85, defenseWeight: 0.15 },
+    first:    { offenseWeight: 0.90, defenseWeight: 0.10 },
+    dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
+  },
+  defense: {
+    catcher:  { offenseWeight: 0.20, defenseWeight: 0.80 },
+    short:    { offenseWeight: 0.25, defenseWeight: 0.75 },
+    center:   { offenseWeight: 0.30, defenseWeight: 0.70 },
+    second:   { offenseWeight: 0.30, defenseWeight: 0.70 },
+    third:    { offenseWeight: 0.35, defenseWeight: 0.65 },
+    right:    { offenseWeight: 0.40, defenseWeight: 0.60 },
+    left:     { offenseWeight: 0.45, defenseWeight: 0.55 },
+    first:    { offenseWeight: 0.55, defenseWeight: 0.45 },
+    dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
+  },
 };
 
 // 打撃力スコア（チーム攻撃力の源泉）
@@ -48,15 +72,17 @@ const calcDefenseScore = (player, position) => {
 };
 
 // ポジションでの総合価値（チーム貢献度）
-const calcPositionValue = (player, position) => {
-  const w = POSITION_WEIGHTS[position] || { offenseWeight: 0.5, defenseWeight: 0.5 };
+const calcPositionValue = (player, position, mode = 'standard') => {
+  const weights = POSITION_WEIGHTS[mode] || POSITION_WEIGHTS.standard;
+  const w = weights[position] || { offenseWeight: 0.5, defenseWeight: 0.5 };
   const offense = calcOffenseScore(player);
   const defense = calcDefenseScore(player, position);
   return offense * w.offenseWeight + defense * w.defenseWeight;
 };
 
 // AIオーダー編成関数
-export const generateOptimalLineup = (teamName) => {
+// mode: 'standard' | 'offense' | 'defense'
+export const generateOptimalLineup = (teamName, mode = 'standard') => {
   if (!TEAMS_DATA || !TEAMS_DATA[teamName]) {
     console.error('チームデータが見つかりません:', teamName);
     return;
@@ -75,13 +101,20 @@ export const generateOptimalLineup = (teamName) => {
 
   playerScores.forEach(ps => {
     positions.forEach(pos => {
-      ps.positions[pos] = calcPositionValue(ps.player, pos);
+      ps.positions[pos] = calcPositionValue(ps.player, pos, mode);
     });
   });
 
   // 貪欲法でチーム価値を最大化するポジション割り当て
   // Step 1: まず打力上位9人（DH込み）をスタメン候補に選出
-  const sortedByOffense = [...playerScores].sort((a, b) => b.offense - a.offense);
+  const sortedByOffense = [...playerScores].sort((a, b) => {
+    if (mode === 'defense') {
+      const aDefMax = Math.max(...positions.map(pos => calcDefenseScore(a.player, pos)));
+      const bDefMax = Math.max(...positions.map(pos => calcDefenseScore(b.player, pos)));
+      return (bDefMax + b.offense * 0.3) - (aDefMax + a.offense * 0.3);
+    }
+    return b.offense - a.offense;
+  });
   const numSlots = LEAGUE_SETTINGS.useDH ? 9 : 8;
   const candidates = sortedByOffense.slice(0, Math.min(numSlots + 4, fielders.length));
 
@@ -98,7 +131,7 @@ export const generateOptimalLineup = (teamName) => {
     if (!assignment) continue;
 
     const totalValue = Object.entries(assignment).reduce((sum, [pos, ps]) => {
-      return sum + calcPositionValue(ps.player, pos);
+      return sum + calcPositionValue(ps.player, pos, mode);
     }, 0);
 
     if (totalValue > bestTotalValue) {
