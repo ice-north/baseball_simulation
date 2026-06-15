@@ -3,8 +3,6 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus, STAFF_GRADE_CAP, canHireGrade } from '../corporate/staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/constants.js';
-import { universityPool } from '../season/universityPool.js';
-import { releasedPlayersPool } from '../teams-data.js';
 import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount, assignScoutTask, cancelScoutTask, getAllScoutTasks, MAX_FAVORITES_PER_SCOUT } from '../corporate/scoutingSystem.js';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
@@ -77,21 +75,6 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
     </div>
   );
 
-  const uniPoolSummary = (() => {
-    let total = 0;
-    const byYear = {};
-    const currentYear = seasonData?.year || 1;
-    Object.entries(universityPool).forEach(([enrollYear, cohort]) => {
-      const yr = parseInt(enrollYear);
-      const yearsIn = currentYear - yr;
-      const label = `${yearsIn + 1}年生`;
-      byYear[label] = (byYear[label] || 0) + cohort.length;
-      total += cohort.length;
-    });
-    return { total, byYear };
-  })();
-
-  const releasedCount = releasedPlayersPool.length;
   const scoutEye = staffBonus.scoutingEye || 0;
   const negotiation = staffBonus.negotiation || 0;
 
@@ -347,56 +330,6 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <p className="text-[10px] text-gray-500 mt-0.5">
                   スカウト補正: x{getReputationScoutBonus(reputation).toFixed(2)} / 候補者質: {getReputationRecruitBonus(reputation) >= 0 ? '+' : ''}{getReputationRecruitBonus(reputation)}
                 </p>
-              </div>
-            </div>
-          </div>
-
-          {/* 選手プール */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
-            <h2 className="text-sm font-bold text-gray-300 mb-3">選手プール状況</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-750 rounded p-3">
-                <h3 className="text-xs font-bold text-cyan-400 mb-2">大学プール ({uniPoolSummary.total}名)</h3>
-                {Object.keys(uniPoolSummary.byYear).length > 0 ? (
-                  <div className="space-y-1">
-                    {Object.entries(uniPoolSummary.byYear).map(([label, count]) => (
-                      <div key={label} className="flex justify-between text-xs">
-                        <span className="text-gray-400">{label}</span>
-                        <span className="text-white">{count}名</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-xs">まだ大学プールが生成されていません</p>
-                )}
-                <p className="text-[10px] text-gray-600 mt-2">4年生のみスカウト対象</p>
-              </div>
-
-              <div className="bg-gray-750 rounded p-3">
-                <h3 className="text-xs font-bold text-orange-400 mb-2">リリースプール ({releasedCount}名)</h3>
-                {releasedCount > 0 ? (
-                  <div className="space-y-1">
-                    {(() => {
-                      const byOrigin = {};
-                      releasedPlayersPool.forEach(p => {
-                        const origin = p.origin === 'university' ? '大学卒'
-                          : p.origin === 'corporate_candidate' ? '社会人候補'
-                          : p.origin === 'independent_candidate' ? '独立L候補'
-                          : p.previousTeam ? `元所属` : 'その他';
-                        byOrigin[origin] = (byOrigin[origin] || 0) + 1;
-                      });
-                      return Object.entries(byOrigin).map(([origin, count]) => (
-                        <div key={origin} className="flex justify-between text-xs">
-                          <span className="text-gray-400">{origin}</span>
-                          <span className="text-white">{count}名</span>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-xs">リリースプールは空です</p>
-                )}
-                <p className="text-[10px] text-gray-600 mt-2">戦力外・大学卒業生が対象</p>
               </div>
             </div>
           </div>
