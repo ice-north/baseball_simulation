@@ -882,20 +882,13 @@ export const initializeCorporateParallelWorld = (existingTeamNames = []) => {
 
 // 注目度の変動要因
 const REPUTATION_GAINS = {
-  win: 0.3,                // 地域リーグ1勝ごと
-  highWinRate: 3,          // 勝率.600以上ボーナス
-  dominantSeason: 5,       // 勝率.700以上ボーナス（highWinRateに加算）
-  seasonChampion: 10,      // 地域リーグ優勝
-  mainTournamentEntry: 6,  // 都市対抗/日本選手権 本戦出場（予選突破）
-  tournamentRoundWin: 2,   // 大会本戦1勝ごと
-  tournamentQF: 3,         // ベスト8進出ボーナス
-  tournamentSF: 5,         // ベスト4進出ボーナス
-  tournamentRunnerUp: 8,   // 大会準優勝
-  tournamentWin: 12,       // 大会優勝
-  proDrafted: 10,          // プロ選手輩出
+  win: 0.5,                // 地域リーグ1勝ごと
+  seasonChampion: 3,       // 地域リーグ優勝
+  tournamentRoundWin: 2,   // 全国大会1勝ごと
+  proDrafted: 4,           // プロ選手輩出
 };
 
-const REPUTATION_DECAY = 2; // 年間自然減衰（実績なしなら忘れられる）
+const REPUTATION_DECAY = 3; // 年間自然減衰（実績なしなら忘れられる）
 
 // 注目度 → 企業の年間追加予算（万円）
 export const getReputationBudgetBonus = (reputation) => {
@@ -1078,18 +1071,10 @@ export const updateReputation = (teamData, seasonResults) => {
   let gain = 0;
   // 地域リーグ成績
   gain += (seasonResults.wins || 0) * REPUTATION_GAINS.win;
-  if (seasonResults.winRate >= 0.700) gain += REPUTATION_GAINS.dominantSeason;
-  if (seasonResults.winRate >= 0.600) gain += REPUTATION_GAINS.highWinRate;
   if (seasonResults.isChampion) gain += REPUTATION_GAINS.seasonChampion;
-  // 大会成績
-  const entries = seasonResults.mainTournamentEntries || 0;
-  gain += entries * REPUTATION_GAINS.mainTournamentEntry;
+  // 全国大会（勝利数のみ、順位ボーナスなし）
   const tWins = seasonResults.tournamentMainWins || 0;
   gain += tWins * REPUTATION_GAINS.tournamentRoundWin;
-  if (tWins >= 3) gain += REPUTATION_GAINS.tournamentQF;
-  if (tWins >= 4) gain += REPUTATION_GAINS.tournamentSF;
-  if (seasonResults.tournamentChampion) gain += REPUTATION_GAINS.tournamentWin;
-  else if (seasonResults.tournamentRunnerUp) gain += REPUTATION_GAINS.tournamentRunnerUp;
   // プロ輩出
   if (seasonResults.proDraftedCount) gain += seasonResults.proDraftedCount * REPUTATION_GAINS.proDrafted;
 
@@ -1256,33 +1241,21 @@ export const updateAllTeamReputations = (seasonData) => {
 // ============================================================
 
 const UNI_REPUTATION_GAINS = {
-  win: 0.3,
-  highWinRate: 3,
-  dominantSeason: 5,
-  seasonChampion: 8,
-  tournamentEntry: 5,
+  win: 0.5,
+  seasonChampion: 3,
   tournamentRoundWin: 2,
-  tournamentSF: 4,
-  tournamentRunnerUp: 7,
-  tournamentWin: 10,
-  proDrafted: 12,
+  proDrafted: 4,
 };
-const UNI_REPUTATION_DECAY = 2;
+const UNI_REPUTATION_DECAY = 3;
 
 export const updateUniversityReputation = (teamData, seasonResults) => {
   const ud = teamData.universityData;
   if (!ud) return;
   let gain = 0;
   gain += (seasonResults.wins || 0) * UNI_REPUTATION_GAINS.win;
-  if (seasonResults.winRate >= 0.700) gain += UNI_REPUTATION_GAINS.dominantSeason;
-  if (seasonResults.winRate >= 0.600) gain += UNI_REPUTATION_GAINS.highWinRate;
   if (seasonResults.isChampion) gain += UNI_REPUTATION_GAINS.seasonChampion;
   const tWins = seasonResults.tournamentMainWins || 0;
-  if (tWins > 0) gain += UNI_REPUTATION_GAINS.tournamentEntry;
   gain += tWins * UNI_REPUTATION_GAINS.tournamentRoundWin;
-  if (tWins >= 2) gain += UNI_REPUTATION_GAINS.tournamentSF;
-  if (seasonResults.tournamentChampion) gain += UNI_REPUTATION_GAINS.tournamentWin;
-  else if (seasonResults.tournamentRunnerUp) gain += UNI_REPUTATION_GAINS.tournamentRunnerUp;
   if (seasonResults.proDraftedCount) gain += seasonResults.proDraftedCount * UNI_REPUTATION_GAINS.proDrafted;
   ud.reputation = clamp(ud.reputation + gain - UNI_REPUTATION_DECAY, 0, 100);
   ud.proDraftCount = (ud.proDraftCount || 0) + (seasonResults.proDraftedCount || 0);
