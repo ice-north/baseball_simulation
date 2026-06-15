@@ -4,6 +4,8 @@ import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from './autoSimulation.js';
 import { updateAllTeamReputations } from '../corporate/corporateInit.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
+import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, generateNihonSenshuken, generateClubSenshuken, createSenshukenMainTournament, generateRegionalTournament, autoPlayBracket } from '../corporate/toshitaikou.js';
 
 // 注目度の中間更新月（2ヶ月ごと: 6月, 8月, 10月）
 const REPUTATION_UPDATE_MONTHS = new Set([6, 8, 10]);
@@ -229,6 +231,86 @@ export const handleProgressToNextGame = ({ seasonData, setSeasonData, setSelecte
   if (result !== null) setSeasonData(result);
 };
 
+// フェーズスキップ時にWORLD_DATAの社会人トーナメントを一括消化
+const bulkSimulateWorldDataTournaments = (month, calYear) => {
+  if (!WORLD_DATA.initialized) return;
+  // 地域トーナメント
+  if (month >= 4 && !WORLD_DATA.corporateRegionalTournament?.generated) {
+    try {
+      const rt = generateRegionalTournament({ userTeamName: null, calendarYear: calYear });
+      WORLD_DATA.corporateRegionalTournament = { ...rt, generated: true };
+    } catch (_) { WORLD_DATA.corporateRegionalTournament = { generated: true, done: true }; }
+  }
+  if (WORLD_DATA.corporateRegionalTournament?.generated && WORLD_DATA.corporateRegionalTournament.phase !== 'done') {
+    const rt = WORLD_DATA.corporateRegionalTournament;
+    for (const regionId of Object.keys(rt.brackets || {})) {
+      const r = rt.brackets[regionId];
+      autoPlayBracket(r.bracket, r.teamDefsMap);
+      if (r.bracket.champion) { r.champion = r.bracket.champion; r.phase = 'done'; }
+    }
+    rt.phase = 'done'; rt.done = true;
+  }
+  // 都市対抗
+  if (month >= 5 && !WORLD_DATA.corporateToshitaikou?.generated) {
+    try {
+      const t = generateToshitaikou({ userTeamName: null, calendarYear: calYear });
+      WORLD_DATA.corporateToshitaikou = { ...t, generated: true, qualifiersDone: false, mainDone: false };
+    } catch (_) { WORLD_DATA.corporateToshitaikou = { generated: true, qualifiersDone: true, mainDone: true }; }
+  }
+  if (WORLD_DATA.corporateToshitaikou?.generated && !WORLD_DATA.corporateToshitaikou.mainDone) {
+    const td = WORLD_DATA.corporateToshitaikou;
+    if (!td.qualifiersDone && td.qualifiers) {
+      for (const rid of Object.keys(td.qualifiers)) autoPlayQualifier(td.qualifiers[rid], null);
+      td.qualifiersDone = true;
+    }
+    if (!td.mainTournament) {
+      try { td.mainTournament = createMainTournament(td.qualifiers, null, calYear); } catch (_) {}
+    }
+    if (td.mainTournament) {
+      autoPlayMainTournament(td.mainTournament);
+      td.champion = td.mainTournament.champion; td.runnerUp = td.mainTournament.runnerUp; td.mainDone = true;
+    }
+  }
+  // 日本選手権
+  if (month >= 9 && !WORLD_DATA.corporateNihonSenshuken?.generated) {
+    try {
+      const ns = generateNihonSenshuken({ userTeamName: null, calendarYear: calYear });
+      WORLD_DATA.corporateNihonSenshuken = { ...ns, generated: true, phase: 'qualifiers' };
+    } catch (_) { WORLD_DATA.corporateNihonSenshuken = { generated: true, done: true }; }
+  }
+  if (WORLD_DATA.corporateNihonSenshuken?.generated && !WORLD_DATA.corporateNihonSenshuken.done) {
+    const ns = WORLD_DATA.corporateNihonSenshuken;
+    if (ns.qualifiers) { for (const rid of Object.keys(ns.qualifiers)) autoPlayQualifier(ns.qualifiers[rid], null); }
+    if (!ns.mainTournament) {
+      try { ns.mainTournament = createSenshukenMainTournament(ns.qualifiers, calYear, 'corporate'); } catch (_) {}
+    }
+    if (ns.mainTournament) {
+      autoPlayMainTournament(ns.mainTournament);
+      ns.champion = ns.mainTournament.champion; ns.runnerUp = ns.mainTournament.runnerUp;
+    }
+    ns.done = true;
+  }
+  // クラブ選手権
+  if (month >= 9 && !WORLD_DATA.corporateClubSenshuken?.generated) {
+    try {
+      const cs = generateClubSenshuken({ userTeamName: null, calendarYear: calYear });
+      WORLD_DATA.corporateClubSenshuken = { ...cs, generated: true, phase: 'qualifiers' };
+    } catch (_) { WORLD_DATA.corporateClubSenshuken = { generated: true, done: true }; }
+  }
+  if (WORLD_DATA.corporateClubSenshuken?.generated && !WORLD_DATA.corporateClubSenshuken.done) {
+    const cs = WORLD_DATA.corporateClubSenshuken;
+    if (cs.qualifiers) { for (const rid of Object.keys(cs.qualifiers)) autoPlayQualifier(cs.qualifiers[rid], null); }
+    if (!cs.mainTournament) {
+      try { cs.mainTournament = createSenshukenMainTournament(cs.qualifiers, calYear, 'club'); } catch (_) {}
+    }
+    if (cs.mainTournament) {
+      autoPlayMainTournament(cs.mainTournament);
+      cs.champion = cs.mainTournament.champion; cs.runnerUp = cs.mainTournament.runnerUp;
+    }
+    cs.done = true;
+  }
+};
+
 // 次のフェーズまで進行
 export const handleProgressToNextPhase = ({ seasonData, setSeasonData, setSelectedMonth, selectedMonth, userTeamName, setScreenMode, setManagementView }) => {
   if (!seasonData) return;
@@ -245,6 +327,11 @@ export const handleProgressToNextPhase = ({ seasonData, setSeasonData, setSelect
   const newPhase = newSeasonData.phase;
   if (oldPhase !== newPhase) {
     newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
+  }
+
+  // フェーズスキップ時: WORLD_DATAの社会人トーナメントも一括消化
+  if (!newSeasonData.settings?.corporateMode) {
+    bulkSimulateWorldDataTournaments(newSeasonData.currentDate.month, newSeasonData.currentDate.year);
   }
 
   // フェーズスキップ時は注目度を強制更新
