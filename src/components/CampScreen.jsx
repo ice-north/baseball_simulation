@@ -1212,6 +1212,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                     <th className="py-1.5 px-1 text-center w-8">バン</th>
                     <th className="py-1.5 px-1 text-center w-9">球速</th>
                     <th className="py-1.5 px-1 text-center w-8">制球</th>
+                    <th className="py-1.5 px-1 text-center w-8">伸び</th>
                     <th className="py-1.5 px-1 text-center w-9">スタ</th>
                     <th className="py-1.5 px-1 text-center w-8">体力</th>
                     <th className="py-1.5 px-1 text-center w-8">回復</th>
@@ -1293,6 +1294,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.bunt||0} label="バント" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.velocity||0} label="球速" isVelocity={true} /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={p.spinRate||0} label="伸び" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
@@ -1663,6 +1665,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
             { key: 'catching.lead', stat: 'lead', name: 'Cリード', get: (s) => s.catching?.lead || 0 },
             { key: 'pitching.velocity', stat: 'velocity', name: '球速', get: (s) => s.pitching?.velocity || 0, isVelocity: true },
             { key: 'pitching.control', stat: 'control', name: '制球', get: (s) => s.pitching?.control || 0 },
+            { key: 'pitching.spinRate', stat: 'spinRate', name: '伸び', get: (s) => s.pitching?.spinRate || 0 },
             { key: 'pitching.stamina', stat: 'stamina', name: 'スタミナ', get: (s) => s.pitching?.stamina || 0, isStamina: true },
             { key: 'physical.bodyStamina', stat: 'bodyStamina', name: '体力', get: (s) => s.physical?.bodyStamina || 50 },
             { key: 'physical.recovery', stat: 'recovery', name: '回復', get: (s) => s.physical?.recovery || 50 },
