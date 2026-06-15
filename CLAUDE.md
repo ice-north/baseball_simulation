@@ -31,7 +31,7 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - `src/corporate/scoutingSystem.js` (~400行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
 - `src/university/universityTeamsData.js` - 大学チームデータ（16リーグ102校（東都2部制12校＋15リーグ×6校）、ランク別成長倍率定義）
 - `src/university/universityLeagueManager.js` (~280行) - 大学リーグ戦シミュレーション（16リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
-- `src/data/playerNames.js` (210KB) - 姓3000件+名3000件の重み付き名前DB
+- `src/data/playerNames.js` (210KB) - 姓3200件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
 
