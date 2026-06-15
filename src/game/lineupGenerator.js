@@ -48,11 +48,16 @@ const calcOffenseScore = (player) => {
 };
 
 // 守備力スコア（ポジション別）
-const calcDefenseScore = (player, position) => {
+const calcDefenseScore = (player, position, mode = 'standard') => {
   const f = player.fielding || {};
   const ph = player.physical || {};
   const fitness = player.positionFitness?.[position] || 0;
-  const fitnessMult = 0.5 + (fitness / 100) * 0.5;
+
+  // 守備重視モードでは適性の影響を大幅に強化
+  // standard: 0.5〜1.0 / defense: 0.2〜1.0（適性70%→0.76, 50%→0.60）
+  const fitnessMult = mode === 'defense'
+    ? 0.2 + (fitness / 100) * 0.8
+    : 0.5 + (fitness / 100) * 0.5;
 
   let baseDefense;
   if (position === 'catcher') {
@@ -65,7 +70,12 @@ const calcDefenseScore = (player, position) => {
     baseDefense = (f.defense || 0) * 0.6 + (ph.arm || 0) * 0.25 + (ph.speed || 0) * 0.15;
   }
 
-  return baseDefense * fitnessMult;
+  // 守備重視モードでは適性ボーナスを追加（適性100で+15pt、80で+9pt、60以下で0）
+  const fitnessBonus = mode === 'defense'
+    ? Math.max(0, (fitness - 60) / 40) * 15
+    : 0;
+
+  return baseDefense * fitnessMult + fitnessBonus;
 };
 
 // ポジションでの総合価値
@@ -73,7 +83,7 @@ const calcPositionValue = (player, position, mode = 'standard') => {
   const weights = POSITION_WEIGHTS[mode] || POSITION_WEIGHTS.standard;
   const w = weights[position] || { offenseWeight: 0.5, defenseWeight: 0.5 };
   const offense = calcOffenseScore(player);
-  const defense = calcDefenseScore(player, position);
+  const defense = calcDefenseScore(player, position, mode);
   return offense * w.offenseWeight + defense * w.defenseWeight;
 };
 
@@ -116,8 +126,14 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
       if (assigned.has(ps.player.id)) return;
 
       const fitness = ps.player.positionFitness?.[pos] || 0;
-      if (pos !== 'dh' && pos !== 'first' && pos !== 'left') {
-        const threshold = mode === 'offense' ? 10 : 20;
+      if (pos !== 'dh') {
+        // 守備重視: 適性60未満は除外（ファースト/レフトは40）
+        // 標準: 20未満除外（ファースト/レフトは除外なし）
+        // 打撃重視: 10未満除外（ファースト/レフトは除外なし）
+        const isLenient = pos === 'first' || pos === 'left';
+        const threshold = mode === 'defense' ? (isLenient ? 40 : 60)
+          : mode === 'offense' ? (isLenient ? 0 : 10)
+          : (isLenient ? 0 : 20);
         if (fitness < threshold) return;
       }
 
@@ -206,7 +222,7 @@ function assignBattingOrder(lineupPlayers, mode = 'standard') {
     const withScores = players.map(p => ({
       ...p,
       offScore: calcOffenseScore(p.player),
-      defScore: calcDefenseScore(p.player, p.position),
+      defScore: calcDefenseScore(p.player, p.position, 'defense'),
     }));
 
     // 打力でソートし、上位から打順を決める
