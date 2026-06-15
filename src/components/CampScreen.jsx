@@ -1198,22 +1198,23 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                     <th className="py-1.5 px-1 text-center w-7">位</th>
                     <th className="py-1.5 px-1 text-center w-6">齢</th>
                     <th className="py-1.5 px-1 text-center w-10" title="成長率 (基礎+変動)">成長</th>
-                    <th className="py-1.5 px-1 text-center w-6" title="プロ意識">プ</th>
-                    <th className="py-1.5 px-1 text-center w-6" title="精神力">精</th>
+                    <th className="py-1.5 px-1 text-center w-8" title="プロ意識">プ意</th>
+                    <th className="py-1.5 px-1 text-center w-8" title="精神力">精神</th>
                     <th className="py-1.5 px-1 text-center w-8">投/打</th>
                     <th className="py-1.5 px-1 text-center w-12">フォーム</th>
-                    <th className="py-1.5 px-1 text-center w-7">ミ</th>
-                    <th className="py-1.5 px-1 text-center w-7">パ</th>
-                    <th className="py-1.5 px-1 text-center w-7">走</th>
-                    <th className="py-1.5 px-1 text-center w-7">肩</th>
-                    <th className="py-1.5 px-1 text-center w-7">守</th>
-                    <th className="py-1.5 px-1 text-center w-7">Cリ</th>
-                    <th className="py-1.5 px-1 text-center w-7">眼</th>
-                    <th className="py-1.5 px-1 text-center w-7">バ</th>
-                    <th className="py-1.5 px-1 text-center w-9">速</th>
-                    <th className="py-1.5 px-1 text-center w-7">制</th>
-                    <th className="py-1.5 px-1 text-center w-9">ス</th>
-                    <th className="py-1.5 px-1 text-center w-7">体</th>
+                    <th className="py-1.5 px-1 text-center w-8">ミト</th>
+                    <th className="py-1.5 px-1 text-center w-8">パワ</th>
+                    <th className="py-1.5 px-1 text-center w-8">走力</th>
+                    <th className="py-1.5 px-1 text-center w-8">肩力</th>
+                    <th className="py-1.5 px-1 text-center w-8">守備</th>
+                    <th className="py-1.5 px-1 text-center w-8">Cリ</th>
+                    <th className="py-1.5 px-1 text-center w-8">選球</th>
+                    <th className="py-1.5 px-1 text-center w-8">バン</th>
+                    <th className="py-1.5 px-1 text-center w-9">球速</th>
+                    <th className="py-1.5 px-1 text-center w-8">制球</th>
+                    <th className="py-1.5 px-1 text-center w-9">スタ</th>
+                    <th className="py-1.5 px-1 text-center w-8">体力</th>
+                    <th className="py-1.5 px-1 text-center w-8">回復</th>
                     <th className="py-1.5 px-2 text-left">変化球</th>
                     <th className="py-1.5 px-2 text-left">前年成績</th>
                     {/* サブポジション適性 */}
@@ -1294,6 +1295,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.control||0} label="制球" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
                         <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
                         <td className="py-1 px-2 text-[10px] font-mono text-gray-400 whitespace-nowrap">
                           {(() => {
@@ -1662,6 +1664,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
             { key: 'pitching.velocity', stat: 'velocity', name: '球速', get: (s) => s.pitching?.velocity || 0, isVelocity: true },
             { key: 'pitching.control', stat: 'control', name: '制球', get: (s) => s.pitching?.control || 0 },
             { key: 'pitching.stamina', stat: 'stamina', name: 'スタミナ', get: (s) => s.pitching?.stamina || 0, isStamina: true },
+            { key: 'physical.bodyStamina', stat: 'bodyStamina', name: '体力', get: (s) => s.physical?.bodyStamina || 50 },
+            { key: 'physical.recovery', stat: 'recovery', name: '回復', get: (s) => s.physical?.recovery || 50 },
           ];
           const ageReports = seasonData?.ageReports || [];
           const ageReportMap = {};
