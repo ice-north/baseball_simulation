@@ -13,7 +13,7 @@ import { initializeUniversityLeagues } from '../university/universityLeagueManag
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
-import { updateAllTeamReputations, updateAllRanks, advanceSponsors } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
@@ -1634,7 +1634,19 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
   updateGrowthModifiers(updatedTeams, awards);
 
-  // 2.6. 全チームの注目度・ランクを更新（社会人＋独立＋大学）
+  // 2.6. 年度末の注目度減衰を適用してからランク判定
+  for (const teamData of Object.values(updatedTeams)) {
+    if (teamData?.corporateData) {
+      if (teamData.independentLeagueId) {
+        applyUniversityReputationDecay(teamData);
+      } else {
+        applyReputationDecay(teamData);
+      }
+    }
+    if (teamData?.universityData) {
+      applyUniversityReputationDecay(teamData);
+    }
+  }
   let rankChanges = [];
   let staffRetirements = [];
   rankChanges = updateAllRanks(seasonData);

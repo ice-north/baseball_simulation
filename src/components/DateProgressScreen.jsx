@@ -8,6 +8,7 @@ import { generateToshitaikou, createMainTournament, autoPlayMainTournament, auto
 import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues, generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
 import { generateAprilHighSchoolClass } from '../season/yearProgressionSystem.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import { updateAllTeamReputations } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
@@ -887,6 +888,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         processAutoInvestigation(userTeam, newSeasonData.currentDate);
       }
       advanceFavoriteBonus(userTeam, newSeasonData.currentDate);
+    }
+
+    // 2ヶ月ごとの注目度更新（6月/8月/10月に月をまたいだ時）
+    const oldMonth = seasonData.currentDate?.month;
+    const newMonth = newSeasonData.currentDate?.month;
+    if (oldMonth !== newMonth && [6, 8, 10].includes(newMonth)) {
+      updateAllTeamReputations(newSeasonData);
     }
 
     if (newSeasonData.currentDate.month !== selectedMonth) setSelectedMonth(newSeasonData.currentDate.month);

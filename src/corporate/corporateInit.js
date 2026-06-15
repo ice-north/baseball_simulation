@@ -1063,38 +1063,37 @@ export const getReputationRecruitBonus = (reputation) => {
   return Math.floor(reputation / 10) - 2; // 0→-2、50→3、100→8
 };
 
-// シーズン終了時の注目度更新
+// シーズン中の注目度更新（減衰なし、累積獲得ポイントの差分を反映）
 export const updateReputation = (teamData, seasonResults) => {
   const cd = teamData.corporateData;
   if (!cd) return;
 
-  let gain = 0;
+  let totalGain = 0;
   // 地域リーグ成績
-  gain += (seasonResults.wins || 0) * REPUTATION_GAINS.win;
-  if (seasonResults.isChampion) gain += REPUTATION_GAINS.seasonChampion;
+  totalGain += (seasonResults.wins || 0) * REPUTATION_GAINS.win;
+  if (seasonResults.isChampion) totalGain += REPUTATION_GAINS.seasonChampion;
   // 全国大会（勝利数のみ、順位ボーナスなし）
   const tWins = seasonResults.tournamentMainWins || 0;
-  gain += tWins * REPUTATION_GAINS.tournamentRoundWin;
+  totalGain += tWins * REPUTATION_GAINS.tournamentRoundWin;
   // プロ輩出
-  if (seasonResults.proDraftedCount) gain += seasonResults.proDraftedCount * REPUTATION_GAINS.proDrafted;
+  if (seasonResults.proDraftedCount) totalGain += seasonResults.proDraftedCount * REPUTATION_GAINS.proDrafted;
 
-  cd.reputation = clamp(cd.reputation + gain - REPUTATION_DECAY, 0, 100);
+  // 前回更新時との差分だけ反映
+  const prevGain = cd.currentSeasonGain || 0;
+  const delta = Math.max(0, totalGain - prevGain);
+  cd.currentSeasonGain = totalGain;
+  cd.reputation = clamp((cd.reputation || 0) + delta, 0, 100);
   cd.yearlyBudgetBonus = getReputationBudgetBonus(cd.reputation);
-  cd.proDraftCount += seasonResults.proDraftedCount || 0;
-  cd.tournamentWins += seasonResults.tournamentChampion ? 1 : 0;
+};
 
-  // 大会成績 → 予算ボーナス（最も良い成績を基準に計算）
-  let tBonus = 0;
-  if (seasonResults.tournamentChampion) {
-    tBonus = TOURNAMENT_BUDGET_BONUS.champion;
-  } else if (seasonResults.tournamentRunnerUp) {
-    tBonus = TOURNAMENT_BUDGET_BONUS.runnerUp;
-  } else if ((seasonResults.tournamentMainWins || 0) >= 2) {
-    tBonus = TOURNAMENT_BUDGET_BONUS.semiFinal;
-  } else if ((seasonResults.mainTournamentEntries || 0) > 0) {
-    tBonus = TOURNAMENT_BUDGET_BONUS.entry;
-  }
-  cd.tournamentBudgetBonus = tBonus;
+// 年度末の自然減衰（オフシーズンに1回だけ呼ぶ）
+export const applyReputationDecay = (teamData) => {
+  const cd = teamData.corporateData;
+  if (!cd) return;
+  cd.reputation = clamp((cd.reputation || 0) - REPUTATION_DECAY, 0, 100);
+  cd.currentSeasonGain = 0;
+  cd.yearlyBudgetBonus = getReputationBudgetBonus(cd.reputation);
+  cd.proDraftCount = cd.proDraftCount || 0;
 };
 
 // 注目度からランクを再判定（昇格/降格）
@@ -1151,7 +1150,8 @@ const countBracketWins = (bracket) => {
   return wins;
 };
 
-// 全チームの注目度とランクを一括更新
+// 全チームの注目度をシーズン中の成績で更新（減衰なし、差分反映）
+// 2ヶ月ごと（6月/8月/10月）＋年度末に呼ばれる
 export const updateAllTeamReputations = (seasonData) => {
   const standings = seasonData.standings || [];
   const standingsMap = {};
@@ -1260,17 +1260,27 @@ const UNI_REPUTATION_DECAY = 3;
 export const updateUniversityReputation = (teamData, seasonResults) => {
   const ud = teamData.universityData || teamData.corporateData;
   if (!ud) return;
-  let gain = 0;
+  let totalGain = 0;
   // 順位ベース（1位+5, 2位+3, 3位+1, 4位以下+0）
   const pos = seasonResults.leaguePosition || 0;
-  if (pos === 1) gain += UNI_REPUTATION_GAINS.position1st;
-  else if (pos === 2) gain += UNI_REPUTATION_GAINS.position2nd;
-  else if (pos === 3) gain += UNI_REPUTATION_GAINS.position3rd;
+  if (pos === 1) totalGain += UNI_REPUTATION_GAINS.position1st;
+  else if (pos === 2) totalGain += UNI_REPUTATION_GAINS.position2nd;
+  else if (pos === 3) totalGain += UNI_REPUTATION_GAINS.position3rd;
   // プロ輩出
-  if (seasonResults.proDraftedCount) gain += seasonResults.proDraftedCount * UNI_REPUTATION_GAINS.proDrafted;
-  ud.reputation = clamp(ud.reputation + gain - UNI_REPUTATION_DECAY, 0, 100);
-  ud.proDraftCount = (ud.proDraftCount || 0) + (seasonResults.proDraftedCount || 0);
-  ud.tournamentWins = (ud.tournamentWins || 0) + (seasonResults.tournamentChampion ? 1 : 0);
+  if (seasonResults.proDraftedCount) totalGain += seasonResults.proDraftedCount * UNI_REPUTATION_GAINS.proDrafted;
+
+  const prevGain = ud.currentSeasonGain || 0;
+  const delta = Math.max(0, totalGain - prevGain);
+  ud.currentSeasonGain = totalGain;
+  ud.reputation = clamp((ud.reputation || 0) + delta, 0, 100);
+};
+
+// 大学・独立リーグの年度末減衰
+export const applyUniversityReputationDecay = (teamData) => {
+  const ud = teamData.universityData || teamData.corporateData;
+  if (!ud) return;
+  ud.reputation = clamp((ud.reputation || 0) - UNI_REPUTATION_DECAY, 0, 100);
+  ud.currentSeasonGain = 0;
 };
 
 export const updateUniversityRankFromReputation = (teamData) => {

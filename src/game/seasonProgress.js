@@ -3,6 +3,19 @@ import { SEASON_PHASES, getCurrentPhase } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, progressToNextGame, progressToNextPhase, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from './autoSimulation.js';
+import { updateAllTeamReputations } from '../corporate/corporateInit.js';
+
+// 注目度の中間更新月（2ヶ月ごと: 6月, 8月, 10月）
+const REPUTATION_UPDATE_MONTHS = new Set([6, 8, 10]);
+
+// 月をまたいだ時に注目度を更新する
+const checkMidSeasonReputationUpdate = (oldDate, newDate, seasonData) => {
+  if (!oldDate || !newDate) return;
+  if (oldDate.month === newDate.month) return;
+  if (REPUTATION_UPDATE_MONTHS.has(newDate.month)) {
+    updateAllTeamReputations(seasonData);
+  }
+};
 
 // フェーズ遷移検出＆自動画面遷移
 export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { setSeasonData, setScreenMode, setManagementView }) => {
@@ -174,6 +187,9 @@ export const handleProgressDate = (days, { seasonData, setSeasonData, setSelecte
 
   newSeasonData = simulateGamesOnDate(newSeasonData);
 
+  // 2ヶ月ごとの注目度更新
+  checkMidSeasonReputationUpdate(seasonData.currentDate, newSeasonData.currentDate, newSeasonData);
+
   // カレンダー月を現在日付に自動追従
   if (newSeasonData?.currentDate?.month && newSeasonData.currentDate.month !== selectedMonth) {
     setSelectedMonth(newSeasonData.currentDate.month);
@@ -202,6 +218,9 @@ export const handleProgressToNextGame = ({ seasonData, setSeasonData, setSelecte
 
   newSeasonData = simulateGamesOnDate(newSeasonData);
 
+  // 2ヶ月ごとの注目度更新
+  checkMidSeasonReputationUpdate(seasonData.currentDate, newSeasonData.currentDate, newSeasonData);
+
   if (newSeasonData?.currentDate?.month && newSeasonData.currentDate.month !== selectedMonth) {
     setSelectedMonth(newSeasonData.currentDate.month);
   }
@@ -227,6 +246,9 @@ export const handleProgressToNextPhase = ({ seasonData, setSeasonData, setSelect
   if (oldPhase !== newPhase) {
     newSeasonData = handlePhaseTransition(newSeasonData, newPhase);
   }
+
+  // フェーズスキップ時は注目度を強制更新
+  updateAllTeamReputations(newSeasonData);
 
   if (newSeasonData?.currentDate?.month && newSeasonData.currentDate.month !== selectedMonth) {
     setSelectedMonth(newSeasonData.currentDate.month);
