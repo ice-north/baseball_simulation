@@ -294,6 +294,71 @@ export function getAllUniversityLeagues() {
   });
 }
 
+// 部制リーグの入替戦処理（1部最下位 ↔ 2部1位）
+export function processUniversityPromotionRelegation() {
+  const leagues = WORLD_DATA.universityLeagues;
+  if (!leagues) return [];
+
+  const changes = [];
+
+  for (const [regionId, league] of Object.entries(leagues)) {
+    if (!league.divisions || !league.divTeams) continue;
+    const numDiv = league.numDivisions || 2;
+
+    // 秋季リーグの順位で判定
+    const fallData = league.fall;
+    if (!fallData?.done) continue;
+
+    for (let d = 1; d < numDiv; d++) {
+      const upperStandings = fallData[`standings${d}`];
+      const lowerStandings = fallData[`standings${d + 1}`];
+      if (!upperStandings?.length || !lowerStandings?.length) continue;
+
+      const relegated = upperStandings[upperStandings.length - 1]?.team;
+      const promoted = lowerStandings[0]?.team;
+      if (!relegated || !promoted) continue;
+
+      // divTeamsを入替
+      const upperTeams = league.divTeams[d];
+      const lowerTeams = league.divTeams[d + 1];
+      const relIdx = upperTeams.indexOf(relegated);
+      const proIdx = lowerTeams.indexOf(promoted);
+      if (relIdx >= 0 && proIdx >= 0) {
+        upperTeams[relIdx] = promoted;
+        lowerTeams[proIdx] = relegated;
+        // div1Teams/div2Teams も更新
+        if (d === 1) {
+          league.div1Teams = [...upperTeams];
+          league.div2Teams = [...lowerTeams];
+        }
+        changes.push({
+          league: league.name,
+          regionId,
+          promoted: { team: promoted, from: `${d + 1}部`, to: `${d}部` },
+          relegated: { team: relegated, from: `${d}部`, to: `${d + 1}部` },
+        });
+      }
+    }
+  }
+
+  // ユーザーの部が変わった場合、WORLD_DATAを更新
+  if (WORLD_DATA.universityLeague) {
+    const ul = WORLD_DATA.universityLeague;
+    const league = leagues[ul.userRegion];
+    if (league?.divisions && league.divTeams) {
+      for (let d = 1; d <= (league.numDivisions || 2); d++) {
+        if (league.divTeams[d]?.includes(ul.userTeam)) {
+          ul.userDivision = d;
+          ul.leagueTeams = [...league.divTeams[d]];
+          break;
+        }
+      }
+    }
+  }
+
+  return changes;
+}
+
 export function resetUniversityLeagues() {
   if (WORLD_DATA.universityLeagues) {
     WORLD_DATA.universityLeagues = {};

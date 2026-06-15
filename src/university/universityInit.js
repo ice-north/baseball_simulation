@@ -110,6 +110,17 @@ export const initializeUniversityGame = (teamDef) => {
 
   // ユーザーのリーグの全チームを取得
   const leagueTeams = UNIVERSITY_TEAMS.filter(t => t.region === userRegion);
+  const regionDef = UNIVERSITY_REGIONS.find(r => r.id === userRegion);
+  const numDivisions = regionDef?.divisions || 1;
+
+  // 部制の場合、ユーザーが所属する部を判定
+  let userDivision = 1;
+  if (numDivisions >= 2) {
+    const perDiv = Math.floor(leagueTeams.length / numDivisions);
+    const userIdx = leagueTeams.findIndex(t => t.name === userTeamName);
+    userDivision = Math.floor(userIdx / perDiv) + 1;
+    if (userDivision > numDivisions) userDivision = numDivisions;
+  }
 
   const createTeamEntry = (def) => {
     const name = def.name;
@@ -130,7 +141,6 @@ export const initializeUniversityGame = (teamDef) => {
         tournamentWins: 0,
       },
     };
-    allTeamNames.push(name);
     return roster;
   };
 
@@ -140,13 +150,22 @@ export const initializeUniversityGame = (teamDef) => {
     userRoster = createTeamEntry(userDef);
   }
 
-  // 同リーグの他チーム
+  // 同リーグの全チームをTEAMS_DATAに追加（部制でも全チーム生成）
   for (const def of leagueTeams) {
     if (TEAMS_DATA[def.name]) continue;
     createTeamEntry(def);
   }
 
-  // 大学リーグ初期化（全14リーグ）
+  // 部制の場合、ユーザーの部のチーム名のみをallTeamNamesに
+  if (numDivisions >= 2) {
+    const perDiv = Math.floor(leagueTeams.length / numDivisions);
+    const divTeams = leagueTeams.slice((userDivision - 1) * perDiv, userDivision * perDiv);
+    divTeams.forEach(t => allTeamNames.push(t.name));
+  } else {
+    leagueTeams.forEach(t => allTeamNames.push(t.name));
+  }
+
+  // 大学リーグ初期化（全16リーグ）
   initializeUniversityLeagues(2024);
 
   // 大学プール初期シード（他リーグの大学生）
@@ -162,14 +181,19 @@ export const initializeUniversityGame = (teamDef) => {
   WORLD_DATA.universityLeague = {
     userTeam: userTeamName,
     userRegion,
+    userDivision,
+    numDivisions,
     leagueTeams: allTeamNames,
   };
 
+  const divLabel = numDivisions >= 2 ? ` ${userDivision}部` : '';
   return {
     userTeamName,
     allTeamNames,
     roster: userRoster,
-    leagueName: UNIVERSITY_REGIONS.find(r => r.id === userRegion)?.name || '',
+    leagueName: (UNIVERSITY_REGIONS.find(r => r.id === userRegion)?.name || '') + divLabel,
+    userDivision,
+    numDivisions,
   };
 };
 
@@ -186,11 +210,17 @@ export const getUniversityLeagueSchedule = (regionId) => {
   const schedule = [];
   let idCounter = 0;
 
-  // 東都2部制の場合、ユーザーチームが所属する部のスケジュールのみ
+  // 部制の場合、ユーザーの部のチーム名セットでフィルタ
+  const userDiv = WORLD_DATA.universityLeague?.userDivision || 1;
+  const divTeamSet = (league.divisions && league.divTeams?.[userDiv])
+    ? new Set(league.divTeams[userDiv])
+    : null;
+
   for (const seasonKey of ['spring', 'fall']) {
     const seasonData = league[seasonKey];
     if (!seasonData?.schedule) continue;
     for (const game of seasonData.schedule) {
+      if (divTeamSet && !divTeamSet.has(game.home)) continue;
       schedule.push({
         id: idCounter++,
         date: { ...game.date },
@@ -205,9 +235,19 @@ export const getUniversityLeagueSchedule = (regionId) => {
   return schedule;
 };
 
-// ユーザーリーグの順位表を初期化
+// ユーザーリーグの順位表を初期化（部制の場合はユーザーの部のみ）
 export const getUniversityLeagueStandings = (regionId, teamNames) => {
-  return teamNames.map(name => ({
+  const league = WORLD_DATA.universityLeagues?.[regionId];
+  const userDiv = WORLD_DATA.universityLeague?.userDivision || 1;
+
+  // 部制の場合、ユーザーの部のチームのみ
+  let filteredNames = teamNames;
+  if (league?.divisions && league.divTeams?.[userDiv]) {
+    const divSet = new Set(league.divTeams[userDiv]);
+    filteredNames = teamNames.filter(n => divSet.has(n));
+  }
+
+  return filteredNames.map(name => ({
     team: name,
     wins: 0,
     losses: 0,

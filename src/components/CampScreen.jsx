@@ -987,6 +987,23 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
           );
         })()}
 
+        {/* 大学リーグ入替通知 */}
+        {currentRound === 1 && seasonData?.universityPromotions?.length > 0 && (() => {
+          const userPromo = seasonData.universityPromotions.find(c =>
+            c.promoted.team === userTeamName || c.relegated.team === userTeamName
+          );
+          if (!userPromo) return null;
+          const isPromoted = userPromo.promoted.team === userTeamName;
+          return (
+            <div className={`mb-2 p-3 rounded-xl border text-center ${isPromoted ? 'bg-green-900/30 border-green-500/40' : 'bg-red-900/30 border-red-500/40'}`}>
+              <span className={`font-black text-lg ${isPromoted ? 'text-green-400' : 'text-red-400'}`}>
+                {isPromoted ? '↑' : '↓'} {isPromoted ? '昇格' : '降格'}: {isPromoted ? userPromo.promoted.from : userPromo.relegated.from} → {isPromoted ? userPromo.promoted.to : userPromo.relegated.to}
+              </span>
+              <span className="text-gray-400 text-xs ml-2">({userPromo.league})</span>
+            </div>
+          );
+        })()}
+
         {/* スタッフ退職通知 */}
         {currentRound === 1 && seasonData?.staffRetirements?.length > 0 && (
           <div className="mb-2 p-3 rounded-xl border bg-gray-800/80 border-gray-600/40">

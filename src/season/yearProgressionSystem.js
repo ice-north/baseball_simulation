@@ -9,7 +9,7 @@ import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates } from './universityPool.js';
-import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
+import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
@@ -1895,8 +1895,10 @@ export function advanceToNextYear(seasonData, allTeams) {
     gradPaths: { corporate: gradCorpCount, independent: gradIndCount, retired: gradRetiredCount },
   };
 
-  // 大学リーグの新シーズン初期化 + 社会人トーナメント結果リセット
+  // 大学リーグの入替戦 → 新シーズン初期化 + 社会人トーナメント結果リセット
+  let universityPromotions = [];
   if (WORLD_DATA.initialized) {
+    universityPromotions = processUniversityPromotionRelegation();
     initializeUniversityLeagues(newSeasonData.currentDate?.year || 2024);
     WORLD_DATA.corporateToshitaikou = null;
     WORLD_DATA.corporateNihonSenshuken = null;
@@ -1910,6 +1912,12 @@ export function advanceToNextYear(seasonData, allTeams) {
     const teamNames = Object.keys(teamsAfterRetirement);
     newSeasonData.schedule = getUniversityLeagueSchedule(regionId);
     newSeasonData.standings = getUniversityLeagueStandings(regionId, teamNames);
+    // 入替でユーザーの部が変わった場合、settings.teamNamesも更新
+    if (WORLD_DATA.universityLeague?.leagueTeams) {
+      newSeasonData.settings.teamNames = [...WORLD_DATA.universityLeague.leagueTeams];
+      newSeasonData.settings.teamsCount = WORLD_DATA.universityLeague.leagueTeams.length;
+      newSeasonData.settings.teamAbbreviations = WORLD_DATA.universityLeague.leagueTeams.map(n => n.slice(0, 3));
+    }
   }
 
   // ランク変動レポートを新シーズンデータに保存
@@ -1927,6 +1935,10 @@ export function advanceToNextYear(seasonData, allTeams) {
     newSeasonData.deficitPenalties = seasonData.deficitPenalties;
   }
 
+  if (universityPromotions.length > 0) {
+    newSeasonData.universityPromotions = universityPromotions;
+  }
+
   return {
     newSeasonData,
     updatedTeams: teamsAfterRetirement,
@@ -1935,6 +1947,7 @@ export function advanceToNextYear(seasonData, allTeams) {
     ageReports,
     rankChanges,
     universityGraduationReport,
+    universityPromotions,
   };
 };
 
