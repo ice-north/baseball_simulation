@@ -1212,19 +1212,27 @@ export const updateAllTeamReputations = (seasonData) => {
     const teamData = TEAMS_DATA[teamName];
     if (!teamData?.corporateData) continue;
 
-    const s = standingsMap[teamName];
-    let entryCount = 0;
-    if (toshitaikouEntries.has(teamName)) entryCount++;
-    if (senshukenEntries.has(teamName)) entryCount++;
+    // 独立リーグは順位ベース（大学と同じ）
+    if (teamData.independentLeagueId) {
+      const s = standingsMap[teamName];
+      const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+      const leaguePosition = sorted.findIndex(st => st.team === teamName) + 1;
+      const seasonResults = {
+        leaguePosition: leaguePosition || 0,
+        proDraftedCount: 0,
+      };
+      updateUniversityReputation(teamData, seasonResults);
+      const change = updateRankFromReputation(teamData);
+      if (change) rankChanges.push(change);
+      continue;
+    }
 
+    // 社会人: 勝利数ベース
+    const s = standingsMap[teamName];
     const seasonResults = {
       wins: s?.wins || 0,
-      winRate: s?.winRate || 0,
       isChampion: teamName === champion,
-      mainTournamentEntries: entryCount,
       tournamentMainWins: mainTournamentWinsMap[teamName] || 0,
-      tournamentChampion: teamName === toshitaikouChampion || teamName === senshukenChampion,
-      tournamentRunnerUp: teamName === toshitaikouRunnerUp || teamName === senshukenRunnerUp,
       proDraftedCount: 0,
     };
 
@@ -1240,22 +1248,25 @@ export const updateAllTeamReputations = (seasonData) => {
 // 大学・独立リーグ向けランク変動システム
 // ============================================================
 
+// 大学・独立リーグ: 勝利数ではなく順位ベース
 const UNI_REPUTATION_GAINS = {
-  win: 0.5,
-  seasonChampion: 3,
-  tournamentRoundWin: 2,
-  proDrafted: 4,
+  position1st: 5,          // リーグ1位
+  position2nd: 3,          // リーグ2位
+  position3rd: 1,          // リーグ3位
+  proDrafted: 4,           // プロ選手輩出
 };
 const UNI_REPUTATION_DECAY = 3;
 
 export const updateUniversityReputation = (teamData, seasonResults) => {
-  const ud = teamData.universityData;
+  const ud = teamData.universityData || teamData.corporateData;
   if (!ud) return;
   let gain = 0;
-  gain += (seasonResults.wins || 0) * UNI_REPUTATION_GAINS.win;
-  if (seasonResults.isChampion) gain += UNI_REPUTATION_GAINS.seasonChampion;
-  const tWins = seasonResults.tournamentMainWins || 0;
-  gain += tWins * UNI_REPUTATION_GAINS.tournamentRoundWin;
+  // 順位ベース（1位+5, 2位+3, 3位+1, 4位以下+0）
+  const pos = seasonResults.leaguePosition || 0;
+  if (pos === 1) gain += UNI_REPUTATION_GAINS.position1st;
+  else if (pos === 2) gain += UNI_REPUTATION_GAINS.position2nd;
+  else if (pos === 3) gain += UNI_REPUTATION_GAINS.position3rd;
+  // プロ輩出
   if (seasonResults.proDraftedCount) gain += seasonResults.proDraftedCount * UNI_REPUTATION_GAINS.proDrafted;
   ud.reputation = clamp(ud.reputation + gain - UNI_REPUTATION_DECAY, 0, 100);
   ud.proDraftCount = (ud.proDraftCount || 0) + (seasonResults.proDraftedCount || 0);
@@ -1318,14 +1329,12 @@ export const updateAllRanks = (seasonData) => {
     const teamData = TEAMS_DATA[teamName];
     if (!teamData?.universityData) continue;
     const s = standingsMap[teamName];
-    const tWins = (ucWins[teamName] || 0) + (mjWins[teamName] || 0);
+    // 順位を計算（standingsを勝率順にソートして何番目か）
+    const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+    const leaguePosition = sorted.findIndex(st => st.team === teamName) + 1;
     const results = {
-      wins: s?.wins || 0,
-      winRate: s?.winRate || 0,
-      isChampion: teamName === uniChampion,
-      tournamentMainWins: tWins,
+      leaguePosition,
       tournamentChampion: teamName === ucChampion || teamName === mjChampion,
-      tournamentRunnerUp: teamName === ucRunnerUp || teamName === mjRunnerUp,
       proDraftedCount: 0,
     };
     updateUniversityReputation(teamData, results);
@@ -1344,18 +1353,16 @@ export const updateAllRanks = (seasonData) => {
           ? [...(sd.standings1 || []), ...(sd.standings2 || [])]
           : (sd.standings || []);
         if (allStandings.length === 0) continue;
-        const leagueChamp = [...allStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)[0]?.team;
+        const sorted = [...allStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
         for (const st of allStandings) {
           const teamDef = UNIVERSITY_TEAMS.find(t => t.name === st.team);
           if (!teamDef) continue;
           let rep = { S: 85, A: 65, B: 40, C: 20, D: 5 }[teamDef.rank] || 20;
-          rep += (st.wins || 0) * 0.3;
-          if (st.winRate >= 0.700) rep += 5;
-          if (st.winRate >= 0.600) rep += 3;
-          if (st.team === leagueChamp) rep += 8;
-          const tW = (ucWins[st.team] || 0) + (mjWins[st.team] || 0);
-          if (tW > 0) rep += 5 + tW * 2;
-          if (st.team === ucChampion || st.team === mjChampion) rep += 10;
+          // 順位ベース
+          const pos = sorted.findIndex(s => s.team === st.team) + 1;
+          if (pos === 1) rep += UNI_REPUTATION_GAINS.position1st;
+          else if (pos === 2) rep += UNI_REPUTATION_GAINS.position2nd;
+          else if (pos === 3) rep += UNI_REPUTATION_GAINS.position3rd;
           rep = clamp(rep - UNI_REPUTATION_DECAY, 0, 100);
           let newRank = teamDef.rank;
           if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';
