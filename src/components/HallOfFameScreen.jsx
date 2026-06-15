@@ -53,6 +53,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   };
 
   const getPositionName = (pos) => POSITION_NAMES[pos] || pos;
+  const isCorporate = !!seasonData?.settings?.corporateMode;
 
   // NPBドラフト指名選手（年度別）
   const npbDraftedPlayers = useMemo(() =>
@@ -144,33 +145,24 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
       if (!team?.players) return;
       team.players.forEach(p => {
         if (p.draftInfo) {
-          const sb = p.seasonStats?.batting || {};
-          const sp = p.seasonStats?.pitching || {};
-          const cb = p.careerStats?.batting || {};
-          const cpitch = p.careerStats?.pitching || {};
           records.push({
             name: p.name, position: p.position, teamName,
             draftYear: p.draftInfo.year, draftRound: p.draftInfo.round,
-            age: p.age, status: '現役',
+            draftAge: p.draftInfo.age || p.age,
+            source: p.draftInfo.source || '',
             isPitcher: p.position === 'pitcher',
-            batting: { games: (cb.games || 0) + (sb.games || 0), hits: (cb.hits || 0) + (sb.hits || 0), atBats: (cb.atBats || 0) + (sb.atBats || 0), homeruns: (cb.homeruns || 0) + (sb.homeruns || 0) },
-            pitching: { games: (cpitch.games || 0) + (sp.games || 0), wins: (cpitch.wins || 0) + (sp.wins || 0), losses: (cpitch.losses || 0) + (sp.losses || 0), saves: (cpitch.saves || 0) + (sp.saves || 0), inningsPitched: (cpitch.inningsPitched || 0) + (sp.inningsPitched || 0), earnedRuns: (cpitch.earnedRuns || 0) + (sp.earnedRuns || 0) }
           });
         }
       });
     });
     hallOfFamePlayers.forEach(p => {
       if (p.draftInfo) {
-        const cs = p.careerStats || {};
         records.push({
           name: p.name, position: p.position, teamName: p.teamName || p.team,
           draftYear: p.draftInfo.year, draftRound: p.draftInfo.round,
-          age: p.age,
-          status: p.departureType === 'npb_drafted' ? 'NPB' : '引退',
-          statusDetail: p.reason || '',
+          draftAge: p.draftInfo.age || p.age,
+          source: p.draftInfo.source || '',
           isPitcher: p.position === 'pitcher',
-          batting: cs.batting || {},
-          pitching: cs.pitching || {}
         });
       }
     });
@@ -592,36 +584,23 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                           <th className="py-1.5 px-2 text-left">選手名</th>
                           <th className="py-1.5 px-2 text-center">守</th>
                           <th className="py-1.5 px-2 text-center">年齢</th>
-                          <th className="py-1.5 px-2 text-center">状態</th>
-                          <th className="py-1.5 px-2 text-right">通算成績</th>
+                          <th className="py-1.5 px-2 text-left">所属</th>
+                          {isCorporate && <th className="py-1.5 px-2 text-left">出身</th>}
                         </tr>
                       </thead>
                       <tbody>
-                        {draftHistoryByYear[draftHistoryYear].map((p, i) => {
-                          const stColor = p.status === '現役' ? 'text-green-400' : p.status === 'NPB' ? 'text-yellow-400' : 'text-gray-500';
-                          let statLine = '';
-                          if (p.isPitcher) {
-                            const ip = p.pitching.inningsPitched > 0 ? (p.pitching.inningsPitched / 3).toFixed(0) : '0';
-                            const era = p.pitching.inningsPitched > 0 ? ((p.pitching.earnedRuns * 27) / p.pitching.inningsPitched).toFixed(2) : '-.--';
-                            statLine = `${p.pitching.wins || 0}勝${p.pitching.losses || 0}敗 ${p.pitching.saves || 0}S ${ip}回 防${era}`;
-                          } else {
-                            const avg = p.batting.atBats > 0 ? (p.batting.hits / p.batting.atBats).toFixed(3) : '.000';
-                            statLine = `${p.batting.games || 0}試 ${avg} ${p.batting.hits || 0}安 ${p.batting.homeruns || 0}本`;
-                          }
-                          return (
-                            <tr key={i} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                              <td className="py-1.5 px-2 text-center font-bold text-purple-400">{p.draftRound}</td>
-                              <td className="py-1.5 px-2 text-left">
-                                <span className={`font-bold ${p.isPitcher ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
-                                <span className="text-gray-400 text-[10px] ml-1">{p.teamName}</span>
-                              </td>
-                              <td className="py-1.5 px-2 text-center text-gray-500">{getPositionName(p.position)}</td>
-                              <td className="py-1.5 px-2 text-center text-gray-500">{p.age}</td>
-                              <td className={`py-1.5 px-2 text-center font-bold ${stColor}`}>{p.status}</td>
-                              <td className="py-1.5 px-2 text-right text-gray-400 text-[10px]">{statLine}</td>
-                            </tr>
-                          );
-                        })}
+                        {draftHistoryByYear[draftHistoryYear].map((p, i) => (
+                          <tr key={i} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                            <td className="py-1.5 px-2 text-center font-bold text-purple-400">{p.draftRound}</td>
+                            <td className="py-1.5 px-2 text-left">
+                              <span className={`font-bold ${p.isPitcher ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
+                            </td>
+                            <td className="py-1.5 px-2 text-center text-gray-500">{getPositionName(p.position)}</td>
+                            <td className="py-1.5 px-2 text-center text-gray-500">{p.draftAge}</td>
+                            <td className="py-1.5 px-2 text-left text-gray-400">{p.teamName}</td>
+                            {isCorporate && <td className="py-1.5 px-2 text-left text-cyan-400 text-[10px]">{p.source}</td>}
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
