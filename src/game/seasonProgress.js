@@ -6,6 +6,7 @@ import { autoSimulateGame } from './autoSimulation.js';
 import { updateAllTeamReputations } from '../corporate/corporateInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, generateNihonSenshuken, generateClubSenshuken, createSenshukenMainTournament, generateRegionalTournament, autoPlayBracket } from '../corporate/toshitaikou.js';
+import { generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
 
 // 注目度の中間更新月（2ヶ月ごと: 6月, 8月, 10月）
 const REPUTATION_UPDATE_MONTHS = new Set([6, 8, 10]);
@@ -332,6 +333,16 @@ export const handleProgressToNextPhase = ({ seasonData, setSeasonData, setSelect
   // フェーズスキップ時: WORLD_DATAの社会人トーナメントも一括消化
   if (!newSeasonData.settings?.corporateMode) {
     bulkSimulateWorldDataTournaments(newSeasonData.currentDate.month, newSeasonData.currentDate.year);
+  }
+
+  // フェーズスキップ時: グランドチャンピオンシップを生成・消化（独立リーグモード）
+  if (!newSeasonData.settings?.corporateMode && !newSeasonData.settings?.universityMode &&
+      WORLD_DATA.initialized && newSeasonData.currentDate.month >= 10 && !newSeasonData.grandChampionship?.generated) {
+    const gc = generateGrandChampionship(WORLD_DATA.userLeagueId, newSeasonData.standings, newSeasonData.settings);
+    if (gc) {
+      autoPlayGrandChampionship(gc);
+      newSeasonData = { ...newSeasonData, grandChampionship: gc };
+    }
   }
 
   // フェーズスキップ時は注目度を強制更新

@@ -330,12 +330,22 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   if (distance > 100 && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 144) {
     // 速度要因: EV144-162で 0→1
     const velocityFactor = Math.max(0, (exitVelocity - 144) / 18);
-    // パワー要因: power 50-95 で 0→1（ミート特化型も少しはHR出る）
-    const powerFactor = Math.max(0, ((batter.power || 50) - 50) / 45);
+    // パワー要因: power 30-95 で 0→1（低パワーでも芯を食えばHRの可能性）
+    const powerFactor = Math.max(0, ((batter.power || 50) - 30) / 65);
     // velocity主体 + power補正（最大約25%）
     const hrProb = velocityFactor * 0.16 + powerFactor * 0.09;
     if (Math.random() < hrProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス越え）' };
+    }
+  }
+
+  // 風や打球の伸びによるフェンスギリギリHR（低パワーでもごく稀に出る）
+  if (distance > 93 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 135) {
+    const evFactor = Math.max(0, (exitVelocity - 135) / 20);
+    const distFactor = Math.max(0, (distance - 93) / 15);
+    const hrProb = evFactor * distFactor * 0.04;
+    if (Math.random() < hrProb) {
+      return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス直撃）' };
     }
   }
 
