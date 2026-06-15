@@ -126,6 +126,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
       meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
       speed: sa.physical?.speed, defense: sa.fielding?.defense,
+      professionalism: sa.professionalism, recovery: sa.physical?.recovery,
     };
     const v = map[key];
     return (v === '?' || v === undefined) ? -1 : (typeof v === 'number' ? v : parseInt(v));
@@ -345,6 +346,8 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                 <SortHeader k="velocity" label="球速" />
                 <SortHeader k="control" label="制" />
                 <SortHeader k="stamina" label="ス" />
+                <SortHeader k="professionalism" label="プ" />
+                <SortHeader k="recovery" label="回" />
                 <SortHeader k="rate" label="交渉%" />
                 <SortHeader k="rivals" label="他球団" />
               </tr>
@@ -391,6 +394,8 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.control)}</td>
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.professionalism)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.physical?.recovery)}</td>
                     <td className="px-1.5 py-2 text-center whitespace-nowrap">
                       <span className={`font-bold ${getRateColor(adjustedRate)}`}>
                         {adjustedRate}%

@@ -409,6 +409,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
       physical: {
         speed: visible.has('speed') ? blur(player.physical?.speed || 0) : hidden,
         arm: hidden,
+        recovery: hidden,
       },
       fielding: {
         defense: visible.has('defense') ? blur(player.fielding?.defense || 0) : hidden,
@@ -418,6 +419,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         control: visible.has('control') ? blur(player.pitching?.control || 30) : hidden,
         stamina: visible.has('stamina') ? blur(player.pitching?.stamina || 60, 200) : hidden,
       },
+      professionalism: hidden,
     };
   }
 
@@ -432,6 +434,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
       physical: {
         speed: isPitcher ? hidden : blur(player.physical?.speed || 0),
         arm: hidden,
+        recovery: hidden,
       },
       fielding: {
         defense: isPitcher ? hidden : blur(player.fielding?.defense || 0),
@@ -441,6 +444,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         control: blur(player.pitching?.control || 30),
         stamina: isPitcher ? blur(player.pitching?.stamina || 60, 200) : hidden,
       },
+      professionalism: hidden,
     };
   }
 
@@ -454,6 +458,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
     physical: {
       speed: blur(player.physical?.speed || 0),
       arm: blur(player.physical?.arm || 0),
+      recovery: blur(player.physical?.recovery || 50),
     },
     fielding: {
       defense: blur(player.fielding?.defense || 0),
@@ -463,6 +468,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
       control: blur(player.pitching?.control || 30),
       stamina: blur(player.pitching?.stamina || 60, 200),
     },
+    professionalism: blur(player.professionalism || 50),
   };
 }
 
