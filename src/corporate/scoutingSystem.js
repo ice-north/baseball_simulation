@@ -482,8 +482,6 @@ function obscureAbilities(player, accuracy, stage = 'full') {
 // ============================================================
 
 const RANK_RECRUIT_BONUS = { S: 0.10, A: 0.05, B: 0, C: -0.05, D: -0.10 };
-const RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
-const RANK_WEIGHT = { S: 50, A: 35, B: 20, C: 10, D: 5 };
 
 /**
  * 選手獲得の成功率を計算（0〜100）
@@ -1274,51 +1272,42 @@ export function generateRivalInterest(scoutedPlayers) {
 
 /**
  * 他球団との競合を考慮した交渉
- * ユーザーのランクが高い → 有利、ライバルのランクが高い → 不利
+ * player.recruitRate が設定されていれば（スカウトボーナス等含む）それを使う
+ * ライバルがいる場合、表示成功率をベースに競合ペナルティを適用
  */
 export function negotiateWithCompetition(team, player, teamData) {
-  const userRank = teamData?.corporateData?.rank || 'C';
   const rivals = player._rivals || [];
 
-  // まず基本の交渉成功率を算出
-  const baseRate = calculateRecruitSuccessRate(player, teamData);
+  // 表示済みの成功率を使う（スカウトボーナス・調査・絆を含む）
+  const displayedRate = player.recruitRate ?? calculateRecruitSuccessRate(player, teamData);
 
   if (rivals.length === 0) {
-    // ライバル不在：基本成功率をそのまま使う
     const roll = Math.random() * 100;
-    const success = roll < baseRate;
+    const success = roll < displayedRate;
     if (success) recruitPlayer(team, player);
-    return { success, rate: baseRate, rivalResult: null };
+    return { success, rate: displayedRate, rivalResult: null };
   }
 
-  // ライバルがいる場合：重み付き抽選で獲得先を決める
-  const userWeight = RANK_WEIGHT[userRank] || 10;
-  const staffBonus = getTeamStaffBonus(teamData?.corporateData?.staff || []);
-  const negotiationBoost = (staffBonus.negotiation || 0) * 0.2;
-  const contenders = [
-    { type: 'user', weight: userWeight + negotiationBoost },
-    ...rivals.map((r, i) => ({ type: `rival_${i}`, rank: r.rank, weight: RANK_WEIGHT[r.rank] || 10 })),
-    { type: 'none', weight: 15 }, // どこにも行かない
-  ];
+  // ライバルがいる場合：表示成功率に競合ペナルティを適用
+  // ライバル1社ごとに成功率×0.75（2社で×0.56、3社で×0.42）
+  const rivalPenalty = Math.pow(0.75, rivals.length);
+  const adjustedRate = Math.max(1, Math.min(95, Math.round(displayedRate * rivalPenalty)));
 
-  const totalWeight = contenders.reduce((sum, c) => sum + c.weight, 0);
-  let roll = Math.random() * totalWeight;
-  let winner = contenders[contenders.length - 1];
-  for (const c of contenders) {
-    roll -= c.weight;
-    if (roll <= 0) { winner = c; break; }
+  const roll = Math.random() * 100;
+  const success = roll < adjustedRate;
+
+  if (success) {
+    recruitPlayer(team, player);
+    return { success, rate: adjustedRate, rivalResult: null };
   }
 
-  const success = winner.type === 'user';
-  const adjustedRate = Math.round((userWeight + negotiationBoost) / totalWeight * 100);
-
-  if (success) recruitPlayer(team, player);
-
-  return {
-    success,
-    rate: adjustedRate,
-    rivalResult: success ? null : (winner.type === 'none' ? 'declined' : winner.rank),
-  };
+  // 失敗時：どのライバルが獲得したか、または辞退か
+  const declineChance = 0.3;
+  if (Math.random() < declineChance) {
+    return { success: false, rate: adjustedRate, rivalResult: 'declined' };
+  }
+  const winnerRival = rivals[Math.floor(Math.random() * rivals.length)];
+  return { success: false, rate: adjustedRate, rivalResult: winnerRival?.rank || 'B' };
 }
 
 /**

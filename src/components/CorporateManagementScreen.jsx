@@ -783,7 +783,14 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.control)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.stamina)}</td>
                               <td className="py-1.5 px-1.5 text-center">{revealLevel >= 1 ? renderVal(p.personality?.mental) : <span className="text-gray-600">?</span>}</td>
-                              <td className="py-1.5 px-1.5 text-center">{revealLevel >= 1 ? renderVal(p.growthPotential) : <span className="text-gray-600">?</span>}</td>
+                              <td className="py-1.5 px-1.5 text-center">{revealLevel >= 1 ? (() => {
+                                const gp = p.growthPotential;
+                                if (gp == null) return <span className="text-gray-600">?</span>;
+                                const v = typeof gp === 'number' ? gp : parseFloat(gp);
+                                if (isNaN(v)) return <span className="text-gray-600">?</span>;
+                                const color = v >= 1.3 ? 'text-pink-400' : v >= 1.2 ? 'text-red-400' : v >= 1.1 ? 'text-orange-400' : v >= 1.0 ? 'text-yellow-400' : v >= 0.9 ? 'text-green-400' : 'text-blue-400';
+                                return <span className={`font-bold ${color}`}>{v.toFixed(2)}</span>;
+                              })() : <span className="text-gray-600">?</span>}</td>
                               <td className="py-1.5 px-1.5 text-center">
                                 <span className={`font-bold ${getRateColor(rate)}`}>{rate}%</span>
                               </td>
