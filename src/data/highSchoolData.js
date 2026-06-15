@@ -111,21 +111,22 @@ export function assignHighSchool(talentTier) {
   const pools = {
     S: [['S', 35], ['A', 28], ['B', 18], ['C', 10], ['D', 5], ['E', 3], ['F', 1]],
     A: [['S', 8], ['A', 30], ['B', 28], ['C', 18], ['D', 8], ['E', 5], ['F', 3]],
-    B: [['A', 3], ['B', 20], ['C', 28], ['D', 24], ['E', 13], ['F', 8], [null, 4]],
-    C: [['B', 2], ['C', 15], ['D', 25], ['E', 25], ['F', 18], [null, 15]],
-    D: [['C', 2], ['D', 12], ['E', 22], ['F', 27], [null, 37]],
-    E: [['D', 2], ['E', 10], ['F', 22], [null, 66]],
+    B: [['A', 3], ['B', 20], ['C', 28], ['D', 24], ['E', 13], ['F', 8], ['D', 4]],
+    C: [['B', 2], ['C', 15], ['D', 25], ['E', 25], ['F', 18], ['D', 15]],
+    D: [['C', 2], ['D', 12], ['E', 22], ['F', 27], ['D', 37]],
+    E: [['D', 2], ['E', 10], ['F', 22], ['D', 66]],
   };
   const dist = pools[talentTier] || pools['D'];
   let roll = Math.random() * 100;
   for (const [rank, weight] of dist) {
     roll -= weight;
     if (roll <= 0) {
-      if (!rank || !BY_RANK[rank] || BY_RANK[rank].length === 0) return null;
       const list = BY_RANK[rank];
       const school = list[Math.floor(Math.random() * list.length)];
       return { name: school.name, rank: school.rank, pref: school.pref };
     }
   }
-  return null;
+  const fallback = BY_RANK['D'];
+  const s = fallback[Math.floor(Math.random() * fallback.length)];
+  return { name: s.name, rank: s.rank, pref: s.pref };
 }
