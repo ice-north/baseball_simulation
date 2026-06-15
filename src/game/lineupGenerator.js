@@ -1,7 +1,6 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 
 // ポジション別の攻守バランス重み
-// 守備負担が大きいポジションほどdefenseWeight高、打撃依存ポジションほどoffenseWeight高
 const POSITION_WEIGHTS = {
   standard: {
     catcher:  { offenseWeight: 0.35, defenseWeight: 0.65 },
@@ -15,34 +14,33 @@ const POSITION_WEIGHTS = {
     dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
   },
   offense: {
-    catcher:  { offenseWeight: 0.55, defenseWeight: 0.45 },
-    short:    { offenseWeight: 0.60, defenseWeight: 0.40 },
-    center:   { offenseWeight: 0.65, defenseWeight: 0.35 },
-    second:   { offenseWeight: 0.65, defenseWeight: 0.35 },
-    third:    { offenseWeight: 0.75, defenseWeight: 0.25 },
-    right:    { offenseWeight: 0.80, defenseWeight: 0.20 },
-    left:     { offenseWeight: 0.85, defenseWeight: 0.15 },
-    first:    { offenseWeight: 0.90, defenseWeight: 0.10 },
+    catcher:  { offenseWeight: 0.60, defenseWeight: 0.40 },
+    short:    { offenseWeight: 0.65, defenseWeight: 0.35 },
+    center:   { offenseWeight: 0.70, defenseWeight: 0.30 },
+    second:   { offenseWeight: 0.70, defenseWeight: 0.30 },
+    third:    { offenseWeight: 0.80, defenseWeight: 0.20 },
+    right:    { offenseWeight: 0.85, defenseWeight: 0.15 },
+    left:     { offenseWeight: 0.90, defenseWeight: 0.10 },
+    first:    { offenseWeight: 0.95, defenseWeight: 0.05 },
     dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
   },
   defense: {
-    catcher:  { offenseWeight: 0.20, defenseWeight: 0.80 },
-    short:    { offenseWeight: 0.25, defenseWeight: 0.75 },
-    center:   { offenseWeight: 0.30, defenseWeight: 0.70 },
-    second:   { offenseWeight: 0.30, defenseWeight: 0.70 },
-    third:    { offenseWeight: 0.35, defenseWeight: 0.65 },
-    right:    { offenseWeight: 0.40, defenseWeight: 0.60 },
-    left:     { offenseWeight: 0.45, defenseWeight: 0.55 },
-    first:    { offenseWeight: 0.55, defenseWeight: 0.45 },
+    catcher:  { offenseWeight: 0.15, defenseWeight: 0.85 },
+    short:    { offenseWeight: 0.20, defenseWeight: 0.80 },
+    center:   { offenseWeight: 0.25, defenseWeight: 0.75 },
+    second:   { offenseWeight: 0.25, defenseWeight: 0.75 },
+    third:    { offenseWeight: 0.30, defenseWeight: 0.70 },
+    right:    { offenseWeight: 0.35, defenseWeight: 0.65 },
+    left:     { offenseWeight: 0.40, defenseWeight: 0.60 },
+    first:    { offenseWeight: 0.50, defenseWeight: 0.50 },
     dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
   },
 };
 
-// 打撃力スコア（チーム攻撃力の源泉）
+// 打撃力スコア
 const calcOffenseScore = (player) => {
   const b = player.batting || {};
   const ph = player.physical || {};
-  // パワーを最重視、ミート・選球眼も重要、走力は加点要素
   return (b.meet || 0) * 1.0 +
          (b.power || 0) * 1.3 +
          (b.eye || 0) * 0.7 +
@@ -54,7 +52,6 @@ const calcDefenseScore = (player, position) => {
   const f = player.fielding || {};
   const ph = player.physical || {};
   const fitness = player.positionFitness?.[position] || 0;
-  // 適性が低いとペナルティ: fitnessMult = 0.5 + (fitness/100)*0.5
   const fitnessMult = 0.5 + (fitness / 100) * 0.5;
 
   let baseDefense;
@@ -71,7 +68,7 @@ const calcDefenseScore = (player, position) => {
   return baseDefense * fitnessMult;
 };
 
-// ポジションでの総合価値（チーム貢献度）
+// ポジションでの総合価値
 const calcPositionValue = (player, position, mode = 'standard') => {
   const weights = POSITION_WEIGHTS[mode] || POSITION_WEIGHTS.standard;
   const w = weights[position] || { offenseWeight: 0.5, defenseWeight: 0.5 };
@@ -79,6 +76,234 @@ const calcPositionValue = (player, position, mode = 'standard') => {
   const defense = calcDefenseScore(player, position);
   return offense * w.offenseWeight + defense * w.defenseWeight;
 };
+
+// 貪欲法によるポジション割り当て
+function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
+  const assigned = new Set();
+  const assignment = {};
+
+  const posOrder = [...positions];
+  if (trialSeed > 0) {
+    const priorityOrder = mode === 'offense'
+      ? ['dh', 'first', 'left', 'right', 'third', 'center', 'second', 'short', 'catcher']
+      : ['catcher', 'short', 'center', 'second', 'third', 'right', 'left', 'first', 'dh'];
+    const shuffled = priorityOrder.filter(p => posOrder.includes(p));
+    if (trialSeed % 3 === 1) {
+      shuffled.reverse();
+    } else if (trialSeed % 3 === 2) {
+      const mid = Math.floor(shuffled.length / 2);
+      const reordered = [...shuffled.slice(mid), ...shuffled.slice(0, mid)];
+      shuffled.length = 0;
+      shuffled.push(...reordered);
+    }
+    posOrder.length = 0;
+    posOrder.push(...shuffled);
+  } else {
+    const priorityOrder = mode === 'defense'
+      ? ['catcher', 'short', 'center', 'second', 'third', 'right', 'left', 'first', 'dh']
+      : mode === 'offense'
+      ? ['dh', 'first', 'left', 'right', 'third', 'center', 'second', 'short', 'catcher']
+      : ['catcher', 'short', 'center', 'second', 'third', 'right', 'left', 'first', 'dh'];
+    posOrder.length = 0;
+    posOrder.push(...priorityOrder.filter(p => positions.includes(p)));
+  }
+
+  posOrder.forEach(pos => {
+    let bestCandidate = null;
+    let bestValue = -Infinity;
+
+    candidates.forEach(ps => {
+      if (assigned.has(ps.player.id)) return;
+
+      const fitness = ps.player.positionFitness?.[pos] || 0;
+      if (pos !== 'dh' && pos !== 'first' && pos !== 'left') {
+        const threshold = mode === 'offense' ? 10 : 20;
+        if (fitness < threshold) return;
+      }
+
+      const value = calcPositionValue(ps.player, pos, mode);
+      if (value > bestValue) {
+        bestValue = value;
+        bestCandidate = ps;
+      }
+    });
+
+    if (bestCandidate) {
+      assignment[pos] = bestCandidate;
+      assigned.add(bestCandidate.player.id);
+    }
+  });
+
+  if (Object.keys(assignment).length < positions.length) {
+    const remaining = positions.filter(p => !assignment[p]);
+    const unassignedPlayers = candidates.filter(ps => !assigned.has(ps.player.id));
+    remaining.forEach(pos => {
+      if (unassignedPlayers.length === 0) return;
+      const best = unassignedPlayers.sort((a, b) => b.offense - a.offense)[0];
+      if (best) {
+        assignment[pos] = best;
+        assigned.add(best.player.id);
+        unassignedPlayers.splice(unassignedPlayers.indexOf(best), 1);
+      }
+    });
+  }
+
+  return Object.keys(assignment).length === positions.length ? assignment : null;
+}
+
+// 打順編成（野球セオリーに基づく）
+function assignBattingOrder(lineupPlayers, mode = 'standard') {
+  const players = [...lineupPlayers];
+  const order = [];
+
+  const pick = (sortFn) => {
+    if (players.length === 0) return null;
+    players.sort(sortFn);
+    const picked = players[0];
+    players.splice(0, 1);
+    order.push(picked);
+    return picked;
+  };
+
+  if (mode === 'offense') {
+    // 打撃重視: パワー・ミート最優先の打順
+    // 1番: 出塁+走力
+    pick((a, b) => {
+      const as = (a.player.batting?.meet || 0) * 1.0 + (a.player.batting?.eye || 0) * 1.2 + (a.player.physical?.speed || 0) * 0.8;
+      const bs = (b.player.batting?.meet || 0) * 1.0 + (b.player.batting?.eye || 0) * 1.2 + (b.player.physical?.speed || 0) * 0.8;
+      return bs - as;
+    });
+    // 2番: 強打者（最強バランス）
+    pick((a, b) => {
+      const as = (a.player.batting?.meet || 0) * 1.1 + (a.player.batting?.power || 0) * 1.0 + (a.player.batting?.eye || 0) * 0.6;
+      const bs = (b.player.batting?.meet || 0) * 1.1 + (b.player.batting?.power || 0) * 1.0 + (b.player.batting?.eye || 0) * 0.6;
+      return bs - as;
+    });
+    // 3番: パワー+ミート
+    pick((a, b) => {
+      const as = (a.player.batting?.power || 0) * 1.2 + (a.player.batting?.meet || 0) * 1.0;
+      const bs = (b.player.batting?.power || 0) * 1.2 + (b.player.batting?.meet || 0) * 1.0;
+      return bs - as;
+    });
+    // 4番: 最強パワー
+    pick((a, b) => {
+      const as = (a.player.batting?.power || 0) * 1.5 + (a.player.batting?.meet || 0) * 0.5;
+      const bs = (b.player.batting?.power || 0) * 1.5 + (b.player.batting?.meet || 0) * 0.5;
+      return bs - as;
+    });
+    // 5番: パワー2番手
+    pick((a, b) => {
+      const as = (a.player.batting?.power || 0) * 1.3 + (a.player.batting?.meet || 0) * 0.7;
+      const bs = (b.player.batting?.power || 0) * 1.3 + (b.player.batting?.meet || 0) * 0.7;
+      return bs - as;
+    });
+    // 6-9: 残りを打力順
+    while (players.length > 0) {
+      pick((a, b) => calcOffenseScore(b.player) - calcOffenseScore(a.player));
+    }
+  } else if (mode === 'defense') {
+    // 守備重視: 守備力の低い選手を上位打線に（打席多く回す）、守備力高い選手は下位で守備集中
+    const withScores = players.map(p => ({
+      ...p,
+      offScore: calcOffenseScore(p.player),
+      defScore: calcDefenseScore(p.player, p.position),
+    }));
+
+    // 打力でソートし、上位から打順を決める
+    withScores.sort((a, b) => b.offScore - a.offScore);
+
+    // 1番: 出塁+走力
+    const leadoff = withScores.reduce((best, p) => {
+      const s = (p.player.batting?.meet || 0) * 0.8 + (p.player.batting?.eye || 0) * 1.0 + (p.player.physical?.speed || 0) * 1.2;
+      const bs = (best.player.batting?.meet || 0) * 0.8 + (best.player.batting?.eye || 0) * 1.0 + (best.player.physical?.speed || 0) * 1.2;
+      return s > bs ? p : best;
+    });
+    order.push(leadoff);
+    const remaining = withScores.filter(p => p !== leadoff);
+
+    // 2番: つなぎ（ミート+選球眼）
+    remaining.sort((a, b) => {
+      const as = (a.player.batting?.meet || 0) * 1.2 + (a.player.batting?.eye || 0) * 0.8 + (a.player.physical?.speed || 0) * 0.5;
+      const bs = (b.player.batting?.meet || 0) * 1.2 + (b.player.batting?.eye || 0) * 0.8 + (b.player.physical?.speed || 0) * 0.5;
+      return bs - as;
+    });
+    order.push(remaining.shift());
+
+    // 3番: バランス
+    remaining.sort((a, b) => {
+      const as = (a.player.batting?.meet || 0) * 1.0 + (a.player.batting?.power || 0) * 1.0 + (a.player.batting?.eye || 0) * 0.5;
+      const bs = (b.player.batting?.meet || 0) * 1.0 + (b.player.batting?.power || 0) * 1.0 + (b.player.batting?.eye || 0) * 0.5;
+      return bs - as;
+    });
+    order.push(remaining.shift());
+
+    // 4番: パワー最優先
+    remaining.sort((a, b) => {
+      const as = (a.player.batting?.power || 0) * 1.5 + (a.player.batting?.meet || 0) * 0.5;
+      const bs = (b.player.batting?.power || 0) * 1.5 + (b.player.batting?.meet || 0) * 0.5;
+      return bs - as;
+    });
+    order.push(remaining.shift());
+
+    // 5-9: 残りを打力順
+    remaining.sort((a, b) => b.offScore - a.offScore);
+    order.push(...remaining);
+    players.length = 0;
+  } else {
+    // 標準: 従来のセオリー打順
+    // 1番: 出塁率+走力（俊足巧打）
+    pick((a, b) => {
+      const as = (a.player.batting?.meet || 0) * 0.8 + (a.player.batting?.eye || 0) * 1.0 + (a.player.physical?.speed || 0) * 1.2;
+      const bs = (b.player.batting?.meet || 0) * 0.8 + (b.player.batting?.eye || 0) * 1.0 + (b.player.physical?.speed || 0) * 1.2;
+      return bs - as;
+    });
+    // 2番: ミート+選球眼（つなぎ役）
+    pick((a, b) => {
+      const as = (a.player.batting?.meet || 0) * 1.2 + (a.player.batting?.eye || 0) * 0.8 + (a.player.batting?.power || 0) * 0.3 + (a.player.physical?.speed || 0) * 0.5;
+      const bs = (b.player.batting?.meet || 0) * 1.2 + (b.player.batting?.eye || 0) * 0.8 + (b.player.batting?.power || 0) * 0.3 + (b.player.physical?.speed || 0) * 0.5;
+      return bs - as;
+    });
+    // 3番: 最強打者（ミート+パワー）
+    pick((a, b) => {
+      const as = (a.player.batting?.meet || 0) * 1.0 + (a.player.batting?.power || 0) * 1.2 + (a.player.batting?.eye || 0) * 0.5;
+      const bs = (b.player.batting?.meet || 0) * 1.0 + (b.player.batting?.power || 0) * 1.2 + (b.player.batting?.eye || 0) * 0.5;
+      return bs - as;
+    });
+    // 4番: 最強パワーヒッター
+    pick((a, b) => {
+      const as = (a.player.batting?.power || 0) * 1.5 + (a.player.batting?.meet || 0) * 0.7 + (a.player.batting?.eye || 0) * 0.3;
+      const bs = (b.player.batting?.power || 0) * 1.5 + (b.player.batting?.meet || 0) * 0.7 + (b.player.batting?.eye || 0) * 0.3;
+      return bs - as;
+    });
+    // 5番: パワー2番手
+    pick((a, b) => {
+      const as = (a.player.batting?.power || 0) * 1.3 + (a.player.batting?.meet || 0) * 0.8 + (a.player.batting?.eye || 0) * 0.4;
+      const bs = (b.player.batting?.power || 0) * 1.3 + (b.player.batting?.meet || 0) * 0.8 + (b.player.batting?.eye || 0) * 0.4;
+      return bs - as;
+    });
+    // 6番: バランス型
+    pick((a, b) => {
+      const as = (a.player.batting?.meet || 0) + (a.player.batting?.power || 0) + (a.player.batting?.eye || 0) * 0.5;
+      const bs = (b.player.batting?.meet || 0) + (b.player.batting?.power || 0) + (b.player.batting?.eye || 0) * 0.5;
+      return bs - as;
+    });
+    // 7番: 残り打力順
+    pick((a, b) => calcOffenseScore(b.player) - calcOffenseScore(a.player));
+    // 8番: 残り打力順（非DH時は8番に弱い打者を置き9番投手の前で走者を出す）
+    pick((a, b) => {
+      const as = (a.player.physical?.speed || 0) * 0.5 + (a.player.batting?.meet || 0) * 0.5;
+      const bs = (b.player.physical?.speed || 0) * 0.5 + (b.player.batting?.meet || 0) * 0.5;
+      return bs - as;
+    });
+    // 9番: 残り
+    if (players.length > 0) {
+      order.push(players[0]);
+      players.splice(0, 1);
+    }
+  }
+
+  return order;
+}
 
 // AIオーダー編成関数
 // mode: 'standard' | 'offense' | 'defense'
@@ -89,6 +314,7 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
   }
 
   const team = TEAMS_DATA[teamName];
+  const useDH = LEAGUE_SETTINGS.useDH;
   const fielders = team.players.filter(p => !p.position || p.position !== 'pitcher' || p.isTwoWay);
   const positions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
 
@@ -105,29 +331,26 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
     });
   });
 
-  // 貪欲法でチーム価値を最大化するポジション割り当て
-  // Step 1: まず打力上位9人（DH込み）をスタメン候補に選出
-  const sortedByOffense = [...playerScores].sort((a, b) => {
+  // 候補選出: モードに応じてソート基準を変える
+  const sortedCandidates = [...playerScores].sort((a, b) => {
     if (mode === 'defense') {
-      const aDefMax = Math.max(...positions.map(pos => calcDefenseScore(a.player, pos)));
-      const bDefMax = Math.max(...positions.map(pos => calcDefenseScore(b.player, pos)));
-      return (bDefMax + b.offense * 0.3) - (aDefMax + a.offense * 0.3);
+      const aVal = Math.max(...positions.map(pos => calcPositionValue(a.player, pos, mode)));
+      const bVal = Math.max(...positions.map(pos => calcPositionValue(b.player, pos, mode)));
+      return bVal - aVal;
     }
     return b.offense - a.offense;
   });
-  const numSlots = LEAGUE_SETTINGS.useDH ? 9 : 8;
-  const candidates = sortedByOffense.slice(0, Math.min(numSlots + 4, fielders.length));
+  const numSlots = useDH ? 9 : 8;
+  const candidates = sortedCandidates.slice(0, Math.min(numSlots + 4, fielders.length));
 
-  // Step 2: 候補者群から最適なポジション割り当てを探索
-  // 複数回のイテレーションで改善
+  // 最適なポジション割り当てを探索
   let bestAssignment = null;
   let bestTotalValue = -Infinity;
 
-  const targetPositions = LEAGUE_SETTINGS.useDH ? [...positions, 'dh'] : positions;
+  const targetPositions = useDH ? [...positions, 'dh'] : positions;
 
-  // ランダム初期解 + 改善を複数回試行
   for (let trial = 0; trial < 20; trial++) {
-    const assignment = greedyAssignment(candidates, targetPositions, trial);
+    const assignment = greedyAssignment(candidates, targetPositions, trial, mode);
     if (!assignment) continue;
 
     const totalValue = Object.entries(assignment).reduce((sum, [pos, ps]) => {
@@ -149,7 +372,7 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
     offense: ps.offense
   }));
 
-  const lineupOrder = assignBattingOrder(lineupPlayers);
+  const lineupOrder = assignBattingOrder(lineupPlayers, mode);
 
   // lineupSettingsに保存
   if (!team.lineupSettings) {
@@ -160,22 +383,40 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
     };
   }
 
-  team.lineupSettings.battingOrder = lineupOrder.map((entry, index) => ({
-    playerId: entry.player.id,
-    battingOrder: index + 1,
-    position: entry.position
-  }));
+  // splice で直接変更（新配列を作るとバグが出る）
+  team.lineupSettings.battingOrder.length = 0;
+
+  lineupOrder.forEach((entry, index) => {
+    team.lineupSettings.battingOrder.push({
+      playerId: entry.player.id,
+      battingOrder: index + 1,
+      position: entry.position,
+    });
+  });
+
+  // 非DH: 投手を9番に追加
+  if (!useDH) {
+    const pitchers = team.players.filter(p => p.position === 'pitcher');
+    if (pitchers.length > 0) {
+      const starterId = team.pitchingRotation?.starters?.[0] || pitchers[0].id;
+      team.lineupSettings.battingOrder.push({
+        playerId: starterId,
+        position: 'pitcher',
+        battingOrder: 9,
+      });
+    }
+  }
 
   // 旧形式の打順も維持
   team.players.forEach(p => { p.battingOrder = 0; });
 
-  lineupOrder.forEach((entry, index) => {
-    const teamPlayer = team.players.find(p => p.id === entry.player.id);
+  team.lineupSettings.battingOrder.forEach(entry => {
+    const teamPlayer = team.players.find(p => p.id === entry.playerId);
     if (teamPlayer) {
-      teamPlayer.battingOrder = index + 1;
+      teamPlayer.battingOrder = entry.battingOrder;
       if (entry.position === 'dh') {
         teamPlayer._isDH = true;
-      } else {
+      } else if (entry.position !== 'pitcher') {
         teamPlayer.position = entry.position;
         delete teamPlayer._isDH;
       }
@@ -183,185 +424,14 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
   });
 };
 
-// 貪欲法によるポジション割り当て
-function greedyAssignment(candidates, positions, trialSeed) {
-  const assigned = new Set();
-  const assignment = {};
-
-  // trialSeedによってポジション割り当て順を変える
-  const posOrder = [...positions];
-  if (trialSeed > 0) {
-    // 守備負担の大きいポジションから埋める（基本戦略）に若干のランダム性
-    const priorityOrder = ['catcher', 'short', 'center', 'second', 'third', 'right', 'left', 'first', 'dh'];
-    const shuffled = priorityOrder.filter(p => posOrder.includes(p));
-    // trial毎に少しだけ順番を入れ替え
-    if (trialSeed % 3 === 1) {
-      // 打撃重視ポジションから先に埋める
-      shuffled.reverse();
-    } else if (trialSeed % 3 === 2) {
-      // 中間ポジションから
-      const mid = Math.floor(shuffled.length / 2);
-      const reordered = [...shuffled.slice(mid), ...shuffled.slice(0, mid)];
-      shuffled.length = 0;
-      shuffled.push(...reordered);
-    }
-    posOrder.length = 0;
-    posOrder.push(...shuffled);
-  } else {
-    // trial 0: 守備負担大→小の順（デフォルト戦略）
-    const priorityOrder = ['catcher', 'short', 'center', 'second', 'third', 'right', 'left', 'first', 'dh'];
-    posOrder.length = 0;
-    posOrder.push(...priorityOrder.filter(p => positions.includes(p)));
-  }
-
-  posOrder.forEach(pos => {
-    let bestCandidate = null;
-    let bestValue = -Infinity;
-
-    candidates.forEach(ps => {
-      if (assigned.has(ps.player.id)) return;
-
-      const fitness = ps.player.positionFitness?.[pos] || 0;
-      // 適性が極端に低いポジションはペナルティ（ただし打力が圧倒的なら許容）
-      const fitnessThreshold = pos === 'dh' ? 0 : 20;
-      if (fitness < fitnessThreshold && pos !== 'dh' && pos !== 'first' && pos !== 'left') {
-        // 守備負担の大きいポジションで適性20未満は除外
-        return;
-      }
-
-      const value = calcPositionValue(ps.player, pos);
-      if (value > bestValue) {
-        bestValue = value;
-        bestCandidate = ps;
-      }
-    });
-
-    if (bestCandidate) {
-      assignment[pos] = bestCandidate;
-      assigned.add(bestCandidate.player.id);
-    }
+// 全チームのAIオーダー編成を実行
+export const generateAllTeamsLineup = (allTeams) => {
+  allTeams.forEach(teamName => {
+    generateOptimalLineup(teamName);
+    generatePitchingRotation(teamName);
   });
-
-  // 全ポジションが埋まらなかった場合は失敗
-  if (Object.keys(assignment).length < positions.length) {
-    // 埋まらなかったポジションは適性無視で打力から補充
-    const remaining = positions.filter(p => !assignment[p]);
-    const unassignedPlayers = candidates.filter(ps => !assigned.has(ps.player.id));
-    remaining.forEach(pos => {
-      if (unassignedPlayers.length === 0) return;
-      // 打力最高の未割り当て選手を配置
-      const best = unassignedPlayers.sort((a, b) => b.offense - a.offense)[0];
-      if (best) {
-        assignment[pos] = best;
-        assigned.add(best.player.id);
-        unassignedPlayers.splice(unassignedPlayers.indexOf(best), 1);
-      }
-    });
-  }
-
-  return Object.keys(assignment).length === positions.length ? assignment : null;
-}
-
-// 打順編成（野球セオリーに基づく）
-function assignBattingOrder(lineupPlayers) {
-  const players = [...lineupPlayers];
-  const order = [];
-
-  const pick = (filterFn, sortFn) => {
-    const candidates = players.filter(filterFn);
-    if (candidates.length === 0) return null;
-    candidates.sort(sortFn);
-    const picked = candidates[0];
-    players.splice(players.indexOf(picked), 1);
-    order.push(picked);
-    return picked;
-  };
-
-  // 1番: 出塁率+走力（俊足巧打）
-  pick(
-    () => true,
-    (a, b) => {
-      const aScore = (a.player.batting?.meet || 0) * 0.8 + (a.player.batting?.eye || 0) * 1.0 + (a.player.physical?.speed || 0) * 1.2;
-      const bScore = (b.player.batting?.meet || 0) * 0.8 + (b.player.batting?.eye || 0) * 1.0 + (b.player.physical?.speed || 0) * 1.2;
-      return bScore - aScore;
-    }
-  );
-
-  // 2番: ミート+選球眼（つなぎ役、最近は強打者も）
-  pick(
-    () => true,
-    (a, b) => {
-      const aScore = (a.player.batting?.meet || 0) * 1.2 + (a.player.batting?.eye || 0) * 0.8 + (a.player.batting?.power || 0) * 0.5 + (a.player.physical?.speed || 0) * 0.5;
-      const bScore = (b.player.batting?.meet || 0) * 1.2 + (b.player.batting?.eye || 0) * 0.8 + (b.player.batting?.power || 0) * 0.5 + (b.player.physical?.speed || 0) * 0.5;
-      return bScore - aScore;
-    }
-  );
-
-  // 3番: 最強打者（ミート+パワーの最高バランス）
-  pick(
-    () => true,
-    (a, b) => {
-      const aScore = (a.player.batting?.meet || 0) * 1.0 + (a.player.batting?.power || 0) * 1.2 + (a.player.batting?.eye || 0) * 0.5;
-      const bScore = (b.player.batting?.meet || 0) * 1.0 + (b.player.batting?.power || 0) * 1.2 + (b.player.batting?.eye || 0) * 0.5;
-      return bScore - aScore;
-    }
-  );
-
-  // 4番: 最強のパワーヒッター（長打力重視）
-  pick(
-    () => true,
-    (a, b) => {
-      const aScore = (a.player.batting?.power || 0) * 1.5 + (a.player.batting?.meet || 0) * 0.7 + (a.player.batting?.eye || 0) * 0.3;
-      const bScore = (b.player.batting?.power || 0) * 1.5 + (b.player.batting?.meet || 0) * 0.7 + (b.player.batting?.eye || 0) * 0.3;
-      return bScore - aScore;
-    }
-  );
-
-  // 5番: パワー2番手（勝負強さ）
-  pick(
-    () => true,
-    (a, b) => {
-      const aScore = (a.player.batting?.power || 0) * 1.3 + (a.player.batting?.meet || 0) * 0.8 + (a.player.batting?.eye || 0) * 0.4;
-      const bScore = (b.player.batting?.power || 0) * 1.3 + (b.player.batting?.meet || 0) * 0.8 + (b.player.batting?.eye || 0) * 0.4;
-      return bScore - aScore;
-    }
-  );
-
-  // 6番: バランス型
-  pick(
-    () => true,
-    (a, b) => {
-      const aScore = (a.player.batting?.meet || 0) + (a.player.batting?.power || 0) + (a.player.batting?.eye || 0) * 0.5;
-      const bScore = (b.player.batting?.meet || 0) + (b.player.batting?.power || 0) + (b.player.batting?.eye || 0) * 0.5;
-      return bScore - aScore;
-    }
-  );
-
-  // 7番: 残りで打撃力の高い順
-  pick(
-    () => true,
-    (a, b) => a.offense - b.offense ? b.offense - a.offense : 0
-  );
-
-  // 8番: 残り（下位打線）
-  pick(
-    () => true,
-    (a, b) => b.offense - a.offense
-  );
-
-  // 9番: 最後の一人（DH無しならピッチャー枠近くで走力のある選手）
-  if (players.length > 0) {
-    players.sort((a, b) => {
-      const aScore = (a.player.physical?.speed || 0) * 0.6 + (a.player.batting?.meet || 0) * 0.4;
-      const bScore = (b.player.physical?.speed || 0) * 0.6 + (b.player.batting?.meet || 0) * 0.4;
-      return bScore - aScore;
-    });
-    order.push(players[0]);
-    players.splice(0, 1);
-  }
-
-  return order;
-}
+  alert('全チームのAIオーダー編成と投手ローテーションを設定しました！');
+};
 
 // 投手ローテーション生成関数（AI監督用）
 export const generatePitchingRotation = (teamName) => {
@@ -373,20 +443,16 @@ export const generatePitchingRotation = (teamName) => {
   const team = TEAMS_DATA[teamName];
   const pitchers = team.players.filter(p => p.position === 'pitcher' || p.pitching?.stamina > 0);
 
-  // 先発適性スコア（スタミナ重視 + 制球 + 球速）
   const starterScore = (p) =>
     (p.pitching?.stamina || 0) * 0.45 +
     (p.pitching?.control || 0) * 0.30 +
     (p.pitching?.velocity || 130) * 0.25;
 
-  // リリーフ適性スコア（球速重視 + 制球、スタミナは低くてもOK）
   const reliefScore = (p) =>
     (p.pitching?.velocity || 130) * 0.45 +
     (p.pitching?.control || 0) * 0.35 +
     (p.pitching?.stamina || 0) * 0.20;
 
-  // 先発候補: スタミナ上位の投手を先発スコア順に5人
-  // 閾値は投手陣のスタミナ中央値を基準に動的決定（社会人モード対応）
   const sortedByStamina = [...pitchers].sort((a, b) => (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0));
   const medianStamina = sortedByStamina.length > 0 ? (sortedByStamina[Math.floor(sortedByStamina.length / 2)]?.pitching?.stamina || 80) : 80;
   const starterThreshold = Math.max(60, Math.min(130, medianStamina));
@@ -396,7 +462,6 @@ export const generatePitchingRotation = (teamName) => {
   const starters = starterCandidates.slice(0, 5);
   const starterIds = new Set(starters.map(p => p.id));
 
-  // 先発が足りない場合はスタミナ順で補充
   if (starters.length < 3) {
     const needed = 3 - starters.length;
     const remaining = sortedByStamina.filter(p => !starterIds.has(p.id));
@@ -406,17 +471,14 @@ export const generatePitchingRotation = (teamName) => {
     }
   }
 
-  // リリーフ候補
   const relievers = pitchers.filter(p => !starterIds.has(p.id));
   const scoredRelievers = relievers
     .map(p => ({ ...p, score: reliefScore(p) }))
     .sort((a, b) => b.score - a.score);
 
-  // ロール割り当て
   const pitcherRoles = {};
   const assigned = new Set();
 
-  // 先発ロール
   const scoredStarters = starters
     .map(p => ({ ...p, score: starterScore(p) }))
     .sort((a, b) => b.score - a.score);
@@ -434,14 +496,12 @@ export const generatePitchingRotation = (teamName) => {
     }
   });
 
-  // 守護神: リリーフ最高スコア（球速+制球が高い）
   const closer = scoredRelievers[0] || null;
   if (closer) {
     pitcherRoles[closer.id] = 'closer';
     assigned.add(closer.id);
   }
 
-  // セットアッパー: 2番手
   const setupMen = [];
   if (scoredRelievers[1]) {
     setupMen.push(scoredRelievers[1]);
@@ -449,14 +509,12 @@ export const generatePitchingRotation = (teamName) => {
     assigned.add(scoredRelievers[1].id);
   }
 
-  // 中継ぎエース: 3番手
   const unassigned = scoredRelievers.filter(p => !assigned.has(p.id));
   if (unassigned[0]) {
     pitcherRoles[unassigned[0].id] = 'ace_relief';
     assigned.add(unassigned[0].id);
   }
 
-  // ワンポイント: 左投げ＆スタミナ低め
   const unassigned2 = scoredRelievers.filter(p => !assigned.has(p.id));
   const onepointCandidate = unassigned2.find(p =>
     p.physical?.throws === 'left' && (p.pitching?.stamina || 0) < 110
@@ -466,7 +524,6 @@ export const generatePitchingRotation = (teamName) => {
     assigned.add(onepointCandidate.id);
   }
 
-  // ロングリリーフ: スタミナが高いリリーフ
   const unassigned3 = scoredRelievers.filter(p => !assigned.has(p.id));
   const longCandidate = [...unassigned3].sort((a, b) =>
     (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0)
@@ -476,14 +533,12 @@ export const generatePitchingRotation = (teamName) => {
     assigned.add(longCandidate.id);
   }
 
-  // 残りをビハインド→敗戦処理
   const unassigned4 = scoredRelievers.filter(p => !assigned.has(p.id));
   unassigned4.forEach((p, i) => {
     pitcherRoles[p.id] = i === 0 ? 'behind' : 'mopup';
     assigned.add(p.id);
   });
 
-  // レガシー配列
   const middleRelievers = scoredRelievers.filter(p =>
     p.id !== closer?.id && !setupMen.some(s => s.id === p.id)
   );
@@ -499,13 +554,4 @@ export const generatePitchingRotation = (teamName) => {
   team.pitchingRotation.currentStarterIndex = 0;
   team.pitchingRotation.reliefFatigue = {};
   team.pitchingRotation.pitcherRoles = pitcherRoles;
-};
-
-// 全チームのAIオーダー編成を実行
-export const generateAllTeamsLineup = (allTeams) => {
-  allTeams.forEach(teamName => {
-    generateOptimalLineup(teamName);
-    generatePitchingRotation(teamName);
-  });
-  alert('全チームのAIオーダー編成と投手ローテーションを設定しました！');
 };
