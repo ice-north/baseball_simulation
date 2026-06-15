@@ -69,6 +69,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
 
   const handleNegotiate = () => {
     const results = [];
+    const removedIds = new Set();
     selectedIds.forEach(id => {
       const player = candidates.find(c => c.id === id);
       if (player) {
@@ -76,12 +77,15 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         const modifiedRate = Math.min(95, (player.recruitRate || 0) + scoutBonus);
         const result = negotiateWithCompetition(teamData, { ...player, recruitRate: modifiedRate }, teamData);
         results.push({ player, ...result, scoutName: selectedScout?.name || null });
+        // 入団成功・他チーム入団・辞退 → 候補から除去、条件折り合わず → 残す（再交渉可能）
+        if (result.success || result.rivalResult) {
+          removedIds.add(id);
+        }
       }
     });
     setNegotiationResults(results);
     setAllResults(prev => [...prev, ...results]);
-    const negotiatedIds = new Set(selectedIds);
-    setCandidates(prev => prev.filter(c => !negotiatedIds.has(c.id)));
+    setCandidates(prev => prev.filter(c => !removedIds.has(c.id)));
     setSelectedIds([]);
     setPhase('results');
   };
@@ -185,16 +189,20 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         </p>
 
         <div className="space-y-3 mb-6">
-          {negotiationResults.map(({ player: p, success, rate, rivalResult, scoutName }) => {
+          {negotiationResults.map(({ player: p, success, rate, rivalResult, rivalTeamName, scoutName }) => {
             const favBonus = getFavoriteBonus(teamData, p.id);
             const invBonus = (p._investigationCount || 0) * 7;
             return (
               <div key={p.id} className={`p-4 rounded-lg border ${
-                success ? 'bg-green-900/20 border-green-700' : 'bg-red-900/10 border-red-900/30'
+                success ? 'bg-green-900/20 border-green-700'
+                  : rivalResult ? 'bg-red-900/10 border-red-900/30'
+                  : 'bg-yellow-900/10 border-yellow-700/30'
               }`}>
                 <div className="flex items-center gap-3 text-base">
-                  <span className={`font-black text-xl w-8 text-center ${success ? 'text-green-400' : 'text-red-400'}`}>
-                    {success ? 'O' : 'X'}
+                  <span className={`font-black text-xl w-8 text-center ${
+                    success ? 'text-green-400' : rivalResult ? 'text-red-400' : 'text-yellow-400'
+                  }`}>
+                    {success ? 'O' : rivalResult ? 'X' : '△'}
                   </span>
                   <span className="text-yellow-400 font-bold">{POSITION_NAMES[p.position]}</span>
                   <span className="text-white font-bold text-lg">{p.name}</span>
@@ -215,9 +223,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                   ) : rivalResult === 'declined' ? (
                     <span className="text-gray-500">本人が入団を辞退しました</span>
                   ) : rivalResult ? (
-                    <span className="text-gray-500">{rivalResult}ランクのチームへの入団が決まりました</span>
+                    <span className="text-gray-500">{rivalTeamName || `${rivalResult}ランクのチーム`}への入団が決まりました</span>
                   ) : (
-                    <span className="text-gray-500">条件面で折り合いがつきませんでした</span>
+                    <span className="text-yellow-500">条件面で折り合いがつきませんでした（再交渉可能）</span>
                   )}
                 </div>
               </div>

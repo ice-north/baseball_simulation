@@ -223,24 +223,7 @@ export function getScoutRecommendation(player, teamRank, teamData) {
  * 選手のスコアと知名度からライバル数を推定
  */
 export function estimateRivalCount(player) {
-  const score = evaluatePlayerScore(player);
-  const fame = player.fame || 0;
-  const age = player.age || 22;
-  const interest = score * 0.6 + fame * 0.4;
-  // idのハッシュで微小ノイズ（安定的なランダム）
-  const hash = (player.id || 0) % 17;
-  const adjusted = interest + hash * 1.5 - 8;
-  // 若い選手ほど注目度が高い
-  const ageBonus = age <= 20 ? 10 : age <= 23 ? 5 : age >= 30 ? -8 : 0;
-  const final = adjusted + ageBonus;
-
-  if (final >= 80) return 7;
-  if (final >= 70) return 6;
-  if (final >= 60) return 5;
-  if (final >= 50) return 4;
-  if (final >= 40) return 3;
-  if (final >= 30) return 2;
-  if (final >= 20) return 1;
+  if (player._rivals) return player._rivals.length;
   return 0;
 }
 
@@ -593,6 +576,11 @@ export function recruitPlayer(team, player) {
  * AIチームのスカウト入団処理
  * 各AIチームが自チームの候補から選手を獲得
  */
+/**
+ * AIチームの残りスカウト入団処理
+ * ユーザー交渉フェーズでライバルとして入団済みの分を考慮し、
+ * まだ定員に達していないチームのみ追加獲得
+ */
 export function processAIScoutRecruitment(allTeams, userTeamName, year) {
   const results = {};
 
@@ -603,14 +591,13 @@ export function processAIScoutRecruitment(allTeams, userTeamName, year) {
     const currentSize = team.players.length;
     if (currentSize >= CORPORATE_TARGET_ROSTER) return;
 
-    const need = Math.min(3, CORPORATE_TARGET_ROSTER - currentSize);
+    const need = Math.min(2, CORPORATE_TARGET_ROSTER - currentSize);
     if (need <= 0) return;
 
     const candidates = generateScoutCandidates(team, year);
     if (candidates.length === 0) return;
     const acquired = [];
 
-    // ポジション不足を分析
     const posCount = { pitcher: 0, catcher: 0, infield: 0, outfield: 0 };
     team.players.forEach(p => {
       if (p.position === 'pitcher') posCount.pitcher++;
@@ -619,7 +606,6 @@ export function processAIScoutRecruitment(allTeams, userTeamName, year) {
       else posCount.outfield++;
     });
 
-    // 必要ポジションの選手を優先獲得
     const sortedCandidates = [...candidates].sort((a, b) => {
       const scoreA = getPositionNeedScore(a.position, posCount);
       const scoreB = getPositionNeedScore(b.position, posCount);
@@ -1233,39 +1219,61 @@ function getClubScoutPool(excludeTeam) {
  * スカウトリストの選手に対する他球団の興味を生成
  * 選手の知名度・能力が高いほど、高ランクチームからの関心が多い
  */
+/**
+ * AIチームの入札を生成し、各スカウト候補に実際のライバルチーム情報を付与
+ * AIチームはポジション不足に応じて候補者を狙う
+ */
 export function generateRivalInterest(scoutedPlayers) {
-  return scoutedPlayers.map(player => {
-    const score = evaluatePlayerScore(player);
-    const fame = player.fame || 0;
-    const age = player.age || 22;
+  const userTeamName = Object.keys(TEAMS_DATA)[0] || '';
+  const playerIdSet = new Set(scoutedPlayers.map(p => p.id));
 
-    const interestScore = score * 0.6 + fame * 0.4;
-    const ageBonus = age <= 20 ? 12 : age <= 23 ? 6 : age >= 30 ? -10 : 0;
-    const adjusted = interestScore + ageBonus;
+  // AIチームのポジション需要を分析し、入札を生成
+  const bidsPerPlayer = {};
+  scoutedPlayers.forEach(p => { bidsPerPlayer[p.id] = []; });
 
-    let rivalCount;
-    if (adjusted >= 75) rivalCount = 5 + Math.floor(Math.random() * 3);
-    else if (adjusted >= 60) rivalCount = 3 + Math.floor(Math.random() * 3);
-    else if (adjusted >= 45) rivalCount = 2 + Math.floor(Math.random() * 2);
-    else if (adjusted >= 30) rivalCount = 1 + (Math.random() < 0.5 ? 1 : 0);
-    else if (adjusted >= 15) rivalCount = Math.random() < 0.4 ? 1 : 0;
-    else rivalCount = 0;
+  Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+    if (teamName === userTeamName) return;
+    if (!team?.players || !team.corporateData) return;
+    const currentSize = team.players.length;
+    if (currentSize >= CORPORATE_TARGET_ROSTER) return;
 
-    const rivals = [];
-    for (let i = 0; i < rivalCount; i++) {
-      const roll = Math.random() * 100;
-      let rank;
-      if (adjusted >= 60) {
-        rank = roll < 20 ? 'S' : roll < 55 ? 'A' : roll < 80 ? 'B' : roll < 95 ? 'C' : 'D';
-      } else if (adjusted >= 35) {
-        rank = roll < 5 ? 'S' : roll < 25 ? 'A' : roll < 55 ? 'B' : roll < 85 ? 'C' : 'D';
-      } else {
-        rank = roll < 10 ? 'B' : roll < 50 ? 'C' : 'D';
+    const need = Math.min(3, CORPORATE_TARGET_ROSTER - currentSize);
+    if (need <= 0) return;
+
+    const rank = team.corporateData?.rank || 'C';
+    const reputation = team.corporateData?.reputation || 0;
+
+    // ポジション不足を分析
+    const posCount = { pitcher: 0, catcher: 0, infield: 0, outfield: 0 };
+    team.players.forEach(p => {
+      if (p.position === 'pitcher') posCount.pitcher++;
+      else if (p.position === 'catcher') posCount.catcher++;
+      else if (['first', 'second', 'third', 'short'].includes(p.position)) posCount.infield++;
+      else posCount.outfield++;
+    });
+
+    // スカウト候補をポジション需要＋能力でスコアリング
+    const scored = scoutedPlayers.map(p => {
+      const posNeed = getPositionNeedScore(p.position, posCount);
+      if (posNeed <= 0) return null;
+      const ability = evaluatePlayerScore(p);
+      const interestChance = (posNeed * 2 + ability + reputation * 0.3) / 150;
+      if (Math.random() > Math.min(0.8, interestChance)) return null;
+      return { player: p, score: posNeed + ability * 0.5 + Math.random() * 20 };
+    }).filter(Boolean);
+
+    scored.sort((a, b) => b.score - a.score);
+    const bidCount = Math.min(need, scored.length);
+    for (let i = 0; i < bidCount; i++) {
+      const pid = scored[i].player.id;
+      if (bidsPerPlayer[pid]) {
+        bidsPerPlayer[pid].push({ teamName, rank, reputation });
       }
-      rivals.push({ rank });
     }
+  });
 
-    player._rivals = rivals;
+  return scoutedPlayers.map(player => {
+    player._rivals = bidsPerPlayer[player.id] || [];
     return player;
   });
 }
@@ -1274,6 +1282,7 @@ export function generateRivalInterest(scoutedPlayers) {
  * 他球団との競合を考慮した交渉
  * player.recruitRate が設定されていれば（スカウトボーナス等含む）それを使う
  * ライバルがいる場合、表示成功率をベースに競合ペナルティを適用
+ * 他チームに入団と判定された場合、実際にそのチームに入団させる
  */
 export function negotiateWithCompetition(team, player, teamData) {
   const rivals = player._rivals || [];
@@ -1285,7 +1294,7 @@ export function negotiateWithCompetition(team, player, teamData) {
     const roll = Math.random() * 100;
     const success = roll < displayedRate;
     if (success) recruitPlayer(team, player);
-    return { success, rate: displayedRate, rivalResult: null };
+    return { success, rate: displayedRate, rivalResult: null, rivalTeamName: null };
   }
 
   // ライバルがいる場合：表示成功率に競合ペナルティを適用
@@ -1298,16 +1307,50 @@ export function negotiateWithCompetition(team, player, teamData) {
 
   if (success) {
     recruitPlayer(team, player);
-    return { success, rate: adjustedRate, rivalResult: null };
+    return { success, rate: adjustedRate, rivalResult: null, rivalTeamName: null };
   }
 
-  // 失敗時：どのライバルが獲得したか、または辞退か
-  const declineChance = 0.3;
-  if (Math.random() < declineChance) {
-    return { success: false, rate: adjustedRate, rivalResult: 'declined' };
+  // 失敗時：条件折り合わず(再交渉可) / 他チーム入団 / 辞退
+  // ライバルが多いほど他チームに取られやすい
+  const rivalTakeChance = Math.min(0.7, rivals.length * 0.2);
+  const declineChance = 0.15;
+
+  const fate = Math.random();
+  if (fate < rivalTakeChance) {
+    // ライバルチームが獲得 → 実際にそのチームに入団させる
+    const winnerRival = rivals[Math.floor(Math.random() * rivals.length)];
+    const rivalTeam = TEAMS_DATA[winnerRival.teamName];
+    if (rivalTeam) {
+      recruitPlayerToTeam(rivalTeam, player);
+    }
+    return { success: false, rate: adjustedRate, rivalResult: winnerRival.rank, rivalTeamName: winnerRival.teamName };
+  } else if (fate < rivalTakeChance + declineChance) {
+    return { success: false, rate: adjustedRate, rivalResult: 'declined', rivalTeamName: null };
   }
-  const winnerRival = rivals[Math.floor(Math.random() * rivals.length)];
-  return { success: false, rate: adjustedRate, rivalResult: winnerRival?.rank || 'B' };
+  // 条件折り合わず → 再交渉可能（candidatesから除去しない）
+  return { success: false, rate: adjustedRate, rivalResult: null, rivalTeamName: null };
+}
+
+/**
+ * 指定チームに選手を入団させる（ライバルチーム用）
+ */
+function recruitPlayerToTeam(team, player) {
+  removeFromPool(player);
+  const recruit = { ...player };
+  delete recruit.scoutAccuracy;
+  delete recruit.scoutedAbilities;
+  delete recruit._poolRef;
+  delete recruit._scoutSource;
+  delete recruit._rivals;
+  delete recruit._investigationCount;
+  delete recruit._revealLevel;
+  recruit.origin = 'scout';
+  recruit.isStarter = false;
+  recruit.battingOrder = 0;
+  recruit.fatigue = 0;
+  if (!recruit.careerHistory) recruit.careerHistory = [];
+  recruit.careerHistory.push({ type: 'corporate', year: null, label: team.name });
+  team.players.push(recruit);
 }
 
 /**
