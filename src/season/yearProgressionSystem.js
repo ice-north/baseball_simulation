@@ -385,6 +385,14 @@ export function processNPBDraft(allTeams, gameYear = 1) {
 
   const awardBonusMap = computeSeasonAwardBonuses(allTeams);
 
+  // === 安全策: 高校生プールが空なら即座に生成 ===
+  if (highSchoolPool.players.length === 0 && gameYear >= 1) {
+    console.warn(`[NPBDraft] 高校生プールが空です（Year ${gameYear}）。自動生成します。`);
+    const hsPlayers = generateHighSchoolClass(gameYear, 3000);
+    highSchoolPool.players = hsPlayers;
+    highSchoolPool.year = gameYear;
+  }
+
   // === 全ソースから候補を収集し、統一スコアで評価 ===
   const allCandidates = [];
 
@@ -446,6 +454,11 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     });
   });
 
+  // === 候補数の診断ログ ===
+  const sourceCounts = { highschool: 0, university: 0, university_team: 0, corporate: 0, independent: 0 };
+  allCandidates.forEach(c => { sourceCounts[c.source] = (sourceCounts[c.source] || 0) + 1; });
+  console.log(`[NPBDraft Year${gameYear}] 候補数: 高校${sourceCounts.highschool} 大学pool${sourceCounts.university} 大学team${sourceCounts.university_team} 社会人${sourceCounts.corporate} 独立${sourceCounts.independent} 合計${allCandidates.length}`);
+
   // === スコア順にソートし、上位~120名を指名 ===
   allCandidates.sort((a, b) => b.score - a.score);
 
@@ -458,6 +471,12 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const totalSlots = mainSlots + ikuSlots;
   const MIN_DRAFT_SCORE = 80;
   const eligible = allCandidates.filter(c => c.score >= MIN_DRAFT_SCORE);
+  const eligibleSourceCounts = { highschool: 0, university: 0, corporate: 0, independent: 0 };
+  eligible.forEach(c => {
+    const src = c.source === 'university_team' ? 'university' : c.source;
+    eligibleSourceCounts[src] = (eligibleSourceCounts[src] || 0) + 1;
+  });
+  console.log(`[NPBDraft Year${gameYear}] eligible(≥${MIN_DRAFT_SCORE}): 高校${eligibleSourceCounts.highschool} 大学${eligibleSourceCounts.university} 社会人${eligibleSourceCounts.corporate} 独立${eligibleSourceCounts.independent} 合計${eligible.length} / slots=${totalSlots}`);
   const selected = eligible.slice(0, Math.min(totalSlots, eligible.length));
 
   // === 指名エントリ生成ヘルパー ===

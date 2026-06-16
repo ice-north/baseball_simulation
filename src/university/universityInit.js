@@ -32,13 +32,13 @@ const makeAbbreviation = (name) => {
   return name.slice(0, 3);
 };
 
-// 大学生の年齢分布（18-22歳、1-4年生）
+// 大学生の年齢分布（19-22歳、1-4年生）
 const assignUniversityAge = (player) => {
   const roll = Math.random();
-  if (roll < 0.25) player.age = 18;       // 1年生
-  else if (roll < 0.50) player.age = 19;  // 2年生
-  else if (roll < 0.75) player.age = 20;  // 3年生
-  else player.age = 21;                   // 4年生
+  if (roll < 0.25) player.age = 19;       // 1年生
+  else if (roll < 0.50) player.age = 20;  // 2年生
+  else if (roll < 0.75) player.age = 21;  // 3年生
+  else player.age = 22;                   // 4年生
 };
 
 // 大学チームのロスターを生成
@@ -76,7 +76,7 @@ const generateUniversityRoster = (teamDef) => {
     p.batting.eye = Math.min(p.batting.eye, batCap + randInt(0, 3));
 
     // 学年に応じた経歴
-    const yearInUni = p.age - 17;
+    const yearInUni = p.age - 18;
     if (!p.careerHistory) p.careerHistory = [];
     p.careerHistory = [
       { type: 'highschool', label: '高校卒' },

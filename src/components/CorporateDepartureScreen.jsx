@@ -19,6 +19,8 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   const [sponsorOffers, setSponsorOffers] = useState(null);
   const [staffConversions, setStaffConversions] = useState({});
   const [staffPreviews, setStaffPreviews] = useState({});
+  const [replaceStaffFor, setReplaceStaffFor] = useState(null);
+  const [staffReplacements, setStaffReplacements] = useState({});
 
   useEffect(() => {
     if (processed) return;
@@ -130,6 +132,11 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     }
   };
 
+  const MAX_STAFF = 10;
+  const pendingConversionCount = Object.values(staffConversions).filter(Boolean).length;
+  const pendingReplacementCount = Object.values(staffReplacements).filter(Boolean).length;
+  const effectiveStaffCount = staff.length + pendingConversionCount - pendingReplacementCount;
+
   const toggleStaffConversion = (playerId) => {
     const player = players.find(p => p.id === playerId);
     if (!player) return;
@@ -140,11 +147,25 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       const nextPrev = { ...staffPreviews };
       delete nextPrev[playerId];
       setStaffPreviews(nextPrev);
+      const nextRepl = { ...staffReplacements };
+      delete nextRepl[playerId];
+      setStaffReplacements(nextRepl);
+      setReplaceStaffFor(null);
+    } else if (effectiveStaffCount >= MAX_STAFF) {
+      const preview = convertPlayerToStaff(player);
+      setStaffPreviews({ ...staffPreviews, [playerId]: preview });
+      setReplaceStaffFor(playerId);
     } else {
       const preview = convertPlayerToStaff(player);
       setStaffConversions({ ...staffConversions, [playerId]: true });
       setStaffPreviews({ ...staffPreviews, [playerId]: preview });
     }
+  };
+
+  const selectStaffToReplace = (playerId, staffId) => {
+    setStaffReplacements({ ...staffReplacements, [playerId]: staffId });
+    setStaffConversions({ ...staffConversions, [playerId]: true });
+    setReplaceStaffFor(null);
   };
 
   const handleAcceptSponsor = (offer, index) => {
@@ -175,7 +196,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
     // 赤字判定は11/30の年度末決算で行う（退団・入団・スタッフ・スポンサー確定後）
 
-    // スタッフ転向処理
+    // スタッフ転向処理（入替がある場合は先に既存スタッフを除去）
     Object.entries(staffConversions).forEach(([pid, enabled]) => {
       if (!enabled) return;
       const numPid = typeof pid === 'string' ? parseInt(pid) : pid;
@@ -184,6 +205,11 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       if (decision === 'retire' || isAutoRetired) {
         const preview = staffPreviews[pid];
         if (preview && cd) {
+          const replaceId = staffReplacements[pid];
+          if (replaceId) {
+            const idx = cd.staff.findIndex(s => s.id === replaceId);
+            if (idx >= 0) cd.staff.splice(idx, 1);
+          }
           cd.staff.push(preview);
         }
       }
@@ -236,6 +262,49 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       </div>
     </div>
   );
+
+  const StaffReplaceSelector = ({ playerId }) => {
+    if (replaceStaffFor !== playerId) {
+      if (staffReplacements[playerId]) {
+        const replaced = staff.find(s => s.id === staffReplacements[playerId]);
+        return replaced ? (
+          <div className="mt-1 text-[10px] text-orange-400">
+            → {replaced.name}（{STAFF_GRADES[replaced.grade]?.label}）と入替
+            <button onClick={() => {
+              const next = { ...staffReplacements };
+              delete next[playerId];
+              setStaffReplacements(next);
+              const nextConv = { ...staffConversions };
+              delete nextConv[playerId];
+              setStaffConversions(nextConv);
+            }} className="ml-2 text-gray-500 hover:text-gray-300">取消</button>
+          </div>
+        ) : null;
+      }
+      return null;
+    }
+    return (
+      <div className="mt-2 p-2 bg-gray-800 rounded border border-orange-700/50">
+        <p className="text-[10px] text-orange-400 mb-1.5 font-bold">スタッフ枠が上限（{MAX_STAFF}名）です。入替えるスタッフを選んでください：</p>
+        <div className="space-y-1">
+          {staff.map(s => (
+            <button key={s.id}
+              onClick={() => selectStaffToReplace(playerId, s.id)}
+              className="w-full flex items-center gap-2 px-2 py-1 bg-gray-700 hover:bg-red-900/40 rounded text-left text-[10px] transition">
+              <span className={`font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
+              <span className="text-white">{s.name}</span>
+              <span className="text-gray-400">{s.role === 'coach' ? 'コーチ' : s.role === 'manager' ? 'マネ' : 'トレ'}</span>
+              <span className="text-gray-500">年俸{getStaffSalary(s).toLocaleString()}万</span>
+              {s.isFormerPlayer && <span className="text-cyan-600">元選手</span>}
+              <span className="ml-auto text-gray-500">{s.strengths?.map(k => STAFF_ABILITIES[k]?.name?.slice(0, 2)).join(' ')}</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setReplaceStaffFor(null)}
+          className="mt-1.5 text-[10px] text-gray-500 hover:text-gray-300">キャンセル</button>
+      </div>
+    );
+  };
 
   const DecisionBadge = ({ decision }) => {
     if (decision === 'release') return <span className="text-red-400 font-bold text-[10px] bg-red-900/40 px-1.5 py-0.5 rounded">解雇</span>;
@@ -417,6 +486,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                       {isConverting && preview && (
                         <StaffPreview preview={preview} />
                       )}
+                      <StaffReplaceSelector playerId={r.id} />
                     </div>
                   );
                 })}
@@ -521,6 +591,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                           <StaffPreview preview={staffPreviews[player.id]} />
                         )}
                       </div>
+                      <StaffReplaceSelector playerId={player.id} />
                     </td>
                   </tr>
                 )}
