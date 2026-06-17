@@ -78,7 +78,8 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', city: '' });
 
-  useEffect(() => { clearGameSessionTeams(); }, []);
+  // ゲームセッション用チームをコンポーネント初期化時にクリア（useEffectだとレンダー後で遅い）
+  const [sessionCleared] = useState(() => { clearGameSessionTeams(); return true; });
 
   const regionTeams = selectedRegion
     ? getTeamsByRegion(selectedRegion)
