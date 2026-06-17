@@ -306,9 +306,11 @@ const AbilityRankingScreen = () => {
   }, [Object.keys(TEAMS_DATA).length]);
 
   const filteredPlayers = useMemo(() => {
-    let list = allPlayers;
+    let list = sortKey === 'draft' ? [...allPlayers, ...hsPlayers] : allPlayers;
     if (category === 'pitcher') list = list.filter(p => p.position === 'pitcher');
-    else if (category === 'fielder') list = list.filter(p => p.position !== 'pitcher');
+    else if (category === 'catcher') list = list.filter(p => p.position === 'catcher');
+    else if (category === 'infielder') list = list.filter(p => ['first', 'second', 'third', 'short'].includes(p.position));
+    else if (category === 'outfielder') list = list.filter(p => ['left', 'center', 'right'].includes(p.position));
 
     list = [...list].sort((a, b) => {
       let diff = 0;
@@ -330,12 +332,14 @@ const AbilityRankingScreen = () => {
     });
 
     return list.slice(0, limit);
-  }, [allPlayers, category, sortKey, limit]);
+  }, [allPlayers, hsPlayers, category, sortKey, limit]);
 
   const filteredHsPlayers = useMemo(() => {
     let list = hsPlayers;
     if (category === 'pitcher') list = list.filter(p => p.position === 'pitcher');
-    else if (category === 'fielder') list = list.filter(p => p.position !== 'pitcher');
+    else if (category === 'catcher') list = list.filter(p => p.position === 'catcher');
+    else if (category === 'infielder') list = list.filter(p => ['first', 'second', 'third', 'short'].includes(p.position));
+    else if (category === 'outfielder') list = list.filter(p => ['left', 'center', 'right'].includes(p.position));
 
     list = [...list].sort((a, b) => {
       let diff = 0;
@@ -367,32 +371,36 @@ const AbilityRankingScreen = () => {
     return [...list].sort((a, b) => b.avg - a.avg);
   }, [allTeamStats, teamRankFilter]);
 
+  const isFielderCategory = ['catcher', 'infielder', 'outfielder'].includes(category);
+
   const getSortOptions = (forMode) => {
+    const fielderOpts = [
+      { key: 'overall', label: '総合' }, { key: 'meet', label: 'ミート' },
+      { key: 'power', label: 'パワー' }, { key: 'speed', label: '走力' },
+      { key: 'defense', label: '守備' }, { key: 'eye', label: '選球眼' },
+      { key: 'draft', label: 'ドラフト' }, { key: 'age', label: '年齢' },
+    ];
+    const pitcherOpts = [
+      { key: 'overall', label: '総合' }, { key: 'velocity', label: '球速' },
+      { key: 'control', label: '制球' }, { key: 'breaking', label: '変化球' },
+      { key: 'stamina', label: 'スタミナ' }, { key: 'draft', label: 'ドラフト' },
+      { key: 'age', label: '年齢' },
+    ];
     if (forMode === 'highschool') {
       if (category === 'pitcher') return [
         { key: 'draft', label: 'ドラフト' }, { key: 'overall', label: '総合' },
         { key: 'velocity', label: '球速' }, { key: 'control', label: '制球' },
         { key: 'breaking', label: '変化球' },
       ];
-      if (category === 'fielder') return [
+      if (isFielderCategory) return [
         { key: 'draft', label: 'ドラフト' }, { key: 'overall', label: '総合' },
         { key: 'meet', label: 'ミート' }, { key: 'power', label: 'パワー' },
         { key: 'speed', label: '走力' }, { key: 'defense', label: '守備' },
       ];
       return [{ key: 'draft', label: 'ドラフト' }, { key: 'overall', label: '総合' }];
     }
-    if (category === 'pitcher') return [
-      { key: 'overall', label: '総合' }, { key: 'velocity', label: '球速' },
-      { key: 'control', label: '制球' }, { key: 'breaking', label: '変化球' },
-      { key: 'stamina', label: 'スタミナ' }, { key: 'draft', label: 'ドラフト' },
-      { key: 'age', label: '年齢' },
-    ];
-    if (category === 'fielder') return [
-      { key: 'overall', label: '総合' }, { key: 'meet', label: 'ミート' },
-      { key: 'power', label: 'パワー' }, { key: 'speed', label: '走力' },
-      { key: 'defense', label: '守備' }, { key: 'eye', label: '選球眼' },
-      { key: 'draft', label: 'ドラフト' }, { key: 'age', label: '年齢' },
-    ];
+    if (category === 'pitcher') return pitcherOpts;
+    if (isFielderCategory) return fielderOpts;
     return [{ key: 'overall', label: '総合' }, { key: 'draft', label: 'ドラフト' }, { key: 'age', label: '年齢' }];
   };
 
@@ -480,8 +488,8 @@ const AbilityRankingScreen = () => {
 
       {(mode === 'player' || mode === 'highschool') && (
         <>
-          <div className="flex gap-1 mb-3">
-            {[{ key: 'all', label: '全選手' }, { key: 'pitcher', label: '投手' }, { key: 'fielder', label: '野手' }].map(t => (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {[{ key: 'all', label: '全選手' }, { key: 'pitcher', label: '投手' }, { key: 'catcher', label: '捕手' }, { key: 'infielder', label: '内野手' }, { key: 'outfielder', label: '外野手' }].map(t => (
               <button key={t.key}
                 onClick={() => { setCategory(t.key); setSortKey(mode === 'highschool' ? 'draft' : 'overall'); }}
                 className={`px-3 py-1.5 rounded text-sm font-bold transition ${
@@ -514,9 +522,9 @@ const AbilityRankingScreen = () => {
 
           {mode === 'player' ? (
             <>
-              {renderPlayerTable(filteredPlayers, false)}
+              {renderPlayerTable(filteredPlayers, sortKey === 'draft')}
               <div className="text-xs text-gray-500 mt-2">
-                全{allPlayers.length}選手中 上位{Math.min(limit, filteredPlayers.length)}名を表示
+                全{allPlayers.length}選手{sortKey === 'draft' && hsPlayers.length > 0 ? ` + 高校生${hsPlayers.length}名` : ''}中 上位{Math.min(limit, filteredPlayers.length)}名を表示
               </div>
             </>
           ) : (
