@@ -10,6 +10,8 @@ import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRa
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 
+export const HIGH_SCHOOL_CLASS_SIZE = 5000;
+
 /**
  * 大学プール: グローバルミュータブル
  * { [enrollYear]: [ { player, enrollYear, graduateYear } ] }
@@ -38,7 +40,7 @@ export const clearHighSchoolPool = () => {
  * @param {number} count - 生成人数（デフォルト1000）
  * @returns {Array} 生成された高卒選手の配列
  */
-export function generateHighSchoolClass(year, count = 3000) {
+export function generateHighSchoolClass(year, count = HIGH_SCHOOL_CLASS_SIZE) {
   const players = [];
   const idBase = year * 100000 + 50000;
 
@@ -578,7 +580,7 @@ export function processUniversityYear(currentYear) {
  * 大学入学時の一括底上げ（seedInitialUniversityClasses用）
  * 高校生品質のベースを大学在籍レベルまで引き上げる
  */
-function applyUniversityEntranceBoost(player, universityRank) {
+export function applyUniversityEntranceBoost(player, universityRank) {
   const boostMap = { S: 12, A: 9, B: 6, C: 4, D: 2 };
   const base = boostMap[universityRank] || 4;
   const gp = player.growthPotential || 1.0;
@@ -804,11 +806,11 @@ export function seedInitialUniversityClasses(gameYear) {
 function mockNPBDraftScore(player) {
   const isPitcher = player.position === 'pitcher';
   const age = player.age || 18;
-  const ageBonusMap = { 18: 35, 19: 30, 20: 20, 21: 15, 22: 10, 23: 5, 24: 0, 25: -10, 26: -22 };
+  const ageBonusMap = { 18: 20, 19: 16, 20: 12, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22 };
   const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : -30;
-  const potentialMult = age <= 18 ? 1.22 : age <= 19 ? 1.16 : age <= 20 ? 1.08 : age <= 21 ? 1.03 : 1.0;
+  const potentialMult = age <= 18 ? 1.12 : age <= 19 ? 1.08 : age <= 20 ? 1.05 : age <= 21 ? 1.02 : 1.0;
   const gp = player.growthPotential || 1.0;
-  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.6) * 45) : age <= 22 ? Math.max(0, (gp - 0.8) * 30) : Math.max(0, (gp - 1.0) * 15);
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.7) * 35) : age <= 22 ? Math.max(0, (gp - 0.8) * 25) : Math.max(0, (gp - 1.0) * 15);
   const fame = player.fame || 0;
   const fameBonus = Math.round(fame * 0.3);
 
@@ -861,10 +863,10 @@ export function warmUpPlayerPipeline(gameYear) {
     const enrollYear = simYear + 1;
     const yearsFromStart = i;
 
-    // 1. 高校生3000人生成
+    // 1. 高校生プール生成
     const idBase = (simYear + 10000) * 100000 + 50000;
     const hsPlayers = [];
-    for (let j = 0; j < 3000; j++) {
+    for (let j = 0; j < HIGH_SCHOOL_CLASS_SIZE; j++) {
       hsPlayers.push(generateHighSchoolPlayer(idBase + j));
     }
 
