@@ -49,6 +49,7 @@ export const TRAINING_MENUS = {
     icon: '💪',
     description: '投手スタミナを強化',
     targets: ['stamina'],
+    growthMultipliers: { stamina: 2.0 },
     category: 'pitching'
   },
   control: {
@@ -892,6 +893,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
+      if (targetStat === 'defense' && totalGrowth < 1) totalGrowth = 1;
       // 球速は175、スタミナは200、その他の能力値は100が上限
       const maxValue = targetStat === 'velocity' ? 175 : targetStat === 'stamina' ? 200 : 100;
       const newValue = Math.min(maxValue, currentValue + totalGrowth);
