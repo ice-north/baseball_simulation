@@ -8,6 +8,7 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
 import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
+import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 
 /**
  * 大学プール: グローバルミュータブル
@@ -792,6 +793,245 @@ export function seedInitialUniversityClasses(gameYear) {
       }
     }
   }
+}
+
+// ============================================================
+// パイプラインウォームアップ（ゲーム開始時に4年分を事前シミュレート）
+// 高校生成→簡易ドラフト→進路振り分け→大学成長→卒業→社会人補充
+// これにより、Year2以降もドラフト候補が全ソースからバランスよく出る
+// ============================================================
+
+function mockNPBDraftScore(player) {
+  const isPitcher = player.position === 'pitcher';
+  const age = player.age || 18;
+  const ageBonusMap = { 18: 35, 19: 30, 20: 20, 21: 15, 22: 10, 23: 5, 24: 0, 25: -10, 26: -22 };
+  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : -30;
+  const potentialMult = age <= 18 ? 1.22 : age <= 19 ? 1.16 : age <= 20 ? 1.08 : age <= 21 ? 1.03 : 1.0;
+  const gp = player.growthPotential || 1.0;
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.6) * 45) : age <= 22 ? Math.max(0, (gp - 0.8) * 30) : Math.max(0, (gp - 1.0) * 15);
+  const fame = player.fame || 0;
+  const fameBonus = Math.round(fame * 0.3);
+
+  let abilityScore;
+  if (isPitcher) {
+    const v = player.pitching?.velocity || 0;
+    const c = player.pitching?.control || 0;
+    const s = player.pitching?.stamina || 0;
+    const bestBreaking = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
+    abilityScore = (Math.max(0, (v - 100) * 1.2) + c * 1.2 + s * 0.6 + bestBreaking * 0.7) * potentialMult;
+  } else {
+    const m = player.batting?.meet || 0;
+    const p = player.batting?.power || 0;
+    const e = player.batting?.eye || 0;
+    const spd = player.physical?.speed || 0;
+    const def = player.fielding?.defense || 0;
+    const arm = player.physical?.arm || 0;
+    abilityScore = (m * 1.2 + p * 1.1 + e * 0.6 + spd * 0.4 + def * 0.4 + arm * 0.3) * potentialMult;
+  }
+  return abilityScore + ageBonus + gpBonus + fameBonus;
+}
+
+function runMockNPBDraft(hsPlayers, uniGraduates) {
+  const MIN_SCORE = 80;
+  const DRAFT_SLOTS = 72;
+
+  const candidates = [];
+  hsPlayers.forEach(p => candidates.push({ player: p, score: mockNPBDraftScore(p), source: 'highschool' }));
+  uniGraduates.forEach(p => candidates.push({ player: p, score: mockNPBDraftScore(p), source: 'university' }));
+
+  const eligible = candidates.filter(c => c.score >= MIN_SCORE);
+  eligible.sort((a, b) => b.score - a.score);
+  const drafted = eligible.slice(0, DRAFT_SLOTS);
+  const draftedIds = new Set(drafted.map(d => d.player.id));
+
+  return {
+    draftedIds,
+    draftedCount: { highschool: drafted.filter(d => d.source === 'highschool').length, university: drafted.filter(d => d.source === 'university').length },
+  };
+}
+
+export function warmUpPlayerPipeline(gameYear) {
+  const existingCount = Object.values(universityPool).reduce((sum, cohort) => sum + (cohort?.length || 0), 0);
+  if (existingCount > 0) return;
+
+  const WARMUP_YEARS = 4;
+
+  for (let i = 0; i < WARMUP_YEARS; i++) {
+    const simYear = gameYear - WARMUP_YEARS + i;
+    const enrollYear = simYear + 1;
+    const yearsFromStart = i;
+
+    // 1. 高校生3000人生成
+    const idBase = (simYear + 10000) * 100000 + 50000;
+    const hsPlayers = [];
+    for (let j = 0; j < 3000; j++) {
+      hsPlayers.push(generateHighSchoolPlayer(idBase + j));
+    }
+
+    // 2. 大学4年生の卒業処理（2年目以降のサイクルで卒業者が出る）
+    const uniGraduates = [];
+    Object.keys(universityPool).forEach(ey => {
+      const cohort = universityPool[ey];
+      if (!cohort) return;
+      const remaining = [];
+      cohort.forEach(entry => {
+        entry.player.age = (entry.player.age || 18) + 1;
+        const yearsInUni = enrollYear - entry.enrollYear;
+        if (yearsInUni >= 4 || entry.player.age >= 23) {
+          if (entry.universityTeamId) {
+            entry.player.universityTeamId = entry.universityTeamId;
+            entry.player.universityName = entry.universityTeamName;
+            entry.player.universityTeamName = entry.universityTeamName;
+            entry.player.universityRank = entry.universityRank;
+          }
+          uniGraduates.push(entry.player);
+        } else {
+          applyUniversityGrowth(entry.player, entry.universityRank);
+          remaining.push(entry);
+        }
+      });
+      if (remaining.length === 0) delete universityPool[ey];
+      else universityPool[ey] = remaining;
+    });
+
+    // 3. 簡易NPBドラフト（高校生 + 大学卒業生から上位を除去）
+    const { draftedIds } = runMockNPBDraft(hsPlayers, uniGraduates);
+    const remainingHS = hsPlayers.filter(p => !draftedIds.has(p.id));
+    const remainingGrads = uniGraduates.filter(p => !draftedIds.has(p.id));
+
+    // 4. 大学卒業生の進路（ドラフト漏れ → 社会人/独立/引退）
+    const gradScored = remainingGrads.map(p => ({ player: p, score: evaluatePlayerPotential(p) }));
+    gradScored.sort((a, b) => b.score - a.score);
+    const corpCut = Math.floor(gradScored.length * 0.40);
+    const indCut = Math.floor(gradScored.length * 0.55);
+    gradScored.forEach((entry, idx) => {
+      const grad = entry.player;
+      if (idx < corpCut) {
+        grad.postGradPath = 'corporate';
+        grad.origin = 'corporate_candidate';
+      } else if (idx < indCut) {
+        grad.postGradPath = 'independent';
+        grad.origin = 'independent_candidate';
+      } else {
+        grad.postGradPath = 'retired';
+      }
+      if (grad.postGradPath !== 'retired') {
+        releasedPlayersPool.push(grad);
+      }
+    });
+
+    // 5. 高校生の進路振り分け（ドラフト漏れ）
+    highSchoolPool.players = remainingHS;
+    highSchoolPool.year = simYear;
+    const hsDistribution = distributeHighSchoolGraduates(enrollYear);
+
+    // 大学入学 + 入学時ブースト
+    enrollInUniversity(hsDistribution.university, enrollYear);
+    const cohort = universityPool[enrollYear];
+    if (cohort) {
+      cohort.forEach(entry => {
+        applyUniversityEntranceBoost(entry.player, entry.universityRank);
+      });
+    }
+
+    // 社会人・独立候補はリリースプールへ
+    hsDistribution.corporate.forEach(p => {
+      p.isStarter = false;
+      p.battingOrder = 0;
+      releasedPlayersPool.push(p);
+    });
+    hsDistribution.independent.forEach(p => {
+      p.isStarter = false;
+      p.battingOrder = 0;
+      releasedPlayersPool.push(p);
+    });
+  }
+
+  // 6. 最後に在学中の全コホートの年齢を正しく設定（ゲーム開始年基準）
+  Object.keys(universityPool).forEach(ey => {
+    const cohort = universityPool[ey];
+    if (!cohort) return;
+    const yearsInUni = gameYear - parseInt(ey);
+    cohort.forEach(entry => {
+      entry.player.age = 19 + yearsInUni;
+    });
+  });
+
+  // 7. 社会人AIチームにリリースプールから選手を補充
+  distributeToCorporateTeams(gameYear);
+}
+
+function distributeToCorporateTeams(gameYear) {
+  if (releasedPlayersPool.length === 0) return;
+
+  const corpTeams = Object.entries(TEAMS_DATA)
+    .filter(([, t]) => t.corporateData && t.corporateData.type === 'enterprise')
+    .map(([name, team]) => ({ name, team, count: team.players?.length || 0 }));
+  const clubTeams = Object.entries(TEAMS_DATA)
+    .filter(([, t]) => t.corporateData && t.corporateData.type === 'club')
+    .map(([name, team]) => ({ name, team, count: team.players?.length || 0 }));
+
+  if (corpTeams.length === 0 && clubTeams.length === 0) return;
+
+  const scored = releasedPlayersPool
+    .map((p, idx) => ({ player: p, idx, score: evaluatePlayerPotential(p) }))
+    .sort((a, b) => b.score - a.score);
+
+  const usedIndices = new Set();
+  const ROSTER_CAPS = { S: 38, A: 35, B: 30, C: 27, D: 20 };
+
+  // 企業チーム: 上位選手を優先配分
+  const sortedCorp = [...corpTeams].sort((a, b) => {
+    const capA = ROSTER_CAPS[a.team.corporateData.rank] || 25;
+    const capB = ROSTER_CAPS[b.team.corporateData.rank] || 25;
+    return (a.count / capA) - (b.count / capB);
+  });
+
+  for (const teamInfo of sortedCorp) {
+    const cap = ROSTER_CAPS[teamInfo.team.corporateData.rank] || 25;
+    const needed = Math.max(0, cap - teamInfo.count);
+    const toAdd = Math.min(needed, Math.floor(needed * 0.3) + 1);
+    let added = 0;
+    for (const entry of scored) {
+      if (added >= toAdd) break;
+      if (usedIndices.has(entry.idx)) continue;
+      const p = { ...entry.player };
+      p.isStarter = false;
+      p.battingOrder = 0;
+      if (!p.careerHistory) p.careerHistory = [];
+      p.careerHistory.push({ type: 'corporate_join', year: gameYear, label: `${teamInfo.name}入社` });
+      teamInfo.team.players.push(p);
+      usedIndices.add(entry.idx);
+      added++;
+    }
+    teamInfo.count += added;
+  }
+
+  // クラブチーム: 中〜下位選手を配分
+  const sortedClub = [...clubTeams].sort((a, b) => a.count - b.count);
+  for (const teamInfo of sortedClub) {
+    const cap = 20;
+    const needed = Math.max(0, cap - teamInfo.count);
+    const toAdd = Math.min(needed, 2);
+    let added = 0;
+    for (let i = scored.length - 1; i >= 0; i--) {
+      if (added >= toAdd) break;
+      if (usedIndices.has(scored[i].idx)) continue;
+      const p = { ...scored[i].player };
+      p.isStarter = false;
+      p.battingOrder = 0;
+      if (!p.careerHistory) p.careerHistory = [];
+      p.careerHistory.push({ type: 'club_join', year: gameYear, label: `${teamInfo.name}入部` });
+      teamInfo.team.players.push(p);
+      usedIndices.add(scored[i].idx);
+      added++;
+    }
+  }
+
+  // 使用した選手をリリースプールから除去
+  const remaining = releasedPlayersPool.filter((_, idx) => !usedIndices.has(idx));
+  releasedPlayersPool.length = 0;
+  remaining.forEach(p => releasedPlayersPool.push(p));
 }
 
 /**

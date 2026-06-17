@@ -31,7 +31,7 @@ import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
-import { seedInitialUniversityClasses } from '../season/universityPool.js';
+import { seedInitialUniversityClasses, warmUpPlayerPipeline } from '../season/universityPool.js';
 import { assignInitialUniversityBackgrounds } from '../university/universityPipeSystem.js';
 
 // ============================================================
@@ -781,8 +781,9 @@ export const initializeCorporateGame = (teamDef) => {
 
   // 大学リーグ初期化
   initializeUniversityLeagues(2024);
-  // 大学プール初期シード（Year1から大学生がドラフト候補に出るように）
-  seedInitialUniversityClasses(1);
+  // パイプラインウォームアップ: 4年分の高校→ドラフト→進路→大学成長→卒業→社会人補充を事前シミュレート
+  // これによりYear2以降のドラフトでも全ソースからバランスよく候補が出る
+  warmUpPlayerPipeline(1);
 
   return {
     userTeamName, allTeamNames, roster: userRoster, staff: userStaff,
@@ -834,8 +835,7 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
 
   // 大学リーグ初期化
   initializeUniversityLeagues(2024);
-  // 大学プール初期シード（Year1から大学生がドラフト候補に出るように）
-  seedInitialUniversityClasses(1);
+  warmUpPlayerPipeline(1);
 };
 
 // ============================================================

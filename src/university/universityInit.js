@@ -8,7 +8,7 @@ import { WORLD_DATA, initializeWorld } from '../corporate/worldData.js';
 import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from './universityTeamsData.js';
 import { initializeUniversityLeagues } from './universityLeagueManager.js';
 import { generateCorporateRoster, initializeCorporateParallelWorld } from '../corporate/corporateInit.js';
-import { seedInitialUniversityClasses, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
+import { seedInitialUniversityClasses, warmUpPlayerPipeline, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
 
 // 大学チームのランク別ロスターサイズ（社会人より小さめ）
 const UNI_ROSTER_SIZE = {
@@ -168,8 +168,8 @@ export const initializeUniversityGame = (teamDef) => {
   // 大学リーグ初期化（全16リーグ）
   initializeUniversityLeagues(2024);
 
-  // 大学プール初期シード（他リーグの大学生）
-  seedInitialUniversityClasses(1);
+  // パイプラインウォームアップ（他リーグの大学生 + 社会人補充）
+  warmUpPlayerPipeline(1);
 
   // 社会人チーム＋独立リーグも並行世界として生成
   initializeCorporateWorldForUniversity();
