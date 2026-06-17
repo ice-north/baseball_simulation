@@ -1850,13 +1850,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         {hasTournament && (
                           <div className="mb-0.5">
                             {(() => {
-                              const userRegionEvents = cell.tournamentEvents.filter(t => t.isUserRegion || t.type === 'main');
+                              const getTournamentName = (type) => {
+                                if (type?.startsWith('nihon_senshuken')) return '日本選手権';
+                                if (type?.startsWith('club_senshuken')) return 'クラブ選手権';
+                                if (type === 'regional_tournament') return '地域大会';
+                                if (type === 'university_championship') return '大学選手権';
+                                if (type === 'meiji_jingu') return '明治神宮';
+                                return '都市対抗';
+                              };
+                              const isMainType = (type) => type === 'main' || type === 'nihon_senshuken' || type === 'club_senshuken' || type === 'regional_tournament' || type === 'university_championship' || type === 'meiji_jingu';
+                              const userRegionEvents = cell.tournamentEvents.filter(t => t.isUserRegion || isMainType(t.type));
                               if (userRegionEvents.length === 0) {
                                 const hasAnyDone = cell.tournamentEvents.some(t => t.done);
-                                return <div className={`text-[9px] font-bold leading-tight ${hasAnyDone ? 'text-gray-500' : 'text-orange-400'}`}>都市対抗</div>;
+                                const name = getTournamentName(cell.tournamentEvents[0]?.type);
+                                return <div className={`text-[9px] font-bold leading-tight ${hasAnyDone ? 'text-gray-500' : 'text-orange-400'}`}>{name}</div>;
                               }
                               return userRegionEvents.map((t, ti) => {
-                                const label = t.type === 'main' ? (t.label || '本戦') : t.label || '予選';
+                                const label = isMainType(t.type) ? (t.label || '本戦') : t.label || '予選';
                                 const color = t.isUserMatch ? 'text-yellow-400' : t.done ? 'text-gray-500' : 'text-orange-400';
                                 return <div key={ti} className={`text-[9px] font-bold leading-tight ${color}`}>{label}{t.isUserMatch ? '⚾' : ''}</div>;
                               });
