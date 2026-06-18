@@ -242,15 +242,16 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
   }
 
   // 年齢ボーナス（若い選手の将来性を評価）
-  const ageBonusMap = { 18: 20, 19: 16, 20: 12, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
-  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 20 : -65);
+  // 実際のNPBドラフトでは高校生が1巡目の3-5人を占める
+  const ageBonusMap = { 18: 28, 19: 22, 20: 15, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
+  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 28 : -65);
 
   // 将来性投影倍率（若い選手の能力を伸びしろ込みで評価）
-  const potentialMult = age <= 18 ? 1.12 : age <= 19 ? 1.08 : age <= 20 ? 1.05 : age <= 21 ? 1.02 : 1.0;
+  const potentialMult = age <= 18 ? 1.18 : age <= 19 ? 1.12 : age <= 20 ? 1.06 : age <= 21 ? 1.02 : 1.0;
 
   // 成長力ボーナス（若い選手ほど成長力が大きく評価される）
   const gp = player.growthPotential || 1.0;
-  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.7) * 35)
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.65) * 38)
                : age <= 22 ? Math.max(0, (gp - 0.8) * 25)
                : Math.max(0, (gp - 1.0) * 15);
 
@@ -477,6 +478,35 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     eligibleSourceCounts[src] = (eligibleSourceCounts[src] || 0) + 1;
   });
   console.log(`[NPBDraft Year${gameYear}] eligible(≥${MIN_DRAFT_SCORE}): 高校${eligibleSourceCounts.highschool} 大学${eligibleSourceCounts.university} 社会人${eligibleSourceCounts.corporate} 独立${eligibleSourceCounts.independent} 合計${eligible.length} / slots=${totalSlots}`);
+
+  // === スコア分布の診断ログ ===
+  const scoresBySource = { highschool: [], university: [], corporate: [], independent: [] };
+  eligible.forEach(c => {
+    const src = c.source === 'university_team' ? 'university' : c.source;
+    if (scoresBySource[src]) scoresBySource[src].push(c.score);
+  });
+  for (const [src, scores] of Object.entries(scoresBySource)) {
+    if (scores.length === 0) continue;
+    scores.sort((a, b) => b - a);
+    const top5 = scores.slice(0, 5).map(s => Math.round(s));
+    const median = scores.length > 0 ? Math.round(scores[Math.floor(scores.length / 2)]) : 0;
+    console.log(`[NPBDraft] ${src} scores: top5=[${top5}] median=${median} count=${scores.length}`);
+  }
+  const top12 = eligible.slice(0, 12);
+  const top12Sources = { highschool: 0, university: 0, corporate: 0, independent: 0 };
+  top12.forEach(c => {
+    const src = c.source === 'university_team' ? 'university' : c.source;
+    top12Sources[src] = (top12Sources[src] || 0) + 1;
+  });
+  console.log(`[NPBDraft] Top12(1st round pool): HS=${top12Sources.highschool} 大学=${top12Sources.university} 社会人=${top12Sources.corporate} 独立=${top12Sources.independent}`);
+  const top120 = eligible.slice(0, Math.min(120, eligible.length));
+  const top120Sources = { highschool: 0, university: 0, corporate: 0, independent: 0 };
+  top120.forEach(c => {
+    const src = c.source === 'university_team' ? 'university' : c.source;
+    top120Sources[src] = (top120Sources[src] || 0) + 1;
+  });
+  console.log(`[NPBDraft] Top120(full draft): HS=${top120Sources.highschool} 大学=${top120Sources.university} 社会人=${top120Sources.corporate} 独立=${top120Sources.independent}`);
+
   const selected = eligible.slice(0, Math.min(totalSlots, eligible.length));
 
   // === 指名エントリ生成ヘルパー ===
@@ -873,6 +903,13 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     independent: draftedPlayers.filter(d => d.source === 'independent').length,
     total: draftedPlayers.length,
   };
+  const firstRoundSources = { highschool: 0, university: 0, corporate: 0, independent: 0 };
+  draftedPlayers.filter(d => d.draftRound === 'ドラフト1位').forEach(d => {
+    const src = (d.source === 'university_team') ? 'university' : d.source;
+    firstRoundSources[src] = (firstRoundSources[src] || 0) + 1;
+  });
+  console.log(`[NPBDraft] 結果: 総数${draftBySource.total} | 高校${draftBySource.highschool} 大学${draftBySource.university} 社会人${draftBySource.corporate} 独立${draftBySource.independent}`);
+  console.log(`[NPBDraft] 1位: 高校${firstRoundSources.highschool} 大学${firstRoundSources.university} 社会人${firstRoundSources.corporate} 独立${firstRoundSources.independent}`);
 
   return { draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, npbStandings, highSchoolDrafted: draftBySource.highschool };
 }

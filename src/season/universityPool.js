@@ -806,11 +806,11 @@ export function seedInitialUniversityClasses(gameYear) {
 function mockNPBDraftScore(player) {
   const isPitcher = player.position === 'pitcher';
   const age = player.age || 18;
-  const ageBonusMap = { 18: 20, 19: 16, 20: 12, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22 };
+  const ageBonusMap = { 18: 28, 19: 22, 20: 15, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22 };
   const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : -30;
-  const potentialMult = age <= 18 ? 1.12 : age <= 19 ? 1.08 : age <= 20 ? 1.05 : age <= 21 ? 1.02 : 1.0;
+  const potentialMult = age <= 18 ? 1.18 : age <= 19 ? 1.12 : age <= 20 ? 1.06 : age <= 21 ? 1.02 : 1.0;
   const gp = player.growthPotential || 1.0;
-  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.7) * 35) : age <= 22 ? Math.max(0, (gp - 0.8) * 25) : Math.max(0, (gp - 1.0) * 15);
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.65) * 38) : age <= 22 ? Math.max(0, (gp - 0.8) * 25) : Math.max(0, (gp - 1.0) * 15);
   const fame = player.fame || 0;
   const fameBonus = Math.round(fame * 0.3);
 
