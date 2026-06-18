@@ -146,14 +146,14 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
                       <div>球速: <span className={getAbilityColor(player.pitching?.velocity, true)}>{player.pitching?.velocity}km</span></div>
                       <div>制球: <span className={getAbilityColor(player.pitching?.control)}>{player.pitching?.control}</span></div>
                       <div>スタミナ: <span className={getAbilityColor(player.pitching?.stamina)}>{player.pitching?.stamina}</span></div>
-                      <div>変化球: <span className="text-gray-300">{player.pitching?.breakingBalls?.length || 0}種</span></div>
+                      <div>プロ意識: <span className={getAbilityColor(player.personality?.discipline)}>{player.personality?.discipline ?? '?'}</span></div>
                     </>
                   ) : (
                     <>
                       <div>ミート: <span className={getAbilityColor(player.batting?.meet)}>{player.batting?.meet}</span></div>
                       <div>パワー: <span className={getAbilityColor(player.batting?.power)}>{player.batting?.power}</span></div>
                       <div>走力: <span className={getAbilityColor(player.physical?.speed)}>{player.physical?.speed}</span></div>
-                      <div>守備: <span className={getAbilityColor(player.fielding?.defense)}>{player.fielding?.defense}</span></div>
+                      <div>プロ意識: <span className={getAbilityColor(player.personality?.discipline)}>{player.personality?.discipline ?? '?'}</span></div>
                     </>
                   )}
                 </div>

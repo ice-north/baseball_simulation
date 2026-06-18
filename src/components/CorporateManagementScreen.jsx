@@ -653,6 +653,11 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                   const v = p.personality?.mental;
                   return (v === undefined || v === null) ? -1 : (typeof v === 'number' ? v : parseInt(v));
                 }
+                if (key === 'professionalism') {
+                  if (revealLevel < 1) return -1;
+                  const v = sa.professionalism;
+                  return (v === '?' || v === undefined) ? -1 : (typeof v === 'number' ? v : parseInt(v));
+                }
                 if (key === 'growth') {
                   if (revealLevel < 1) return -1;
                   const v = p.growthPotential;
@@ -729,6 +734,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           <SortHeader k="control" label="制" w="w-6" />
                           <SortHeader k="stamina" label="ス" w="w-6" />
                           <SortHeader k="mental" label="精" w="w-6" />
+                          <SortHeader k="professionalism" label="プ" w="w-6" />
                           <SortHeader k="growth" label="成" w="w-6" />
                           <SortHeader k="rate" label="交渉%" w="w-10" />
                           <SortHeader k="rivals" label="他球団" w="w-8" />
@@ -783,6 +789,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.control)}</td>
                               <td className="py-1.5 px-1.5 text-center">{renderVal(sa.pitching?.stamina)}</td>
                               <td className="py-1.5 px-1.5 text-center">{revealLevel >= 1 ? renderVal(p.personality?.mental) : <span className="text-gray-600">?</span>}</td>
+                              <td className="py-1.5 px-1.5 text-center">{revealLevel >= 1 ? renderVal(sa.professionalism) : <span className="text-gray-600">?</span>}</td>
                               <td className="py-1.5 px-1.5 text-center">{revealLevel >= 1 ? (() => {
                                 const gp = p.growthPotential;
                                 if (gp == null) return <span className="text-gray-600">?</span>;

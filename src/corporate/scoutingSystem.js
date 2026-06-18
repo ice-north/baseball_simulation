@@ -409,6 +409,8 @@ function obscureAbilities(player, accuracy, stage = 'full') {
     };
   }
 
+  const discipline = player.personality?.discipline ?? player.professionalism ?? 50;
+
   if (stage === 'secondary') {
     // 主要能力: 投手は球速+制球+スタミナ、野手はミート+パワー+走力+守備
     return {
@@ -430,7 +432,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         control: blur(player.pitching?.control || 30),
         stamina: isPitcher ? blur(player.pitching?.stamina || 60, 200) : hidden,
       },
-      professionalism: hidden,
+      professionalism: blur(discipline),
     };
   }
 
@@ -454,7 +456,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
       control: blur(player.pitching?.control || 30),
       stamina: blur(player.pitching?.stamina || 60, 200),
     },
-    professionalism: blur(player.professionalism || 50),
+    professionalism: blur(discipline),
   };
 }
 
