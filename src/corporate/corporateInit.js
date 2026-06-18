@@ -75,8 +75,8 @@ const RANK_CONFIG = {
     proChance: 0.10,       // 25人×10% ≈ 2.5人/チーム がプロ注目レベルに
     proBoost: [10, 16],
     proGrowth: 0.08,
-    standoutCount: [1, 2],   // Sランク級の突出選手（クラブの逸材）
-    standoutTargetRank: 'S',
+    standoutCount: [1, 2],   // Aランク級の突出選手
+    standoutTargetRank: 'A',
   },
   D: {
     teamOffset: -3,
@@ -84,8 +84,8 @@ const RANK_CONFIG = {
     proChance: 0.06,       // 20人×6% ≈ 1.2人/チーム（クラブチームからプロ輩出もある）
     proBoost: [8, 14],
     proGrowth: 0.06,
-    standoutCount: [1, 2],   // Aランク級の突出選手（Dランクの逸材）
-    standoutTargetRank: 'A',
+    standoutCount: [1, 2],   // Bランク級の突出選手
+    standoutTargetRank: 'B',
   },
 };
 
@@ -442,8 +442,8 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     }
   }
 
-  // C/Dランク: 低確率でプロ注目レベルが出現
-  if (cfg.proChance && cfg.proBoost) {
+  // C/Dランク: 低確率でプロ注目レベルが出現（クラブチームは成長で到達する設計のため除外）
+  if (cfg.proChance && cfg.proBoost && type !== 'club') {
     for (const p of roster) {
       if (Math.random() < cfg.proChance) {
         applyBoost(p, cfg.proBoost, cfg.proGrowth || 0.06);
@@ -452,7 +452,8 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
   }
 
   // B/C/Dランク: 1-2名の突出選手（2ランク上の実力で生成）
-  if (cfg.standoutCount && cfg.standoutTargetRank) {
+  // クラブチームは除外: 初期能力ではなくプロ意識×成長率で数年かけてドラフト候補に成長する設計
+  if (cfg.standoutCount && cfg.standoutTargetRank && type !== 'club') {
     const targetRank = cfg.standoutTargetRank;
     const targetScale = RANK_SCALE[targetRank] || 0.80;
     const rescale = targetScale / scale;
@@ -485,8 +486,7 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
         }
       }
       p.growthPotential = clamp((p.growthPotential || 1.0) + 0.10, 0.5, 1.5);
-      const fameBoost = (rank === 'D' || rank === 'C') ? randInt(10, 25) : randInt(5, 15);
-      p.fame = clamp((p.fame || 0) + fameBoost, 0, 100);
+      p.fame = clamp((p.fame || 0) + randInt(5, 15), 0, 100);
     }
   }
 

@@ -1601,15 +1601,26 @@ function applyCorporatePlayerGrowth(allTeams) {
     if (!team.players) continue;
 
     const rank = team.corporateData?.rank || 'D';
+    const isClub = team.corporateData?.type === 'club';
     const rankMult = { S: 1.15, A: 1.05, B: 1.0, C: 0.90, D: 0.80 }[rank] || 1.0;
 
     for (const player of team.players) {
       const age = player.age || 25;
       if (age > 27) continue;
       const gp = player.growthPotential || 1.0;
+      const discipline = player.personality?.discipline ?? 50;
+
+      // プロ意識による成長倍率
+      // クラブチーム: キャンプも無く環境が劣るため、自己鍛錬力（プロ意識）が成長を大きく左右する
+      //   discipline 40→1.0x, 60→1.9x, 80→2.8x, 100→3.7x
+      // 企業/独立: 環境が整っているためプロ意識の影響は控えめ
+      //   discipline 50→1.0x, 70→1.3x, 90→1.6x
+      const disciplineMult = isClub
+        ? 1.0 + Math.max(0, (discipline - 40) * 0.045)
+        : 1.0 + Math.max(0, (discipline - 50) * 0.015);
 
       const grow = (current, base, cap = 99, threshold = null, rate = 0.05) => {
-        let amount = base * gp * rankMult * (0.6 + Math.random() * 0.6);
+        let amount = base * gp * rankMult * disciplineMult * (0.6 + Math.random() * 0.6);
         if (threshold != null) amount *= decayMult(current, threshold, rate);
         return Math.min(cap, current + Math.round(amount));
       };
@@ -1638,7 +1649,12 @@ function applyCorporatePlayerGrowth(allTeams) {
         }
       }
 
-      player.fame = Math.min(100, (player.fame || 0) + Math.floor(Math.random() * 3));
+      // 知名度の蓄積: クラブでプロ意識が高い選手は地域で評判になる
+      let fameGain = Math.floor(Math.random() * 3);
+      if (isClub && discipline >= 65) {
+        fameGain += Math.floor((discipline - 50) * 0.08);
+      }
+      player.fame = Math.min(100, (player.fame || 0) + fameGain);
     }
   }
 }
