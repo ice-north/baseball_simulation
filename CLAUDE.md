@@ -166,6 +166,14 @@ NEW GAME → 企業チーム選択 → キャンプ
 - **チーム運営画面**: サイドバー「チーム運営」（社会人モード限定）でスタッフ・スカウト状況・財務を確認
 - **画面遷移**: `corporate_departure` → `corporate_scout` → `dateprogress`（独立リーグの `contract` → `tryout` に対応）
 
+## クラブチームのプロ意識駆動成長 (`src/season/yearProgressionSystem.js`)
+- **設計思想**: クラブチームはキャンプも無く実践経験も少ないため、人工的な突出選手ブーストではなく、選手のプロ意識(discipline)×成長率(growthPotential)で数年かけてドラフト候補に成長する設計
+- **クラブ除外**: `corporateInit.js` の `proChance` / `standout` はクラブチーム(`type === 'club'`)を除外。初期能力は低い(RANK_SCALE D=0.58, C=0.70)
+- **disciplineMult（クラブ）**: `1.0 + max(0, (discipline - 40) × 0.045)` — discipline 40→1.0x, 60→1.9x, 80→2.8x
+- **disciplineMult（企業/独立）**: `1.0 + max(0, (discipline - 50) × 0.015)` — 環境が整っているため控えめ
+- **知名度蓄積**: クラブでdiscipline≥65の選手は `fameGain += (discipline-50)×0.08` で地域の評判が蓄積
+- **ドラフト到達条件**: discipline 80+（上位5%）× growthPotential 1.2+ で3-4年かけて到達。年間約2名がドラフト指名
+
 ## 投手起用ロール
 - 先発: complete(完投型), short(ショートスターター), quality(勝ち権利交代), ace(エース)
 - リリーフ: long(ロング), onepoint(ワンポイント), setup(セットアッパー), closer(守護神), ace_relief(中継ぎエース), behind(ビハインド), mopup(敗戦処理)
