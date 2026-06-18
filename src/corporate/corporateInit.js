@@ -75,8 +75,8 @@ const RANK_CONFIG = {
     proChance: 0.10,       // 25人×10% ≈ 2.5人/チーム がプロ注目レベルに
     proBoost: [10, 16],
     proGrowth: 0.08,
-    standoutCount: [1, 2],   // Aランク級の突出選手
-    standoutTargetRank: 'A',
+    standoutCount: [1, 2],   // Sランク級の突出選手（クラブの逸材）
+    standoutTargetRank: 'S',
   },
   D: {
     teamOffset: -3,
@@ -84,8 +84,8 @@ const RANK_CONFIG = {
     proChance: 0.06,       // 20人×6% ≈ 1.2人/チーム（クラブチームからプロ輩出もある）
     proBoost: [8, 14],
     proGrowth: 0.06,
-    standoutCount: [1, 2],   // Bランク級の突出選手
-    standoutTargetRank: 'B',
+    standoutCount: [1, 2],   // Aランク級の突出選手（Dランクの逸材）
+    standoutTargetRank: 'A',
   },
 };
 
@@ -485,7 +485,8 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
         }
       }
       p.growthPotential = clamp((p.growthPotential || 1.0) + 0.10, 0.5, 1.5);
-      p.fame = clamp((p.fame || 0) + randInt(5, 15), 0, 100);
+      const fameBoost = (rank === 'D' || rank === 'C') ? randInt(10, 25) : randInt(5, 15);
+      p.fame = clamp((p.fame || 0) + fameBoost, 0, 100);
     }
   }
 
