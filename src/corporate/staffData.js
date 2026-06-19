@@ -92,6 +92,8 @@ export const canHireGrade = (teamRank, staffGrade) => {
   return GRADE_ORDER.indexOf(staffGrade) <= GRADE_ORDER.indexOf(cap);
 };
 
+export const MAX_STAFF = 10;
+
 // 給与計算（選手・スタッフ共通）: 高卒1年目400万、年齢+1ごとに+20万
 const BASE_SALARY = 400;
 const SALARY_PER_AGE = 20;
@@ -270,11 +272,19 @@ export const convertPlayerToStaff = (player) => {
   // 経験年数 = 選手としてのキャリア（年齢-18を目安に、最大15）
   const experience = Math.min(15, Math.max(1, (player.age || 30) - 18));
 
+  // 専門タイプを選手の得意分野から決定
+  const specialtyKey = isPitcher
+    ? (isCatcher ? 'battery_expert' : 'pitching_expert')
+    : strengths.includes('fieldRunCoach') ? 'defense_expert' : 'batting_expert';
+  const specialtyLabel = STAFF_SPECIALTIES[specialtyKey]?.label || '万能型';
+
   return {
     id,
     name: player.name,
     role: 'coach',
     grade,
+    specialty: specialtyKey,
+    specialtyLabel,
     age: player.age || 35,
     abilities,
     strengths: [...new Set(strengths)],

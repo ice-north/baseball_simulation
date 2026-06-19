@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { processCorporateRetirements, executeDepartures } from '../corporate/scoutingSystem.js';
-import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES } from '../corporate/staffData.js';
+import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES, MAX_STAFF } from '../corporate/staffData.js';
 import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
 import { getTeamStaffBonus, STAFF_GRADES } from '../corporate/staffData.js';
 
@@ -132,7 +132,6 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     }
   };
 
-  const MAX_STAFF = 10;
   const pendingConversionCount = Object.values(staffConversions).filter(Boolean).length;
   const pendingReplacementCount = Object.values(staffReplacements).filter(Boolean).length;
   const effectiveStaffCount = staff.length + pendingConversionCount - pendingReplacementCount;
@@ -617,14 +616,26 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         </div>
       )}
 
+      {/* 入替未完了警告 */}
+      {replaceStaffFor !== null && (
+        <div className="mb-2 p-2 bg-orange-900/30 border border-orange-700 rounded">
+          <p className="text-orange-400 text-xs font-bold">
+            ⚠ スタッフ入替の選択が完了していません。入替先を選ぶか、転向を取消してから確定してください。
+          </p>
+        </div>
+      )}
+
       {/* 操作ボタン */}
       <div className="flex items-center gap-4">
         <button
           onClick={handleConfirm}
+          disabled={replaceStaffFor !== null}
           className={`px-5 py-2 rounded font-bold text-sm ${
-            !isClub && budgetBalance < 0
-              ? 'bg-red-700 hover:bg-red-600 text-white'
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
+            replaceStaffFor !== null
+              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              : !isClub && budgetBalance < 0
+                ? 'bg-red-700 hover:bg-red-600 text-white'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
           }`}
         >
           {!isClub && budgetBalance < 0 ? '赤字のまま確定' : '契約更改を確定'}

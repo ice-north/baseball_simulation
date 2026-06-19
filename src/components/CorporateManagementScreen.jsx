@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus, STAFF_GRADE_CAP, canHireGrade } from '../corporate/staffData.js';
+import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, getPlayerSalary, generateStaffMarket, getTeamStaffBonus, STAFF_GRADE_CAP, canHireGrade, MAX_STAFF } from '../corporate/staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/constants.js';
 import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount, assignScoutTask, cancelScoutTask, getAllScoutTasks, MAX_FAVORITES_PER_SCOUT } from '../corporate/scoutingSystem.js';
@@ -92,6 +92,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
       setConfirmHire(null);
       return;
     }
+    if (staff.length >= MAX_STAFF) {
+      setConfirmHire(null);
+      return;
+    }
     cd.staff.push(newStaff);
     const idx = marketStaff.findIndex(s => s.id === newStaff.id);
     if (idx >= 0) marketStaff.splice(idx, 1);
@@ -144,7 +148,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               ))}
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              スタッフ{staff.length}名 / スタッフ人件費: {staffSalaryTotal.toLocaleString()}万円
+              スタッフ{staff.length}名 / 上限{MAX_STAFF}名 / 人件費: {staffSalaryTotal.toLocaleString()}万円
               <span className="ml-3 text-gray-600">雇用上限: {STAFF_GRADES[maxStaffGrade]?.label}まで</span>
             </div>
           </div>
@@ -1133,11 +1137,18 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 年俸: <span className="text-white font-bold">{getStaffSalary(confirmHire)}万円</span>
               </div>
             </div>
+            {staff.length >= MAX_STAFF && (
+              <p className="text-red-400 text-xs mb-2">スタッフ枠が上限（{MAX_STAFF}名）に達しています。先に解雇してください。</p>
+            )}
             <div className="flex gap-3 justify-end">
               <button onClick={() => setConfirmHire(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm">
                 キャンセル
               </button>
-              <button onClick={() => handleHire(confirmHire)} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-bold">
+              <button
+                onClick={() => handleHire(confirmHire)}
+                disabled={staff.length >= MAX_STAFF}
+                className={`px-4 py-2 rounded text-sm font-bold ${staff.length >= MAX_STAFF ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500 text-white'}`}
+              >
                 雇用する
               </button>
             </div>
