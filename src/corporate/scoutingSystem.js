@@ -294,9 +294,9 @@ export function generateScoutCandidates(teamData, year) {
   const scoutEye = staffBonus.scoutingEye || 50;
   const reputation = teamData.corporateData?.reputation || 30;
 
-  // 候補者数: スカウト能力で6〜12人（赤字ペナルティで減少）
-  const baseCount = 6;
-  const bonusCount = Math.floor(scoutEye / 20);
+  // 候補者数: スカウト眼で4〜12人（赤字ペナルティで減少）
+  const baseCount = 4;
+  const bonusCount = Math.floor(scoutEye / 12);
   const scoutPenalty = teamData.corporateData?.scoutPenalty || 0;
   const candidateCount = Math.max(3, baseCount + bonusCount - scoutPenalty);
 
@@ -1086,7 +1086,7 @@ function generateScoutReport(teamData, target, staffScoutEye, gameYear) {
 
   if (pool.length === 0) return [];
 
-  const candidateCount = Math.min(pool.length, 5 + Math.floor(scoutEye / 20)); // 5〜10人
+  const candidateCount = Math.min(pool.length, 3 + Math.floor(scoutEye / 14)); // 3〜10人
 
   // 既にスカウト済みのIDを除外
   const existingIds = new Set();
