@@ -1044,7 +1044,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       allDates.push(...getRegionalTournamentDatesForCalendar(seasonData.regionalTournament, userTeamName));
     }
     if (seasonData.clubSenshuken?.generated) {
-      allDates.push(...getNihonSenshukenDatesForCalendar(seasonData.clubSenshuken, userTeamName));
+      allDates.push(...getNihonSenshukenDatesForCalendar(seasonData.clubSenshuken, userTeamName, 'club_senshuken'));
     }
     if (seasonData.universityChampionship?.generated) {
       allDates.push(...getUniversityTournamentDatesForCalendar(seasonData.universityChampionship, userTeamName));

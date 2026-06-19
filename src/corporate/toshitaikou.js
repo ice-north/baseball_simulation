@@ -1245,7 +1245,7 @@ export function getUserNihonSenshukenMatchOnDate(tournament, dateObj, userTeamNa
   return null;
 }
 
-export function getNihonSenshukenDatesForCalendar(tournament, userTeamName) {
+export function getNihonSenshukenDatesForCalendar(tournament, userTeamName, typePrefix = 'nihon_senshuken') {
   if (!tournament) return [];
   const dates = [];
 
@@ -1274,8 +1274,8 @@ export function getNihonSenshukenDatesForCalendar(tournament, userTeamName) {
     for (const regionId of Object.keys(tournament.qualifiers)) {
       const q = tournament.qualifiers[regionId];
       const isUserRegion = regionId === tournament.userRegionId;
-      collectBracketDates(q.mainBracket, 'nihon_senshuken_qualifier', regionId, isUserRegion, '選手権予選');
-      collectBracketDates(q.losersBracket, 'nihon_senshuken_qualifier_losers', regionId, isUserRegion, '選手権敗者復活');
+      collectBracketDates(q.mainBracket, `${typePrefix}_qualifier`, regionId, isUserRegion, '選手権予選');
+      collectBracketDates(q.losersBracket, `${typePrefix}_qualifier_losers`, regionId, isUserRegion, '選手権敗者復活');
     }
   }
 
@@ -1301,7 +1301,7 @@ export function getNihonSenshukenDatesForCalendar(tournament, userTeamName) {
       }
     }
     for (const entry of Object.values(dateEntries)) {
-      dates.push({ ...entry, type: 'nihon_senshuken' });
+      dates.push({ ...entry, type: typePrefix });
     }
   }
 
