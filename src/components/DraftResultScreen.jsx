@@ -647,6 +647,37 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
       </div>
 
       <div className="text-center mt-3 text-gray-600 text-xs">{statusText()}</div>
+
+      {/* DEBUG PANEL - 一時的 */}
+      <div className="max-w-5xl mx-auto mt-4 bg-black/80 rounded-lg p-3 text-[10px] font-mono text-green-400">
+        <div>isFirstRound: {String(isFirstRound)}</div>
+        <div>currentRound: {currentRound}</div>
+        <div>gridOrder names: [{gridOrder.map(t => t.name).join(', ')}]</div>
+        {isFirstRound ? (
+          <>
+            <div>phaseRevealOrder: [{phaseRevealOrder.join(', ')}]</div>
+            <div>phaseRevealed: [{[...phaseRevealed].join(', ')}]</div>
+            <div>phase picks npbTeam: [{(currentPhase?.picks || []).map(p => p.npbTeam).join(', ')}]</div>
+            {gridOrder.map(t => {
+              const inPhase = !!currentPhase?.picks?.find(p => p.npbTeam === t.name);
+              const rev = phaseRevealed.has(t.name);
+              const nameMatch = phaseRevealOrder.includes(t.name);
+              return <div key={t.name} style={{ color: rev ? '#0f0' : nameMatch ? '#ff0' : '#f00' }}>{t.name}: inPhase={String(inPhase)} revealed={String(rev)} inRevealOrder={String(nameMatch)}</div>;
+            })}
+          </>
+        ) : (
+          <>
+            <div>waiverRevealOrder: [{waiverRevealOrder.join(', ')}]</div>
+            <div>waiverRevealed: [{[...waiverRevealed].join(', ')}]</div>
+            {gridOrder.map(t => {
+              const hasPick = (currentTeamMap[t.name] || []).length > 0;
+              const rev = waiverRevealed.has(t.name);
+              const nameMatch = waiverRevealOrder.includes(t.name);
+              return <div key={t.name} style={{ color: rev ? '#0f0' : nameMatch ? '#ff0' : '#f00' }}>{t.name}: hasPick={String(hasPick)} revealed={String(rev)} inRevealOrder={String(nameMatch)}</div>;
+            })}
+          </>
+        )}
+      </div>
     </div>
   );
 };
