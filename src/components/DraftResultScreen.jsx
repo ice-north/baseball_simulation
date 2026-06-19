@@ -2,18 +2,18 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const NPB_TEAMS_INFO = [
-  { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', textColor: '#000', league: 'ce' },
-  { name: '阪神タイガース', short: '阪神', color: '#FFD700', textColor: '#000', league: 'ce' },
-  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', textColor: '#fff', league: 'ce' },
-  { name: '広島東洋カープ', short: '広島東洋', color: '#CC0000', textColor: '#fff', league: 'ce' },
-  { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', textColor: '#fff', league: 'ce' },
-  { name: 'ヤクルトスワローズ', short: '東京ヤクルト', color: '#006633', textColor: '#fff', league: 'ce' },
-  { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', textColor: '#fff', league: 'pa' },
-  { name: 'ソフトバンクホークス', short: '福岡ソフトバンク', color: '#DAA520', textColor: '#000', league: 'pa' },
-  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', textColor: '#fff', league: 'pa' },
-  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', textColor: '#fff', league: 'pa' },
-  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', textColor: '#fff', league: 'pa' },
-  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', textColor: '#fff', league: 'pa' },
+  { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', textColor: '#000', league: 'ce', flag: 'giants' },
+  { name: '阪神タイガース', short: '阪神', color: '#FFD700', textColor: '#000', league: 'ce', flag: 'tigers' },
+  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', textColor: '#fff', league: 'ce', flag: 'baystars' },
+  { name: '広島東洋カープ', short: '広島東洋', color: '#CC0000', textColor: '#fff', league: 'ce', flag: 'carp' },
+  { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', textColor: '#fff', league: 'ce', flag: 'dragons' },
+  { name: 'ヤクルトスワローズ', short: '東京ヤクルト', color: '#006633', textColor: '#fff', league: 'ce', flag: 'swallows' },
+  { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', textColor: '#fff', league: 'pa', flag: 'buffaloes' },
+  { name: 'ソフトバンクホークス', short: '福岡ソフトバンク', color: '#DAA520', textColor: '#000', league: 'pa', flag: 'hawks' },
+  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', textColor: '#fff', league: 'pa', flag: 'lions' },
+  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', textColor: '#fff', league: 'pa', flag: 'eagles' },
+  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', textColor: '#fff', league: 'pa', flag: 'marines' },
+  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', textColor: '#fff', league: 'pa', flag: 'fighters' },
 ];
 
 const shuffle = (arr) => {
@@ -79,6 +79,26 @@ const COLLISION_STYLES = [
 const CARD_BODY_HEIGHT = 200;
 
 const getTeamInfo = (name) => NPB_TEAMS_INFO.find(t => t.name === name) || { short: name, color: '#666', textColor: '#fff' };
+
+const getTeamFlagUrl = (teamName) => {
+  const info = NPB_TEAMS_INFO.find(t => t.name === teamName);
+  if (!info?.flag) return null;
+  return `/flag/${info.flag}.svg`;
+};
+
+const TeamFlag = ({ teamName, size = 20 }) => {
+  const url = getTeamFlagUrl(teamName);
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt=""
+      className="inline-block shrink-0"
+      style={{ height: size, width: 'auto', objectFit: 'contain' }}
+      onError={(e) => { e.target.style.display = 'none'; }}
+    />
+  );
+};
 
 const getLotteryMissHistory = (firstRoundData) => {
   if (!firstRoundData?.phases) return {};
@@ -309,9 +329,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     if (settledPick) {
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
-          <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-            {team.name}
-            {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
+          <div className="px-3 py-1.5 flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
+            <TeamFlag teamName={team.name} size={18} />
+            <span>{team.name}</span>
+            {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
           </div>
           <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
             <PlayerCardContent name={settledPick.name} position={settledPick.position} teamName={settledPick.teamName} />
@@ -338,9 +359,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
-          <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-            {team.name}
-            {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
+          <div className="px-3 py-1.5 flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
+            <TeamFlag teamName={team.name} size={18} />
+            <span>{team.name}</span>
+            {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
           </div>
           <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ height: CARD_BODY_HEIGHT }}>
             {!revealed ? (
@@ -371,9 +393,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
-        <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-          {team.name}
-          {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
+        <div className="px-3 py-1.5 flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
+          <TeamFlag teamName={team.name} size={18} />
+          <span>{team.name}</span>
+          {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
         </div>
         <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
           <div className="text-gray-200 text-xs text-center">—</div>
@@ -389,9 +412,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const rank = rankLabels[team.name];
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
-        <div className="px-3 py-1.5 text-center font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-          {team.name}
-          {rank && <span className="ml-1 opacity-70 text-[10px]">{rank}</span>}
+        <div className="px-3 py-1.5 flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
+          <TeamFlag teamName={team.name} size={18} />
+          <span>{team.name}</span>
+          {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
         </div>
         <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
           {!hasPick ? (
@@ -510,7 +534,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
                   <span className="text-gray-400 text-xs">←</span>
                   {lr.competitors.map(t => {
                     const ti = getTeamInfo(t);
-                    return <span key={t} className="text-xs font-bold px-2 py-0.5 rounded" style={{ backgroundColor: ti.color, color: ti.textColor }}>{ti.short}</span>;
+                    return <span key={t} className="text-xs font-bold px-2 py-0.5 rounded inline-flex items-center gap-1" style={{ backgroundColor: ti.color, color: ti.textColor }}><TeamFlag teamName={t} size={14} />{ti.short}</span>;
                   })}
                   <span className="text-gray-500 text-xs ml-auto">{lr.competitors.length}球団競合</span>
                 </div>
@@ -532,7 +556,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
                   <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap">
                     <span className="text-gray-900 font-black text-sm">{lr.playerName}</span>
                     <span className="text-gray-400 text-xs">→</span>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ backgroundColor: winnerInfo.color, color: winnerInfo.textColor }}>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded inline-flex items-center gap-1" style={{ backgroundColor: winnerInfo.color, color: winnerInfo.textColor }}>
+                      <TeamFlag teamName={lr.winner} size={14} />
                       {winnerInfo.short} 当選
                     </span>
                     <span className="text-gray-400 text-xs ml-2">
@@ -647,8 +672,9 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
           const misses = missHistory[team.name] || [];
           return (
             <div key={team.name} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="px-3 py-2 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-                {team.name} ({picks.length}名)
+              <div className="px-3 py-2 flex items-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
+                <TeamFlag teamName={team.name} size={20} />
+                <span>{team.name} ({picks.length}名)</span>
               </div>
               <div className="divide-y divide-gray-200">
                 {sorted.map((entry, idx) => {
@@ -754,7 +780,10 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
                 <div key={idx} className={`draft-card bg-gray-700/60 rounded-xl p-3.5 ${style.border} ${style.glow}`} style={{ animationDelay: `${idx * 0.07}s` }}>
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <span className={`font-black text-sm px-2.5 py-1 rounded-lg shrink-0 ${style.badge}`}>{entry.draftRound || '指名'}</span>
-                    <span className="text-yellow-300 font-bold text-base shrink-0">{entry.npbTeam}</span>
+                    <span className="text-yellow-300 font-bold text-base shrink-0 flex items-center gap-1">
+                      <TeamFlag teamName={entry.npbTeam} size={16} />
+                      {entry.npbTeam}
+                    </span>
                     <span className="text-white font-black text-lg shrink-0">{entry.name}</span>
                     <span className="text-gray-400 text-sm shrink-0">{entry.age}歳</span>
                     <span className="text-blue-400 font-semibold text-sm shrink-0">{POSITION_NAMES[entry.position] || entry.position}</span>
