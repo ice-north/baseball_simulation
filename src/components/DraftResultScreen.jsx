@@ -377,7 +377,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               </div>
             )}
           </div>
-          <div className={`absolute inset-0 z-20 ${revealed ? 'flag-fade' : ''}`}>
+          <div className={`absolute inset-0 z-20 transition-opacity duration-700 ease-out ${revealed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         </div>
@@ -427,7 +427,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           )}
         </div>
         {hasPick && (
-          <div className={`absolute inset-0 z-20 ${revealed ? 'flag-fade' : ''}`}>
+          <div className={`absolute inset-0 z-20 transition-opacity duration-700 ease-out ${revealed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         )}
@@ -591,14 +591,6 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
-      <style>{`
-        @keyframes flagFadeOut {
-          0% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        .flag-fade { animation: flagFadeOut 0.8s ease-out forwards; pointer-events: none; }
-      `}</style>
-
       <div className="text-center mb-5">
         <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">プロ野球ドラフト会議</h1>
