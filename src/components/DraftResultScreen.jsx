@@ -76,8 +76,6 @@ const COLLISION_STYLES = [
   { bg: 'bg-purple-100', border: 'border-2 border-purple-300', label: 'text-purple-600' },
 ];
 
-const CARD_BODY_HEIGHT = 200;
-
 const getTeamInfo = (name) => NPB_TEAMS_INFO.find(t => t.name === name) || { short: name, color: '#666', textColor: '#fff' };
 
 const TeamFlag = ({ teamName, size = 20 }) => {
@@ -321,13 +319,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
     if (settledPick) {
       return (
-        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
-          <div className="px-3 py-1.5 flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-            <TeamFlag teamName={team.name} size={18} />
-            <span>{team.name}</span>
-            {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
+        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
+          <div className="px-2 py-1 flex items-center justify-center gap-1 font-bold text-xs tracking-wide bg-gray-200">
+            <span className="text-gray-600">{team.short}</span>
+            {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
           </div>
-          <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
+          <div className="bg-white flex-1 flex flex-col justify-center p-2">
             <PlayerCardContent name={settledPick.name} position={settledPick.position} teamName={settledPick.teamName} />
           </div>
         </div>
@@ -351,48 +348,43 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
       }
 
       return (
-        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
-          <div className="px-3 py-1.5 flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-            <TeamFlag teamName={team.name} size={18} />
-            <span>{team.name}</span>
-            {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
+        <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
+          <div className="px-2 py-1 flex items-center justify-center gap-1 font-bold text-xs tracking-wide bg-gray-200">
+            <span className="text-gray-600">{team.short}</span>
+            {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
           </div>
-          <div className={`${cardBg} ${borderClass} relative overflow-hidden`} style={{ height: CARD_BODY_HEIGHT }}>
-            <div className="absolute inset-0 p-3 flex flex-col justify-center">
-              {phaseState === 'lotteryShown' && isLoser ? (
-                <div className="text-center">
-                  <div className="text-red-400 text-xs font-bold">抽選外れ</div>
-                  <div className="text-gray-400 text-[10px] mt-1">再指名待ち...</div>
-                </div>
-              ) : (
-                <div className="w-full space-y-1">
-                  <PlayerCardContent name={phasePick.name} position={phasePick.position} teamName={phasePick.teamName} />
-                  {(phaseState === 'revealing' || phaseState === 'allRevealed') && hasCollision && cStyle && (
-                    <div className={`text-center text-[10px] font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
-                  )}
-                  {phaseState === 'lotteryShown' && isWinner && (
-                    <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 抽選当選</div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className={`absolute inset-0 flex items-center justify-center z-10 ${revealed ? 'flag-peel' : ''}`}
-                 style={{ backgroundColor: `${team.color}15` }}>
-              <img src={`/flag/${team.flag}.png`} alt="" className="max-h-[80%] max-w-[85%] object-contain drop-shadow-lg" />
-            </div>
+          <div className={`${cardBg} ${borderClass} flex-1 flex flex-col justify-center p-2`}>
+            {phaseState === 'lotteryShown' && isLoser ? (
+              <div className="text-center">
+                <div className="text-red-400 text-xs font-bold">抽選外れ</div>
+                <div className="text-gray-400 text-[10px] mt-1">再指名待ち...</div>
+              </div>
+            ) : (
+              <div className="w-full space-y-1">
+                <PlayerCardContent name={phasePick.name} position={phasePick.position} teamName={phasePick.teamName} />
+                {(phaseState === 'revealing' || phaseState === 'allRevealed') && hasCollision && cStyle && (
+                  <div className={`text-center text-[10px] font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
+                )}
+                {phaseState === 'lotteryShown' && isWinner && (
+                  <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 抽選当選</div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className={`absolute inset-0 z-20 ${revealed ? 'flag-peel' : ''}`}>
+            <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         </div>
       );
     }
 
     return (
-      <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
-        <div className="px-3 py-1.5 flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-          <TeamFlag teamName={team.name} size={18} />
-          <span>{team.name}</span>
-          {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
+      <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
+        <div className="px-2 py-1 flex items-center justify-center gap-1 font-bold text-xs tracking-wide bg-gray-200">
+          <span className="text-gray-600">{team.short}</span>
+          {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
         </div>
-        <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
+        <div className="bg-white flex-1 flex flex-col justify-center p-2">
           <div className="text-gray-200 text-xs text-center">—</div>
         </div>
       </div>
@@ -405,33 +397,27 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const revealed = waiverRevealed.has(team.name);
     const rank = rankLabels[team.name];
     return (
-      <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg">
-        <div className="px-3 py-1.5 flex items-center justify-center gap-1.5 font-bold text-xs sm:text-sm tracking-wide" style={{ backgroundColor: team.color, color: team.textColor }}>
-          <TeamFlag teamName={team.name} size={18} />
-          <span>{team.name}</span>
-          {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
+      <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
+        <div className="px-2 py-1 flex items-center justify-center gap-1 font-bold text-xs tracking-wide bg-gray-200">
+          <span className="text-gray-600">{team.short}</span>
+          {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
         </div>
-        <div className="bg-white relative overflow-hidden" style={{ height: CARD_BODY_HEIGHT }}>
+        <div className="bg-white flex-1 flex flex-col justify-center p-2">
           {!hasPick ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-gray-300 text-xs text-center">指名なし</div>
-            </div>
+            <div className="text-gray-300 text-xs text-center">指名なし</div>
           ) : (
-            <>
-              <div className="absolute inset-0 p-3 flex flex-col justify-center">
-                <div className="w-full space-y-1">
-                  {picks.map((entry, pi) => (
-                    <PlayerCardContent key={pi} name={entry.name} position={entry.position} teamName={entry.teamName} />
-                  ))}
-                </div>
-              </div>
-              <div className={`absolute inset-0 flex items-center justify-center z-10 ${revealed ? 'flag-peel' : ''}`}
-                   style={{ backgroundColor: `${team.color}15` }}>
-                <img src={`/flag/${team.flag}.png`} alt="" className="max-h-[80%] max-w-[85%] object-contain drop-shadow-lg" />
-              </div>
-            </>
+            <div className="w-full space-y-1">
+              {picks.map((entry, pi) => (
+                <PlayerCardContent key={pi} name={entry.name} position={entry.position} teamName={entry.teamName} />
+              ))}
+            </div>
           )}
         </div>
+        {hasPick && (
+          <div className={`absolute inset-0 z-20 ${revealed ? 'flag-peel' : ''}`}>
+            <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
+          </div>
+        )}
       </div>
     );
   };
@@ -593,12 +579,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <style>{`
-        @keyframes flagPeel {
-          0% { transform: translateY(0) scale(1); opacity: 1; }
-          55% { opacity: 1; }
-          100% { transform: translateY(-85%) scale(0.93); opacity: 0; }
+        @keyframes flagPageTurn {
+          0% { transform: perspective(1200px) rotateZ(0deg) rotateX(0deg); opacity: 1; }
+          25% { transform: perspective(1200px) rotateZ(-8deg) rotateX(4deg); opacity: 1; }
+          100% { transform: perspective(1200px) rotateZ(-75deg) rotateX(25deg); opacity: 0; }
         }
-        .flag-peel { animation: flagPeel 0.8s cubic-bezier(.25,.46,.45,.94) forwards; pointer-events: none; }
+        .flag-peel { animation: flagPageTurn 0.9s cubic-bezier(.25,.46,.45,.94) forwards; transform-origin: top left; pointer-events: none; }
       `}</style>
 
       <div className="text-center mb-5">
