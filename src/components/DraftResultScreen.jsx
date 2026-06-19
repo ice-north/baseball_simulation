@@ -357,28 +357,31 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             <span>{team.name}</span>
             {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
           </div>
-          <div className={`${cardBg} ${borderClass} p-3 flex flex-col justify-center`} style={{ height: CARD_BODY_HEIGHT }}>
-            {!revealed ? (
-              <div className="text-center">
-                <div className="text-3xl sm:text-4xl mb-1 opacity-20 select-none font-black text-gray-400">?</div>
-                <div className="text-gray-300 text-[10px]">未発表</div>
-              </div>
-            ) : phaseState === 'lotteryShown' && isLoser ? (
-              <div className="text-center">
-                <div className="text-red-400 text-xs font-bold">抽選外れ</div>
-                <div className="text-gray-400 text-[10px] mt-1">再指名待ち...</div>
-              </div>
-            ) : (
-              <div className="card-reveal w-full space-y-1">
-                <PlayerCardContent name={phasePick.name} position={phasePick.position} teamName={phasePick.teamName} />
-                {(phaseState === 'revealing' || phaseState === 'allRevealed') && hasCollision && cStyle && (
-                  <div className={`text-center text-[10px] font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
-                )}
-                {phaseState === 'lotteryShown' && isWinner && (
-                  <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 抽選当選</div>
+          <div className={`${cardBg} ${borderClass} relative overflow-hidden`} style={{ height: CARD_BODY_HEIGHT }}>
+            {revealed && (
+              <div className="absolute inset-0 p-3 flex flex-col justify-center player-reveal">
+                {phaseState === 'lotteryShown' && isLoser ? (
+                  <div className="text-center">
+                    <div className="text-red-400 text-xs font-bold">抽選外れ</div>
+                    <div className="text-gray-400 text-[10px] mt-1">再指名待ち...</div>
+                  </div>
+                ) : (
+                  <div className="w-full space-y-1">
+                    <PlayerCardContent name={phasePick.name} position={phasePick.position} teamName={phasePick.teamName} />
+                    {(phaseState === 'revealing' || phaseState === 'allRevealed') && hasCollision && cStyle && (
+                      <div className={`text-center text-[10px] font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
+                    )}
+                    {phaseState === 'lotteryShown' && isWinner && (
+                      <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 抽選当選</div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
+            <div className={`absolute inset-0 flex items-center justify-center z-10 ${revealed ? 'flag-peel' : ''}`}
+                 style={{ backgroundColor: `${team.color}15` }}>
+              <img src={`/flag/${team.flag}.png`} alt="" className="max-h-[80%] max-w-[85%] object-contain drop-shadow-lg" />
+            </div>
           </div>
         </div>
       );
@@ -410,20 +413,27 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           <span>{team.name}</span>
           {rank && <span className="opacity-70 text-[10px]">{rank}</span>}
         </div>
-        <div className="bg-white p-3 flex flex-col justify-center" style={{ height: CARD_BODY_HEIGHT }}>
+        <div className="bg-white relative overflow-hidden" style={{ height: CARD_BODY_HEIGHT }}>
           {!hasPick ? (
-            <div className="text-gray-300 text-xs text-center">指名なし</div>
-          ) : !revealed ? (
-            <div className="text-center">
-              <div className="text-3xl sm:text-4xl mb-1 opacity-20 select-none font-black text-gray-400">?</div>
-              <div className="text-gray-300 text-[10px]">未発表</div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-gray-300 text-xs text-center">指名なし</div>
             </div>
           ) : (
-            <div className="card-reveal w-full space-y-1">
-              {picks.map((entry, pi) => (
-                <PlayerCardContent key={pi} name={entry.name} position={entry.position} teamName={entry.teamName} />
-              ))}
-            </div>
+            <>
+              {revealed && (
+                <div className="absolute inset-0 p-3 flex flex-col justify-center player-reveal">
+                  <div className="w-full space-y-1">
+                    {picks.map((entry, pi) => (
+                      <PlayerCardContent key={pi} name={entry.name} position={entry.position} teamName={entry.teamName} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className={`absolute inset-0 flex items-center justify-center z-10 ${revealed ? 'flag-peel' : ''}`}
+                   style={{ backgroundColor: `${team.color}15` }}>
+                <img src={`/flag/${team.flag}.png`} alt="" className="max-h-[80%] max-w-[85%] object-contain drop-shadow-lg" />
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -587,12 +597,17 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <style>{`
-        @keyframes cardReveal {
-          0% { opacity: 0; transform: perspective(600px) rotateY(90deg) scale(0.9); }
-          50% { opacity: 1; transform: perspective(600px) rotateY(-5deg) scale(1.02); }
-          100% { opacity: 1; transform: perspective(600px) rotateY(0deg) scale(1); }
+        @keyframes flagPeel {
+          0% { transform: translateY(0) scale(1); opacity: 1; }
+          55% { opacity: 1; }
+          100% { transform: translateY(-85%) scale(0.93); opacity: 0; }
         }
-        .card-reveal { animation: cardReveal 0.6s cubic-bezier(.22,.68,0,1.1) forwards; }
+        @keyframes playerReveal {
+          0% { opacity: 0; transform: translateY(10px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .flag-peel { animation: flagPeel 0.8s cubic-bezier(.25,.46,.45,.94) forwards; pointer-events: none; }
+        .player-reveal { animation: playerReveal 0.5s ease-out 0.4s both; }
       `}</style>
 
       <div className="text-center mb-5">
