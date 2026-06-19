@@ -1858,7 +1858,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                 if (type === 'meiji_jingu') return '明治神宮';
                                 return '都市対抗';
                               };
-                              const isMainType = (type) => type === 'main' || type === 'nihon_senshuken' || type === 'club_senshuken' || type === 'regional_tournament' || type === 'university_championship' || type === 'meiji_jingu';
+                              const isMainType = (type) => type === 'main' || type === 'nihon_senshuken' || type === 'club_senshuken' || type === 'university_championship' || type === 'meiji_jingu';
                               const userRegionEvents = cell.tournamentEvents.filter(t => t.isUserRegion || isMainType(t.type));
                               if (userRegionEvents.length === 0) {
                                 const hasAnyDone = cell.tournamentEvents.some(t => t.done);
