@@ -320,9 +320,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     if (settledPick) {
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
-          <div className="px-2 py-1 flex items-center justify-center gap-1 font-bold text-xs tracking-wide bg-gray-200">
-            <span className="text-gray-600">{team.short}</span>
-            {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+          <div className="flex items-stretch bg-gray-200">
+            <img src={`/flag/${team.flag}.png`} alt="" className="h-full object-cover" style={{ aspectRatio: '3/2' }} />
+            <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide">
+              <span className="text-gray-600">{team.short}</span>
+              {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+            </div>
           </div>
           <div className="bg-white flex-1 flex flex-col justify-center p-2">
             <PlayerCardContent name={settledPick.name} position={settledPick.position} teamName={settledPick.teamName} />
@@ -349,9 +352,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
-          <div className="px-2 py-1 flex items-center justify-center gap-1 font-bold text-xs tracking-wide bg-gray-200">
-            <span className="text-gray-600">{team.short}</span>
-            {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+          <div className="flex items-stretch bg-gray-200">
+            {revealed && <img src={`/flag/${team.flag}.png`} alt="" className="h-full object-cover" style={{ aspectRatio: '3/2' }} />}
+            <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide">
+              <span className="text-gray-600">{team.short}</span>
+              {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+            </div>
           </div>
           <div className={`${cardBg} ${borderClass} flex-1 flex flex-col justify-center p-2`}>
             {phaseState === 'lotteryShown' && isLoser ? (
@@ -371,7 +377,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               </div>
             )}
           </div>
-          <div className={`absolute inset-0 z-20 ${revealed ? 'flag-peel' : ''}`}>
+          <div className={`absolute inset-0 z-20 ${revealed ? 'flag-fade' : ''}`}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         </div>
@@ -380,9 +386,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
-        <div className="px-2 py-1 flex items-center justify-center gap-1 font-bold text-xs tracking-wide bg-gray-200">
-          <span className="text-gray-600">{team.short}</span>
-          {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+        <div className="flex items-stretch bg-gray-200">
+          <img src={`/flag/${team.flag}.png`} alt="" className="h-full object-cover" style={{ aspectRatio: '3/2' }} />
+          <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide">
+            <span className="text-gray-600">{team.short}</span>
+            {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+          </div>
         </div>
         <div className="bg-white flex-1 flex flex-col justify-center p-2">
           <div className="text-gray-200 text-xs text-center">—</div>
@@ -396,11 +405,15 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const hasPick = picks.length > 0;
     const revealed = waiverRevealed.has(team.name);
     const rank = rankLabels[team.name];
+    const showHeader = !hasPick || revealed;
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
-        <div className="px-2 py-1 flex items-center justify-center gap-1 font-bold text-xs tracking-wide bg-gray-200">
-          <span className="text-gray-600">{team.short}</span>
-          {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+        <div className="flex items-stretch bg-gray-200">
+          {showHeader && <img src={`/flag/${team.flag}.png`} alt="" className="h-full object-cover" style={{ aspectRatio: '3/2' }} />}
+          <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide">
+            <span className="text-gray-600">{team.short}</span>
+            {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+          </div>
         </div>
         <div className="bg-white flex-1 flex flex-col justify-center p-2">
           {!hasPick ? (
@@ -414,7 +427,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           )}
         </div>
         {hasPick && (
-          <div className={`absolute inset-0 z-20 ${revealed ? 'flag-peel' : ''}`}>
+          <div className={`absolute inset-0 z-20 ${revealed ? 'flag-fade' : ''}`}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         )}
@@ -579,12 +592,11 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <style>{`
-        @keyframes flagPageTurn {
-          0% { transform: perspective(1200px) rotateZ(0deg) rotateX(0deg); opacity: 1; }
-          25% { transform: perspective(1200px) rotateZ(-8deg) rotateX(4deg); opacity: 1; }
-          100% { transform: perspective(1200px) rotateZ(-75deg) rotateX(25deg); opacity: 0; }
+        @keyframes flagFadeOut {
+          0% { opacity: 1; }
+          100% { opacity: 0; }
         }
-        .flag-peel { animation: flagPageTurn 0.9s cubic-bezier(.25,.46,.45,.94) forwards; transform-origin: top left; pointer-events: none; }
+        .flag-fade { animation: flagFadeOut 0.8s ease-out forwards; pointer-events: none; }
       `}</style>
 
       <div className="text-center mb-5">
