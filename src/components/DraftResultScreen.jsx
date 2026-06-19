@@ -239,18 +239,32 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   const revealNext = useCallback(() => {
     if (isFirstRound) {
       const unrevealed = phaseRevealOrder.filter(n => !phaseRevRef.current.has(n));
+      console.log('[DraftReveal] phase unrevealed:', unrevealed, 'current set:', [...phaseRevRef.current]);
       if (unrevealed.length === 0) return;
+      const toReveal = unrevealed[0];
+      console.log('[DraftReveal] revealing phase team:', JSON.stringify(toReveal), 'length:', toReveal.length);
       setIsRevealing(true);
       timerRef.current = setTimeout(() => {
-        setPhaseRevealed(prev => new Set([...prev, unrevealed[0]]));
+        setPhaseRevealed(prev => {
+          const next = new Set([...prev, toReveal]);
+          console.log('[DraftReveal] phaseRevealed updated:', [...next]);
+          return next;
+        });
         setIsRevealing(false);
       }, 500);
     } else {
       const unrevealed = waiverRevealOrder.filter(n => !waiverRevRef.current.has(n));
+      console.log('[DraftReveal] waiver unrevealed:', unrevealed, 'current set:', [...waiverRevRef.current]);
       if (unrevealed.length === 0) return;
+      const toReveal = unrevealed[0];
+      console.log('[DraftReveal] revealing waiver team:', JSON.stringify(toReveal), 'length:', toReveal.length);
       setIsRevealing(true);
       timerRef.current = setTimeout(() => {
-        setWaiverRevealed(prev => new Set([...prev, unrevealed[0]]));
+        setWaiverRevealed(prev => {
+          const next = new Set([...prev, toReveal]);
+          console.log('[DraftReveal] waiverRevealed updated:', [...next]);
+          return next;
+        });
         setIsRevealing(false);
       }, 500);
     }
@@ -316,6 +330,9 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const isInPhase = !!phasePick;
     const revealed = phaseRevealed.has(team.name);
     const rank = rankLabels[team.name];
+    if (isInPhase) {
+      console.log('[DraftCard]', team.name, 'isInPhase:', isInPhase, 'revealed:', revealed, 'phaseRevealed:', [...phaseRevealed])
+    }
 
     if (settledPick) {
       return (
@@ -377,10 +394,11 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               </div>
             )}
           </div>
-          <div className="absolute inset-0 z-20"
-                 style={{ opacity: revealed ? 0 : 1, transition: 'opacity 0.8s ease-out', pointerEvents: revealed ? 'none' : 'auto' }}>
-            <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
-          </div>
+          {!revealed && (
+            <div className="absolute inset-0 z-20">
+              <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
+            </div>
+          )}
         </div>
       );
     }
@@ -407,6 +425,9 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const revealed = waiverRevealed.has(team.name);
     const rank = rankLabels[team.name];
     const showHeader = !hasPick || revealed;
+    if (hasPick) {
+      console.log('[DraftWaiver]', team.name, 'revealed:', revealed, 'waiverRevealed:', [...waiverRevealed]);
+    }
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
         <div className="flex items-stretch bg-gray-200">
@@ -427,9 +448,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             </div>
           )}
         </div>
-        {hasPick && (
-          <div className="absolute inset-0 z-20"
-                 style={{ opacity: revealed ? 0 : 1, transition: 'opacity 0.8s ease-out', pointerEvents: revealed ? 'none' : 'auto' }}>
+        {hasPick && !revealed && (
+          <div className="absolute inset-0 z-20">
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         )}
