@@ -377,7 +377,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               </div>
             )}
           </div>
-          <div className={`absolute inset-0 z-20 transition-opacity duration-700 ease-out ${revealed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <div className="absolute inset-0 z-20"
+                 style={{ opacity: revealed ? 0 : 1, transition: 'opacity 0.8s ease-out', pointerEvents: revealed ? 'none' : 'auto' }}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         </div>
@@ -427,7 +428,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           )}
         </div>
         {hasPick && (
-          <div className={`absolute inset-0 z-20 transition-opacity duration-700 ease-out ${revealed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <div className="absolute inset-0 z-20"
+                 style={{ opacity: revealed ? 0 : 1, transition: 'opacity 0.8s ease-out', pointerEvents: revealed ? 'none' : 'auto' }}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         )}
