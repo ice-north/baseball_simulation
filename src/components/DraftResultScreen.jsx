@@ -80,21 +80,15 @@ const CARD_BODY_HEIGHT = 200;
 
 const getTeamInfo = (name) => NPB_TEAMS_INFO.find(t => t.name === name) || { short: name, color: '#666', textColor: '#fff' };
 
-const FLAG_EXTENSIONS = ['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif'];
-
 const TeamFlag = ({ teamName, size = 20 }) => {
   const info = NPB_TEAMS_INFO.find(t => t.name === teamName);
   if (!info?.flag) return null;
-  const [extIdx, setExtIdx] = useState(0);
-  const hidden = extIdx >= FLAG_EXTENSIONS.length;
-  if (hidden) return null;
   return (
     <img
-      src={`/flag/${info.flag}.${FLAG_EXTENSIONS[extIdx]}`}
+      src={`/flag/${info.flag}.png`}
       alt=""
       className="inline-block shrink-0"
       style={{ height: size, width: size * 1.5, objectFit: 'contain' }}
-      onError={() => setExtIdx(prev => prev + 1)}
     />
   );
 };
