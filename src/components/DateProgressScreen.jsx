@@ -6,7 +6,8 @@ import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../s
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, autoPlayBracket, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
 import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues, generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
-import { generateAprilHighSchoolClass } from '../season/yearProgressionSystem.js';
+import { generateAprilHighSchoolClass, checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
+import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { updateAllTeamReputations } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
@@ -1764,83 +1765,160 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   // スポーツ新聞モーダル用のデータ生成
   const newspaperData = useMemo(() => {
     if (!showNewspaper) return null;
-    const userLeagueTeamSet = new Set(seasonData?.settings?.teamNames || []);
-    const allTeamNames = userLeagueTeamSet.size > 0
-      ? Object.keys(TEAMS_DATA || {}).filter(tn => userLeagueTeamSet.has(tn))
-      : Object.keys(TEAMS_DATA || {});
-    const seenIds = new Set();
-    const allPlayers = [];
-    allTeamNames.forEach(tn => {
-      (TEAMS_DATA[tn]?.players || []).forEach(p => {
-        if (p.id != null && seenIds.has(p.id)) return;
-        if (p.id != null) seenIds.add(p.id);
-        allPlayers.push({ ...p, teamName: tn });
+    const POS_SHORT = { pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手', third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手' };
+    const FORM_SHORT = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイドスロー', submarine: 'アンダースロー' };
+    const sections = [];
+
+    const makeCard = (p, source, orgName) => {
+      const isPitcher = p.position === 'pitcher';
+      const throws = p.physical?.throws === 'left' ? '左' : '右';
+      const bats = p.batting?.bats === 'left' ? '左' : p.batting?.bats === 'switch' ? '両' : '右';
+      const draft = checkNPBDraftEligibility(p);
+      let headline = '';
+      if (isPitcher) {
+        const v = p.pitching?.velocity || 0;
+        const ctrl = p.pitching?.control || 0;
+        const form = FORM_SHORT[p.pitching?.form] || '';
+        const balls = (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length;
+        if (v >= 150) headline = `最速${v}km！ 剛腕`;
+        else if (v >= 145) headline = `${v}kmの速球派`;
+        else if (v >= 140) headline = `${v}km ${balls >= 3 ? '多彩な変化球' : form || ''}`;
+        else if (ctrl >= 60) headline = `制球力${ctrl} ${form || '技巧派'}`;
+        else headline = `${v}km ${form || ''}`;
+      } else {
+        const pw = p.batting?.power || 0;
+        const spd = p.physical?.speed || 0;
+        const mt = p.batting?.meet || 0;
+        const def = p.fielding?.defense || 0;
+        if (pw >= 55 && spd >= 60) headline = 'パワー＆走力の二刀流';
+        else if (pw >= 55) headline = `パワー${pw} 長打力が魅力`;
+        else if (spd >= 65) headline = `走力${spd} 俊足`;
+        else if (mt >= 50) headline = `ミート${mt} 巧打者`;
+        else if (def >= 60) headline = `守備${def} 堅守`;
+        else headline = `${POS_SHORT[p.position] || p.position}`;
+      }
+      return {
+        name: p.name, age: p.age, position: POS_SHORT[p.position] || p.position,
+        throws, bats, source, orgName, headline,
+        isPitcher, fame: p.fame || 0, score: draft.totalScore,
+        velocity: p.pitching?.velocity, control: p.pitching?.control,
+        meet: p.batting?.meet, power: p.batting?.power, speed: p.physical?.speed,
+        arm: p.physical?.arm, defense: p.fielding?.defense,
+        growthPotential: p.growthPotential,
+      };
+    };
+
+    // 高校生注目選手
+    if (highSchoolPool.players?.length > 0) {
+      const hsProspects = highSchoolPool.players
+        .map(p => ({ player: p, draft: checkNPBDraftEligibility(p) }))
+        .filter(x => x.draft.totalScore >= 80)
+        .sort((a, b) => b.draft.totalScore - a.draft.totalScore)
+        .slice(0, 8)
+        .map(x => makeCard(x.player, 'highschool', x.player.highSchool?.name || '高校'));
+      if (hsProspects.length > 0) {
+        sections.push({ title: '高校生ドラフト候補', icon: '🏫', color: 'text-green-400', borderColor: 'border-green-700/30', bgColor: 'bg-green-900/20', players: hsProspects });
+      }
+    }
+
+    // 大学注目選手（3〜4年生）
+    const uniProspects = [];
+    const gameYear = seasonData.settings?.year || 1;
+    Object.entries(universityPool).forEach(([enrollYear, entries]) => {
+      if (!entries) return;
+      const yearsInUni = gameYear - parseInt(enrollYear);
+      if (yearsInUni < 2) return;
+      entries.forEach(entry => {
+        const p = entry.player;
+        if (!p) return;
+        const draft = checkNPBDraftEligibility(p);
+        if (draft.totalScore >= 80) {
+          const card = makeCard(p, 'university', entry.universityTeamName || '大学');
+          card.year = yearsInUni + 1;
+          card.uniRank = entry.universityRank;
+          uniProspects.push({ card, score: draft.totalScore });
+        }
       });
     });
+    uniProspects.sort((a, b) => b.score - a.score);
+    if (uniProspects.length > 0) {
+      sections.push({ title: '大学生ドラフト候補', icon: '🎓', color: 'text-blue-400', borderColor: 'border-blue-700/30', bgColor: 'bg-blue-900/20', players: uniProspects.slice(0, 8).map(x => x.card) });
+    }
 
-    const standings = seasonData.standings || [];
-    const totalGames = seasonData.settings?.gamesPerSeason || 60;
-    const maxGP = Math.max(...standings.map(s => s.gamesPlayed || 0), 1);
-    const progress = Math.min(maxGP / totalGames, 1);
-    const qualifiedAB = Math.max(Math.floor(totalGames * 3.1 * progress), 10);
-    const qualifiedOuts = Math.max(Math.floor(totalGames * 1.0 * progress), 3) * 3;
-
-    const battingQ = allPlayers.filter(p => (p.seasonStats?.batting?.atBats || 0) >= qualifiedAB);
-    const pitchingQ = allPlayers.filter(p => (p.seasonStats?.pitching?.inningsPitched || 0) >= qualifiedOuts);
-
-    const batAvg = p => p.seasonStats?.batting?.atBats > 0 ? p.seasonStats.batting.hits / p.seasonStats.batting.atBats : 0;
-    const era = p => p.seasonStats?.pitching?.inningsPitched > 0 ? (p.seasonStats.pitching.earnedRuns / (p.seasonStats.pitching.inningsPitched / 3)) * 9 : 99;
-    const obpSlg = p => {
-      const s = p.seasonStats?.batting;
-      if (!s || s.atBats === 0) return 0;
-      const obp = (s.hits + s.walks) / (s.atBats + s.walks);
-      const tb = (s.hits - (s.doubles || 0) - (s.triples || 0) - s.homeruns) + (s.doubles || 0) * 2 + (s.triples || 0) * 3 + s.homeruns * 4;
-      return obp + tb / s.atBats;
-    };
-
-    const rankings = {
-      avg: [...battingQ].sort((a, b) => batAvg(b) - batAvg(a)).slice(0, 10),
-      hr: [...allPlayers].filter(p => (p.seasonStats?.batting?.homeruns || 0) > 0).sort((a, b) => b.seasonStats.batting.homeruns - a.seasonStats.batting.homeruns).slice(0, 10),
-      rbi: [...allPlayers].filter(p => (p.seasonStats?.batting?.rbis || 0) > 0).sort((a, b) => b.seasonStats.batting.rbis - a.seasonStats.batting.rbis).slice(0, 10),
-      sb: [...allPlayers].filter(p => (p.seasonStats?.batting?.stolenBases || 0) > 0).sort((a, b) => b.seasonStats.batting.stolenBases - a.seasonStats.batting.stolenBases).slice(0, 10),
-      ops: [...battingQ].sort((a, b) => obpSlg(b) - obpSlg(a)).slice(0, 10),
-      era: [...pitchingQ].sort((a, b) => era(a) - era(b)).slice(0, 10),
-      wins: [...allPlayers].filter(p => (p.seasonStats?.pitching?.wins || 0) > 0).sort((a, b) => b.seasonStats.pitching.wins - a.seasonStats.pitching.wins).slice(0, 10),
-      saves: [...allPlayers].filter(p => (p.seasonStats?.pitching?.saves || 0) > 0).sort((a, b) => b.seasonStats.pitching.saves - a.seasonStats.pitching.saves).slice(0, 10),
-      so: [...allPlayers].filter(p => (p.seasonStats?.pitching?.strikeouts || 0) > 0).sort((a, b) => b.seasonStats.pitching.strikeouts - a.seasonStats.pitching.strikeouts).slice(0, 10),
-    };
-
-    // 注目選手（若手活躍・ベテラン健在・好調選手）
-    const headlines = [];
-    allPlayers.forEach(p => {
-      const bs = p.seasonStats?.batting;
-      const ps = p.seasonStats?.pitching;
-      const abbr = getTeamAbbreviation(p.teamName);
-      if (p.age <= 22 && bs?.atBats >= 20 && batAvg(p) >= 0.300) {
-        headlines.push({ icon: '⭐', text: `${abbr} ${p.name}(${p.age}歳) 打率${batAvg(p).toFixed(3)}！ 若き才能が開花`, color: 'text-cyan-400', priority: 3 });
-      }
-      if (p.age <= 22 && ps?.wins >= 3) {
-        headlines.push({ icon: '⭐', text: `${abbr} ${p.name}(${p.age}歳) ${ps.wins}勝！ 若手投手が躍動`, color: 'text-cyan-400', priority: 3 });
-      }
-      if (p.age >= 32 && bs?.atBats >= 30 && batAvg(p) >= 0.300) {
-        headlines.push({ icon: '👴', text: `${abbr} ${p.name}(${p.age}歳) まだまだ衰えず！ 打率${batAvg(p).toFixed(3)}`, color: 'text-amber-400', priority: 2 });
-      }
-      if (bs?.homeruns >= 15) {
-        headlines.push({ icon: '💣', text: `${abbr} ${p.name} ${bs.homeruns}本塁打！ 量産ペース`, color: 'text-pink-400', priority: 2 });
-      }
-      if (ps?.inningsPitched > 0 && era(p) <= 1.50 && ps.inningsPitched >= qualifiedOuts * 0.5) {
-        headlines.push({ icon: '🔥', text: `${abbr} ${p.name} 防御率${era(p).toFixed(2)}！ 圧巻の投球`, color: 'text-orange-400', priority: 3 });
-      }
-      if (ps?.saves >= 10) {
-        headlines.push({ icon: '🔒', text: `${abbr} ${p.name} ${ps.saves}セーブ！ 守護神として君臨`, color: 'text-blue-400', priority: 1 });
-      }
-      if (bs?.stolenBases >= 15) {
-        headlines.push({ icon: '💨', text: `${abbr} ${p.name} ${bs.stolenBases}盗塁！ 韋駄天の異名`, color: 'text-green-400', priority: 1 });
-      }
+    // 社会人・独立リーグ注目選手
+    const corpProspects = [];
+    const indProspects = [];
+    Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
+      if (!team?.players) return;
+      const isCorp = team.corporateData?.type === 'enterprise' || team.corporateData?.type === 'club';
+      const isInd = !isCorp && !team.corporateData && teamName !== userTeamName;
+      if (!isCorp && !isInd) return;
+      team.players.forEach(p => {
+        if (p.age >= 30) return;
+        const draft = checkNPBDraftEligibility(p);
+        if (draft.totalScore < 80) return;
+        const card = makeCard(p, isCorp ? 'corporate' : 'independent', teamName);
+        if (isCorp) corpProspects.push({ card, score: draft.totalScore });
+        else indProspects.push({ card, score: draft.totalScore });
+      });
     });
-    headlines.sort((a, b) => b.priority - a.priority);
+    corpProspects.sort((a, b) => b.score - a.score);
+    if (corpProspects.length > 0) {
+      sections.push({ title: '社会人注目選手', icon: '🏢', color: 'text-amber-400', borderColor: 'border-amber-700/30', bgColor: 'bg-amber-900/20', players: corpProspects.slice(0, 8).map(x => x.card) });
+    }
+    indProspects.sort((a, b) => b.score - a.score);
+    if (indProspects.length > 0) {
+      sections.push({ title: '独立リーグ注目選手', icon: '⚡', color: 'text-purple-400', borderColor: 'border-purple-700/30', bgColor: 'bg-purple-900/20', players: indProspects.slice(0, 6).map(x => x.card) });
+    }
 
-    return { rankings, headlines: headlines.slice(0, 8), qualifiedAB, qualifiedOuts, batAvg, era, obpSlg };
+    // 自リーグの活躍選手
+    const userLeagueTeamSet = new Set(seasonData?.settings?.teamNames || []);
+    const leagueTeams = userLeagueTeamSet.size > 0
+      ? Object.keys(TEAMS_DATA).filter(tn => userLeagueTeamSet.has(tn))
+      : Object.keys(TEAMS_DATA).slice(0, 12);
+    const leagueStars = [];
+    leagueTeams.forEach(tn => {
+      (TEAMS_DATA[tn]?.players || []).forEach(p => {
+        const bs = p.seasonStats?.batting;
+        const ps = p.seasonStats?.pitching;
+        if (!bs && !ps) return;
+        let star = false;
+        let note = '';
+        if (bs?.atBats >= 30 && bs.hits / bs.atBats >= 0.330) { star = true; note = `打率${(bs.hits / bs.atBats).toFixed(3)}`; }
+        if (bs?.homeruns >= 10) { star = true; note = `${bs.homeruns}本塁打`; }
+        if (ps?.wins >= 5) { star = true; note = `${ps.wins}勝`; }
+        if (ps?.saves >= 5) { star = true; note = `${ps.saves}S`; }
+        if (ps?.inningsPitched >= 30 && (ps.earnedRuns / (ps.inningsPitched / 3)) * 9 <= 2.0) {
+          star = true; note = `防御率${((ps.earnedRuns / (ps.inningsPitched / 3)) * 9).toFixed(2)}`;
+        }
+        if (star) {
+          const card = makeCard(p, 'league', tn);
+          card.headline = note + ' ' + card.headline;
+          leagueStars.push({ card, score: checkNPBDraftEligibility(p).totalScore });
+        }
+      });
+    });
+    leagueStars.sort((a, b) => b.score - a.score);
+    if (leagueStars.length > 0) {
+      sections.push({ title: 'リーグ活躍選手', icon: '🔥', color: 'text-red-400', borderColor: 'border-red-700/30', bgColor: 'bg-red-900/20', players: leagueStars.slice(0, 6).map(x => x.card) });
+    }
+
+    // 大会情報
+    const tournamentNews = [];
+    const td = seasonData.toshitaikou;
+    if (td?.champion) tournamentNews.push({ icon: '🏆', text: `都市対抗野球大会 優勝: ${td.champion}`, color: 'text-yellow-400' });
+    else if (td?.mainTournament) tournamentNews.push({ icon: '⚾', text: '都市対抗本戦 開催中', color: 'text-yellow-400' });
+    else if (td?.qualifiersDone) tournamentNews.push({ icon: '⚾', text: '都市対抗 予選終了 — 本戦間近', color: 'text-yellow-400' });
+    const ns = seasonData.nihonSenshuken;
+    if (ns?.champion) tournamentNews.push({ icon: '🏆', text: `日本選手権 優勝: ${ns.champion}`, color: 'text-orange-400' });
+    else if (ns?.generated) tournamentNews.push({ icon: '⚾', text: '日本選手権 進行中', color: 'text-orange-400' });
+    const rt = seasonData.regionalTournament;
+    if (rt?.generated && rt.brackets) {
+      const champs = Object.values(rt.brackets).filter(b => b.champion).map(b => `${b.regionName}: ${b.champion}`);
+      if (champs.length > 0) tournamentNews.push({ icon: '🥇', text: `地域大会優勝 — ${champs.slice(0, 3).join('、')}${champs.length > 3 ? ` 他${champs.length - 3}地区` : ''}`, color: 'text-green-400' });
+    }
+
+    return { sections, tournamentNews };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showNewspaper, seasonData.results?.length, seasonData.currentDate?.day]);
 
@@ -3353,93 +3431,76 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
       {/* スポーツ新聞モーダル */}
       {showNewspaper && newspaperData && (() => {
-        const { rankings, headlines, qualifiedAB, qualifiedOuts, batAvg, era, obpSlg } = newspaperData;
+        const { sections, tournamentNews } = newspaperData;
         const curDate = seasonData.currentDate;
-        const renderRank = (list, title, icon, color, getValue, formatVal, ascending) => (
-          <div className="bg-gray-900/80 rounded-xl p-3 border border-gray-700/30">
-            <div className={`text-xs font-bold ${color} mb-2 pb-1.5 border-b border-gray-700/40 flex items-center gap-1`}>
-              <span>{icon}</span> {title}
-            </div>
-            {list.length === 0 ? <div className="text-xs text-gray-500 py-1">該当者なし</div> : (
-              list.map((p, i) => {
-                const isUser = p.teamName === userTeamName;
-                return (
-                  <div key={p.id || i} className={`flex items-center text-xs py-0.5 px-1 rounded ${isUser ? 'text-yellow-300 bg-yellow-900/15' : 'text-gray-300'}`}>
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                      i === 0 ? 'bg-yellow-500/90 text-black' : i === 1 ? 'bg-gray-400/80 text-black' : i === 2 ? 'bg-orange-600/80 text-white' : 'text-gray-600'
-                    }`}>{i + 1}</span>
-                    <span className="flex-1 truncate ml-1.5">{p.name} <span className="text-gray-500 text-[10px]">({getTeamAbbreviation(p.teamName)})</span></span>
-                    <span className={`font-mono font-bold ${color}`}>{formatVal(getValue(p))}</span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        );
         return (
-          <div className="fixed inset-0 z-50 flex items-start justify-center p-2 pt-8 overflow-y-auto" onClick={() => setShowNewspaper(false)}>
+          <div className="fixed inset-0 z-50 flex items-start justify-center p-2 pt-6 overflow-y-auto" onClick={() => setShowNewspaper(false)}>
             <div className="absolute inset-0 bg-black/70" />
-            <div className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-lg w-full border border-gray-700/50" onClick={e => e.stopPropagation()}>
+            <div className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-lg w-full border border-gray-700/50 mb-8" onClick={e => e.stopPropagation()}>
               <div className="sticky top-0 z-10 bg-gradient-to-r from-red-800 to-red-900 rounded-t-2xl px-4 py-3 flex items-center justify-between border-b border-red-700/50">
                 <div>
-                  <div className="text-[10px] text-red-300/60 tracking-widest uppercase">Sports Daily</div>
-                  <h2 className="text-lg font-black text-white tracking-tight">スポーツ新聞</h2>
+                  <div className="text-[10px] text-red-300/60 tracking-widest uppercase">Draft Watch</div>
+                  <h2 className="text-lg font-black text-white tracking-tight">ドラフト注目選手</h2>
                   <div className="text-[10px] text-red-200/60">{curDate.year}年{curDate.month}月{curDate.day}日</div>
                 </div>
                 <button onClick={() => setShowNewspaper(false)} className="text-red-300 hover:text-white text-2xl leading-none px-2 py-1 hover:bg-red-700/50 rounded-lg transition-colors">✕</button>
               </div>
 
-              <div className="p-4 space-y-4">
-                {headlines.length > 0 && (
-                  <div>
-                    <div className="text-xs font-bold text-yellow-400 mb-2 flex items-center gap-1">
-                      <span>🗞️</span> 注目ヘッドライン
+              <div className="p-3 space-y-3">
+                {tournamentNews.length > 0 && (
+                  <div className="space-y-1">
+                    {tournamentNews.map((t, i) => (
+                      <div key={i} className="flex items-center gap-1.5 bg-gray-800/80 rounded-lg px-2.5 py-1.5 border border-gray-700/30">
+                        <span className="text-sm shrink-0">{t.icon}</span>
+                        <span className={`text-xs font-bold ${t.color}`}>{t.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {sections.map((sec, si) => (
+                  <div key={si} className={`rounded-xl border ${sec.borderColor} overflow-hidden`}>
+                    <div className={`px-3 py-2 ${sec.bgColor} flex items-center gap-1.5`}>
+                      <span className="text-sm">{sec.icon}</span>
+                      <span className={`text-xs font-bold ${sec.color}`}>{sec.title}</span>
+                      <span className="text-[10px] text-gray-500 ml-auto">{sec.players.length}名</span>
                     </div>
-                    <div className="space-y-1">
-                      {headlines.map((h, i) => (
-                        <div key={i} className="flex items-start gap-1.5 bg-gray-800/80 rounded-lg px-2.5 py-1.5 border border-gray-700/30">
-                          <span className="text-sm shrink-0">{h.icon}</span>
-                          <span className={`text-xs ${h.color}`}>{h.text}</span>
+                    <div className="divide-y divide-gray-800/50">
+                      {sec.players.map((c, ci) => (
+                        <div key={ci} className="px-3 py-2 hover:bg-gray-800/30">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white font-bold text-sm">{c.name}</span>
+                            <span className="text-gray-400 text-[10px]">{c.age}歳</span>
+                            <span className="text-gray-500 text-[10px]">{c.throws}投{c.bats}打</span>
+                            <span className="text-gray-400 text-[10px] px-1 py-0.5 bg-gray-800/60 rounded">{c.position}</span>
+                            {c.year && <span className="text-blue-400 text-[10px]">{c.year}年生</span>}
+                            {c.uniRank && <span className="text-[10px] text-gray-500">({c.uniRank}ランク)</span>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-gray-500 text-[10px] truncate">{c.orgName}</span>
+                            <span className={`text-[10px] ${sec.color} truncate flex-1`}>{c.headline}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0 mt-1 text-[10px]">
+                            {c.isPitcher ? (<>
+                              {c.velocity && <span className="text-gray-400">球速 <span className={`font-bold ${c.velocity >= 150 ? 'text-red-400' : c.velocity >= 140 ? 'text-orange-400' : 'text-gray-300'}`}>{c.velocity}km</span></span>}
+                              {c.control != null && <span className="text-gray-400">制球 <span className="text-gray-300 font-bold">{c.control}</span></span>}
+                            </>) : (<>
+                              {c.meet != null && <span className="text-gray-400">ミート <span className="text-gray-300 font-bold">{c.meet}</span></span>}
+                              {c.power != null && <span className="text-gray-400">パワー <span className={`font-bold ${c.power >= 55 ? 'text-orange-400' : 'text-gray-300'}`}>{c.power}</span></span>}
+                            </>)}
+                            {c.speed != null && <span className="text-gray-400">走力 <span className={`font-bold ${c.speed >= 65 ? 'text-cyan-400' : 'text-gray-300'}`}>{c.speed}</span></span>}
+                            {c.arm != null && <span className="text-gray-400">肩力 <span className="text-gray-300 font-bold">{c.arm}</span></span>}
+                            {c.defense != null && <span className="text-gray-400">守備 <span className="text-gray-300 font-bold">{c.defense}</span></span>}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
+                ))}
+
+                {sections.length === 0 && (
+                  <div className="text-center text-gray-500 text-xs py-8">まだ注目選手の情報がありません</div>
                 )}
-
-                <div>
-                  <div className="text-xs font-bold text-blue-400 mb-2 flex items-center gap-1">
-                    <span>⚾</span> 打撃ランキング
-                    <span className="text-[10px] text-gray-500 font-normal ml-1">規定打席{qualifiedAB}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {renderRank(rankings.avg, '首位打者', '🏏', 'text-blue-400', batAvg, v => v.toFixed(3))}
-                    {renderRank(rankings.hr, '本塁打王', '💥', 'text-pink-400', p => p.seasonStats?.batting?.homeruns || 0, v => `${v}本`)}
-                    {renderRank(rankings.rbi, '打点王', '🔋', 'text-green-400', p => p.seasonStats?.batting?.rbis || 0, v => `${v}点`)}
-                    {renderRank(rankings.sb, '盗塁王', '💨', 'text-teal-400', p => p.seasonStats?.batting?.stolenBases || 0, v => `${v}盗`)}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs font-bold text-orange-400 mb-2 flex items-center gap-1">
-                    <span>🔥</span> 投手ランキング
-                    <span className="text-[10px] text-gray-500 font-normal ml-1">規定投球{Math.floor(qualifiedOuts / 3)}回</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {renderRank(rankings.era, '最優秀防御率', '🛡', 'text-orange-400', era, v => v.toFixed(2))}
-                    {renderRank(rankings.wins, '最多勝', '🏆', 'text-yellow-400', p => p.seasonStats?.pitching?.wins || 0, v => `${v}勝`)}
-                    {renderRank(rankings.saves, '最多セーブ', '🔒', 'text-blue-400', p => p.seasonStats?.pitching?.saves || 0, v => `${v}S`)}
-                    {renderRank(rankings.so, '最多奪三振', '🌀', 'text-purple-400', p => p.seasonStats?.pitching?.strikeouts || 0, v => `${v}K`)}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs font-bold text-amber-400 mb-2 flex items-center gap-1">
-                    <span>📊</span> 総合指標
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {renderRank(rankings.ops, 'OPS', '📈', 'text-amber-400', obpSlg, v => v.toFixed(3))}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
