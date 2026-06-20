@@ -112,7 +112,8 @@ NEW GAME → 企業チーム選択 → キャンプ
   - 大学チーム数×受け入れ数で各ランクの大学スロットを決定（S:120, A:260, B:330, C:288, D:84）
   - 社会人・独立候補は大学スロットの5-10%程度。残りは引退
 - **大学在学**: `universityPool` にグローバル保持。4年間（or 22歳）で卒業。在学中は毎年ランク別成長処理
-  - 各エントリに `universityRank` を保持。成長倍率: S=1.25, A=1.10, B=1.00, C=0.90, D=0.80
+  - 入学ブーストなし（4年間の年次成長に統合済み）
+  - 各エントリに `universityRank` を保持。成長倍率: S=1.55, A=1.25, B=1.00, C=0.80, D=0.60
 - **卒業後**: `releasedPlayersPool` に追加され、トライアウト/スカウト候補として供給
 - **スカウト対象**: 高校生プール（4月〜）、大学3-4年生、リリースプールすべてがスカウト候補
 - **セーブ/ロード**: `serializeUniversityPool()` / `deserializeUniversityPool()` で大学+高校生プール両方を保存・復元
@@ -160,8 +161,9 @@ NEW GAME → 企業チーム選択 → キャンプ
   - 部制はUNIVERSITY_REGIONSの`divisions`フィールドで汎用管理（東都:2、他:1）。将来の3部制も対応可
   - 試合日: 火・水・土・日。`WORLD_DATA.universityLeagues` に格納
   - DateProgressScreenで折りたたみ表示（全16リーグ個別展開可）
-- **ランク別成長**: `UNIVERSITY_RANK_GROWTH` — S=1.25倍, A=1.10倍, B=1.00倍, C=0.90倍, D=0.80倍
+- **ランク別成長**: `UNIVERSITY_RANK_GROWTH` — S=1.55倍, A=1.25倍, B=1.00倍, C=0.80倍, D=0.60倍
   - `applyUniversityGrowth()` で自動適用。universityPool の各エントリに `universityRank` を保持
+  - 旧入学ブーストを廃止し、4年間の年次成長に統合。S校とD校の差がより明確に
 - **将来のゲームモード**: `gameMode = 'university'` として社会人モードと並行実装可能
 
 ## 社会人モード入退団 (`src/corporate/scoutingSystem.js`)

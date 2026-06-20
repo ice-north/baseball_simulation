@@ -8,7 +8,7 @@ import { createSeasonData, initializeStandings } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
-import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates, HIGH_SCHOOL_CLASS_SIZE, applyUniversityEntranceBoost } from './universityPool.js';
+import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates, HIGH_SCHOOL_CLASS_SIZE } from './universityPool.js';
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
@@ -1990,12 +1990,6 @@ export function advanceToNextYear(seasonData, allTeams) {
     hsDistribution = distributeHighSchoolGraduates(currentYear + 1);
     // ランク別に大学入学
     enrollInUniversity(hsDistribution.university, currentYear + 1);
-    const newCohort = universityPool[currentYear + 1];
-    if (newCohort) {
-      newCohort.forEach(entry => {
-        applyUniversityEntranceBoost(entry.player, entry.universityRank);
-      });
-    }
     // 社会人候補はリリースプールへ
     hsDistribution.corporate.forEach(p => {
       p.isStarter = false;

@@ -662,44 +662,6 @@ export function processUniversityYear(currentYear) {
 }
 
 /**
- * 大学入学時の一括底上げ（seedInitialUniversityClasses用）
- * 高校生品質のベースを大学在籍レベルまで引き上げる
- */
-export function applyUniversityEntranceBoost(player, universityRank) {
-  const boostMap = { S: 12, A: 9, B: 6, C: 4, D: 2 };
-  const base = boostMap[universityRank] || 4;
-  const gp = player.growthPotential || 1.0;
-  const r = () => Math.floor(Math.random() * 5) - 2;
-  const isPitcher = player.position === 'pitcher';
-
-  const decayMult = (current, threshold, rate) => {
-    if (current < threshold) return 1.0;
-    return Math.max(0.10, 1.0 - (current - threshold) * rate);
-  };
-  const boost = (v, amount, cap = 99, threshold = null, rate = 0.05) => {
-    let raw = amount * (0.8 + gp * 0.4);
-    if (threshold != null) raw *= decayMult(v, threshold, rate);
-    return Math.min(cap, v + Math.round(raw) + r());
-  };
-
-  if (isPitcher) {
-    player.pitching.velocity = boost(player.pitching.velocity, base * 0.5, 155, 145, 0.20);
-    player.pitching.control = boost(player.pitching.control, base * 1.2, 99, 70, 0.05);
-    player.pitching.stamina = boost(player.pitching.stamina, base * 1.5, 200, 80, 0.03);
-    player.physical.arm = boost(player.physical.arm, base * 0.8, 99, 80, 0.03);
-  } else {
-    player.batting.meet = boost(player.batting.meet, base * 1.0, 99, 70, 0.05);
-    player.batting.power = boost(player.batting.power, base * 0.8, 99, 70, 0.05);
-    player.batting.eye = boost(player.batting.eye, base * 0.8, 99, 70, 0.05);
-    player.physical.speed = boost(player.physical.speed, base * 0.6, 99, 80, 0.03);
-    player.physical.arm = boost(player.physical.arm, base * 0.5, 99, 80, 0.03);
-    player.fielding.defense = boost(player.fielding.defense, base * 0.8, 99, 70, 0.05);
-  }
-  player.physical.bodyStamina = boost(player.physical.bodyStamina || 40, base * 0.6, 99, 80, 0.03);
-  player.physical.recovery = boost(player.physical.recovery || 40, base * 0.4, 99, 80, 0.03);
-}
-
-/**
  * 大学での1年間の成長を適用
  * キャンプの練習とは異なり、バランス型の緩やかな成長
  * @param {Object} player - 選手オブジェクト
@@ -725,32 +687,32 @@ function applyUniversityGrowth(player, universityRank = null) {
   };
 
   if (isPitcher) {
-    player.pitching.control = grow(player.pitching.control, 3, 99, 70, 0.05);
-    player.pitching.stamina = grow(player.pitching.stamina, 4, 200, 80, 0.03);
-    player.physical.arm = grow(player.physical.arm, 2, 99, 80, 0.03);
-    player.pitching.velocity = grow(player.pitching.velocity, 1.0, 165, 150, 0.20);
+    player.pitching.control = grow(player.pitching.control, 5, 99, 70, 0.05);
+    player.pitching.stamina = grow(player.pitching.stamina, 7, 200, 80, 0.03);
+    player.physical.arm = grow(player.physical.arm, 3.5, 99, 80, 0.03);
+    player.pitching.velocity = grow(player.pitching.velocity, 2.0, 165, 150, 0.20);
     if (player.pitching.arsenal) {
       player.pitching.arsenal.forEach(pitch => {
         if (pitch.type !== 'straight') {
-          pitch.level = Math.min(100, pitch.level + Math.floor(Math.random() * 3 * gp));
+          pitch.level = Math.min(100, pitch.level + Math.floor(Math.random() * 4 * gp * rankMult));
         }
       });
     }
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 2, 99, 80, 0.03);
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 99, 80, 0.03);
   } else {
-    player.batting.meet = grow(player.batting.meet, 3, 99, 70, 0.05);
-    player.batting.power = grow(player.batting.power, 2, 99, 70, 0.05);
-    player.batting.eye = grow(player.batting.eye, 2, 99, 70, 0.05);
-    player.physical.speed = grow(player.physical.speed, 1, 99, 80, 0.03);
-    player.fielding.defense = grow(player.fielding.defense, 2, 99, 70, 0.05);
-    player.physical.arm = grow(player.physical.arm, 1, 99, 80, 0.03);
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 2, 99, 80, 0.03);
+    player.batting.meet = grow(player.batting.meet, 5, 99, 70, 0.05);
+    player.batting.power = grow(player.batting.power, 3.5, 99, 70, 0.05);
+    player.batting.eye = grow(player.batting.eye, 3.5, 99, 70, 0.05);
+    player.physical.speed = grow(player.physical.speed, 2, 99, 80, 0.03);
+    player.fielding.defense = grow(player.fielding.defense, 3.5, 99, 70, 0.05);
+    player.physical.arm = grow(player.physical.arm, 2, 99, 80, 0.03);
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 99, 80, 0.03);
   }
 
   // フィジカル共通
   player.physical.muscle = grow(player.physical.muscle || 40, 2, 99, 80, 0.03);
   player.physical.dexterity = grow(player.physical.dexterity || 40, 2, 99, 80, 0.03);
-  player.physical.recovery = grow(player.physical.recovery || 40, 1, 99, 80, 0.03);
+  player.physical.recovery = grow(player.physical.recovery || 40, 2, 99, 80, 0.03);
 }
 
 // ============================================================
@@ -869,10 +831,6 @@ export function seedInitialUniversityClasses(gameYear) {
 
     const cohort = universityPool[enrollYear];
     if (cohort) {
-      // 入学時ブースト: 高校生品質→大学チーム在籍品質への底上げ
-      cohort.forEach(entry => {
-        applyUniversityEntranceBoost(entry.player, entry.universityRank);
-      });
       for (let y = 0; y < yearsInUni; y++) {
         cohort.forEach(entry => {
           applyUniversityGrowth(entry.player, entry.universityRank);
@@ -1054,14 +1012,8 @@ export function warmUpPlayerPipeline(gameYear) {
     highSchoolPool.year = simYear;
     const hsDistribution = distributeHighSchoolGraduates(enrollYear);
 
-    // 大学入学 + 入学時ブースト
+    // 大学入学
     enrollInUniversity(hsDistribution.university, enrollYear);
-    const cohort = universityPool[enrollYear];
-    if (cohort) {
-      cohort.forEach(entry => {
-        applyUniversityEntranceBoost(entry.player, entry.universityRank);
-      });
-    }
 
     // 社会人・独立候補はリリースプールへ
     hsDistribution.corporate.forEach(p => {
