@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { POSITION_NAMES } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 
 const NPB_TEAMS_INFO = [
   { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', textColor: '#000', league: 'ce', flag: 'giants' },
@@ -630,8 +630,86 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   );
 };
 
+const PITCH_NAMES = {
+  straight: 'ストレート', slider: 'スライダー', curve: 'カーブ',
+  fork: 'フォーク', changeup: 'チェンジアップ', sinker: 'シンカー',
+  shoot: 'シュート', cutter: 'カッター', splitter: 'スプリッター',
+  twoSeam: 'ツーシーム', palm: 'パーム', knuckle: 'ナックル',
+};
+const FORM_NAMES = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+const FULL_POS_NAMES = { pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手', third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手' };
+
+const StatVal = ({ label, value, suffix }) => (
+  <div className="flex items-baseline gap-1">
+    <span className="text-gray-500 text-[10px] w-10 shrink-0">{label}</span>
+    <span className={`text-xs font-bold ${getAbilityColor(value)}`}>{value}{suffix || ''}</span>
+  </div>
+);
+
+const DraftPlayerDetail = ({ player }) => {
+  if (!player) return null;
+  const p = player;
+  const isPitcher = p.position === 'pitcher';
+  const bats = p.batting?.bats === 'left' ? '左' : p.batting?.bats === 'switch' ? '両' : '右';
+  const throws = p.physical?.throws === 'left' ? '左' : '右';
+  const build = p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉';
+
+  return (
+    <div className="mt-1.5 pt-1.5 border-t border-gray-200 text-[10px]">
+      <div className="flex items-center gap-3 mb-1.5 text-gray-500">
+        <span>{FULL_POS_NAMES[p.position] || p.position}</span>
+        <span>{throws}投{bats}打</span>
+        <span>{build}</span>
+        {isPitcher && p.pitching?.form && <span>{FORM_NAMES[p.pitching.form] || p.pitching.form}</span>}
+        {p.growthPotential != null && <span>成長力 <span className={`font-bold ${getAbilityColor(p.growthPotential * 50)}`}>{p.growthPotential.toFixed(2)}</span></span>}
+      </div>
+      {isPitcher ? (
+        <div className="space-y-1">
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            <StatVal label="球速" value={p.pitching?.velocity || 0} suffix="km" />
+            <StatVal label="制球" value={p.pitching?.control || 0} />
+            <StatVal label="スタミナ" value={p.pitching?.stamina || 0} />
+          </div>
+          {p.pitching?.arsenal?.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {p.pitching.arsenal.filter(b => b.type !== 'straight').map((b, i) => (
+                <span key={i} className="inline-flex items-center gap-0.5 bg-gray-100 rounded px-1 py-0.5">
+                  <span className="text-gray-600">{PITCH_NAMES[b.type] || b.type}</span>
+                  <span className={`font-bold ${getAbilityColor(b.level)}`}>{b.level}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            <StatVal label="ミート" value={p.batting?.meet || 0} />
+            <StatVal label="パワー" value={p.batting?.power || 0} />
+            <StatVal label="走力" value={p.physical?.speed || 0} />
+            <StatVal label="守備" value={p.fielding?.defense || 0} />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            <StatVal label="ミート" value={p.batting?.meet || 0} />
+            <StatVal label="パワー" value={p.batting?.power || 0} />
+            <StatVal label="選球眼" value={p.batting?.eye || 0} />
+            <StatVal label="走力" value={p.physical?.speed || 0} />
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            <StatVal label="肩力" value={p.physical?.arm || 0} />
+            <StatVal label="守備" value={p.fielding?.defense || 0} />
+            <StatVal label="盗塁" value={p.batting?.steal || 0} />
+            {p.position === 'catcher' && <StatVal label="リード" value={p.catching?.lead || 0} />}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, onContinue }) => {
   const [summaryGrid] = useState(() => buildGridOrder(npbStandings));
+  const [expandedPlayer, setExpandedPlayer] = useState(null);
   const teamPicks = useMemo(() => {
     const map = {};
     NPB_TEAMS_INFO.forEach(t => { map[t.name] = []; });
@@ -682,15 +760,20 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                           ))}
                         </div>
                       )}
-                      <div className="px-3 py-2 flex items-baseline gap-2 flex-wrap">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                          isFirst ? 'bg-red-100 text-red-700' :
-                          entry.draftRound.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
-                        }`}>{displayLabel}</span>
-                        <span className="text-gray-900 font-bold text-sm">{entry.name}</span>
-                        <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
-                        <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
-                        <span className="text-gray-400 text-xs">{entry.teamName}</span>
+                      <div className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                           onClick={() => setExpandedPlayer(expandedPlayer === entry.playerId ? null : entry.playerId)}>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                            isFirst ? 'bg-red-100 text-red-700' :
+                            entry.draftRound.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
+                          }`}>{displayLabel}</span>
+                          <span className="text-gray-900 font-bold text-sm">{entry.name}</span>
+                          <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
+                          <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
+                          <span className="text-gray-400 text-xs">{entry.teamName}</span>
+                          <span className="text-gray-400 text-[10px] ml-auto">{expandedPlayer === entry.playerId ? '▲' : '▼'}</span>
+                        </div>
+                        {expandedPlayer === entry.playerId && <DraftPlayerDetail player={entry.player} />}
                       </div>
                     </div>
                   );
