@@ -519,24 +519,41 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   allCandidates.forEach(c => { sourceCounts[c.source] = (sourceCounts[c.source] || 0) + 1; });
   console.log(`[NPBDraft Year${gameYear}] 候補数: 高校${sourceCounts.highschool} 大学pool${sourceCounts.university} 大学team${sourceCounts.university_team} 社会人${sourceCounts.corporate} 独立${sourceCounts.independent} 合計${allCandidates.length}`);
 
-  // === スコア順にソートし、上位~120名を指名 ===
+  // === スコア順にソートし、候補の質に応じて指名 ===
   allCandidates.sort((a, b) => b.score - a.score);
 
-  // 各NPBチームの指名枠: 本指名6巡 + 育成 = 最大7巡 × 12球団 = 84名
-  // 実際は5-7巡が多い → 60-84名の本指名 + 育成指名
   const numTeams = NPB_TEAMS.length;
-  const mainRounds = 5 + Math.floor(Math.random() * 2); // 5〜6巡
-  const mainSlots = mainRounds * numTeams;
-  const ikuSlots = Math.floor(Math.random() * 3) * numTeams; // 0〜2巡の育成
-  const totalSlots = mainSlots + ikuSlots;
   const MIN_DRAFT_SCORE = 80;
-  const eligible = allCandidates.filter(c => c.score >= MIN_DRAFT_SCORE);
+  const MIN_IKU_SCORE = 65;
+  const eligible = allCandidates.filter(c => c.score >= MIN_IKU_SCORE);
+  const mainEligible = allCandidates.filter(c => c.score >= MIN_DRAFT_SCORE);
+
+  // 候補の質で本指名巡数を決定（良い候補が多いほど多巡）
+  const mainCandPerTeam = Math.floor(mainEligible.length / numTeams);
+  const baseMainRounds = mainCandPerTeam >= 8 ? 6 : mainCandPerTeam >= 6 ? 5 : 4;
+
+  // 球団ごとの指名枠を個別に設定
+  const IKU_HEAVY_TEAMS = new Set(['読売ジャイアンツ', 'ソフトバンクホークス', '西武ライオンズ', 'オリックス・バファローズ']);
+  const teamDraftLimits = {};
+  NPB_TEAMS.forEach(team => {
+    // 本指名: baseMainRounds ± 1のバラつき
+    const mainVariance = Math.floor(Math.random() * 3) - 1;
+    const mainPicks = Math.max(3, Math.min(7, baseMainRounds + mainVariance));
+    // 育成: 育成積極球団は2-4名、それ以外は0-2名
+    const isIkuHeavy = IKU_HEAVY_TEAMS.has(team);
+    const ikuPicks = isIkuHeavy
+      ? 2 + Math.floor(Math.random() * 3)
+      : Math.floor(Math.random() * 3);
+    teamDraftLimits[team] = { mainPicks, ikuPicks, mainDone: 0, ikuDone: 0 };
+  });
   const eligibleSourceCounts = { highschool: 0, university: 0, corporate: 0, independent: 0 };
   eligible.forEach(c => {
     const src = c.source === 'university_team' ? 'university' : c.source;
     eligibleSourceCounts[src] = (eligibleSourceCounts[src] || 0) + 1;
   });
-  console.log(`[NPBDraft Year${gameYear}] eligible(≥${MIN_DRAFT_SCORE}): 高校${eligibleSourceCounts.highschool} 大学${eligibleSourceCounts.university} 社会人${eligibleSourceCounts.corporate} 独立${eligibleSourceCounts.independent} 合計${eligible.length} / slots=${totalSlots}`);
+  const totalMainSlots = Object.values(teamDraftLimits).reduce((s, t) => s + t.mainPicks, 0);
+  const totalIkuSlots = Object.values(teamDraftLimits).reduce((s, t) => s + t.ikuPicks, 0);
+  console.log(`[NPBDraft Year${gameYear}] eligible(≥${MIN_IKU_SCORE}): 高校${eligibleSourceCounts.highschool} 大学${eligibleSourceCounts.university} 社会人${eligibleSourceCounts.corporate} 独立${eligibleSourceCounts.independent} 合計${eligible.length} / 本指名枠=${totalMainSlots} 育成枠=${totalIkuSlots}`);
 
   // === スコア分布の診断ログ ===
   const scoresBySource = { highschool: [], university: [], corporate: [], independent: [] };
@@ -566,7 +583,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   });
   console.log(`[NPBDraft] Top120(full draft): HS=${top120Sources.highschool} 大学=${top120Sources.university} 社会人=${top120Sources.corporate} 独立=${top120Sources.independent}`);
 
-  const selected = eligible.slice(0, Math.min(totalSlots, eligible.length));
+  const maxRound = Math.max(...Object.values(teamDraftLimits).map(t => t.mainPicks + t.ikuPicks));
 
   // === 指名エントリ生成ヘルパー ===
   const createDraftEntry = (candidate, npbTeam, roundLabel) => {
@@ -835,20 +852,26 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     if (!cand) continue;
     draftedPlayers.push(createDraftEntry(cand, team, 'ドラフト1位'));
     updateDraftTracker(team, cand);
+    if (teamDraftLimits[team]) teamDraftLimits[team].mainDone++;
   }
 
-  // === 2巡目以降: ウェーバー/逆ウェーバー交互制（球団好みで選択） ===
-  for (let round = 1; round < mainRounds + (ikuSlots > 0 ? Math.ceil(ikuSlots / numTeams) : 0); round++) {
-    const isIku = round >= mainRounds;
-    const ikuRound = round - mainRounds + 1;
-    const roundLabel = isIku ? `育成${ikuRound}巡目` : DRAFT_ROUND_LABELS[Math.min(6, 6 - round)];
+  // === 2巡目以降: ウェーバー/逆ウェーバー交互制（球団別の指名枠で管理） ===
+  for (let round = 1; round < maxRound; round++) {
     const teamOrder = round % 2 === 1 ? waiverOrder : reverseWaiverOrder;
 
     for (let t = 0; t < numTeams; t++) {
       const npbTeam = teamOrder[t % numTeams];
-      // 残り候補の上位から球団好み込みで選択
-      const remaining = eligible.filter(c => !takenIds.has(c.player.id));
-      if (remaining.length === 0) break;
+      const limits = teamDraftLimits[npbTeam];
+
+      // この球団がまだ指名できるか判定
+      const isMainPhase = limits.mainDone < limits.mainPicks;
+      const isIkuPhase = !isMainPhase && limits.ikuDone < limits.ikuPicks;
+      if (!isMainPhase && !isIkuPhase) continue;
+
+      const minScore = isMainPhase ? MIN_DRAFT_SCORE : MIN_IKU_SCORE;
+      const remaining = eligible.filter(c => !takenIds.has(c.player.id) && c.score >= minScore);
+      if (remaining.length === 0) continue;
+
       const searchWindow = remaining.slice(0, Math.max(8, Math.ceil(remaining.length * 0.15)));
       let bestCand = null, bestPref = -Infinity;
       for (const c of searchWindow) {
@@ -858,10 +881,22 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         const pref = c.score + prefBonus * 0.7 + noise + balancePenalty;
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
       }
-      if (!bestCand) break;
-      takenIds.add(bestCand.player.id);
-      draftedPlayers.push(createDraftEntry(bestCand, npbTeam, roundLabel));
-      updateDraftTracker(npbTeam, bestCand);
+      if (!bestCand) continue;
+
+      if (isMainPhase) {
+        const pickOrder = limits.mainDone + 1;
+        const roundLabel = `ドラフト${pickOrder}位`;
+        takenIds.add(bestCand.player.id);
+        draftedPlayers.push(createDraftEntry(bestCand, npbTeam, roundLabel));
+        updateDraftTracker(npbTeam, bestCand);
+        limits.mainDone++;
+      } else {
+        const ikuRound = limits.ikuDone + 1;
+        takenIds.add(bestCand.player.id);
+        draftedPlayers.push(createDraftEntry(bestCand, npbTeam, `育成${ikuRound}巡目`));
+        updateDraftTracker(npbTeam, bestCand);
+        limits.ikuDone++;
+      }
     }
   }
 
