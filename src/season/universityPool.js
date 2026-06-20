@@ -810,17 +810,23 @@ function mockNPBDraftScore(player) {
   const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : -30;
   const potentialMult = age <= 18 ? 1.18 : age <= 19 ? 1.12 : age <= 20 ? 1.06 : age <= 21 ? 1.02 : 1.0;
   const gp = player.growthPotential || 1.0;
-  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.65) * 38) : age <= 22 ? Math.max(0, (gp - 0.8) * 25) : Math.max(0, (gp - 1.0) * 15);
   const fame = player.fame || 0;
   const fameBonus = Math.round(fame * 0.3);
 
-  let abilityScore;
+  let rawAbility, abilityScore;
   if (isPitcher) {
     const v = player.pitching?.velocity || 0;
     const c = player.pitching?.control || 0;
     const s = player.pitching?.stamina || 0;
-    const bestBreaking = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
-    abilityScore = (Math.max(0, (v - 100) * 1.2) + c * 1.2 + s * 0.6 + bestBreaking * 0.7) * potentialMult;
+    const breakingBalls = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
+    const bestBreaking = breakingBalls.reduce((max, a) => Math.max(max, a.level || 0), 0);
+    const arsenalCount = breakingBalls.filter(a => (a.level || 0) >= 20).length;
+    let velocityScore = Math.max(0, (v - 110) * 0.8);
+    if (v >= 140) velocityScore += (v - 140) * 2.5;
+    if (v >= 150) velocityScore += (v - 150) * 3.0;
+    const breakingScore = bestBreaking * 0.7 + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
+    rawAbility = velocityScore + c * 0.8 + s * 0.4 + breakingScore;
+    abilityScore = rawAbility * potentialMult;
   } else {
     const m = player.batting?.meet || 0;
     const p = player.batting?.power || 0;
@@ -828,8 +834,13 @@ function mockNPBDraftScore(player) {
     const spd = player.physical?.speed || 0;
     const def = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
-    abilityScore = (m * 1.2 + p * 1.1 + e * 0.6 + spd * 0.4 + def * 0.4 + arm * 0.3) * potentialMult;
+    rawAbility = m * 1.2 + p * 1.1 + e * 0.6 + spd * 0.4 + def * 0.4 + arm * 0.3;
+    abilityScore = rawAbility * potentialMult;
   }
+  const abilityFactor = Math.min(1.0, rawAbility / (isPitcher ? 100 : 130));
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.65) * 38) * abilityFactor
+                : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
+                : Math.max(0, (gp - 1.0) * 15);
   return abilityScore + ageBonus + gpBonus + fameBonus;
 }
 

@@ -266,11 +266,28 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const control = player.pitching?.control || 0;
     const stamina = player.pitching?.stamina || 0;
     const arsenal = player.pitching?.arsenal || [];
-    const bestBreaking = arsenal.filter(a => a.type !== 'straight').reduce((max, a) => Math.max(max, a.level || 0), 0);
+    const breakingBalls = arsenal.filter(a => a.type !== 'straight');
+    const bestBreaking = breakingBalls.reduce((max, a) => Math.max(max, a.level || 0), 0);
+    const arsenalCount = breakingBalls.filter(a => (a.level || 0) >= 20).length;
 
-    const velocityScore = Math.max(0, (velocity - 100) * 1.2);
-    const abilityScore = (velocityScore + control * 1.2 + stamina * 0.6 + bestBreaking * 0.7) * potentialMult;
-    baseScore = abilityScore + ageBonus + gpBonus + fameBonus;
+    // 球速スコア: 非線形（高速域ほど評価急上昇）
+    let velocityScore = Math.max(0, (velocity - 110) * 0.8);
+    if (velocity >= 140) velocityScore += (velocity - 140) * 2.5;
+    if (velocity >= 150) velocityScore += (velocity - 150) * 3.0;
+
+    // 変化球: 最高レベル + 球種数ボーナス（2球種+5, 3球種以上+12）
+    const breakingScore = bestBreaking * 0.7 + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
+
+    const rawAbility = velocityScore + control * 0.8 + stamina * 0.4 + breakingScore;
+    const abilityScore = rawAbility * potentialMult;
+
+    // 成長力ボーナス: 現在能力に比例（素材がある選手ほど成長力が意味を持つ）
+    const abilityFactor = Math.min(1.0, rawAbility / 100);
+    const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.65) * 38) * abilityFactor
+                        : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
+                        : Math.max(0, (gp - 1.0) * 15);
+
+    baseScore = abilityScore + ageBonus + gpBonusScaled + fameBonus;
     const totalScore = baseScore + awardBonus;
 
     reasons.push(`投手力${Math.round(abilityScore)}pt`);
@@ -289,8 +306,16 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const defense = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
 
-    const abilityScore = (meet * 1.2 + power * 1.1 + eye * 0.6 + speed * 0.4 + defense * 0.4 + arm * 0.3) * potentialMult;
-    baseScore = abilityScore + ageBonus + gpBonus + fameBonus;
+    const rawAbility = meet * 1.2 + power * 1.1 + eye * 0.6 + speed * 0.4 + defense * 0.4 + arm * 0.3;
+    const abilityScore = rawAbility * potentialMult;
+
+    // 成長力ボーナス: 現在能力に比例
+    const abilityFactor = Math.min(1.0, rawAbility / 130);
+    const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.65) * 38) * abilityFactor
+                        : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
+                        : Math.max(0, (gp - 1.0) * 15);
+
+    baseScore = abilityScore + ageBonus + gpBonusScaled + fameBonus;
     const totalScore = baseScore + awardBonus;
 
     reasons.push(`野手力${Math.round(abilityScore)}pt`);
