@@ -200,11 +200,12 @@ export function getUserUniversityTournamentMatchOnDate(tournament, dateObj, user
   return null;
 }
 
-// カレンダー表示用の日程リスト
+// カレンダー表示用の日程リスト（ラウンド×日付で重複排除）
 export function getUniversityTournamentDatesForCalendar(tournament, userTeamName) {
   if (!tournament?.bracket?.matchDates) return [];
   const dates = [];
   const bracket = tournament.bracket;
+  const seen = new Set();
 
   for (let r = 0; r < bracket.rounds.length; r++) {
     for (let m = 0; m < bracket.rounds[r].length; m++) {
@@ -215,14 +216,27 @@ export function getUniversityTournamentDatesForCalendar(tournament, userTeamName
 
       const isUserMatch = match.team1 === userTeamName || match.team2 === userTeamName;
       const roundName = getRoundName(bracket, r);
+      const key = `${r}-${matchDate.month}-${matchDate.day}`;
 
-      dates.push({
-        date: matchDate,
-        label: `${tournament.name} ${roundName}`,
-        isUserMatch,
-        done: !!match.winner,
-        type: 'main',
-      });
+      if (isUserMatch) {
+        dates.push({
+          date: matchDate,
+          label: `${tournament.name} ${roundName}`,
+          isUserMatch: true,
+          done: !!match.winner,
+          type: 'main',
+        });
+      } else if (!seen.has(key)) {
+        seen.add(key);
+        const allDone = bracket.rounds[r].every(mt => mt.isBye || !!mt.winner);
+        dates.push({
+          date: matchDate,
+          label: `${tournament.name} ${roundName}`,
+          isUserMatch: false,
+          done: allDone,
+          type: 'main',
+        });
+      }
     }
   }
   return dates;

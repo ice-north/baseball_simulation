@@ -11,6 +11,7 @@ import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates, HIGH_SCHOOL_CLASS_SIZE } from './universityPool.js';
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
+import { generatePositionFitness } from './tryoutSystem.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay } from '../corporate/corporateInit.js';
@@ -1564,12 +1565,7 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
     if (second !== arsenal[0].type) arsenal.push({ id: 2, type: second, level: 10 + Math.floor(Math.random() * 20) });
   }
 
-  const positionFitness = { pitcher: 0, catcher: 0, first: 0, second: 0, third: 0, short: 0, left: 0, center: 0, right: 0 };
-  positionFitness[position] = 80 + Math.floor(Math.random() * 21);
-  if (!isPitcher && Math.random() < 0.3) {
-    const subPos = ['first', 'second', 'third', 'short', 'left', 'center', 'right'].filter(p => p !== position);
-    positionFitness[subPos[Math.floor(Math.random() * subPos.length)]] = 30 + Math.floor(Math.random() * 30);
-  }
+  const positionFitness = generatePositionFitness(position);
 
   const norm = () => Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18)));
   const growthPotential = 0.7 + Math.random() * 0.6;
@@ -2239,15 +2235,13 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 大学モード: リーグ再初期化後にスケジュール・順位表を設定
   if (seasonData.settings?.universityMode) {
     const regionId = seasonData.settings.universityRegion;
-    const teamNames = Object.keys(teamsAfterRetirement);
     newSeasonData.schedule = getUniversityLeagueSchedule(regionId);
-    newSeasonData.standings = getUniversityLeagueStandings(regionId, teamNames);
     // 入替でユーザーの部が変わった場合、settings.teamNamesも更新
-    if (WORLD_DATA.universityLeague?.leagueTeams) {
-      newSeasonData.settings.teamNames = [...WORLD_DATA.universityLeague.leagueTeams];
-      newSeasonData.settings.teamsCount = WORLD_DATA.universityLeague.leagueTeams.length;
-      newSeasonData.settings.teamAbbreviations = WORLD_DATA.universityLeague.leagueTeams.map(n => n.slice(0, 3));
-    }
+    const leagueTeams = WORLD_DATA.universityLeague?.leagueTeams || seasonData.settings.teamNames;
+    newSeasonData.standings = getUniversityLeagueStandings(regionId, leagueTeams);
+    newSeasonData.settings.teamNames = [...leagueTeams];
+    newSeasonData.settings.teamsCount = leagueTeams.length;
+    newSeasonData.settings.teamAbbreviations = leagueTeams.map(n => n.slice(0, 3));
   }
 
   // ランク変動レポートを新シーズンデータに保存
