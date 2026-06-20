@@ -278,7 +278,7 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     // 変化球: 最高レベル + 球種数ボーナス（2球種+5, 3球種以上+12）
     const breakingScore = bestBreaking * 0.7 + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
 
-    const rawAbility = velocityScore + control * 0.8 + stamina * 0.4 + breakingScore;
+    const rawAbility = velocityScore + control * 0.8 + stamina * 0.15 + breakingScore;
     const abilityScore = rawAbility * potentialMult;
 
     // 成長力ボーナス: 現在能力に比例（素材がある選手ほど成長力が意味を持つ）

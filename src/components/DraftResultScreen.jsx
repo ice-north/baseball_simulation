@@ -655,8 +655,8 @@ const DraftPlayerDetail = ({ player }) => {
   const build = p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉';
 
   return (
-    <div className="mt-1.5 pt-1.5 border-t border-gray-200 text-[10px]">
-      <div className="flex items-center gap-3 mb-1.5 text-gray-500">
+    <div className="text-xs">
+      <div className="flex items-center gap-3 mb-2 text-gray-500">
         <span>{FULL_POS_NAMES[p.position] || p.position}</span>
         <span>{throws}投{bats}打</span>
         <span>{build}</span>
@@ -707,9 +707,34 @@ const DraftPlayerDetail = ({ player }) => {
   );
 };
 
+const DraftPlayerModal = ({ entry, onClose }) => {
+  if (!entry) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="relative bg-white rounded-xl shadow-2xl max-w-sm w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white rounded-t-xl px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+              entry.draftRound === 'ドラフト1位' ? 'bg-red-100 text-red-700' :
+              entry.draftRound?.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
+            }`}>{entry.draftRound?.replace('ドラフト', '')}</span>
+            <span className="font-bold text-gray-900">{entry.name}</span>
+            <span className="text-gray-400 text-xs">({entry.age})</span>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">✕</button>
+        </div>
+        <div className="px-4 py-3">
+          <DraftPlayerDetail player={entry.player} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, onContinue }) => {
   const [summaryGrid] = useState(() => buildGridOrder(npbStandings));
-  const [expandedPlayer, setExpandedPlayer] = useState(null);
+  const [selectedEntry, setSelectedEntry] = useState(null);
   const teamPicks = useMemo(() => {
     const map = {};
     NPB_TEAMS_INFO.forEach(t => { map[t.name] = []; });
@@ -761,7 +786,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                         </div>
                       )}
                       <div className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
-                           onClick={() => setExpandedPlayer(expandedPlayer === entry.playerId ? null : entry.playerId)}>
+                           onClick={() => setSelectedEntry(entry)}>
                         <div className="flex items-baseline gap-2 flex-wrap">
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                             isFirst ? 'bg-red-100 text-red-700' :
@@ -771,9 +796,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                           <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
                           <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
                           <span className="text-gray-400 text-xs">{entry.teamName}</span>
-                          <span className="text-gray-400 text-[10px] ml-auto">{expandedPlayer === entry.playerId ? '▲' : '▼'}</span>
                         </div>
-                        {expandedPlayer === entry.playerId && <DraftPlayerDetail player={entry.player} />}
                       </div>
                     </div>
                   );
@@ -788,6 +811,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
           結果詳細へ →
         </button>
       </div>
+      <DraftPlayerModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
     </div>
   );
 };

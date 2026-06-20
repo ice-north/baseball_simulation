@@ -825,7 +825,7 @@ function mockNPBDraftScore(player) {
     if (v >= 140) velocityScore += (v - 140) * 2.5;
     if (v >= 150) velocityScore += (v - 150) * 3.0;
     const breakingScore = bestBreaking * 0.7 + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
-    rawAbility = velocityScore + c * 0.8 + s * 0.4 + breakingScore;
+    rawAbility = velocityScore + c * 0.8 + s * 0.15 + breakingScore;
     abilityScore = rawAbility * potentialMult;
   } else {
     const m = player.batting?.meet || 0;
