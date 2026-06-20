@@ -164,6 +164,11 @@ NEW GAME → 企業チーム選択 → キャンプ
 - **ランク別成長**: `UNIVERSITY_RANK_GROWTH` — S=1.55倍, A=1.35倍, B=1.15倍, C=1.00倍, D=0.85倍
   - `applyUniversityGrowth()` で自動適用。universityPool の各エントリに `universityRank` を保持
   - 旧入学ブーストを廃止し、4年間の年次成長に統合。S校とD校の差がより明確に
+- **大学specialties連動成長**: 各大学の得意分野が成長に影響
+  - 7分野: technique(技巧), power(パワー), stamina(体力), defense(守備), versatility(適応), athletic(身体), mental(精神)
+  - specialty該当: ×1.2倍、非該当: ×0.85倍。能力→分野マッピング: 制球=technique, 球速=power, スタミナ=stamina, ミート=technique, パワー=power, 選球眼=mental, 走力=athletic, 守備=defense
+  - **新球種習得**: 投手に毎年判定。technique/versatility持ち=15%, それ以外=5%。フォーム適性球種を優先
+  - **サブポジ成長**: 野手に毎年判定。defense/versatility持ち=35%, それ以外=12%。適正+4〜14
 - **将来のゲームモード**: `gameMode = 'university'` として社会人モードと並行実装可能
 
 ## 社会人モード入退団 (`src/corporate/scoutingSystem.js`)

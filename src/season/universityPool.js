@@ -644,8 +644,8 @@ export function processUniversityYear(currentYear) {
         return;
       }
 
-      // 成長処理（大学ランクに応じた成長倍率を適用）
-      applyUniversityGrowth(player, entry.universityRank);
+      // 成長処理（大学の特色に応じた成長）
+      applyUniversityGrowth(player, entry.universityRank, entry.universityTeamId);
       applyUniversityFame(entry, currentYear);
       report.grown++;
       remaining.push(entry);
@@ -661,25 +661,43 @@ export function processUniversityYear(currentYear) {
   return { graduates, report };
 }
 
+const UNI_ALL_PITCH_TYPES = [
+  'slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
+  'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'
+];
+
+const UNI_FORM_PITCH_AFFINITY = {
+  overhand: ['fork', 'curve', 'splitter'],
+  threeQuarter: ['slider', 'changeup', 'cutter'],
+  sidearm: ['sinker', 'slider', 'shoot'],
+  submarine: ['sinker', 'changeup', 'twoSeam'],
+};
+
 /**
  * 大学での1年間の成長を適用
- * キャンプの練習とは異なり、バランス型の緩やかな成長
+ * 大学のspecialtiesに応じて得意分野が伸びやすく、新球種・サブポジも成長
  * @param {Object} player - 選手オブジェクト
- * @param {string|null} universityRank - 大学ランク（S/A/B/C/D）。高ランクほど成長が速い
+ * @param {string|null} universityRank - 大学ランク
+ * @param {number|null} universityTeamId - 大学チームID（specialties参照用）
  */
-function applyUniversityGrowth(player, universityRank = null) {
+function applyUniversityGrowth(player, universityRank = null, universityTeamId = null) {
   const gp = player.growthPotential || 1.0;
   const rankMult = getUniversityGrowthMultiplier(universityRank);
   const isPitcher = player.position === 'pitcher';
 
-  // 高能力値の成長減衰（キャンプと同じルール）
+  const team = universityTeamId ? UNIVERSITY_TEAMS.find(t => t.id === universityTeamId) : null;
+  const specialties = team?.specialties || [];
+  const has = (s) => specialties.includes(s);
+  // specialtyに含まれる分野は1.2倍、含まれない分野は0.85倍
+  const specMult = (s) => has(s) ? 1.2 : 0.85;
+
   const decayMult = (current, threshold, rate, floor = 0.10) => {
     if (current < threshold) return 1.0;
     return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
 
-  const grow = (current, base, cap = 99, threshold = null, rate = 0.05) => {
-    let amount = base * gp * rankMult * (0.7 + Math.random() * 0.6);
+  const grow = (current, base, spec, cap = 99, threshold = null, rate = 0.05) => {
+    let amount = base * gp * rankMult * specMult(spec) * (0.7 + Math.random() * 0.6);
     if (threshold != null) {
       amount *= decayMult(current, threshold, rate);
     }
@@ -687,32 +705,72 @@ function applyUniversityGrowth(player, universityRank = null) {
   };
 
   if (isPitcher) {
-    player.pitching.control = grow(player.pitching.control, 5, 99, 70, 0.05);
-    player.pitching.stamina = grow(player.pitching.stamina, 7, 200, 80, 0.03);
-    player.physical.arm = grow(player.physical.arm, 3.5, 99, 80, 0.03);
-    player.pitching.velocity = grow(player.pitching.velocity, 2.0, 165, 150, 0.20);
+    player.pitching.control = grow(player.pitching.control, 5, 'technique', 99, 70, 0.05);
+    player.pitching.stamina = grow(player.pitching.stamina, 7, 'stamina', 200, 80, 0.03);
+    player.physical.arm = grow(player.physical.arm, 3.5, 'athletic', 99, 80, 0.03);
+    player.pitching.velocity = grow(player.pitching.velocity, 2.0, 'power', 165, 150, 0.20);
     if (player.pitching.arsenal) {
+      const techBonus = has('technique') ? 1.3 : 1.0;
       player.pitching.arsenal.forEach(pitch => {
         if (pitch.type !== 'straight') {
-          pitch.level = Math.min(100, pitch.level + Math.floor(Math.random() * 4 * gp * rankMult));
+          pitch.level = Math.min(100, pitch.level + Math.floor(Math.random() * 4 * gp * rankMult * techBonus));
         }
       });
     }
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 99, 80, 0.03);
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 'stamina', 99, 80, 0.03);
+
+    // 新球種習得チャンス（technique or versatility持ちの大学で確率UP）
+    const arsenal = player.pitching?.arsenal || [];
+    const existingTypes = arsenal.map(p => p.type);
+    const hasNewPitchChance = has('technique') || has('versatility');
+    const newPitchRate = hasNewPitchChance ? 0.15 : 0.05;
+    if (Math.random() < newPitchRate) {
+      const form = player.pitching?.form || 'overhand';
+      const affinityTypes = UNI_FORM_PITCH_AFFINITY[form] || [];
+      // フォーム適性球種を優先候補にする
+      let candidates = affinityTypes.filter(t => !existingTypes.includes(t));
+      if (candidates.length === 0) {
+        candidates = UNI_ALL_PITCH_TYPES.filter(t => !existingTypes.includes(t));
+      }
+      if (candidates.length > 0) {
+        const newType = candidates[Math.floor(Math.random() * candidates.length)];
+        const isAffinity = affinityTypes.includes(newType);
+        const baseLevel = Math.floor(Math.random() * 20) + (isAffinity ? 25 : 15);
+        const newId = arsenal.length > 0 ? Math.max(...arsenal.map(a => a.id || 0)) + 1 : 1;
+        arsenal.push({ id: newId, type: newType, level: baseLevel });
+        if (!player.pitching.arsenal) player.pitching.arsenal = arsenal;
+      }
+    }
   } else {
-    player.batting.meet = grow(player.batting.meet, 5, 99, 70, 0.05);
-    player.batting.power = grow(player.batting.power, 3.5, 99, 70, 0.05);
-    player.batting.eye = grow(player.batting.eye, 3.5, 99, 70, 0.05);
-    player.physical.speed = grow(player.physical.speed, 2, 99, 80, 0.03);
-    player.fielding.defense = grow(player.fielding.defense, 3.5, 99, 70, 0.05);
-    player.physical.arm = grow(player.physical.arm, 2, 99, 80, 0.03);
-    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 99, 80, 0.03);
+    player.batting.meet = grow(player.batting.meet, 5, 'technique', 99, 70, 0.05);
+    player.batting.power = grow(player.batting.power, 3.5, 'power', 99, 70, 0.05);
+    player.batting.eye = grow(player.batting.eye, 3.5, 'mental', 99, 70, 0.05);
+    player.physical.speed = grow(player.physical.speed, 2, 'athletic', 99, 80, 0.03);
+    player.fielding.defense = grow(player.fielding.defense, 3.5, 'defense', 99, 70, 0.05);
+    player.physical.arm = grow(player.physical.arm, 2, 'athletic', 99, 80, 0.03);
+    player.physical.bodyStamina = grow(player.physical.bodyStamina, 3, 'stamina', 99, 80, 0.03);
+
+    // サブポジ成長（defense or versatility持ちの大学で確率UP）
+    if (player.positionFitness) {
+      const hasSubPosChance = has('defense') || has('versatility');
+      const subPosRate = hasSubPosChance ? 0.35 : 0.12;
+      if (Math.random() < subPosRate) {
+        const allPos = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+        const nonMain = allPos.filter(p => p !== player.position);
+        const weak = nonMain.filter(p => (player.positionFitness[p] || 0) < 70);
+        const targets = weak.length > 0 ? weak : nonMain;
+        const picked = targets[Math.floor(Math.random() * targets.length)];
+        const old = player.positionFitness[picked] || 0;
+        const gain = Math.floor(Math.random() * 8) + (hasSubPosChance ? 7 : 4);
+        player.positionFitness[picked] = Math.min(100, old + gain);
+      }
+    }
   }
 
   // フィジカル共通
-  player.physical.muscle = grow(player.physical.muscle || 40, 2, 99, 80, 0.03);
-  player.physical.dexterity = grow(player.physical.dexterity || 40, 2, 99, 80, 0.03);
-  player.physical.recovery = grow(player.physical.recovery || 40, 2, 99, 80, 0.03);
+  player.physical.muscle = grow(player.physical.muscle || 40, 2, 'athletic', 99, 80, 0.03);
+  player.physical.dexterity = grow(player.physical.dexterity || 40, 2, 'athletic', 99, 80, 0.03);
+  player.physical.recovery = grow(player.physical.recovery || 40, 2, 'stamina', 99, 80, 0.03);
 }
 
 // ============================================================
@@ -833,7 +891,7 @@ export function seedInitialUniversityClasses(gameYear) {
     if (cohort) {
       for (let y = 0; y < yearsInUni; y++) {
         cohort.forEach(entry => {
-          applyUniversityGrowth(entry.player, entry.universityRank);
+          applyUniversityGrowth(entry.player, entry.universityRank, entry.universityTeamId);
         });
       }
     }
@@ -973,7 +1031,7 @@ export function warmUpPlayerPipeline(gameYear) {
           }
           uniGraduates.push(entry.player);
         } else {
-          applyUniversityGrowth(entry.player, entry.universityRank);
+          applyUniversityGrowth(entry.player, entry.universityRank, entry.universityTeamId);
           remaining.push(entry);
         }
       });
