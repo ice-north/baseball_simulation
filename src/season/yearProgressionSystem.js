@@ -261,6 +261,10 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
 
   let baseScore = 0;
 
+  // 年齢別評価傾向: 高校生=素材(フィジカル)重視、社会人=技術(完成度)重視
+  const isYoung = age <= 19;
+  const isMature = age >= 22;
+
   if (isPitcher) {
     const velocity = player.pitching?.velocity || 0;
     const control = player.pitching?.control || 0;
@@ -270,18 +274,38 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const bestBreaking = breakingBalls.reduce((max, a) => Math.max(max, a.level || 0), 0);
     const arsenalCount = breakingBalls.filter(a => (a.level || 0) >= 20).length;
 
-    // 球速スコア: 非線形（高速域ほど評価急上昇）
-    let velocityScore = Math.max(0, (velocity - 110) * 1.1);
-    if (velocity >= 140) velocityScore += (velocity - 140) * 3.0;
-    if (velocity >= 150) velocityScore += (velocity - 150) * 3.5;
+    // 年齢別ウェイト: 高校生は球速重視、社会人は制球・変化球重視
+    const velBase = isYoung ? 1.4 : isMature ? 0.9 : 1.1;
+    const vel140 = isYoung ? 3.5 : isMature ? 2.5 : 3.0;
+    const vel150 = isYoung ? 4.5 : isMature ? 3.0 : 3.5;
+    const ctrlW = isYoung ? 0.7 : isMature ? 1.4 : 1.1;
+    const staW = isYoung ? 0.15 : isMature ? 0.35 : 0.25;
+    const breakW = isYoung ? 0.5 : isMature ? 1.0 : 0.8;
 
-    // 変化球: 最高レベル + 球種数ボーナス（2球種+5, 3球種以上+12）
-    const breakingScore = bestBreaking * 0.8 + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
+    let velocityScore = Math.max(0, (velocity - 110) * velBase);
+    if (velocity >= 140) velocityScore += (velocity - 140) * vel140;
+    if (velocity >= 150) velocityScore += (velocity - 150) * vel150;
 
-    const rawAbility = velocityScore + control * 1.1 + stamina * 0.25 + breakingScore;
+    const breakingScore = bestBreaking * breakW + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
+
+    let rawAbility = velocityScore + control * ctrlW + stamina * staW + breakingScore;
+
+    // 高校生: 肩力(フィジカル素材)を加点、変則フォーム(アンダー/サイド)は指名されにくい
+    if (isYoung) {
+      rawAbility += (player.physical?.arm || 0) * 0.3;
+      const form = player.pitching?.form;
+      if (form === 'submarine') rawAbility -= 20;
+      else if (form === 'sidearm') rawAbility -= 10;
+    }
+    // 社会人: 変則フォームは技術・希少性として評価
+    if (isMature) {
+      const form = player.pitching?.form;
+      if (form === 'submarine') rawAbility += 8;
+      else if (form === 'sidearm') rawAbility += 5;
+    }
+
     const abilityScore = rawAbility * potentialMult;
 
-    // 成長力ボーナス: 現在能力に比例（素材がある選手ほど成長力が意味を持つ）
     const abilityFactor = Math.min(1.0, rawAbility / 120);
     const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.65) * 38) * abilityFactor
                         : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
@@ -294,9 +318,10 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
     if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
     reasons.push(`総合${Math.round(totalScore)}pt`);
-    if (velocity >= 148) reasons.push(`球速${velocity}km`);
-    if (control >= 75) reasons.push(`制球力${control}`);
-    if (bestBreaking >= 70) reasons.push(`変化球${bestBreaking}`);
+    if (isYoung && velocity >= 140) reasons.push(`球速${velocity}km`);
+    if (!isYoung && velocity >= 148) reasons.push(`球速${velocity}km`);
+    if (isMature && control >= 65) reasons.push(`制球力${control}`);
+    if (isMature && bestBreaking >= 60) reasons.push(`変化球${bestBreaking}`);
     if (age <= 22) reasons.push(`${age}歳の将来性`);
   } else {
     const meet = player.batting?.meet || 0;
@@ -306,10 +331,17 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const defense = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
 
-    const rawAbility = meet * 1.0 + power * 1.0 + eye * 0.5 + speed * 0.4 + defense * 0.4 + arm * 0.3;
+    // 年齢別ウェイト: 高校生はパワー/足/肩、社会人はミート/選球眼/守備
+    const meetW = isYoung ? 0.6 : isMature ? 1.3 : 1.0;
+    const powerW = isYoung ? 1.3 : isMature ? 0.8 : 1.0;
+    const eyeW = isYoung ? 0.2 : isMature ? 0.8 : 0.5;
+    const speedW = isYoung ? 0.7 : isMature ? 0.3 : 0.4;
+    const defW = isYoung ? 0.2 : isMature ? 0.7 : 0.4;
+    const armW = isYoung ? 0.5 : isMature ? 0.2 : 0.3;
+
+    const rawAbility = meet * meetW + power * powerW + eye * eyeW + speed * speedW + defense * defW + arm * armW;
     const abilityScore = rawAbility * potentialMult;
 
-    // 成長力ボーナス: 現在能力に比例
     const abilityFactor = Math.min(1.0, rawAbility / 130);
     const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.65) * 38) * abilityFactor
                         : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
@@ -322,10 +354,12 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     if (fameBonus > 0) reasons.push(`知名度+${fameBonus}pt`);
     if (awardBonus > 0) reasons.push(`成績ボーナス+${awardBonus}pt`);
     reasons.push(`総合${Math.round(totalScore)}pt`);
-    if (meet >= 75) reasons.push(`ミート${meet}`);
-    if (power >= 75) reasons.push(`パワー${power}`);
-    if (speed >= 80) reasons.push(`俊足${speed}`);
-    if (defense >= 80) reasons.push(`守備${defense}`);
+    if (isYoung && power >= 55) reasons.push(`パワー${power}`);
+    if (isYoung && speed >= 65) reasons.push(`俊足${speed}`);
+    if (isYoung && arm >= 65) reasons.push(`強肩${arm}`);
+    if (isMature && meet >= 60) reasons.push(`ミート${meet}`);
+    if (isMature && defense >= 65) reasons.push(`守備${defense}`);
+    if (isMature && eye >= 55) reasons.push(`選球眼${eye}`);
     if (age <= 22) reasons.push(`${age}歳の将来性`);
   }
 

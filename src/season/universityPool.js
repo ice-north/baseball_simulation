@@ -813,6 +813,9 @@ function mockNPBDraftScore(player) {
   const fame = player.fame || 0;
   const fameBonus = Math.round(fame * 0.3);
 
+  const isYoung = age <= 19;
+  const isMature = age >= 22;
+
   let rawAbility, abilityScore;
   if (isPitcher) {
     const v = player.pitching?.velocity || 0;
@@ -821,11 +824,31 @@ function mockNPBDraftScore(player) {
     const breakingBalls = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
     const bestBreaking = breakingBalls.reduce((max, a) => Math.max(max, a.level || 0), 0);
     const arsenalCount = breakingBalls.filter(a => (a.level || 0) >= 20).length;
-    let velocityScore = Math.max(0, (v - 110) * 1.1);
-    if (v >= 140) velocityScore += (v - 140) * 3.0;
-    if (v >= 150) velocityScore += (v - 150) * 3.5;
-    const breakingScore = bestBreaking * 0.8 + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
-    rawAbility = velocityScore + c * 1.1 + s * 0.25 + breakingScore;
+
+    const velBase = isYoung ? 1.4 : isMature ? 0.9 : 1.1;
+    const vel140 = isYoung ? 3.5 : isMature ? 2.5 : 3.0;
+    const vel150 = isYoung ? 4.5 : isMature ? 3.0 : 3.5;
+    const ctrlW = isYoung ? 0.7 : isMature ? 1.4 : 1.1;
+    const staW = isYoung ? 0.15 : isMature ? 0.35 : 0.25;
+    const breakW = isYoung ? 0.5 : isMature ? 1.0 : 0.8;
+
+    let velocityScore = Math.max(0, (v - 110) * velBase);
+    if (v >= 140) velocityScore += (v - 140) * vel140;
+    if (v >= 150) velocityScore += (v - 150) * vel150;
+    const breakingScore = bestBreaking * breakW + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
+    rawAbility = velocityScore + c * ctrlW + s * staW + breakingScore;
+
+    if (isYoung) {
+      rawAbility += (player.physical?.arm || 0) * 0.3;
+      const form = player.pitching?.form;
+      if (form === 'submarine') rawAbility -= 20;
+      else if (form === 'sidearm') rawAbility -= 10;
+    }
+    if (isMature) {
+      const form = player.pitching?.form;
+      if (form === 'submarine') rawAbility += 8;
+      else if (form === 'sidearm') rawAbility += 5;
+    }
     abilityScore = rawAbility * potentialMult;
   } else {
     const m = player.batting?.meet || 0;
@@ -834,7 +857,15 @@ function mockNPBDraftScore(player) {
     const spd = player.physical?.speed || 0;
     const def = player.fielding?.defense || 0;
     const arm = player.physical?.arm || 0;
-    rawAbility = m * 1.0 + p * 1.0 + e * 0.5 + spd * 0.4 + def * 0.4 + arm * 0.3;
+
+    const meetW = isYoung ? 0.6 : isMature ? 1.3 : 1.0;
+    const powerW = isYoung ? 1.3 : isMature ? 0.8 : 1.0;
+    const eyeW = isYoung ? 0.2 : isMature ? 0.8 : 0.5;
+    const speedW = isYoung ? 0.7 : isMature ? 0.3 : 0.4;
+    const defW = isYoung ? 0.2 : isMature ? 0.7 : 0.4;
+    const armW = isYoung ? 0.5 : isMature ? 0.2 : 0.3;
+
+    rawAbility = m * meetW + p * powerW + e * eyeW + spd * speedW + def * defW + arm * armW;
     abilityScore = rawAbility * potentialMult;
   }
   const abilityFactor = Math.min(1.0, rawAbility / (isPitcher ? 120 : 130));
