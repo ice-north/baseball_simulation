@@ -1678,33 +1678,59 @@ function applyCorporatePlayerGrowth(allTeams) {
         ? 1.0 + Math.max(0, (discipline - 40) * 0.045)
         : 1.0 + Math.max(0, (discipline - 50) * 0.015);
 
-      const grow = (current, base, cap = 99, threshold = null, rate = 0.05) => {
-        let amount = base * gp * rankMult * disciplineMult * (0.6 + Math.random() * 0.6);
+      // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
+      // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
+      let statEntries;
+      if (player.position === 'pitcher') {
+        statEntries = [
+          { key: 'control', val: player.pitching?.control || 0 },
+          { key: 'stamina', val: player.pitching?.stamina || 0 },
+          { key: 'velocity', val: (player.pitching?.velocity || 130) - 100 },
+          { key: 'arm', val: player.physical?.arm || 0 },
+        ];
+      } else {
+        statEntries = [
+          { key: 'meet', val: player.batting?.meet || 0 },
+          { key: 'power', val: player.batting?.power || 0 },
+          { key: 'eye', val: player.batting?.eye || 0 },
+          { key: 'speed', val: player.physical?.speed || 0 },
+          { key: 'arm', val: player.physical?.arm || 0 },
+          { key: 'defense', val: player.fielding?.defense || 0 },
+        ];
+      }
+      statEntries.sort((a, b) => b.val - a.val);
+      const strengthKeys = new Set(statEntries.slice(0, 2).map(e => e.key));
+      const weakKeys = new Set(statEntries.slice(-2).map(e => e.key));
+      // 長所×1.4, 普通×1.0, 短所×0.7
+      const specMult = (key) => strengthKeys.has(key) ? 1.4 : weakKeys.has(key) ? 0.7 : 1.0;
+
+      const grow = (current, base, key, cap = 99, threshold = null, rate = 0.05) => {
+        let amount = base * gp * rankMult * disciplineMult * specMult(key) * (0.6 + Math.random() * 0.6);
         if (threshold != null) amount *= decayMult(current, threshold, rate);
         return Math.min(cap, current + Math.round(amount));
       };
 
       if (player.position === 'pitcher') {
         if (player.pitching) {
-          player.pitching.control = grow(player.pitching.control, 3.0, 99, 70, 0.05);
-          player.pitching.stamina = grow(player.pitching.stamina, 2.0, 200, 80, 0.03);
-          player.pitching.velocity = grow(player.pitching.velocity, 0.5, 165, 150, 0.20);
+          player.pitching.control = grow(player.pitching.control, 3.0, 'control', 99, 70, 0.05);
+          player.pitching.stamina = grow(player.pitching.stamina, 2.0, 'stamina', 200, 80, 0.03);
+          player.pitching.velocity = grow(player.pitching.velocity, 0.5, 'velocity', 165, 150, 0.20);
         }
         if (player.physical) {
-          player.physical.arm = grow(player.physical.arm, 1.0, 99, 80, 0.03);
+          player.physical.arm = grow(player.physical.arm, 1.0, 'arm', 99, 80, 0.03);
         }
       } else {
         if (player.batting) {
-          player.batting.meet = grow(player.batting.meet, 3.0, 99, 70, 0.05);
-          player.batting.power = grow(player.batting.power, 1.5, 99, 70, 0.05);
-          player.batting.eye = grow(player.batting.eye, 2.0, 99, 70, 0.05);
+          player.batting.meet = grow(player.batting.meet, 3.0, 'meet', 99, 70, 0.05);
+          player.batting.power = grow(player.batting.power, 1.5, 'power', 99, 70, 0.05);
+          player.batting.eye = grow(player.batting.eye, 2.0, 'eye', 99, 70, 0.05);
         }
         if (player.physical) {
-          player.physical.speed = grow(player.physical.speed, 0.5, 99, 80, 0.03);
-          player.physical.arm = grow(player.physical.arm, 0.5, 99, 80, 0.03);
+          player.physical.speed = grow(player.physical.speed, 0.5, 'speed', 99, 80, 0.03);
+          player.physical.arm = grow(player.physical.arm, 0.5, 'arm', 99, 80, 0.03);
         }
         if (player.fielding) {
-          player.fielding.defense = grow(player.fielding.defense, 2.5, 99, 70, 0.05);
+          player.fielding.defense = grow(player.fielding.defense, 2.5, 'defense', 99, 70, 0.05);
         }
       }
 
