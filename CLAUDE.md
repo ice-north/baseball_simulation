@@ -24,6 +24,7 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - `src/components/DateProgressScreen.jsx` (~1620行) - 日程進行画面
 - `src/components/ManagementScreen.jsx` (~330行) - 管理画面ルーター
 - `src/components/GameFlowScreens.jsx` (~160行) - ゲームフロー画面群
+- `src/components/UniversityScoutScreen.jsx` (~260行) - 大学スポーツ推薦スカウト画面
 - `src/components/GameUIComponents.jsx` (~380行) - Sidebar・RenderBases・AccordionSection
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
@@ -78,6 +79,13 @@ NEW GAME → 企業チーム選択 → キャンプ
 → 都市対抗予選(6月) → 都市対抗本戦(8月)
 → ドラフト(10月:高校生+チーム選手からNPB指名) → 日本選手権(11月)
 → 退団(11/9) → スカウト入団(11/10) → オフシーズン(高校生ランク別振り分け)
+→ Year 2+(キャンプ...)
+
+【大学モード】
+NEW GAME → 大学チーム選択 → キャンプ
+→ 4月(高校3年生3000人生成) → 春季リーグ(4-6月) → 全日本大学選手権(6月)
+→ 秋季リーグ(9-11月) → 明治神宮大会(11月)
+→ ドラフト(10月) → スポーツ推薦スカウト(11/10) → オフシーズン(卒業+入部+振り分け)
 → Year 2+(キャンプ...)
 ```
 
@@ -184,6 +192,17 @@ NEW GAME → 企業チーム選択 → キャンプ
   - ランク補正: S=+10%, A=+5%, B=0%, C=-5%, D=-10%
 - **チーム運営画面**: サイドバー「チーム運営」（社会人モード限定）でスタッフ・スカウト状況・財務を確認
 - **画面遷移**: `corporate_departure` → `corporate_scout` → `dateprogress`（独立リーグの `contract` → `tryout` に対応）
+
+## 大学モード スポーツ推薦スカウト (`src/corporate/scoutingSystem.js`)
+- **概要**: 大学モード（11/10）で高校生プールからスポーツ推薦候補をスカウトし、入部させる
+- **推薦枠数**: ランク別 S=8, A=7, B=5, C=4, D=3
+- **候補者数**: reputation依存で8〜20名。能力+知名度+注目度でスコアリング
+- **能力表示**: 精度50-85%のぼかし表示（secondary段階 = 主要能力のみ可視）
+- **交渉成功率**: baseRate(30%+reputation*50%) - 選手の質 + ランク補正(S+12%〜D-12%)
+- **フロー**: スカウト画面 → 候補から選択 → 交渉 → 成功者は`_universityReserved`フラグ → オフシーズン卒業処理で入部
+- **画面遷移**: `university_scout` → `dateprogress`（11/10トリガー、完了後11/15へ進行）
+- **新入生構成**: スカウト推薦(scouted) + AI推薦(recommended) + 一般入部(general)
+- **UI**: `src/components/UniversityScoutScreen.jsx`
 
 ## クラブチームのプロ意識駆動成長 (`src/season/yearProgressionSystem.js`)
 - **設計思想**: クラブチームはキャンプも無く実践経験も少ないため、人工的な突出選手ブーストではなく、選手のプロ意識(discipline)×成長率(growthPotential)で数年かけてドラフト候補に成長する設計

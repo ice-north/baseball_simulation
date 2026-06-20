@@ -1466,12 +1466,36 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
       if (p.universityYear) p.universityYear++;
     });
 
-    // 新入生を補充（卒業人数分 + ロスター下限調整）
-    const targetSize = getUniversityTargetRosterSize(rank);
-    const neededCount = Math.max(graduates.length, targetSize - remaining.length);
-    const newPlayers = generateUniversityFreshmen(neededCount, rank, teamName, teamData, currentYear);
+    // スカウト推薦入部者をhighSchoolPoolから取得
+    const scoutedPlayers = [];
+    if (teamName === Object.keys(allTeams)[0] && highSchoolPool.players) {
+      const reserved = highSchoolPool.players.filter(p => p._universityReserved === teamName);
+      reserved.forEach(p => {
+        delete p._universityReserved;
+        p.universityTeamId = teamData.universityTeamId;
+        p.universityTeamName = teamName;
+        p.universityYear = 1;
+        p.recruitType = 'scouted';
+        p.age = 19;
+        p.isStarter = false;
+        p.battingOrder = 0;
+        if (!p.positionFitness) p.positionFitness = generatePositionFitness(p.position);
+        if (!p.careerHistory) p.careerHistory = [];
+        p.careerHistory.push({ type: 'university', year: currentYear + 1, label: teamName });
+        p.seasonStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 } };
+        if (!p.careerStats) p.careerStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } };
+        scoutedPlayers.push(p);
+      });
+      highSchoolPool.players = highSchoolPool.players.filter(p => p._universityReserved !== teamName);
+    }
 
-    report.recruited.push(...newPlayers.map(p => ({
+    // 新入生を補充（卒業人数分 + ロスター下限調整 - スカウト入部者）
+    const targetSize = getUniversityTargetRosterSize(rank);
+    const neededCount = Math.max(0, Math.max(graduates.length, targetSize - remaining.length) - scoutedPlayers.length);
+    const newPlayers = generateUniversityFreshmen(neededCount, rank, teamName, teamData, currentYear);
+    const allNewPlayers = [...scoutedPlayers, ...newPlayers];
+
+    report.recruited.push(...allNewPlayers.map(p => ({
       name: p.name,
       team: teamName,
       position: p.position,
@@ -1479,7 +1503,7 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
     })));
 
     // ロスター更新（splice方式でTEAMS_DATAを直接変更）
-    teamData.players.splice(0, teamData.players.length, ...remaining, ...newPlayers);
+    teamData.players.splice(0, teamData.players.length, ...remaining, ...allNewPlayers);
   }
 
   return report;

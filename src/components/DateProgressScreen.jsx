@@ -468,7 +468,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
     if (month === 11 && day === 10 && newPhase === SEASON_PHASES.TRYOUT) {
       if (isUniversity) {
-        // 大学モード: トライアウトなし → オフシーズンへ直行
+        setSeasonData(newData);
+        if (onForceEvent) onForceEvent('university_scout');
+        return null;
       } else {
         setSeasonData(newData);
         const isClub = seasonData?.settings?.clubMode;

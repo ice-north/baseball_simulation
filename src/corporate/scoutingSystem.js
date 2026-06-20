@@ -1476,3 +1476,73 @@ function isDatePassed(current, target) {
   const t = target.year * 10000 + target.month * 100 + target.day;
   return c >= t;
 }
+
+// ============================================================
+// 大学モード スカウトシステム
+// 高校生プールからスポーツ推薦候補を発掘
+// ============================================================
+
+const UNI_SCOUT_SLOTS = { S: 8, A: 7, B: 5, C: 4, D: 3 };
+
+export function getUniversityScoutSlots(rank) {
+  return UNI_SCOUT_SLOTS[rank] || 5;
+}
+
+export function generateUniversityScoutCandidates(teamData, rank) {
+  if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
+
+  const reputation = teamData?.universityData?.reputation || 30;
+  const reputationMult = 0.8 + (reputation / 100) * 0.4;
+
+  const candidateCount = Math.min(20, Math.max(8, Math.round(6 + reputation / 10)));
+
+  const scored = highSchoolPool.players.map((p, idx) => {
+    const base = evaluatePlayerScore(p);
+    const fame = p.fame || 0;
+    const noise = (Math.random() - 0.5) * 25;
+    const repBonus = (reputationMult - 1.0) * 15;
+    const discoveryPenalty = -((100 - fame) / 100) * 20;
+    return { player: p, poolIndex: idx, score: base + noise + repBonus + discoveryPenalty };
+  });
+  scored.sort((a, b) => b.score - a.score);
+
+  const selected = scored.slice(0, candidateCount);
+
+  return selected.map(entry => {
+    const p = JSON.parse(JSON.stringify(entry.player));
+    const accuracy = 50 + Math.floor(reputation * 0.3) + Math.floor(Math.random() * 10);
+    p.scoutAccuracy = Math.min(85, accuracy);
+    p.scoutedAbilities = obscureAbilities(p, p.scoutAccuracy, 'secondary');
+    p._poolRef = { source: 'highschool', poolIndex: entry.poolIndex };
+    p._scoutSource = p.highSchool?.name ? p.highSchool.name : '高校';
+    p._originalScore = entry.score;
+    p.recruitRate = calculateUniversityRecruitRate(p, rank, reputation);
+    return p;
+  });
+}
+
+function calculateUniversityRecruitRate(player, uniRank, reputation) {
+  const baseRate = 0.30 + (reputation / 100) * 0.50;
+  const playerScore = evaluatePlayerScore(player);
+  const qualityPenalty = Math.max(-0.05, Math.min(0.25, (playerScore - 50) / 200));
+  const rankBonus = { S: 0.12, A: 0.06, B: 0, C: -0.06, D: -0.12 }[uniRank] || 0;
+  const rate = baseRate - qualityPenalty + rankBonus;
+  return Math.max(5, Math.min(90, Math.round(rate * 100)));
+}
+
+export function attemptUniversityRecruit(player, uniRank, reputation) {
+  const rate = player.recruitRate || calculateUniversityRecruitRate(player, uniRank, reputation);
+  const roll = Math.random() * 100;
+  return { success: roll < rate, rate };
+}
+
+export function getUniversityScoutRecommendation(player, uniRank) {
+  const score = evaluatePlayerScore(player);
+  const baseline = { S: 80, A: 65, B: 50, C: 40, D: 30 }[uniRank] || 50;
+  const diff = score - baseline;
+  if (diff >= 30) return 'S';
+  if (diff >= 15) return 'A';
+  if (diff >= 0) return 'B';
+  if (diff >= -15) return 'C';
+  return 'D';
+}

@@ -33,6 +33,7 @@ import CorporateScoutScreen from './CorporateScoutScreen.jsx';
 import CorporateManagementScreen from './CorporateManagementScreen.jsx';
 import ClubRecruitScreen from './ClubRecruitScreen.jsx';
 import BudgetSettlementScreen from './BudgetSettlementScreen.jsx';
+import UniversityScoutScreen from './UniversityScoutScreen.jsx';
 import DebugPlayerViewScreen from './DebugPlayerViewScreen.jsx';
 
 const ManagementScreen = ({
@@ -138,6 +139,19 @@ const ManagementScreen = ({
       setManagementView('dateprogress');
     }}
   />;
+  if (managementView === 'university_scout') return <UniversityScoutScreen
+    seasonData={seasonData}
+    onComplete={(recruited) => {
+      const newData = {
+        ...seasonData,
+        currentDate: { ...seasonData.currentDate, month: 11, day: 15 },
+        phase: 'off_season',
+        universityRecruits: recruited?.map(p => ({ id: p.id, name: p.name, position: p.position, source: p._scoutSource })) || [],
+      };
+      setSeasonData(newData);
+      setManagementView('dateprogress');
+    }}
+  />;
   if (managementView === 'budget_settlement') return <BudgetSettlementScreen
     seasonData={seasonData}
     onComplete={(penalties) => {
@@ -186,7 +200,7 @@ const ManagementScreen = ({
     onSetupManagedGame={setupManagedGame}
     onRegisterAdvance={(fn) => { advanceDayRef.current = fn; }}
     onForceEvent={(eventType) => {
-      if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement')) {
+      if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement' || eventType === 'university_scout')) {
         const update = {};
         if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
         if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
@@ -198,6 +212,7 @@ const ManagementScreen = ({
       else if (eventType === 'corporate_departure') setManagementView('corporate_departure');
       else if (eventType === 'corporate_scout') setManagementView('corporate_scout');
       else if (eventType === 'club_recruit') setManagementView('club_recruit');
+      else if (eventType === 'university_scout') setManagementView('university_scout');
       else if (eventType === 'budget_settlement') setManagementView('budget_settlement');
       else if (eventType === 'tryout') setManagementView('tryout');
       else if (eventType === 'draft') {

@@ -463,7 +463,7 @@ export function processHighSchoolNPBDraft() {
  *   university: { S: [...], A: [...], ... } ランク別に分類
  */
 export function distributeHighSchoolGraduates(enrollYear) {
-  const players = highSchoolPool.players;
+  const players = highSchoolPool.players.filter(p => !p._universityReserved);
   if (players.length === 0) {
     return { university: {}, corporate: [], independent: [], retired: [] };
   }
@@ -515,8 +515,9 @@ export function distributeHighSchoolGraduates(enrollYear) {
   // 残り（どこにも入れなかった選手）は引退
   const retired = scored.slice(cursor).map(s => s.player);
 
-  // 高校生プールをクリア
-  highSchoolPool.players = [];
+  // 高校生プールをクリア（推薦予約者は残す）
+  const reserved = highSchoolPool.players.filter(p => p._universityReserved);
+  highSchoolPool.players = reserved;
 
   return { university, corporate, independent, retired };
 }
