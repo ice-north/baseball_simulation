@@ -9,6 +9,7 @@ import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.j
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
 
 export const HIGH_SCHOOL_CLASS_SIZE = 5000;
 
@@ -524,9 +525,91 @@ export function distributeHighSchoolGraduates(enrollYear) {
 // 大学在学中の成長
 // ============================================================
 
+function getTeamLeaguePosition(teamName, regionId) {
+  const leagues = WORLD_DATA.universityLeagues;
+  if (!leagues) return null;
+
+  const league = leagues[regionId];
+  if (!league) return null;
+
+  for (const seasonKey of ['fall', 'spring']) {
+    const seasonData = league[seasonKey];
+    if (!seasonData?.done) continue;
+
+    if (league.divisions && league.divTeams) {
+      const numDiv = league.numDivisions || 2;
+      for (let d = 1; d <= numDiv; d++) {
+        const standings = seasonData[`standings${d}`];
+        if (!standings) continue;
+        const idx = standings.findIndex(s => s.team === teamName);
+        if (idx >= 0) return { position: idx + 1, total: standings.length, division: d, season: seasonKey };
+      }
+    } else {
+      const standings = seasonData.standings;
+      if (!standings) continue;
+      const idx = standings.findIndex(s => s.team === teamName);
+      if (idx >= 0) return { position: idx + 1, total: standings.length, division: 1, season: seasonKey };
+    }
+  }
+  return null;
+}
+
+function applyUniversityFame(entry, currentYear) {
+  const player = entry.player;
+  const yearsInUni = currentYear - entry.enrollYear;
+  const rank = entry.universityRank;
+  const teamName = entry.universityTeamName;
+
+  if (!teamName) return;
+
+  const team = UNIVERSITY_TEAMS.find(t => t.name === teamName);
+  const regionId = team?.region;
+
+  // リーグの注目度: 六大学・東都など上位リーグほどメディア露出が多い
+  const rankFameBase = { S: 4, A: 3, B: 2, C: 1, D: 0 };
+  let fameGain = rankFameBase[rank] || 0;
+
+  // リーグ順位ボーナス
+  if (regionId) {
+    const pos = getTeamLeaguePosition(teamName, regionId);
+    if (pos) {
+      if (pos.division === 1) {
+        if (pos.position === 1) fameGain += 5;
+        else if (pos.position === 2) fameGain += 3;
+        else if (pos.position === 3) fameGain += 1;
+      }
+      // 2部所属は注目度が低い
+      if (pos.division >= 2) fameGain = Math.max(0, fameGain - 2);
+    }
+  }
+
+  // 3-4年生（ドラフト候補年）は注目度が上がりやすい
+  if (yearsInUni >= 3) fameGain = Math.round(fameGain * 1.5);
+  else if (yearsInUni >= 2) fameGain = Math.round(fameGain * 1.2);
+
+  // 能力が高い選手ほど名前が知れ渡る（エース・四番は目立つ）
+  const isPitcher = player.position === 'pitcher';
+  let abilityBonus = 0;
+  if (isPitcher) {
+    if (player.pitching?.velocity >= 150) abilityBonus += 3;
+    else if (player.pitching?.velocity >= 145) abilityBonus += 1;
+    if (player.pitching?.control >= 60) abilityBonus += 1;
+  } else {
+    if (player.batting?.power >= 60) abilityBonus += 2;
+    else if (player.batting?.power >= 50) abilityBonus += 1;
+    if (player.batting?.meet >= 60) abilityBonus += 1;
+    if (player.physical?.speed >= 70) abilityBonus += 1;
+  }
+  fameGain += abilityBonus;
+
+  if (fameGain > 0) {
+    player.fame = Math.min(100, (player.fame || 0) + fameGain);
+  }
+}
+
 /**
  * 大学プールの年次更新（毎年オフシーズンに実行）
- * - 在学中の選手の年齢+1、能力成長
+ * - 在学中の選手の年齢+1、能力成長、知名度蓄積
  * - 4年生（22歳）を卒業として排出
  * @param {number} currentYear - 現在のゲーム年度
  * @returns {{ graduates: Array, enrollmentReport: Object }}
@@ -549,6 +632,7 @@ export function processUniversityYear(currentYear) {
 
       // 卒業判定: 4年経過 or 年齢23歳以上
       if (yearsInUni >= 4 || player.age >= 23) {
+        applyUniversityFame(entry, currentYear);
         if (entry.universityTeamId) {
           player.universityTeamId = entry.universityTeamId;
           player.universityName = entry.universityTeamName;
@@ -562,6 +646,7 @@ export function processUniversityYear(currentYear) {
 
       // 成長処理（大学ランクに応じた成長倍率を適用）
       applyUniversityGrowth(player, entry.universityRank);
+      applyUniversityFame(entry, currentYear);
       report.grown++;
       remaining.push(entry);
     });
