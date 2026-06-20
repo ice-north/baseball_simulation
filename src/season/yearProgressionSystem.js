@@ -1686,25 +1686,25 @@ function applyCorporatePlayerGrowth(allTeams) {
 
       if (player.position === 'pitcher') {
         if (player.pitching) {
-          player.pitching.control = grow(player.pitching.control, 2.5, 99, 70, 0.05);
-          player.pitching.stamina = grow(player.pitching.stamina, 3, 200, 80, 0.03);
-          player.pitching.velocity = grow(player.pitching.velocity, 0.8, 165, 150, 0.20);
+          player.pitching.control = grow(player.pitching.control, 3.0, 99, 70, 0.05);
+          player.pitching.stamina = grow(player.pitching.stamina, 2.0, 200, 80, 0.03);
+          player.pitching.velocity = grow(player.pitching.velocity, 0.5, 165, 150, 0.20);
         }
         if (player.physical) {
-          player.physical.arm = grow(player.physical.arm, 1.5, 99, 80, 0.03);
+          player.physical.arm = grow(player.physical.arm, 1.0, 99, 80, 0.03);
         }
       } else {
         if (player.batting) {
-          player.batting.meet = grow(player.batting.meet, 2.5, 99, 70, 0.05);
-          player.batting.power = grow(player.batting.power, 2, 99, 70, 0.05);
-          player.batting.eye = grow(player.batting.eye, 1.5, 99, 70, 0.05);
+          player.batting.meet = grow(player.batting.meet, 3.0, 99, 70, 0.05);
+          player.batting.power = grow(player.batting.power, 1.5, 99, 70, 0.05);
+          player.batting.eye = grow(player.batting.eye, 2.0, 99, 70, 0.05);
         }
         if (player.physical) {
-          player.physical.speed = grow(player.physical.speed, 1, 99, 80, 0.03);
-          player.physical.arm = grow(player.physical.arm, 1, 99, 80, 0.03);
+          player.physical.speed = grow(player.physical.speed, 0.5, 99, 80, 0.03);
+          player.physical.arm = grow(player.physical.arm, 0.5, 99, 80, 0.03);
         }
         if (player.fielding) {
-          player.fielding.defense = grow(player.fielding.defense, 2, 99, 70, 0.05);
+          player.fielding.defense = grow(player.fielding.defense, 2.5, 99, 70, 0.05);
         }
       }
 

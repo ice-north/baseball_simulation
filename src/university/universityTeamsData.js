@@ -212,10 +212,10 @@ export const SPECIALTY_RANK_BOOST = {
 
 export const UNIVERSITY_RANK_GROWTH = {
   S: 1.55,
-  A: 1.25,
-  B: 1.00,
-  C: 0.80,
-  D: 0.60,
+  A: 1.35,
+  B: 1.15,
+  C: 1.00,
+  D: 0.85,
 };
 
 // ============================================================
