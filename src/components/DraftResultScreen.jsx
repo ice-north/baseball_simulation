@@ -239,32 +239,18 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   const revealNext = useCallback(() => {
     if (isFirstRound) {
       const unrevealed = phaseRevealOrder.filter(n => !phaseRevRef.current.has(n));
-      console.log('[DraftReveal] phase unrevealed:', unrevealed, 'current set:', [...phaseRevRef.current]);
       if (unrevealed.length === 0) return;
-      const toReveal = unrevealed[0];
-      console.log('[DraftReveal] revealing phase team:', JSON.stringify(toReveal), 'length:', toReveal.length);
       setIsRevealing(true);
       timerRef.current = setTimeout(() => {
-        setPhaseRevealed(prev => {
-          const next = new Set([...prev, toReveal]);
-          console.log('[DraftReveal] phaseRevealed updated:', [...next]);
-          return next;
-        });
+        setPhaseRevealed(prev => new Set([...prev, unrevealed[0]]));
         setIsRevealing(false);
       }, 500);
     } else {
       const unrevealed = waiverRevealOrder.filter(n => !waiverRevRef.current.has(n));
-      console.log('[DraftReveal] waiver unrevealed:', unrevealed, 'current set:', [...waiverRevRef.current]);
       if (unrevealed.length === 0) return;
-      const toReveal = unrevealed[0];
-      console.log('[DraftReveal] revealing waiver team:', JSON.stringify(toReveal), 'length:', toReveal.length);
       setIsRevealing(true);
       timerRef.current = setTimeout(() => {
-        setWaiverRevealed(prev => {
-          const next = new Set([...prev, toReveal]);
-          console.log('[DraftReveal] waiverRevealed updated:', [...next]);
-          return next;
-        });
+        setWaiverRevealed(prev => new Set([...prev, unrevealed[0]]));
         setIsRevealing(false);
       }, 500);
     }
@@ -330,21 +316,17 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const isInPhase = !!phasePick;
     const revealed = phaseRevealed.has(team.name);
     const rank = rankLabels[team.name];
-    if (isInPhase) {
-      console.log('[DraftCard]', team.name, 'isInPhase:', isInPhase, 'revealed:', revealed, 'phaseRevealed:', [...phaseRevealed])
-    }
-
     if (settledPick) {
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
-          <div className="flex items-stretch bg-gray-200">
-            <img src={`/flag/${team.flag}.png`} alt="" className="h-full object-cover" style={{ aspectRatio: '3/2' }} />
-            <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide">
-              <span className="text-gray-600">{team.short}</span>
-              {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+          <div className="flex items-center bg-gray-200 px-1 py-0.5 shrink-0" style={{ minHeight: '24px', maxHeight: '28px' }}>
+            <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />
+            <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
+              <span className="text-gray-600 truncate">{team.short}</span>
+              {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
             </div>
           </div>
-          <div className="bg-white flex-1 flex flex-col justify-center p-2">
+          <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
             <PlayerCardContent name={settledPick.name} position={settledPick.position} teamName={settledPick.teamName} />
           </div>
         </div>
@@ -369,14 +351,14 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
       return (
         <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
-          <div className="flex items-stretch bg-gray-200">
-            {revealed && <img src={`/flag/${team.flag}.png`} alt="" className="h-full object-cover" style={{ aspectRatio: '3/2' }} />}
-            <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide">
-              <span className="text-gray-600">{team.short}</span>
-              {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+          <div className="flex items-center bg-gray-200 px-1 py-0.5 shrink-0" style={{ minHeight: '24px', maxHeight: '28px' }}>
+            {revealed && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
+            <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
+              <span className="text-gray-600 truncate">{team.short}</span>
+              {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
             </div>
           </div>
-          <div className={`${cardBg} ${borderClass} flex-1 flex flex-col justify-center p-2`}>
+          <div className={`${cardBg} ${borderClass} flex-1 flex flex-col justify-center p-2 min-h-0`}>
             {phaseState === 'lotteryShown' && isLoser ? (
               <div className="text-center">
                 <div className="text-red-400 text-xs font-bold">抽選外れ</div>
@@ -394,25 +376,24 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               </div>
             )}
           </div>
-          {!revealed && (
-            <div className="absolute inset-0 z-20">
-              <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
-            </div>
-          )}
+          <div className="absolute inset-0 z-20"
+               style={{ opacity: revealed ? 0 : 1, transition: 'opacity 0.8s ease-out', pointerEvents: revealed ? 'none' : 'auto' }}>
+            <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
+          </div>
         </div>
       );
     }
 
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
-        <div className="flex items-stretch bg-gray-200">
-          <img src={`/flag/${team.flag}.png`} alt="" className="h-full object-cover" style={{ aspectRatio: '3/2' }} />
-          <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide">
-            <span className="text-gray-600">{team.short}</span>
-            {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+        <div className="flex items-center bg-gray-200 px-1 py-0.5 shrink-0" style={{ minHeight: '24px', maxHeight: '28px' }}>
+          <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />
+          <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
+            <span className="text-gray-600 truncate">{team.short}</span>
+            {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
           </div>
         </div>
-        <div className="bg-white flex-1 flex flex-col justify-center p-2">
+        <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
           <div className="text-gray-200 text-xs text-center">—</div>
         </div>
       </div>
@@ -425,19 +406,16 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const revealed = waiverRevealed.has(team.name);
     const rank = rankLabels[team.name];
     const showHeader = !hasPick || revealed;
-    if (hasPick) {
-      console.log('[DraftWaiver]', team.name, 'revealed:', revealed, 'waiverRevealed:', [...waiverRevealed]);
-    }
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
-        <div className="flex items-stretch bg-gray-200">
-          {showHeader && <img src={`/flag/${team.flag}.png`} alt="" className="h-full object-cover" style={{ aspectRatio: '3/2' }} />}
-          <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide">
-            <span className="text-gray-600">{team.short}</span>
-            {rank && <span className="text-gray-400 text-[10px]">{rank}</span>}
+        <div className="flex items-center bg-gray-200 px-1 py-0.5 shrink-0" style={{ minHeight: '24px', maxHeight: '28px' }}>
+          {showHeader && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
+          <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
+            <span className="text-gray-600 truncate">{team.short}</span>
+            {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
           </div>
         </div>
-        <div className="bg-white flex-1 flex flex-col justify-center p-2">
+        <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
           {!hasPick ? (
             <div className="text-gray-300 text-xs text-center">指名なし</div>
           ) : (
@@ -448,8 +426,9 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             </div>
           )}
         </div>
-        {hasPick && !revealed && (
-          <div className="absolute inset-0 z-20">
+        {hasPick && (
+          <div className="absolute inset-0 z-20"
+               style={{ opacity: revealed ? 0 : 1, transition: 'opacity 0.8s ease-out', pointerEvents: revealed ? 'none' : 'auto' }}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
           </div>
         )}
@@ -647,37 +626,6 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
       </div>
 
       <div className="text-center mt-3 text-gray-600 text-xs">{statusText()}</div>
-
-      {/* DEBUG PANEL - 一時的 */}
-      <div className="max-w-5xl mx-auto mt-4 bg-black/80 rounded-lg p-3 text-[10px] font-mono text-green-400">
-        <div>isFirstRound: {String(isFirstRound)}</div>
-        <div>currentRound: {currentRound}</div>
-        <div>gridOrder names: [{gridOrder.map(t => t.name).join(', ')}]</div>
-        {isFirstRound ? (
-          <>
-            <div>phaseRevealOrder: [{phaseRevealOrder.join(', ')}]</div>
-            <div>phaseRevealed: [{[...phaseRevealed].join(', ')}]</div>
-            <div>phase picks npbTeam: [{(currentPhase?.picks || []).map(p => p.npbTeam).join(', ')}]</div>
-            {gridOrder.map(t => {
-              const inPhase = !!currentPhase?.picks?.find(p => p.npbTeam === t.name);
-              const rev = phaseRevealed.has(t.name);
-              const nameMatch = phaseRevealOrder.includes(t.name);
-              return <div key={t.name} style={{ color: rev ? '#0f0' : nameMatch ? '#ff0' : '#f00' }}>{t.name}: inPhase={String(inPhase)} revealed={String(rev)} inRevealOrder={String(nameMatch)}</div>;
-            })}
-          </>
-        ) : (
-          <>
-            <div>waiverRevealOrder: [{waiverRevealOrder.join(', ')}]</div>
-            <div>waiverRevealed: [{[...waiverRevealed].join(', ')}]</div>
-            {gridOrder.map(t => {
-              const hasPick = (currentTeamMap[t.name] || []).length > 0;
-              const rev = waiverRevealed.has(t.name);
-              const nameMatch = waiverRevealOrder.includes(t.name);
-              return <div key={t.name} style={{ color: rev ? '#0f0' : nameMatch ? '#ff0' : '#f00' }}>{t.name}: hasPick={String(hasPick)} revealed={String(rev)} inRevealOrder={String(nameMatch)}</div>;
-            })}
-          </>
-        )}
-      </div>
     </div>
   );
 };
