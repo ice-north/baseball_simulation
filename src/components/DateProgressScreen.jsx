@@ -34,6 +34,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [showCorporateTournaments, setShowCorporateTournaments] = useState(false);
   const [showUniversityLeagues, setShowUniversityLeagues] = useState(false);
   const [expandedUniLeagues, setExpandedUniLeagues] = useState({});
+  const [showNewspaper, setShowNewspaper] = useState(false);
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -1604,7 +1605,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
     return shuffled;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonData.results?.length, seasonData.standings]);
+  }, [seasonData.results?.length, seasonData.standings, seasonData.currentDate?.month, seasonData.currentDate?.day]);
 
   // 自チーム専用レポート（監督・コーチ視点の状況報告）
   const teamReport = useMemo(() => {
@@ -1758,7 +1759,90 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
     return reports.slice(0, 5);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonData.results?.length, seasonData.standings]);
+  }, [seasonData.results?.length, seasonData.standings, seasonData.currentDate?.month, seasonData.currentDate?.day]);
+
+  // スポーツ新聞モーダル用のデータ生成
+  const newspaperData = useMemo(() => {
+    if (!showNewspaper) return null;
+    const userLeagueTeamSet = new Set(seasonData?.settings?.teamNames || []);
+    const allTeamNames = userLeagueTeamSet.size > 0
+      ? Object.keys(TEAMS_DATA || {}).filter(tn => userLeagueTeamSet.has(tn))
+      : Object.keys(TEAMS_DATA || {});
+    const seenIds = new Set();
+    const allPlayers = [];
+    allTeamNames.forEach(tn => {
+      (TEAMS_DATA[tn]?.players || []).forEach(p => {
+        if (p.id != null && seenIds.has(p.id)) return;
+        if (p.id != null) seenIds.add(p.id);
+        allPlayers.push({ ...p, teamName: tn });
+      });
+    });
+
+    const standings = seasonData.standings || [];
+    const totalGames = seasonData.settings?.gamesPerSeason || 60;
+    const maxGP = Math.max(...standings.map(s => s.gamesPlayed || 0), 1);
+    const progress = Math.min(maxGP / totalGames, 1);
+    const qualifiedAB = Math.max(Math.floor(totalGames * 3.1 * progress), 10);
+    const qualifiedOuts = Math.max(Math.floor(totalGames * 1.0 * progress), 3) * 3;
+
+    const battingQ = allPlayers.filter(p => (p.seasonStats?.batting?.atBats || 0) >= qualifiedAB);
+    const pitchingQ = allPlayers.filter(p => (p.seasonStats?.pitching?.inningsPitched || 0) >= qualifiedOuts);
+
+    const batAvg = p => p.seasonStats?.batting?.atBats > 0 ? p.seasonStats.batting.hits / p.seasonStats.batting.atBats : 0;
+    const era = p => p.seasonStats?.pitching?.inningsPitched > 0 ? (p.seasonStats.pitching.earnedRuns / (p.seasonStats.pitching.inningsPitched / 3)) * 9 : 99;
+    const obpSlg = p => {
+      const s = p.seasonStats?.batting;
+      if (!s || s.atBats === 0) return 0;
+      const obp = (s.hits + s.walks) / (s.atBats + s.walks);
+      const tb = (s.hits - (s.doubles || 0) - (s.triples || 0) - s.homeruns) + (s.doubles || 0) * 2 + (s.triples || 0) * 3 + s.homeruns * 4;
+      return obp + tb / s.atBats;
+    };
+
+    const rankings = {
+      avg: [...battingQ].sort((a, b) => batAvg(b) - batAvg(a)).slice(0, 10),
+      hr: [...allPlayers].filter(p => (p.seasonStats?.batting?.homeruns || 0) > 0).sort((a, b) => b.seasonStats.batting.homeruns - a.seasonStats.batting.homeruns).slice(0, 10),
+      rbi: [...allPlayers].filter(p => (p.seasonStats?.batting?.rbis || 0) > 0).sort((a, b) => b.seasonStats.batting.rbis - a.seasonStats.batting.rbis).slice(0, 10),
+      sb: [...allPlayers].filter(p => (p.seasonStats?.batting?.stolenBases || 0) > 0).sort((a, b) => b.seasonStats.batting.stolenBases - a.seasonStats.batting.stolenBases).slice(0, 10),
+      ops: [...battingQ].sort((a, b) => obpSlg(b) - obpSlg(a)).slice(0, 10),
+      era: [...pitchingQ].sort((a, b) => era(a) - era(b)).slice(0, 10),
+      wins: [...allPlayers].filter(p => (p.seasonStats?.pitching?.wins || 0) > 0).sort((a, b) => b.seasonStats.pitching.wins - a.seasonStats.pitching.wins).slice(0, 10),
+      saves: [...allPlayers].filter(p => (p.seasonStats?.pitching?.saves || 0) > 0).sort((a, b) => b.seasonStats.pitching.saves - a.seasonStats.pitching.saves).slice(0, 10),
+      so: [...allPlayers].filter(p => (p.seasonStats?.pitching?.strikeouts || 0) > 0).sort((a, b) => b.seasonStats.pitching.strikeouts - a.seasonStats.pitching.strikeouts).slice(0, 10),
+    };
+
+    // 注目選手（若手活躍・ベテラン健在・好調選手）
+    const headlines = [];
+    allPlayers.forEach(p => {
+      const bs = p.seasonStats?.batting;
+      const ps = p.seasonStats?.pitching;
+      const abbr = getTeamAbbreviation(p.teamName);
+      if (p.age <= 22 && bs?.atBats >= 20 && batAvg(p) >= 0.300) {
+        headlines.push({ icon: '⭐', text: `${abbr} ${p.name}(${p.age}歳) 打率${batAvg(p).toFixed(3)}！ 若き才能が開花`, color: 'text-cyan-400', priority: 3 });
+      }
+      if (p.age <= 22 && ps?.wins >= 3) {
+        headlines.push({ icon: '⭐', text: `${abbr} ${p.name}(${p.age}歳) ${ps.wins}勝！ 若手投手が躍動`, color: 'text-cyan-400', priority: 3 });
+      }
+      if (p.age >= 32 && bs?.atBats >= 30 && batAvg(p) >= 0.300) {
+        headlines.push({ icon: '👴', text: `${abbr} ${p.name}(${p.age}歳) まだまだ衰えず！ 打率${batAvg(p).toFixed(3)}`, color: 'text-amber-400', priority: 2 });
+      }
+      if (bs?.homeruns >= 15) {
+        headlines.push({ icon: '💣', text: `${abbr} ${p.name} ${bs.homeruns}本塁打！ 量産ペース`, color: 'text-pink-400', priority: 2 });
+      }
+      if (ps?.inningsPitched > 0 && era(p) <= 1.50 && ps.inningsPitched >= qualifiedOuts * 0.5) {
+        headlines.push({ icon: '🔥', text: `${abbr} ${p.name} 防御率${era(p).toFixed(2)}！ 圧巻の投球`, color: 'text-orange-400', priority: 3 });
+      }
+      if (ps?.saves >= 10) {
+        headlines.push({ icon: '🔒', text: `${abbr} ${p.name} ${ps.saves}セーブ！ 守護神として君臨`, color: 'text-blue-400', priority: 1 });
+      }
+      if (bs?.stolenBases >= 15) {
+        headlines.push({ icon: '💨', text: `${abbr} ${p.name} ${bs.stolenBases}盗塁！ 韋駄天の異名`, color: 'text-green-400', priority: 1 });
+      }
+    });
+    headlines.sort((a, b) => b.priority - a.priority);
+
+    return { rankings, headlines: headlines.slice(0, 8), qualifiedAB, qualifiedOuts, batAvg, era, obpSlg };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showNewspaper, seasonData.results?.length, seasonData.currentDate?.day]);
 
   const getEventColor = (label) => {
     if (label === 'シーズン終了') return 'text-red-400';
@@ -2784,11 +2868,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             </div>
           )}
 
+          {/* スポーツ新聞ボタン（トピックが無い時のフォールバック） */}
+          {cachedTopics.length === 0 && scoutReportNotifications.length === 0 && (seasonData.results?.length || 0) > 0 && (
+            <div className="mt-3 text-center">
+              <button onClick={() => setShowNewspaper(true)} className="text-xs font-bold text-yellow-400 bg-yellow-900/30 hover:bg-yellow-900/50 px-4 py-1.5 rounded-lg border border-yellow-700/30 transition-colors">
+                📰 スポーツ新聞を読む
+              </button>
+            </div>
+          )}
+
           {/* 主なトピック（試合のある日のみ更新、休日は前日のトピックを表示） */}
           {(cachedTopics.length > 0 || scoutReportNotifications.length > 0) && (
             <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
               <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
                 <span className="text-yellow-400">📰</span> {todaysGames.length === 0 ? '直近のトピック' : '主なトピック'}
+                <button onClick={() => setShowNewspaper(true)} className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-900/40 hover:bg-yellow-900/60 px-2 py-0.5 rounded-lg border border-yellow-700/40 transition-colors">
+                  スポーツ新聞
+                </button>
               </h2>
               <div className="space-y-1">
                 {scoutReportNotifications.slice(0, 2).map((mission, i) => (
@@ -3253,6 +3349,101 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             titleColor,
           }}
         />;
+      })()}
+
+      {/* スポーツ新聞モーダル */}
+      {showNewspaper && newspaperData && (() => {
+        const { rankings, headlines, qualifiedAB, qualifiedOuts, batAvg, era, obpSlg } = newspaperData;
+        const curDate = seasonData.currentDate;
+        const renderRank = (list, title, icon, color, getValue, formatVal, ascending) => (
+          <div className="bg-gray-900/80 rounded-xl p-3 border border-gray-700/30">
+            <div className={`text-xs font-bold ${color} mb-2 pb-1.5 border-b border-gray-700/40 flex items-center gap-1`}>
+              <span>{icon}</span> {title}
+            </div>
+            {list.length === 0 ? <div className="text-xs text-gray-500 py-1">該当者なし</div> : (
+              list.map((p, i) => {
+                const isUser = p.teamName === userTeamName;
+                return (
+                  <div key={p.id || i} className={`flex items-center text-xs py-0.5 px-1 rounded ${isUser ? 'text-yellow-300 bg-yellow-900/15' : 'text-gray-300'}`}>
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                      i === 0 ? 'bg-yellow-500/90 text-black' : i === 1 ? 'bg-gray-400/80 text-black' : i === 2 ? 'bg-orange-600/80 text-white' : 'text-gray-600'
+                    }`}>{i + 1}</span>
+                    <span className="flex-1 truncate ml-1.5">{p.name} <span className="text-gray-500 text-[10px]">({getTeamAbbreviation(p.teamName)})</span></span>
+                    <span className={`font-mono font-bold ${color}`}>{formatVal(getValue(p))}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        );
+        return (
+          <div className="fixed inset-0 z-50 flex items-start justify-center p-2 pt-8 overflow-y-auto" onClick={() => setShowNewspaper(false)}>
+            <div className="absolute inset-0 bg-black/70" />
+            <div className="relative bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-lg w-full border border-gray-700/50" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 z-10 bg-gradient-to-r from-red-800 to-red-900 rounded-t-2xl px-4 py-3 flex items-center justify-between border-b border-red-700/50">
+                <div>
+                  <div className="text-[10px] text-red-300/60 tracking-widest uppercase">Sports Daily</div>
+                  <h2 className="text-lg font-black text-white tracking-tight">スポーツ新聞</h2>
+                  <div className="text-[10px] text-red-200/60">{curDate.year}年{curDate.month}月{curDate.day}日</div>
+                </div>
+                <button onClick={() => setShowNewspaper(false)} className="text-red-300 hover:text-white text-2xl leading-none px-2 py-1 hover:bg-red-700/50 rounded-lg transition-colors">✕</button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {headlines.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold text-yellow-400 mb-2 flex items-center gap-1">
+                      <span>🗞️</span> 注目ヘッドライン
+                    </div>
+                    <div className="space-y-1">
+                      {headlines.map((h, i) => (
+                        <div key={i} className="flex items-start gap-1.5 bg-gray-800/80 rounded-lg px-2.5 py-1.5 border border-gray-700/30">
+                          <span className="text-sm shrink-0">{h.icon}</span>
+                          <span className={`text-xs ${h.color}`}>{h.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div className="text-xs font-bold text-blue-400 mb-2 flex items-center gap-1">
+                    <span>⚾</span> 打撃ランキング
+                    <span className="text-[10px] text-gray-500 font-normal ml-1">規定打席{qualifiedAB}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {renderRank(rankings.avg, '首位打者', '🏏', 'text-blue-400', batAvg, v => v.toFixed(3))}
+                    {renderRank(rankings.hr, '本塁打王', '💥', 'text-pink-400', p => p.seasonStats?.batting?.homeruns || 0, v => `${v}本`)}
+                    {renderRank(rankings.rbi, '打点王', '🔋', 'text-green-400', p => p.seasonStats?.batting?.rbis || 0, v => `${v}点`)}
+                    {renderRank(rankings.sb, '盗塁王', '💨', 'text-teal-400', p => p.seasonStats?.batting?.stolenBases || 0, v => `${v}盗`)}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-bold text-orange-400 mb-2 flex items-center gap-1">
+                    <span>🔥</span> 投手ランキング
+                    <span className="text-[10px] text-gray-500 font-normal ml-1">規定投球{Math.floor(qualifiedOuts / 3)}回</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {renderRank(rankings.era, '最優秀防御率', '🛡', 'text-orange-400', era, v => v.toFixed(2))}
+                    {renderRank(rankings.wins, '最多勝', '🏆', 'text-yellow-400', p => p.seasonStats?.pitching?.wins || 0, v => `${v}勝`)}
+                    {renderRank(rankings.saves, '最多セーブ', '🔒', 'text-blue-400', p => p.seasonStats?.pitching?.saves || 0, v => `${v}S`)}
+                    {renderRank(rankings.so, '最多奪三振', '🌀', 'text-purple-400', p => p.seasonStats?.pitching?.strikeouts || 0, v => `${v}K`)}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-bold text-amber-400 mb-2 flex items-center gap-1">
+                    <span>📊</span> 総合指標
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {renderRank(rankings.ops, 'OPS', '📈', 'text-amber-400', obpSlg, v => v.toFixed(3))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
       })()}
 
       {/* 試合選択モーダル */}
