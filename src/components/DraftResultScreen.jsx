@@ -639,12 +639,31 @@ const PITCH_NAMES = {
 const FORM_NAMES = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
 const FULL_POS_NAMES = { pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手', third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手' };
 
-const StatVal = ({ label, value, suffix }) => (
-  <div className="flex items-baseline gap-1">
-    <span className="text-gray-500 text-[10px] w-10 shrink-0">{label}</span>
-    <span className={`text-xs font-bold ${getAbilityColor(value)}`}>{value}{suffix || ''}</span>
-  </div>
-);
+const TRAIT_NAMES = {
+  speedster: '俊足', slugger: '強打者', defender: '守備職人', contactHitter: '巧打者',
+  eyeMaster: '選球眼', baserunner: '走塁巧者', armStrong: '強肩', speedContact: '俊足巧打',
+  powerArm: '強肩強打', fireballer: '速球派', controlPitcher: '制球派', ironman: '鉄腕',
+  breakingBall: '変化球', sinkerballer: 'シンカーボーラー', strikeoutArtist: '奪三振',
+};
+
+const StatBar = ({ label, value, suffix, maxVal }) => {
+  const max = maxVal || 100;
+  const pct = Math.min(100, (value / max) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-gray-500 text-xs w-16 shrink-0 text-right">{label}</span>
+      <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{
+          width: `${pct}%`,
+          backgroundColor: value >= 80 ? '#ef4444' : value >= 60 ? '#f59e0b' : value >= 40 ? '#3b82f6' : '#9ca3af'
+        }} />
+      </div>
+      <span className={`text-xs font-bold w-10 text-right ${getAbilityColor(maxVal === 170 ? value / 1.7 : value)}`}>
+        {value}{suffix || ''}
+      </span>
+    </div>
+  );
+};
 
 const DraftPlayerDetail = ({ player }) => {
   if (!player) return null;
@@ -653,56 +672,88 @@ const DraftPlayerDetail = ({ player }) => {
   const bats = p.batting?.bats === 'left' ? '左' : p.batting?.bats === 'switch' ? '両' : '右';
   const throws = p.physical?.throws === 'left' ? '左' : '右';
   const build = p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉';
+  const traits = p.traits || [];
 
   return (
-    <div className="text-xs">
-      <div className="flex items-center gap-3 mb-2 text-gray-500">
-        <span>{FULL_POS_NAMES[p.position] || p.position}</span>
-        <span>{throws}投{bats}打</span>
-        <span>{build}</span>
-        {isPitcher && p.pitching?.form && <span>{FORM_NAMES[p.pitching.form] || p.pitching.form}</span>}
-        {p.growthPotential != null && <span>成長力 <span className={`font-bold ${getAbilityColor(p.growthPotential * 50)}`}>{p.growthPotential.toFixed(2)}</span></span>}
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
+        <span className="font-semibold text-gray-800">{FULL_POS_NAMES[p.position] || p.position}</span>
+        <span className="px-1.5 py-0.5 bg-gray-100 rounded">{throws}投{bats}打</span>
+        <span className="px-1.5 py-0.5 bg-gray-100 rounded">{build}</span>
+        {isPitcher && p.pitching?.form && <span className="px-1.5 py-0.5 bg-gray-100 rounded">{FORM_NAMES[p.pitching.form] || p.pitching.form}</span>}
       </div>
-      {isPitcher ? (
-        <div className="space-y-1">
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-            <StatVal label="球速" value={p.pitching?.velocity || 0} suffix="km" />
-            <StatVal label="制球" value={p.pitching?.control || 0} />
-            <StatVal label="スタミナ" value={p.pitching?.stamina || 0} />
-          </div>
-          {p.pitching?.arsenal?.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {p.pitching.arsenal.filter(b => b.type !== 'straight').map((b, i) => (
-                <span key={i} className="inline-flex items-center gap-0.5 bg-gray-100 rounded px-1 py-0.5">
-                  <span className="text-gray-600">{PITCH_NAMES[b.type] || b.type}</span>
-                  <span className={`font-bold ${getAbilityColor(b.level)}`}>{b.level}</span>
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-            <StatVal label="ミート" value={p.batting?.meet || 0} />
-            <StatVal label="パワー" value={p.batting?.power || 0} />
-            <StatVal label="走力" value={p.physical?.speed || 0} />
-            <StatVal label="守備" value={p.fielding?.defense || 0} />
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-1">
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-            <StatVal label="ミート" value={p.batting?.meet || 0} />
-            <StatVal label="パワー" value={p.batting?.power || 0} />
-            <StatVal label="選球眼" value={p.batting?.eye || 0} />
-            <StatVal label="走力" value={p.physical?.speed || 0} />
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-            <StatVal label="肩力" value={p.physical?.arm || 0} />
-            <StatVal label="守備" value={p.fielding?.defense || 0} />
-            <StatVal label="盗塁" value={p.batting?.steal || 0} />
-            {p.position === 'catcher' && <StatVal label="リード" value={p.catching?.lead || 0} />}
-          </div>
+
+      {traits.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {traits.map((t, i) => (
+            <span key={i} className="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded">
+              {TRAIT_NAMES[t] || t}
+            </span>
+          ))}
         </div>
       )}
+
+      {isPitcher && (
+        <div>
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">投球能力</div>
+          <div className="space-y-1">
+            <StatBar label="球速" value={p.pitching?.velocity || 0} suffix="km" maxVal={170} />
+            <StatBar label="制球" value={p.pitching?.control || 0} />
+            <StatBar label="スタミナ" value={p.pitching?.stamina || 0} />
+          </div>
+          {p.pitching?.arsenal?.length > 0 && (
+            <div className="mt-2">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">球種</div>
+              <div className="flex flex-wrap gap-1.5">
+                {p.pitching.arsenal.map((b, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-0.5 text-xs">
+                    <span className="text-gray-700">{PITCH_NAMES[b.type] || b.type}</span>
+                    <span className={`font-bold ${getAbilityColor(b.level)}`}>{b.level}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div>
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">打撃能力</div>
+        <div className="space-y-1">
+          <StatBar label="ミート" value={p.batting?.meet || 0} />
+          <StatBar label="パワー" value={p.batting?.power || 0} />
+          <StatBar label="選球眼" value={p.batting?.eye || 0} />
+          <StatBar label="盗塁" value={p.batting?.steal || 0} />
+          {p.batting?.bunt != null && <StatBar label="バント" value={p.batting.bunt} />}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">フィジカル</div>
+        <div className="space-y-1">
+          <StatBar label="走力" value={p.physical?.speed || 0} />
+          <StatBar label="肩力" value={p.physical?.arm || 0} />
+          <StatBar label="守備" value={p.fielding?.defense || 0} />
+          {p.physical?.bodyStamina != null && <StatBar label="体力" value={p.physical.bodyStamina} />}
+          {p.physical?.recovery != null && <StatBar label="回復" value={p.physical.recovery} />}
+        </div>
+      </div>
+
+      {p.position === 'catcher' && p.catching?.lead != null && (
+        <div>
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">捕手能力</div>
+          <StatBar label="リード" value={p.catching.lead} />
+        </div>
+      )}
+
+      <div>
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">素質</div>
+        <div className="space-y-1">
+          {p.growthPotential != null && <StatBar label="成長力" value={Math.round(p.growthPotential * 50)} />}
+          {p.personality?.discipline != null && <StatBar label="プロ意識" value={p.personality.discipline} />}
+          {p.personality?.mental != null && <StatBar label="精神力" value={p.personality.mental} />}
+        </div>
+      </div>
     </div>
   );
 };
@@ -712,19 +763,20 @@ const DraftPlayerModal = ({ entry, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
-      <div className="relative bg-white rounded-xl shadow-2xl max-w-sm w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white rounded-t-xl px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white rounded-t-2xl px-5 py-3.5 border-b border-gray-200 flex items-center justify-between z-10">
+          <div className="flex items-center gap-2.5">
+            <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
               entry.draftRound === 'ドラフト1位' ? 'bg-red-100 text-red-700' :
               entry.draftRound?.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
             }`}>{entry.draftRound?.replace('ドラフト', '')}</span>
-            <span className="font-bold text-gray-900">{entry.name}</span>
-            <span className="text-gray-400 text-xs">({entry.age})</span>
+            <span className="font-bold text-gray-900 text-lg">{entry.name}</span>
+            <span className="text-gray-400 text-sm">({entry.age}歳)</span>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors">✕</button>
         </div>
-        <div className="px-4 py-3">
+        <div className="px-5 py-4">
+          <div className="text-xs text-gray-500 mb-3">{entry.teamName} / {DRAFT_POSITION_NAMES[entry.position] || entry.position}</div>
           <DraftPlayerDetail player={entry.player} />
         </div>
       </div>
