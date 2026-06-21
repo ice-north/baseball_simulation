@@ -174,7 +174,7 @@ function generateHighSchoolPlayer(id) {
     if (isSideOrUnder) velocity -= 3;
     if (throws === 'left') velocity -= 3;
     let control = Math.round(nrm(24, 9) + off + controlAdjust);
-    let stamina = Math.round(nrm(58, 12) + off * 1.5);
+    let stamina = Math.round(nrm(63, 14) + off * 1.5);
 
     if (specialty === 'power_arm') velocity += r(5, 10);
     else if (specialty === 'technician') control += r(10, 20);

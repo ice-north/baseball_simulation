@@ -587,7 +587,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
         dexterity: randRangeWithVariance(40, 65),
         velocity: velocityFromArm(twoWayArm),
         control: Math.min(randRangeWithVariance(40, 68) + controlAdjust, 85),
-        stamina: randStamina(80, 110),
+        stamina: randStamina(85, 120),
         spinRate: randRangeWithVariance(30, 60)
       });
     } else {
@@ -608,7 +608,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
         dexterity: randRangeWithVariance(40, 65),
         velocity: velocityFromArm(twoWayArm),
         control: Math.min(randRangeWithVariance(40, 65) + controlAdjust, 80),
-        stamina: randStamina(67, 100),
+        stamina: randStamina(72, 108),
         spinRate: randRangeWithVariance(30, 60)
       });
     }
@@ -634,7 +634,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       dexterity: randRangeWithVariance(35, 65),
       velocity: velocityFromArm(pitcherArm),
       control: Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85),
-      stamina: randStamina(73, 113, ageBonus),
+      stamina: randStamina(78, 123, ageBonus),
       spinRate: randRangeWithVariance(35, 70)
     };
   } else {
@@ -804,7 +804,7 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       // 剛腕が魅力。制球や変化球を磨けば戦力に
       arm: () => randRange(80, 92),
       control: () => Math.min(randRange(28, 45) + controlAdjust, 58),
-      stamina: () => randStamina(55, 82),
+      stamina: () => randStamina(58, 88),
       muscle: () => randRange(65, 85),
       spinRate: () => randRange(55, 80)
     },
@@ -812,33 +812,33 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
       // 制球派の素材。肩はそこそこだが制球が光る
       arm: () => randRange(58, 72),
       control: () => Math.min(randRange(58, 73) + controlAdjust, 80),
-      stamina: () => randStamina(72, 100),
+      stamina: () => randStamina(77, 108),
       dexterity: () => randRange(60, 80)
     },
     ironman: {
       // タフネス型。技術は粗いが練習で伸びる
       arm: () => randRange(60, 73),
       control: () => Math.min(randRange(35, 52) + controlAdjust, 65),
-      stamina: () => randStamina(95, 125),
+      stamina: () => randStamina(100, 135),
       muscle: () => randRange(55, 75)
     },
     breakingBall: {
       // 変化球派（arsenalで+2球種、早熟型）
       arm: () => randRange(55, 70),
       control: () => Math.min(randRange(48, 63) + controlAdjust, 72),
-      stamina: () => randStamina(70, 95)
+      stamina: () => randStamina(75, 103)
     },
     sinkerballer: {
       // ゴロ量産候補。制球とスタミナが売り
       arm: () => randRange(58, 72),
       control: () => Math.min(randRange(52, 68) + controlAdjust, 75),
-      stamina: () => randStamina(82, 110)
+      stamina: () => randStamina(87, 118)
     },
     strikeoutArtist: {
       // 空振り奪取型。肩が強く粗削り
       arm: () => randRange(75, 88),
       control: () => Math.min(randRange(30, 48) + controlAdjust, 60),
-      stamina: () => randStamina(55, 80),
+      stamina: () => randStamina(58, 86),
       spinRate: () => randRange(60, 85)
     }
   };
