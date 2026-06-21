@@ -170,58 +170,86 @@ const CAMP_PRESETS = {
   },
   coach: {
     name: 'コーチおすすめ', icon: '📋',
-    desc: '年齢と経験から最も成長が期待できるメニューを選択',
+    desc: '各選手の能力・年齢・疲労から最適な練習を提案',
     getMain: (p) => {
       const age = p.age || 20;
-      const exp = p.experience || 0;
+      const gm = p.growthModifier || 0;
       if (p.position === 'pitcher') {
-        // 若手(≤23): フィジカル(球速)が伸びやすい
-        // 中堅(24-28): 経験で技術(制球)が伸びる
-        // ベテラン(29+): 制球+スタミナ維持
-        if (age <= 21) return 'velocity';
-        if (age <= 23) {
-          const v = p.pitching?.velocity || 130;
-          return v < 145 ? 'velocity' : 'stamina';
-        }
-        if (age <= 28) {
-          const c = p.pitching?.control || 50;
-          return c < 60 ? 'control' : 'stamina';
-        }
-        return 'control';
+        const v = p.pitching?.velocity || 130;
+        const c = p.pitching?.control || 50;
+        const s = p.pitching?.stamina || 80;
+        const arsenal = p.pitching?.arsenal || [];
+        const breakingCount = arsenal.filter(a => a.name !== 'ストレート').length;
+        const avgBreaking = breakingCount > 0
+          ? arsenal.filter(a => a.name !== 'ストレート').reduce((sum, a) => sum + (a.level || 0), 0) / breakingCount
+          : 0;
+        if (s < 65) return 'stamina';
+        if (c < 35) return 'control';
+        if (breakingCount <= 1) return 'newpitch';
+        if (age <= 23 && v < 148) return 'velocity';
+        if (age <= 23 && v >= 148 && c < 50) return 'control';
+        if (c < 50) return 'control';
+        if (avgBreaking < 40 && breakingCount >= 2) return 'control';
+        if (s < 90 && s <= c) return 'stamina';
+        if (age >= 29) return c <= s ? 'control' : 'stamina';
+        return v < 145 ? 'velocity' : 'control';
       }
-      // 野手
-      // 若手(≤23): フィジカル(走塁/パワー)が伸びやすい
-      // 中堅(24-28): 技術(打撃/選球眼)が伸びる
-      // ベテラン(29+): 守備・選球眼で安定感
-      if (age <= 21) {
-        const spd = p.physical?.speed || 0;
-        return spd < 50 ? 'baserunning' : 'batting';
-      }
-      if (age <= 23) {
-        const pow = p.batting?.power || 0;
-        const spd = p.physical?.speed || 0;
-        return pow < spd ? 'batting' : 'baserunning';
-      }
-      if (age <= 28) {
-        if (exp >= 150) {
-          const eye = p.batting?.eye || 0;
-          return eye < 40 ? 'eye' : 'batting';
-        }
-        return 'batting';
-      }
+      const meet = p.batting?.meet || 0;
+      const power = p.batting?.power || 0;
+      const eye = p.batting?.eye || 0;
+      const speed = p.physical?.speed || 0;
       const def = p.fielding?.defense || 0;
-      return def < 45 ? 'fielding' : 'eye';
+      const steal = p.batting?.steal || 0;
+      if (def < 30) return 'fielding';
+      if (meet < 25 && power < 25) return 'batting';
+      if (age <= 23 && speed >= 55 && steal < 40) return 'baserunning';
+      if (age <= 23 && speed < 40) return 'baserunning';
+      const weakest = [
+        { key: 'batting', val: (meet + power * 0.7) / 1.7 },
+        { key: 'baserunning', val: (speed + steal * 0.5) / 1.5 },
+        { key: 'fielding', val: def },
+        { key: 'eye', val: eye },
+      ].sort((a, b) => a.val - b.val);
+      if (age >= 29) {
+        if (eye < 40) return 'eye';
+        if (def < 45) return 'fielding';
+        return meet <= power ? 'batting' : 'eye';
+      }
+      if (weakest[0].val < 35) return weakest[0].key;
+      if (age <= 23) {
+        if (power < 40) return 'batting';
+        if (speed < 45) return 'baserunning';
+      }
+      return weakest[0].key;
     },
     getSub: (p) => {
       const age = p.age || 20;
+      const gm = p.growthModifier || 0;
+      if (gm <= -0.08 || (age >= 32 && (p.physical?.recovery || 50) < 40)) return 'stretch';
       if (p.position === 'pitcher') {
-        if (age <= 23) return 'running';
-        if (age <= 28) return 'breaking';
-        return 'stretch';
+        const c = p.pitching?.control || 50;
+        const s = p.pitching?.stamina || 80;
+        const arsenal = p.pitching?.arsenal || [];
+        const breakingCount = arsenal.filter(a => a.name !== 'ストレート').length;
+        const avgBreaking = breakingCount > 0
+          ? arsenal.filter(a => a.name !== 'ストレート').reduce((sum, a) => sum + (a.level || 0), 0) / breakingCount
+          : 0;
+        if (avgBreaking < 35 && breakingCount >= 2) return 'breaking';
+        if (s < 80) return 'running';
+        if (breakingCount >= 2 && avgBreaking < 55) return 'breaking';
+        if (age >= 29) return 'stretch';
+        return 'running';
       }
-      if (age <= 23) return 'muscle';
-      if (age <= 28) return 'eye';
-      return 'stretch';
+      const def = p.fielding?.defense || 0;
+      const eye = p.batting?.eye || 0;
+      const speed = p.physical?.speed || 0;
+      const lead = p.catching?.lead || 0;
+      if (p.position === 'catcher' && lead < 40) return 'clead_study';
+      if (def < 35) return 'defense_sub';
+      if (eye < 30) return 'eye';
+      if (age >= 29) return 'stretch';
+      if (speed < 40) return 'running';
+      return 'muscle';
     },
   },
 };
