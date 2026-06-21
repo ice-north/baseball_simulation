@@ -194,15 +194,21 @@ NEW GAME → 大学チーム選択 → キャンプ
 - **画面遷移**: `corporate_departure` → `corporate_scout` → `dateprogress`（独立リーグの `contract` → `tryout` に対応）
 
 ## 大学モード スポーツ推薦スカウト (`src/corporate/scoutingSystem.js`)
-- **概要**: 大学モード（11/10）で高校生プールからスポーツ推薦候補をスカウトし、入部させる
+- **概要**: 4月の高校生プール生成と同時にスカウト候補を初期化し、シーズン通年でスカウト活動
 - **推薦枠数**: ランク別 S=8, A=7, B=5, C=4, D=3
-- **候補者数**: reputation依存で8〜20名。能力+知名度+注目度でスコアリング
-- **能力表示**: 精度50-85%のぼかし表示（secondary段階 = 主要能力のみ可視）
-- **交渉成功率**: baseRate(30%+reputation*50%) - 選手の質 + ランク補正(S+12%〜D-12%)
-- **フロー**: スカウト画面 → 候補から選択 → 交渉 → 成功者は`_universityReserved`フラグ → オフシーズン卒業処理で入部
-- **画面遷移**: `university_scout` → `dateprogress`（11/10トリガー、完了後11/15へ進行）
+- **候補生成**: `initUniversityScoutList(teamData, rank)` — 4月に高校生プールから候補を選出。reputation依存で8〜20名
+- **能力表示**: `_revealLevel` 0=primary(精度50-65%), 1=secondary(精度65-80%), 2=full(精度80-95%)
+- **調査システム**: `startUniversityInvestigation(candidate, date)` — 5日間で`_revealLevel`が1段階上昇
+- **注目システム**: `toggleUniversityWatch(candidate)` — 注目中は週+4%ずつ`_watchBonus`が蓄積
+- **日次処理**: `processUniversityScoutDay(candidates, date, rank, rep)` — 調査完了判定+注目ボーナス加算
+- **交渉成功率**: `calculateUniversityRecruitRate()` = baseRate(30%+rep*50%) - qualityPenalty + rankBonus(S+12%〜D-12%) + invBonus(8%/段階) + watchBonus
+- **交渉**: `attemptUniversityRecruit(player, rank, rep)` — 成功時`_universityReserved`フラグ
+- **設計思想**: 低ランク大学は無名の逸材を早期に発掘・注目して交渉率を上げてから確保する醍醐味
+- **フロー**: 4月初期化 → シーズン中サイドバーからスカウト画面 → 11/10に強制完了イベント → オフシーズン卒業処理で入部
+- **画面遷移**: サイドバー「推薦スカウト」で随時アクセス / `university_scout`（11/10トリガー時はonComplete付き）
 - **新入生構成**: スカウト推薦(scouted) + AI推薦(recommended) + 一般入部(general)
 - **UI**: `src/components/UniversityScoutScreen.jsx`
+- **セーブ/ロード**: `WORLD_DATA._universityScout` に候補・獲得済みリストを保持。年度末にnullリセット
 
 ## クラブチームのプロ意識駆動成長 (`src/season/yearProgressionSystem.js`)
 - **設計思想**: クラブチームはキャンプも無く実践経験も少ないため、人工的な突出選手ブーストではなく、選手のプロ意識(discipline)×成長率(growthPotential)で数年かけてドラフト候補に成長する設計
