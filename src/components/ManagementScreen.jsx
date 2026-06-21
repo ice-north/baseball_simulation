@@ -35,6 +35,7 @@ import ClubRecruitScreen from './ClubRecruitScreen.jsx';
 import BudgetSettlementScreen from './BudgetSettlementScreen.jsx';
 import UniversityScoutScreen from './UniversityScoutScreen.jsx';
 import DebugPlayerViewScreen from './DebugPlayerViewScreen.jsx';
+import PlayerSearchScreen from './PlayerSearchScreen.jsx';
 
 const ManagementScreen = ({
   managementView,
@@ -188,6 +189,9 @@ const ManagementScreen = ({
   if (managementView === 'corporate_management') return <CorporateManagementScreen
     seasonData={seasonData}
     gameMode={gameMode}
+  />;
+  if (managementView === 'player_search') return <PlayerSearchScreen
+    onBack={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'debug_players') return <DebugPlayerViewScreen
     onBack={() => setManagementView('dateprogress')}
