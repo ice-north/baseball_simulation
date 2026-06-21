@@ -14,7 +14,7 @@ import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
-import { checkScoutMissionCompletion, SCOUT_TARGETS, processAutoInvestigation, advanceFavoriteBonus } from '../corporate/scoutingSystem.js';
+import { checkScoutMissionCompletion, SCOUT_TARGETS, processAutoInvestigation, advanceFavoriteBonus, processUniversityScoutDay, initUniversityScoutList } from '../corporate/scoutingSystem.js';
 import { generateUniversityChampionship, generateMeijiJinguTournament, simulateUniversityTournamentOnDate, autoPlayUniversityTournament, getUserUniversityTournamentMatchOnDate, getUniversityTournamentDatesForCalendar } from '../university/universityTournament.js';
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 
@@ -222,6 +222,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const gameYear = newData.settings?.year || seasonData?.year || 1;
       generateAprilHighSchoolClass(gameYear);
       newData = { ...newData, _highSchoolGenerated: true };
+      if (isUniversity) {
+        const userTeam = TEAMS_DATA[userTeamName];
+        const uniRank = userTeam?.universityData?.rank || 'C';
+        const list = initUniversityScoutList(userTeam, uniRank);
+        WORLD_DATA._universityScout = { candidates: list, recruited: [], initialized: true };
+      }
     }
 
     if (isCorporate && month >= 5 && !newData.toshitaikou?.generated) {
@@ -929,6 +935,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           if (allQDone) wdCS.phase = 'qualifiers_done';
         }
       }
+    }
+
+    // 大学モード: スカウト調査＋注目ボーナスの日次処理
+    if (isUniversity && WORLD_DATA._universityScout?.candidates) {
+      const uniRank = TEAMS_DATA[userTeamName]?.universityData?.rank || 'C';
+      const uniRep = TEAMS_DATA[userTeamName]?.universityData?.reputation || 30;
+      processUniversityScoutDay(WORLD_DATA._universityScout.candidates, newSeasonData.currentDate, uniRank, uniRep);
     }
 
     // スカウト派遣の完了チェック + 自動調査 + お気に入りボーナス

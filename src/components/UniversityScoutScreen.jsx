@@ -2,43 +2,48 @@ import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import {
-  generateUniversityScoutCandidates,
+  initUniversityScoutList,
   getUniversityScoutSlots,
+  startUniversityInvestigation,
+  toggleUniversityWatch,
   attemptUniversityRecruit,
   getUniversityScoutRecommendation,
 } from '../corporate/scoutingSystem.js';
 import { highSchoolPool } from '../season/universityPool.js';
-import { generatePositionFitness } from '../season/tryoutSystem.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
 
-const UniversityScoutScreen = ({ seasonData, onComplete }) => {
+const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
   const userTeamName = teamNames[0] || '';
   const teamData = TEAMS_DATA[userTeamName];
   const rank = teamData?.universityData?.rank || 'C';
   const reputation = teamData?.universityData?.reputation || 30;
-
   const maxSlots = getUniversityScoutSlots(rank);
-  const [candidates, setCandidates] = useState([]);
-  const [selectedIds, setSelectedIds] = useState([]);
+
+  const scoutData = WORLD_DATA._universityScout || {};
+  const [candidates, setCandidates] = useState(scoutData.candidates || []);
+  const [recruited, setRecruited] = useState(scoutData.recruited || []);
   const [phase, setPhase] = useState('scout');
-  const [results, setResults] = useState([]);
-  const [allRecruited, setAllRecruited] = useState([]);
+  const [negotiationResult, setNegotiationResult] = useState(null);
   const [sortKey, setSortKey] = useState('rate');
   const [sortAsc, setSortAsc] = useState(false);
 
   useEffect(() => {
-    if (candidates.length > 0) return;
-    const scouted = generateUniversityScoutCandidates(teamData, rank);
-    setCandidates(scouted);
+    if (candidates.length === 0 && highSchoolPool.players?.length > 0 && !scoutData.initialized) {
+      const list = initUniversityScoutList(teamData, rank);
+      setCandidates(list);
+      WORLD_DATA._universityScout = { candidates: list, recruited: [], initialized: true };
+    }
   }, []);
 
-  const toggleSelect = (playerId) => {
-    setSelectedIds(prev => {
-      if (prev.includes(playerId)) return prev.filter(id => id !== playerId);
-      if (prev.length >= maxSlots - allRecruited.length) return prev;
-      return [...prev, playerId];
-    });
-  };
+  useEffect(() => {
+    if (WORLD_DATA._universityScout) {
+      WORLD_DATA._universityScout.candidates = candidates;
+      WORLD_DATA._universityScout.recruited = recruited;
+    }
+  }, [candidates, recruited]);
+
+  const remainingSlots = maxSlots - recruited.length;
 
   const getRateColor = (rate) => {
     if (rate >= 70) return 'text-red-400';
@@ -49,49 +54,39 @@ const UniversityScoutScreen = ({ seasonData, onComplete }) => {
 
   const recColor = (g) => ({ S: 'text-red-400', A: 'text-orange-400', B: 'text-yellow-400', C: 'text-green-400', D: 'text-blue-400' }[g] || 'text-gray-500');
 
-  const handleNegotiate = () => {
-    const res = [];
-    const removedIds = new Set();
-    selectedIds.forEach(id => {
-      if (allRecruited.length + res.filter(r => r.success).length >= maxSlots) return;
-      const player = candidates.find(c => c.id === id);
-      if (!player) return;
-      const result = attemptUniversityRecruit(player, rank, reputation);
-      res.push({ player, ...result });
-      removedIds.add(id);
-    });
-    setResults(res);
-    const newRecruited = res.filter(r => r.success).map(r => r.player);
-    setAllRecruited(prev => [...prev, ...newRecruited]);
-    setCandidates(prev => prev.filter(c => !removedIds.has(c.id)));
-    setSelectedIds([]);
-    setPhase('results');
+  const handleInvestigate = (id) => {
+    const c = candidates.find(p => p.id === id);
+    if (!c) return;
+    const ok = startUniversityInvestigation(c, seasonData.currentDate);
+    if (ok) setCandidates([...candidates]);
   };
 
-  const handleContinue = () => {
-    if (allRecruited.length >= maxSlots || candidates.length === 0) {
-      handleFinalize();
+  const handleWatch = (id) => {
+    const c = candidates.find(p => p.id === id);
+    if (!c) return;
+    toggleUniversityWatch(c);
+    setCandidates([...candidates]);
+  };
+
+  const handleRecruit = (id) => {
+    if (remainingSlots <= 0) return;
+    const c = candidates.find(p => p.id === id);
+    if (!c) return;
+    const result = attemptUniversityRecruit(c, rank, reputation);
+    setNegotiationResult({ player: c, ...result });
+    if (result.success) {
+      const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
+      if (orig) orig._universityReserved = userTeamName;
+      setRecruited(prev => [...prev, c]);
+      setCandidates(prev => prev.filter(p => p.id !== id));
     } else {
-      setPhase('scout');
-      setResults([]);
+      setCandidates(prev => prev.filter(p => p.id !== id));
     }
   };
 
   const handleFinalize = () => {
-    allRecruited.forEach(p => {
-      const ref = p._poolRef;
-      if (ref?.source === 'highschool' && ref.poolIndex != null) {
-        const origPlayer = highSchoolPool.players.find(hp => hp.id === p.id);
-        if (origPlayer) {
-          origPlayer._universityReserved = userTeamName;
-        }
-      }
-    });
-    setPhase('confirmed');
-  };
-
-  const handleDone = () => {
-    if (onComplete) onComplete(allRecruited);
+    WORLD_DATA._universityScout = { ...WORLD_DATA._universityScout, finalized: true };
+    if (onComplete) onComplete(recruited);
   };
 
   const handleSort = (key) => {
@@ -129,8 +124,6 @@ const UniversityScoutScreen = ({ seasonData, onComplete }) => {
     return sortAsc ? va - vb : vb - va;
   });
 
-  const remainingSlots = maxSlots - allRecruited.length;
-
   const SortHeader = ({ k, label, w }) => (
     <th onClick={() => handleSort(k)}
       className={`py-1 px-1 cursor-pointer hover:text-white transition select-none whitespace-nowrap ${w || ''} ${sortKey === k ? 'text-cyan-400' : 'text-gray-500'}`}>
@@ -145,81 +138,51 @@ const UniversityScoutScreen = ({ seasonData, onComplete }) => {
     return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 120) * 2) : n)}`}>{val}</span>;
   };
 
-  if (phase === 'results') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-4">
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-xl font-black text-white mb-4">スポーツ推薦 交渉結果</h1>
-          <div className="space-y-2 mb-4">
-            {results.map((r, i) => (
-              <div key={i} className={`rounded-xl p-3 border ${r.success ? 'bg-green-900/30 border-green-700/50' : 'bg-red-900/20 border-red-800/30'}`}>
-                <div className="flex items-center gap-2">
-                  <span className={`text-lg font-bold ${r.success ? 'text-green-400' : 'text-red-400'}`}>
-                    {r.success ? '入部決定' : '辞退'}
-                  </span>
-                  <span className="text-white font-bold">{r.player.name}</span>
-                  <span className="text-gray-400 text-sm">{POSITION_NAMES[r.player.position] || r.player.position}</span>
-                  <span className="text-gray-500 text-sm">{r.player._scoutSource}</span>
-                </div>
-                <div className="text-gray-400 text-xs mt-1">
-                  交渉成功率: {r.rate}%
-                  {r.success && ' — スポーツ推薦枠で入部'}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="text-gray-400 text-sm">
-              推薦確保: {allRecruited.length}/{maxSlots}名
-            </div>
-            <button onClick={handleContinue}
-              className="px-6 py-2 rounded-xl font-bold text-white bg-blue-700 hover:bg-blue-600 transition">
-              {allRecruited.length >= maxSlots || candidates.length === 0 ? '確定' : '続ける'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const revealLabel = (level) => {
+    if (level >= 2) return <span className="text-green-400 text-[9px]">詳細</span>;
+    if (level >= 1) return <span className="text-yellow-400 text-[9px]">概要</span>;
+    return <span className="text-gray-500 text-[9px]">未知</span>;
+  };
 
-  if (phase === 'confirmed') {
+  if (negotiationResult) {
+    const r = negotiationResult;
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-4">
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-xl font-black text-white mb-4">スポーツ推薦 確定</h1>
-          <div className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50 mb-4">
-            <h2 className="text-sm font-bold text-blue-400 mb-2">推薦入部者 ({allRecruited.length}名)</h2>
-            {allRecruited.length === 0 ? (
-              <p className="text-gray-500 text-sm">推薦入部者はいません。一般入部のみで新入生を迎えます。</p>
-            ) : (
-              <div className="space-y-1">
-                {allRecruited.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm">
-                    <span className="text-green-400 font-bold">{p.name}</span>
-                    <span className="text-gray-400">{POSITION_NAMES[p.position] || p.position}</span>
-                    <span className="text-gray-500">{p._scoutSource}</span>
-                    {p.position === 'pitcher' ? (
-                      <span className="text-gray-500">{p.pitching?.velocity}km 制球{p.pitching?.control}</span>
-                    ) : (
-                      <span className="text-gray-500">ミ{p.batting?.meet} パ{p.batting?.power} 走{p.physical?.speed}</span>
-                    )}
-                  </div>
-                ))}
+      <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-4 flex items-center justify-center">
+        <div className="max-w-md w-full">
+          <div className={`rounded-xl p-6 border ${r.success ? 'bg-green-900/30 border-green-700/50' : 'bg-red-900/20 border-red-800/30'}`}>
+            <div className="text-center mb-4">
+              <span className={`text-2xl font-black ${r.success ? 'text-green-400' : 'text-red-400'}`}>
+                {r.success ? '入部決定!' : '辞退...'}
+              </span>
+            </div>
+            <div className="text-center mb-2">
+              <span className="text-white font-bold text-lg">{r.player.name}</span>
+              <span className="text-gray-400 text-sm ml-2">{POSITION_NAMES[r.player.position] || r.player.position}</span>
+            </div>
+            <div className="text-center text-gray-400 text-sm mb-1">{r.player._scoutSource}</div>
+            <div className="text-center text-gray-500 text-xs mb-4">交渉成功率: {r.rate}%</div>
+            {r.success && (
+              <div className="text-center text-green-300 text-sm mb-4">
+                スポーツ推薦枠で入部が決定しました (残り{remainingSlots - (r.success ? 1 : 0)}枠)
               </div>
             )}
-          </div>
-          <div className="text-center">
-            <button onClick={handleDone}
-              className="px-8 py-3 rounded-xl font-bold text-white bg-green-700 hover:bg-green-600 transition text-lg">
-              オフシーズンへ
-            </button>
+            {!r.success && (
+              <div className="text-center text-gray-400 text-sm mb-4">
+                他校への進学を選びました
+              </div>
+            )}
+            <div className="text-center">
+              <button onClick={() => setNegotiationResult(null)}
+                className="px-6 py-2 rounded-xl font-bold text-white bg-blue-700 hover:bg-blue-600 transition">
+                戻る
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // Scout phase
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
       <div className="max-w-5xl mx-auto">
@@ -227,29 +190,53 @@ const UniversityScoutScreen = ({ seasonData, onComplete }) => {
           <div>
             <h1 className="text-xl font-black text-white">スポーツ推薦スカウト</h1>
             <p className="text-gray-400 text-xs mt-0.5">
-              {userTeamName} ({rank}ランク) — 推薦枠: {remainingSlots}名残り (確保済{allRecruited.length}/{maxSlots})
+              {userTeamName} ({rank}ランク) — 推薦枠: {remainingSlots}/{maxSlots}名
+              {recruited.length > 0 && <span className="text-green-400 ml-2">確保済{recruited.length}名</span>}
             </p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={handleNegotiate}
-              disabled={selectedIds.length === 0}
-              className={`px-4 py-2 rounded-lg font-bold text-sm transition ${
-                selectedIds.length > 0 ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}>
-              交渉する ({selectedIds.length}名)
-            </button>
-            <button onClick={() => { setSelectedIds([]); handleFinalize(); }}
-              className="px-4 py-2 rounded-lg font-bold text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 transition">
-              スキップ
-            </button>
+          <div className="flex gap-2 items-center">
+            <div className="text-gray-500 text-xs mr-2">
+              調査: 5日 / 注目: +4%/週
+            </div>
+            {onComplete ? (
+              <button onClick={handleFinalize}
+                className="px-4 py-2 rounded-lg font-bold text-sm bg-green-700 hover:bg-green-600 text-white transition">
+                確定してオフシーズンへ
+              </button>
+            ) : onBack ? (
+              <button onClick={onBack}
+                className="px-4 py-2 rounded-lg font-bold text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 transition">
+                戻る
+              </button>
+            ) : null}
           </div>
         </div>
 
+        {recruited.length > 0 && (
+          <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-2 mb-3">
+            <div className="text-[10px] text-green-400 font-bold mb-1">確保済み選手</div>
+            <div className="flex flex-wrap gap-2">
+              {recruited.map((p, i) => (
+                <div key={i} className="bg-green-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
+                  <span className="text-white font-bold">{p.name}</span>
+                  <span className="text-green-300">{POSITION_NAMES[p.position]?.slice(0, 2)}</span>
+                  <span className="text-green-400/60">{p._scoutSource}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {candidates.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-lg mb-4">スカウト候補が見つかりませんでした</p>
-            <button onClick={handleDone} className="px-6 py-2 rounded-xl font-bold text-white bg-green-700 hover:bg-green-600">
-              オフシーズンへ
-            </button>
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg mb-4">
+              {highSchoolPool.players?.length > 0 ? 'スカウト候補が見つかりませんでした' : '高校生プールがまだ生成されていません (4月以降)'}
+            </p>
+            {onComplete && (
+              <button onClick={handleFinalize} className="px-6 py-2 rounded-xl font-bold text-white bg-green-700 hover:bg-green-600">
+                オフシーズンへ
+              </button>
+            )}
           </div>
         ) : (
           <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 overflow-hidden">
@@ -257,12 +244,12 @@ const UniversityScoutScreen = ({ seasonData, onComplete }) => {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-700/50 text-[10px]">
-                    <th className="py-1 px-1 text-gray-600 w-8"></th>
                     <SortHeader k="rec" label="推" w="w-8" />
                     <SortHeader k="name" label="名前" w="w-24" />
                     <th className="py-1 px-1 text-gray-500 w-10">守</th>
                     <SortHeader k="age" label="年" w="w-8" />
                     <th className="py-1 px-1 text-gray-500 w-16">出身</th>
+                    <th className="py-1 px-1 text-gray-500 w-10">情報</th>
                     <SortHeader k="velocity" label="球速" w="w-10" />
                     <SortHeader k="control" label="制球" w="w-10" />
                     <SortHeader k="stamina" label="ス" w="w-8" />
@@ -271,31 +258,30 @@ const UniversityScoutScreen = ({ seasonData, onComplete }) => {
                     <SortHeader k="eye" label="眼" w="w-8" />
                     <SortHeader k="speed" label="走" w="w-8" />
                     <SortHeader k="defense" label="守" w="w-8" />
-                    <SortHeader k="professionalism" label="意" w="w-8" />
                     <SortHeader k="rate" label="成功率" w="w-14" />
+                    <th className="py-1 px-1 text-gray-500 w-32">操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedCandidates.map((p, i) => {
+                  {sortedCandidates.map(p => {
                     const sa = p.scoutedAbilities || {};
-                    const isSelected = selectedIds.includes(p.id);
-                    const canSelect = isSelected || selectedIds.length < remainingSlots;
                     const recGrade = getUniversityScoutRecommendation(p, rank);
+                    const isInvestigating = p._investigating;
+                    const canInvestigate = !isInvestigating && (p._revealLevel || 0) < 2;
+                    const canRecruit = remainingSlots > 0 && !isInvestigating;
                     return (
-                      <tr key={p.id} onClick={() => canSelect && toggleSelect(p.id)}
-                        className={`border-b border-gray-800/50 cursor-pointer transition ${
-                          isSelected ? 'bg-blue-900/40' : 'hover:bg-gray-700/30'} ${!canSelect ? 'opacity-50' : ''}`}>
-                        <td className="py-1.5 px-1 text-center">
-                          <span className={`inline-block w-4 h-4 rounded border ${
-                            isSelected ? 'bg-blue-500 border-blue-400' : 'border-gray-600'}`}>
-                            {isSelected && <span className="text-white text-[10px]">✓</span>}
-                          </span>
-                        </td>
+                      <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-700/20 transition">
                         <td className={`py-1.5 px-1 text-center font-black ${recColor(recGrade)}`}>{recGrade}</td>
-                        <td className="py-1.5 px-1 text-white font-bold truncate max-w-[96px]">{p.name}</td>
+                        <td className="py-1.5 px-1">
+                          <div className="flex items-center gap-1">
+                            {p._watching && <span className="text-yellow-400 text-[10px]" title="注目中">★</span>}
+                            <span className="text-white font-bold truncate max-w-[96px]">{p.name}</span>
+                          </div>
+                        </td>
                         <td className="py-1.5 px-1 text-gray-400">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
                         <td className="py-1.5 px-1 text-gray-400 text-center">{p.age}</td>
                         <td className="py-1.5 px-1 text-gray-500 truncate max-w-[64px]">{p._scoutSource}</td>
+                        <td className="py-1.5 px-1 text-center">{revealLabel(p._revealLevel || 0)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
@@ -304,8 +290,37 @@ const UniversityScoutScreen = ({ seasonData, onComplete }) => {
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
-                        <td className="py-1.5 px-1 text-center">{renderVal(sa.professionalism)}</td>
-                        <td className={`py-1.5 px-1 text-center font-bold ${getRateColor(p.recruitRate)}`}>{p.recruitRate}%</td>
+                        <td className={`py-1.5 px-1 text-center font-bold ${getRateColor(p.recruitRate)}`}>
+                          {p.recruitRate}%
+                          {(p._watchBonus || 0) > 0 && <span className="text-yellow-500 text-[9px] ml-0.5">+{p._watchBonus}</span>}
+                        </td>
+                        <td className="py-1.5 px-1">
+                          <div className="flex gap-1">
+                            <button onClick={() => handleWatch(p.id)}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                                p._watching ? 'bg-yellow-700 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                              title={p._watching ? '注目解除' : '注目 (+4%/週)'}>
+                              {p._watching ? '★注目中' : '☆注目'}
+                            </button>
+                            {canInvestigate && (
+                              <button onClick={() => handleInvestigate(p.id)}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-800 text-cyan-200 hover:bg-cyan-700 transition">
+                                調査
+                              </button>
+                            )}
+                            {isInvestigating && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-400">
+                                調査中...
+                              </span>
+                            )}
+                            {canRecruit && (
+                              <button onClick={() => handleRecruit(p.id)}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-800 text-blue-200 hover:bg-blue-700 transition">
+                                交渉
+                              </button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}

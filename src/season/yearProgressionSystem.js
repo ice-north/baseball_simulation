@@ -2254,6 +2254,7 @@ export function advanceToNextYear(seasonData, allTeams) {
     WORLD_DATA.corporateNihonSenshuken = null;
     WORLD_DATA.corporateClubSenshuken = null;
     WORLD_DATA.corporateRegionalTournament = null;
+    WORLD_DATA._universityScout = null;
   }
 
   // 大学モード: リーグ再初期化後にスケジュール・順位表を設定

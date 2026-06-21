@@ -1479,7 +1479,7 @@ function isDatePassed(current, target) {
 
 // ============================================================
 // 大学モード スカウトシステム
-// 高校生プールからスポーツ推薦候補を発掘
+// 4月から高校生をスカウトし、調査・注目で交渉率を上げ、推薦枠で確保
 // ============================================================
 
 const UNI_SCOUT_SLOTS = { S: 8, A: 7, B: 5, C: 4, D: 3 };
@@ -1488,46 +1488,115 @@ export function getUniversityScoutSlots(rank) {
   return UNI_SCOUT_SLOTS[rank] || 5;
 }
 
-export function generateUniversityScoutCandidates(teamData, rank) {
+export function initUniversityScoutList(teamData, rank) {
   if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
 
   const reputation = teamData?.universityData?.reputation || 30;
   const reputationMult = 0.8 + (reputation / 100) * 0.4;
-
   const candidateCount = Math.min(20, Math.max(8, Math.round(6 + reputation / 10)));
 
-  const scored = highSchoolPool.players.map((p, idx) => {
-    const base = evaluatePlayerScore(p);
-    const fame = p.fame || 0;
-    const noise = (Math.random() - 0.5) * 25;
-    const repBonus = (reputationMult - 1.0) * 15;
-    const discoveryPenalty = -((100 - fame) / 100) * 20;
-    return { player: p, poolIndex: idx, score: base + noise + repBonus + discoveryPenalty };
-  });
+  const scored = highSchoolPool.players
+    .filter(p => !p._universityReserved)
+    .map((p, idx) => {
+      const base = evaluatePlayerScore(p);
+      const fame = p.fame || 0;
+      const noise = (Math.random() - 0.5) * 25;
+      const repBonus = (reputationMult - 1.0) * 15;
+      const discoveryPenalty = -((100 - fame) / 100) * 20;
+      return { player: p, poolIndex: idx, score: base + noise + repBonus + discoveryPenalty };
+    });
   scored.sort((a, b) => b.score - a.score);
 
-  const selected = scored.slice(0, candidateCount);
-
-  return selected.map(entry => {
+  return scored.slice(0, candidateCount).map(entry => {
     const p = JSON.parse(JSON.stringify(entry.player));
-    const accuracy = 50 + Math.floor(reputation * 0.3) + Math.floor(Math.random() * 10);
-    p.scoutAccuracy = Math.min(85, accuracy);
-    p.scoutedAbilities = obscureAbilities(p, p.scoutAccuracy, 'secondary');
+    const accuracy = 40 + Math.floor(reputation * 0.2) + Math.floor(Math.random() * 10);
+    p.scoutAccuracy = Math.min(75, accuracy);
+    p.scoutedAbilities = obscureAbilities(p, p.scoutAccuracy, 'primary');
     p._poolRef = { source: 'highschool', poolIndex: entry.poolIndex };
     p._scoutSource = p.highSchool?.name ? p.highSchool.name : '高校';
-    p._originalScore = entry.score;
-    p.recruitRate = calculateUniversityRecruitRate(p, rank, reputation);
+    p._revealLevel = 0;
+    p._investigationCount = 0;
+    p._watchBonus = 0;
+    p._investigating = false;
+    p._investigateReturn = null;
+    p.recruitRate = calculateUniversityRecruitRate(p, rank, reputation, 0);
     return p;
   });
 }
 
-function calculateUniversityRecruitRate(player, uniRank, reputation) {
+function calculateUniversityRecruitRate(player, uniRank, reputation, watchBonus = 0) {
   const baseRate = 0.30 + (reputation / 100) * 0.50;
   const playerScore = evaluatePlayerScore(player);
   const qualityPenalty = Math.max(-0.05, Math.min(0.25, (playerScore - 50) / 200));
   const rankBonus = { S: 0.12, A: 0.06, B: 0, C: -0.06, D: -0.12 }[uniRank] || 0;
-  const rate = baseRate - qualityPenalty + rankBonus;
-  return Math.max(5, Math.min(90, Math.round(rate * 100)));
+  const invBonus = (player._investigationCount || 0) * 0.08;
+  const wBonus = (watchBonus || player._watchBonus || 0) / 100;
+  const rate = baseRate - qualityPenalty + rankBonus + invBonus + wBonus;
+  return Math.max(5, Math.min(95, Math.round(rate * 100)));
+}
+
+export function startUniversityInvestigation(candidate, currentDate) {
+  if (candidate._investigating) return false;
+  if ((candidate._revealLevel || 0) >= 2) return false;
+  candidate._investigating = true;
+  const d = new Date(currentDate.year, currentDate.month - 1, currentDate.day);
+  d.setDate(d.getDate() + 5);
+  candidate._investigateReturn = { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+  return true;
+}
+
+export function processUniversityScoutDay(candidates, currentDate, uniRank, reputation) {
+  if (!candidates || candidates.length === 0) return [];
+  const completed = [];
+  const cd = currentDate.year * 10000 + currentDate.month * 100 + currentDate.day;
+
+  for (const c of candidates) {
+    if (c._investigating && c._investigateReturn) {
+      const rd = c._investigateReturn.year * 10000 + c._investigateReturn.month * 100 + c._investigateReturn.day;
+      if (cd >= rd) {
+        c._investigating = false;
+        c._investigateReturn = null;
+        c._investigationCount = (c._investigationCount || 0) + 1;
+        c._revealLevel = Math.min(2, (c._revealLevel || 0) + 1);
+        const stage = c._revealLevel === 1 ? 'secondary' : 'full';
+        const newAccuracy = Math.min(90, (c.scoutAccuracy || 50) + 10);
+        c.scoutAccuracy = newAccuracy;
+        c.scoutedAbilities = obscureAbilities(c, newAccuracy, stage);
+        c.recruitRate = calculateUniversityRecruitRate(c, uniRank, reputation);
+        completed.push(c);
+      }
+    }
+  }
+
+  // Weekly watch bonus
+  for (const c of candidates) {
+    if (c._watching) {
+      if (!c._watchStart) {
+        c._watchStart = cd;
+        c._lastWatchAdvance = cd;
+      }
+      if (c._lastWatchAdvance) {
+        const diff = dateDiffDays(c._lastWatchAdvance, cd);
+        if (diff >= 7) {
+          const weeks = Math.floor(diff / 7);
+          c._watchBonus = (c._watchBonus || 0) + weeks * 4;
+          c._lastWatchAdvance = cd;
+          c.recruitRate = calculateUniversityRecruitRate(c, uniRank, reputation);
+        }
+      }
+    }
+  }
+
+  return completed;
+}
+
+export function toggleUniversityWatch(candidate) {
+  candidate._watching = !candidate._watching;
+  if (!candidate._watching) {
+    candidate._watchStart = null;
+    candidate._lastWatchAdvance = null;
+  }
+  return candidate._watching;
 }
 
 export function attemptUniversityRecruit(player, uniRank, reputation) {

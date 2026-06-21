@@ -139,19 +139,23 @@ const ManagementScreen = ({
       setManagementView('dateprogress');
     }}
   />;
-  if (managementView === 'university_scout') return <UniversityScoutScreen
-    seasonData={seasonData}
-    onComplete={(recruited) => {
-      const newData = {
-        ...seasonData,
-        currentDate: { ...seasonData.currentDate, month: 11, day: 15 },
-        phase: 'off_season',
-        universityRecruits: recruited?.map(p => ({ id: p.id, name: p.name, position: p.position, source: p._scoutSource })) || [],
-      };
-      setSeasonData(newData);
-      setManagementView('dateprogress');
-    }}
-  />;
+  if (managementView === 'university_scout') {
+    const isForced = seasonData.currentDate?.month === 11 && seasonData.currentDate?.day >= 10;
+    return <UniversityScoutScreen
+      seasonData={seasonData}
+      onBack={!isForced ? () => setManagementView('dateprogress') : null}
+      onComplete={isForced ? (recruited) => {
+        const newData = {
+          ...seasonData,
+          currentDate: { ...seasonData.currentDate, month: 11, day: 15 },
+          phase: 'off_season',
+          universityRecruits: recruited?.map(p => ({ id: p.id, name: p.name, position: p.position, source: p._scoutSource })) || [],
+        };
+        setSeasonData(newData);
+        setManagementView('dateprogress');
+      } : null}
+    />;
+  }
   if (managementView === 'budget_settlement') return <BudgetSettlementScreen
     seasonData={seasonData}
     onComplete={(penalties) => {

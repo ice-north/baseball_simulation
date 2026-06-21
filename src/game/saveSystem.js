@@ -122,6 +122,7 @@ export const saveGameToSlot = async (slotIndex, gameState) => {
       } : null,
       corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? { done: true } : null,
       universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
+      _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
     } : null;
 
     const saveData = {
@@ -223,6 +224,7 @@ export const loadGameFromSlot = async (slotIndex) => {
       WORLD_DATA.corporateClubSenshuken = wd.corporateClubSenshuken || null;
       WORLD_DATA.corporateRegionalTournament = wd.corporateRegionalTournament || null;
       WORLD_DATA.universityLeague = wd.universityLeague || null;
+      WORLD_DATA._universityScout = wd._universityScout || null;
     }
 
     // 大学プール復元
