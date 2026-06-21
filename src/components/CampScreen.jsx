@@ -282,6 +282,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
   const [dispatchConfirm, setDispatchConfirm] = useState(null); // { playerId, destKey }
   const [dispatchResults, setDispatchResults] = useState([]); // キャンプ終了時の派遣結果表示
   const [updateKey, setUpdateKey] = useState(0); // 再レンダリング用
+  const [sortKey, setSortKey] = useState('position');
+  const [sortAsc, setSortAsc] = useState(true);
 
   // キャンプ開始時のステータスを保存（成長合計計算用）
   const [preCampStats] = useState(() => {
@@ -309,12 +311,40 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
     setUpdateKey(prev => prev + 1);
   };
 
-  // POSITION_ORDER imported from constants
+  const toggleSort = (key) => {
+    if (sortKey === key) { setSortAsc(!sortAsc); }
+    else { setSortKey(key); setSortAsc(key === 'position'); }
+  };
   const sortedPlayers = [...(userTeam?.players || [])].sort((a, b) => {
+    const dir = sortAsc ? 1 : -1;
+    const getVal = (p) => {
+      switch (sortKey) {
+        case 'position': return POSITION_ORDER.indexOf(p.position);
+        case 'age': return p.age || 20;
+        case 'growth': return (p.growthPotential ?? 1.0) + (p.growthModifier || 0);
+        case 'discipline': return p.personality?.discipline || 0;
+        case 'mental': return p.personality?.mental || 0;
+        case 'meet': return p.batting?.meet || 0;
+        case 'power': return p.batting?.power || 0;
+        case 'speed': return p.physical?.speed || 0;
+        case 'arm': return p.physical?.arm || 0;
+        case 'defense': return p.fielding?.defense || 0;
+        case 'clead': return p.catching?.lead || 0;
+        case 'eye': return p.batting?.eye || 0;
+        case 'bunt': return p.batting?.bunt || 0;
+        case 'velocity': return p.pitching?.velocity || 0;
+        case 'control': return p.pitching?.control || 0;
+        case 'stamina': return p.pitching?.stamina || 0;
+        case 'bodyStamina': return p.physical?.bodyStamina || 0;
+        case 'recovery': return p.physical?.recovery || 0;
+        default: return 0;
+      }
+    };
+    const diff = (getVal(a) - getVal(b)) * dir;
+    if (diff !== 0) return diff;
     const posA = POSITION_ORDER.indexOf(a.position);
     const posB = POSITION_ORDER.indexOf(b.position);
-    if (posA !== posB) return posA - posB;
-    return (b.age || 20) - (a.age || 20);
+    return posA - posB;
   });
 
   const isPitcher = (player) => player.position === 'pitcher';
@@ -771,30 +801,41 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
-                    <th className="py-1.5 px-2 text-left w-20">選手</th>
-                    <th className="py-1.5 px-1 text-center w-7">位</th>
-                    <th className="py-1.5 px-1 text-center w-6">齢</th>
-                    <th className="py-1.5 px-1 text-center w-10" title="成長率 (基礎+変動)">成長</th>
-                    <th className="py-1.5 px-1 text-center w-8" title="プロ意識">プ意</th>
-                    <th className="py-1.5 px-1 text-center w-8" title="精神力">精神</th>
-                    <th className="py-1.5 px-1 text-center w-8">投/打</th>
-                    <th className="py-1.5 px-1 text-center w-12">フォーム</th>
-                    <th className="py-1.5 px-1 text-center w-8">ミト</th>
-                    <th className="py-1.5 px-1 text-center w-8">パワ</th>
-                    <th className="py-1.5 px-1 text-center w-8">走力</th>
-                    <th className="py-1.5 px-1 text-center w-8">肩力</th>
-                    <th className="py-1.5 px-1 text-center w-8">守備</th>
-                    <th className="py-1.5 px-1 text-center w-8">Cリ</th>
-                    <th className="py-1.5 px-1 text-center w-8">選球</th>
-                    <th className="py-1.5 px-1 text-center w-8">バン</th>
-                    <th className="py-1.5 px-1 text-center w-9">球速</th>
-                    <th className="py-1.5 px-1 text-center w-8">制球</th>
-                    <th className="py-1.5 px-1 text-center w-8">伸び</th>
-                    <th className="py-1.5 px-1 text-center w-9">スタ</th>
-                    <th className="py-1.5 px-1 text-center w-8">体力</th>
-                    <th className="py-1.5 px-1 text-center w-8">回復</th>
-                    <th className="py-1.5 px-2 text-left">変化球</th>
-                    <th className="py-1.5 px-2 text-left">前年成績</th>
+                    {(() => {
+                      const S = ({ k, w, children, title, align = 'center' }) => (
+                        <th className={`py-1.5 px-1 ${align === 'left' ? 'text-left px-2' : 'text-center'} ${w || ''}`} title={title}>
+                          <button onClick={() => toggleSort(k)} className={`hover:text-white transition ${sortKey === k ? 'text-yellow-400' : ''}`}>
+                            {children}{sortKey === k ? (sortAsc ? '↑' : '↓') : ''}
+                          </button>
+                        </th>
+                      );
+                      return (<>
+                        <th className="py-1.5 px-2 text-left w-20">選手</th>
+                        <S k="position" w="w-7">位</S>
+                        <S k="age" w="w-6">齢</S>
+                        <S k="growth" w="w-10" title="成長率 (基礎+変動)">成長</S>
+                        <S k="discipline" w="w-8" title="プロ意識">プ意</S>
+                        <S k="mental" w="w-8" title="精神力">精神</S>
+                        <th className="py-1.5 px-1 text-center w-8">投/打</th>
+                        <th className="py-1.5 px-1 text-center w-12">フォーム</th>
+                        <S k="meet" w="w-8">ミト</S>
+                        <S k="power" w="w-8">パワ</S>
+                        <S k="speed" w="w-8">走力</S>
+                        <S k="arm" w="w-8">肩力</S>
+                        <S k="defense" w="w-8">守備</S>
+                        <S k="clead" w="w-8">Cリ</S>
+                        <S k="eye" w="w-8">選球</S>
+                        <S k="bunt" w="w-8">バン</S>
+                        <S k="velocity" w="w-9">球速</S>
+                        <S k="control" w="w-8">制球</S>
+                        <th className="py-1.5 px-1 text-center w-8">伸び</th>
+                        <S k="stamina" w="w-9">スタ</S>
+                        <S k="bodyStamina" w="w-8">体力</S>
+                        <S k="recovery" w="w-8">回復</S>
+                        <th className="py-1.5 px-2 text-left">変化球</th>
+                        <th className="py-1.5 px-2 text-left">前年成績</th>
+                      </>);
+                    })()}
                     {/* サブポジション適性 */}
                     {subPosHeaders.map(pos => (
                       <th key={pos} className="py-1.5 px-0.5 text-center w-6" title={POSITION_NAMES[pos]}>{subPosShort[pos]}</th>
