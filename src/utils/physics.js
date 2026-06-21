@@ -86,6 +86,18 @@ export const getPositionFitness = (player, pos, defaultValue = 50) => {
   return player.positionFitness[pos] ?? defaultValue;
 };
 
+export const syncPositionToFitness = (player) => {
+  if (!player?.positionFitness || player.position === 'pitcher') return;
+  const positions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  let bestPos = player.position;
+  let bestVal = player.positionFitness[bestPos] || 0;
+  for (const pos of positions) {
+    const val = player.positionFitness[pos] || 0;
+    if (val > bestVal) { bestVal = val; bestPos = pos; }
+  }
+  if (bestPos !== player.position) player.position = bestPos;
+};
+
 /**
  * スタミナによる能力補正を計算
  * @param {number} currentStamina - 現在のスタミナ

@@ -5,6 +5,7 @@
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { syncPositionToFitness } from '../utils/physics.js';
 
 // 練習カテゴリ → スタッフ指導能力のマッピング
 const CATEGORY_TO_STAFF_ABILITY = {
@@ -531,6 +532,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         player.positionFitness[picked] = Math.min(100, old + baseGain);
         const actual = player.positionFitness[picked] - old;
         growthReport.push({ statName: `${POSITION_NAMES_MAP[picked] || picked}適正`, before: old, after: player.positionFitness[picked], growth: actual });
+        syncPositionToFitness(player);
       }
       break;
     }

@@ -10,6 +10,7 @@ import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRa
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import { syncPositionToFitness } from '../utils/physics.js';
 
 export const HIGH_SCHOOL_CLASS_SIZE = 5000;
 
@@ -765,6 +766,7 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
         const gain = Math.floor(Math.random() * 8) + (hasSubPosChance ? 7 : 4);
         player.positionFitness[picked] = Math.min(100, old + gain);
       }
+      syncPositionToFitness(player);
     }
   }
 
