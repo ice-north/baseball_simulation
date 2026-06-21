@@ -1495,6 +1495,9 @@ export function initUniversityScoutList(teamData, rank) {
   const reputationMult = 0.8 + (reputation / 100) * 0.4;
   const candidateCount = Math.min(20, Math.max(8, Math.round(6 + reputation / 10)));
 
+  const rankDiscoveryMult = { S: 0.2, A: 0.5, B: 1.0, C: 1.2, D: 1.5 }[rank] || 1.0;
+  const rankAbilityBonus = { S: 12, A: 6, B: 0, C: -3, D: -6 }[rank] || 0;
+
   const scored = highSchoolPool.players
     .filter(p => !p._universityReserved)
     .map((p, idx) => {
@@ -1502,8 +1505,8 @@ export function initUniversityScoutList(teamData, rank) {
       const fame = p.fame || 0;
       const noise = (Math.random() - 0.5) * 25;
       const repBonus = (reputationMult - 1.0) * 15;
-      const discoveryPenalty = -((100 - fame) / 100) * 20;
-      return { player: p, poolIndex: idx, score: base + noise + repBonus + discoveryPenalty };
+      const discoveryPenalty = -((100 - fame) / 100) * 20 * rankDiscoveryMult;
+      return { player: p, poolIndex: idx, score: base + noise + repBonus + discoveryPenalty + rankAbilityBonus };
     });
   scored.sort((a, b) => b.score - a.score);
 
@@ -1527,8 +1530,10 @@ export function initUniversityScoutList(teamData, rank) {
 function calculateUniversityRecruitRate(player, uniRank, reputation, watchBonus = 0) {
   const baseRate = 0.30 + (reputation / 100) * 0.50;
   const playerScore = evaluatePlayerScore(player);
-  const qualityPenalty = Math.max(-0.05, Math.min(0.25, (playerScore - 50) / 200));
-  const rankBonus = { S: 0.12, A: 0.06, B: 0, C: -0.06, D: -0.12 }[uniRank] || 0;
+  const rawPenalty = Math.max(-0.05, Math.min(0.30, (playerScore - 50) / 200));
+  const qualityMult = { S: 0.15, A: 0.45, B: 1.0, C: 1.25, D: 1.5 }[uniRank] || 1.0;
+  const qualityPenalty = rawPenalty * qualityMult;
+  const rankBonus = { S: 0.15, A: 0.08, B: 0, C: -0.06, D: -0.12 }[uniRank] || 0;
   const invBonus = (player._investigationCount || 0) * 0.08;
   const wBonus = (watchBonus || player._watchBonus || 0) / 100;
   const rate = baseRate - qualityPenalty + rankBonus + invBonus + wBonus;
