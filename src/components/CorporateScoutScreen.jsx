@@ -344,6 +344,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                 <SortHeader k="rec" label="推薦" />
                 <SortHeader k="name" label="選手名" />
                 <SortHeader k="age" label="齢" />
+                <th className="px-1.5 py-2 text-gray-500 whitespace-nowrap">体</th>
                 <th className="px-1.5 py-2 text-gray-500 whitespace-nowrap">守備</th>
                 <th className="px-1.5 py-2 text-gray-500 whitespace-nowrap min-w-[5rem]">出身</th>
                 <SortHeader k="meet" label="ミ" />
@@ -392,6 +393,11 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                     </td>
                     <td className="px-1.5 py-2 text-white font-bold whitespace-nowrap">{player.name}</td>
                     <td className="px-1.5 py-2 text-gray-400 text-center">{player.age}</td>
+                    <td className="px-1.5 py-2 text-center">
+                      <span className={player.physical?.build === 'large' ? 'text-orange-400' : player.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
+                        {player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}
+                      </span>
+                    </td>
                     <td className="px-1.5 py-2 text-yellow-400 text-center font-bold">{POSITION_NAMES[player.position]}</td>
                     <td className="px-1.5 py-2 text-cyan-400 whitespace-nowrap">{player._scoutSource}</td>
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.batting?.meet)}</td>

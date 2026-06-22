@@ -204,6 +204,7 @@ const PlayerSearchScreen = ({ onBack }) => {
                 <th className="py-1 px-2 text-left w-20">選手</th>
                 <th className="py-1 px-1 text-center w-6">位</th>
                 <SortTh k="age" w="w-6">齢</SortTh>
+                <th className="py-1 px-1 text-center w-7">体</th>
                 <th className="py-1 px-1 text-left w-24 max-w-[96px] truncate">所属</th>
                 <SortTh k="meet" w="w-7">ミ</SortTh>
                 <SortTh k="power" w="w-7">パ</SortTh>
@@ -228,6 +229,11 @@ const PlayerSearchScreen = ({ onBack }) => {
                   <td className="py-0.5 px-2 font-bold text-xs truncate max-w-[80px]">{p.name}</td>
                   <td className="py-0.5 px-1 text-center text-gray-500">{POSITION_NAMES[p.position] || p.position}</td>
                   <td className="py-0.5 px-1 text-center text-gray-500">{p.age || '?'}</td>
+                  <td className="py-0.5 px-1 text-center">
+                    <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
+                      {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
+                    </span>
+                  </td>
                   <td className="py-0.5 px-1 text-left text-gray-500 truncate max-w-[96px]" title={p._sourceLabel}>{p._sourceLabel}</td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.meet || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.power || 0} /></td>
@@ -250,7 +256,7 @@ const PlayerSearchScreen = ({ onBack }) => {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={16} className="py-8 text-center text-gray-500">条件に一致する選手が見つかりません</td></tr>
+                <tr><td colSpan={17} className="py-8 text-center text-gray-500">条件に一致する選手が見つかりません</td></tr>
               )}
             </tbody>
           </table>
@@ -262,6 +268,9 @@ const PlayerSearchScreen = ({ onBack }) => {
             <div className="flex items-center gap-3 mb-2">
               <span className={`font-bold text-base ${selectedPlayer.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{selectedPlayer.name}</span>
               <span className="text-gray-400 text-sm">{POSITION_NAMES[selectedPlayer.position]} / {selectedPlayer.age}歳</span>
+              <span className={`text-xs ${selectedPlayer.physical?.build === 'large' ? 'text-orange-400' : selectedPlayer.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}`}>
+                {selectedPlayer.physical?.build === 'large' ? '大柄' : selectedPlayer.physical?.build === 'small' ? '小柄' : '中肉'}
+              </span>
               <span className="text-gray-500 text-xs">{selectedPlayer._sourceLabel}</span>
               <button onClick={() => setSelectedPlayer(null)} className="ml-auto text-gray-500 hover:text-white">✕</button>
             </div>

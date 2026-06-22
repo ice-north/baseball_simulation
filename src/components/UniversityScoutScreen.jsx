@@ -248,6 +248,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     <SortHeader k="name" label="名前" w="w-24" />
                     <th className="py-1 px-1 text-gray-500 w-10">守</th>
                     <SortHeader k="age" label="年" w="w-8" />
+                    <th className="py-1 px-1 text-gray-500 w-8">体</th>
                     <th className="py-1 px-1 text-gray-500 w-16">出身</th>
                     <th className="py-1 px-1 text-gray-500 w-10">情報</th>
                     <SortHeader k="velocity" label="球速" w="w-10" />
@@ -280,6 +281,11 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                         </td>
                         <td className="py-1.5 px-1 text-gray-400">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
                         <td className="py-1.5 px-1 text-gray-400 text-center">{p.age}</td>
+                        <td className="py-1.5 px-1 text-center">
+                          <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
+                            {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
+                          </span>
+                        </td>
                         <td className="py-1.5 px-1 text-gray-500 truncate max-w-[64px]">{p._scoutSource}</td>
                         <td className="py-1.5 px-1 text-center">{revealLabel(p._revealLevel || 0)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>

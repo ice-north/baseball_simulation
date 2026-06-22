@@ -321,6 +321,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
       switch (sortKey) {
         case 'position': return POSITION_ORDER.indexOf(p.position);
         case 'age': return p.age || 20;
+        case 'build': return p.physical?.build === 'large' ? 2 : p.physical?.build === 'small' ? 0 : 1;
         case 'growth': return (p.growthPotential ?? 1.0) + (p.growthModifier || 0);
         case 'discipline': return p.personality?.discipline || 0;
         case 'mental': return p.personality?.mental || 0;
@@ -813,6 +814,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                         <th className="py-1.5 px-2 text-left w-20">選手</th>
                         <S k="position" w="w-7">位</S>
                         <S k="age" w="w-6">齢</S>
+                        <S k="build" w="w-7" title="体格">体</S>
                         <S k="growth" w="w-10" title="成長率 (基礎+変動)">成長</S>
                         <S k="discipline" w="w-8" title="プロ意識">プ意</S>
                         <S k="mental" w="w-8" title="精神力">精神</S>
@@ -867,6 +869,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                           <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
                         </td>
                         <td className="py-1 px-1 text-center text-gray-500 text-[10px]">{player.age || 20}</td>
+                        <td className="py-1 px-1 text-center text-[10px]">
+                          <span className={ph.build === 'large' ? 'text-orange-400' : ph.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
+                            {ph.build === 'large' ? '大柄' : ph.build === 'small' ? '小柄' : '中肉'}
+                          </span>
+                        </td>
                         <td className="py-1 px-1 text-center text-[10px]">
                           {(() => {
                             const base = player.growthPotential ?? 1.0;
