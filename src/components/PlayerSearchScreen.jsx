@@ -72,6 +72,7 @@ const PlayerSearchScreen = ({ onBack }) => {
   const [filters, setFilters] = useState(() => JSON.parse(JSON.stringify(DEFAULT_FILTERS)));
   const [sources, setSources] = useState({ highschool: true, university: true, released: true, teams: false });
   const [posFilter, setPosFilter] = useState('all');
+  const [nameQuery, setNameQuery] = useState('');
   const [sortKey, setSortKey] = useState('meet');
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
@@ -80,6 +81,11 @@ const PlayerSearchScreen = ({ onBack }) => {
 
   const filtered = useMemo(() => {
     let list = allPlayers.filter(p => sources[p._source]);
+
+    if (nameQuery.trim()) {
+      const q = nameQuery.trim();
+      list = list.filter(p => p.name?.includes(q) || p._sourceLabel?.includes(q));
+    }
 
     if (posFilter === 'pitcher') list = list.filter(p => p.position === 'pitcher');
     else if (posFilter === 'fielder') list = list.filter(p => p.position !== 'pitcher');
@@ -102,7 +108,7 @@ const PlayerSearchScreen = ({ onBack }) => {
     });
 
     return list.slice(0, 200);
-  }, [allPlayers, sources, posFilter, filters, sortKey, sortAsc]);
+  }, [allPlayers, sources, posFilter, nameQuery, filters, sortKey, sortAsc]);
 
   const updateFilter = (key, field, value) => {
     setFilters(prev => ({
@@ -119,6 +125,7 @@ const PlayerSearchScreen = ({ onBack }) => {
   const resetFilters = () => {
     setFilters(JSON.parse(JSON.stringify(DEFAULT_FILTERS)));
     setPosFilter('all');
+    setNameQuery('');
   };
 
   const SortTh = ({ k, children, w }) => (
@@ -160,6 +167,19 @@ const PlayerSearchScreen = ({ onBack }) => {
             >{p.label}</button>
           ))}
           <button onClick={resetFilters} className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-400 hover:bg-red-700 hover:text-white transition ml-auto">リセット</button>
+        </div>
+
+        {/* Name search */}
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="text"
+            value={nameQuery}
+            onChange={e => setNameQuery(e.target.value)}
+            placeholder="選手名・所属で検索..."
+            className="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 w-64 focus:outline-none focus:border-blue-500"
+          />
+          {nameQuery && <button onClick={() => setNameQuery('')} className="text-gray-500 hover:text-white text-sm">✕</button>}
+          <span className="text-gray-600 text-[10px] ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
         </div>
 
         {/* Filters */}
