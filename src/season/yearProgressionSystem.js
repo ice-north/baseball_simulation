@@ -1374,6 +1374,19 @@ export function updateGrowthModifiers(allTeams, awards) {
     if (!team.players) return;
     const isChampion = teamName === championTeam;
 
+    // ベテラン指導力: 30歳以上でdiscipline/mentalが高い選手が若手の成長を促進
+    const veterans = team.players.filter(p => (p.age || 18) >= 30);
+    let veteranBonus = 0;
+    for (const vet of veterans) {
+      const disc = vet.discipline || 50;
+      const ment = vet.mental || 50;
+      const leadership = (disc + ment) / 2;
+      if (leadership >= 60) {
+        veteranBonus += 0.01 + (leadership - 60) * 0.0005;
+      }
+    }
+    veteranBonus = Math.min(0.06, Math.round(veteranBonus * 1000) / 1000);
+
     team.players.forEach(player => {
       // 年齢による成長ポテンシャル減衰: 24歳から(age-23)*0.05ずつ加速
       const age = player.age || 18;
@@ -1387,6 +1400,11 @@ export function updateGrowthModifiers(allTeams, awards) {
 
       if (isChampion) {
         modifier += 0.05;
+      }
+
+      // ベテラン指導力: 25歳以下の若手にのみ適用
+      if (age <= 25 && veteranBonus > 0) {
+        modifier += veteranBonus;
       }
 
       player.growthModifier = Math.max(-0.3, Math.round(modifier * 100) / 100);

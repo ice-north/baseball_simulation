@@ -94,15 +94,34 @@ export const canHireGrade = (teamRank, staffGrade) => {
 
 export const MAX_STAFF = 10;
 
-// 給与計算（選手・スタッフ共通）: 高卒1年目400万、年齢+1ごとに+20万
+// 給与計算: スタッフは年齢ベース、選手は年功+能力ベース
 const BASE_SALARY = 400;
 const SALARY_PER_AGE = 20;
 
 export const getStaffSalary = (staff) =>
   BASE_SALARY + ((staff.age || 35) - 18) * SALARY_PER_AGE;
 
-export const getPlayerSalary = (player) =>
-  BASE_SALARY + ((player.age || 18) - 18) * SALARY_PER_AGE;
+const getPlayerOverall = (player) => {
+  if (player.position === 'pitcher') {
+    const v = player.pitching?.velocity || 0;
+    const c = player.pitching?.control || 0;
+    const s = player.pitching?.stamina || 0;
+    return Math.round((v - 100) * 1.5 + c * 0.8 + s * 0.3);
+  }
+  const m = player.batting?.meet || 0;
+  const p = player.batting?.power || 0;
+  const e = player.batting?.eye || 0;
+  const sp = player.physical?.speed || 0;
+  const d = player.fielding?.defense || 0;
+  return Math.round(m + p + e * 0.5 + sp * 0.3 + d * 0.3);
+};
+
+export const getPlayerSalary = (player) => {
+  const age = player.age || 18;
+  const seniority = Math.min(15, Math.max(0, age - 18));
+  const overall = Math.max(0, getPlayerOverall(player));
+  return BASE_SALARY + seniority * 8 + overall * 2;
+};
 
 // ============================================================
 // スタッフ生成
