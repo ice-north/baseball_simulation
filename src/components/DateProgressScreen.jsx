@@ -2028,8 +2028,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                 const name = getTournamentName(cell.tournamentEvents[0]?.type);
                                 return <div className={`text-[9px] font-bold leading-tight ${hasAnyDone ? 'text-gray-500' : 'text-orange-400'}`}>{name}</div>;
                               }
-                              return userRegionEvents.map((t, ti) => {
-                                const label = isMainType(t.type) ? (t.label || '本戦') : t.label || '予選';
+                              const deduped = [];
+                              const seen = new Set();
+                              for (const t of userRegionEvents) {
+                                const lbl = isMainType(t.type) ? (t.label || '本戦') : t.label || '予選';
+                                const key = `${getTournamentName(t.type)}_${lbl}_${t.isUserMatch}`;
+                                if (seen.has(key)) continue;
+                                seen.add(key);
+                                deduped.push(t);
+                              }
+                              return deduped.map((t, ti) => {
+                                const rawLabel = isMainType(t.type) ? (t.label || '本戦') : t.label || '予選';
+                                const tournamentCount = new Set(userRegionEvents.map(e => getTournamentName(e.type))).size;
+                                const label = tournamentCount > 1 ? `${getTournamentName(t.type)} ${rawLabel}` : rawLabel;
                                 const color = t.isUserMatch ? 'text-yellow-400' : t.done ? 'text-gray-500' : 'text-orange-400';
                                 return <div key={ti} className={`text-[9px] font-bold leading-tight ${color}`}>{label}{t.isUserMatch ? '⚾' : ''}</div>;
                               });
