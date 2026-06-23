@@ -314,6 +314,7 @@ export const generateStaffMarket = (count = 15, teamRank = null) => {
 // ============================================================
 
 // チーム全スタッフの合算能力を返す
+// 最高値ベース: エースコーチの実力が基盤、サブスタッフは補助的に底上げ
 export const getTeamStaffBonus = (staffList) => {
   const bonus = {};
   for (const key of STAFF_ABILITY_KEYS) {
@@ -322,16 +323,12 @@ export const getTeamStaffBonus = (staffList) => {
 
   if (!staffList || staffList.length === 0) return bonus;
 
-  for (const staff of staffList) {
-    for (const key of STAFF_ABILITY_KEYS) {
-      bonus[key] += staff.abilities[key] || 0;
-    }
-  }
-
-  // 平均値ベースだが、人数が多いほどわずかにボーナス（最大+10%）
-  const headcountBonus = 1.0 + Math.min(0.10, (staffList.length - 1) * 0.02);
   for (const key of STAFF_ABILITY_KEYS) {
-    bonus[key] = Math.round((bonus[key] / staffList.length) * headcountBonus);
+    const values = staffList.map(s => s.abilities[key] || 0);
+    const maxVal = Math.max(...values);
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const headcountBonus = Math.min(0.10, (staffList.length - 1) * 0.02);
+    bonus[key] = Math.round(maxVal * 0.8 + avg * 0.2 + maxVal * headcountBonus);
   }
 
   return bonus;
