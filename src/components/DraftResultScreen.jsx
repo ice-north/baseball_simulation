@@ -809,7 +809,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
         <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">全球団指名一覧</h1>
       </div>
-      <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
         {summaryGrid.map(team => {
           const picks = teamPicks[team.name] || [];
           if (picks.length === 0) return null;
@@ -839,15 +839,15 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                       )}
                       <div className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
                            onClick={() => setSelectedEntry(entry)}>
-                        <div className="flex items-baseline gap-2 flex-wrap">
+                        <div className="flex items-baseline gap-1.5 whitespace-nowrap overflow-hidden">
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                             isFirst ? 'bg-red-100 text-red-700' :
                             entry.draftRound.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
                           }`}>{displayLabel}</span>
-                          <span className="text-gray-900 font-bold text-sm">{entry.name}</span>
+                          <span className="text-gray-900 font-bold text-sm shrink-0">{entry.name}</span>
                           <span className="text-gray-500 text-xs shrink-0">({entry.age})</span>
                           <span className="text-gray-500 text-xs shrink-0">{DRAFT_POSITION_NAMES[entry.position] || entry.position}</span>
-                          <span className="text-gray-400 text-xs">{entry.teamName}</span>
+                          <span className="text-gray-400 text-xs truncate">{entry.teamName}</span>
                         </div>
                       </div>
                     </div>
@@ -927,7 +927,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
               const filteredReasons = entry.reasons.filter(r => !/ミート|パワー|選球眼|走力|守備|肩力|盗塁|球速|制球|スタミナ|俊足/.test(r));
               return (
                 <div key={idx} className={`draft-card bg-gray-700/60 rounded-xl p-3.5 ${style.border} ${style.glow}`} style={{ animationDelay: `${idx * 0.07}s` }}>
-                  <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="flex items-center gap-2.5 whitespace-nowrap overflow-hidden">
                     <span className={`font-black text-sm px-2.5 py-1 rounded-lg shrink-0 ${style.badge}`}>{entry.draftRound || '指名'}</span>
                     <span className="text-yellow-300 font-bold text-base shrink-0 flex items-center gap-1">
                       <TeamFlag teamName={entry.npbTeam} size={16} />
