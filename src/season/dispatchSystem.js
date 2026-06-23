@@ -24,8 +24,8 @@ export const DISPATCH_DESTINATIONS = {
     name: 'プロ研修',
     icon: '🏟️',
     desc: 'キャンプ期間にプロ球団で特訓。技術系が大きく伸びる',
-    maxAge: 26,         // 26歳以下
-    maxOverall: 60,     // 総合力60以下
+    maxAge: 24,         // 24歳以下
+    maxOverall: 55,     // 総合力55以下
     growthProfile: 'technical',
   },
 };
