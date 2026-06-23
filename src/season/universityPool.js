@@ -121,8 +121,8 @@ function generateHighSchoolPlayer(id) {
   else                       { tier = 'E'; off = -4; }
 
   // === Phase 2: 基礎身体能力を先に生成（投手/野手決定の材料）===
-  let baseArm = Math.max(1, Math.round(nrm(38, 12) + off * 0.5 + buildMod.arm));
-  let baseSpeed = Math.max(1, Math.round(nrm(35, 12) + buildMod.speed));
+  let baseArm = Math.max(1, Math.round(nrm(38, 14) + off * 0.5 + buildMod.arm));
+  let baseSpeed = Math.max(1, Math.round(nrm(35, 14) + buildMod.speed));
 
   // === Phase 3: 投手/野手を肩力ベースで決定 ===
   // 肩が強いほど投手になる確率が上がる（全体で約40%が投手）
@@ -171,13 +171,13 @@ function generateHighSchoolPlayer(id) {
   let abilities;
   if (isPitcher) {
     const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
-    let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
+    let velocity = Math.round(nrm(126, 11) + velTierBonus[tier]);
     if (isSideOrUnder) velocity -= 3;
     if (throws === 'left') velocity -= 3;
     let control = Math.round(nrm(24, 9) + off + controlAdjust);
     let stamina = Math.round(nrm(63, 14) + off * 1.5);
 
-    if (specialty === 'power_arm') velocity += r(5, 10);
+    if (specialty === 'power_arm') velocity += r(6, 13);
     else if (specialty === 'technician') control += r(10, 20);
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
@@ -209,16 +209,16 @@ function generateHighSchoolPlayer(id) {
     }[position] || { meet: 0, power: 0, eye: 0, defense: 0, steal: 0 };
 
     let meet = Math.round(nrm(19, 9) + off + pm.meet);
-    let power = Math.round(nrm(15, 10) + off + buildMod.power + pm.power);
+    let power = Math.round(nrm(15, 12) + off + buildMod.power + pm.power);
     let eye = Math.round(nrm(18, 8) + off * 0.8 + pm.eye);
     let defense = Math.round(nrm(28, 10) + off * 0.6 + buildMod.defense + pm.defense);
     let steal = Math.round(nrm(22, 9) + off * 0.4 + buildMod.steal + pm.steal);
 
-    if (specialty === 'speedster') { baseSpeed += r(12, 22); steal += r(8, 15); }
-    else if (specialty === 'slugger') power += r(12, 22);
-    else if (specialty === 'contact') { meet += r(12, 20); eye += r(8, 15); }
-    else if (specialty === 'glove') defense += r(12, 20);
-    else if (specialty === 'cannon') baseArm += r(15, 25);
+    if (specialty === 'speedster') { baseSpeed += r(14, 26); steal += r(10, 18); }
+    else if (specialty === 'slugger') power += r(14, 26);
+    else if (specialty === 'contact') { meet += r(14, 24); eye += r(8, 15); }
+    else if (specialty === 'glove') defense += r(14, 24);
+    else if (specialty === 'cannon') baseArm += r(18, 30);
 
     abilities = {
       meet: Math.max(5, meet), power: Math.max(3, power),
