@@ -73,12 +73,18 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     selectedIds.forEach(id => {
       const player = candidates.find(c => c.id === id);
       if (player) {
+        if ((player._negotiationAttempts || 0) >= 3) {
+          results.push({ player, success: false, rate: 0, rivalResult: 'max_attempts', rivalTeamName: null, scoutName: selectedScout?.name || null });
+          return;
+        }
+        player._negotiationAttempts = (player._negotiationAttempts || 0) + 1;
         const scoutBonus = getScoutNegotiationBonus(selectedScout);
         const modifiedRate = Math.min(95, (player.recruitRate || 0) + scoutBonus);
         const result = negotiateWithCompetition(teamData, { ...player, recruitRate: modifiedRate }, teamData);
         results.push({ player, ...result, scoutName: selectedScout?.name || null });
-        // 入団成功・他チーム入団・辞退 → 候補から除去、条件折り合わず → 残す（再交渉可能）
         if (result.success || result.rivalResult) {
+          removedIds.add(id);
+        } else if (player._negotiationAttempts >= 3) {
           removedIds.add(id);
         }
       }
@@ -220,12 +226,19 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                 <div className="ml-11 mt-1.5 text-sm">
                   {success ? (
                     <span className="text-green-400 font-bold">入団が決まりました! キャンプから合流します。</span>
+                  ) : rivalResult === 'max_attempts' ? (
+                    <span className="text-red-400">交渉回数の上限(3回)に達しました</span>
                   ) : rivalResult === 'declined' ? (
                     <span className="text-gray-500">本人が入団を辞退しました</span>
                   ) : rivalResult ? (
                     <span className="text-gray-500">{rivalTeamName || `${rivalResult}ランクのチーム`}への入団が決まりました</span>
                   ) : (
-                    <span className="text-yellow-500">条件面で折り合いがつきませんでした（再交渉可能）</span>
+                    <span className="text-yellow-500">
+                      条件面で折り合いがつきませんでした
+                      {(p._negotiationAttempts || 0) < 3
+                        ? `（残り${3 - (p._negotiationAttempts || 0)}回交渉可能）`
+                        : ''}
+                    </span>
                   )}
                 </div>
               </div>
@@ -417,6 +430,11 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                       {scoutBonus > 0 && <span className="text-green-400 text-xs ml-1">+{scoutBonus}</span>}
                       {invBonus > 0 && <span className="text-cyan-400 text-xs ml-1">調+{invBonus}</span>}
                       {favBonus > 0 && <span className="text-yellow-400 text-xs ml-1">★+{favBonus}</span>}
+                      {(player._negotiationAttempts || 0) > 0 && (
+                        <span className={`text-xs ml-1 ${player._negotiationAttempts >= 2 ? 'text-red-400' : 'text-orange-400'}`}>
+                          残{3 - player._negotiationAttempts}回
+                        </span>
+                      )}
                     </td>
                     <td className="px-1.5 py-2 text-center">
                       {rivals > 0 ? (

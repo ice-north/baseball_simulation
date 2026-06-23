@@ -72,6 +72,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     if (remainingSlots <= 0) return;
     const c = candidates.find(p => p.id === id);
     if (!c) return;
+    c._negotiationAttempts = (c._negotiationAttempts || 0) + 1;
     const result = attemptUniversityRecruit(c, rank, reputation);
     setNegotiationResult({ player: c, ...result });
     if (result.success) {
@@ -79,8 +80,10 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
       if (orig) orig._universityReserved = userTeamName;
       setRecruited(prev => [...prev, c]);
       setCandidates(prev => prev.filter(p => p.id !== id));
-    } else {
+    } else if (c._negotiationAttempts >= 3) {
       setCandidates(prev => prev.filter(p => p.id !== id));
+    } else {
+      setCandidates([...candidates]);
     }
   };
 
@@ -168,7 +171,9 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
             )}
             {!r.success && (
               <div className="text-center text-gray-400 text-sm mb-4">
-                他校への進学を選びました
+                {(r.player._negotiationAttempts || 0) >= 3
+                  ? '交渉回数の上限(3回)に達しました'
+                  : `他校への進学を選びました（残り${3 - (r.player._negotiationAttempts || 0)}回交渉可能）`}
               </div>
             )}
             <div className="text-center">
@@ -319,10 +324,10 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                                 調査中...
                               </span>
                             )}
-                            {canRecruit && (
+                            {canRecruit && (p._negotiationAttempts || 0) < 3 && (
                               <button onClick={() => handleRecruit(p.id)}
                                 className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-800 text-blue-200 hover:bg-blue-700 transition">
-                                交渉
+                                交渉{(p._negotiationAttempts || 0) > 0 ? `(${3 - p._negotiationAttempts})` : ''}
                               </button>
                             )}
                           </div>
