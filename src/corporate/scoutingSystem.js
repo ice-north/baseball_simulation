@@ -1327,10 +1327,25 @@ export function negotiateWithCompetition(team, player, teamData) {
     }
     return { success: false, rate: adjustedRate, rivalResult: winnerRival.rank, rivalTeamName: winnerRival.teamName };
   } else if (fate < rivalTakeChance + declineChance) {
-    return { success: false, rate: adjustedRate, rivalResult: 'declined', rivalTeamName: null };
+    // 辞退 → ライバルがいればそのチームへ、いなければランダムなチームへ
+    const destTeam = pickRandomDestination(player, team);
+    return { success: false, rate: adjustedRate, rivalResult: 'declined', rivalTeamName: destTeam };
   }
   // 条件折り合わず → 再交渉可能（candidatesから除去しない）
   return { success: false, rate: adjustedRate, rivalResult: null, rivalTeamName: null };
+}
+
+export function pickRandomDestination(player, excludeTeam) {
+  const rivals = player._rivals || [];
+  if (rivals.length > 0) {
+    const pick = rivals[Math.floor(Math.random() * rivals.length)];
+    return pick.teamName;
+  }
+  const candidates = Object.entries(TEAMS_DATA)
+    .filter(([name, t]) => t !== excludeTeam && t?.corporateData && t.players)
+    .map(([name]) => name);
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 /**

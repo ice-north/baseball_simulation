@@ -151,11 +151,11 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       setStaffReplacements(nextRepl);
       setReplaceStaffFor(null);
     } else if (effectiveStaffCount >= MAX_STAFF) {
-      const preview = convertPlayerToStaff(player);
+      const preview = convertPlayerToStaff(player, seasonData?.year);
       setStaffPreviews({ ...staffPreviews, [playerId]: preview });
       setReplaceStaffFor(playerId);
     } else {
-      const preview = convertPlayerToStaff(player);
+      const preview = convertPlayerToStaff(player, seasonData?.year);
       setStaffConversions({ ...staffConversions, [playerId]: true });
       setStaffPreviews({ ...staffPreviews, [playerId]: preview });
     }

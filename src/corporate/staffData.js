@@ -94,34 +94,15 @@ export const canHireGrade = (teamRank, staffGrade) => {
 
 export const MAX_STAFF = 10;
 
-// 給与計算: スタッフは年齢ベース、選手は年功+能力ベース
+// 給与計算（選手・スタッフ共通）: 高卒1年目400万、年齢+1ごとに+20万
 const BASE_SALARY = 400;
 const SALARY_PER_AGE = 20;
 
 export const getStaffSalary = (staff) =>
   BASE_SALARY + ((staff.age || 35) - 18) * SALARY_PER_AGE;
 
-const getPlayerOverall = (player) => {
-  if (player.position === 'pitcher') {
-    const v = player.pitching?.velocity || 0;
-    const c = player.pitching?.control || 0;
-    const s = player.pitching?.stamina || 0;
-    return Math.round((v - 100) * 1.5 + c * 0.8 + s * 0.3);
-  }
-  const m = player.batting?.meet || 0;
-  const p = player.batting?.power || 0;
-  const e = player.batting?.eye || 0;
-  const sp = player.physical?.speed || 0;
-  const d = player.fielding?.defense || 0;
-  return Math.round(m + p + e * 0.5 + sp * 0.3 + d * 0.3);
-};
-
-export const getPlayerSalary = (player) => {
-  const age = player.age || 18;
-  const seniority = Math.min(15, Math.max(0, age - 18));
-  const overall = Math.max(0, getPlayerOverall(player));
-  return BASE_SALARY + seniority * 8 + overall * 2;
-};
+export const getPlayerSalary = (player) =>
+  BASE_SALARY + ((player.age || 18) - 18) * SALARY_PER_AGE;
 
 // ============================================================
 // スタッフ生成
@@ -216,12 +197,12 @@ export const generateStaff = (role, grade = null, maxGrade = null) => {
 };
 
 // 引退選手をスタッフに転向（チーム内情を知る分、市場スタッフより有利）
-export const convertPlayerToStaff = (player) => {
+export const convertPlayerToStaff = (player, currentYear) => {
   const id = nextStaffId++;
   const isPitcher = player.position === 'pitcher';
   const isCatcher = player.position === 'catcher';
 
-  // 選手の総合力からグレードを判定し、1段階昇格（チーム貢献ボーナス）
+  // 選手の総合力を算出
   let overall;
   if (isPitcher) {
     overall = ((player.pitching?.velocity || 130) - 120) * 1.5
@@ -233,15 +214,27 @@ export const convertPlayerToStaff = (player) => {
       + (player.fielding?.defense || 30)) / 5;
   }
 
-  let baseGrade;
-  if (overall >= 65) baseGrade = 'S';
-  else if (overall >= 52) baseGrade = 'A';
-  else if (overall >= 40) baseGrade = 'B';
-  else if (overall >= 28) baseGrade = 'C';
-  else baseGrade = 'D';
+  // 自チーム所属年数を算出（careerHistoryの最後の入団年から）
+  let tenure = Math.max(1, (player.age || 30) - 18);
+  if (currentYear && player.careerHistory?.length > 0) {
+    const lastJoin = [...player.careerHistory].reverse().find(h =>
+      h.type === 'corporate_join' || h.type === 'club_join' || h.type === 'independent' || h.type === 'draft'
+    );
+    if (lastJoin?.year) tenure = Math.max(1, currentYear - lastJoin.year);
+  }
 
-  const UPGRADE = { D: 'C', C: 'B', B: 'A', A: 'S', S: 'S' };
-  const grade = UPGRADE[baseGrade];
+  // グレード判定: 能力ベース + 所属年数ボーナス
+  // 所属年数が長いほどチームへの貢献度が高く、良いコーチになる
+  const tenureBonus = Math.min(15, tenure * 2);
+  const gradeScore = overall + tenureBonus;
+
+  let grade;
+  if (gradeScore >= 70) grade = 'S';
+  else if (gradeScore >= 55) grade = 'A';
+  else if (gradeScore >= 40) grade = 'B';
+  else if (gradeScore >= 25) grade = 'C';
+  else grade = 'D';
+
   const g = STAFF_GRADES[grade];
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));

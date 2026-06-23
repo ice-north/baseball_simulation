@@ -10,6 +10,7 @@ import {
   calculateRecruitSuccessRate,
   estimateRivalCount,
   getScoutRecommendation,
+  pickRandomDestination,
 } from '../corporate/scoutingSystem.js';
 
 const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onComplete }) => {
@@ -74,7 +75,8 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       const player = candidates.find(c => c.id === id);
       if (player) {
         if ((player._negotiationAttempts || 0) >= 3) {
-          results.push({ player, success: false, rate: 0, rivalResult: 'max_attempts', rivalTeamName: null, scoutName: selectedScout?.name || null });
+          const dest = pickRandomDestination(player, teamData);
+          results.push({ player, success: false, rate: 0, rivalResult: 'max_attempts', rivalTeamName: dest, scoutName: selectedScout?.name || null });
           return;
         }
         player._negotiationAttempts = (player._negotiationAttempts || 0) + 1;
@@ -85,6 +87,9 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         if (result.success || result.rivalResult) {
           removedIds.add(id);
         } else if (player._negotiationAttempts >= 3) {
+          const dest = pickRandomDestination(player, teamData);
+          results[results.length - 1].rivalResult = 'max_attempts';
+          results[results.length - 1].rivalTeamName = dest;
           removedIds.add(id);
         }
       }
@@ -227,11 +232,19 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                   {success ? (
                     <span className="text-green-400 font-bold">入団が決まりました! キャンプから合流します。</span>
                   ) : rivalResult === 'max_attempts' ? (
-                    <span className="text-red-400">交渉回数の上限(3回)に達しました</span>
+                    <span className="text-red-400">
+                      交渉回数の上限(3回)に達しました
+                      {rivalTeamName && <> → <span className="text-orange-400 font-bold">{rivalTeamName}</span>に入団</>}
+                    </span>
                   ) : rivalResult === 'declined' ? (
-                    <span className="text-gray-500">本人が入団を辞退しました</span>
+                    <span className="text-gray-500">
+                      本人が入団を辞退しました
+                      {rivalTeamName && <> → <span className="text-orange-400 font-bold">{rivalTeamName}</span>に入団</>}
+                    </span>
                   ) : rivalResult ? (
-                    <span className="text-gray-500">{rivalTeamName || `${rivalResult}ランクのチーム`}への入団が決まりました</span>
+                    <span className="text-gray-500">
+                      <span className="text-orange-400 font-bold">{rivalTeamName || `${rivalResult}ランクのチーム`}</span>への入団が決まりました
+                    </span>
                   ) : (
                     <span className="text-yellow-500">
                       条件面で折り合いがつきませんでした
