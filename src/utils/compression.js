@@ -403,13 +403,19 @@ function decompressFromBase64(input) {
  * @param {Object} saveData - Save data to optimize
  * @returns {Object} Optimized save data
  */
+function stripPoolPlayer(p) {
+  const { seasonStats, careerStats, careerHistory, gameLog, lastAtBat, lastPitch, ...core } = p;
+  if (core.catching && core.position !== 'catcher' && !core.catching.lead) delete core.catching;
+  return core;
+}
+
 export function optimizeSaveData(saveData) {
-  const optimized = JSON.parse(JSON.stringify(saveData));
+  // saveData is already a deep clone — mutate in-place instead of re-cloning
 
   // Optimize teamsData - remove non-essential player fields
-  if (optimized.teamsData) {
-    Object.keys(optimized.teamsData).forEach(teamName => {
-      const team = optimized.teamsData[teamName];
+  if (saveData.teamsData) {
+    Object.keys(saveData.teamsData).forEach(teamName => {
+      const team = saveData.teamsData[teamName];
       if (team.players) {
         team.players = team.players.map(p => {
           // Remove large nested objects that can be recalculated
@@ -427,10 +433,10 @@ export function optimizeSaveData(saveData) {
   }
 
   // Optimize seasonData - remove detailed game logs from results
-  if (optimized.seasonData) {
+  if (saveData.seasonData) {
     // Trim results to essential info only
-    if (optimized.seasonData.results) {
-      optimized.seasonData.results = optimized.seasonData.results.map(r => ({
+    if (saveData.seasonData.results) {
+      saveData.seasonData.results = saveData.seasonData.results.map(r => ({
         gameId: r.gameId,
         date: r.date,
         homeTeam: r.homeTeam,
@@ -439,15 +445,13 @@ export function optimizeSaveData(saveData) {
         awayScore: r.awayScore,
         winner: r.winner,
         phase: r.phase
-        // Exclude: playByPlay, boxScore, detailed logs
       }));
     }
 
     // Trim schedule - for completed games, remove unnecessary fields
-    if (optimized.seasonData.schedule) {
-      optimized.seasonData.schedule = optimized.seasonData.schedule.map(g => {
+    if (saveData.seasonData.schedule) {
+      saveData.seasonData.schedule = saveData.seasonData.schedule.map(g => {
         if (g.result) {
-          // Game is complete - only keep essential info
           return {
             gameId: g.gameId,
             date: g.date,
@@ -461,13 +465,27 @@ export function optimizeSaveData(saveData) {
             }
           };
         }
-        // Game not played yet - keep all info needed
         return g;
       });
     }
   }
 
-  return optimized;
+  // Optimize universityPool - strip zero-value stats from pool players
+  if (saveData.universityPool) {
+    if (saveData.universityPool.highSchool?.players) {
+      saveData.universityPool.highSchool.players = saveData.universityPool.highSchool.players.map(stripPoolPlayer);
+    }
+    if (saveData.universityPool.university) {
+      for (const year of Object.keys(saveData.universityPool.university)) {
+        saveData.universityPool.university[year] = saveData.universityPool.university[year].map(entry => {
+          if (entry.player) entry.player = stripPoolPlayer(entry.player);
+          return entry;
+        });
+      }
+    }
+  }
+
+  return saveData;
 }
 
 /**
@@ -476,9 +494,8 @@ export function optimizeSaveData(saveData) {
  * @returns {string} Compressed string
  */
 export function compressData(data) {
-  // Optimize before compression to reduce size
-  const optimizedData = optimizeSaveData(data);
-  const jsonStr = JSON.stringify(optimizedData);
+  optimizeSaveData(data);
+  const jsonStr = JSON.stringify(data);
   return 'LZ:' + compressToBase64(jsonStr);
 }
 

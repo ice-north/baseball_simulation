@@ -1214,11 +1214,30 @@ export function getUniversityPoolSummary() {
 /**
  * セーブ/ロード用: 大学プール+高校生プールをシリアライズ
  */
+function clonePlayerLite(p) {
+  const clone = {};
+  for (const key of Object.keys(p)) {
+    if (key === 'seasonStats' || key === 'careerStats' || key === 'careerHistory' || key === 'gameLog' || key === 'lastAtBat' || key === 'lastPitch') continue;
+    const v = p[key];
+    clone[key] = (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
+  }
+  return clone;
+}
+
 export function serializeUniversityPool() {
-  return {
-    university: JSON.parse(JSON.stringify(universityPool)),
-    highSchool: JSON.parse(JSON.stringify(highSchoolPool))
+  const uni = {};
+  for (const [year, cohort] of Object.entries(universityPool)) {
+    uni[year] = cohort.map(entry => {
+      const e = { ...entry };
+      if (e.player) e.player = clonePlayerLite(e.player);
+      return e;
+    });
+  }
+  const hs = {
+    players: (highSchoolPool.players || []).map(clonePlayerLite),
+    year: highSchoolPool.year
   };
+  return { university: uni, highSchool: hs };
 }
 
 /**
