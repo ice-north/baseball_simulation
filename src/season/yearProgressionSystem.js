@@ -245,15 +245,15 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
 
   // 年齢ボーナス（若い選手の将来性を評価）
   // 実際のNPBドラフトでは高校生が1巡目の3-5人を占める
-  const ageBonusMap = { 18: 28, 19: 22, 20: 15, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
-  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 28 : -65);
+  const ageBonusMap = { 18: 33, 19: 27, 20: 15, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
+  const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 33 : -65);
 
   // 将来性投影倍率（若い選手の能力を伸びしろ込みで評価）
-  const potentialMult = age <= 18 ? 1.18 : age <= 19 ? 1.12 : age <= 20 ? 1.06 : age <= 21 ? 1.02 : 1.0;
+  const potentialMult = age <= 18 ? 1.22 : age <= 19 ? 1.15 : age <= 20 ? 1.06 : age <= 21 ? 1.02 : 1.0;
 
   // 成長力ボーナス（若い選手ほど成長力が大きく評価される）
   const gp = player.growthPotential || 1.0;
-  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.65) * 38)
+  const gpBonus = age <= 19 ? Math.max(0, (gp - 0.60) * 45)
                : age <= 22 ? Math.max(0, (gp - 0.8) * 25)
                : Math.max(0, (gp - 1.0) * 15);
 
@@ -277,9 +277,9 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const arsenalCount = breakingBalls.filter(a => (a.level || 0) >= 20).length;
 
     // 年齢別ウェイト: 高校生は球速重視、社会人は制球・変化球重視
-    const velBase = isYoung ? 1.4 : isMature ? 0.9 : 1.1;
-    const vel140 = isYoung ? 3.5 : isMature ? 2.5 : 3.0;
-    const vel150 = isYoung ? 4.5 : isMature ? 3.0 : 3.5;
+    const velBase = isYoung ? 1.5 : isMature ? 0.9 : 1.1;
+    const vel140 = isYoung ? 4.0 : isMature ? 2.5 : 3.0;
+    const vel150 = isYoung ? 5.0 : isMature ? 3.0 : 3.5;
     const ctrlW = isYoung ? 0.7 : isMature ? 1.4 : 1.1;
     const staW = isYoung ? 0.15 : isMature ? 0.35 : 0.25;
     const breakW = isYoung ? 0.5 : isMature ? 1.0 : 0.8;
@@ -309,7 +309,7 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const abilityScore = rawAbility * potentialMult;
 
     const abilityFactor = Math.min(1.0, rawAbility / 120);
-    const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.65) * 38) * abilityFactor
+    const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.60) * 45) * abilityFactor
                         : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
                         : Math.max(0, (gp - 1.0) * 15);
 
@@ -335,17 +335,17 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
 
     // 年齢別ウェイト: 高校生はパワー/足/肩、社会人はミート/選球眼/守備
     const meetW = isYoung ? 0.6 : isMature ? 1.3 : 1.0;
-    const powerW = isYoung ? 1.3 : isMature ? 0.8 : 1.0;
+    const powerW = isYoung ? 1.4 : isMature ? 0.8 : 1.0;
     const eyeW = isYoung ? 0.2 : isMature ? 0.8 : 0.5;
-    const speedW = isYoung ? 0.7 : isMature ? 0.3 : 0.4;
+    const speedW = isYoung ? 0.8 : isMature ? 0.3 : 0.4;
     const defW = isYoung ? 0.2 : isMature ? 0.7 : 0.4;
-    const armW = isYoung ? 0.5 : isMature ? 0.2 : 0.3;
+    const armW = isYoung ? 0.6 : isMature ? 0.2 : 0.3;
 
     const rawAbility = meet * meetW + power * powerW + eye * eyeW + speed * speedW + defense * defW + arm * armW;
     const abilityScore = rawAbility * potentialMult;
 
     const abilityFactor = Math.min(1.0, rawAbility / 130);
-    const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.65) * 38) * abilityFactor
+    const gpBonusScaled = age <= 19 ? Math.max(0, (gp - 0.60) * 45) * abilityFactor
                         : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
                         : Math.max(0, (gp - 1.0) * 15);
 
