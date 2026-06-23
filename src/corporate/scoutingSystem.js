@@ -1293,10 +1293,13 @@ export function negotiateWithCompetition(team, player, teamData) {
   const displayedRate = player.recruitRate ?? calculateRecruitSuccessRate(player, teamData);
 
   if (rivals.length === 0) {
+    // ライバルなし: 行き先がないため交渉が有利（+12%）
+    const noRivalBonus = 12;
+    const boostedRate = Math.min(95, displayedRate + noRivalBonus);
     const roll = Math.random() * 100;
-    const success = roll < displayedRate;
+    const success = roll < boostedRate;
     if (success) recruitPlayer(team, player);
-    return { success, rate: displayedRate, rivalResult: null, rivalTeamName: null };
+    return { success, rate: boostedRate, rivalResult: null, rivalTeamName: null, noRivalBonus };
   }
 
   // ライバルがいる場合：表示成功率に競合ペナルティを適用
@@ -1341,11 +1344,7 @@ export function pickRandomDestination(player, excludeTeam) {
     const pick = rivals[Math.floor(Math.random() * rivals.length)];
     return pick.teamName;
   }
-  const candidates = Object.entries(TEAMS_DATA)
-    .filter(([name, t]) => t !== excludeTeam && t?.corporateData && t.players)
-    .map(([name]) => name);
-  if (candidates.length === 0) return null;
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  return null;
 }
 
 /**

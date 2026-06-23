@@ -200,9 +200,12 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         </p>
 
         <div className="space-y-3 mb-6">
-          {negotiationResults.map(({ player: p, success, rate, rivalResult, rivalTeamName, scoutName }) => {
+          {negotiationResults.map(({ player: p, success, rate, rivalResult, rivalTeamName, scoutName, noRivalBonus }) => {
             const favBonus = getFavoriteBonus(teamData, p.id);
             const invBonus = (p._investigationCount || 0) * 7;
+            const destLabel = rivalTeamName
+              ? <span className="text-orange-400 font-bold">{rivalTeamName}</span>
+              : <span className="text-gray-400">独立リーグトライアウト</span>;
             return (
               <div key={p.id} className={`p-4 rounded-lg border ${
                 success ? 'bg-green-900/20 border-green-700'
@@ -227,23 +230,22 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                   {scoutName && <span className="text-cyan-400">担当: {scoutName}</span>}
                   {invBonus > 0 && <span className="text-cyan-400">調査+{invBonus}%</span>}
                   {favBonus > 0 && <span className="text-yellow-400">★絆+{favBonus}%</span>}
+                  {noRivalBonus > 0 && <span className="text-green-400">競合なし+{noRivalBonus}%</span>}
                 </div>
                 <div className="ml-11 mt-1.5 text-sm">
                   {success ? (
                     <span className="text-green-400 font-bold">入団が決まりました! キャンプから合流します。</span>
                   ) : rivalResult === 'max_attempts' ? (
                     <span className="text-red-400">
-                      交渉回数の上限(3回)に達しました
-                      {rivalTeamName && <> → <span className="text-orange-400 font-bold">{rivalTeamName}</span>に入団</>}
+                      交渉回数の上限(3回)に達しました → {destLabel}へ
                     </span>
                   ) : rivalResult === 'declined' ? (
                     <span className="text-gray-500">
-                      本人が入団を辞退しました
-                      {rivalTeamName && <> → <span className="text-orange-400 font-bold">{rivalTeamName}</span>に入団</>}
+                      本人が入団を辞退しました → {destLabel}へ
                     </span>
                   ) : rivalResult ? (
                     <span className="text-gray-500">
-                      <span className="text-orange-400 font-bold">{rivalTeamName || `${rivalResult}ランクのチーム`}</span>への入団が決まりました
+                      {destLabel}への入団が決まりました
                     </span>
                   ) : (
                     <span className="text-yellow-500">
@@ -437,12 +439,13 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.professionalism)}</td>
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.physical?.recovery)}</td>
                     <td className="px-1.5 py-2 text-center whitespace-nowrap">
-                      <span className={`font-bold ${getRateColor(adjustedRate)}`}>
-                        {adjustedRate}%
+                      <span className={`font-bold ${getRateColor(rivals === 0 ? Math.min(95, adjustedRate + 12) : adjustedRate)}`}>
+                        {rivals === 0 ? Math.min(95, adjustedRate + 12) : adjustedRate}%
                       </span>
                       {scoutBonus > 0 && <span className="text-green-400 text-xs ml-1">+{scoutBonus}</span>}
                       {invBonus > 0 && <span className="text-cyan-400 text-xs ml-1">調+{invBonus}</span>}
                       {favBonus > 0 && <span className="text-yellow-400 text-xs ml-1">★+{favBonus}</span>}
+                      {rivals === 0 && <span className="text-green-400 text-xs ml-1">競合なし</span>}
                       {(player._negotiationAttempts || 0) > 0 && (
                         <span className={`text-xs ml-1 ${player._negotiationAttempts >= 2 ? 'text-red-400' : 'text-orange-400'}`}>
                           残{3 - player._negotiationAttempts}回
@@ -454,7 +457,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                         <span className={`font-bold ${rivals >= 3 ? 'text-red-400' : rivals >= 2 ? 'text-orange-400' : 'text-yellow-400'}`}>
                           {rivals}社
                         </span>
-                      ) : <span className="text-gray-600">-</span>}
+                      ) : <span className="text-green-600 text-xs">なし</span>}
                     </td>
                   </tr>
                 );
