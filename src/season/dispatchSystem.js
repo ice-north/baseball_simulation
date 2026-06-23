@@ -16,17 +16,17 @@ export const DISPATCH_DESTINATIONS = {
     name: '大学野球留学',
     icon: '🎓',
     desc: 'OBのいる大学へ派遣。大学の得意分野で成長',
-    maxAge: 22,         // 22歳以下
-    maxOverall: 55,     // 総合力55以下
-    growthProfile: 'physical', // デフォルトプロファイル（大学specialtiesで上書き）
+    maxAge: 26,         // 26歳以下
+    maxOverall: 60,     // 総合力60以下
+    growthProfile: 'physical',
   },
   proCamp: {
     name: 'プロ研修',
     icon: '🏟️',
     desc: 'キャンプ期間にプロ球団で特訓。技術系が大きく伸びる',
-    maxAge: 24,         // 24歳以下
-    maxOverall: 50,     // 総合力50以下
-    growthProfile: 'technical', // 技術系メイン
+    maxAge: 26,         // 26歳以下
+    maxOverall: 60,     // 総合力60以下
+    growthProfile: 'technical',
   },
 };
 
