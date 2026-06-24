@@ -1081,15 +1081,17 @@ export function warmUpPlayerPipeline(gameYear) {
     // 大学入学
     enrollInUniversity(hsDistribution.university, enrollYear);
 
-    // 社会人・独立候補はリリースプールへ
+    // 社会人・独立候補はリリースプールへ（高卒1年目=19歳）
     hsDistribution.corporate.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
+      p.age = Math.max(19, p.age);
       releasedPlayersPool.push(p);
     });
     hsDistribution.independent.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
+      p.age = Math.max(19, p.age);
       releasedPlayersPool.push(p);
     });
   }
@@ -1143,6 +1145,7 @@ function distributeToCorporateTeams(gameYear) {
       if (added >= toAdd) break;
       if (usedIndices.has(entry.idx)) continue;
       const p = { ...entry.player };
+      p.age = Math.max(19, p.age);
       p.isStarter = false;
       p.battingOrder = 0;
       if (!p.careerHistory) p.careerHistory = [];
@@ -1165,6 +1168,7 @@ function distributeToCorporateTeams(gameYear) {
       if (added >= toAdd) break;
       if (usedIndices.has(scored[i].idx)) continue;
       const p = { ...scored[i].player };
+      p.age = Math.max(19, p.age);
       p.isStarter = false;
       p.battingOrder = 0;
       if (!p.careerHistory) p.careerHistory = [];
