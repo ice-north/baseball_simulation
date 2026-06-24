@@ -71,6 +71,7 @@ export function calcPlayerOverall(player) {
 export const DISPATCH_LIMITS = {
   perTeamPerDest: 1,  // プロ研修: 各チーム1人
   leagueTotal: 8,     // リーグ全体で合計8人（プロ研修のみ）
+  perTeamUniversity: 4, // 大学派遣: チーム全体で4人まで
 };
 
 /**
@@ -100,6 +101,11 @@ export function checkDispatchEligibility(player, destKey, options = {}) {
       // 社会人: パイプベース（OBのいる大学に枠数分）
       const teamData = options.teamData;
       if (!teamData) return { eligible: false, reason: 'チームデータなし' };
+      const teamPlayers = teamData.players || [];
+      const totalUniDispatched = teamPlayers.filter(p => p.dispatchedThisCamp === 'university').length;
+      if (totalUniDispatched >= DISPATCH_LIMITS.perTeamUniversity) {
+        return { eligible: false, reason: `大学派遣はチーム全体で${DISPATCH_LIMITS.perTeamUniversity}人まで` };
+      }
       const pipes = getAvailableUniversityDispatches(teamData);
       if (pipes.length === 0) return { eligible: false, reason: 'OBのいる大学がありません' };
       if (options.universityId) {

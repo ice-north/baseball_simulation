@@ -528,6 +528,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                   <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
                     <div className="text-white font-bold text-lg mb-1">{player.name}</div>
                     <div className="text-gray-400 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
+                    {(() => {
+                      const dispatched = (userTeam?.players || []).filter(p => p.dispatchedThisCamp === 'university').length;
+                      const max = DISPATCH_LIMITS.perTeamUniversity;
+                      return <div className={`text-xs mt-1 font-bold ${dispatched >= max ? 'text-red-400' : 'text-orange-400'}`}>チーム派遣枠: {dispatched}/{max}人</div>;
+                    })()}
                   </div>
                   {uniOptions.length === 0 ? (
                     <div className="text-gray-400 text-sm text-center mb-3">OBのいる大学がありません</div>
