@@ -356,7 +356,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     </div>
 
                     {/* 球団別グリッド */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-4 gap-2">
                       {NPB_TEAMS_GRID.map(team => {
                         const picks = npbDraftGridData.byTeam[team.name] || [];
                         return (
@@ -402,8 +402,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                             'bg-yellow-700/70 text-yellow-200'
                                           }`}>{roundLabel}</span>
                                         </td>
-                                        <td className="py-1 pl-2 text-white font-bold text-xs whitespace-nowrap">{entry.name}</td>
-                                        <td className="py-1 whitespace-nowrap pl-2">
+                                        <td className="py-1 pl-1 text-white font-bold text-xs whitespace-nowrap">{entry.name}</td>
+                                        <td className="py-1 whitespace-nowrap pl-1">
                                           <span className="text-blue-300">{getPositionName(entry.position)}</span>
                                           <span className="inline-block w-2" />
                                           <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{throwHand}</span>
@@ -414,7 +414,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                             <span className={`text-[10px] px-1 py-px rounded border ml-3 ${srcInfo.color}`}>{srcInfo.label}</span>
                                           ) : null}
                                         </td>
-                                        <td className="py-1 text-gray-400 text-right pl-2 whitespace-nowrap">{entry.teamName}</td>
+                                        <td className="py-1 text-gray-400 text-right pl-1 whitespace-nowrap">{entry.teamName}</td>
                                       </tr>
                                     );
                                   })}
