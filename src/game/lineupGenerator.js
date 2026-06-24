@@ -25,14 +25,14 @@ const POSITION_WEIGHTS = {
     dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
   },
   defense: {
-    catcher:  { offenseWeight: 0.15, defenseWeight: 0.85 },
-    short:    { offenseWeight: 0.20, defenseWeight: 0.80 },
-    center:   { offenseWeight: 0.25, defenseWeight: 0.75 },
-    second:   { offenseWeight: 0.25, defenseWeight: 0.75 },
-    third:    { offenseWeight: 0.30, defenseWeight: 0.70 },
-    right:    { offenseWeight: 0.35, defenseWeight: 0.65 },
-    left:     { offenseWeight: 0.40, defenseWeight: 0.60 },
-    first:    { offenseWeight: 0.50, defenseWeight: 0.50 },
+    catcher:  { offenseWeight: 0.00, defenseWeight: 1.00 },
+    short:    { offenseWeight: 0.00, defenseWeight: 1.00 },
+    center:   { offenseWeight: 0.00, defenseWeight: 1.00 },
+    second:   { offenseWeight: 0.00, defenseWeight: 1.00 },
+    third:    { offenseWeight: 0.00, defenseWeight: 1.00 },
+    right:    { offenseWeight: 0.00, defenseWeight: 1.00 },
+    left:     { offenseWeight: 0.00, defenseWeight: 1.00 },
+    first:    { offenseWeight: 0.00, defenseWeight: 1.00 },
     dh:       { offenseWeight: 1.00, defenseWeight: 0.00 },
   },
 };
@@ -53,10 +53,10 @@ const calcDefenseScore = (player, position, mode = 'standard') => {
   const ph = player.physical || {};
   const fitness = player.positionFitness?.[position] || 0;
 
-  // 守備重視モードでは適性の影響を大幅に強化
-  // standard: 0.5〜1.0 / defense: 0.2〜1.0（適性70%→0.76, 50%→0.60）
+  // defense: fitness²曲線 — 30%→0.09, 50%→0.25, 70%→0.49, 100%→1.0
+  // standard: 0.5〜1.0 線形
   const fitnessMult = mode === 'defense'
-    ? 0.2 + (fitness / 100) * 0.8
+    ? (fitness / 100) * (fitness / 100)
     : 0.5 + (fitness / 100) * 0.5;
 
   let baseDefense;
@@ -70,9 +70,9 @@ const calcDefenseScore = (player, position, mode = 'standard') => {
     baseDefense = (f.defense || 0) * 0.6 + (ph.arm || 0) * 0.25 + (ph.speed || 0) * 0.15;
   }
 
-  // 守備重視モードでは適性ボーナスを追加（適性100で+15pt、80で+9pt、60以下で0）
+  // 守備重視モードでは適性ボーナスを追加（適性100で+20pt、80で+12pt、60以下で0）
   const fitnessBonus = mode === 'defense'
-    ? Math.max(0, (fitness - 60) / 40) * 15
+    ? Math.max(0, (fitness - 60) / 40) * 20
     : 0;
 
   return baseDefense * fitnessMult + fitnessBonus;
@@ -127,11 +127,11 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
 
       const fitness = ps.player.positionFitness?.[pos] || 0;
       if (pos !== 'dh') {
-        // 守備重視: 適性60未満は除外（ファースト/レフトは40）
+        // 守備重視: 適性70未満は除外（ファースト/レフトは50）
         // 標準: 20未満除外（ファースト/レフトは除外なし）
         // 打撃重視: 10未満除外（ファースト/レフトは除外なし）
         const isLenient = pos === 'first' || pos === 'left';
-        const threshold = mode === 'defense' ? (isLenient ? 40 : 60)
+        const threshold = mode === 'defense' ? (isLenient ? 50 : 70)
           : mode === 'offense' ? (isLenient ? 0 : 10)
           : (isLenient ? 0 : 20);
         if (fitness < threshold) return;
@@ -155,7 +155,15 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
     const unassignedPlayers = candidates.filter(ps => !assigned.has(ps.player.id));
     remaining.forEach(pos => {
       if (unassignedPlayers.length === 0) return;
-      const best = unassignedPlayers.sort((a, b) => b.offense - a.offense)[0];
+      let best = null;
+      let bestValue = -Infinity;
+      for (const ps of unassignedPlayers) {
+        const value = calcPositionValue(ps.player, pos, mode);
+        if (value > bestValue) {
+          bestValue = value;
+          best = ps;
+        }
+      }
       if (best) {
         assignment[pos] = best;
         assigned.add(best.player.id);
@@ -350,14 +358,17 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
   // 候補選出: モードに応じてソート基準を変える
   const sortedCandidates = [...playerScores].sort((a, b) => {
     if (mode === 'defense') {
-      const aVal = Math.max(...positions.map(pos => calcPositionValue(a.player, pos, mode)));
-      const bVal = Math.max(...positions.map(pos => calcPositionValue(b.player, pos, mode)));
+      const aVal = Math.max(...positions.map(pos => calcDefenseScore(a.player, pos, mode)));
+      const bVal = Math.max(...positions.map(pos => calcDefenseScore(b.player, pos, mode)));
       return bVal - aVal;
     }
     return b.offense - a.offense;
   });
   const numSlots = useDH ? 9 : 8;
-  const candidates = sortedCandidates.slice(0, Math.min(numSlots + 4, fielders.length));
+  const candidatePoolSize = mode === 'defense'
+    ? Math.min(numSlots + 8, fielders.length)
+    : Math.min(numSlots + 4, fielders.length);
+  const candidates = sortedCandidates.slice(0, candidatePoolSize);
 
   // 最適なポジション割り当てを探索
   let bestAssignment = null;
