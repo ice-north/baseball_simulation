@@ -356,7 +356,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     </div>
 
                     {/* 球団別グリッド */}
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       {NPB_TEAMS_GRID.map(team => {
                         const picks = npbDraftGridData.byTeam[team.name] || [];
                         return (
@@ -382,7 +382,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 const roundLabel = entry.draftRound?.replace('ドラフト', '') || '';
                                 return (
                                   <div key={pi} className={`grid items-center py-1 ${pi > 0 ? 'border-t border-gray-700/30' : ''}`}
-                                    style={{ gridTemplateColumns: '40px 1fr 28px 22px 28px 32px auto', gap: '4px' }}>
+                                    style={{ gridTemplateColumns: '44px minmax(60px,1fr) 30px 24px 32px 36px minmax(40px,1fr)', gap: '4px' }}>
                                     <span className={`text-[10px] font-bold px-1 py-0.5 rounded text-center ${
                                       entry.draftRound === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
                                       entry.draftRound === '育成指名' ? 'bg-gray-600/70 text-gray-300' :
