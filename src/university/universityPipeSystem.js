@@ -143,6 +143,7 @@ export function assignInitialUniversityBackgrounds(players, options = {}) {
     const uni = candidates[Math.floor(Math.random() * candidates.length)];
     player.universityTeamId = uni.id;
     player.universityName = uni.name;
+    player.universityTeamName = uni.name;
     player.universityRank = rank;
     if (!player.origin || player.origin === 'corporate_candidate') {
       player.origin = 'university';

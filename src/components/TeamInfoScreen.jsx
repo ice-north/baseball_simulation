@@ -133,6 +133,9 @@ const TeamInfoScreen = () => {
             <div>年齢: <span className="text-white">{player.age || '?'}歳</span></div>
             <div>投: <span className="text-white">{player.physical?.throws === 'left' ? '左' : '右'}</span></div>
             <div>打: <span className="text-white">{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</span></div>
+            {(player.universityTeamName || player.universityName) && (
+              <div className="col-span-2">出身: <span className="text-blue-300">{player.universityTeamName || player.universityName}</span></div>
+            )}
           </div>
           {/* 経歴 */}
           {(() => {
@@ -141,9 +144,10 @@ const TeamInfoScreen = () => {
             if (history.length > 0) {
               history.forEach(h => steps.push({ label: h.label, type: h.type }));
             } else {
-              if (player.universityTeamName) {
+              const uniName = player.universityTeamName || player.universityName;
+              if (uniName) {
                 steps.push({ label: '高校卒', type: 'highschool' });
-                steps.push({ label: player.universityTeamName, type: 'university' });
+                steps.push({ label: uniName, type: 'university' });
               }
               if (player.previousTeam) steps.push({ label: player.previousTeam, type: 'corporate' });
             }
