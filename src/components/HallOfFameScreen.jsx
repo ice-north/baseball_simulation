@@ -410,11 +410,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                           <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{batHand}</span>
                                           <span className="inline-block w-2" />
                                           <span className="text-white">{entry.age}歳</span>
-                                          {srcInfo ? (
-                                            <span className={`text-[10px] px-1 py-px rounded border ml-3 ${srcInfo.color}`}>{srcInfo.label}</span>
-                                          ) : null}
+                                          <span className="text-gray-400 ml-3">{entry.teamName}</span>
                                         </td>
-                                        <td className="py-1 text-gray-400 text-right pl-1 whitespace-nowrap">{entry.teamName}</td>
                                       </tr>
                                     );
                                   })}
