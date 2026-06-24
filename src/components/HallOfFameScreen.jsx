@@ -402,13 +402,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                             'bg-yellow-700/70 text-yellow-200'
                                           }`}>{roundLabel}</span>
                                         </td>
-                                        <td className="py-1 text-white font-bold text-xs whitespace-nowrap">{entry.name}</td>
+                                        <td className="py-1 pl-2 text-white font-bold text-xs whitespace-nowrap">{entry.name}</td>
                                         <td className="py-1 whitespace-nowrap pl-2">
                                           <span className="text-blue-300">{getPositionName(entry.position)}</span>
-                                          {' '}
+                                          {' '}
                                           <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{throwHand}</span>
                                           <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{batHand}</span>
-                                          {' '}
+                                          {' '}
                                           <span className="text-white">{entry.age}歳</span>
                                         </td>
                                         <td className="py-1 pl-2 whitespace-nowrap">
