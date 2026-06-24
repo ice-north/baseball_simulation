@@ -40,7 +40,6 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const [expandedYear, setExpandedYear] = useState(null);
   const [draftHistoryYear, setDraftHistoryYear] = useState(null);
   const [npbDraftYear, setNpbDraftYear] = useState(null);
-  const [npbDraftRound, setNpbDraftRound] = useState(null);
   const [selectedDraftIndexes, setSelectedDraftIndexes] = useState(() => new Set());
 
   const toggleDraftSelection = (idx) => {
@@ -69,21 +68,21 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
     return [...years].sort((a, b) => b - a);
   }, [npbDraftedPlayers]);
 
-  // 選択年のドラフトデータをラウンド×球団に整理
+  // 選択年のドラフトデータを球団別に整理
   const npbDraftGridData = useMemo(() => {
     if (!npbDraftYear) return null;
     const yearPlayers = npbDraftedPlayers.filter(p => p.year === npbDraftYear);
-    const byRound = {};
-    ROUND_ORDER.forEach(round => {
-      const teamMap = {};
-      NPB_TEAMS_GRID.forEach(t => { teamMap[t.name] = []; });
-      yearPlayers.filter(p => p.draftRound === round).forEach(p => {
-        if (teamMap[p.npbTeam]) teamMap[p.npbTeam].push(p);
-      });
-      const hasAny = Object.values(teamMap).some(arr => arr.length > 0);
-      if (hasAny) byRound[round] = teamMap;
+    const byTeam = {};
+    NPB_TEAMS_GRID.forEach(t => { byTeam[t.name] = []; });
+    yearPlayers.forEach(p => {
+      if (byTeam[p.npbTeam]) byTeam[p.npbTeam].push(p);
     });
-    return { byRound, total: yearPlayers.length, yearPlayers };
+    Object.values(byTeam).forEach(list => {
+      const ro = {};
+      ROUND_ORDER.forEach((r, i) => { ro[r] = i; });
+      list.sort((a, b) => (ro[a.draftRound] ?? 99) - (ro[b.draftRound] ?? 99));
+    });
+    return { byTeam, total: yearPlayers.length, yearPlayers };
   }, [npbDraftYear, npbDraftedPlayers]);
 
   // 自動的に最新年を選択
@@ -324,7 +323,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 <div className="flex gap-1.5 mb-3 flex-wrap">
                   {npbDraftYears.map(year => (
                     <button key={year}
-                      onClick={() => { setNpbDraftYear(year); setNpbDraftRound(null); }}
+                      onClick={() => setNpbDraftYear(year)}
                       className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${
                         npbDraftYear === year
                           ? 'bg-red-600 text-white shadow-md'
@@ -356,102 +355,72 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       })()}
                     </div>
 
-                    {/* ラウンド選択 */}
-                    <div className="flex gap-1 mb-3 flex-wrap">
-                      <button
-                        onClick={() => setNpbDraftRound(null)}
-                        className={`px-3 py-1 rounded text-xs font-bold transition ${
-                          !npbDraftRound ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                        }`}
-                      >
-                        全ラウンド
-                      </button>
-                      {ROUND_ORDER.filter(r => npbDraftGridData.byRound[r]).map(round => (
-                        <button key={round}
-                          onClick={() => setNpbDraftRound(round)}
-                          className={`px-3 py-1 rounded text-xs font-bold transition ${
-                            npbDraftRound === round
-                              ? (round === 'ドラフト1位' ? 'bg-red-600 text-white' : round === '育成指名' ? 'bg-gray-600 text-white' : 'bg-yellow-700 text-yellow-200')
-                              : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                          }`}
-                        >
-                          {round}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* ラウンド別3×4グリッド */}
-                    {(npbDraftRound ? [npbDraftRound] : ROUND_ORDER).filter(r => npbDraftGridData.byRound[r]).map(round => (
-                      <div key={round} className="mb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`text-sm font-black px-2.5 py-1 rounded-lg ${
-                            round === 'ドラフト1位' ? 'bg-red-600 text-white' :
-                            round === '育成指名' ? 'bg-gray-700 text-gray-300' :
-                            'bg-yellow-700 text-yellow-200'
-                          }`}>{round}</span>
-                          <span className="text-gray-500 text-xs">
-                            {Object.values(npbDraftGridData.byRound[round]).filter(arr => arr.length > 0).length}球団指名
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          {NPB_TEAMS_GRID.map(team => {
-                            const picks = npbDraftGridData.byRound[round][team.name] || [];
-                            return (
-                              <div key={team.name} className="rounded-lg overflow-hidden" style={{ minHeight: '100px' }}>
-                                <div
-                                  className="px-2 py-1 flex items-center gap-1.5 border-b border-gray-700/50"
-                                  style={{
-                                    background: `linear-gradient(135deg, ${team.color}33 0%, #1a1a2e 100%)`,
-                                    borderTop: `3px solid ${team.color}`,
-                                  }}
-                                >
-                                  <span className="text-sm">{team.logo}</span>
-                                  <span className="text-white font-bold text-xs">{team.short}</span>
+                    {/* 球団別グリッド */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {NPB_TEAMS_GRID.map(team => {
+                        const picks = npbDraftGridData.byTeam[team.name] || [];
+                        return (
+                          <div key={team.name} className="rounded-lg overflow-hidden">
+                            <div
+                              className="px-2.5 py-1.5 flex items-center gap-1.5 border-b border-gray-700/50"
+                              style={{
+                                background: `linear-gradient(135deg, ${team.color}33 0%, #1a1a2e 100%)`,
+                                borderTop: `3px solid ${team.color}`,
+                              }}
+                            >
+                              <span className="text-sm">{team.logo}</span>
+                              <span className="text-white font-bold text-xs">{team.short}</span>
+                              <span className="text-gray-500 text-[10px] ml-auto">{picks.length}名</span>
+                            </div>
+                            <div className="bg-gray-800/90 p-2 space-y-1.5" style={{ minHeight: '80px' }}>
+                              {picks.length === 0 ? (
+                                <div className="flex items-center justify-center h-full text-gray-600 text-xs min-h-[60px]">
+                                  指名なし
                                 </div>
-                                <div className="bg-gray-800/90 p-2" style={{ minHeight: '70px' }}>
-                                  {picks.length === 0 ? (
-                                    <div className="flex items-center justify-center h-full text-gray-600 text-xs min-h-[50px]">
-                                      指名なし
+                              ) : picks.map((entry, pi) => {
+                                const srcInfo = SOURCE_LABELS[entry.source];
+                                const roundLabel = entry.draftRound?.replace('ドラフト', '') || '';
+                                return (
+                                  <div key={pi} className={pi > 0 ? 'pt-1.5 border-t border-gray-700/40' : ''}>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                        entry.draftRound === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
+                                        entry.draftRound === '育成指名' ? 'bg-gray-600/70 text-gray-300' :
+                                        'bg-yellow-700/70 text-yellow-200'
+                                      }`}>{roundLabel}</span>
+                                      <span className="text-white font-black text-sm leading-tight truncate">{entry.name}</span>
                                     </div>
-                                  ) : picks.map((entry, pi) => {
-                                    const srcInfo = SOURCE_LABELS[entry.source];
-                                    return (
-                                      <div key={pi} className={pi > 0 ? 'mt-1.5 pt-1.5 border-t border-gray-700/50' : ''}>
-                                        <div className="text-white font-black text-sm leading-tight">{entry.name}</div>
-                                        <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                                          <span className="text-blue-400 text-[10px] font-semibold">
-                                            {getPositionName(entry.position)}
-                                          </span>
-                                          <span className="text-gray-500 text-[10px]">{entry.age}歳</span>
-                                          <span className="text-[10px]">
-                                            <span className={entry.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>
-                                              {entry.throws === 'left' ? '左' : '右'}
-                                            </span>
-                                            <span className={
-                                              entry.bats === 'left' ? 'text-green-400' :
-                                              entry.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'
-                                            }>
-                                              {entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}
-                                            </span>
-                                          </span>
-                                          {srcInfo && (
-                                            <span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${srcInfo.color}`}>
-                                              {srcInfo.label}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-gray-500 text-[10px] truncate">{entry.teamName}</div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
+                                    <div className="flex items-center gap-1 flex-wrap mt-0.5 ml-0.5">
+                                      <span className="text-blue-400 text-[10px] font-semibold">
+                                        {getPositionName(entry.position)}
+                                      </span>
+                                      <span className="text-gray-500 text-[10px]">{entry.age}歳</span>
+                                      <span className="text-[10px]">
+                                        <span className={entry.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>
+                                          {entry.throws === 'left' ? '左' : '右'}
+                                        </span>
+                                        <span className={
+                                          entry.bats === 'left' ? 'text-green-400' :
+                                          entry.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'
+                                        }>
+                                          {entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}
+                                        </span>
+                                      </span>
+                                      {srcInfo && (
+                                        <span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${srcInfo.color}`}>
+                                          {srcInfo.label}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-gray-500 text-[10px] truncate ml-0.5">{entry.teamName}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
 
                     {/* 詳細テーブル（折りたたみ） */}
                     <details className="mt-4">
