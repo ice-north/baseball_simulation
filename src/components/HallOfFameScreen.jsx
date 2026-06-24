@@ -378,16 +378,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                   指名なし
                                 </div>
                               ) : (
-                                <table className="w-full text-[11px]" style={{ tableLayout: 'fixed' }}>
-                                  <colgroup>
-                                    <col style={{ width: '36px' }} />
-                                    <col />
-                                    <col style={{ width: '18px' }} />
-                                    <col style={{ width: '22px' }} />
-                                    <col style={{ width: '30px' }} />
-                                    <col style={{ width: '30px' }} />
-                                    <col style={{ width: '80px' }} />
-                                  </colgroup>
+                                <table className="w-full text-[11px]">
                                   <tbody>
                                   {picks.map((entry, pi) => {
                                     const srcInfo = SOURCE_LABELS[entry.source];
@@ -400,28 +391,32 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                     } else {
                                       roundLabel = rd.replace('ドラフト', '');
                                     }
+                                    const throwHand = entry.throws === 'left' ? '左' : '右';
+                                    const batHand = entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右';
                                     return (
                                       <tr key={pi} className={pi > 0 ? 'border-t border-gray-700/30' : ''}>
-                                        <td className="py-1 pr-1">
+                                        <td className="py-1 pr-1" style={{ width: '34px' }}>
                                           <span className={`text-[10px] font-bold px-1 py-0.5 rounded block text-center whitespace-nowrap ${
                                             rd === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
                                             isIkusei ? 'bg-green-700/70 text-green-200' :
                                             'bg-yellow-700/70 text-yellow-200'
                                           }`}>{roundLabel}</span>
                                         </td>
-                                        <td className="py-1 text-white font-bold text-xs truncate">{entry.name}</td>
-                                        <td className="py-1 text-blue-300">{getPositionName(entry.position)}</td>
-                                        <td className="py-1">
-                                          <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{entry.throws === 'left' ? '左' : '右'}</span>
-                                          <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}</span>
+                                        <td className="py-1 text-white font-bold text-xs whitespace-nowrap">{entry.name}</td>
+                                        <td className="py-1 whitespace-nowrap pl-2">
+                                          <span className="text-blue-300">{getPositionName(entry.position)}</span>
+                                          {' '}
+                                          <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{throwHand}</span>
+                                          <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{batHand}</span>
+                                          {' '}
+                                          <span className="text-white">{entry.age}歳</span>
                                         </td>
-                                        <td className="py-1 text-white">{entry.age}歳</td>
-                                        <td className="py-1">
+                                        <td className="py-1 pl-2 whitespace-nowrap">
                                           {srcInfo ? (
-                                            <span className={`text-[10px] px-1 py-px rounded border whitespace-nowrap ${srcInfo.color}`}>{srcInfo.label}</span>
+                                            <span className={`text-[10px] px-1 py-px rounded border ${srcInfo.color}`}>{srcInfo.label}</span>
                                           ) : null}
                                         </td>
-                                        <td className="py-1 text-gray-400 truncate text-right">{entry.teamName}</td>
+                                        <td className="py-1 text-gray-400 text-right pl-2 whitespace-nowrap">{entry.teamName}</td>
                                       </tr>
                                     );
                                   })}
