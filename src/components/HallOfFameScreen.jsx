@@ -548,7 +548,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           </div>
         )}
 
-        {/* 入団記録タブ（従来のドラフト指名タブ） */}
+        {/* 入団記録タブ（球団別グリッド表示） */}
         {activeTab === 'roster' && (
           <div>
             {draftYears.length === 0 ? (
@@ -572,39 +572,54 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     </button>
                   ))}
                 </div>
-                {draftHistoryYear && draftHistoryByYear[draftHistoryYear] && (
-                  <div className="bg-gray-800 rounded-lg overflow-hidden">
-                    <div className="px-4 py-2 border-b border-gray-700">
-                      <span className="text-sm font-bold text-white">{draftHistoryYear}年目入団 — {draftHistoryByYear[draftHistoryYear].length}名</span>
+                {draftHistoryYear && draftHistoryByYear[draftHistoryYear] && (() => {
+                  const yearRecords = draftHistoryByYear[draftHistoryYear];
+                  const teamMap = {};
+                  yearRecords.forEach(r => {
+                    if (!teamMap[r.teamName]) teamMap[r.teamName] = [];
+                    teamMap[r.teamName].push(r);
+                  });
+                  Object.values(teamMap).forEach(list => list.sort((a, b) => a.draftRound - b.draftRound));
+                  const teamNames = Object.keys(teamMap).sort();
+                  return (
+                    <div>
+                      <div className="bg-gray-800 rounded-lg p-3 mb-3 flex items-center gap-4 flex-wrap">
+                        <span className="text-white font-bold">{draftHistoryYear}年目 入団</span>
+                        <span className="text-gray-400 text-sm">{yearRecords.length}名 / {teamNames.length}チーム</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {teamNames.map(tn => {
+                          const picks = teamMap[tn];
+                          return (
+                            <div key={tn} className="rounded-lg overflow-hidden bg-gray-800">
+                              <div className="px-2.5 py-1.5 bg-purple-900/40 border-b border-purple-700/30 flex items-center justify-between">
+                                <span className="text-white font-bold text-xs truncate">{tn}</span>
+                                <span className="text-purple-400 text-[10px] font-bold">{picks.length}名</span>
+                              </div>
+                              <div className="p-2 space-y-1.5">
+                                {picks.map((p, pi) => (
+                                  <div key={pi} className={pi > 0 ? 'pt-1.5 border-t border-gray-700/40' : ''}>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-purple-400 text-[10px] font-bold w-4 text-right">{p.draftRound}</span>
+                                      <span className={`font-bold text-sm ${p.isPitcher ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 ml-5 mt-0.5">
+                                      <span className="text-blue-400 text-[10px]">{getPositionName(p.position)}</span>
+                                      <span className="text-gray-500 text-[10px]">{p.draftAge}歳</span>
+                                      {isCorporate && p.source && (
+                                        <span className="text-cyan-400 text-[9px]">{p.source}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <table className="w-full text-xs text-gray-300">
-                      <thead>
-                        <tr className="border-b border-gray-700 text-gray-500">
-                          <th className="py-1.5 px-2 text-center w-10">巡</th>
-                          <th className="py-1.5 px-2 text-left">選手名</th>
-                          <th className="py-1.5 px-2 text-center">守</th>
-                          <th className="py-1.5 px-2 text-center">年齢</th>
-                          <th className="py-1.5 px-2 text-left">所属</th>
-                          {isCorporate && <th className="py-1.5 px-2 text-left">出身</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {draftHistoryByYear[draftHistoryYear].map((p, i) => (
-                          <tr key={i} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                            <td className="py-1.5 px-2 text-center font-bold text-purple-400">{p.draftRound}</td>
-                            <td className="py-1.5 px-2 text-left">
-                              <span className={`font-bold ${p.isPitcher ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
-                            </td>
-                            <td className="py-1.5 px-2 text-center text-gray-500">{getPositionName(p.position)}</td>
-                            <td className="py-1.5 px-2 text-center text-gray-500">{p.draftAge}</td>
-                            <td className="py-1.5 px-2 text-left text-gray-400">{p.teamName}</td>
-                            {isCorporate && <td className="py-1.5 px-2 text-left text-cyan-400 text-[10px]">{p.source}</td>}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                  );
+                })()}
                 {!draftHistoryYear && (
                   <div className="bg-gray-800 rounded-lg p-6 text-center">
                     <p className="text-gray-500 text-sm">年度を選択してください</p>
