@@ -356,7 +356,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     </div>
 
                     {/* 球団別グリッド */}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       {NPB_TEAMS_GRID.map(team => {
                         const picks = npbDraftGridData.byTeam[team.name] || [];
                         return (
@@ -402,7 +402,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                             'bg-yellow-700/70 text-yellow-200'
                                           }`}>{roundLabel}</span>
                                         </td>
-                                        <td className="py-1 pl-1 text-white font-bold text-xs whitespace-nowrap">{entry.name}</td>
+                                        <td className="py-1 pl-1 text-white font-bold text-xs whitespace-nowrap" style={{ minWidth: '7em' }}>{entry.name}</td>
                                         <td className="py-1 whitespace-nowrap pl-1">
                                           <span className="text-blue-300">{getPositionName(entry.position)}</span>
                                           <span className="inline-block w-2" />
