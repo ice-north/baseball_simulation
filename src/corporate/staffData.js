@@ -202,16 +202,28 @@ export const convertPlayerToStaff = (player, currentYear) => {
   const isPitcher = player.position === 'pitcher';
   const isCatcher = player.position === 'catcher';
 
-  // 選手の総合力を算出
+  // 選手の総合力を算出（コーチとしての指導力の土台）
   let overall;
   if (isPitcher) {
-    overall = ((player.pitching?.velocity || 130) - 120) * 1.5
-      + (player.pitching?.control || 40) + (player.pitching?.stamina || 80) * 0.4;
-    overall /= 3;
+    const v = player.pitching?.velocity || 130;
+    const c = player.pitching?.control || 40;
+    const s = player.pitching?.stamina || 60;
+    const arm = player.physical?.arm || 40;
+    const arsenal = player.pitching?.arsenal || [];
+    const breakingBalls = arsenal.filter(a => a.type !== 'straight');
+    const bestBreaking = breakingBalls.reduce((max, a) => Math.max(max, a.level || 0), 0);
+    const arsenalCount = breakingBalls.filter(a => (a.level || 0) >= 20).length;
+    const arsenalBonus = arsenalCount >= 3 ? 8 : arsenalCount >= 2 ? 4 : 0;
+    overall = ((v - 120) * 1.2 + c * 0.8 + s * 0.3 + bestBreaking * 0.4 + arsenalBonus + arm * 0.2) / 3;
   } else {
-    overall = ((player.batting?.meet || 30) + (player.batting?.power || 30)
-      + (player.physical?.speed || 30) + (player.physical?.arm || 30)
-      + (player.fielding?.defense || 30)) / 5;
+    const m = player.batting?.meet || 30;
+    const p = player.batting?.power || 30;
+    const e = player.batting?.eye || 20;
+    const sp = player.physical?.speed || 30;
+    const arm = player.physical?.arm || 30;
+    const def = player.fielding?.defense || 30;
+    const stl = player.physical?.steal || 20;
+    overall = (m + p + e * 0.7 + sp * 0.6 + arm * 0.5 + def * 0.8 + stl * 0.4) / 4;
   }
 
   // 自チーム所属年数を算出（careerHistoryの最後の入団年から）
