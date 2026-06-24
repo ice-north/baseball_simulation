@@ -12,7 +12,7 @@ import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, process
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { generatePositionFitness } from './tryoutSystem.js';
-import { syncPositionToFitness, getVelocityCap } from '../utils/physics.js';
+import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay } from '../corporate/corporateInit.js';
@@ -1789,7 +1789,8 @@ function applyCorporatePlayerGrowth(allTeams) {
         if (player.pitching) {
           player.pitching.control = grow(player.pitching.control, 3.0, 'control', 99, 70, 0.05);
           player.pitching.stamina = grow(player.pitching.stamina, 2.0, 'stamina', 200, 80, 0.03);
-          player.pitching.velocity = grow(player.pitching.velocity, 0.5, 'velocity', getVelocityCap(player.physical?.arm || 50), 150, 0.20);
+          const ypVelCatchup = getVelocityCatchupMult(player.physical?.arm || 50, player.pitching.velocity);
+          player.pitching.velocity = grow(player.pitching.velocity, 0.5 * ypVelCatchup, 'velocity', getVelocityCap(player.physical?.arm || 50), 150, 0.20);
         }
         if (player.physical) {
           player.physical.arm = grow(player.physical.arm, 1.0, 'arm', 99, 80, 0.03);
@@ -2481,10 +2482,11 @@ export function applyAgeCurveChanges(allTeams) {
               }
             }
             if (stat === 'arm' && player.position !== 'pitcher') {
-              const velChange = Math.round(change * 0.5);
+              const currentVelForCatchup = getNestedValue(updatedPlayer, getStatPath('velocity'));
+              const velChange = Math.round(change * 0.5 * getVelocityCatchupMult(newValue, currentVelForCatchup || 120));
               if (velChange !== 0) {
                 const velPath = getStatPath('velocity');
-                const currentVel = getNestedValue(updatedPlayer, velPath);
+                const currentVel = currentVelForCatchup;
                 if (currentVel != null) {
                   const newVel = Math.max(100, Math.min(getVelocityCap(newValue), currentVel + velChange));
                   if (newVel !== currentVel) {

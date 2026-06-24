@@ -5,7 +5,7 @@
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
-import { syncPositionToFitness, getVelocityCap } from '../utils/physics.js';
+import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 
 // 練習カテゴリ → スタッフ指導能力のマッピング
 const CATEGORY_TO_STAFF_ABILITY = {
@@ -301,10 +301,11 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           player[obj][prop] = Math.min(100, old + gain);
           growthReport.push({ statName: picked.name, before: old, after: old + gain, growth: gain });
           if (picked.key === 'physical.arm' && player.position !== 'pitcher') {
-            const velChange = Math.round(gain * 0.5);
+            const armNow = player.physical?.arm || 50;
+            const velChange = Math.round(gain * 0.5 * getVelocityCatchupMult(armNow, player.pitching?.velocity || 120));
             if (velChange > 0 && player.pitching) {
               const oldVel = player.pitching.velocity || 120;
-              const newVel = Math.min(getVelocityCap(player.physical?.arm || 50), oldVel + velChange);
+              const newVel = Math.min(getVelocityCap(armNow), oldVel + velChange);
               if (newVel !== oldVel) {
                 player.pitching.velocity = newVel;
                 growthReport.push({ statName: '球速', before: oldVel, after: newVel, growth: newVel - oldVel, isLinked: true });
@@ -865,6 +866,12 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         formAdjustedGrowth = Math.round(baseGrowth * formEffect.velocityGrowthMult);
       } else if (targetStat === 'control' && formEffect.controlGrowthMult !== 1.0) {
         formAdjustedGrowth = Math.round(baseGrowth * formEffect.controlGrowthMult);
+      }
+
+      // 肩力ポテンシャルとのギャップによるキャッチアップ（球速のみ）
+      if (targetStat === 'velocity') {
+        const armVal = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
+        formAdjustedGrowth = Math.round(formAdjustedGrowth * getVelocityCatchupMult(armVal, currentValue));
       }
 
       // 高能力値の成長減衰（覚醒分は減衰しない）

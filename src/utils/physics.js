@@ -103,6 +103,15 @@ export const getVelocityCap = (arm) => {
   return Math.round(130 + (Math.min(100, arm || 50) - 50) * 0.7);
 };
 
+// 肩力ポテンシャルと現在球速のギャップによるキャッチアップ補正
+// ギャップが大きい＝投げ方が悪い→練習で改善しやすい
+export const getVelocityCatchupMult = (arm, currentVelocity) => {
+  const cap = getVelocityCap(arm);
+  const gap = cap - currentVelocity;
+  if (gap <= 5) return 1.0;
+  return Math.min(3.0, 1.0 + (gap - 5) * 0.05);
+};
+
 /**
  * スタミナによる能力補正を計算
  * @param {number} currentStamina - 現在のスタミナ

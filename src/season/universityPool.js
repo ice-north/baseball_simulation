@@ -8,7 +8,7 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
 import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
-import { getVelocityCap } from '../utils/physics.js';
+import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { syncPositionToFitness } from '../utils/physics.js';
@@ -714,7 +714,8 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
     player.pitching.stamina = grow(player.pitching.stamina, 7, 'stamina', 200, 80, 0.03);
     player.physical.arm = grow(player.physical.arm, 3.5, 'athletic', 99, 80, 0.03);
     const uniVelCap = getVelocityCap(player.physical.arm);
-    player.pitching.velocity = grow(player.pitching.velocity, 2.0, 'power', uniVelCap, 150, 0.20);
+    const uniVelCatchup = getVelocityCatchupMult(player.physical.arm, player.pitching.velocity);
+    player.pitching.velocity = grow(player.pitching.velocity, 2.0 * uniVelCatchup, 'power', uniVelCap, 150, 0.20);
     if (player.pitching.arsenal) {
       const techBonus = has('technique') ? 1.3 : 1.0;
       player.pitching.arsenal.forEach(pitch => {

@@ -4,7 +4,7 @@
 // ============================================================
 
 import { getNestedValue, setNestedValueMut } from './growthUtils.js';
-import { getVelocityCap } from '../utils/physics.js';
+import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { getPitchTypeName } from './campTraining.js';
 import { getAvailableUniversityDispatches, getRemainingDispatchSlots } from '../university/universityPipeSystem.js';
 import { getUniversityTeamById, getSpecialtyLabel, SPECIALTY_LABELS, SPECIALTY_RANK_BOOST } from '../university/universityTeamsData.js';
@@ -229,7 +229,8 @@ export function resolveDispatchTraining(player) {
       growthReport.push({ statName: '制球', before: cBefore, after: player.pitching.control, growth: player.pitching.control - cBefore });
 
       // power → 球速
-      const velGrowth = sg('power', Math.floor(Math.random() * 3) + 1);
+      const velCatchup1 = getVelocityCatchupMult(player.physical?.arm || 50, player.pitching.velocity);
+      const velGrowth = Math.round(sg('power', Math.floor(Math.random() * 3) + 1) * velCatchup1);
       const vBefore = player.pitching.velocity;
       player.pitching.velocity = Math.max(vBefore, Math.min(getVelocityCap(player.physical?.arm || 50), vBefore + velGrowth));
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
@@ -375,7 +376,8 @@ export function resolveDispatchTraining(player) {
       player.pitching.control = Math.min(99, before + ctrlGrowth);
       growthReport.push({ statName: '制球', before, after: player.pitching.control, growth: player.pitching.control - before });
 
-      const velGrowth = applyGrowthMult(Math.floor(Math.random() * 2) + 1);
+      const velCatchup2 = getVelocityCatchupMult(player.physical?.arm || 50, player.pitching.velocity);
+      const velGrowth = Math.round(applyGrowthMult(Math.floor(Math.random() * 2) + 1) * velCatchup2);
       const vBefore = player.pitching.velocity;
       player.pitching.velocity = Math.max(vBefore, Math.min(getVelocityCap(player.physical?.arm || 50), vBefore + velGrowth));
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
@@ -427,7 +429,7 @@ export function resolveDispatchTraining(player) {
       const pick = awakeStats[Math.floor(Math.random() * awakeStats.length)];
       const current = getNestedValue(player, pick.path) || 50;
       const baseBonus = pick.path === 'pitching.velocity'
-        ? Math.floor(Math.random() * 2) + 1
+        ? Math.round((Math.floor(Math.random() * 2) + 1) * getVelocityCatchupMult(player.physical?.arm || 50, current))
         : Math.floor(Math.random() * 4) + 3;
       const bonus = applyGrowthMult(baseBonus);
       const newVal = Math.min(pick.max, current + bonus);
