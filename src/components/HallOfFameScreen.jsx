@@ -405,15 +405,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                         <td className="py-1 pl-2 text-white font-bold text-xs whitespace-nowrap">{entry.name}</td>
                                         <td className="py-1 whitespace-nowrap pl-2">
                                           <span className="text-blue-300">{getPositionName(entry.position)}</span>
-                                          {' '}
+                                          <span className="inline-block w-2" />
                                           <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{throwHand}</span>
                                           <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{batHand}</span>
-                                          {' '}
+                                          <span className="inline-block w-2" />
                                           <span className="text-white">{entry.age}歳</span>
-                                        </td>
-                                        <td className="py-1 pl-2 whitespace-nowrap">
                                           {srcInfo ? (
-                                            <span className={`text-[10px] px-1 py-px rounded border ${srcInfo.color}`}>{srcInfo.label}</span>
+                                            <span className={`text-[10px] px-1 py-px rounded border ml-3 ${srcInfo.color}`}>{srcInfo.label}</span>
                                           ) : null}
                                         </td>
                                         <td className="py-1 text-gray-400 text-right pl-2 whitespace-nowrap">{entry.teamName}</td>
