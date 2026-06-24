@@ -525,6 +525,10 @@ export const generateCorporateRoster = (teamDef, year = 1) => {
     if (p.careerHistory.length === 0) {
       p.careerHistory.push({ type: 'highschool', label: '高校卒' });
     }
+    const uniName = p.universityTeamName || p.universityName;
+    if (uniName && !p.careerHistory.some(h => h.type === 'university')) {
+      p.careerHistory.push({ type: 'university', label: uniName });
+    }
     p.careerHistory.push({ type: 'corporate', label: teamDef.name || teamDef.displayName });
   });
 
