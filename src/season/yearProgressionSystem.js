@@ -12,7 +12,7 @@ import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, process
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { generatePositionFitness } from './tryoutSystem.js';
-import { syncPositionToFitness } from '../utils/physics.js';
+import { syncPositionToFitness, getVelocityCap } from '../utils/physics.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay } from '../corporate/corporateInit.js';
@@ -1789,7 +1789,7 @@ function applyCorporatePlayerGrowth(allTeams) {
         if (player.pitching) {
           player.pitching.control = grow(player.pitching.control, 3.0, 'control', 99, 70, 0.05);
           player.pitching.stamina = grow(player.pitching.stamina, 2.0, 'stamina', 200, 80, 0.03);
-          player.pitching.velocity = grow(player.pitching.velocity, 0.5, 'velocity', 165, 150, 0.20);
+          player.pitching.velocity = grow(player.pitching.velocity, 0.5, 'velocity', getVelocityCap(player.physical?.arm || 50), 150, 0.20);
         }
         if (player.physical) {
           player.physical.arm = grow(player.physical.arm, 1.0, 'arm', 99, 80, 0.03);
@@ -2486,7 +2486,7 @@ export function applyAgeCurveChanges(allTeams) {
                 const velPath = getStatPath('velocity');
                 const currentVel = getNestedValue(updatedPlayer, velPath);
                 if (currentVel != null) {
-                  const newVel = Math.max(100, Math.min(150, currentVel + velChange));
+                  const newVel = Math.max(100, Math.min(getVelocityCap(newValue), currentVel + velChange));
                   if (newVel !== currentVel) {
                     updatedPlayer = setNestedValue(updatedPlayer, velPath, newVel);
                     changes.push({ stat: 'velocity', statName: getStatName('velocity'), before: currentVel, after: newVel, change: newVel - currentVel });

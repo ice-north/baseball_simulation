@@ -4,6 +4,7 @@
 // ============================================================
 
 import { getNestedValue, setNestedValueMut } from './growthUtils.js';
+import { getVelocityCap } from '../utils/physics.js';
 import { getPitchTypeName } from './campTraining.js';
 import { getAvailableUniversityDispatches, getRemainingDispatchSlots } from '../university/universityPipeSystem.js';
 import { getUniversityTeamById, getSpecialtyLabel, SPECIALTY_LABELS, SPECIALTY_RANK_BOOST } from '../university/universityTeamsData.js';
@@ -230,7 +231,7 @@ export function resolveDispatchTraining(player) {
       // power → 球速
       const velGrowth = sg('power', Math.floor(Math.random() * 3) + 1);
       const vBefore = player.pitching.velocity;
-      player.pitching.velocity = Math.max(vBefore, Math.min(158, vBefore + velGrowth));
+      player.pitching.velocity = Math.max(vBefore, Math.min(getVelocityCap(player.physical?.arm || 50), vBefore + velGrowth));
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
 
       // stamina → スタミナ
@@ -376,7 +377,7 @@ export function resolveDispatchTraining(player) {
 
       const velGrowth = applyGrowthMult(Math.floor(Math.random() * 2) + 1);
       const vBefore = player.pitching.velocity;
-      player.pitching.velocity = Math.max(vBefore, Math.min(155, vBefore + velGrowth));
+      player.pitching.velocity = Math.max(vBefore, Math.min(getVelocityCap(player.physical?.arm || 50), vBefore + velGrowth));
       growthReport.push({ statName: '球速', before: vBefore, after: player.pitching.velocity, growth: player.pitching.velocity - vBefore });
 
       const arsenal = player.pitching?.arsenal || [];
@@ -418,8 +419,9 @@ export function resolveDispatchTraining(player) {
   const awakeChance = outcome === 'great_success' ? 0.3 : outcome === 'minor' ? 0.1 : 0.2;
   if (Math.random() < awakeChance) {
     if (player.position === 'pitcher') {
+      const dispatchVelCap = getVelocityCap(player.physical?.arm || 50);
       const awakeStats = [
-        { path: 'pitching.velocity', name: '球速', max: 160 },
+        { path: 'pitching.velocity', name: '球速', max: dispatchVelCap },
         { path: 'pitching.control', name: '制球', max: 99 },
       ];
       const pick = awakeStats[Math.floor(Math.random() * awakeStats.length)];

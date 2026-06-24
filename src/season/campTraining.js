@@ -5,7 +5,7 @@
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
-import { syncPositionToFitness } from '../utils/physics.js';
+import { syncPositionToFitness, getVelocityCap } from '../utils/physics.js';
 
 // 練習カテゴリ → スタッフ指導能力のマッピング
 const CATEGORY_TO_STAFF_ABILITY = {
@@ -304,7 +304,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
             const velChange = Math.round(gain * 0.5);
             if (velChange > 0 && player.pitching) {
               const oldVel = player.pitching.velocity || 120;
-              const newVel = Math.min(158, oldVel + velChange);
+              const newVel = Math.min(getVelocityCap(player.physical?.arm || 50), oldVel + velChange);
               if (newVel !== oldVel) {
                 player.pitching.velocity = newVel;
                 growthReport.push({ statName: '球速', before: oldVel, after: newVel, growth: newVel - oldVel, isLinked: true });
@@ -896,8 +896,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
       if (targetStat === 'defense' && totalGrowth < 1) totalGrowth = 1;
-      // 球速は175、スタミナは200、その他の能力値は100が上限
-      const maxValue = targetStat === 'velocity' ? 175 : targetStat === 'stamina' ? 200 : 100;
+      const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
+      const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : 100;
       const newValue = Math.min(maxValue, currentValue + totalGrowth);
       updatedPlayer = setNestedValue(updatedPlayer, statPath, newValue);
       growthReport.push({
@@ -927,7 +927,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         if (velChange !== 0) {
           const velPath = getStatPath('velocity');
           const currentVel = getNestedValue(updatedPlayer, velPath) || 120;
-          const newVel = Math.max(100, Math.min(150, currentVel + velChange));
+          const newVel = Math.max(100, Math.min(getVelocityCap(newValue), currentVel + velChange));
           if (newVel !== currentVel) {
             updatedPlayer = setNestedValue(updatedPlayer, velPath, newVel);
             growthReport.push({ stat: 'velocity', statName: getStatName('velocity'), before: currentVel, after: newVel, growth: newVel - currentVel, isAwakening: false, isLinked: true });

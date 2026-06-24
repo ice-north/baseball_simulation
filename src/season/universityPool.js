@@ -8,6 +8,7 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
 import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
+import { getVelocityCap } from '../utils/physics.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { syncPositionToFitness } from '../utils/physics.js';
@@ -181,17 +182,19 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'technician') control += r(10, 20);
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
+    const armValue = Math.max(10, baseArm + r(2, 8));
+    const velCap = getVelocityCap(armValue);
     abilities = {
       meet: g(14, 6, 0.3, 3),
       power: g(10 + buildMod.power * 0.3, 5, 0.3, 3),
       eye: g(16, 6, 0.3, 5),
       steal: Math.max(1, Math.round(nrm(16, 7) + buildMod.steal * 0.5)),
       speed: baseSpeed,
-      arm: Math.max(10, baseArm + r(2, 8)),
+      arm: armValue,
       defense: g(32, 8, 0.4, 1),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(43, 10, 0, 15),
-      velocity: Math.max(110, velocity),
+      velocity: Math.max(110, Math.min(velCap, velocity)),
       control: Math.max(5, control),
       stamina: Math.max(25, stamina)
     };
@@ -710,7 +713,8 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
     player.pitching.control = grow(player.pitching.control, 5, 'technique', 99, 70, 0.05);
     player.pitching.stamina = grow(player.pitching.stamina, 7, 'stamina', 200, 80, 0.03);
     player.physical.arm = grow(player.physical.arm, 3.5, 'athletic', 99, 80, 0.03);
-    player.pitching.velocity = grow(player.pitching.velocity, 2.0, 'power', 165, 150, 0.20);
+    const uniVelCap = getVelocityCap(player.physical.arm);
+    player.pitching.velocity = grow(player.pitching.velocity, 2.0, 'power', uniVelCap, 150, 0.20);
     if (player.pitching.arsenal) {
       const techBonus = has('technique') ? 1.3 : 1.0;
       player.pitching.arsenal.forEach(pitch => {

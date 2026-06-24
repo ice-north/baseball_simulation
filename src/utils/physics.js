@@ -98,6 +98,11 @@ export const syncPositionToFitness = (player) => {
   if (bestPos !== player.position) player.position = bestPos;
 };
 
+// 肩力から球速上限を算出（肩50→130km, 肩100→165km）
+export const getVelocityCap = (arm) => {
+  return Math.round(130 + (Math.min(100, arm || 50) - 50) * 0.7);
+};
+
 /**
  * スタミナによる能力補正を計算
  * @param {number} currentStamina - 現在のスタミナ
