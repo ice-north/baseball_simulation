@@ -4,18 +4,18 @@ import { exportDraftedPlayers } from '../game/saveSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
 const NPB_TEAMS_GRID = [
-  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', logo: '🦅' },
-  { name: '阪神タイガース', short: '阪神', color: '#FFD700', logo: '🐯' },
-  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', logo: '🐟' },
-  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', logo: '⭐' },
-  { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', logo: '🐃' },
-  { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', logo: '🐉' },
-  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', logo: '🐻' },
-  { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', logo: '🏟️' },
-  { name: 'ソフトバンクホークス', short: '福岡ソフトバンク', color: '#DAA520', logo: '🦅' },
-  { name: '広島東洋カープ', short: '広島東洋', color: '#CC0000', logo: '🎏' },
-  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', logo: '🦁' },
-  { name: 'ヤクルトスワローズ', short: '東京ヤクルト', color: '#006633', logo: '🐦' },
+  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', flag: 'eagles' },
+  { name: '阪神タイガース', short: '阪神', color: '#FFD700', flag: 'tigers' },
+  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', flag: 'marines' },
+  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', flag: 'baystars' },
+  { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', flag: 'buffaloes' },
+  { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', flag: 'dragons' },
+  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', flag: 'fighters' },
+  { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', flag: 'giants' },
+  { name: 'ソフトバンクホークス', short: '福岡ソフトバンク', color: '#DAA520', flag: 'hawks' },
+  { name: '広島東洋カープ', short: '広島東洋', color: '#CC0000', flag: 'carp' },
+  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', flag: 'lions' },
+  { name: 'ヤクルトスワローズ', short: '東京ヤクルト', color: '#006633', flag: 'swallows' },
 ];
 
 const ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位', 'ドラフト4位', 'ドラフト5位', 'ドラフト6位', '育成指名'];
@@ -368,7 +368,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 borderTop: `3px solid ${team.color}`,
                               }}
                             >
-                              <span className="text-sm">🏁</span>
+                              <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '18px', width: '27px' }} />
                               <span className="text-white font-bold text-xs">{team.short}</span>
                               <span className="text-gray-500 text-[10px] ml-auto">{picks.length}名</span>
                             </div>
@@ -377,38 +377,57 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 <div className="flex items-center justify-center h-full text-gray-500 text-sm min-h-[40px]">
                                   指名なし
                                 </div>
-                              ) : (() => {
-                                let ikuseiCount = 0;
-                                return picks.map((entry, pi) => {
-                                const srcInfo = SOURCE_LABELS[entry.source];
-                                let roundLabel = entry.draftRound?.replace('ドラフト', '') || '';
-                                if (entry.draftRound === '育成指名') {
-                                  ikuseiCount++;
-                                  roundLabel = `育${ikuseiCount}位`;
-                                }
-                                return (
-                                  <div key={pi} className={`grid items-center py-1 ${pi > 0 ? 'border-t border-gray-700/30' : ''}`}
-                                    style={{ gridTemplateColumns: '34px 1fr auto auto auto auto auto', gap: '6px' }}>
-                                    <span className={`text-[10px] font-bold px-1 py-0.5 rounded text-center whitespace-nowrap ${
-                                      entry.draftRound === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
-                                      entry.draftRound === '育成指名' ? 'bg-gray-600/70 text-gray-300' :
-                                      'bg-yellow-700/70 text-yellow-200'
-                                    }`}>{roundLabel}</span>
-                                    <span className="text-white font-bold text-xs truncate min-w-0">{entry.name}</span>
-                                    <span className="text-blue-300 text-[11px] whitespace-nowrap">{getPositionName(entry.position)}</span>
-                                    <span className="text-[11px] whitespace-nowrap">
-                                      <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{entry.throws === 'left' ? '左' : '右'}</span>
-                                      <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}</span>
-                                    </span>
-                                    <span className="text-white text-[11px] whitespace-nowrap">{entry.age}歳</span>
-                                    {srcInfo ? (
-                                      <span className={`text-[10px] px-1 py-px rounded border text-center whitespace-nowrap ${srcInfo.color}`}>{srcInfo.label}</span>
-                                    ) : <span />}
-                                    <span className="text-gray-400 text-[11px] truncate text-right">{entry.teamName}</span>
-                                  </div>
-                                );
-                              });
-                              })()}
+                              ) : (
+                                <table className="w-full text-[11px]" style={{ tableLayout: 'fixed' }}>
+                                  <colgroup>
+                                    <col style={{ width: '36px' }} />
+                                    <col />
+                                    <col style={{ width: '18px' }} />
+                                    <col style={{ width: '22px' }} />
+                                    <col style={{ width: '30px' }} />
+                                    <col style={{ width: '30px' }} />
+                                    <col style={{ width: '80px' }} />
+                                  </colgroup>
+                                  <tbody>
+                                  {picks.map((entry, pi) => {
+                                    const srcInfo = SOURCE_LABELS[entry.source];
+                                    const rd = entry.draftRound || '';
+                                    const isIkusei = rd.includes('育成');
+                                    let roundLabel;
+                                    if (isIkusei) {
+                                      const num = rd.match(/(\d+)/);
+                                      roundLabel = num ? `育${num[1]}` : '育成';
+                                    } else {
+                                      roundLabel = rd.replace('ドラフト', '');
+                                    }
+                                    return (
+                                      <tr key={pi} className={pi > 0 ? 'border-t border-gray-700/30' : ''}>
+                                        <td className="py-1 pr-1">
+                                          <span className={`text-[10px] font-bold px-1 py-0.5 rounded block text-center whitespace-nowrap ${
+                                            rd === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
+                                            isIkusei ? 'bg-green-700/70 text-green-200' :
+                                            'bg-yellow-700/70 text-yellow-200'
+                                          }`}>{roundLabel}</span>
+                                        </td>
+                                        <td className="py-1 text-white font-bold text-xs truncate">{entry.name}</td>
+                                        <td className="py-1 text-blue-300">{getPositionName(entry.position)}</td>
+                                        <td className="py-1">
+                                          <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{entry.throws === 'left' ? '左' : '右'}</span>
+                                          <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}</span>
+                                        </td>
+                                        <td className="py-1 text-white">{entry.age}歳</td>
+                                        <td className="py-1">
+                                          {srcInfo ? (
+                                            <span className={`text-[10px] px-1 py-px rounded border whitespace-nowrap ${srcInfo.color}`}>{srcInfo.label}</span>
+                                          ) : null}
+                                        </td>
+                                        <td className="py-1 text-gray-400 truncate text-right">{entry.teamName}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                  </tbody>
+                                </table>
+                              )}
                             </div>
                           </div>
                         );
