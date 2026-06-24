@@ -3,19 +3,26 @@ import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { exportDraftedPlayers } from '../game/saveSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 
-const NPB_TEAMS_GRID = [
-  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', flag: 'eagles' },
-  { name: '阪神タイガース', short: '阪神', color: '#FFD700', flag: 'tigers' },
-  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', flag: 'marines' },
-  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', flag: 'baystars' },
-  { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', flag: 'buffaloes' },
-  { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', flag: 'dragons' },
-  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', flag: 'fighters' },
+const NPB_TEAMS_CE = [
   { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', flag: 'giants' },
-  { name: 'ソフトバンクホークス', short: '福岡ソフトバンク', color: '#DAA520', flag: 'hawks' },
+  { name: '阪神タイガース', short: '阪神', color: '#FFD700', flag: 'tigers' },
+  { name: '横浜DeNAベイスターズ', short: '横浜DeNA', color: '#003DA5', flag: 'baystars' },
   { name: '広島東洋カープ', short: '広島東洋', color: '#CC0000', flag: 'carp' },
-  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', flag: 'lions' },
+  { name: '中日ドラゴンズ', short: '中日', color: '#003DA5', flag: 'dragons' },
   { name: 'ヤクルトスワローズ', short: '東京ヤクルト', color: '#006633', flag: 'swallows' },
+];
+const NPB_TEAMS_PA = [
+  { name: 'ソフトバンクホークス', short: '福岡ソフトバンク', color: '#DAA520', flag: 'hawks' },
+  { name: 'オリックス・バファローズ', short: 'オリックス', color: '#002D62', flag: 'buffaloes' },
+  { name: '西武ライオンズ', short: '埼玉西武', color: '#003366', flag: 'lions' },
+  { name: '楽天ゴールデンイーグルス', short: '東北楽天', color: '#8B0000', flag: 'eagles' },
+  { name: '千葉ロッテマリーンズ', short: '千葉ロッテ', color: '#808080', flag: 'marines' },
+  { name: '日本ハムファイターズ', short: '北海道日本ハム', color: '#004080', flag: 'fighters' },
+];
+const NPB_TEAMS_GRID = [
+  NPB_TEAMS_CE[0], NPB_TEAMS_CE[1], NPB_TEAMS_PA[0], NPB_TEAMS_PA[1],
+  NPB_TEAMS_CE[2], NPB_TEAMS_CE[3], NPB_TEAMS_PA[2], NPB_TEAMS_PA[3],
+  NPB_TEAMS_CE[4], NPB_TEAMS_CE[5], NPB_TEAMS_PA[4], NPB_TEAMS_PA[5],
 ];
 
 const ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位', 'ドラフト4位', 'ドラフト5位', 'ドラフト6位', '育成指名'];
