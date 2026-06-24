@@ -356,7 +356,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     </div>
 
                     {/* 球団別グリッド */}
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       {NPB_TEAMS_GRID.map(team => {
                         const picks = npbDraftGridData.byTeam[team.name] || [];
                         return (
