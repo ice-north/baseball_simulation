@@ -9,6 +9,7 @@ import { checkRetirement } from '../season/yearProgressionSystem.js';
 import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
 import { universityPool, highSchoolPool } from '../season/universityPool.js';
+import { getUniversityPipes } from '../university/universityPipeSystem.js';
 
 // ============================================================
 // 退団システム
@@ -243,6 +244,9 @@ function getUniversityScoutPool(currentYear) {
         if (entry.universityTeamName) {
           entry.player.universityTeamName = entry.universityTeamName;
         }
+        if (entry.universityTeamId) {
+          entry.player.universityTeamId = entry.universityTeamId;
+        }
         pool.push({
           player: entry.player,
           source: 'university',
@@ -303,6 +307,11 @@ export function generateScoutCandidates(teamData, year) {
   // 注目度が高いほど上位選手にアクセスしやすい
   const reputationMult = getReputationScoutBonus(reputation);
 
+  // パイプ大学のIDセット（OBの繋がりで情報が入りやすい）
+  const pipes = getUniversityPipes(teamData);
+  const pipeMap = {};
+  for (const p of pipes) pipeMap[p.universityId] = p.pipeStrength;
+
   // 大学プール + リリースプール + 高校生プール を統合
   const uniPool = getUniversityScoutPool(year);
   const relPool = getReleasedScoutPool();
@@ -320,10 +329,11 @@ export function generateScoutCandidates(teamData, year) {
     const noise = (Math.random() - 0.5) * 30;
     const repBonus = (reputationMult - 1.0) * 20;
     // 知名度が低い選手は、スカウト能力が低いと見落とされる
-    // fame 0 → discoveryPenalty = -(100-scoutEye)*0.3 = 最大-30（scoutEye=0の時）
-    // fame 100 → discoveryPenalty = 0（有名なので誰でも見つかる）
     const discoveryPenalty = -((100 - fame) / 100) * ((100 - scoutEye) * 0.3);
-    return { ...entry, score: base + noise + repBonus + discoveryPenalty };
+    // パイプボーナス: OBの繋がりで情報が入る（強度1→+10, 2→+15, 3→+20）
+    const uniId = entry.player.universityTeamId;
+    const pipeBonus = uniId && pipeMap[uniId] ? 5 + pipeMap[uniId] * 5 : 0;
+    return { ...entry, score: base + noise + repBonus + discoveryPenalty + pipeBonus, _pipeStrength: pipeMap[uniId] || 0 };
   });
   scored.sort((a, b) => b.score - a.score);
 
@@ -337,6 +347,8 @@ export function generateScoutCandidates(teamData, year) {
     p.scoutedAbilities = obscureAbilities(p, accuracy);
     // プールからの除去用の参照情報
     p._poolRef = { source: entry.source, poolIndex: entry.poolIndex, enrollYear: entry.enrollYear, teamName: entry.teamName };
+    // パイプ強度を候補者に付与（交渉成功率計算で使用）
+    p._pipeStrength = entry._pipeStrength || 0;
     // 出身表示用
     if (entry.source === 'highschool') {
       p._scoutSource = p.highSchool?.name ? p.highSchool.name + '高' : '高校';
@@ -501,7 +513,11 @@ export function calculateRecruitSuccessRate(player, teamData) {
   // お気に入りボーナス: 週ごとに+3%蓄積
   const favBonus = (getFavoriteBonus(teamData, player.id) / 100);
 
-  const rate = baseRate - qualityPenalty + negotiationBonus + rankBonus + investigationBonus + favBonus;
+  // パイプボーナス: OBの繋がりで入団しやすい（強度1→+5%, 2→+8%, 3→+12%）
+  const ps = player._pipeStrength || 0;
+  const pipeBonus = ps >= 3 ? 0.12 : ps === 2 ? 0.08 : ps === 1 ? 0.05 : 0;
+
+  const rate = baseRate - qualityPenalty + negotiationBonus + rankBonus + investigationBonus + favBonus + pipeBonus;
   return Math.max(1, Math.min(95, Math.round(rate * 100)));
 }
 

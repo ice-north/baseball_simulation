@@ -230,6 +230,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                   {scoutName && <span className="text-cyan-400">担当: {scoutName}</span>}
                   {invBonus > 0 && <span className="text-cyan-400">調査+{invBonus}%</span>}
                   {favBonus > 0 && <span className="text-yellow-400">★絆+{favBonus}%</span>}
+                  {(p._pipeStrength || 0) > 0 && <span className="text-purple-400">OBパイプ+{p._pipeStrength >= 3 ? 12 : p._pipeStrength === 2 ? 8 : 5}%</span>}
                   {noRivalBonus > 0 && <span className="text-green-400">競合なし+{noRivalBonus}%</span>}
                 </div>
                 <div className="ml-11 mt-1.5 text-sm">
@@ -445,6 +446,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                       {scoutBonus > 0 && <span className="text-green-400 text-xs ml-1">+{scoutBonus}</span>}
                       {invBonus > 0 && <span className="text-cyan-400 text-xs ml-1">調+{invBonus}</span>}
                       {favBonus > 0 && <span className="text-yellow-400 text-xs ml-1">★+{favBonus}</span>}
+                      {(player._pipeStrength || 0) > 0 && <span className="text-purple-400 text-xs ml-1">OB</span>}
                       {rivals === 0 && <span className="text-green-400 text-xs ml-1">競合なし</span>}
                       {(player._negotiationAttempts || 0) > 0 && (
                         <span className={`text-xs ml-1 ${player._negotiationAttempts >= 2 ? 'text-red-400' : 'text-orange-400'}`}>
