@@ -8,36 +8,47 @@ import { UNIVERSITY_TEAMS, getUniversityTeamById, getUniversityTeamsByRank } fro
 
 /**
  * チームの大学パイプ一覧を取得
- * OBの人数に応じてパイプ強度が決まる
+ * 選手+コーチのOB人数に応じてパイプ強度が決まる
  * @param {Object} teamData - TEAMS_DATA[teamName]
- * @returns {Array<{ universityId, universityName, rank, obCount, pipeStrength, specialties, obPlayers }>}
+ * @returns {Array<{ universityId, universityName, rank, obCount, pipeStrength, specialties, obPlayers, obStaff }>}
  */
 export function getUniversityPipes(teamData) {
   const players = teamData?.players || [];
+  const staff = teamData?.corporateData?.staff || [];
   const obMap = {};
 
   for (const p of players) {
     if (!p.universityTeamId) continue;
     if (!obMap[p.universityTeamId]) {
-      obMap[p.universityTeamId] = [];
+      obMap[p.universityTeamId] = { players: [], staff: [] };
     }
-    obMap[p.universityTeamId].push(p);
+    obMap[p.universityTeamId].players.push(p);
+  }
+
+  for (const s of staff) {
+    if (!s.universityTeamId) continue;
+    if (!obMap[s.universityTeamId]) {
+      obMap[s.universityTeamId] = { players: [], staff: [] };
+    }
+    obMap[s.universityTeamId].staff.push(s);
   }
 
   const pipes = [];
-  for (const [uniIdStr, obPlayers] of Object.entries(obMap)) {
+  for (const [uniIdStr, ob] of Object.entries(obMap)) {
     const uniId = Number(uniIdStr);
     const uni = getUniversityTeamById(uniId);
     if (!uni) continue;
 
+    const totalOb = ob.players.length + ob.staff.length;
     pipes.push({
       universityId: uniId,
       universityName: uni.name,
       rank: uni.rank,
       specialties: uni.specialties || [],
-      obCount: obPlayers.length,
-      pipeStrength: calcPipeStrength(obPlayers.length),
-      obPlayers: obPlayers.map(p => ({ id: p.id, name: p.name })),
+      obCount: totalOb,
+      pipeStrength: calcPipeStrength(totalOb),
+      obPlayers: ob.players.map(p => ({ id: p.id, name: p.name })),
+      obStaff: ob.staff.map(s => ({ id: s.id, name: s.name, role: s.role })),
     });
   }
 

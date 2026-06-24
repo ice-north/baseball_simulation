@@ -320,6 +320,8 @@ export const convertPlayerToStaff = (player, currentYear) => {
     experience,
     personality: player.personality?.type || randomPersonality(),
     isFormerPlayer: true,
+    universityTeamId: player.universityTeamId || null,
+    universityName: player.universityName || player.universityTeamName || null,
   };
 };
 

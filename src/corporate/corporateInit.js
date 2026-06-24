@@ -572,6 +572,7 @@ export const generateInitialStaff = (rank) => {
       staff.push(generateStaff(role, null, maxGrade));
     }
   }
+  assignInitialUniversityBackgrounds(staff, { universityRate: 0.65, teamRank: rank });
   return staff;
 };
 

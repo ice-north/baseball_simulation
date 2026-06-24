@@ -978,18 +978,24 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
                     {/* OB一覧 */}
                     <div className="mt-2 border-t border-gray-700 pt-2">
-                      <div className="text-[10px] text-gray-500 mb-1">OB: {pipe.obCount}名</div>
+                      <div className="text-[10px] text-gray-500 mb-1">OB: {pipe.obCount}名（選手{pipe.obPlayers.length} / スタッフ{(pipe.obStaff || []).length}）</div>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                         {pipe.obPlayers.map(ob => {
                           const player = players.find(p => p.id === ob.id);
                           return (
-                            <span key={ob.id} className="text-xs text-gray-300">
+                            <span key={`p-${ob.id}`} className="text-xs text-gray-300">
                               <span className="text-gray-500">{player ? POSITION_NAMES[player.position] || '' : ''}</span>
                               {' '}{ob.name}
                               {player && <span className="text-gray-600 ml-0.5">({player.age}歳)</span>}
                             </span>
                           );
                         })}
+                        {(pipe.obStaff || []).map(ob => (
+                          <span key={`s-${ob.id}`} className="text-xs text-purple-300">
+                            <span className="text-purple-500">コーチ</span>
+                            {' '}{ob.name}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
