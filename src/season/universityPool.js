@@ -191,7 +191,7 @@ function generateHighSchoolPlayer(id) {
       steal: Math.max(1, Math.round(nrm(16, 7) + buildMod.steal * 0.5)),
       speed: baseSpeed,
       arm: armValue,
-      defense: g(32, 8, 0.4, 1),
+      defense: g(35, 10, 0.4, 1),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(43, 10, 0, 15),
       velocity: Math.max(110, Math.min(velCap, velocity)),
@@ -214,7 +214,7 @@ function generateHighSchoolPlayer(id) {
     let meet = Math.round(nrm(19, 9) + off + pm.meet);
     let power = Math.round(nrm(15, 12) + off + buildMod.power + pm.power);
     let eye = Math.round(nrm(18, 8) + off * 0.8 + pm.eye);
-    let defense = Math.round(nrm(28, 10) + off * 0.6 + buildMod.defense + pm.defense);
+    let defense = Math.round(nrm(38, 13) + off * 0.6 + buildMod.defense + pm.defense);
     let steal = Math.round(nrm(22, 9) + off * 0.4 + buildMod.steal + pm.steal);
 
     if (specialty === 'speedster') { baseSpeed += r(14, 26); steal += r(10, 18); }
