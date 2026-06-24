@@ -107,42 +107,6 @@ function getPlayerTraits(isPitcher) {
 
 
 /**
- * 2年目以降のトライアウト候補生成
- * リリースプール（ドラフト漏れ・大学卒業生・戦力外）を主体とし、
- * 不足分のみランダム生成で補う
- */
-function generateYear2PlusCandidates(year, teamCount, independentLeagueRank) {
-  const candidates = [];
-  const existingIds = new Set();
-
-  // 1. リリースプールから候補を取得（メインソース）
-  const releasedCandidates = getReleasedCandidatesFromPool();
-  releasedCandidates.forEach(rc => {
-    if (!existingIds.has(rc.id)) {
-      existingIds.add(rc.id);
-      if (!rc.scoutComment) rc.scoutComment = generateScoutComment(rc);
-      candidates.push(rc);
-    }
-  });
-
-  // 2. リリースプールだけでは不足する場合、最低限のランダム補充
-  // 必要数 = チーム数 × 15人（従来通り）の半分を最低保証
-  const minCandidates = teamCount * 8;
-  if (candidates.length < minCandidates) {
-    const fillCount = minCandidates - candidates.length;
-    const fillCandidates = generateRandomFillCandidates(fillCount, year, independentLeagueRank);
-    fillCandidates.forEach(fc => {
-      if (!existingIds.has(fc.id)) {
-        existingIds.add(fc.id);
-        candidates.push(fc);
-      }
-    });
-  }
-
-  return candidates;
-}
-
-/**
  * 不足分補充用のランダム候補生成（2年目以降用）
  * generateTryoutCandidatesと同じロジックだが少数のみ生成
  */
@@ -424,231 +388,32 @@ export function updateReleasedPoolAfterTryout(draftedIds) {
  * @returns {Array} トライアウト候補者の配列
  */
 export function generateTryoutCandidates(year, teamCount, isInitial = false, independentLeagueRank = null) {
-  // 2年目以降はリリースプール（ドラフト漏れ・大学卒業生・戦力外）を主体にする
-  if (!isInitial) {
-    return generateYear2PlusCandidates(year, teamCount, independentLeagueRank);
-  }
-
-  // 初回は30人/チーム
-  const candidatesPerTeam = 30;
-  const totalCandidates = teamCount * candidatesPerTeam;
+  // リリースプール（ドラフト漏れ・大学卒業生・戦力外）を主体にする
+  // 初回も2年目以降も同じロジック（warmUpPipelineで事前にプール生成済み）
   const candidates = [];
+  const existingIds = new Set();
 
-  const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+  // 1. リリースプールから候補を取得（メインソース）
+  const releasedCandidates = getReleasedCandidatesFromPool();
+  releasedCandidates.forEach(rc => {
+    if (!existingIds.has(rc.id)) {
+      existingIds.add(rc.id);
+      if (!rc.scoutComment) rc.scoutComment = generateScoutComment(rc);
+      candidates.push(rc);
+    }
+  });
 
-  // ID衝突を防ぐため、年度ベースのオフセットを使用
-  const idBase = (year || 1) * 10000;
-
-  for (let i = 1; i <= totalCandidates; i++) {
-    // 利き手を決定
-    const handedness = determineHandedness();
-    const throws = handedness.throws;
-    const bats = handedness.bats;
-
-    // 二刀流選手かどうか（8%の確率）
-    const isTwoWay = Math.random() < 0.08;
-
-    // 投手と野手を1:1の比率で生成（ただし左投げは制限あり）
-    let isPitcher = Math.random() < 0.5;
-    let position;
-    let twoWaySubPosition = null;
-
-    // 左投げ野手が守れるポジション
-    const leftHandFieldPositions = ['first', 'left', 'center', 'right'];
-    const allFieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
-
-    if (isTwoWay) {
-      const twoWayRoll = Math.random();
-      if (twoWayRoll < 0.7) {
-        // 70%: 投手登録の二刀流（野手としても出場可能）
-        position = 'pitcher';
-        isPitcher = true;
-        if (throws === 'left') {
-          twoWaySubPosition = leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)];
-        } else {
-          twoWaySubPosition = allFieldPositions[Math.floor(Math.random() * allFieldPositions.length)];
-        }
-      } else if (twoWayRoll < 0.9) {
-        // 20%: 主要野手登録の二刀流
-        if (throws === 'left') {
-          position = leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)];
-        } else {
-          position = Math.random() < 0.5 ? 'short' : 'center';
-        }
-        isPitcher = false;
-      } else {
-        // 10%: その他の野手登録の二刀流
-        if (throws === 'left') {
-          position = leftHandFieldPositions[Math.floor(Math.random() * leftHandFieldPositions.length)];
-        } else {
-          const otherPositions = ['catcher', 'first', 'second', 'third', 'left', 'right'];
-          position = otherPositions[Math.floor(Math.random() * otherPositions.length)];
-        }
-        isPitcher = false;
+  // 2. 不足分をランダム補充（初回は30人/チーム、2年目以降は8人/チーム が最低保証）
+  const minCandidates = isInitial ? teamCount * 30 : teamCount * 8;
+  if (candidates.length < minCandidates) {
+    const fillCount = minCandidates - candidates.length;
+    const fillCandidates = generateRandomFillCandidates(fillCount, year, independentLeagueRank);
+    fillCandidates.forEach(fc => {
+      if (!existingIds.has(fc.id)) {
+        existingIds.add(fc.id);
+        candidates.push(fc);
       }
-    } else if (throws === 'left') {
-      // 左投げの場合、ポジションを制限
-      position = getPositionForLeftHander();
-      isPitcher = position === 'pitcher';
-    } else {
-      // 右投げの場合は自由にポジション決定
-      position = isPitcher ? 'pitcher' : fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
-    }
-
-    // 特性を持つ選手かどうか（65%の確率、二刀流以外）
-    const hasTraits = !isTwoWay && Math.random() < 0.65;
-    const playerTraits = hasTraits ? getPlayerTraits(isPitcher) : [];
-    // 後方互換用: 最初の特性をspecialistTypeとして使う
-    const isSpecialist = playerTraits.length > 0;
-    const specialistType = playerTraits[0] || null;
-
-    // 投球フォームを先に決定（能力に影響するため）
-    // オーバースロー45%、スリークォーター40%、サイドスロー10%、アンダースロー5%
-    const formRand = Math.random() * 100;
-    let pitchingForm;
-    if (formRand < 45) {
-      pitchingForm = 'overhand';
-    } else if (formRand < 85) {
-      pitchingForm = 'threeQuarter';
-    } else if (formRand < 95) {
-      pitchingForm = 'sidearm';
-    } else {
-      pitchingForm = 'submarine';
-    }
-
-    // ランダムな名前生成
-    const name = generateRandomPlayerName();
-
-    // 年齢を重み付きランダムで決定（19-25歳、高卒1年目・大卒が多い分布）
-    const ageWeights = [
-      { age: 19, weight: 20 }, // 高卒1年目
-      { age: 20, weight: 10 },
-      { age: 21, weight: 10 },
-      { age: 22, weight: 30 }, // 大卒
-      { age: 23, weight: 15 },
-      { age: 24, weight: 10 },
-      { age: 25, weight: 5 },
-    ];
-    const totalWeight = ageWeights.reduce((sum, w) => sum + w.weight, 0);
-    const roll = Math.random() * totalWeight;
-    let cumulative = 0;
-    let age = 19;
-    for (const entry of ageWeights) {
-      cumulative += entry.weight;
-      if (roll < cumulative) { age = entry.age; break; }
-    }
-
-    // 能力値生成（特性選手の場合は特殊な分布、年齢補正あり、二刀流対応）
-    const abilities = generateAbilities(isPitcher, position, isSpecialist, specialistType, pitchingForm, age, isTwoWay, playerTraits);
-
-    const player = {
-      id: idBase + i,
-      name: name,
-      age: age,
-      position: position,
-      battingOrder: 0,
-      isStarter: false,
-      isTwoWay: isTwoWay, // 二刀流フラグ
-      twoWaySubPosition: twoWaySubPosition, // 投手登録二刀流の野手サブポジション
-      primaryRole: isTwoWay && position === 'pitcher' ? 'pitcher' : null, // 投手登録二刀流マーカー
-      batting: {
-        meet: abilities.meet,
-        power: abilities.power,
-        eye: abilities.eye,
-        bats: bats,
-        steal: abilities.steal,
-        bunt: abilities.bunt || 30
-      },
-      physical: {
-        speed: abilities.speed,
-        arm: abilities.arm,
-        throws: throws,
-        bodyStamina: abilities.bodyStamina || 50,
-        recovery: abilities.recovery || 50,
-        muscle: abilities.muscle || 50,
-        dexterity: abilities.dexterity || 50
-      },
-      fielding: {
-        defense: abilities.defense
-      },
-      catching: {
-        lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 35 : Math.floor(Math.random() * 26) + 20
-      },
-      pitching: {
-        velocity: abilities.velocity,
-        control: abilities.control,
-        stamina: abilities.stamina,
-        spinRate: abilities.spinRate || 50,
-        form: pitchingForm,
-        arsenal: (isPitcher || isTwoWay)
-          ? generateRandomArsenal(
-              playerTraits.includes('breakingBall') ? 2 : 0,
-              playerTraits.includes('fireballer') || playerTraits.includes('strikeoutArtist')
-            )
-          : generateFielderArsenal()
-      },
-      traits: playerTraits, // 選手の特性を保存
-      scoutComment: null, // 後でgenerateScoutCommentで設定
-      // 隠し成長力: 非対称正規分布（中央0.95、高成長は圧縮してレアに）
-      // 10代は+0.08ブースト。24人ドラフトで1.2以上は平均1.5人程度
-      growthPotential: (() => {
-        const u1 = Math.random() || 0.001;
-        const u2 = Math.random();
-        const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-        const skewed = normal > 0 ? normal * 0.75 : normal;
-        let base = 0.95 + skewed * 0.2;
-        if (age <= 19) base += 0.08;
-        return Math.max(0.5, Math.min(1.5, base));
-      })(),
-      positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
-      professionalCareer: {
-        isDrafted: false,
-        draftYear: null,
-        draftTeam: null,
-        achievements: []
-      },
-      personality: {
-        discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
-        mental: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
-      },
-      fame: 0,
-      fatigue: 0,
-      experience: 0,
-      careerHistory: [{ type: 'highschool', label: '高校卒' }],
-      seasonStats: {
-        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-        pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-      },
-      careerStats: {
-        batting: { games: 0, atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0, sacrificeBunts: 0 },
-        pitching: { games: 0, wins: 0, losses: 0, saves: 0, holds: 0, inningsPitched: 0, runsAllowed: 0, earnedRuns: 0, hits: 0, homeruns: 0, walks: 0, strikeouts: 0, pitches: 0 }
-      }
-    };
-
-    // 独立リーグモード: 並行世界と同等の能力キャップを適用
-    if (independentLeagueRank) {
-      const ilr = independentLeagueRank;
-      const IL_VEL_CAP = { B: 140, C: 133, D: 126 };
-      const IL_CTRL_CAP = { B: 58, C: 48, D: 38 };
-      const IL_BAT_CAP = { B: 52, C: 44, D: 36 };
-      const IL_SCALE = { B: 0.80, C: 0.70, D: 0.58 };
-      const vc = IL_VEL_CAP[ilr] || 145;
-      const cc = IL_CTRL_CAP[ilr] || 55;
-      const bc = IL_BAT_CAP[ilr] || 50;
-      const sc = IL_SCALE[ilr] || 0.85;
-      if (isPitcher) {
-        player.pitching.velocity = Math.min(player.pitching.velocity, vc + Math.floor(Math.random() * 4));
-        player.pitching.control = Math.min(player.pitching.control, cc + Math.floor(Math.random() * 4));
-      }
-      player.batting.meet = Math.min(player.batting.meet, bc + Math.floor(Math.random() * 4));
-      player.batting.power = Math.min(player.batting.power, bc + Math.floor(Math.random() * 4));
-      player.batting.eye = Math.min(player.batting.eye, bc + Math.floor(Math.random() * 3));
-      player.fielding.defense = Math.round(player.fielding.defense * sc);
-      player.physical.speed = Math.round(player.physical.speed * sc);
-    }
-
-    player.scoutComment = generateScoutComment(player);
-    candidates.push(player);
+    });
   }
 
   return candidates;
