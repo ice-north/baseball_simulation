@@ -513,10 +513,10 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
 
   // バラつき付きランダム生成（能力値用、10-99制限）
   const randRangeWithVariance = (min, max, bonus = ageBonus) => {
-    const variance = Math.floor(Math.random() * 11) - 5; // -5 ~ +5 のランダム変動
+    const variance = Math.floor(Math.random() * 21) - 10; // -10 ~ +10 のランダム変動
     const adjustedMin = Math.max(10, Math.min(min + bonus, max));
     const base = Math.floor(Math.random() * (max - adjustedMin + 1)) + adjustedMin;
-    return Math.max(10, Math.min(99, base + variance));
+    return Math.max(1, Math.min(99, base + variance));
   };
 
   // 球速用ランダム生成（120-160km/h範囲、正規分布風のバラつき）
@@ -616,44 +616,44 @@ function generateAbilities(isPitcher, position, isSpecialist, specialistType, pi
   // 通常の能力値範囲（投手用 or 野手アーキタイプ別）
   let normalAbilities;
   if (isPitcher) {
-    // 投手は肩力が高い選手（肩力55-78 → 球速127-143程度）
-    const pitcherArm = randRangeWithVariance(55, 78, ageBonus);
+    // 投手は肩力ベースで球速が決まる（肩力40-90で幅広い投手像）
+    const pitcherArm = randRangeWithVariance(40, 90, ageBonus);
     normalAbilities = {
-      meet: randRangeWithVariance(15, 40, battingAgeBonus),
-      power: randRangeWithVariance(5, 29, battingAgeBonus),
-      eye: randRangeWithVariance(25, 50, battingAgeBonus),
-      steal: randRangeWithVariance(10, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
-      bunt: randRangeWithVariance(20, 50),
-      speed: randRangeWithVariance(33, 58, Math.max(0, Math.floor(ageBonus * 0.5))),
+      meet: randRangeWithVariance(10, 35, battingAgeBonus),
+      power: randRangeWithVariance(3, 25, battingAgeBonus),
+      eye: randRangeWithVariance(20, 45, battingAgeBonus),
+      steal: randRangeWithVariance(5, 25, Math.max(0, Math.floor(ageBonus * 0.5))),
+      bunt: randRangeWithVariance(15, 45),
+      speed: randRangeWithVariance(25, 60, Math.max(0, Math.floor(ageBonus * 0.5))),
       arm: pitcherArm,
-      defense: randRangeWithVariance(40, 65),
-      bodyStamina: randRangeWithVariance(40, 70),
-      recovery: randRangeWithVariance(40, 70),
-      muscle: randRangeWithVariance(35, 65),
-      dexterity: randRangeWithVariance(35, 65),
+      defense: randRangeWithVariance(30, 65),
+      bodyStamina: randRangeWithVariance(35, 70),
+      recovery: randRangeWithVariance(35, 70),
+      muscle: randRangeWithVariance(30, 70),
+      dexterity: randRangeWithVariance(30, 65),
       velocity: velocityFromArm(pitcherArm),
-      control: Math.min(randRangeWithVariance(35, 65) + controlAdjust, 85),
-      stamina: randStamina(78, 123, ageBonus),
-      spinRate: randRangeWithVariance(35, 70)
+      control: Math.min(randRangeWithVariance(20, 70) + controlAdjust, 85),
+      stamina: randStamina(60, 140, ageBonus),
+      spinRate: randRangeWithVariance(25, 75)
     };
   } else {
     // 野手アーキタイプ: 特性なしの選手にも個性を持たせる
     // 【設計思想】原石段階。長所は光るが伸びしろを残す
     const archetypes = [
       // 巧打タイプ: ミート高、パワー低
-      { meet: [50, 70], power: [18, 38], eye: [46, 66], steal: [30, 56], bunt: [45, 65], speed: [38, 63], arm: [30, 56], defense: [36, 60] },
+      { meet: [50, 80], power: [10, 35], eye: [45, 75], steal: [25, 55], bunt: [45, 70], speed: [30, 60], arm: [20, 55], defense: [30, 60] },
       // 強打タイプ: パワー高、走力低
-      { meet: [33, 53], power: [43, 63], eye: [30, 53], steal: [20, 40], bunt: [10, 30], speed: [28, 50], arm: [40, 63], defense: [30, 53] },
+      { meet: [25, 55], power: [45, 75], eye: [25, 50], steal: [10, 35], bunt: [5, 25], speed: [20, 48], arm: [35, 65], defense: [20, 50] },
       // 俊足タイプ: 走力高、パワー低
-      { meet: [36, 56], power: [18, 38], eye: [33, 56], steal: [56, 76], bunt: [50, 70], speed: [58, 76], arm: [30, 56], defense: [40, 63] },
+      { meet: [30, 58], power: [10, 35], eye: [30, 55], steal: [55, 85], bunt: [50, 75], speed: [60, 88], arm: [25, 55], defense: [35, 65] },
       // 守備タイプ: 守備高、打撃低
-      { meet: [30, 50], power: [18, 38], eye: [33, 56], steal: [30, 56], bunt: [35, 55], speed: [43, 66], arm: [50, 70], defense: [56, 76] },
+      { meet: [20, 48], power: [10, 35], eye: [30, 55], steal: [25, 55], bunt: [30, 55], speed: [40, 70], arm: [50, 80], defense: [55, 85] },
       // バランスタイプ: 平均的
-      { meet: [36, 60], power: [26, 50], eye: [33, 60], steal: [30, 58], bunt: [30, 55], speed: [36, 63], arm: [33, 58], defense: [33, 60] },
+      { meet: [30, 60], power: [20, 50], eye: [28, 58], steal: [25, 55], bunt: [25, 55], speed: [30, 60], arm: [28, 58], defense: [28, 58] },
       // 打撃特化タイプ: 打撃全般高、守備走力低
-      { meet: [46, 66], power: [38, 60], eye: [40, 63], steal: [20, 40], bunt: [20, 40], speed: [28, 50], arm: [30, 53], defense: [26, 48] },
+      { meet: [48, 78], power: [38, 68], eye: [40, 68], steal: [10, 35], bunt: [15, 35], speed: [20, 48], arm: [25, 50], defense: [18, 45] },
       // 肩力タイプ: 肩力高、ミート低
-      { meet: [30, 50], power: [30, 50], eye: [30, 53], steal: [26, 50], bunt: [25, 45], speed: [36, 60], arm: [58, 76], defense: [43, 66] },
+      { meet: [20, 50], power: [25, 50], eye: [25, 50], steal: [20, 50], bunt: [20, 45], speed: [30, 60], arm: [58, 88], defense: [40, 70] },
     ];
     const archIndex = Math.floor(Math.random() * archetypes.length);
     const arch = archetypes[archIndex];
