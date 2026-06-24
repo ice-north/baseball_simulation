@@ -372,47 +372,32 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                               <span className="text-white font-bold text-xs">{team.short}</span>
                               <span className="text-gray-500 text-[10px] ml-auto">{picks.length}名</span>
                             </div>
-                            <div className="bg-gray-800/90 p-2 space-y-1.5" style={{ minHeight: '80px' }}>
+                            <div className="bg-gray-800/90 p-1.5" style={{ minHeight: '60px' }}>
                               {picks.length === 0 ? (
-                                <div className="flex items-center justify-center h-full text-gray-600 text-xs min-h-[60px]">
+                                <div className="flex items-center justify-center h-full text-gray-600 text-xs min-h-[40px]">
                                   指名なし
                                 </div>
                               ) : picks.map((entry, pi) => {
                                 const srcInfo = SOURCE_LABELS[entry.source];
                                 const roundLabel = entry.draftRound?.replace('ドラフト', '') || '';
                                 return (
-                                  <div key={pi} className={pi > 0 ? 'pt-1.5 border-t border-gray-700/40' : ''}>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                                        entry.draftRound === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
-                                        entry.draftRound === '育成指名' ? 'bg-gray-600/70 text-gray-300' :
-                                        'bg-yellow-700/70 text-yellow-200'
-                                      }`}>{roundLabel}</span>
-                                      <span className="text-white font-black text-sm leading-tight truncate">{entry.name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 flex-wrap mt-0.5 ml-0.5">
-                                      <span className="text-blue-400 text-[10px] font-semibold">
-                                        {getPositionName(entry.position)}
-                                      </span>
-                                      <span className="text-gray-500 text-[10px]">{entry.age}歳</span>
-                                      <span className="text-[10px]">
-                                        <span className={entry.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>
-                                          {entry.throws === 'left' ? '左' : '右'}
-                                        </span>
-                                        <span className={
-                                          entry.bats === 'left' ? 'text-green-400' :
-                                          entry.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'
-                                        }>
-                                          {entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}
-                                        </span>
-                                      </span>
-                                      {srcInfo && (
-                                        <span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${srcInfo.color}`}>
-                                          {srcInfo.label}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="text-gray-500 text-[10px] truncate ml-0.5">{entry.teamName}</div>
+                                  <div key={pi} className={`flex items-center gap-1 py-0.5 ${pi > 0 ? 'border-t border-gray-700/30' : ''}`}>
+                                    <span className={`text-[8px] font-bold px-1 py-px rounded shrink-0 ${
+                                      entry.draftRound === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
+                                      entry.draftRound === '育成指名' ? 'bg-gray-600/70 text-gray-300' :
+                                      'bg-yellow-700/70 text-yellow-200'
+                                    }`}>{roundLabel}</span>
+                                    <span className="text-white font-bold text-[11px] truncate">{entry.name}</span>
+                                    <span className="text-blue-400 text-[9px] shrink-0">{getPositionName(entry.position)}</span>
+                                    <span className="text-[9px] shrink-0">
+                                      <span className={entry.throws === 'left' ? 'text-green-400' : 'text-gray-600'}>{entry.throws === 'left' ? '左' : '右'}</span>
+                                      <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-gray-600'}>{entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}</span>
+                                    </span>
+                                    <span className="text-gray-500 text-[9px] shrink-0">{entry.age}歳</span>
+                                    {srcInfo && (
+                                      <span className={`text-[8px] px-0.5 rounded border shrink-0 ${srcInfo.color}`}>{srcInfo.label}</span>
+                                    )}
+                                    <span className="text-gray-600 text-[9px] truncate ml-auto">{entry.teamName}</span>
                                   </div>
                                 );
                               })}
