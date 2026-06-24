@@ -372,32 +372,32 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                               <span className="text-white font-bold text-xs">{team.short}</span>
                               <span className="text-gray-500 text-[10px] ml-auto">{picks.length}名</span>
                             </div>
-                            <div className="bg-gray-800/90 p-1.5" style={{ minHeight: '60px' }}>
+                            <div className="bg-gray-800/90 p-2" style={{ minHeight: '60px' }}>
                               {picks.length === 0 ? (
-                                <div className="flex items-center justify-center h-full text-gray-600 text-xs min-h-[40px]">
+                                <div className="flex items-center justify-center h-full text-gray-500 text-sm min-h-[40px]">
                                   指名なし
                                 </div>
                               ) : picks.map((entry, pi) => {
                                 const srcInfo = SOURCE_LABELS[entry.source];
                                 const roundLabel = entry.draftRound?.replace('ドラフト', '') || '';
                                 return (
-                                  <div key={pi} className={`flex items-center gap-1 py-0.5 ${pi > 0 ? 'border-t border-gray-700/30' : ''}`}>
-                                    <span className={`text-[8px] font-bold px-1 py-px rounded shrink-0 ${
+                                  <div key={pi} className={`flex items-center gap-1.5 py-1 ${pi > 0 ? 'border-t border-gray-700/30' : ''}`}>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                                       entry.draftRound === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
                                       entry.draftRound === '育成指名' ? 'bg-gray-600/70 text-gray-300' :
                                       'bg-yellow-700/70 text-yellow-200'
                                     }`}>{roundLabel}</span>
-                                    <span className="text-white font-bold text-[11px] truncate">{entry.name}</span>
-                                    <span className="text-blue-400 text-[9px] shrink-0">{getPositionName(entry.position)}</span>
-                                    <span className="text-[9px] shrink-0">
-                                      <span className={entry.throws === 'left' ? 'text-green-400' : 'text-gray-600'}>{entry.throws === 'left' ? '左' : '右'}</span>
-                                      <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-gray-600'}>{entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}</span>
+                                    <span className="text-white font-bold text-xs truncate">{entry.name}</span>
+                                    <span className="text-blue-300 text-[11px] shrink-0">{getPositionName(entry.position)}</span>
+                                    <span className="text-[11px] shrink-0">
+                                      <span className={entry.throws === 'left' ? 'text-green-400' : 'text-white'}>{entry.throws === 'left' ? '左' : '右'}</span>
+                                      <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{entry.bats === 'left' ? '左' : entry.bats === 'switch' ? '両' : '右'}</span>
                                     </span>
-                                    <span className="text-gray-500 text-[9px] shrink-0">{entry.age}歳</span>
+                                    <span className="text-white text-[11px] shrink-0">{entry.age}歳</span>
                                     {srcInfo && (
-                                      <span className={`text-[8px] px-0.5 rounded border shrink-0 ${srcInfo.color}`}>{srcInfo.label}</span>
+                                      <span className={`text-[10px] px-1 py-px rounded border shrink-0 ${srcInfo.color}`}>{srcInfo.label}</span>
                                     )}
-                                    <span className="text-gray-600 text-[9px] truncate ml-auto">{entry.teamName}</span>
+                                    <span className="text-gray-400 text-[11px] truncate ml-auto">{entry.teamName}</span>
                                   </div>
                                 );
                               })}
