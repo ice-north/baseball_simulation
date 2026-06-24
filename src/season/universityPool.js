@@ -171,13 +171,13 @@ function generateHighSchoolPlayer(id) {
   let abilities;
   if (isPitcher) {
     const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
-    let velocity = Math.round(nrm(126, 11) + velTierBonus[tier]);
+    let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
     if (isSideOrUnder) velocity -= 3;
     if (throws === 'left') velocity -= 3;
     let control = Math.round(nrm(24, 9) + off + controlAdjust);
     let stamina = Math.round(nrm(63, 14) + off * 1.5);
 
-    if (specialty === 'power_arm') velocity += r(6, 13);
+    if (specialty === 'power_arm') velocity += r(5, 10);
     else if (specialty === 'technician') control += r(10, 20);
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
@@ -191,7 +191,7 @@ function generateHighSchoolPlayer(id) {
       defense: g(32, 8, 0.4, 1),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(43, 10, 0, 15),
-      velocity: Math.max(95, velocity),
+      velocity: Math.max(110, velocity),
       control: Math.max(5, control),
       stamina: Math.max(25, stamina)
     };
