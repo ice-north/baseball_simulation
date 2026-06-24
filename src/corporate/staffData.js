@@ -223,10 +223,15 @@ export const convertPlayerToStaff = (player, currentYear) => {
     if (lastJoin?.year) tenure = Math.max(1, currentYear - lastJoin.year);
   }
 
-  // グレード判定: 能力ベース + 所属年数ボーナス
-  // 所属年数が長いほどチームへの貢献度が高く、良いコーチになる
-  const tenureBonus = Math.min(15, tenure * 2);
-  const gradeScore = overall + tenureBonus;
+  // 通算キャリア年数（選手人生の長さ）
+  const totalCareer = Math.max(1, (player.age || 20) - 18);
+
+  // グレード判定: 能力 + 所属年数ボーナス + キャリアボーナス
+  // 所属年数: チーム事情を知り尽くした内部昇格の強み（上限+10）
+  // キャリア: 長い選手人生で培った経験（上限+10）
+  const tenureBonus = Math.min(10, tenure * 2);
+  const careerBonus = Math.min(10, totalCareer);
+  const gradeScore = overall + tenureBonus + careerBonus;
 
   let grade;
   if (gradeScore >= 70) grade = 'S';
