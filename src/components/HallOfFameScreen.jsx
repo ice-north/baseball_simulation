@@ -23,7 +23,7 @@ const ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位',
 const SOURCE_LABELS = {
   highschool: { label: '高校', color: 'text-green-400 bg-green-900/40 border-green-600/40' },
   university: { label: '大学', color: 'text-blue-400 bg-blue-900/40 border-blue-600/40' },
-  corporate:  { label: '社会人', color: 'text-orange-400 bg-orange-900/40 border-orange-600/40' },
+  corporate:  { label: '社人', color: 'text-orange-400 bg-orange-900/40 border-orange-600/40' },
   independent: { label: '独立', color: 'text-purple-400 bg-purple-900/40 border-purple-600/40' },
 };
 
@@ -377,9 +377,15 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 <div className="flex items-center justify-center h-full text-gray-500 text-sm min-h-[40px]">
                                   指名なし
                                 </div>
-                              ) : picks.map((entry, pi) => {
+                              ) : (() => {
+                                let ikuseiCount = 0;
+                                return picks.map((entry, pi) => {
                                 const srcInfo = SOURCE_LABELS[entry.source];
-                                const roundLabel = entry.draftRound?.replace('ドラフト', '') || '';
+                                let roundLabel = entry.draftRound?.replace('ドラフト', '') || '';
+                                if (entry.draftRound === '育成指名') {
+                                  ikuseiCount++;
+                                  roundLabel = `育成${ikuseiCount}`;
+                                }
                                 return (
                                   <div key={pi} className={`grid items-center py-1 ${pi > 0 ? 'border-t border-gray-700/30' : ''}`}
                                     style={{ gridTemplateColumns: '44px minmax(60px,1fr) 30px 24px 32px 36px minmax(40px,1fr)', gap: '4px' }}>
@@ -401,7 +407,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                     <span className="text-gray-400 text-[11px] truncate text-right">{entry.teamName}</span>
                                   </div>
                                 );
-                              })}
+                              });
+                              })()}
                             </div>
                           </div>
                         );
