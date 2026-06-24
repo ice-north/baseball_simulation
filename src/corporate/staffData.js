@@ -94,12 +94,12 @@ export const canHireGrade = (teamRank, staffGrade) => {
 
 export const MAX_STAFF = 10;
 
-// 給与計算（選手・スタッフ共通）: 高卒1年目400万、年齢+1ごとに+20万
+// 給与計算: 高卒1年目400万、年齢+1ごとに+20万（スタッフは55歳で打ち止め）
 const BASE_SALARY = 400;
 const SALARY_PER_AGE = 20;
 
 export const getStaffSalary = (staff) =>
-  BASE_SALARY + ((staff.age || 35) - 18) * SALARY_PER_AGE;
+  BASE_SALARY + (Math.min((staff.age || 35), 55) - 18) * SALARY_PER_AGE;
 
 export const getPlayerSalary = (player) =>
   BASE_SALARY + ((player.age || 18) - 18) * SALARY_PER_AGE;
@@ -399,14 +399,14 @@ export const advanceStaffYear = (staffList, autoReplenish = false, teamRank = nu
     staff.experience = (staff.experience || 0) + 1;
     staff.age = (staff.age || 35) + 1;
   }
-  // 60歳以上で退職判定（60歳:20%, 65歳:60%, 70歳:100%）
+  // 65歳定年制（60歳から早期退職あり: 60歳10%, 63歳30%, 65歳:定年退職）
   for (let i = staffList.length - 1; i >= 0; i--) {
     const s = staffList[i];
     const age = s.age || 35;
     if (age < 60) continue;
-    const retireChance = age >= 70 ? 1.0 : age >= 65 ? 0.6 : 0.2;
+    const retireChance = age >= 65 ? 1.0 : age >= 63 ? 0.3 : 0.1;
     if (Math.random() < retireChance) {
-      retired.push({ name: s.name, role: s.role, age, grade: s.grade });
+      retired.push({ name: s.name, role: s.role, age, grade: s.grade, reason: age >= 65 ? '定年退職' : '早期退職' });
       staffList.splice(i, 1);
     }
   }

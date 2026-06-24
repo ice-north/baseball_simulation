@@ -676,7 +676,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                   <div key={idx} className="text-xs text-gray-400">
                     <span className="text-white font-bold">{s.name}</span>
                     <span className="ml-1">({roleNames[s.role] || s.role} / {s.age}歳 / {s.grade}級)</span>
-                    <span className="ml-1 text-orange-400">が退職しました</span>
+                    <span className="ml-1 text-orange-400">{s.reason === '定年退職' ? '定年退職' : '退職'}しました</span>
                   </div>
                 );
               })}
