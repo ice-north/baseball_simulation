@@ -4,6 +4,8 @@ import { STAFF_ABILITIES, STAFF_ROLE_PROFILES, STAFF_GRADES, getStaffSalary, get
 import { getReputationScoutBonus, getReputationRecruitBonus, getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, SPONSOR_TIERS, BUDGET_BY_RANK } from '../corporate/corporateInit.js';
 import { getAbilityColor, POSITION_NAMES, getPositionSortIndex } from '../utils/constants.js';
 import { dispatchScout, SCOUT_TARGETS, investigatePlayer, startInvestigation, setAutoInvestigationFilter, getAutoInvestigationFilter, toggleFavoritePlayer, getFavoriteBonus, getAllScoutedPlayers, calculateRecruitSuccessRate, getScoutRecommendation, estimateRivalCount, assignScoutTask, cancelScoutTask, getAllScoutTasks, MAX_FAVORITES_PER_SCOUT } from '../corporate/scoutingSystem.js';
+import { getUniversityPipes } from '../university/universityPipeSystem.js';
+import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
 
 const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -113,6 +115,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   const tabs = [
     { id: 'staff', label: 'スタッフ' },
     { id: 'scout', label: 'スカウト状況' },
+    { id: 'pipe', label: 'パイプ' },
     { id: 'finance', label: '予算' },
   ];
 
@@ -911,6 +914,91 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
         </div>
       )}
+
+      {/* ===== パイプタブ ===== */}
+      {tab === 'pipe' && (() => {
+        const pipes = getUniversityPipes(teamData);
+        const pipeStrengthLabel = (s) => s >= 3 ? '◎ 太い' : s === 2 ? '○ 普通' : '△ 細い';
+        const pipeStrengthColor = (s) => s >= 3 ? 'text-green-400' : s === 2 ? 'text-yellow-400' : 'text-gray-400';
+        return (
+          <div>
+            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+              <h2 className="text-sm font-bold text-gray-300 mb-1">大学パイプ一覧</h2>
+              <p className="text-[10px] text-gray-500 mb-3">
+                チーム内のOB（大学出身選手）を通じた大学との繋がりです。パイプがある大学にはキャンプで選手を派遣できます。
+              </p>
+              <div className="flex gap-4 mb-3">
+                <div className="bg-gray-750 rounded px-3 py-2 text-center">
+                  <div className="text-[10px] text-gray-400">繋がり大学数</div>
+                  <div className="text-xl font-bold text-cyan-400">{pipes.length}</div>
+                </div>
+                <div className="bg-gray-750 rounded px-3 py-2 text-center">
+                  <div className="text-[10px] text-gray-400">総派遣枠</div>
+                  <div className="text-xl font-bold text-yellow-400">{pipes.reduce((s, p) => s + Math.min(3, p.pipeStrength), 0)}</div>
+                </div>
+                <div className="bg-gray-750 rounded px-3 py-2 text-center">
+                  <div className="text-[10px] text-gray-400">総OB人数</div>
+                  <div className="text-xl font-bold text-white">{pipes.reduce((s, p) => s + p.obCount, 0)}</div>
+                </div>
+              </div>
+            </div>
+
+            {pipes.length === 0 ? (
+              <div className="bg-gray-800 rounded-lg p-8 text-center">
+                <p className="text-gray-400">大学出身の選手がいないため、パイプがありません。</p>
+                <p className="text-xs text-gray-500 mt-2">大卒選手をスカウトすると、その出身大学とのパイプが生まれます。</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pipes.map(pipe => (
+                  <div key={pipe.universityId} className="bg-gray-800 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${gradeColor(pipe.rank)} bg-gray-700`}>{pipe.rank}</span>
+                        <span className="text-white font-bold">{pipe.universityName}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-bold ${pipeStrengthColor(pipe.pipeStrength)}`}>
+                          {pipeStrengthLabel(pipe.pipeStrength)}
+                        </span>
+                        <span className="text-xs text-gray-400">派遣枠: <span className="text-white font-bold">{Math.min(3, pipe.pipeStrength)}</span>人</span>
+                      </div>
+                    </div>
+
+                    {/* 得意分野 */}
+                    {pipe.specialties.length > 0 && (
+                      <div className="flex gap-1 mb-2">
+                        {pipe.specialties.map(sp => (
+                          <span key={sp} className="text-[10px] bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">
+                            {SPECIALTY_ICONS[sp] || ''} {SPECIALTY_LABELS[sp] || sp}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* OB一覧 */}
+                    <div className="mt-2 border-t border-gray-700 pt-2">
+                      <div className="text-[10px] text-gray-500 mb-1">OB: {pipe.obCount}名</div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                        {pipe.obPlayers.map(ob => {
+                          const player = players.find(p => p.id === ob.id);
+                          return (
+                            <span key={ob.id} className="text-xs text-gray-300">
+                              <span className="text-gray-500">{player ? POSITION_NAMES[player.position] || '' : ''}</span>
+                              {' '}{ob.name}
+                              {player && <span className="text-gray-600 ml-0.5">({player.age}歳)</span>}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ===== 財務タブ ===== */}
       {tab === 'finance' && (
