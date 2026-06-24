@@ -8,9 +8,12 @@ import {
   toggleUniversityWatch,
   attemptUniversityRecruit,
   getUniversityScoutRecommendation,
+  generateSelectionCandidates,
 } from '../corporate/scoutingSystem.js';
 import { highSchoolPool } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+
+const TOTAL_NEW_MEMBERS = { S: 15, A: 13, B: 11, C: 9, D: 7 };
 
 const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -27,6 +30,9 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const [negotiationResult, setNegotiationResult] = useState(null);
   const [sortKey, setSortKey] = useState('rate');
   const [sortAsc, setSortAsc] = useState(false);
+  const [newDiscoveryCount, setNewDiscoveryCount] = useState(0);
+  const [selectionCandidates, setSelectionCandidates] = useState([]);
+  const [selectionPicked, setSelectionPicked] = useState([]);
 
   useEffect(() => {
     if (candidates.length === 0 && highSchoolPool.players?.length > 0 && !scoutData.initialized) {
@@ -42,6 +48,15 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
       WORLD_DATA._universityScout.recruited = recruited;
     }
   }, [candidates, recruited]);
+
+  useEffect(() => {
+    const nd = WORLD_DATA._universityScout?._newDiscoveries || 0;
+    if (nd > 0) {
+      setNewDiscoveryCount(nd);
+      setCandidates(WORLD_DATA._universityScout?.candidates || []);
+      WORLD_DATA._universityScout._newDiscoveries = 0;
+    }
+  });
 
   const remainingSlots = maxSlots - recruited.length;
 
@@ -87,9 +102,26 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     }
   };
 
+  const totalSlots = TOTAL_NEW_MEMBERS[rank] || 9;
+  const selectionSlots = Math.max(0, totalSlots - recruited.length);
+
   const handleFinalize = () => {
     WORLD_DATA._universityScout = { ...WORLD_DATA._universityScout, finalized: true };
-    if (onComplete) onComplete(recruited);
+    const selCandidates = generateSelectionCandidates(rank, reputation, Math.max(15, selectionSlots * 3));
+    setSelectionCandidates(selCandidates);
+    setPhase('selection');
+  };
+
+  const handleSelectionPick = (player) => {
+    if (selectionPicked.length >= selectionSlots) return;
+    const orig = highSchoolPool.players?.find(hp => hp.id === player.id);
+    if (orig) orig._universityReserved = userTeamName;
+    setSelectionPicked(prev => [...prev, player]);
+    setSelectionCandidates(prev => prev.filter(p => p.id !== player.id));
+  };
+
+  const handleSelectionFinalize = () => {
+    if (onComplete) onComplete({ recommended: recruited, selection: selectionPicked });
   };
 
   const handleSort = (key) => {
@@ -188,6 +220,129 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     );
   }
 
+  if (phase === 'selection') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h1 className="text-xl font-black text-white">セレクション (一般入部試験)</h1>
+              <p className="text-gray-400 text-xs mt-0.5">
+                {userTeamName} ({rank}ランク) — 入部枠: 残り{selectionSlots - selectionPicked.length}/{selectionSlots}名
+                {selectionPicked.length > 0 && <span className="text-green-400 ml-2">選出済{selectionPicked.length}名</span>}
+              </p>
+            </div>
+            <button onClick={handleSelectionFinalize}
+              className="px-4 py-2 rounded-lg font-bold text-sm bg-green-700 hover:bg-green-600 text-white transition">
+              確定してオフシーズンへ
+            </button>
+          </div>
+
+          {recruited.length > 0 && (
+            <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-2 mb-2">
+              <div className="text-[10px] text-blue-400 font-bold mb-1">推薦入部 ({recruited.length}名)</div>
+              <div className="flex flex-wrap gap-2">
+                {recruited.map((p, i) => (
+                  <div key={i} className="bg-blue-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
+                    <span className="text-white font-bold">{p.name}</span>
+                    <span className="text-blue-300">{POSITION_NAMES[p.position]?.slice(0, 2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectionPicked.length > 0 && (
+            <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-2 mb-2">
+              <div className="text-[10px] text-green-400 font-bold mb-1">セレクション合格 ({selectionPicked.length}名)</div>
+              <div className="flex flex-wrap gap-2">
+                {selectionPicked.map((p, i) => (
+                  <div key={i} className="bg-green-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
+                    <span className="text-white font-bold">{p.name}</span>
+                    <span className="text-green-300">{POSITION_NAMES[p.position]?.slice(0, 2)}</span>
+                    <span className="text-green-400/60">{p.highSchool?.name || '高校'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectionCandidates.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg mb-4">セレクション参加者がいません</p>
+              <button onClick={handleSelectionFinalize}
+                className="px-6 py-2 rounded-xl font-bold text-white bg-green-700 hover:bg-green-600">
+                オフシーズンへ
+              </button>
+            </div>
+          ) : (
+            <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-700/50 text-[10px]">
+                      <th className="py-1 px-1 text-gray-500 w-24">名前</th>
+                      <th className="py-1 px-1 text-gray-500 w-10">守</th>
+                      <th className="py-1 px-1 text-gray-500 w-8">年</th>
+                      <th className="py-1 px-1 text-gray-500 w-8">体</th>
+                      <th className="py-1 px-1 text-gray-500 w-16">出身校</th>
+                      <th className="py-1 px-1 text-gray-500 w-10">球速</th>
+                      <th className="py-1 px-1 text-gray-500 w-10">制球</th>
+                      <th className="py-1 px-1 text-gray-500 w-8">ス</th>
+                      <th className="py-1 px-1 text-gray-500 w-8">ミ</th>
+                      <th className="py-1 px-1 text-gray-500 w-8">パ</th>
+                      <th className="py-1 px-1 text-gray-500 w-8">眼</th>
+                      <th className="py-1 px-1 text-gray-500 w-8">走</th>
+                      <th className="py-1 px-1 text-gray-500 w-8">守</th>
+                      <th className="py-1 px-1 text-gray-500 w-16">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectionCandidates.map(p => {
+                      const sa = p.scoutedAbilities || {};
+                      const canPick = selectionPicked.length < selectionSlots;
+                      return (
+                        <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-700/20 transition">
+                          <td className="py-1.5 px-1">
+                            <span className="text-white font-bold truncate max-w-[96px]">{p.name}</span>
+                          </td>
+                          <td className="py-1.5 px-1 text-gray-400">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
+                          <td className="py-1.5 px-1 text-gray-400 text-center">{p.age}</td>
+                          <td className="py-1.5 px-1 text-center">
+                            <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
+                              {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-1 text-gray-500 truncate max-w-[64px]">{p.highSchool?.name || '高校'}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.meet)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.power)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
+                          <td className="py-1.5 px-1">
+                            {canPick && (
+                              <button onClick={() => handleSelectionPick(p)}
+                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-800 text-green-200 hover:bg-green-700 transition">
+                                合格
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
       <div className="max-w-5xl mx-auto">
@@ -206,7 +361,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
             {onComplete ? (
               <button onClick={handleFinalize}
                 className="px-4 py-2 rounded-lg font-bold text-sm bg-green-700 hover:bg-green-600 text-white transition">
-                確定してオフシーズンへ
+                推薦確定 → セレクションへ
               </button>
             ) : onBack ? (
               <button onClick={onBack}
@@ -216,6 +371,18 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
             ) : null}
           </div>
         </div>
+
+        {newDiscoveryCount > 0 && (
+          <div className="bg-yellow-900/30 border border-yellow-700/40 rounded-xl p-2 mb-3 flex items-center justify-between">
+            <span className="text-yellow-300 text-xs font-bold">
+              新たに{newDiscoveryCount}名の候補者が見つかりました
+            </span>
+            <button onClick={() => setNewDiscoveryCount(0)}
+              className="text-yellow-500 hover:text-yellow-300 text-xs px-2">
+              ✕
+            </button>
+          </div>
+        )}
 
         {recruited.length > 0 && (
           <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-2 mb-3">

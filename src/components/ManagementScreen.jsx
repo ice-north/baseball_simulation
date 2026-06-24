@@ -145,12 +145,17 @@ const ManagementScreen = ({
     return <UniversityScoutScreen
       seasonData={seasonData}
       onBack={!isForced ? () => setManagementView('dateprogress') : null}
-      onComplete={isForced ? (recruited) => {
+      onComplete={isForced ? (result) => {
+        const recommended = result?.recommended || [];
+        const selection = result?.selection || [];
         const newData = {
           ...seasonData,
           currentDate: { ...seasonData.currentDate, month: 11, day: 15 },
           phase: 'off_season',
-          universityRecruits: recruited?.map(p => ({ id: p.id, name: p.name, position: p.position, source: p._scoutSource })) || [],
+          universityRecruits: [
+            ...recommended.map(p => ({ id: p.id, name: p.name, position: p.position, source: p._scoutSource, type: 'recommended' })),
+            ...selection.map(p => ({ id: p.id, name: p.name, position: p.position, source: p.highSchool?.name || '高校', type: 'selection' })),
+          ],
         };
         setSeasonData(newData);
         setManagementView('dateprogress');

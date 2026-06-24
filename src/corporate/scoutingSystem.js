@@ -1522,14 +1522,27 @@ export function initUniversityScoutList(teamData, rank) {
   if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
 
   const reputation = teamData?.universityData?.reputation || 30;
-  const reputationMult = 0.8 + (reputation / 100) * 0.4;
-  const candidateCount = Math.min(20, Math.max(8, Math.round(6 + reputation / 10)));
+  // 初回は3〜5名のみ発見（徐々に増える）
+  const initialCount = Math.min(5, Math.max(3, Math.round(2 + reputation / 30)));
 
+  const candidates = discoverCandidatesFromPool(initialCount, rank, reputation);
+  return candidates;
+}
+
+function discoverCandidatesFromPool(count, rank, reputation) {
+  if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
+
+  const reputationMult = 0.8 + (reputation / 100) * 0.4;
   const rankDiscoveryMult = { S: 0.2, A: 0.5, B: 1.0, C: 1.2, D: 1.5 }[rank] || 1.0;
   const rankAbilityBonus = { S: 12, A: 6, B: 0, C: -3, D: -6 }[rank] || 0;
 
+  const existingIds = new Set(
+    (WORLD_DATA._universityScout?.candidates || []).map(c => c.id)
+      .concat((WORLD_DATA._universityScout?.recruited || []).map(c => c.id))
+  );
+
   const scored = highSchoolPool.players
-    .filter(p => !p._universityReserved)
+    .filter(p => !p._universityReserved && !existingIds.has(p.id))
     .map((p, idx) => {
       const base = evaluatePlayerScore(p);
       const fame = p.fame || 0;
@@ -1540,7 +1553,7 @@ export function initUniversityScoutList(teamData, rank) {
     });
   scored.sort((a, b) => b.score - a.score);
 
-  return scored.slice(0, candidateCount).map(entry => {
+  return scored.slice(0, count).map(entry => {
     const p = JSON.parse(JSON.stringify(entry.player));
     const accuracy = 40 + Math.floor(reputation * 0.2) + Math.floor(Math.random() * 10);
     p.scoutAccuracy = Math.min(75, accuracy);
@@ -1553,6 +1566,59 @@ export function initUniversityScoutList(teamData, rank) {
     p._investigating = false;
     p._investigateReturn = null;
     p.recruitRate = calculateUniversityRecruitRate(p, rank, reputation, 0);
+    return p;
+  });
+}
+
+/**
+ * 月初に新候補を発見（高校生プールから追加）
+ * 月が進むほどスカウト網が広がり、発見数が増える
+ */
+export function discoverNewScoutCandidates(rank, reputation, month) {
+  // 4月=初期化済、5月〜10月に毎月追加発見
+  if (month < 5 || month > 10) return [];
+  // 後半ほど多く発見: 5月=2名、6-7月=3名、8-10月=4名
+  const baseCount = month <= 5 ? 2 : month <= 7 ? 3 : 4;
+  const repBonus = Math.floor(reputation / 50);
+  const count = Math.min(6, baseCount + repBonus);
+
+  return discoverCandidatesFromPool(count, rank, reputation);
+}
+
+/**
+ * セレクション候補を高校生プールから生成
+ * スポーツ推薦で取れなかった枠を一般入部試験で埋める
+ * 推薦候補より能力は低めの層が中心
+ */
+export function generateSelectionCandidates(rank, reputation, count = 15) {
+  if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
+
+  const existingIds = new Set(
+    (WORLD_DATA._universityScout?.candidates || []).map(c => c.id)
+      .concat((WORLD_DATA._universityScout?.recruited || []).map(c => c.id))
+  );
+
+  // 推薦候補ほど上位ではない中間〜下位層を選ぶ
+  const rankAbilityBonus = { S: 5, A: 2, B: 0, C: -2, D: -5 }[rank] || 0;
+  const scored = highSchoolPool.players
+    .filter(p => !p._universityReserved && !existingIds.has(p.id))
+    .map(p => {
+      const base = evaluatePlayerScore(p);
+      const noise = (Math.random() - 0.5) * 30;
+      return { player: p, score: base + noise + rankAbilityBonus };
+    });
+
+  // 上位は推薦で取られるので、中間層をメインに（上位20%をスキップ）
+  scored.sort((a, b) => b.score - a.score);
+  const skipTop = Math.floor(scored.length * 0.2);
+  const pool = scored.slice(skipTop);
+
+  return pool.slice(0, count).map(entry => {
+    const p = JSON.parse(JSON.stringify(entry.player));
+    // セレクションでは能力がほぼ見える状態
+    p.scoutAccuracy = 80;
+    p.scoutedAbilities = obscureAbilities(p, 80, 'full');
+    p._selectionCandidate = true;
     return p;
   });
 }
@@ -1581,9 +1647,24 @@ export function startUniversityInvestigation(candidate, currentDate) {
 }
 
 export function processUniversityScoutDay(candidates, currentDate, uniRank, reputation) {
-  if (!candidates || candidates.length === 0) return [];
+  if (!candidates) return [];
   const completed = [];
   const cd = currentDate.year * 10000 + currentDate.month * 100 + currentDate.day;
+
+  // 月初（1日）に新候補を発見して追加
+  if (currentDate.day === 1 && currentDate.month >= 5 && currentDate.month <= 10) {
+    const lastDiscoveryMonth = WORLD_DATA._universityScout?._lastDiscoveryMonth || 4;
+    if (currentDate.month > lastDiscoveryMonth) {
+      const newCandidates = discoverNewScoutCandidates(uniRank, reputation, currentDate.month);
+      if (newCandidates.length > 0) {
+        candidates.push(...newCandidates);
+        if (WORLD_DATA._universityScout) {
+          WORLD_DATA._universityScout._lastDiscoveryMonth = currentDate.month;
+          WORLD_DATA._universityScout._newDiscoveries = newCandidates.length;
+        }
+      }
+    }
+  }
 
   for (const c of candidates) {
     if (c._investigating && c._investigateReturn) {
