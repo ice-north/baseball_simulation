@@ -249,7 +249,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
 
   return (
     <div className="p-4 bg-gray-900 min-h-screen">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* ヘッダー + タブ */}
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h1 className="text-xl font-bold text-yellow-400">資料室</h1>
