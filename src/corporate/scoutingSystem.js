@@ -11,6 +11,7 @@ import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateI
 import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { getUniversityPipes } from '../university/universityPipeSystem.js';
 import { WORLD_DATA } from './worldData.js';
+import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 
 // ============================================================
 // 退団システム
@@ -1571,6 +1572,7 @@ function discoverCandidatesFromPool(count, rank, reputation) {
     p.recruitRate = calculateUniversityRecruitRate(p, rank, reputation, 0);
     p._approachGauge = 0;
     p._approaching = false;
+    p._rivals = generateRivals(p, rank);
     return p;
   });
 }
@@ -1708,6 +1710,21 @@ export function processUniversityScoutDay(candidates, currentDate, uniRank, repu
     }
   }
 
+  // ライバル大学のゲージ進行 → 先に100%到達で横取り
+  const rivalStolen = advanceRivalGauges(candidates, uniRank);
+  if (rivalStolen.length > 0 && WORLD_DATA._universityScout) {
+    const wd = WORLD_DATA._universityScout;
+    if (!wd._rivalStolen) wd._rivalStolen = [];
+    for (const s of rivalStolen) {
+      const c = s.candidate;
+      const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
+      if (orig) orig._universityReserved = s.rivalName;
+      wd._rivalStolen.push({ name: c.name, position: c.position, rivalName: s.rivalName, rivalRank: s.rivalRank });
+      const idx = candidates.indexOf(c);
+      if (idx >= 0) candidates.splice(idx, 1);
+    }
+  }
+
   // 接近ゲージの日次蓄積
   const gaugeCompleted = [];
   for (const c of candidates) {
@@ -1790,6 +1807,92 @@ export function calculateDailyGaugeRate(player, uniRank, reputation) {
   const watchBonus = ((player._watchBonus || 0) / 100) * 2.0;
   const rate = baseRate + rankBonus - qualityPenalty + invBonus + watchBonus;
   return Math.max(0.5, Math.round(rate * 10) / 10);
+}
+
+// ============================================================
+// ライバル大学競合システム
+// 他大学も同じ高校生に接近 → 先にゲージ100%にした方が獲得
+// ============================================================
+
+const RANK_REPUTATION_BASE = { S: 85, A: 65, B: 40, C: 20, D: 5 };
+const RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
+
+function generateRivals(player, userRank) {
+  const score = evaluatePlayerScore(player);
+  const rivalCount = score >= 70 ? 3 : score >= 50 ? 2 : score >= 30 ? 1 : (Math.random() < 0.4 ? 1 : 0);
+  if (rivalCount === 0) return [];
+
+  const userTeamName = Object.keys(TEAMS_DATA)[0] || '';
+  const userTeamId = UNIVERSITY_TEAMS.find(t => t.name === userTeamName)?.id;
+
+  const eligibleRanks = [];
+  if (score >= 60) eligibleRanks.push('S', 'A', 'B');
+  else if (score >= 40) eligibleRanks.push('A', 'B', 'C');
+  else eligibleRanks.push('B', 'C', 'D');
+
+  const pool = UNIVERSITY_TEAMS.filter(t =>
+    t.id !== userTeamId && eligibleRanks.includes(t.rank)
+  );
+  if (pool.length === 0) return [];
+
+  const shuffled = pool.sort(() => Math.random() - 0.5);
+  const picked = shuffled.slice(0, rivalCount);
+
+  return picked.map(t => {
+    const rep = RANK_REPUTATION_BASE[t.rank] || 40;
+    const startDelay = Math.floor(Math.random() * 45) + 5;
+    return {
+      universityName: t.name,
+      rank: t.rank,
+      reputation: rep,
+      gauge: 0,
+      approaching: false,
+      _startDelay: startDelay,
+      _daysPassed: 0,
+    };
+  });
+}
+
+function advanceRivalGauges(candidates, userRank) {
+  const stolen = [];
+  for (const c of candidates) {
+    if (!c._rivals || c._rivals.length === 0) continue;
+    for (const rival of c._rivals) {
+      rival._daysPassed = (rival._daysPassed || 0) + 1;
+      if (!rival.approaching && rival._daysPassed >= rival._startDelay) {
+        rival.approaching = true;
+      }
+      if (!rival.approaching) continue;
+      const rate = calculateRivalGaugeRate(c, rival.rank, rival.reputation);
+      rival.gauge = Math.min(100, rival.gauge + rate);
+      if (rival.gauge >= 100) {
+        stolen.push({ candidate: c, rivalName: rival.universityName, rivalRank: rival.rank });
+        break;
+      }
+    }
+  }
+  return stolen;
+}
+
+function calculateRivalGaugeRate(player, rivalRank, rivalRep) {
+  const baseRate = 2.5 + (rivalRep / 100) * 2.0;
+  const rankBonus = { S: 1.5, A: 0.5, B: 0, C: -0.3, D: -0.5 }[rivalRank] || 0;
+  const playerScore = evaluatePlayerScore(player);
+  const qualityPenalty = Math.max(0, (playerScore - 30) * 0.04);
+  const rate = baseRate + rankBonus - qualityPenalty;
+  return Math.max(0.5, Math.round(rate * 10) / 10);
+}
+
+export function getRivalInfo(candidate) {
+  if (!candidate._rivals || candidate._rivals.length === 0) return null;
+  const active = candidate._rivals.filter(r => r.approaching);
+  if (active.length === 0) return { count: 0, maxGauge: 0, rivals: [] };
+  const maxGauge = Math.max(...active.map(r => r.gauge));
+  return {
+    count: active.length,
+    maxGauge,
+    rivals: active.map(r => ({ name: r.universityName, rank: r.rank, gauge: Math.floor(r.gauge) })),
+  };
 }
 
 export function getUniversityScoutRecommendation(player, uniRank) {

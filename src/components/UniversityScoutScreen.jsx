@@ -12,6 +12,7 @@ import {
   stopUniversityApproach,
   calculateDailyGaugeRate,
   getMaxApproaches,
+  getRivalInfo,
 } from '../corporate/scoutingSystem.js';
 import { highSchoolPool } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
@@ -36,6 +37,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const [sortAsc, setSortAsc] = useState(false);
   const [newDiscoveryCount, setNewDiscoveryCount] = useState(0);
   const [gaugeCompletePlayer, setGaugeCompletePlayer] = useState(null);
+  const [rivalStolenList, setRivalStolenList] = useState([]);
   const [selectionCandidates, setSelectionCandidates] = useState([]);
   const [selectionPicked, setSelectionPicked] = useState([]);
 
@@ -70,6 +72,12 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
       setCandidates([...(wd.candidates || [])]);
       setRecruited([...(wd.recruited || [])]);
       wd._gaugeRecruitedCount = 0;
+    }
+    const rs = wd._rivalStolen || [];
+    if (rs.length > 0) {
+      setRivalStolenList(prev => [...prev, ...rs]);
+      setCandidates([...(wd.candidates || [])]);
+      wd._rivalStolen = [];
     }
   });
 
@@ -168,6 +176,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     switch (key) {
       case 'gaugeRate': return calculateDailyGaugeRate(p, rank, reputation);
       case 'gauge': return p._approachGauge || 0;
+      case 'rivalMax': { const ri = getRivalInfo(p); return ri ? ri.maxGauge : 0; }
       case 'age': return p.age || 99;
       case 'name': return p.name || '';
       case 'rec': return recGradeOrder[getUniversityScoutRecommendation(p, rank)] || 0;
@@ -221,6 +230,39 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
             </div>
             <div className="text-center">
               <button onClick={() => setGaugeCompletePlayer(null)}
+                className="px-6 py-2 rounded-xl font-bold text-white bg-blue-700 hover:bg-blue-600 transition">
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (rivalStolenList.length > 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-4 flex items-center justify-center">
+        <div className="max-w-md w-full">
+          <div className="rounded-xl p-6 border bg-red-900/20 border-red-800/30">
+            <div className="text-center mb-4">
+              <span className="text-2xl font-black text-red-400">他大学に先を越された!</span>
+            </div>
+            {rivalStolenList.map((s, i) => (
+              <div key={i} className="mb-3 p-3 bg-gray-800/50 rounded-lg">
+                <div className="text-center">
+                  <span className="text-white font-bold">{s.name}</span>
+                  <span className="text-gray-400 text-sm ml-2">{POSITION_NAMES[s.position] || s.position}</span>
+                </div>
+                <div className="text-center text-red-300 text-sm mt-1">
+                  → <span className="font-bold">{s.rivalName}</span>
+                  <span className="text-gray-500 text-xs ml-1">({s.rivalRank}ランク)</span>
+                  が推薦確定
+                </div>
+              </div>
+            ))}
+            <div className="text-center mt-4">
+              <button onClick={() => setRivalStolenList([])}
                 className="px-6 py-2 rounded-xl font-bold text-white bg-blue-700 hover:bg-blue-600 transition">
                 OK
               </button>
@@ -463,6 +505,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     <SortHeader k="growth" label="成長" />
                     <SortHeader k="gaugeRate" label="速度" />
                     <SortHeader k="gauge" label="ゲージ" />
+                    <SortHeader k="rivalMax" label="競合" />
                     <th className="py-1 px-1 text-gray-500">操作</th>
                   </tr>
                 </thead>
@@ -476,6 +519,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     const gaugeRate = calculateDailyGaugeRate(p, rank, reputation);
                     const daysLeft = gauge < 100 ? Math.ceil((100 - gauge) / gaugeRate) : 0;
                     const canApproach = !p._approaching && approachingCount < maxApproaches && remainingSlots > 0;
+                    const rival = getRivalInfo(p);
                     return (
                       <tr key={p.id} className={`border-b border-gray-800/50 hover:bg-gray-700/20 transition ${p._approaching ? 'bg-cyan-900/10' : ''}`}>
                         <td className={`py-1.5 px-1 text-center font-black ${recColor(recGrade)}`}>{recGrade}</td>
@@ -525,6 +569,26 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             </div>
                           ) : gauge > 0 ? (
                             <span className="text-gray-500 text-[10px]">{Math.floor(gauge)}% (停止中)</span>
+                          ) : (
+                            <span className="text-gray-600 text-[10px]">—</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-1 whitespace-nowrap" style={{ minWidth: '80px' }}>
+                          {rival && rival.count > 0 ? (
+                            <div className="flex flex-col gap-0.5">
+                              {rival.rivals.map((r, ri) => (
+                                <div key={ri} className="flex items-center gap-1">
+                                  <span className={`text-[9px] font-bold ${r.gauge >= 70 ? 'text-red-400' : r.gauge >= 40 ? 'text-orange-400' : 'text-gray-400'}`}>
+                                    {r.name.length > 4 ? r.name.slice(0, 4) + '..' : r.name}
+                                  </span>
+                                  <div className="w-8 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${r.gauge >= 70 ? 'bg-red-500' : r.gauge >= 40 ? 'bg-orange-500' : 'bg-gray-500'}`}
+                                      style={{ width: `${r.gauge}%` }} />
+                                  </div>
+                                  <span className="text-gray-500 text-[8px]">{r.gauge}%</span>
+                                </div>
+                              ))}
+                            </div>
                           ) : (
                             <span className="text-gray-600 text-[10px]">—</span>
                           )}
