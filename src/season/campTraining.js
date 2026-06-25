@@ -903,6 +903,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
+      if (targetStat === 'defense' && totalGrowth < 1) totalGrowth = 1;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : 100;
       const newValue = Math.min(maxValue, currentValue + totalGrowth);
