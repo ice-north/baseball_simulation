@@ -27,7 +27,7 @@ export const TRAINING_MENUS = {
     targets: ['meet', 'power', 'eye', 'bunt'],
     // 能力ごとの成長倍率: パワーは才能依存のため半減、選球眼は副次効果として半減
     // ミートは1.0倍維持（+0〜2）、パワー/選球眼/バントは0.3〜0.5倍（+0〜1）
-    growthMultipliers: { power: 0.5, eye: 0.5, bunt: 0.3 },
+    growthMultipliers: { power: 0.7, eye: 0.5, bunt: 0.3 },
     category: 'batting'
   },
   baserunning: {
@@ -35,7 +35,7 @@ export const TRAINING_MENUS = {
     icon: '🏃',
     description: '走力・盗塁・バントを強化',
     targets: ['speed', 'steal', 'bunt'],
-    growthMultipliers: { bunt: 0.5 },
+    growthMultipliers: { speed: 1.5, bunt: 0.5 },
     category: 'batting'
   },
   fielding: {
@@ -51,7 +51,7 @@ export const TRAINING_MENUS = {
     icon: '💪',
     description: '投手スタミナを強化',
     targets: ['stamina'],
-    growthMultipliers: { stamina: 2.0 },
+    growthMultipliers: { stamina: 1.5 },
     category: 'pitching'
   },
   control: {
@@ -903,7 +903,6 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
-      if (targetStat === 'defense' && totalGrowth < 1) totalGrowth = 1;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
       const maxValue = targetStat === 'velocity' ? getVelocityCap(armForCap) : targetStat === 'stamina' ? 200 : 100;
       const newValue = Math.min(maxValue, currentValue + totalGrowth);
