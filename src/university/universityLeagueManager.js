@@ -1,6 +1,6 @@
 // ============================================================
 // 大学リーグマネージャー
-// 16リーグの春季・秋季リーグ戦スケジュール生成・試合シミュレーション
+// 26リーグの春季・秋季リーグ戦スケジュール生成・試合シミュレーション
 // divisions対応: UNIVERSITY_REGIONSのdivisionsフィールドで自動分割
 // ============================================================
 
@@ -129,6 +129,7 @@ function updateStandings(standings, home, away, homeScore, awayScore) {
 
 export function initializeUniversityLeagues(year) {
   if (!WORLD_DATA.universityLeagues) WORLD_DATA.universityLeagues = {};
+  WORLD_DATA._uniTournaments = {};
 
   for (const region of UNIVERSITY_REGIONS) {
     const teams = UNIVERSITY_TEAMS.filter(t => t.region === region.id);

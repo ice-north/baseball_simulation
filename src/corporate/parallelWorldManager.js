@@ -7,6 +7,7 @@ import { WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { simulateUniversityLeagueDate, getAllUniversityLeagues } from '../university/universityLeagueManager.js';
+import { generateUniversityChampionship, generateMeijiJinguTournament, autoPlayUniversityTournament } from '../university/universityTournament.js';
 import { INDEPENDENT_LEAGUES } from './independentLeagueData.js';
 
 const getScheduleByDateForLeague = (schedule, date) => {
@@ -50,6 +51,32 @@ export const simulateParallelWorldDate = (currentDate) => {
   // 大学リーグ
   if (WORLD_DATA.universityLeagues && Object.keys(WORLD_DATA.universityLeagues).length > 0) {
     simulateUniversityLeagueDate(currentDate);
+
+    // 大学全国大会（非大学モード: バックグラウンド自動消化）
+    if (WORLD_DATA.mode !== 'university') {
+      const { month, day } = currentDate;
+      if (!WORLD_DATA._uniTournaments) WORLD_DATA._uniTournaments = {};
+
+      // 全日本大学野球選手権大会（6月10日）
+      if (month === 6 && day === 10 && !WORLD_DATA._uniTournaments.ucDone) {
+        const uc = generateUniversityChampionship(null, currentDate.year);
+        if (uc) {
+          autoPlayUniversityTournament(uc);
+          WORLD_DATA._uniTournaments.uc = uc;
+          WORLD_DATA._uniTournaments.ucDone = true;
+        }
+      }
+
+      // 明治神宮野球大会（11月10日）
+      if (month === 11 && day === 10 && !WORLD_DATA._uniTournaments.mjDone) {
+        const mj = generateMeijiJinguTournament(null, currentDate.year);
+        if (mj) {
+          autoPlayUniversityTournament(mj);
+          WORLD_DATA._uniTournaments.mj = mj;
+          WORLD_DATA._uniTournaments.mjDone = true;
+        }
+      }
+    }
   }
 
   for (const [leagueId, leagueData] of Object.entries(WORLD_DATA.independentLeagues)) {

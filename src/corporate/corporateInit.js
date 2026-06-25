@@ -1260,6 +1260,9 @@ const UNI_REPUTATION_GAINS = {
   position2nd: 3,          // リーグ2位
   position3rd: 1,          // リーグ3位
   proDrafted: 4,           // プロ選手輩出
+  tournamentWin: 2,        // 全国大会1勝ごと
+  tournamentChampion: 5,   // 全国大会優勝
+  tournamentRunnerUp: 3,   // 全国大会準優勝
 };
 const UNI_REPUTATION_DECAY = 3;
 
@@ -1359,6 +1362,16 @@ export const updateAllRanks = (seasonData) => {
   }
 
   // WORLD_DATA内の他リーグ大学チームも簡易更新
+  // 全国大会結果の取得（大学モード: seasonDataから、他モード: WORLD_DATA._uniTournamentsから）
+  const ucSource = seasonData.universityChampionship || WORLD_DATA._uniTournaments?.uc;
+  const mjSource = seasonData.meijiJingu || WORLD_DATA._uniTournaments?.mj;
+  const worldUcWins = ucSource?.bracket ? countBracketWins(ucSource.bracket) : {};
+  const worldMjWins = mjSource?.bracket ? countBracketWins(mjSource.bracket) : {};
+  const worldUcChampion = ucSource?.champion || null;
+  const worldUcRunnerUp = ucSource?.runnerUp || null;
+  const worldMjChampion = mjSource?.champion || null;
+  const worldMjRunnerUp = mjSource?.runnerUp || null;
+
   const uniLeagues = WORLD_DATA.universityLeagues;
   if (uniLeagues) {
     for (const [regionId, league] of Object.entries(uniLeagues)) {
@@ -1379,6 +1392,11 @@ export const updateAllRanks = (seasonData) => {
           if (pos === 1) rep += UNI_REPUTATION_GAINS.position1st;
           else if (pos === 2) rep += UNI_REPUTATION_GAINS.position2nd;
           else if (pos === 3) rep += UNI_REPUTATION_GAINS.position3rd;
+          // 全国大会ボーナス
+          const tWins = (worldUcWins[st.team] || 0) + (worldMjWins[st.team] || 0);
+          if (tWins > 0) rep += tWins * UNI_REPUTATION_GAINS.tournamentWin;
+          if (st.team === worldUcChampion || st.team === worldMjChampion) rep += UNI_REPUTATION_GAINS.tournamentChampion;
+          else if (st.team === worldUcRunnerUp || st.team === worldMjRunnerUp) rep += UNI_REPUTATION_GAINS.tournamentRunnerUp;
           rep = clamp(rep - UNI_REPUTATION_DECAY, 0, 100);
           let newRank = teamDef.rank;
           if (rep >= RANK_PROMOTE_THRESHOLD.S) newRank = 'S';

@@ -17,7 +17,7 @@ import {
   getRoundName,
 } from '../corporate/toshitaikou.js';
 
-// 全14リーグから優勝チームを取得
+// 全26リーグから優勝チームを取得（1部優勝チームのみ）
 export function getLeagueChampions(seasonKey, userSeasonData = null) {
   const champions = [];
   const userRegion = WORLD_DATA.mode === 'university' ? WORLD_DATA.userLeagueId : null;
