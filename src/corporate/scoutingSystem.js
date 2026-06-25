@@ -1569,6 +1569,8 @@ function discoverCandidatesFromPool(count, rank, reputation) {
     p._investigating = false;
     p._investigateReturn = null;
     p.recruitRate = calculateUniversityRecruitRate(p, rank, reputation, 0);
+    p._approachGauge = 0;
+    p._approaching = false;
     return p;
   });
 }
@@ -1706,6 +1708,34 @@ export function processUniversityScoutDay(candidates, currentDate, uniRank, repu
     }
   }
 
+  // 接近ゲージの日次蓄積
+  const gaugeCompleted = [];
+  for (const c of candidates) {
+    if (!c._approaching) continue;
+    const rate = calculateDailyGaugeRate(c, uniRank, reputation);
+    c._approachGauge = Math.min(100, (c._approachGauge || 0) + rate);
+    if (c._approachGauge >= 100) {
+      gaugeCompleted.push(c);
+    }
+  }
+
+  // ゲージMAXの選手を自動確保
+  if (gaugeCompleted.length > 0 && WORLD_DATA._universityScout) {
+    const wd = WORLD_DATA._universityScout;
+    const userTeamName = Object.keys(TEAMS_DATA)[0] || '';
+    const maxSlots = getUniversityScoutSlots(uniRank);
+    for (const c of gaugeCompleted) {
+      if ((wd.recruited || []).length >= maxSlots) break;
+      const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
+      if (orig) orig._universityReserved = userTeamName;
+      if (!wd.recruited) wd.recruited = [];
+      wd.recruited.push(c);
+      const idx = candidates.indexOf(c);
+      if (idx >= 0) candidates.splice(idx, 1);
+    }
+    wd._gaugeRecruitedCount = (wd._gaugeRecruitedCount || 0) + gaugeCompleted.length;
+  }
+
   return completed;
 }
 
@@ -1722,6 +1752,44 @@ export function attemptUniversityRecruit(player, uniRank, reputation) {
   const rate = player.recruitRate || calculateUniversityRecruitRate(player, uniRank, reputation);
   const roll = Math.random() * 100;
   return { success: roll < rate, rate };
+}
+
+// ============================================================
+// 接近ゲージシステム
+// 候補に「接近」して毎日ゲージを蓄積、100%で推薦確定
+// ============================================================
+
+const MAX_CONCURRENT_APPROACHES = { S: 5, A: 4, B: 3, C: 3, D: 2 };
+
+export function getMaxApproaches(rank) {
+  return MAX_CONCURRENT_APPROACHES[rank] || 3;
+}
+
+export function startUniversityApproach(candidate) {
+  if (candidate._approaching) return false;
+  candidate._approaching = true;
+  if (candidate._approachGauge == null) candidate._approachGauge = 0;
+  return true;
+}
+
+export function stopUniversityApproach(candidate) {
+  candidate._approaching = false;
+  return true;
+}
+
+/**
+ * 1日あたりのゲージ蓄積量を計算
+ * 選手の質が高いほど遅く、大学ランク・注目度・調査で加速
+ */
+export function calculateDailyGaugeRate(player, uniRank, reputation) {
+  const baseRate = 2.0 + (reputation / 100) * 3.0;
+  const rankBonus = { S: 2.0, A: 1.0, B: 0, C: -0.5, D: -1.0 }[uniRank] || 0;
+  const playerScore = evaluatePlayerScore(player);
+  const qualityPenalty = Math.max(0, (playerScore - 30) * 0.05);
+  const invBonus = (player._investigationCount || 0) * 0.5;
+  const watchBonus = ((player._watchBonus || 0) / 100) * 2.0;
+  const rate = baseRate + rankBonus - qualityPenalty + invBonus + watchBonus;
+  return Math.max(0.5, Math.round(rate * 10) / 10);
 }
 
 export function getUniversityScoutRecommendation(player, uniRank) {
