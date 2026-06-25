@@ -10,6 +10,7 @@ import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
 import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { getUniversityPipes } from '../university/universityPipeSystem.js';
+import { WORLD_DATA } from './worldData.js';
 
 // ============================================================
 // 退団システム
