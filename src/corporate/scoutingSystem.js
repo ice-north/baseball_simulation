@@ -1782,10 +1782,10 @@ export function stopUniversityApproach(candidate) {
  * 選手の質が高いほど遅く、大学ランク・注目度・調査で加速
  */
 export function calculateDailyGaugeRate(player, uniRank, reputation) {
-  const baseRate = 2.0 + (reputation / 100) * 3.0;
-  const rankBonus = { S: 2.0, A: 1.0, B: 0, C: -0.5, D: -1.0 }[uniRank] || 0;
+  const baseRate = 2.5 + (reputation / 100) * 2.0;
+  const rankBonus = { S: 1.5, A: 0.5, B: 0, C: -0.3, D: -0.5 }[uniRank] || 0;
   const playerScore = evaluatePlayerScore(player);
-  const qualityPenalty = Math.max(0, (playerScore - 30) * 0.05);
+  const qualityPenalty = Math.max(0, (playerScore - 30) * 0.04);
   const invBonus = (player._investigationCount || 0) * 0.5;
   const watchBonus = ((player._watchBonus || 0) / 100) * 2.0;
   const rate = baseRate + rankBonus - qualityPenalty + invBonus + watchBonus;
