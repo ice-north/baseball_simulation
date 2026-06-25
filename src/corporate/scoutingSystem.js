@@ -390,12 +390,14 @@ function obscureAbilities(player, accuracy, stage = 'full') {
 
   const isPitcher = player.position === 'pitcher';
 
+  const discipline = player.personality?.discipline ?? player.professionalism ?? 50;
+  const mental = player.personality?.mental ?? 50;
+
   if (stage === 'primary') {
     // 概要: 全能力からランダムに2つだけ見える
     const pitcherKeys = ['velocity', 'control', 'stamina'];
     const hitterKeys = ['meet', 'power', 'eye', 'speed', 'defense'];
     const pool = isPitcher ? pitcherKeys : hitterKeys;
-    // ランダムに2つ選出
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     const visible = new Set(shuffled.slice(0, 2));
 
@@ -419,13 +421,11 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         stamina: visible.has('stamina') ? blur(player.pitching?.stamina || 60, 200) : hidden,
       },
       professionalism: hidden,
+      mental: hidden,
     };
   }
 
-  const discipline = player.personality?.discipline ?? player.professionalism ?? 50;
-
   if (stage === 'secondary') {
-    // 主要能力: 投手は球速+制球+スタミナ、野手はミート+パワー+走力+守備
     return {
       batting: {
         meet: blur(player.batting?.meet || 0),
@@ -434,7 +434,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
       },
       physical: {
         speed: isPitcher ? hidden : blur(player.physical?.speed || 0),
-        arm: hidden,
+        arm: blur(player.physical?.arm || 0),
         recovery: hidden,
       },
       fielding: {
@@ -446,6 +446,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         stamina: isPitcher ? blur(player.pitching?.stamina || 60, 200) : hidden,
       },
       professionalism: blur(discipline),
+      mental: blur(mental),
     };
   }
 
@@ -470,6 +471,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
       stamina: blur(player.pitching?.stamina || 60, 200),
     },
     professionalism: blur(discipline),
+    mental: blur(mental),
   };
 }
 

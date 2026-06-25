@@ -129,15 +129,23 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     else { setSortKey(key); setSortAsc(key === 'age' || key === 'name'); }
   };
 
+  const throwLabel = (t) => t === 'left' ? '左' : '右';
+  const batLabel = (b) => b === 'left' ? '左' : b === 'switch' ? '両' : '右';
+  const formLabel = (f) => ({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[f] || '-');
+  const gpLabel = (gp) => gp == null ? '-' : gp.toFixed(2);
+  const gpColor = (gp) => gp >= 1.3 ? 'text-red-400' : gp >= 1.1 ? 'text-yellow-400' : gp >= 0.9 ? 'text-green-400' : 'text-gray-500';
+
   const getAbilityVal = (p, key) => {
     const sa = p.scoutedAbilities || {};
     const map = {
       velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
       meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
-      speed: sa.physical?.speed, defense: sa.fielding?.defense,
+      speed: sa.physical?.speed, arm: sa.physical?.arm, defense: sa.fielding?.defense,
       professionalism: sa.professionalism,
+      mental: sa.mental, growth: p.growthPotential,
     };
     const v = map[key];
+    if (key === 'growth') return typeof v === 'number' ? v : -1;
     return (v === '?' || v === undefined) ? -1 : (typeof v === 'number' ? v : parseInt(v));
   };
 
@@ -223,7 +231,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   if (phase === 'selection') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-[1800px] mx-auto">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h1 className="text-xl font-black text-white">セレクション (一般入部試験)</h1>
@@ -281,20 +289,26 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-700/50 text-[10px]">
-                      <th className="py-1 px-1 text-gray-500 w-24">名前</th>
-                      <th className="py-1 px-1 text-gray-500 w-10">守</th>
-                      <th className="py-1 px-1 text-gray-500 w-8">年</th>
-                      <th className="py-1 px-1 text-gray-500 w-8">体</th>
-                      <th className="py-1 px-1 text-gray-500 w-16">出身校</th>
-                      <th className="py-1 px-1 text-gray-500 w-10">球速</th>
-                      <th className="py-1 px-1 text-gray-500 w-10">制球</th>
-                      <th className="py-1 px-1 text-gray-500 w-8">ス</th>
-                      <th className="py-1 px-1 text-gray-500 w-8">ミ</th>
-                      <th className="py-1 px-1 text-gray-500 w-8">パ</th>
-                      <th className="py-1 px-1 text-gray-500 w-8">眼</th>
-                      <th className="py-1 px-1 text-gray-500 w-8">走</th>
-                      <th className="py-1 px-1 text-gray-500 w-8">守</th>
-                      <th className="py-1 px-1 text-gray-500 w-16">操作</th>
+                      <th className="py-1 px-1 text-gray-500">名前</th>
+                      <th className="py-1 px-1 text-gray-500">守</th>
+                      <th className="py-1 px-1 text-gray-500">投打</th>
+                      <th className="py-1 px-1 text-gray-500">フォーム</th>
+                      <th className="py-1 px-1 text-gray-500">年</th>
+                      <th className="py-1 px-1 text-gray-500">体</th>
+                      <th className="py-1 px-1 text-gray-500">出身校</th>
+                      <th className="py-1 px-1 text-gray-500">球速</th>
+                      <th className="py-1 px-1 text-gray-500">制球</th>
+                      <th className="py-1 px-1 text-gray-500">ス</th>
+                      <th className="py-1 px-1 text-gray-500">ミ</th>
+                      <th className="py-1 px-1 text-gray-500">パ</th>
+                      <th className="py-1 px-1 text-gray-500">眼</th>
+                      <th className="py-1 px-1 text-gray-500">走</th>
+                      <th className="py-1 px-1 text-gray-500">肩</th>
+                      <th className="py-1 px-1 text-gray-500">守</th>
+                      <th className="py-1 px-1 text-gray-500">精神</th>
+                      <th className="py-1 px-1 text-gray-500">プロ</th>
+                      <th className="py-1 px-1 text-gray-500">成長</th>
+                      <th className="py-1 px-1 text-gray-500">操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -303,17 +317,19 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       const canPick = selectionPicked.length < selectionSlots;
                       return (
                         <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-700/20 transition">
-                          <td className="py-1.5 px-1">
-                            <span className="text-white font-bold truncate max-w-[96px]">{p.name}</span>
+                          <td className="py-1.5 px-1 whitespace-nowrap">
+                            <span className="text-white font-bold">{p.name}</span>
                           </td>
-                          <td className="py-1.5 px-1 text-gray-400">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
+                          <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
+                          <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{throwLabel(p.physical?.throws)}{batLabel(p.batting?.bats)}</td>
+                          <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{formLabel(p.pitching?.form)}</td>
                           <td className="py-1.5 px-1 text-gray-400 text-center">{p.age}</td>
-                          <td className="py-1.5 px-1 text-center">
+                          <td className="py-1.5 px-1 text-center whitespace-nowrap">
                             <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                               {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
                             </span>
                           </td>
-                          <td className="py-1.5 px-1 text-gray-500 truncate max-w-[64px]">{p.highSchool?.name || '高校'}</td>
+                          <td className="py-1.5 px-1 text-gray-500 whitespace-nowrap">{p.highSchool?.name || '高校'}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
@@ -321,7 +337,11 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.power)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.arm)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.mental)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.professionalism)}</td>
+                          <td className={`py-1.5 px-1 text-center font-bold ${gpColor(p.growthPotential)}`}>{gpLabel(p.growthPotential)}</td>
                           <td className="py-1.5 px-1">
                             {canPick && (
                               <button onClick={() => handleSelectionPick(p)}
@@ -345,7 +365,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-xl font-black text-white">スポーツ推薦スカウト</h1>
@@ -416,23 +436,29 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-700/50 text-[10px]">
-                    <SortHeader k="rec" label="推" w="w-8" />
-                    <SortHeader k="name" label="名前" w="w-24" />
-                    <th className="py-1 px-1 text-gray-500 w-10">守</th>
-                    <SortHeader k="age" label="年" w="w-8" />
-                    <th className="py-1 px-1 text-gray-500 w-8">体</th>
-                    <th className="py-1 px-1 text-gray-500 w-16">出身</th>
-                    <th className="py-1 px-1 text-gray-500 w-10">情報</th>
-                    <SortHeader k="velocity" label="球速" w="w-10" />
-                    <SortHeader k="control" label="制球" w="w-10" />
-                    <SortHeader k="stamina" label="ス" w="w-8" />
-                    <SortHeader k="meet" label="ミ" w="w-8" />
-                    <SortHeader k="power" label="パ" w="w-8" />
-                    <SortHeader k="eye" label="眼" w="w-8" />
-                    <SortHeader k="speed" label="走" w="w-8" />
-                    <SortHeader k="defense" label="守" w="w-8" />
-                    <SortHeader k="rate" label="成功率" w="w-14" />
-                    <th className="py-1 px-1 text-gray-500 w-32">操作</th>
+                    <SortHeader k="rec" label="推" />
+                    <SortHeader k="name" label="名前" />
+                    <th className="py-1 px-1 text-gray-500">守</th>
+                    <th className="py-1 px-1 text-gray-500">投打</th>
+                    <th className="py-1 px-1 text-gray-500">フォーム</th>
+                    <SortHeader k="age" label="年" />
+                    <th className="py-1 px-1 text-gray-500">体</th>
+                    <th className="py-1 px-1 text-gray-500">出身</th>
+                    <th className="py-1 px-1 text-gray-500">情報</th>
+                    <SortHeader k="velocity" label="球速" />
+                    <SortHeader k="control" label="制球" />
+                    <SortHeader k="stamina" label="ス" />
+                    <SortHeader k="meet" label="ミ" />
+                    <SortHeader k="power" label="パ" />
+                    <SortHeader k="eye" label="眼" />
+                    <SortHeader k="speed" label="走" />
+                    <SortHeader k="arm" label="肩" />
+                    <SortHeader k="defense" label="守" />
+                    <SortHeader k="mental" label="精神" />
+                    <SortHeader k="professionalism" label="プロ" />
+                    <SortHeader k="growth" label="成長" />
+                    <SortHeader k="rate" label="成功率" />
+                    <th className="py-1 px-1 text-gray-500">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -445,20 +471,22 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     return (
                       <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-700/20 transition">
                         <td className={`py-1.5 px-1 text-center font-black ${recColor(recGrade)}`}>{recGrade}</td>
-                        <td className="py-1.5 px-1">
+                        <td className="py-1.5 px-1 whitespace-nowrap">
                           <div className="flex items-center gap-1">
                             {p._watching && <span className="text-yellow-400 text-[10px]" title="注目中">★</span>}
-                            <span className="text-white font-bold truncate max-w-[96px]">{p.name}</span>
+                            <span className="text-white font-bold">{p.name}</span>
                           </div>
                         </td>
-                        <td className="py-1.5 px-1 text-gray-400">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
+                        <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
+                        <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{throwLabel(p.physical?.throws)}{batLabel(p.batting?.bats)}</td>
+                        <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{formLabel(p.pitching?.form)}</td>
                         <td className="py-1.5 px-1 text-gray-400 text-center">{p.age}</td>
-                        <td className="py-1.5 px-1 text-center">
+                        <td className="py-1.5 px-1 text-center whitespace-nowrap">
                           <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                             {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
                           </span>
                         </td>
-                        <td className="py-1.5 px-1 text-gray-500 truncate max-w-[64px]">{p._scoutSource}</td>
+                        <td className="py-1.5 px-1 text-gray-500 whitespace-nowrap">{p._scoutSource}</td>
                         <td className="py-1.5 px-1 text-center">{revealLabel(p._revealLevel || 0)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
@@ -467,8 +495,12 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.power)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
+                        <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.arm)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
-                        <td className={`py-1.5 px-1 text-center font-bold ${getRateColor(p.recruitRate)}`}>
+                        <td className="py-1.5 px-1 text-center">{renderVal(sa.mental)}</td>
+                        <td className="py-1.5 px-1 text-center">{renderVal(sa.professionalism)}</td>
+                        <td className={`py-1.5 px-1 text-center font-bold ${gpColor(p.growthPotential)}`}>{gpLabel(p.growthPotential)}</td>
+                        <td className={`py-1.5 px-1 text-center font-bold whitespace-nowrap ${getRateColor(p.recruitRate)}`}>
                           {p.recruitRate}%
                           {(p._watchBonus || 0) > 0 && <span className="text-yellow-500 text-[9px] ml-0.5">+{p._watchBonus}</span>}
                         </td>
