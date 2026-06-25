@@ -41,8 +41,9 @@ export const TRAINING_MENUS = {
   fielding: {
     name: '守備練習',
     icon: '🧤',
-    description: '守備力・肩力を強化',
-    targets: ['defense', 'arm'],
+    description: '守備力を強化、盗塁技術を微増',
+    targets: ['defense', 'steal'],
+    growthMultipliers: { steal: 0.3 },
     category: 'fielding'
   },
   stamina: {
