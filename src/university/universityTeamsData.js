@@ -67,7 +67,7 @@ export const UNIVERSITY_TEAMS = [
   { id: 12, name: '青山学院大学', region: 'tokyoto', rank: 'B', budget: 65, specialties: ['athletic', 'defense', 'mental'] },
 
   // ========== 東都大学 2部（入替制）==========
-  { id: 13, name: '日本大学', region: 'tokyoto', rank: 'B', budget: 65, specialties: ['power', 'athletic', 'stamina'] },
+  { id: 13, name: '日本大学', region: 'tokyoto', rank: 'A', budget: 70, specialties: ['power', 'athletic', 'stamina', 'technique'] },
   { id: 14, name: '専修大学', region: 'tokyoto', rank: 'B', budget: 60, specialties: ['defense', 'technique', 'mental'] },
   { id: 15, name: '立正大学', region: 'tokyoto', rank: 'B', budget: 55, specialties: ['technique', 'defense', 'versatility'] },
   { id: 16, name: '国士舘大学', region: 'tokyoto', rank: 'C', budget: 50, specialties: ['athletic', 'power'] },
@@ -235,7 +235,7 @@ export const UNIVERSITY_TEAMS = [
   { id: 144, name: '関西国際大学', region: 'hanshin', rank: 'C', budget: 45, specialties: ['versatility', 'athletic'] },
 
   // ========== 近畿学生 1部（新規リーグ）==========
-  { id: 145, name: '奈良学園大学', region: 'kinki', rank: 'B', budget: 55, specialties: ['defense', 'technique', 'mental'] },
+  { id: 145, name: '奈良学園大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['defense', 'technique'] },
   { id: 146, name: '大阪大谷大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['technique', 'stamina'] },
   { id: 147, name: '帝塚山大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['athletic', 'defense'] },
   { id: 148, name: '和歌山大学', region: 'kinki', rank: 'D', budget: 40, specialties: ['mental'] },
@@ -267,7 +267,7 @@ export const UNIVERSITY_TEAMS = [
   { id: 215, name: '佐賀大学', region: 'kyushu_area', rank: 'D', budget: 35, specialties: ['stamina'] },
 
   // ========== 南部九州大学（入替制）==========
-  { id: 166, name: '東海大学九州', region: 'nanbu_kyushu', rank: 'B', budget: 55, specialties: ['technique', 'athletic', 'power'] },
+  { id: 166, name: '東海大学九州', region: 'nanbu_kyushu', rank: 'A', budget: 70, specialties: ['technique', 'athletic', 'power', 'stamina'] },
   { id: 165, name: '鹿屋体育大学', region: 'nanbu_kyushu', rank: 'B', budget: 55, specialties: ['athletic', 'stamina', 'power'] },
   { id: 168, name: '宮崎産業経営大学', region: 'nanbu_kyushu', rank: 'C', budget: 45, specialties: ['athletic', 'technique'] },
   { id: 216, name: '沖縄大学', region: 'nanbu_kyushu', rank: 'C', budget: 45, specialties: ['athletic', 'defense'] },
@@ -293,7 +293,7 @@ export const UNIVERSITY_TEAMS = [
   // ========== 東海地区大学（入替制）==========
   { id: 181, name: '常葉大学', region: 'tokai', rank: 'B', budget: 55, specialties: ['technique', 'athletic', 'defense'] },
   { id: 203, name: '中部学院大学', region: 'tokai', rank: 'C', budget: 45, specialties: ['defense', 'technique'] },
-  { id: 204, name: '三重中京大学', region: 'tokai', rank: 'C', budget: 45, specialties: ['athletic', 'technique'] },
+  { id: 204, name: '朝日大学', region: 'tokai', rank: 'B', budget: 55, specialties: ['power', 'athletic', 'technique'] },
   { id: 182, name: '静岡大学', region: 'tokai', rank: 'C', budget: 45, specialties: ['mental', 'technique'] },
   { id: 183, name: '岐阜聖徳学園大学', region: 'tokai', rank: 'C', budget: 45, specialties: ['defense', 'stamina'] },
   { id: 184, name: '皇學館大学', region: 'tokai', rank: 'C', budget: 45, specialties: ['mental', 'technique'] },
@@ -316,7 +316,7 @@ export const UNIVERSITY_TEAMS = [
 
   // ========== 中国地区大学 2部 ==========
   { id: 208, name: '岡山商科大学', region: 'chugoku', rank: 'C', budget: 45, specialties: ['technique', 'mental'] },
-  { id: 209, name: '岡山理科大学', region: 'chugoku', rank: 'B', budget: 55, specialties: ['technique', 'athletic', 'stamina'] },
+  { id: 209, name: '岡山理科大学', region: 'chugoku', rank: 'C', budget: 45, specialties: ['technique', 'athletic'] },
   { id: 210, name: '福山大学', region: 'chugoku', rank: 'C', budget: 40, specialties: ['stamina', 'defense'] },
   { id: 197, name: '島根大学', region: 'chugoku', rank: 'D', budget: 35, specialties: ['mental'] },
   { id: 211, name: '鳥取大学', region: 'chugoku', rank: 'D', budget: 35, specialties: ['mental'] },
