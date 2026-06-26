@@ -13,6 +13,17 @@ const RANK_LABELS = {
   S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興',
 };
 
+const RANK_BG = {
+  S: 'bg-yellow-500/20 border-yellow-500/40',
+  A: 'bg-red-500/20 border-red-500/40',
+  B: 'bg-blue-500/20 border-blue-500/40',
+  C: 'bg-green-500/20 border-green-500/40',
+  D: 'bg-gray-500/20 border-gray-500/40',
+};
+
+const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+const getBestRank = (teams) => teams.reduce((best, t) => RANK_ORDER[t.rank] < RANK_ORDER[best] ? t.rank : best, 'D');
+
 const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
@@ -20,23 +31,27 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
   if (!selectedRegion) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
           <p className="text-gray-400 text-sm mb-6">所属するリーグを選んでください</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {UNIVERSITY_REGIONS.map(region => {
               const teams = UNIVERSITY_TEAMS.filter(t => t.region === region.id);
               const numDivisions = region.divisions || 1;
               const perDiv = numDivisions >= 2 ? Math.floor(teams.length / numDivisions) : 0;
+              const leagueRank = getBestRank(teams);
               return (
                 <button key={region.id}
                   onClick={() => setSelectedRegion(region)}
                   className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-500 rounded-xl p-4 text-left transition group"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <div className="text-lg font-bold text-white group-hover:text-amber-400 transition">{region.name}</div>
-                    <div className="text-xs text-gray-500">{teams.length}校</div>
+                    <div className="text-base font-bold text-white group-hover:text-amber-400 transition truncate mr-2">{region.name}</div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-sm font-bold px-1.5 py-0.5 rounded border ${RANK_BG[leagueRank]} ${RANK_COLORS[leagueRank]}`}>{leagueRank}</span>
+                      <span className="text-xs text-gray-500">{teams.length}校</span>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1 text-xs">
                     {teams.map(t => (
@@ -86,7 +101,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-1">{selectedRegion.name}</h1>
         <p className="text-gray-400 text-sm mb-6">監督を務めるチームを選んでください</p>
 
@@ -98,7 +113,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
               return (
                 <div key={d}>
                   <h3 className={`text-sm font-bold ${divColor} mb-2`}>{d + 1}部</h3>
-                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${d < numDivisions - 1 ? 'mb-4' : 'mb-6'}`}>
+                  <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${d < numDivisions - 1 ? 'mb-4' : 'mb-6'}`}>
                     {divTeams.map(renderTeamButton)}
                   </div>
                 </div>
@@ -106,7 +121,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
             })}
           </>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
             {teams.map(renderTeamButton)}
           </div>
         )}
