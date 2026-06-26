@@ -825,20 +825,20 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                         <S k="mental" w="w-8" title="精神力">精神</S>
                         <th className="py-1.5 px-1 text-center w-8">投/打</th>
                         <th className="py-1.5 px-1 text-center w-12">フォーム</th>
-                        <S k="meet" w="w-8">ミト</S>
-                        <S k="power" w="w-8">パワ</S>
-                        <S k="speed" w="w-8">走力</S>
-                        <S k="arm" w="w-8">肩力</S>
-                        <S k="defense" w="w-8">守備</S>
+                        <S k="meet" w="w-8">ミ</S>
+                        <S k="power" w="w-8">パ</S>
+                        <S k="speed" w="w-8">走</S>
+                        <S k="arm" w="w-8">肩</S>
+                        <S k="defense" w="w-8">守</S>
                         <S k="clead" w="w-8">Cリ</S>
-                        <S k="eye" w="w-8">選球</S>
-                        <S k="bunt" w="w-8">バン</S>
-                        <S k="velocity" w="w-9">球速</S>
-                        <S k="control" w="w-8">制球</S>
+                        <S k="eye" w="w-8">眼</S>
+                        <S k="bunt" w="w-8">バ</S>
+                        <S k="velocity" w="w-9">速</S>
+                        <S k="control" w="w-8">制</S>
                         <th className="py-1.5 px-1 text-center w-8">伸び</th>
-                        <S k="stamina" w="w-9">スタ</S>
-                        <S k="bodyStamina" w="w-8">体力</S>
-                        <S k="recovery" w="w-8">回復</S>
+                        <S k="stamina" w="w-9">ス</S>
+                        <S k="bodyStamina" w="w-8">体</S>
+                        <S k="recovery" w="w-8">回</S>
                         <th className="py-1.5 px-2 text-left">変化球</th>
                         <th className="py-1.5 px-2 text-left">前年成績</th>
                       </>);

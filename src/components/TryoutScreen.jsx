@@ -432,9 +432,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                                     <th className="px-2 py-1">走</th>
                                     <th className="px-2 py-1">肩</th>
                                     <th className="px-2 py-1">守</th>
-                                    <th className="px-2 py-1">球速</th>
-                                    <th className="px-2 py-1">制球</th>
-                                    <th className="px-2 py-1">スタ</th>
+                                    <th className="px-2 py-1">速</th>
+                                    <th className="px-2 py-1">制</th>
+                                    <th className="px-2 py-1">ス</th>
                                     <th className="px-2 py-1">回転</th>
                                   </tr>
                                 </thead>
