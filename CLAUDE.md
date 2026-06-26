@@ -30,8 +30,8 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
 - `src/season/universityPool.js` (~550行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
 - `src/corporate/scoutingSystem.js` (~400行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
-- `src/university/universityTeamsData.js` - 大学チームデータ（26リーグ198校（2部制7リーグ×12校＋1部制19リーグ×6校）、ランク別成長倍率定義）
-- `src/university/universityLeagueManager.js` (~280行) - 大学リーグ戦シミュレーション（26リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
+- `src/university/universityTeamsData.js` - 大学チームデータ（27リーグ204校（2部制7リーグ×12校＋1部制20リーグ×6校）、ランク別成長倍率定義）
+- `src/university/universityLeagueManager.js` (~280行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
 - `src/data/playerNames.js` (210KB) - 姓3200件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
@@ -165,10 +165,10 @@ NEW GAME → 大学チーム選択 → キャンプ
 - **WORLD_DATA内の他リーグ大学**: 順位表から簡易計算してランク変動を適用
 
 ## 大学リーグシステム (`src/university/`)
-- **チームデータ** (`universityTeamsData.js`): `UNIVERSITY_TEAMS` に198校定義（26リーグ、2部制7リーグ）
+- **チームデータ** (`universityTeamsData.js`): `UNIVERSITY_TEAMS` に204校定義（27リーグ、2部制7リーグ）
   - 首都圏7リーグ(72校): 東京六大学, 東都1部+2部, 首都1部+2部, 東京新1部+2部, 千葉県1部+2部, 神奈川, 関甲新1部+2部
-  - 地方19リーグ(126校): 北海道学生, 札幌学生, 北東北大学, 仙台六大学, 南東北大学, 愛知1部+2部, 東海地区, 北陸, 関西学生, 関西六大学, 京滋大学, 阪神大学, 近畿学生, 広島六大学, 中国地区1部+2部, 四国地区, 福岡六大学, 九州六大学, 九州地区
-- **リーグ戦** (`universityLeagueManager.js`): 26リーグの春季(4/5〜6/10)・秋季(9/6〜11/5)リーグ戦
+  - 地方20リーグ(132校): 北海道学生, 札幌学生, 北東北大学, 仙台六大学, 南東北大学, 愛知1部+2部, 東海地区, 北陸, 関西学生, 関西六大学, 京滋大学, 阪神大学, 近畿学生, 広島六大学, 中国地区1部+2部, 四国地区, 福岡六大学, 九州六大学, 九州地区, 南部九州
+- **リーグ戦** (`universityLeagueManager.js`): 27リーグの春季(4/5〜6/10)・秋季(9/6〜11/5)リーグ戦
   - ランク別戦力値 `{ S: 78, A: 65, B: 50, C: 38, D: 25 }` で簡易シミュレーション
   - 部制はUNIVERSITY_REGIONSの`divisions`フィールドで汎用管理（7リーグが2部制、他1部制）。将来の3部制も対応可
   - 試合日: 火・水・土・日。`WORLD_DATA.universityLeagues` に格納
