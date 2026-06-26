@@ -4,6 +4,7 @@ import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { generateOptimalLineup } from '../game/lineupGenerator.js';
+import { TabBar } from './GameUIComponents.jsx';
 
 const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup');
@@ -1010,33 +1011,23 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         </div>
 
         {/* タブナビゲーション */}
-        <div className="flex gap-1 mb-4 bg-gray-800/60 p-1 rounded-xl border border-gray-700/50">
-          {[
+        <TabBar
+          tabs={[
             { key: 'lineup',   label: 'スタメン設定', icon: '👥' },
             { key: 'rotation', label: '投手起用',     icon: '⚾' },
             { key: 'defense',  label: '守備分析',     icon: '🛡' },
             { key: 'strategy', label: '作戦指示',     icon: '📋' },
             { key: 'roster',   label: 'ロスター管理', icon: '📝' },
-          ].map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => { setTab(key); setSelectedPitcherId(null); setSwapSource(null); setSelectedBenchPlayer(null); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
-                tab === key
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
-              }`}
-            >
-              <span className="text-base leading-none">{icon}</span>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+          ]}
+          activeKey={tab}
+          onChange={(key) => { setTab(key); setSelectedPitcherId(null); setSwapSource(null); setSelectedBenchPlayer(null); }}
+          className="mb-4"
+        />
 
         {tab === 'lineup' && (
-          <div className="grid grid-cols-3 gap-4">
-            {/* 左側: スタメン (1/3) */}
-            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-1 overflow-hidden">
+          <div className="grid grid-cols-12 gap-4">
+            {/* 左側: スタメン (4/12) */}
+            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-700/50">
                 <div className="flex items-center gap-2">
                   <h2 className="font-semibold text-white text-sm">スタメン設定</h2>
@@ -1249,8 +1240,72 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               </div>
             </div>
 
-            {/* 右側: 控え選手一覧（2/3） */}
-            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-2 overflow-hidden flex flex-col">
+            {/* 中央: ミニダイアモンド */}
+            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-3 overflow-hidden p-3">
+              <h2 className="font-semibold text-white text-sm mb-2 text-center">守備配置</h2>
+              <svg viewBox="0 0 260 240" className="w-full max-w-[260px] mx-auto">
+                <defs>
+                  <linearGradient id="miniField" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#166534" stopOpacity="0.3"/>
+                    <stop offset="100%" stopColor="#14532d" stopOpacity="0.1"/>
+                  </linearGradient>
+                </defs>
+                <polygon points="130,200 10,100 130,10 250,100" fill="url(#miniField)" stroke="#22543d" strokeWidth="1"/>
+                <line x1="130" y1="200" x2="10" y2="100" stroke="#22543d" strokeWidth="0.5" strokeDasharray="4"/>
+                <line x1="130" y1="200" x2="250" y2="100" stroke="#22543d" strokeWidth="0.5" strokeDasharray="4"/>
+                <rect x="115" y="155" width="30" height="30" fill="#22543d" stroke="#2d6a4f" strokeWidth="0.5" transform="rotate(45 130 170)"/>
+                {(() => {
+                  const miniCoords = {
+                    pitcher:  { x: 130, y: 145 },
+                    catcher:  { x: 130, y: 215 },
+                    first:    { x: 205, y: 125 },
+                    second:   { x: 170, y: 90 },
+                    short:    { x: 90,  y: 90 },
+                    third:    { x: 55,  y: 125 },
+                    left:     { x: 30,  y: 55 },
+                    center:   { x: 130, y: 30 },
+                    right:    { x: 230, y: 55 },
+                  };
+                  const posLabelsShort = { pitcher: '投', catcher: '捕', first: '一', second: '二', short: '遊', third: '三', left: '左', center: '中', right: '右' };
+                  return Object.entries(miniCoords).map(([pos, coord]) => {
+                    const entry = lineup.find(e => e.position === pos);
+                    const player = entry ? team.players.find(p => p.id === entry.playerId) : null;
+                    const fitness = player?.positionFitness?.[pos] ?? 50;
+                    const fitnessColor = fitness >= 80 ? '#22c55e' : fitness >= 60 ? '#eab308' : fitness >= 40 ? '#f97316' : '#ef4444';
+                    return (
+                      <g key={pos}>
+                        <circle cx={coord.x} cy={coord.y} r={player ? 16 : 12} fill={player ? '#1e293b' : '#0f172a'} stroke={player ? fitnessColor : '#475569'} strokeWidth={player ? 2 : 1} opacity={player ? 1 : 0.5}/>
+                        {player ? (
+                          <>
+                            <text x={coord.x} y={coord.y - 4} textAnchor="middle" fill="white" fontSize="8" fontWeight="bold">{posLabelsShort[pos]}</text>
+                            <text x={coord.x} y={coord.y + 7} textAnchor="middle" fill="#94a3b8" fontSize="6.5">
+                              {player.name.length > 3 ? player.name.slice(0, 3) : player.name}
+                            </text>
+                          </>
+                        ) : (
+                          <text x={coord.x} y={coord.y + 3} textAnchor="middle" fill="#64748b" fontSize="8">{posLabelsShort[pos]}</text>
+                        )}
+                      </g>
+                    );
+                  });
+                })()}
+              </svg>
+              {(() => {
+                const positionsCovered = new Set(lineup.filter(e => e.battingOrder >= 1).map(e => e.position));
+                const fieldPos = ['catcher','first','second','short','third','left','center','right'];
+                const missing = fieldPos.filter(p => !positionsCovered.has(p));
+                const posNames = { catcher: '捕手', first: '一塁', second: '二塁', short: '遊撃', third: '三塁', left: '左翼', center: '中堅', right: '右翼' };
+                if (missing.length === 0) return null;
+                return (
+                  <div className="mt-2 text-center text-xs text-yellow-400/80">
+                    未配置: {missing.map(p => posNames[p]).join('・')}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 右側: 控え選手一覧 */}
+            <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-5 overflow-hidden flex flex-col">
               <div className="px-4 py-3 border-b border-gray-700/50 shrink-0 space-y-2">
                 <div className="flex items-center gap-2">
                   <h2 className="font-semibold text-white text-sm">

@@ -285,6 +285,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
   const [sortKey, setSortKey] = useState('position');
   const [sortAsc, setSortAsc] = useState(true);
   const [showCampReview, setShowCampReview] = useState(false);
+  const [campFilter, setCampFilter] = useState('all');
 
   // キャンプ開始時のステータスを保存（成長合計計算用）
   const [preCampStats] = useState(() => {
@@ -507,7 +508,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
   const subPosShort = { catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
 
   // 派遣中でない選手のみ表示
-  const activePlayers = sortedPlayers.filter(p => !p.dispatchedThisCamp);
+  const allActivePlayers = sortedPlayers.filter(p => !p.dispatchedThisCamp);
+  const activePlayers = campFilter === 'all' ? allActivePlayers
+    : campFilter === 'pitcher' ? allActivePlayers.filter(p => p.position === 'pitcher')
+    : allActivePlayers.filter(p => p.position !== 'pitcher');
   const dispatchedPlayers = sortedPlayers.filter(p => p.dispatchedThisCamp);
 
   return (
@@ -802,6 +806,28 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                 </div>
               </div>
             )}
+
+            {/* 投手/野手フィルタ */}
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-gray-500 text-xs font-bold">表示:</span>
+              {[
+                { key: 'all', label: '全員', count: allActivePlayers.length },
+                { key: 'pitcher', label: '投手', count: allActivePlayers.filter(p => p.position === 'pitcher').length },
+                { key: 'fielder', label: '野手', count: allActivePlayers.filter(p => p.position !== 'pitcher').length },
+              ].map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setCampFilter(f.key)}
+                  className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
+                    campFilter === f.key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                  }`}
+                >
+                  {f.label} <span className="opacity-60">{f.count}</span>
+                </button>
+              ))}
+            </div>
 
             {/* 選手テーブル */}
             <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto">

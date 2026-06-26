@@ -290,6 +290,50 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
   </div>
 );
 
+// --- GameButton 共通ボタンコンポーネント ---
+const BUTTON_VARIANTS = {
+  primary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',
+  secondary: 'bg-gray-600 hover:bg-gray-500 text-gray-100',
+  danger: 'bg-red-600 hover:bg-red-500 text-white',
+  success: 'bg-green-600 hover:bg-green-500 text-white',
+  ghost: 'bg-transparent hover:bg-gray-700/60 text-gray-300 hover:text-white',
+};
+const BUTTON_SIZES = {
+  sm: 'px-2.5 py-1 text-xs rounded',
+  md: 'px-4 py-1.5 text-sm rounded-lg',
+  lg: 'px-6 py-2.5 text-base rounded-lg',
+};
+export const GameButton = ({ variant = 'primary', size = 'md', className = '', disabled = false, children, ...props }) => (
+  <button
+    className={`font-bold transition-all ${BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.primary} ${BUTTON_SIZES[size] || BUTTON_SIZES.md} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
+    disabled={disabled}
+    {...props}
+  >
+    {children}
+  </button>
+);
+
+// --- TabBar 共通タブコンポーネント ---
+export const TabBar = ({ tabs, activeKey, onChange, className = '' }) => (
+  <div className={`flex gap-1 bg-gray-800/60 rounded-xl p-1 border border-gray-700/50 ${className}`}>
+    {tabs.map(({ key, label, icon, count }) => (
+      <button
+        key={key}
+        onClick={() => onChange(key)}
+        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+          activeKey === key
+            ? 'bg-blue-600 text-white shadow-sm'
+            : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+        }`}
+      >
+        {icon && <span className="text-base leading-none">{icon}</span>}
+        <span>{label}</span>
+        {count !== undefined && <span className="text-xs opacity-60 ml-0.5">({count})</span>}
+      </button>
+    ))}
+  </div>
+);
+
 // --- AccordionSection コンポーネント ---
 export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
   <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 overflow-hidden">

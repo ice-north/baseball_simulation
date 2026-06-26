@@ -609,6 +609,64 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               <div className="text-gray-400 text-sm ml-auto">候補者: {filteredCandidates.length} 人</div>
             </div>
 
+            {/* おすすめ候補 */}
+            {isUserTurn && (() => {
+              const positionCounts = { pitcher: 0, catcher: 0, infielder: 0, outfielder: 0 };
+              userRoster.forEach(player => {
+                const cat = getPositionCategory(player.position);
+                if (cat in positionCounts) positionCounts[cat]++;
+              });
+              const needs = [];
+              const mins = { pitcher: { min: 5, ideal: 10 }, catcher: { min: 1, ideal: 2 }, infielder: { min: 4, ideal: 6 }, outfielder: { min: 3, ideal: 6 } };
+              const catLabels = { pitcher: '投手', catcher: '捕手', infielder: '内野手', outfielder: '外野手' };
+              Object.entries(mins).forEach(([cat, { min, ideal }]) => {
+                if (positionCounts[cat] < ideal) {
+                  const urgency = positionCounts[cat] < min ? 'critical' : 'want';
+                  const best = tryoutCandidates
+                    .filter(p => getPositionCategory(p.position) === cat)
+                    .sort((a, b) => {
+                      const aO = a.position === 'pitcher' ? getPitcherOverall(a) : getFielderOverall(a);
+                      const bO = b.position === 'pitcher' ? getPitcherOverall(b) : getFielderOverall(b);
+                      return bO - aO;
+                    })[0];
+                  if (best) needs.push({ cat, urgency, label: catLabels[cat], current: positionCounts[cat], ideal, player: best });
+                }
+              });
+              if (needs.length === 0) return null;
+              return (
+                <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 p-3 mb-3">
+                  <div className="text-xs text-gray-400 font-bold mb-2">おすすめ候補</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {needs.map(n => (
+                      <div
+                        key={n.cat}
+                        onClick={() => isUserTurn && handleSelectPlayer(n.player)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition hover:scale-[1.02] ${
+                          n.urgency === 'critical'
+                            ? 'bg-red-900/30 border-red-700/50 hover:bg-red-900/50'
+                            : 'bg-blue-900/20 border-blue-700/40 hover:bg-blue-900/40'
+                        }`}
+                      >
+                        <div>
+                          <div className={`text-[10px] font-bold ${n.urgency === 'critical' ? 'text-red-400' : 'text-blue-400'}`}>
+                            {n.label} ({n.current}/{n.ideal})
+                          </div>
+                          <div className="text-white text-xs font-bold">{n.player.name}</div>
+                          <div className="text-gray-500 text-[10px]">
+                            {POSITION_NAMES[n.player.position]} {n.player.age}歳
+                            {n.player.position === 'pitcher'
+                              ? ` ${n.player.pitching?.velocity || 0}km 制${n.player.pitching?.control || 0}`
+                              : ` ミ${n.player.batting?.meet || 0} パ${n.player.batting?.power || 0}`
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 mb-5">
               <table className="w-full text-[11px] text-left">
                 <thead className="bg-gray-800 text-gray-400 text-[10px] sticky top-0 border-b border-gray-700/50">
