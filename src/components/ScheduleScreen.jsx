@@ -525,13 +525,18 @@ const ScheduleScreen = ({
                     const winRate = team.wins + team.losses > 0
                       ? (team.wins / (team.wins + team.losses))
                       : 0;
+                    const played = team.gamesPlayed || ((team.wins || 0) + (team.losses || 0) + (team.draws || 0));
+                    const remaining = totalGames - played;
                     let gameBehind = '';
+                    let gbNum = 0;
                     if (index === 0) {
                       gameBehind = lIsChampion ? '優勝' : '-';
                     } else {
-                      const diff = ((lLeaderWins - team.wins) - (lLeaderLosses - team.losses)) / 2;
-                      gameBehind = diff === 0 ? '-' : diff.toFixed(1);
+                      gbNum = ((lLeaderWins - team.wins) - (lLeaderLosses - team.losses)) / 2;
+                      gameBehind = gbNum === 0 ? '-' : gbNum.toFixed(1);
                     }
+                    const maxWins = team.wins + remaining;
+                    const isEliminated = index > 0 && maxWins < lLeaderWins && !lIsChampion;
                     let magic = '';
                     if (index === 0 && sorted.length > 1) {
                       const second = sorted[1];
@@ -540,17 +545,28 @@ const ScheduleScreen = ({
                       if (magicNum > 0 && !lIsChampion) magic = `M${magicNum}`;
                       else if (lIsChampion) magic = '-';
                     }
+                    const rowBg = index === 0 && lIsChampion ? 'bg-yellow-900/30'
+                      : isEliminated ? 'bg-gray-900/40'
+                      : index === 0 ? 'bg-blue-900/15'
+                      : index <= 2 && gbNum <= 5 && remaining > 0 ? 'bg-green-900/10'
+                      : '';
+                    const dimClass = isEliminated ? 'text-gray-500' : '';
                     return (
-                      <tr key={index} className={`border-b border-gray-700 ${index === 0 && lIsChampion ? 'bg-yellow-900/30' : ''}`}>
-                        <td className="py-3 text-lg font-bold">{index + 1}</td>
-                        <td className="py-3 text-lg font-bold">{team.team}</td>
-                        <td className="text-center py-3 text-lg">{team.gamesPlayed || ((team.wins || 0) + (team.losses || 0) + (team.draws || 0))}</td>
-                        <td className="text-center py-3 text-lg">{team.wins}</td>
-                        <td className="text-center py-3 text-lg">{team.losses}</td>
-                        <td className="text-center py-3 text-lg">{team.draws}</td>
-                        <td className="text-center py-3 text-lg">{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
-                        <td className={`text-center py-3 text-lg font-bold ${index === 0 && lIsChampion ? 'text-yellow-400' : 'text-gray-300'}`}>
+                      <tr key={index} className={`border-b border-gray-700 ${rowBg}`}>
+                        <td className={`py-3 text-lg font-bold ${dimClass}`}>{index + 1}</td>
+                        <td className={`py-3 text-lg font-bold ${
+                          index === 0 && lIsChampion ? 'text-yellow-300' : isEliminated ? 'text-gray-500' : index === 0 ? 'text-blue-300' : ''
+                        }`}>{team.team}</td>
+                        <td className={`text-center py-3 text-lg ${dimClass}`}>{played}</td>
+                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.wins}</td>
+                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.losses}</td>
+                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.draws}</td>
+                        <td className={`text-center py-3 text-lg ${dimClass}`}>{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
+                        <td className={`text-center py-3 text-lg font-bold ${
+                          index === 0 && lIsChampion ? 'text-yellow-400' : isEliminated ? 'text-gray-600' : 'text-gray-300'
+                        }`}>
                           {gameBehind}
+                          {isEliminated && <span className="text-red-500/70 text-xs ml-1">消</span>}
                         </td>
                         <td className="text-center py-3 text-lg text-red-400 font-bold">{magic}</td>
                       </tr>

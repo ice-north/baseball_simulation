@@ -1840,6 +1840,21 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             );
           };
 
+          // 投手起用バランス警告
+          const roleWarnings = (() => {
+            const w = [];
+            if (reliefByRole.closer.length === 0) w.push({ msg: '守護神が未設定です', level: 'error' });
+            if (reliefByRole.closer.length >= 2) w.push({ msg: '守護神が2人以上設定されています', level: 'warn' });
+            if (reliefByRole.setup.length === 0) w.push({ msg: 'セットアッパーが未設定です', level: 'warn' });
+            if (starterPitchers.length < 4) w.push({ msg: `先発が${starterPitchers.length}人（推奨: 5-6人）`, level: 'error' });
+            else if (starterPitchers.length < 5) w.push({ msg: `先発が${starterPitchers.length}人（推奨: 5-6人）`, level: 'warn' });
+            if (starterPitchers.length > 7) w.push({ msg: `先発が${starterPitchers.length}人（多すぎる可能性）`, level: 'warn' });
+            if (unassignedPitchers.length > 0) w.push({ msg: `${unassignedPitchers.length}人の投手がロール未設定`, level: 'info' });
+            const totalRelief = allReliefPitchers.length;
+            if (totalRelief < 3) w.push({ msg: `リリーフが${totalRelief}人（推奨: 4人以上）`, level: 'warn' });
+            return w;
+          })();
+
           // コンパクトブルペンフロー
           const BullpenFlowCompact = () => {
             const items = [
@@ -1850,24 +1865,39 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               { label: '未', count: unassignedPitchers.length, target: 0, color: 'text-gray-400' },
             ];
             return (
-              <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700/50 mb-2">
-                {items.map((s, i) => (
-                  <React.Fragment key={s.label}>
-                    <div className="flex items-center gap-1">
-                      <span className={`text-xs font-medium ${s.color}`}>{s.label}</span>
-                      <span className={`text-sm font-bold ${s.target > 0 && s.count >= s.target ? 'text-white' : s.count > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
-                        {s.count}{s.target > 0 && <span className="text-gray-500 text-[11px]">/{s.target}</span>}
+              <>
+                <div className="flex items-center gap-3 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700/50 mb-1">
+                  {items.map((s, i) => (
+                    <React.Fragment key={s.label}>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-xs font-medium ${s.color}`}>{s.label}</span>
+                        <span className={`text-sm font-bold ${s.target > 0 && s.count >= s.target ? 'text-white' : s.count > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
+                          {s.count}{s.target > 0 && <span className="text-gray-500 text-[11px]">/{s.target}</span>}
+                        </span>
+                      </div>
+                      {i < items.length - 1 && <span className="text-gray-700 text-xs">▸</span>}
+                    </React.Fragment>
+                  ))}
+                  {selectedPitcherId ? (
+                    <span className="text-blue-400 text-[11px] ml-auto animate-pulse">→ 入替先をクリック（同じ選手で詳細）</span>
+                  ) : (
+                    <span className="text-gray-500 text-[11px] ml-auto">タップで入替 / バッジで役割変更</span>
+                  )}
+                </div>
+                {roleWarnings.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 px-1 mb-2">
+                    {roleWarnings.map((w, i) => (
+                      <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        w.level === 'error' ? 'bg-red-900/40 text-red-400 border border-red-700/40' :
+                        w.level === 'warn' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700/30' :
+                        'bg-gray-800/60 text-gray-400 border border-gray-700/30'
+                      }`}>
+                        {w.level === 'error' ? '!' : w.level === 'warn' ? '!' : 'i'} {w.msg}
                       </span>
-                    </div>
-                    {i < items.length - 1 && <span className="text-gray-700 text-xs">▸</span>}
-                  </React.Fragment>
-                ))}
-                {selectedPitcherId ? (
-                  <span className="text-blue-400 text-[11px] ml-auto animate-pulse">→ 入替先をクリック（同じ選手で詳細）</span>
-                ) : (
-                  <span className="text-gray-500 text-[11px] ml-auto">タップで入替 / バッジで役割変更</span>
+                    ))}
+                  </div>
                 )}
-              </div>
+              </>
             );
           };
 

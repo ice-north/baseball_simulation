@@ -36,6 +36,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [showUniversityLeagues, setShowUniversityLeagues] = useState(false);
   const [expandedUniLeagues, setExpandedUniLeagues] = useState({});
   const [showNewspaper, setShowNewspaper] = useState(false);
+  const [pendingPhaseEvent, setPendingPhaseEvent] = useState(null);
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -458,42 +459,48 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
-    if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
-      setSeasonData(newData);
-      if (onForceEvent) onForceEvent('draft');
+    const PHASE_EVENT_INFO = {
+      draft: { label: 'ドラフト会議', desc: 'NPBドラフト会議が始まります。チームの有力選手が指名される可能性があります。' },
+      contract: { label: '契約更改', desc: '選手との契約更改を行います。戦力外通告もこのフェーズで実施します。' },
+      corporate_departure: { label: '退団処理', desc: '引退・戦力外の選手が退団します。' },
+      corporate_scout: { label: 'スカウト入団', desc: '新戦力のスカウト・獲得を行います。' },
+      club_recruit: { label: 'クラブ補強', desc: '新メンバーの獲得を行います。' },
+      tryout: { label: 'トライアウト', desc: '新戦力の獲得のためトライアウトを実施します。' },
+      university_scout: { label: 'スポーツ推薦', desc: '推薦スカウトの最終決定を行います。' },
+      budget_settlement: { label: '予算決算', desc: '今シーズンの収支を確定します。' },
+      offseason: { label: 'オフシーズン', desc: 'シーズンが終了しました。表彰・引退・進路決定を行います。' },
+    };
+    const triggerPhaseEvent = (data, eventType) => {
+      setSeasonData(data);
+      const info = PHASE_EVENT_INFO[eventType];
+      setPendingPhaseEvent({ eventType, label: info?.label || eventType, desc: info?.desc || '', data });
       return null;
+    };
+
+    if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
+      return triggerPhaseEvent(newData, 'draft');
     }
     if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
       if (isUniversity) {
         // 大学モード: 契約更改なし → オフシーズンへ直行
       } else {
-        setSeasonData(newData);
-        if (onForceEvent) onForceEvent(isCorporate ? 'corporate_departure' : 'contract');
-        return null;
+        return triggerPhaseEvent(newData, isCorporate ? 'corporate_departure' : 'contract');
       }
     }
     if (month === 11 && day === 10 && newPhase === SEASON_PHASES.TRYOUT) {
       if (isUniversity) {
-        setSeasonData(newData);
-        if (onForceEvent) onForceEvent('university_scout');
-        return null;
+        return triggerPhaseEvent(newData, 'university_scout');
       } else {
-        setSeasonData(newData);
         const isClub = seasonData?.settings?.clubMode;
-        if (onForceEvent) onForceEvent(isCorporate ? (isClub ? 'club_recruit' : 'corporate_scout') : 'tryout');
-        return null;
+        return triggerPhaseEvent(newData, isCorporate ? (isClub ? 'club_recruit' : 'corporate_scout') : 'tryout');
       }
     }
     if (month === 11 && day === 30 && isCorporate && !seasonData?.settings?.clubMode) {
-      setSeasonData(newData);
-      if (onForceEvent) onForceEvent('budget_settlement');
-      return null;
+      return triggerPhaseEvent(newData, 'budget_settlement');
     }
     if (month >= 12 || (month === 11 && day >= 30) || (isUniversity && month === 11 && day >= 15)) {
       newData = { ...newData, phase: SEASON_PHASES.OFF_SEASON };
-      setSeasonData(newData);
-      if (onForceEvent) onForceEvent('offseason');
-      return null;
+      return triggerPhaseEvent(newData, 'offseason');
     }
     return newData;
   };
@@ -3590,6 +3597,38 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         handleGameChoice={handleGameChoice}
         setShowGameChoiceModal={setShowGameChoiceModal}
       />}
+
+      {/* フェーズ移行確認モーダル */}
+      {pendingPhaseEvent && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 max-w-sm w-full">
+            <div className="px-5 py-4 border-b border-gray-700">
+              <h3 className="text-white font-bold text-lg">{pendingPhaseEvent.label}</h3>
+              <p className="text-gray-400 text-sm mt-1">{pendingPhaseEvent.desc}</p>
+            </div>
+            <div className="px-5 py-4 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setPendingPhaseEvent(null);
+                }}
+                className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium transition"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  const evt = pendingPhaseEvent.eventType;
+                  setPendingPhaseEvent(null);
+                  if (onForceEvent) onForceEvent(evt);
+                }}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition"
+              >
+                進む
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

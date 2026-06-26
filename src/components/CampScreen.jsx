@@ -1286,19 +1286,19 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
             return (b.age || 20) - (a.age || 20);
           });
           const STAT_DEFS = [
-            { key: 'batting.meet', stat: 'meet', name: 'ミート', get: (s) => s.batting?.meet || 0 },
-            { key: 'batting.power', stat: 'power', name: 'パワー', get: (s) => s.batting?.power || 0 },
-            { key: 'batting.eye', stat: 'eye', name: '選球眼', get: (s) => s.batting?.eye || 0 },
-            { key: 'physical.speed', stat: 'speed', name: '走力', get: (s) => s.physical?.speed || 0 },
-            { key: 'physical.arm', stat: 'arm', name: '肩力', get: (s) => s.physical?.arm || 0 },
-            { key: 'fielding.defense', stat: 'defense', name: '守備', get: (s) => s.fielding?.defense || 0 },
-            { key: 'catching.lead', stat: 'lead', name: 'Cリード', get: (s) => s.catching?.lead || 0 },
-            { key: 'pitching.velocity', stat: 'velocity', name: '球速', get: (s) => s.pitching?.velocity || 0, isVelocity: true },
-            { key: 'pitching.control', stat: 'control', name: '制球', get: (s) => s.pitching?.control || 0 },
-            { key: 'pitching.spinRate', stat: 'spinRate', name: '伸び', get: (s) => s.pitching?.spinRate || 0 },
-            { key: 'pitching.stamina', stat: 'stamina', name: 'スタミナ', get: (s) => s.pitching?.stamina || 0, isStamina: true },
-            { key: 'physical.bodyStamina', stat: 'bodyStamina', name: '体力', get: (s) => s.physical?.bodyStamina || 50 },
-            { key: 'physical.recovery', stat: 'recovery', name: '回復', get: (s) => s.physical?.recovery || 50 },
+            { key: 'batting.meet', stat: 'meet', name: 'ミ', get: (s) => s.batting?.meet || 0 },
+            { key: 'batting.power', stat: 'power', name: 'パ', get: (s) => s.batting?.power || 0 },
+            { key: 'batting.eye', stat: 'eye', name: '眼', get: (s) => s.batting?.eye || 0 },
+            { key: 'physical.speed', stat: 'speed', name: '走', get: (s) => s.physical?.speed || 0 },
+            { key: 'physical.arm', stat: 'arm', name: '肩', get: (s) => s.physical?.arm || 0 },
+            { key: 'fielding.defense', stat: 'defense', name: '守', get: (s) => s.fielding?.defense || 0 },
+            { key: 'catching.lead', stat: 'lead', name: 'Cリ', get: (s) => s.catching?.lead || 0 },
+            { key: 'pitching.velocity', stat: 'velocity', name: '速', get: (s) => s.pitching?.velocity || 0, isVelocity: true },
+            { key: 'pitching.control', stat: 'control', name: '制', get: (s) => s.pitching?.control || 0 },
+            { key: 'pitching.spinRate', stat: 'spinRate', name: '伸', get: (s) => s.pitching?.spinRate || 0 },
+            { key: 'pitching.stamina', stat: 'stamina', name: 'ス', get: (s) => s.pitching?.stamina || 0, isStamina: true },
+            { key: 'physical.bodyStamina', stat: 'bodyStamina', name: '体', get: (s) => s.physical?.bodyStamina || 50 },
+            { key: 'physical.recovery', stat: 'recovery', name: '回', get: (s) => s.physical?.recovery || 50 },
           ];
           const ageReports = seasonData?.ageReports || [];
           const ageReportMap = {};
@@ -1360,29 +1360,28 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                           <td className="py-1 px-1 text-center">
                             <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
                           </td>
-                          {diffs.map(d => (
-                            <td key={d.key} className="py-1 px-1 text-center font-mono text-[10px]">
-                              {d.diff !== 0 ? (
-                                <span>
-                                  <span className="text-gray-500">{d.before - d.naturalDiff}</span>
-                                  <span className="text-gray-500 mx-0.5">{'\u2192'}</span>
-                                  <span className={d.diff > 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{d.after}</span>
-                                  {d.campDiff !== 0 && (
-                                    <span className={`ml-0.5 ${d.campDiff > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                      {d.campDiff > 0 ? `+${d.campDiff}` : d.campDiff}
+                          {diffs.map(d => {
+                            const bgClass = d.diff >= 5 ? 'bg-yellow-400/15' : d.diff >= 3 ? 'bg-green-400/10' : d.diff < -2 ? 'bg-red-400/10' : '';
+                            return (
+                              <td key={d.key} className={`py-1 px-1 text-center font-mono text-[10px] ${bgClass}`}>
+                                {d.diff !== 0 ? (
+                                  <span>
+                                    <span className={`font-bold text-[11px] ${d.diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {d.diff > 0 ? `+${d.diff}` : d.diff}
                                     </span>
-                                  )}
-                                  {d.naturalDiff !== 0 && (
-                                    <span className={`ml-0.5 ${d.naturalDiff > 0 ? 'text-cyan-400' : 'text-red-400'}`}>
-                                      ({d.naturalDiff > 0 ? `+${d.naturalDiff}` : d.naturalDiff})
-                                    </span>
-                                  )}
-                                </span>
-                              ) : (
-                                <span className="text-gray-500">-</span>
-                              )}
-                            </td>
-                          ))}
+                                    <span className="text-gray-600 ml-0.5 text-[9px]">{d.after}</span>
+                                    {d.naturalDiff !== 0 && (
+                                      <span className={`ml-0.5 text-[9px] ${d.naturalDiff > 0 ? 'text-cyan-400' : 'text-red-300'}`}>
+                                        ({d.naturalDiff > 0 ? `+${d.naturalDiff}` : d.naturalDiff})
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-600">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
                           <td className="py-1 px-2 text-[10px]">
                             {newPitches.length > 0 ? (
                               <span className="text-yellow-400 font-bold">
