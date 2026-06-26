@@ -10,28 +10,28 @@
 // ============================================================
 
 export const UNIVERSITY_REGIONS = [
-  // === 首都圏 ===
-  { id: 'tokyo_big6', name: '東京六大学野球リーグ', teamCount: 6, divisions: 1 },
-  { id: 'tokyoto', name: '東都大学野球リーグ', teamCount: 12, divisions: 2 },
-  { id: 'shuto', name: '首都大学野球リーグ', teamCount: 12, divisions: 2 },
-  { id: 'tokyo_new', name: '東京新大学野球リーグ', teamCount: 12, divisions: 2 },
-  { id: 'chiba_ken', name: '千葉県大学野球リーグ', teamCount: 12, divisions: 2 },
-  { id: 'kanagawa', name: '神奈川大学野球リーグ', teamCount: 6, divisions: 1 },
-  { id: 'kankoshin', name: '関甲新学生野球リーグ', teamCount: 12, divisions: 2 },
   // === 北海道・東北 ===
   { id: 'hokkaido', name: '北海道学生野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'sapporo', name: '札幌学生野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'tohoku_n', name: '北東北大学野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'tohoku', name: '仙台六大学野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'tohoku_s', name: '南東北大学野球リーグ', teamCount: 6, divisions: 1 },
+  { id: 'kankoshin', name: '関甲新学生野球リーグ', teamCount: 12, divisions: 2 },
+  // === 関東 ===
+  { id: 'tokyo_big6', name: '東京六大学野球リーグ', teamCount: 6, divisions: 1 },
+  { id: 'tokyoto', name: '東都大学野球リーグ', teamCount: 12, divisions: 2 },
+  { id: 'shuto', name: '首都大学野球リーグ', teamCount: 12, divisions: 2 },
+  { id: 'tokyo_new', name: '東京新大学野球リーグ', teamCount: 12, divisions: 2 },
+  { id: 'chiba_ken', name: '千葉県大学野球リーグ', teamCount: 12, divisions: 2 },
+  { id: 'kanagawa', name: '神奈川大学野球リーグ', teamCount: 6, divisions: 1 },
   // === 中部 ===
-  { id: 'aichi', name: '愛知大学野球リーグ', teamCount: 12, divisions: 2 },
-  { id: 'tokai', name: '東海地区大学野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'hokuriku', name: '北陸大学野球リーグ', teamCount: 6, divisions: 1 },
+  { id: 'tokai', name: '東海地区大学野球リーグ', teamCount: 6, divisions: 1 },
+  { id: 'aichi', name: '愛知大学野球リーグ', teamCount: 12, divisions: 2 },
   // === 関西 ===
+  { id: 'keiji', name: '京滋大学野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'kansai', name: '関西学生野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'kansai_rk', name: '関西六大学野球リーグ', teamCount: 6, divisions: 1 },
-  { id: 'keiji', name: '京滋大学野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'hanshin', name: '阪神大学野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'kinki', name: '近畿学生野球リーグ', teamCount: 6, divisions: 1 },
   // === 中国・四国 ===
