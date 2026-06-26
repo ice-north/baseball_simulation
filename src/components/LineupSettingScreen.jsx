@@ -2085,10 +2085,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         })()}
 
         {tab === 'defense' && (() => {
-          // スタメン選手のポジション別配置を取得
+          // スタメン選手のポジション別配置を取得（スタメン+投手のみ）
           const positionPlayers = {};
           const positionEntries = {};
           lineup.forEach(entry => {
+            if (entry.battingOrder < 1 && entry.position !== 'pitcher') return;
+            if (entry.position !== 'pitcher' && entry.battingOrder > maxFielderSlots) return;
             const player = team.players.find(p => p.id === entry.playerId);
             if (player) {
               positionPlayers[entry.position] = player;
@@ -2193,8 +2195,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               setSelectedDefensePos(null);
             } else {
               // 2つの位置をスワップ
-              const entry1 = lineup.find(e => e.position === selectedDefensePos && e.battingOrder >= 1 && e.battingOrder <= 8);
-              const entry2 = lineup.find(e => e.position === pos && e.battingOrder >= 1 && e.battingOrder <= 8);
+              const entry1 = lineup.find(e => e.position === selectedDefensePos && e.battingOrder >= 1 && e.battingOrder <= maxFielderSlots);
+              const entry2 = lineup.find(e => e.position === pos && e.battingOrder >= 1 && e.battingOrder <= maxFielderSlots);
               if (entry1 && entry2) {
                 entry1.position = pos;
                 entry2.position = selectedDefensePos;
@@ -2213,7 +2215,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
           // 選択中ポジションの候補者一覧
           const selectedPosSwapCandidates = selectedDefensePos ? lineup
-            .filter(e => e.battingOrder >= 1 && e.battingOrder <= 8 && e.position !== selectedDefensePos)
+            .filter(e => e.battingOrder >= 1 && e.battingOrder <= maxFielderSlots && e.position !== selectedDefensePos)
             .map(e => {
               const player = team.players.find(p => p.id === e.playerId);
               return player ? { player, entry: e } : null;
@@ -2584,7 +2586,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                           <div className="bg-gray-700/30 rounded px-2 py-1 mb-1.5 text-gray-500 text-sm">未配置</div>
                         )}
                         {candidates.length > 0 ? candidates.map(({ player: cp, fitness: cf }) => {
-                          const inLineup = lineup.some(e => e.playerId === cp.id && e.battingOrder >= 1 && e.battingOrder <= 8);
+                          const inLineup = lineup.some(e => e.playerId === cp.id && e.battingOrder >= 1 && e.battingOrder <= maxFielderSlots);
                           return (
                             <div key={cp.id} className="flex items-center justify-between px-2 py-0.5 text-xs">
                               <span className={`truncate ${inLineup ? 'text-yellow-300' : 'text-gray-300'}`}>
