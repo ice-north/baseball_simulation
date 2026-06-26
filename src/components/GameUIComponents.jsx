@@ -290,6 +290,66 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
   </div>
 );
 
+// --- Tooltip 共通ツールチップコンポーネント ---
+export const Tooltip = ({ text, children, position = 'top' }) => {
+  const [show, setShow] = React.useState(false);
+  const posStyles = {
+    top: 'bottom-full left-1/2 -translate-x-1/2 mb-1.5',
+    bottom: 'top-full left-1/2 -translate-x-1/2 mt-1.5',
+    left: 'right-full top-1/2 -translate-y-1/2 mr-1.5',
+    right: 'left-full top-1/2 -translate-y-1/2 ml-1.5',
+  };
+  return (
+    <span className="relative inline-flex" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      {children}
+      {show && text && (
+        <span className={`absolute z-50 px-2 py-1 rounded text-[11px] text-gray-100 bg-gray-900 border border-gray-700 shadow-lg whitespace-nowrap pointer-events-none ${posStyles[position] || posStyles.top}`}>
+          {text}
+        </span>
+      )}
+    </span>
+  );
+};
+
+// --- StatHeader ツールチップ付き略称ヘッダー ---
+const STAT_TOOLTIPS = {
+  'ミ': 'ミート（打撃精度）', 'パ': 'パワー（長打力）', '走': '走力', '肩': '肩力', '守': '守備力',
+  '眼': '選球眼', '盗': '盗塁技術', '速': '球速（km/h）', '制': '制球力', 'ス': 'スタミナ',
+  '体': '体力（疲労耐性）', '回': '回復力', '伸': '球の伸び', 'バ': 'バント技術',
+  'Cリ': 'キャッチャーリード', '齢': '年齢', '位': 'ポジション', '成長': '成長率（基礎+変動）',
+  'プ意': 'プロ意識', '精神': '精神力', '野': '野手総合力', '投': '投手総合力',
+  '試': '試合出場数', 'HR': '本塁打', '打点': '打点',
+};
+
+export const StatHeader = ({ label, sortKey, sortActive, sortAsc, onClick, className = '' }) => (
+  <Tooltip text={STAT_TOOLTIPS[label]}>
+    <th
+      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600/40 transition select-none text-center ${sortActive ? 'text-yellow-400' : ''} ${className}`}
+      onClick={onClick}
+    >
+      {label}{sortActive ? (sortAsc ? '↑' : '↓') : ''}
+    </th>
+  </Tooltip>
+);
+
+// --- AbilityLegend 能力値凡例 ---
+export const AbilityLegend = ({ className = '' }) => (
+  <div className={`flex items-center gap-1.5 text-[10px] ${className}`}>
+    <span className="text-gray-500 font-bold">能力:</span>
+    {[
+      { min: 90, color: 'text-pink-400', label: '90+' },
+      { min: 80, color: 'text-red-400', label: '80+' },
+      { min: 70, color: 'text-orange-400', label: '70+' },
+      { min: 60, color: 'text-yellow-400', label: '60+' },
+      { min: 50, color: 'text-green-400', label: '50+' },
+      { min: 40, color: 'text-blue-400', label: '40+' },
+      { min: 0, color: 'text-gray-400', label: '40未満' },
+    ].map(t => (
+      <span key={t.min} className={t.color}>{t.label}</span>
+    ))}
+  </div>
+);
+
 // --- GameButton 共通ボタンコンポーネント ---
 const BUTTON_VARIANTS = {
   primary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',

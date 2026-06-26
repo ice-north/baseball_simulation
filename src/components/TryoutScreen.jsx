@@ -4,6 +4,7 @@ import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, a
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { Tooltip } from './GameUIComponents.jsx';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
   const [tryoutCandidates, setTryoutCandidates] = useState([]);
@@ -671,23 +672,34 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               <table className="w-full text-[11px] text-left">
                 <thead className="bg-gray-800 text-gray-400 text-[10px] sticky top-0 border-b border-gray-700/50">
                   <tr>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('name')}>名前{getSortIndicator('name')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('age')}>齢{getSortIndicator('age')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('position')}>守{getSortIndicator('position')}</th>
-                    <th className="px-1 py-1.5 whitespace-nowrap">投打</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('meet')}>ミ{getSortIndicator('meet')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('power')}>パ{getSortIndicator('power')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('speed')}>走{getSortIndicator('speed')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('arm')}>肩{getSortIndicator('arm')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('defense')}>守{getSortIndicator('defense')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('velocity')}>速{getSortIndicator('velocity')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('control')}>制{getSortIndicator('control')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('stamina')}>ス{getSortIndicator('stamina')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('spinRate')}>回{getSortIndicator('spinRate')}</th>
-                    <th className="px-1 py-1.5 whitespace-nowrap">変化球</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('fielderOverall')}>野{getSortIndicator('fielderOverall')}</th>
-                    <th className="px-1 py-1.5 cursor-pointer hover:text-white whitespace-nowrap" onClick={() => handleSort('pitcherOverall')}>投{getSortIndicator('pitcherOverall')}</th>
-                    <th className="px-1 py-1.5 whitespace-nowrap">スカウト評価</th>
+                    {[
+                      { label: '名前', key: 'name', tip: null },
+                      { label: '齢', key: 'age', tip: '年齢' },
+                      { label: '守', key: 'position', tip: 'ポジション' },
+                      { label: '投打', key: null, tip: '投球/打席の左右' },
+                      { label: 'ミ', key: 'meet', tip: 'ミート（打撃精度）' },
+                      { label: 'パ', key: 'power', tip: 'パワー（長打力）' },
+                      { label: '走', key: 'speed', tip: '走力' },
+                      { label: '肩', key: 'arm', tip: '肩力' },
+                      { label: '守', key: 'defense', tip: '守備力' },
+                      { label: '速', key: 'velocity', tip: '球速（km/h）' },
+                      { label: '制', key: 'control', tip: '制球力' },
+                      { label: 'ス', key: 'stamina', tip: 'スタミナ' },
+                      { label: '回', key: 'spinRate', tip: '球の回転数' },
+                      { label: '変化球', key: null, tip: '習得変化球' },
+                      { label: '野', key: 'fielderOverall', tip: '野手総合力' },
+                      { label: '投', key: 'pitcherOverall', tip: '投手総合力' },
+                      { label: 'スカウト評価', key: null, tip: 'スカウトの選手評価' },
+                    ].map((col, i) => (
+                      <Tooltip key={i} text={col.tip}>
+                        <th
+                          className={`px-1 py-1.5 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-white' : ''}`}
+                          onClick={col.key ? () => handleSort(col.key) : undefined}
+                        >
+                          {col.label}{col.key ? getSortIndicator(col.key) : ''}
+                        </th>
+                      </Tooltip>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>

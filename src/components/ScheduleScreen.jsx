@@ -280,6 +280,55 @@ const ScheduleScreen = ({
   return (
     <div className="min-h-screen bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 py-5">
+      {/* シーズンタイムライン */}
+      {(() => {
+        const phases = [
+          { key: 'spring_camp',     label: 'キャンプ', month: 1,  endMonth: 3,  color: '#22c55e' },
+          { key: 'regular_season',  label: 'シーズン', month: 4,  endMonth: 9,  color: '#3b82f6' },
+          { key: 'playoffs',        label: 'PO',      month: 10, endMonth: 10, color: '#eab308' },
+          { key: 'draft',           label: 'ドラフト', month: 10, endMonth: 10, color: '#a855f7', point: true },
+          { key: 'contract',        label: '契約',    month: 11, endMonth: 11, color: '#14b8a6', point: true },
+          { key: 'off_season',      label: 'オフ',    month: 11, endMonth: 12, color: '#6b7280' },
+        ];
+        const totalMonths = 12;
+        const currentMonth = currentDate.month;
+        const progressPct = ((currentMonth - 1 + (currentDate.day / 31)) / totalMonths) * 100;
+        return (
+          <div className="mb-3 bg-gray-800/60 rounded-xl border border-gray-700/50 px-4 py-2.5">
+            <div className="relative h-6 flex items-center">
+              {phases.filter(p => !p.point).map(p => {
+                const left = ((p.month - 1) / totalMonths) * 100;
+                const width = ((p.endMonth - p.month + 1) / totalMonths) * 100;
+                const isActive = currentPhase === p.key;
+                return (
+                  <div key={p.key} className="absolute h-4 rounded-sm flex items-center justify-center overflow-hidden transition-all"
+                    style={{ left: `${left}%`, width: `${width}%`, backgroundColor: isActive ? p.color : `${p.color}33`, border: isActive ? `1.5px solid ${p.color}` : '1px solid transparent' }}>
+                    <span className={`text-[9px] font-bold ${isActive ? 'text-white' : 'text-gray-500'}`}>{p.label}</span>
+                  </div>
+                );
+              })}
+              {phases.filter(p => p.point).map(p => {
+                const left = ((p.month - 1 + 0.5) / totalMonths) * 100;
+                const isActive = currentPhase === p.key;
+                return (
+                  <div key={p.key} className="absolute z-10 flex flex-col items-center" style={{ left: `${left}%`, transform: 'translateX(-50%)' }}>
+                    <div className={`w-2.5 h-2.5 rounded-full border-2 ${isActive ? 'scale-125' : ''}`}
+                      style={{ backgroundColor: isActive ? p.color : '#374151', borderColor: p.color }} />
+                  </div>
+                );
+              })}
+              <div className="absolute z-20 w-0.5 h-6 bg-white/80 rounded-full shadow-sm shadow-white/50"
+                style={{ left: `${Math.min(progressPct, 99)}%` }} />
+            </div>
+            <div className="flex justify-between mt-1">
+              {[1,4,7,10,12].map(m => (
+                <span key={m} className={`text-[9px] ${currentDate.month === m ? 'text-white font-bold' : 'text-gray-600'}`}>{m}月</span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -290,22 +339,33 @@ const ScheduleScreen = ({
             </span>
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {currentDate.year}年{currentDate.month}月{currentDate.day}日
+            {currentDate.year}年{currentDate.month}月{currentDate.day}日（{['日','月','火','水','木','金','土'][new Date(currentDate.year, currentDate.month - 1, currentDate.day).getDay()]}）
           </p>
         </div>
-        {/* 日付進行ボタン */}
-        <div className="flex gap-1.5 items-center">
-          <button onClick={() => onProgressDate(1)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition">
-            ➡ 1日進める
-          </button>
-          <button onClick={onProgressToNextGame} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition">
-            ⏩ 次の試合日
-          </button>
-          <button onClick={onProgressToNextPhase} className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition">
-            次フェーズ
-          </button>
-          <button onClick={onStartGame} className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition border border-green-500/50">
-            ⚾ 試合開始
+        {/* 日付進行ボタン（階層化） */}
+        <div className="flex items-center gap-3">
+          {/* メインアクション */}
+          {todayGames.some(g => g.home === userTeamName || g.away === userTeamName) ? (
+            <button onClick={onStartGame} className="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-green-600/20 border border-green-500/50">
+              ⚾ 試合開始
+            </button>
+          ) : (
+            <button onClick={onProgressToNextGame} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-sm">
+              ⏩ 次の試合日へ
+            </button>
+          )}
+          {/* セカンダリ */}
+          <div className="flex gap-1">
+            <button onClick={() => onProgressDate(1)} className="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-2.5 py-1.5 rounded text-xs font-medium transition">
+              +1日
+            </button>
+            <button onClick={() => onProgressDate(3)} className="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-2.5 py-1.5 rounded text-xs font-medium transition">
+              +3日
+            </button>
+          </div>
+          {/* 危険操作 */}
+          <button onClick={onProgressToNextPhase} className="text-gray-500 hover:text-orange-400 text-xs font-medium transition px-2 py-1.5 rounded hover:bg-gray-800" title="次のフェーズまで一気に進めます">
+            次フェーズ »
           </button>
         </div>
       </div>

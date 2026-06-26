@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { finalizePlayerSeason } from '../season/yearProgressionSystem.js';
+import { AbilityLegend, Tooltip } from './GameUIComponents.jsx';
 
 // AI自動解雇のロスター調整パラメータ
 const AI_MIN_ROSTER = 17;   // この人数を下回らない範囲で解雇
@@ -139,13 +140,20 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     });
   }, [players, sortKey, sortAsc]);
 
+  const SORT_TOOLTIPS = {
+    'ミ': 'ミート', 'パ': 'パワー', '走': '走力', '肩': '肩力', '守': '守備力',
+    '眼': '選球眼', '盗': '盗塁', '速': '球速', '制': '制球', 'ス': 'スタミナ',
+    '試': '試合数', '成績': '今季成績', '齢': '年齢', '成長': '成長率',
+  };
   const SortHeader = ({ label, sortKeyVal, className = '' }) => (
-    <th
-      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
-      onClick={(e) => { e.stopPropagation(); handleSort(sortKeyVal); }}
-    >
-      {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
-    </th>
+    <Tooltip text={SORT_TOOLTIPS[label]}>
+      <th
+        className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
+        onClick={(e) => { e.stopPropagation(); handleSort(sortKeyVal); }}
+      >
+        {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
+      </th>
+    </Tooltip>
   );
 
   const toggleRelease = (playerId) => {
@@ -198,6 +206,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     <div className="p-3 bg-gray-900 min-h-screen">
       <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
       <p className="text-gray-400 text-xs mb-1">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
+      <AbilityLegend className="mb-2" />
       {aiReleasedCount > 0 && (
         <p className="text-yellow-400 text-xs mb-2">AIチームは{aiReleasedCount}人の選手を自動解雇します。</p>
       )}
