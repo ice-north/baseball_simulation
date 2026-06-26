@@ -200,6 +200,12 @@ export const SUB_TRAINING_MENUS = {
     description: 'キャッチャーリード向上（リード+1~3）',
     targets: ['clead'],
   },
+  long_throw: {
+    name: '遠投',
+    icon: '🎯',
+    description: '肩力を重点強化（+0〜3）投手は球速連動',
+    targets: ['arm'],
+  },
   eye: {
     name: '選球眼練習',
     icon: '👁️',
@@ -501,6 +507,32 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       const old = player.catching.lead || 40;
       player.catching.lead = Math.min(100, old + gain);
       growthReport.push({ statName: 'Cリード', before: old, after: player.catching.lead, growth: gain });
+      break;
+    }
+    case 'long_throw': {
+      if (player.physical) {
+        const armRaw = Math.random() < 0.5 ? (Math.random() < 0.35 ? 3 : Math.random() < 0.5 ? 2 : 1) : (Math.random() < 0.3 ? 1 : 0);
+        if (armRaw > 0) {
+          const oldArm = player.physical.arm || 50;
+          const armGain = Math.min(armRaw, 100 - oldArm);
+          if (armGain > 0) {
+            player.physical.arm = oldArm + armGain;
+            growthReport.push({ statName: '肩力', before: oldArm, after: player.physical.arm, growth: armGain });
+            if (player.pitching) {
+              const armNow = player.physical.arm;
+              const velChange = Math.round(armGain * 0.6 * getVelocityCatchupMult(armNow, player.pitching.velocity || 120));
+              if (velChange > 0) {
+                const oldVel = player.pitching.velocity || 120;
+                const newVel = Math.min(getVelocityCap(armNow), oldVel + velChange);
+                if (newVel > oldVel) {
+                  player.pitching.velocity = newVel;
+                  growthReport.push({ statName: '球速', before: oldVel, after: newVel, growth: newVel - oldVel, isLinked: true });
+                }
+              }
+            }
+          }
+        }
+      }
       break;
     }
     case 'eye': {
