@@ -607,11 +607,23 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           </span>
           <div className="h-px w-16 bg-gradient-to-l from-transparent to-red-500/60" />
         </div>
-        <div className="text-gray-500 text-xs mt-1.5">
+        <div className="text-gray-500 text-xs mt-1.5 mb-1">
           {currentRoundIdx + 1} / {activeRounds.length} ラウンド
           {isFirstRound && ' (入札制)'}
           {!isFirstRound && currentRoundIdx % 2 === 1 && ' (ウェーバー制 ← 下位球団から)'}
           {!isFirstRound && currentRoundIdx % 2 === 0 && ' (逆ウェーバー制 → 上位球団から)'}
+        </div>
+        <div className="max-w-xs mx-auto flex items-center gap-2">
+          <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${((currentRoundIdx + 1) / activeRounds.length) * 100}%`,
+                background: `linear-gradient(90deg, #ef4444, #f59e0b ${Math.min(100, ((currentRoundIdx + 1) / activeRounds.length) * 150)}%, #22c55e)`,
+              }}
+            />
+          </div>
+          <span className="text-[10px] text-gray-500 whitespace-nowrap">{Math.round(((currentRoundIdx + 1) / activeRounds.length) * 100)}%</span>
         </div>
       </div>
 

@@ -284,6 +284,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
   const [updateKey, setUpdateKey] = useState(0); // 再レンダリング用
   const [sortKey, setSortKey] = useState('position');
   const [sortAsc, setSortAsc] = useState(true);
+  const [showCampReview, setShowCampReview] = useState(false);
 
   // キャンプ開始時のステータスを保存（成長合計計算用）
   const [preCampStats] = useState(() => {
@@ -1194,9 +1195,20 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                   次のクールへ（第{currentRound + 1}クール）
                 </button>
               ) : (
+                <>
                 <button
-                  onClick={() => {
-                    // キャンプ終了時に派遣結果を確定・適用
+                  onClick={() => setShowCampReview(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                >
+                  キャンプ終了 → 成長確認
+                </button>
+
+                {showCampReview && (() => {
+                  const dispatched = (userTeam?.players || []).filter(p => p.dispatchedThisCamp);
+                  const pitchers = (userTeam?.players || []).filter(p => p.position === 'pitcher');
+                  const fielders = (userTeam?.players || []).filter(p => p.position !== 'pitcher');
+                  const finalizeCamp = () => {
+                    setShowCampReview(false);
                     const results = [];
                     Object.values(TEAMS_DATA).forEach(team => {
                       team.players?.forEach(p => {
@@ -1218,11 +1230,41 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                     } else {
                       setViewMode('summary');
                     }
-                  }}
-                  className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
-                >
-                  キャンプ終了 → 成長確認
-                </button>
+                  };
+                  return (
+                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowCampReview(false)}>
+                      <div className="bg-gray-800 rounded-xl border border-gray-600 max-w-md w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-white font-bold text-lg mb-3">キャンプ終了確認</h3>
+                        <div className="bg-gray-900/60 rounded-lg p-3 mb-3 space-y-2 text-sm">
+                          <div className="flex justify-between text-gray-300">
+                            <span>完了クール</span>
+                            <span className="text-white font-bold">{currentRound} / {MAX_CAMP_ROUNDS}</span>
+                          </div>
+                          <div className="flex justify-between text-gray-300">
+                            <span>投手 / 野手</span>
+                            <span className="text-white font-bold">{pitchers.length}人 / {fielders.length}人</span>
+                          </div>
+                          {dispatched.length > 0 && (
+                            <div className="flex justify-between text-gray-300">
+                              <span>派遣中</span>
+                              <span className="text-orange-400 font-bold">{dispatched.length}人（結果確定）</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-gray-400 text-xs mb-4">キャンプを終了して成長結果を確認します。この操作は取り消せません。</p>
+                        <div className="flex gap-3 justify-end">
+                          <button onClick={() => setShowCampReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
+                            戻る
+                          </button>
+                          <button onClick={finalizeCamp} className="bg-green-600 hover:bg-green-500 text-white px-5 py-1.5 rounded font-bold text-sm transition">
+                            キャンプ終了
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                </>
               )}
             </div>
           </>

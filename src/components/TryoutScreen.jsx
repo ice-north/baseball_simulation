@@ -342,25 +342,41 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                 if (current >= min) return '🟡';
                 return '🔴';
               };
+              const shortages = [];
+              if (positionCounts.pitcher < 5) shortages.push(`投手があと${5 - positionCounts.pitcher}人必要`);
+              if (positionCounts.catcher < 1) shortages.push('捕手が不足');
+              if (positionCounts.infielder < 4) shortages.push(`内野手があと${4 - positionCounts.infielder}人必要`);
+              if (positionCounts.outfielder < 3) shortages.push(`外野手があと${3 - positionCounts.outfielder}人必要`);
               return (
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="bg-gray-700 rounded p-2 text-center">
-                    <div className="text-sm text-gray-400">投手</div>
-                    <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.pitcher, 5, 10)} {positionCounts.pitcher}/10</div>
+                <>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="bg-gray-700 rounded p-2 text-center">
+                      <div className="text-sm text-gray-400">投手</div>
+                      <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.pitcher, 5, 10)} {positionCounts.pitcher}/10</div>
+                    </div>
+                    <div className="bg-gray-700 rounded p-2 text-center">
+                      <div className="text-sm text-gray-400">捕手</div>
+                      <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.catcher, 1, 2)} {positionCounts.catcher}/2</div>
+                    </div>
+                    <div className="bg-gray-700 rounded p-2 text-center">
+                      <div className="text-sm text-gray-400">内野手</div>
+                      <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.infielder, 4, 6)} {positionCounts.infielder}/6</div>
+                    </div>
+                    <div className="bg-gray-700 rounded p-2 text-center">
+                      <div className="text-sm text-gray-400">外野手</div>
+                      <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.outfielder, 3, 6)} {positionCounts.outfielder}/6</div>
+                    </div>
                   </div>
-                  <div className="bg-gray-700 rounded p-2 text-center">
-                    <div className="text-sm text-gray-400">捕手</div>
-                    <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.catcher, 1, 2)} {positionCounts.catcher}/2</div>
-                  </div>
-                  <div className="bg-gray-700 rounded p-2 text-center">
-                    <div className="text-sm text-gray-400">内野手</div>
-                    <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.infielder, 4, 6)} {positionCounts.infielder}/6</div>
-                  </div>
-                  <div className="bg-gray-700 rounded p-2 text-center">
-                    <div className="text-sm text-gray-400">外野手</div>
-                    <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.outfielder, 3, 6)} {positionCounts.outfielder}/6</div>
-                  </div>
-                </div>
+                  {shortages.length > 0 && (
+                    <div className="mt-2 bg-red-900/40 border border-red-700/50 rounded-lg px-3 py-2 flex items-start gap-2">
+                      <span className="text-red-400 text-sm font-bold shrink-0">!</span>
+                      <div className="text-red-300 text-xs">
+                        <span className="font-bold">編成不足: </span>
+                        {shortages.join(' / ')}
+                      </div>
+                    </div>
+                  )}
+                </>
               );
             })()}
           </div>

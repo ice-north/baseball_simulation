@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { finalizePlayerSeason } from '../season/yearProgressionSystem.js';
@@ -69,6 +69,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
   const [confirmed, setConfirmed] = useState(false);
   const [sortKey, setSortKey] = useState(null);
   const [sortAsc, setSortAsc] = useState(false);
+  const [showReview, setShowReview] = useState(false);
 
   // AI チームの自動解雇処理
   useEffect(() => {
@@ -297,18 +298,56 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
           <div className="flex gap-3">
             <button
-              onClick={handleConfirm}
+              onClick={() => userReleased.length > 0 ? setShowReview(true) : handleConfirm()}
               className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded font-bold text-sm"
             >
               契約更改を確定する
             </button>
             <button
-              onClick={() => { handleConfirm(); }}
+              onClick={() => {
+                setReleasedPlayers(prev => ({ ...prev, [userTeamName]: [] }));
+                handleConfirm();
+              }}
               className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-1.5 rounded text-sm"
             >
               解雇せずに確定
             </button>
           </div>
+
+          {showReview && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowReview(false)}>
+              <div className="bg-gray-800 rounded-xl border border-gray-600 max-w-lg w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-white font-bold text-lg mb-3">契約更改の確認</h3>
+                <div className="bg-gray-900/60 rounded-lg p-3 mb-3 max-h-48 overflow-y-auto">
+                  <div className="text-gray-400 text-xs mb-2">解雇予定選手 ({userReleased.length}人)</div>
+                  {players.filter(p => userReleased.includes(p.id)).map(p => (
+                    <div key={p.id} className="flex items-center justify-between text-sm py-1 border-b border-gray-700/50 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 text-xs">{POSITION_NAMES[p.position]}</span>
+                        <span className="text-white font-bold">{p.name}</span>
+                        <span className="text-gray-500 text-xs">{p.age}歳</span>
+                      </div>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${(p.age || 20) >= 33 ? 'bg-gray-700 text-gray-400' : 'bg-blue-900/50 text-blue-300'}`}>
+                        {(p.age || 20) >= 33 ? '引退' : 'リリースプール'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-gray-400 text-xs mb-4 space-y-1">
+                  <div>残りロスター: <span className="text-white font-bold">{players.length - userReleased.length}人</span></div>
+                  <div className="text-yellow-400/80">この操作は取り消せません。33歳以上の選手は引退、33歳未満はリリースプールに移動します。</div>
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => setShowReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
+                    戻る
+                  </button>
+                  <button onClick={() => { setShowReview(false); handleConfirm(); }} className="bg-red-600 hover:bg-red-500 text-white px-5 py-1.5 rounded font-bold text-sm transition">
+                    解雇を確定する
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div className="text-center py-10">

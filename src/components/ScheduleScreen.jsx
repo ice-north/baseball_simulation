@@ -311,22 +311,28 @@ const ScheduleScreen = ({
       </div>
 
       {/* カレンダー月選択 */}
-      <div className="mb-3 flex gap-1 flex-wrap">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => (
-          <button
-            key={month}
-            onClick={() => setSelectedMonth(month)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
-              selectedMonth === month
-                ? 'bg-blue-600 text-white'
-                : month === currentDate.month
-                ? 'bg-gray-700 text-white ring-1 ring-blue-400/50'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-            }`}
-          >
-            {month}月
-          </button>
-        ))}
+      <div className="mb-3 flex items-center justify-center gap-2">
+        <button
+          onClick={() => setSelectedMonth(prev => prev <= 1 ? 12 : prev - 1)}
+          className="px-2.5 py-1 rounded-lg text-sm font-bold bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition"
+        >◀</button>
+        <select
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(Number(e.target.value))}
+          className="bg-gray-800 text-white text-sm font-bold px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 appearance-none text-center min-w-[5rem] cursor-pointer"
+        >
+          {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+            <option key={m} value={m}>{m}月{m === currentDate.month ? ' ●' : ''}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => setSelectedMonth(prev => prev >= 12 ? 1 : prev + 1)}
+          className="px-2.5 py-1 rounded-lg text-sm font-bold bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition"
+        >▶</button>
+        <button
+          onClick={() => setSelectedMonth(currentDate.month)}
+          className="px-2 py-1 rounded-lg text-xs font-semibold bg-blue-700/60 text-blue-200 hover:bg-blue-600 transition ml-1"
+        >今月</button>
       </div>
 
       {/* カレンダー */}

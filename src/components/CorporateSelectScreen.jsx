@@ -29,31 +29,46 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
         <div className="flex flex-col items-center space-y-6">
           <button
             onClick={onSelectUniversity}
-            className="group w-96 bg-gradient-to-r from-amber-700 to-orange-700 hover:from-amber-600 hover:to-orange-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
+            className="group w-96 bg-gradient-to-r from-amber-700 to-orange-700 hover:from-amber-600 hover:to-orange-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] text-left"
           >
-            <div className="text-2xl mb-1">大学野球</div>
-            <div className="text-sm font-normal text-amber-200">
+            <div className="text-2xl mb-1 text-center">大学野球</div>
+            <div className="text-sm font-normal text-amber-200 mb-2 text-center">
               大学チームの監督として春季・秋季リーグを戦い、選手をプロへ送り出す。
+            </div>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {['春季・秋季リーグ', '全日本選手権', '明治神宮大会', '推薦スカウト', 'NPBドラフト'].map(tag => (
+                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-100/80">{tag}</span>
+              ))}
             </div>
           </button>
 
           <button
             onClick={onSelectCorporate}
-            className="group w-96 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
+            className="group w-96 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] text-left"
           >
-            <div className="text-2xl mb-1">社会人野球</div>
-            <div className="text-sm font-normal text-blue-200">
+            <div className="text-2xl mb-1 text-center">社会人野球</div>
+            <div className="text-sm font-normal text-blue-200 mb-2 text-center">
               企業チームまたはクラブチームの監督に就任。企業はスカウトとコーチで強化、クラブは入部希望者と自然成長で戦う。
+            </div>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {['都市対抗予選', '都市対抗本戦', '日本選手権', 'スカウト入団', '企業 or クラブ'].map(tag => (
+                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-100/80">{tag}</span>
+              ))}
             </div>
           </button>
 
           <button
             onClick={onSelectIndependent}
-            className="group w-96 bg-gradient-to-r from-green-700 to-emerald-700 hover:from-green-600 hover:to-emerald-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
+            className="group w-96 bg-gradient-to-r from-green-700 to-emerald-700 hover:from-green-600 hover:to-emerald-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] text-left"
           >
-            <div className="text-2xl mb-1">独立リーグ</div>
-            <div className="text-sm font-normal text-green-200">
+            <div className="text-2xl mb-1 text-center">独立リーグ</div>
+            <div className="text-sm font-normal text-green-200 mb-2 text-center">
               リーグを立ち上げ、トライアウトで選手を集める。経験が選手を育てる。
+            </div>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {['トライアウト', 'リーグ戦', 'グランドCS', 'NPBドラフト', 'リーグ設計'].map(tag => (
+                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-green-900/60 text-green-100/80">{tag}</span>
+              ))}
             </div>
           </button>
         </div>
