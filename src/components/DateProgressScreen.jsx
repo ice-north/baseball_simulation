@@ -46,6 +46,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const isUniversity = !!seasonData.settings?.universityMode;
   const currentPhase = seasonData.phase || 'off_season';
   const phaseInfo = PHASE_INFO[currentPhase] || { name: '', color: 'bg-gray-100', description: '' };
+  const currentDate = seasonData.currentDate || { month: 4, day: 1, year: 1 };
 
   const getStartingPitcher = (teamName) => {
     const team = TEAMS_DATA[teamName];
