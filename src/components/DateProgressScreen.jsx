@@ -1963,43 +1963,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   return (
     <div className="p-3 min-h-screen">
-      {/* シーズンタイムライン */}
-      <div className="mb-3 bg-gray-800/60 rounded-xl border border-gray-700/50 px-4 py-2">
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-bold text-white shrink-0">
-            {seasonData.year}年目
-            <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${phaseInfo.color || 'bg-gray-100'} text-gray-800`}>
-              {phaseInfo.name || currentPhase}
-            </span>
-          </div>
-          <div className="flex-1 relative h-4 flex items-center">
-            {[
-              { key: 'spring_camp', label: 'キャンプ', m: 1, end: 3, c: '#22c55e' },
-              { key: 'regular_season', label: 'シーズン', m: 4, end: 9, c: '#3b82f6' },
-              { key: 'playoffs', label: 'PO', m: 10, end: 10, c: '#eab308' },
-              { key: 'off_season', label: 'オフ', m: 11, end: 12, c: '#6b7280' },
-            ].map(p => {
-              const left = ((p.m - 1) / 12) * 100;
-              const width = ((p.end - p.m + 1) / 12) * 100;
-              const isActive = currentPhase === p.key;
-              return (
-                <Tooltip key={p.key} text={p.label}>
-                  <div className="absolute h-3 rounded-sm flex items-center justify-center"
-                    style={{ left: `${left}%`, width: `${width}%`, backgroundColor: isActive ? p.c : `${p.c}33`, border: isActive ? `1.5px solid ${p.c}` : 'none' }}>
-                    <span className={`text-[8px] font-bold ${isActive ? 'text-white' : 'text-gray-600'}`}>{p.label}</span>
-                  </div>
-                </Tooltip>
-              );
-            })}
-            <div className="absolute z-20 w-0.5 h-5 bg-white/80 rounded-full"
-              style={{ left: `${Math.min(((currentDate.month - 1 + currentDate.day / 31) / 12) * 100, 99)}%` }} />
-          </div>
-          <div className="text-xs text-gray-400 shrink-0">
-            {currentDate.month}/{currentDate.day}
-          </div>
-        </div>
-      </div>
-
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
