@@ -24,6 +24,21 @@ const UNI_BATTING_CAP = { S: 68, A: 62, B: 55, C: 47, D: 40 };
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const randInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
+// ユーザーチームのベンチ登録選手を初期化（投手10名+野手15名=25名）
+const BENCH_LIMIT = 25;
+const initializeActiveRoster = (players) => {
+  players.forEach(p => { p.isActive = false; });
+  const score = (p) => p.position === 'pitcher'
+    ? (p.pitching?.velocity || 0) * 0.4 + (p.pitching?.control || 0) * 0.35 + (p.pitching?.stamina || 0) * 0.25
+    : (p.batting?.meet || 0) * 0.4 + (p.batting?.power || 0) * 0.25 + (p.fielding?.defense || 0) * 0.2 + (p.physical?.speed || 0) * 0.15;
+  const pitchers = [...players.filter(p => p.position === 'pitcher')].sort((a, b) => score(b) - score(a));
+  const fielders = [...players.filter(p => p.position !== 'pitcher')].sort((a, b) => score(b) - score(a));
+  const pitcherSlots = Math.round(BENCH_LIMIT * 0.4);
+  const fielderSlots = BENCH_LIMIT - pitcherSlots;
+  pitchers.slice(0, pitcherSlots).forEach(p => { p.isActive = true; });
+  fielders.slice(0, fielderSlots).forEach(p => { p.isActive = true; });
+};
+
 const makeAbbreviation = (name) => {
   if (name.length <= 3) return name;
   return name.slice(0, 3);
@@ -149,6 +164,8 @@ export const initializeUniversityGame = (teamDef) => {
   const userDef = leagueTeams.find(d => d.name === userTeamName);
   if (userDef) {
     const roster = generateUniversityRoster(userDef, true);
+    // ベンチ登録選手を初期化: 投手10名+野手15名=25名をアクティブに
+    initializeActiveRoster(roster);
     TEAMS_DATA[userDef.name] = {
       name: userDef.name,
       abbreviation: makeAbbreviation(userDef.name),

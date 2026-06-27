@@ -1524,6 +1524,12 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
       type: p.recruitType,
     })));
 
+    // ユーザーチームの新入生は練習生（isActive=false）として登録。
+    // 既存選手のisActive状態は維持。ロスター管理画面で入れ替え可能。
+    if (isUserTeam) {
+      allNewPlayers.forEach(p => { p.isActive = false; });
+    }
+
     // ロスター更新（splice方式でTEAMS_DATAを直接変更）、ユーザーチームは60人上限
     const finalRoster = [...remaining, ...allNewPlayers];
     if (isUserTeam && finalRoster.length > 60) finalRoster.splice(60);

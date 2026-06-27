@@ -85,13 +85,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const maxFielderSlots = useDH ? 9 : 8;
 
   const { fielders, pitchers, lineupPlayerIds, benchPlayers } = useMemo(() => {
-    const f = team.players.filter(p => p.position !== 'pitcher');
-    const p = team.players.filter(p => p.position === 'pitcher');
+    // isActive=falseの選手（練習生）はスタメン・控えから除外。未設定は全員有効（大学モード以外）
+    const isEligible = (p) => p.isActive !== false;
+    const f = team.players.filter(p => p.position !== 'pitcher' && isEligible(p));
+    const p = team.players.filter(p => p.position === 'pitcher' && isEligible(p));
     const lpIds = new Set(lineup.map(e => e.playerId));
     const maxSlot = useDH ? 9 : 8;
     const fieldIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= maxSlot).map(e => e.playerId));
     const seen = new Set();
     const bench = team.players.filter(pl => {
+      if (!isEligible(pl)) return false;
       if (fieldIds.has(pl.id)) return false;
       if (seen.has(pl.id)) return false;
       seen.add(pl.id);

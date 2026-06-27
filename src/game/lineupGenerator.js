@@ -339,7 +339,10 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
 
   const team = TEAMS_DATA[teamName];
   const useDH = LEAGUE_SETTINGS.useDH;
-  const fielders = team.players.filter(p => !p.position || p.position !== 'pitcher' || p.isTwoWay);
+  // isActive=false（練習生）は除外。未設定は全員有効（大学モード以外の後方互換）
+  const fielders = team.players.filter(p =>
+    (!p.position || p.position !== 'pitcher' || p.isTwoWay) && p.isActive !== false
+  );
   const positions = ['catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
 
   // 全選手×全ポジションの価値マトリクスを構築
