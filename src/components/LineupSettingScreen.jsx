@@ -506,9 +506,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               <h4 className="text-purple-400 text-[10px] font-bold uppercase tracking-wider mb-1.5">内面</h4>
               <div className="grid grid-cols-4 gap-1 bg-gray-700/40 rounded-lg p-2">
                 <StatBox label="成長率" value={player.growthPotential ? `×${player.growthPotential.toFixed(2)}` : '-'} />
-                <StatBox label="プロ意識" value={player.discipline || 0} />
-                <StatBox label="精神力" value={player.mental || 0} />
-                {player.position === 'catcher' && <StatBox label="Cリード" value={player.catcherLead || 0} />}
+                <StatBox label="プロ意識" value={player.personality?.discipline ?? 0} />
+                <StatBox label="精神力" value={player.personality?.mental ?? 0} />
+                {player.position === 'catcher' && <StatBox label="Cリード" value={player.catching?.lead ?? 0} />}
                 {player.position !== 'catcher' && <StatBox label="経験" value={player.experience || 0} />}
               </div>
             </div>
@@ -662,8 +662,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 </>}
                 <tr><td colSpan={players.length + 1} className="py-1 px-2 text-[10px] text-purple-400 font-bold bg-gray-700/30">内面</td></tr>
                 <StatRow label="成長率" getValue={pl => pl.growthPotential ? parseFloat(pl.growthPotential.toFixed(2)) : 0} />
-                <StatRow label="プロ意識" getValue={pl => pl.discipline || 0} />
-                <StatRow label="精神力" getValue={pl => pl.mental || 0} />
+                <StatRow label="プロ意識" getValue={pl => pl.personality?.discipline ?? 0} />
+                <StatRow label="精神力" getValue={pl => pl.personality?.mental ?? 0} />
                 <StatRow label="経験" getValue={pl => pl.experience || 0} />
                 <tr><td colSpan={players.length + 1} className="py-1 px-2 text-[10px] text-yellow-400 font-bold bg-gray-700/30">シーズン成績</td></tr>
                 <StatRow label="打率" getValue={pl => {
