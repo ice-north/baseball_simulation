@@ -230,13 +230,13 @@ const adjustCorporateAge = (player, isIndependent = false) => {
 };
 
 // 社会人/独立リーグチームの選手を生成（ランク×種別でロースターサイズが変動）
-export const generateCorporateRoster = (teamDef, year = 1) => {
+export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) => {
   const rank = teamDef.rank || 'C';
   const type = teamDef.type || 'corporate';
   const isIndependent = String(teamDef.id || '').startsWith('il_');
   const cfg = (isIndependent ? INDEPENDENT_RANK_CONFIG[rank] : null) || RANK_CONFIG[rank] || RANK_CONFIG.C;
   const sizeRange = ROSTER_SIZE[rank]?.[type] || ROSTER_SIZE.C.corporate;
-  const rosterSize = randInt(sizeRange[0], sizeRange[1]);
+  const rosterSize = sizeOverride ?? randInt(sizeRange[0], sizeRange[1]);
 
   // 候補者数をロースターの1.5倍以上確保
   const candidateTeams = Math.max(2, Math.ceil(rosterSize / 25));

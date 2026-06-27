@@ -10,14 +10,11 @@ import { initializeUniversityLeagues } from './universityLeagueManager.js';
 import { generateCorporateRoster, initializeCorporateParallelWorld } from '../corporate/corporateInit.js';
 import { seedInitialUniversityClasses, warmUpPlayerPipeline, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
 
-// 大学チームのランク別ロスターサイズ（社会人より小さめ）
-const UNI_ROSTER_SIZE = {
-  S: [28, 33],
-  A: [25, 30],
-  B: [22, 27],
-  C: [20, 25],
-  D: [18, 22],
-};
+// 大学チームの学年あたり人数（1〜4年生 × 人数 = 総在籍数）
+const UNI_PLAYERS_PER_GRADE = { S: 14, A: 12, B: 10, C: 8, D: 6 };
+
+// プレイヤーチームの最大ロスター人数
+const USER_TEAM_MAX_ROSTER = 60;
 
 // 大学チーム用の能力キャップ（社会人より低め、高校生ベース+成長）
 const UNI_VELOCITY_CAP = { S: 150, A: 148, B: 143, C: 136, D: 130 };
@@ -41,24 +38,31 @@ const assignUniversityAge = (player) => {
   else player.age = 22;                   // 4年生
 };
 
-// 大学チームのロスターを生成
-const generateUniversityRoster = (teamDef) => {
+// 大学チームのロスターを生成（学年別人数を均等に配分）
+const generateUniversityRoster = (teamDef, isUserTeam = false) => {
   const rank = teamDef.rank || 'C';
   const velCap = UNI_VELOCITY_CAP[rank] || 140;
   const ctrlCap = UNI_CONTROL_CAP[rank] || 50;
   const batCap = UNI_BATTING_CAP[rank] || 50;
 
-  // corporateInitのgenerateRosterを流用してベースを作成
+  const perGrade = UNI_PLAYERS_PER_GRADE[rank] || 8;
+  const totalSize = isUserTeam
+    ? Math.min(perGrade * 4, USER_TEAM_MAX_ROSTER)
+    : perGrade * 4;
+
+  // corporateInitのgenerateRosterを流用してベースを作成（サイズ指定）
   const fakeDef = {
     ...teamDef,
     type: 'corporate',
     id: `uni_${teamDef.id}`,
   };
-  const roster = generateCorporateRoster(fakeDef, 1);
+  const roster = generateCorporateRoster(fakeDef, 1, totalSize);
 
-  // 大学生用に年齢・能力を調整
-  roster.forEach(p => {
-    assignUniversityAge(p);
+  // 大学生用に年齢・能力を調整し、学年を均等に配分
+  roster.forEach((p, i) => {
+    // 学年を均等配分: grade 1〜4 を繰り返す
+    const grade = (i % 4) + 1;
+    p.age = 18 + grade;
 
     // 大学生らしい能力レンジに調整（ソフトキャップ）
     if (p.position === 'pitcher') {
@@ -75,9 +79,6 @@ const generateUniversityRoster = (teamDef) => {
     p.batting.power = Math.min(p.batting.power, batCap + randInt(0, 5));
     p.batting.eye = Math.min(p.batting.eye, batCap + randInt(0, 3));
 
-    // 学年に応じた経歴
-    const yearInUni = p.age - 18;
-    if (!p.careerHistory) p.careerHistory = [];
     p.careerHistory = [
       { type: 'highschool', label: '高校卒' },
       { type: 'university', year: 1, label: teamDef.name },
@@ -86,7 +87,7 @@ const generateUniversityRoster = (teamDef) => {
     // 大学モード専用フラグ
     p.universityTeamId = teamDef.id;
     p.universityTeamName = teamDef.name;
-    p.universityYear = yearInUni;
+    p.universityYear = grade;
   });
 
   return roster;
@@ -144,10 +145,27 @@ export const initializeUniversityGame = (teamDef) => {
     return roster;
   };
 
-  // ユーザーチームを最初に追加
+  // ユーザーチームを最初に追加（最大60人制限あり）
   const userDef = leagueTeams.find(d => d.name === userTeamName);
   if (userDef) {
-    userRoster = createTeamEntry(userDef);
+    const roster = generateUniversityRoster(userDef, true);
+    TEAMS_DATA[userDef.name] = {
+      name: userDef.name,
+      abbreviation: makeAbbreviation(userDef.name),
+      players: roster,
+      pitchingRotation: null,
+      universityTeamId: userDef.id,
+      universityData: {
+        rank: userDef.rank,
+        region: userDef.region,
+        budget: userDef.budget,
+        leagueName: UNIVERSITY_REGIONS.find(r => r.id === userDef.region)?.name || '',
+        reputation: { S: 85, A: 65, B: 40, C: 20, D: 5 }[userDef.rank] || 20,
+        proDraftCount: 0,
+        tournamentWins: 0,
+      },
+    };
+    userRoster = roster;
   }
 
   // 同リーグの全チームをTEAMS_DATAに追加（部制でも全チーム生成）

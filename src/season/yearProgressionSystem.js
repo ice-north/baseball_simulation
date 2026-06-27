@@ -1510,7 +1510,9 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
     }
 
     // 新入生を補充（卒業人数分 + ロスター下限調整 - スカウト入部者）
-    const targetSize = getUniversityTargetRosterSize(rank);
+    const isUserTeam = teamName === seasonData.userTeamName;
+    const maxRoster = isUserTeam ? 60 : Infinity;
+    const targetSize = Math.min(getUniversityTargetRosterSize(rank), maxRoster);
     const neededCount = Math.max(0, Math.max(graduates.length, targetSize - remaining.length) - scoutedPlayers.length);
     const newPlayers = generateUniversityFreshmen(neededCount, rank, teamName, teamData, currentYear);
     const allNewPlayers = [...scoutedPlayers, ...newPlayers];
@@ -1522,8 +1524,10 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
       type: p.recruitType,
     })));
 
-    // ロスター更新（splice方式でTEAMS_DATAを直接変更）
-    teamData.players.splice(0, teamData.players.length, ...remaining, ...allNewPlayers);
+    // ロスター更新（splice方式でTEAMS_DATAを直接変更）、ユーザーチームは60人上限
+    const finalRoster = [...remaining, ...allNewPlayers];
+    if (isUserTeam && finalRoster.length > 60) finalRoster.splice(60);
+    teamData.players.splice(0, teamData.players.length, ...finalRoster);
   }
 
   return report;
@@ -1531,8 +1535,9 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
 
 // ランク別目標ロスターサイズ
 function getUniversityTargetRosterSize(rank) {
-  const sizes = { S: 30, A: 27, B: 24, C: 22, D: 20 };
-  return sizes[rank] || 22;
+  // 学年あたり人数×4学年（S:14, A:12, B:10, C:8, D:6）
+  const sizes = { S: 56, A: 48, B: 40, C: 32, D: 24 };
+  return sizes[rank] || 32;
 }
 
 // 新入生を生成（推薦入学 + 一般入部）
