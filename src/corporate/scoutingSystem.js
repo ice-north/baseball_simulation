@@ -1526,8 +1526,8 @@ export function initUniversityScoutList(teamData, rank) {
   if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
 
   const reputation = teamData?.universityData?.reputation || 30;
-  // 初回は3〜5名のみ発見（徐々に増える）
-  const initialCount = Math.min(5, Math.max(3, Math.round(2 + reputation / 30)));
+  // 初回は6〜12名発見
+  const initialCount = Math.min(12, Math.max(6, Math.round(5 + reputation / 15)));
 
   const candidates = discoverCandidatesFromPool(initialCount, rank, reputation);
   return candidates;
@@ -1552,7 +1552,7 @@ function discoverCandidatesFromPool(count, rank, reputation) {
       const fame = p.fame || 0;
       const noise = (Math.random() - 0.5) * 25;
       const repBonus = (reputationMult - 1.0) * 15;
-      const discoveryPenalty = -((100 - fame) / 100) * 20 * rankDiscoveryMult;
+      const discoveryPenalty = -((100 - fame) / 100) * 8 * rankDiscoveryMult;
       return { player: p, poolIndex: idx, score: base + noise + repBonus + discoveryPenalty + rankAbilityBonus };
     });
   scored.sort((a, b) => b.score - a.score);
@@ -1584,10 +1584,10 @@ function discoverCandidatesFromPool(count, rank, reputation) {
 export function discoverNewScoutCandidates(rank, reputation, month) {
   // 4月=初期化済、5月〜10月に毎月追加発見
   if (month < 5 || month > 10) return [];
-  // 後半ほど多く発見: 5月=2名、6-7月=3名、8-10月=4名
-  const baseCount = month <= 5 ? 2 : month <= 7 ? 3 : 4;
-  const repBonus = Math.floor(reputation / 50);
-  const count = Math.min(6, baseCount + repBonus);
+  // 後半ほど多く発見: 5月=4名、6-7月=5名、8-10月=6名
+  const baseCount = month <= 5 ? 4 : month <= 7 ? 5 : 6;
+  const repBonus = Math.floor(reputation / 30);
+  const count = Math.min(10, baseCount + repBonus);
 
   return discoverCandidatesFromPool(count, rank, reputation);
 }
@@ -1904,4 +1904,42 @@ export function getUniversityScoutRecommendation(player, uniRank) {
   if (diff >= 0) return 'B';
   if (diff >= -15) return 'C';
   return 'D';
+}
+
+/**
+ * 選手検索から高校生をスカウト候補リストに追加する
+ * 直接検索で見つけているため _revealLevel=2（能力完全開示）
+ */
+export function addHighSchoolPlayerToScoutList(player, uniRank, reputation) {
+  if (!WORLD_DATA._universityScout) return { success: false, reason: 'not_initialized' };
+
+  const existingIds = new Set(
+    (WORLD_DATA._universityScout.candidates || []).map(c => c.id)
+      .concat((WORLD_DATA._universityScout.recruited || []).map(c => c.id))
+  );
+  if (existingIds.has(player.id)) return { success: false, reason: 'already_exists' };
+
+  const p = JSON.parse(JSON.stringify(player));
+  p.scoutAccuracy = 95;
+  p.scoutedAbilities = obscureAbilities(p, 95, 'full');
+  p._scoutSource = p.highSchool?.name ? p.highSchool.name : '高校（検索）';
+  p._revealLevel = 2;
+  p._investigationCount = 2;
+  p._watchBonus = 0;
+  p._investigating = false;
+  p._investigateReturn = null;
+  p.recruitRate = calculateUniversityRecruitRate(p, uniRank, reputation, 0);
+  p._approachGauge = 0;
+  p._approaching = false;
+  p._rivals = generateRivals(p, uniRank);
+  p._addedBySearch = true;
+
+  if (highSchoolPool.players) {
+    const idx = highSchoolPool.players.findIndex(hp => hp.id === player.id);
+    if (idx !== -1) p._poolRef = { source: 'highschool', poolIndex: idx };
+  }
+
+  if (!WORLD_DATA._universityScout.candidates) WORLD_DATA._universityScout.candidates = [];
+  WORLD_DATA._universityScout.candidates.push(p);
+  return { success: true };
 }

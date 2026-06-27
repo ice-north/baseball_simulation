@@ -4,6 +4,7 @@ import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
+import { addHighSchoolPlayerToScoutList } from '../corporate/scoutingSystem.js';
 
 const SOURCES = [
   { key: 'highschool', label: '高校生' },
@@ -68,7 +69,7 @@ function collectAllPlayers() {
   return results;
 }
 
-const PlayerSearchScreen = ({ onBack }) => {
+const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const [filters, setFilters] = useState(() => JSON.parse(JSON.stringify(DEFAULT_FILTERS)));
   const [sources, setSources] = useState({ highschool: true, university: true, released: true, teams: false });
   const [posFilter, setPosFilter] = useState('all');
@@ -76,6 +77,7 @@ const PlayerSearchScreen = ({ onBack }) => {
   const [sortKey, setSortKey] = useState('meet');
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [scoutAddMsg, setScoutAddMsg] = useState(null);
 
   const allPlayers = useMemo(() => collectAllPlayers(), []);
 
@@ -285,13 +287,31 @@ const PlayerSearchScreen = ({ onBack }) => {
         {/* Detail panel */}
         {selectedPlayer && (
           <div className="mt-3 bg-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
               <span className={`font-bold text-base ${selectedPlayer.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{selectedPlayer.name}</span>
               <span className="text-gray-400 text-sm">{POSITION_NAMES[selectedPlayer.position]} / {selectedPlayer.age}歳</span>
               <span className={`text-xs ${selectedPlayer.physical?.build === 'large' ? 'text-orange-400' : selectedPlayer.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}`}>
                 {selectedPlayer.physical?.build === 'large' ? '大柄' : selectedPlayer.physical?.build === 'small' ? '小柄' : '中肉'}
               </span>
               <span className="text-gray-500 text-xs">{selectedPlayer._sourceLabel}</span>
+              {gameMode === 'university' && selectedPlayer._source === 'highschool' && WORLD_DATA._universityScout && (() => {
+                const alreadyIn = (WORLD_DATA._universityScout.candidates || []).some(c => c.id === selectedPlayer.id)
+                  || (WORLD_DATA._universityScout.recruited || []).some(c => c.id === selectedPlayer.id);
+                const teamData = TEAMS_DATA[userTeamName];
+                const uniRank = teamData?.universityData?.rank || 'C';
+                const reputation = teamData?.universityData?.reputation || 30;
+                return alreadyIn
+                  ? <span className="text-xs text-green-400 px-2 py-0.5 bg-green-900/40 rounded">候補登録済</span>
+                  : <button
+                      className="text-xs px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white rounded transition font-bold"
+                      onClick={() => {
+                        const result = addHighSchoolPlayerToScoutList(selectedPlayer, uniRank, reputation);
+                        setScoutAddMsg(result.success ? `${selectedPlayer.name} をスカウト候補に追加しました` : '追加できませんでした');
+                        setTimeout(() => setScoutAddMsg(null), 3000);
+                      }}
+                    >推薦候補に追加</button>;
+              })()}
+              {scoutAddMsg && <span className="text-xs text-yellow-300">{scoutAddMsg}</span>}
               <button onClick={() => setSelectedPlayer(null)} className="ml-auto text-gray-500 hover:text-white">✕</button>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

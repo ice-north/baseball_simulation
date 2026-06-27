@@ -425,7 +425,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           setSeasonData(newData);
           return newData;
         } else {
-          autoPlayUniversityTournament(tournament);
           newData = { ...newData, universityChampionship: { ...tournament, generated: true } };
         }
       }
@@ -441,7 +440,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           setSeasonData(newData);
           return newData;
         } else {
-          autoPlayUniversityTournament(tournament);
           newData = { ...newData, meijiJingu: { ...tournament, generated: true } };
         }
       }
@@ -451,12 +449,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (isUniversity) {
       if (newData.universityChampionship?.generated && newData.universityChampionship.phase !== 'done') {
         const uc = JSON.parse(JSON.stringify(newData.universityChampionship));
-        simulateUniversityTournamentOnDate(uc, seasonData.currentDate, userTeamName);
+        simulateUniversityTournamentOnDate(uc, newData.currentDate, userTeamName);
         newData = { ...newData, universityChampionship: uc };
       }
       if (newData.meijiJingu?.generated && newData.meijiJingu.phase !== 'done') {
         const mj = JSON.parse(JSON.stringify(newData.meijiJingu));
-        simulateUniversityTournamentOnDate(mj, seasonData.currentDate, userTeamName);
+        simulateUniversityTournamentOnDate(mj, newData.currentDate, userTeamName);
         newData = { ...newData, meijiJingu: mj };
       }
     }

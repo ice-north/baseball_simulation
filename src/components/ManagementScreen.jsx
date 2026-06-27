@@ -196,6 +196,8 @@ const ManagementScreen = ({
   />;
   if (managementView === 'player_search') return <PlayerSearchScreen
     onBack={() => setManagementView('dateprogress')}
+    gameMode={gameMode}
+    userTeamName={userTeamName}
   />;
   if (managementView === 'roster') return <RosterScreen seasonData={seasonData} gameMode={gameMode} />;
   if (managementView === 'teaminfo') return <TeamInfoScreen />;
