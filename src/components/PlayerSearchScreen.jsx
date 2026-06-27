@@ -278,7 +278,13 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={17} className="py-8 text-center text-gray-500">条件に一致する選手が見つかりません</td></tr>
+                <tr><td colSpan={17} className="py-8 text-center text-gray-500">
+                  {sources.highschool && !sources.university && !sources.released && !sources.teams && highSchoolPool.players.length === 0
+                    ? '高校生プールは4月に生成されます。4月以降に再度確認してください。'
+                    : sources.highschool && highSchoolPool.players.length === 0
+                    ? '高校生は4月以降に表示されます（現在プール未生成）'
+                    : '条件に一致する選手が見つかりません'}
+                </td></tr>
               )}
             </tbody>
           </table>
