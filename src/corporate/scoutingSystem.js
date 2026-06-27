@@ -1911,7 +1911,10 @@ export function getUniversityScoutRecommendation(player, uniRank) {
  * 直接検索で見つけているため _revealLevel=2（能力完全開示）
  */
 export function addHighSchoolPlayerToScoutList(player, uniRank, reputation) {
-  if (!WORLD_DATA._universityScout) return { success: false, reason: 'not_initialized' };
+  // スカウトシステム未初期化なら空リストで自動初期化（4月前・年度末リセット後に対応）
+  if (!WORLD_DATA._universityScout) {
+    WORLD_DATA._universityScout = { candidates: [], recruited: [], initialized: false };
+  }
 
   const existingIds = new Set(
     (WORLD_DATA._universityScout.candidates || []).map(c => c.id)

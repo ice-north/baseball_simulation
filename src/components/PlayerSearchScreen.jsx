@@ -300,9 +300,12 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 {selectedPlayer.physical?.build === 'large' ? '大柄' : selectedPlayer.physical?.build === 'small' ? '小柄' : '中肉'}
               </span>
               <span className="text-gray-500 text-xs">{selectedPlayer._sourceLabel}</span>
-              {gameMode === 'university' && selectedPlayer._source === 'highschool' && WORLD_DATA._universityScout && (() => {
-                const alreadyIn = (WORLD_DATA._universityScout.candidates || []).some(c => c.id === selectedPlayer.id)
-                  || (WORLD_DATA._universityScout.recruited || []).some(c => c.id === selectedPlayer.id);
+              {gameMode === 'university' && selectedPlayer._source === 'highschool' && (() => {
+                const scout = WORLD_DATA._universityScout;
+                const alreadyIn = scout && (
+                  (scout.candidates || []).some(c => c.id === selectedPlayer.id)
+                  || (scout.recruited || []).some(c => c.id === selectedPlayer.id)
+                );
                 const teamData = TEAMS_DATA[userTeamName];
                 const uniRank = teamData?.universityData?.rank || 'C';
                 const reputation = teamData?.universityData?.reputation || 30;
