@@ -370,6 +370,14 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
     : Math.min(numSlots + 4, fielders.length);
   const candidates = sortedCandidates.slice(0, candidatePoolSize);
 
+  // 守備専任ポジション（捕手・遊撃）: 適性の高い選手が候補にいない場合、ロスターから追加
+  const candidateIds = new Set(candidates.map(ps => ps.player.id));
+  for (const mustPos of ['catcher', 'short']) {
+    if (candidates.some(ps => (ps.player.positionFitness?.[mustPos] || 0) >= 80)) continue;
+    const best = sortedCandidates.find(ps => !candidateIds.has(ps.player.id) && (ps.player.positionFitness?.[mustPos] || 0) >= 80);
+    if (best) { candidates.push(best); candidateIds.add(best.player.id); }
+  }
+
   // 最適なポジション割り当てを探索
   let bestAssignment = null;
   let bestTotalValue = -Infinity;
