@@ -939,7 +939,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                           <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
                         </td>
                         <td className="py-1 px-1 text-center text-[10px] text-gray-400">
-                          {isPitcher(player) ? ({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-') : '-'}
+                          {({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-')}
                         </td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>
