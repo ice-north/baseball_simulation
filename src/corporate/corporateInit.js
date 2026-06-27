@@ -22,6 +22,7 @@
 // ============================================================
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
+import { generateRandomPlayerName } from '../data/playerNames.js';
 import { generateStaff, STAFF_GRADE_CAP } from './staffData.js';
 import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
@@ -879,6 +880,20 @@ export const initializeCorporateParallelWorld = (existingTeamNames = []) => {
     WORLD_DATA.corporateLeague.teams[name] = TEAMS_DATA[name];
   }
   initializeIndependentLeagues(null, [...existingTeamNames, ...corpTeamNames]);
+
+  // 重複名選手の改名（同一選手がリリースプール経由で複数チームに入るケースを修正）
+  const seenPlayerNames = new Set();
+  for (const teamName of corpTeamNames) {
+    for (const player of TEAMS_DATA[teamName]?.players || []) {
+      if (!player.name) continue;
+      if (seenPlayerNames.has(player.name)) {
+        let newName = generateRandomPlayerName();
+        while (seenPlayerNames.has(newName)) newName = generateRandomPlayerName();
+        player.name = newName;
+      }
+      seenPlayerNames.add(player.name);
+    }
+  }
 };
 
 // ============================================================

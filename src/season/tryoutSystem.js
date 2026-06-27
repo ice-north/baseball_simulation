@@ -305,11 +305,16 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
  * - 能力値にブランクによる微減衰を適用
  * @returns {Array} 再トライアウト参加者（解雇フラグ付き）
  */
-function getReleasedCandidatesFromPool() {
+function getReleasedCandidatesFromPool(maxPlayers = null) {
   if (!releasedPlayersPool || releasedPlayersPool.length === 0) return [];
 
+  // シャッフルして上限を設ける: 複数チームの並行初期化時に同一選手が全チームに選ばれるのを防ぐ
+  const sourcePool = maxPlayers !== null
+    ? [...releasedPlayersPool].sort(() => Math.random() - 0.5).slice(0, maxPlayers)
+    : releasedPlayersPool;
+
   const candidates = [];
-  for (const p of releasedPlayersPool) {
+  for (const p of sourcePool) {
     const aged = JSON.parse(JSON.stringify(p));
 
     // 大学卒業生/新規候補は減衰なし（入団直後のフレッシュな状態）
@@ -394,7 +399,9 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   const existingIds = new Set();
 
   // 1. リリースプールから候補を取得（メインソース）
-  const releasedCandidates = getReleasedCandidatesFromPool();
+  // isInitialかつ大量チームの初期化時は上限を設けてシャッフル（重複選手の蔓延を防ぐ）
+  const releasedLimit = isInitial ? Math.min(releasedPlayersPool?.length || 0, 50) : null;
+  const releasedCandidates = getReleasedCandidatesFromPool(releasedLimit);
   releasedCandidates.forEach(rc => {
     if (!existingIds.has(rc.id)) {
       existingIds.add(rc.id);
