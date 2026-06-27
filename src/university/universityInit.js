@@ -26,6 +26,8 @@ const randInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
 // ユーザーチームのベンチ登録選手を初期化（投手10名+野手15名=25名）
 const BENCH_LIMIT = 25;
+// 必須確保ポジション（各1名以上）
+const REQUIRED_POSITIONS = ['catcher', 'short', 'second', 'third', 'first', 'left', 'center', 'right'];
 const initializeActiveRoster = (players) => {
   players.forEach(p => { p.isActive = false; });
   const score = (p) => p.position === 'pitcher'
@@ -33,10 +35,22 @@ const initializeActiveRoster = (players) => {
     : (p.batting?.meet || 0) * 0.4 + (p.batting?.power || 0) * 0.25 + (p.fielding?.defense || 0) * 0.2 + (p.physical?.speed || 0) * 0.15;
   const pitchers = [...players.filter(p => p.position === 'pitcher')].sort((a, b) => score(b) - score(a));
   const fielders = [...players.filter(p => p.position !== 'pitcher')].sort((a, b) => score(b) - score(a));
-  const pitcherSlots = Math.round(BENCH_LIMIT * 0.4);
-  const fielderSlots = BENCH_LIMIT - pitcherSlots;
+  const pitcherSlots = Math.round(BENCH_LIMIT * 0.4); // 10
+  const fielderSlots = BENCH_LIMIT - pitcherSlots;    // 15
+
+  // 必須ポジションを1名ずつ確保してから残りをスコア順
+  const activated = new Set();
+  for (const pos of REQUIRED_POSITIONS) {
+    if (activated.size >= fielderSlots) break;
+    const best = fielders.find(p => p.position === pos && !activated.has(p.id));
+    if (best) { best.isActive = true; activated.add(best.id); }
+  }
+  // 残り野手枠はスコア順
+  for (const p of fielders) {
+    if (activated.size >= fielderSlots) break;
+    if (!activated.has(p.id)) { p.isActive = true; activated.add(p.id); }
+  }
   pitchers.slice(0, pitcherSlots).forEach(p => { p.isActive = true; });
-  fielders.slice(0, fielderSlots).forEach(p => { p.isActive = true; });
 };
 
 const makeAbbreviation = (name) => {

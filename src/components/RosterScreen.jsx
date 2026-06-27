@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
+import LineupSettingScreen from './LineupSettingScreen.jsx';
 
 const POS_NAMES = {
   pitcher: '投', catcher: '捕', first: '一', second: '二',
@@ -27,7 +28,10 @@ const playerScore = (p) => {
          (p.physical?.speed || 0) * 0.05;
 };
 
-// ポジションバランスを考慮した自動選択（投手40% / 野手60%）
+// 必須確保ポジション（各1名以上）
+const REQUIRED_POSITIONS = ['catcher', 'short', 'second', 'third', 'first', 'left', 'center', 'right'];
+
+// ポジションバランスを考慮した自動選択（投手40% / 野手60%、必須ポジション保証）
 export const autoSelectActive = (players) => {
   players.forEach(p => { p.isActive = false; });
   const pitchers = [...players.filter(p => p.position === 'pitcher')]
@@ -36,8 +40,19 @@ export const autoSelectActive = (players) => {
     .sort((a, b) => playerScore(b) - playerScore(a));
   const pitcherSlots = Math.round(ACTIVE_LIMIT * 0.4);  // 10
   const fielderSlots = ACTIVE_LIMIT - pitcherSlots;      // 15
+
+  // 必須ポジションを1名ずつ確保してから残りをスコア順
+  const activated = new Set();
+  for (const pos of REQUIRED_POSITIONS) {
+    if (activated.size >= fielderSlots) break;
+    const best = fielders.find(p => p.position === pos && !activated.has(p.id));
+    if (best) { best.isActive = true; activated.add(best.id); }
+  }
+  for (const p of fielders) {
+    if (activated.size >= fielderSlots) break;
+    if (!activated.has(p.id)) { p.isActive = true; activated.add(p.id); }
+  }
   pitchers.slice(0, pitcherSlots).forEach(p => { p.isActive = true; });
-  fielders.slice(0, fielderSlots).forEach(p => { p.isActive = true; });
 };
 
 // --- PlayerCard コンポーネント ---
@@ -108,6 +123,7 @@ const PosStats = ({ activePlayers }) => {
 // --- メイン RosterScreen ---
 const RosterScreen = ({ seasonData, gameMode }) => {
   const [tick, setTick] = useState(0);
+  const [activeTab, setActiveTab] = useState('roster');
   const refresh = () => setTick(v => v + 1);
 
   const userTeamName = seasonData?.userTeamName || Object.keys(TEAMS_DATA || {})[0];
@@ -175,12 +191,9 @@ const RosterScreen = ({ seasonData, gameMode }) => {
 
   if (!isUniversityMode) {
     return (
-      <div className="p-4 max-w-4xl mx-auto">
-        <h1 className="text-xl font-bold text-white mb-4">ロスター管理</h1>
-        <div className="bg-gray-800 rounded p-6 text-center text-gray-400">
-          このモードではロスター登録制限はありません。<br />
-          <span className="text-white font-bold">全 {players.length} 名</span> が試合登録可能です。
-        </div>
+      <div className="p-4 max-w-6xl mx-auto">
+        <h1 className="text-xl font-bold text-white mb-4">スタメン・ロスター管理</h1>
+        <LineupSettingScreen teamName={userTeamName} onBack={null} />
       </div>
     );
   }
@@ -188,34 +201,63 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   return (
     <div className="p-4 max-w-5xl mx-auto">
       {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold text-white">ロスター登録管理</h1>
+          <h1 className="text-xl font-bold text-white">ロスター・スタメン管理</h1>
           <p className="text-xs text-gray-400 mt-0.5">大学野球 公式試合ベンチ登録枠：最大 {ACTIVE_LIMIT} 名</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className={`text-sm font-bold px-3 py-1 rounded border
-            ${isFull ? 'border-red-500 text-red-400 bg-red-950/40' : 'border-green-600 text-green-400 bg-green-950/30'}`}>
-            登録 {activePlayers.length} / {ACTIVE_LIMIT} 名
+        {activeTab === 'roster' && (
+          <div className="flex items-center gap-3">
+            <div className={`text-sm font-bold px-3 py-1 rounded border
+              ${isFull ? 'border-red-500 text-red-400 bg-red-950/40' : 'border-green-600 text-green-400 bg-green-950/30'}`}>
+              登録 {activePlayers.length} / {ACTIVE_LIMIT} 名
+            </div>
+            <button
+              onClick={handleAutoSelect}
+              className="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded transition-colors"
+            >
+              AI自動選択
+            </button>
           </div>
-          <button
-            onClick={handleAutoSelect}
-            className="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded transition-colors"
-          >
-            AI自動選択
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* 説明 */}
+      {/* タブ切り替え */}
+      <div className="flex gap-1 bg-gray-800/60 rounded-xl p-1 border border-gray-700/50 mb-4">
+        <button
+          onClick={() => setActiveTab('roster')}
+          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+            activeTab === 'roster' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+          }`}
+        >
+          📋 ベンチ登録（{activePlayers.length}/{ACTIVE_LIMIT}）
+        </button>
+        <button
+          onClick={() => setActiveTab('lineup')}
+          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+            activeTab === 'lineup' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+          }`}
+        >
+          ⚾ スタメン設定
+        </button>
+      </div>
+
+      {/* スタメン設定タブ */}
+      {activeTab === 'lineup' && (
+        <LineupSettingScreen teamName={userTeamName} onBack={null} />
+      )}
+
+      {/* ベンチ登録タブの説明 */}
+      {activeTab === 'roster' && (
       <div className="bg-gray-800/70 rounded p-2.5 mb-4 text-xs text-gray-400">
         選手をクリックして<span className="text-white">登録選手 ↔ 練習生</span>を切り替えます。
         スタメン出場中（<span className="text-yellow-400">先発</span>表示）は変更不可。
         <span className="text-blue-400">AI自動選択</span>で投手10名・野手15名を自動登録します。
       </div>
+      )}
 
-      {/* 2パネル */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* 2パネル（ベンチ登録タブのみ表示） */}
+      {activeTab === 'roster' && <div className="grid grid-cols-2 gap-4">
         {/* 登録選手 */}
         <div className="bg-gray-800 rounded-lg p-3 flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-2 flex-shrink-0">
@@ -279,9 +321,9 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               ))}
           </div>
         </div>
-      </div>
+      </div>}
 
-      <PosStats activePlayers={activePlayers} />
+      {activeTab === 'roster' && <PosStats activePlayers={activePlayers} />}
     </div>
   );
 };
