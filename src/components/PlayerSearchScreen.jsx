@@ -78,6 +78,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [scoutAddMsg, setScoutAddMsg] = useState(null);
+  const [scoutTick, setScoutTick] = useState(0); // スカウト追加後の再描画トリガー
 
   const allPlayers = useMemo(() => collectAllPlayers(), []);
 
@@ -240,12 +241,20 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="stamina" w="w-7">ス</SortTh>
                 <SortTh k="growth" w="w-8">成長</SortTh>
                 <th className="py-1 px-1 text-center w-7">知</th>
+                {gameMode === 'university' && <th className="py-1 px-1 text-center w-8 text-purple-400">スカ</th>}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p, idx) => (
+              {filtered.map((p, idx) => {
+                const isScoutable = gameMode === 'university' && p._source === 'highschool';
+                const scout = WORLD_DATA._universityScout;
+                const alreadyScouted = isScoutable && scout && (
+                  (scout.candidates || []).some(c => c.id === p.id)
+                  || (scout.recruited || []).some(c => c.id === p.id)
+                );
+                return (
                 <tr key={`${p._source}-${p.id || idx}`}
-                  className="border-b border-gray-700/30 hover:bg-gray-700/40 cursor-pointer"
+                  className={`border-b border-gray-700/30 hover:bg-gray-700/40 cursor-pointer ${selectedPlayer?.id === p.id && selectedPlayer?._source === p._source ? 'bg-gray-700/50' : ''}`}
                   onClick={() => setSelectedPlayer(selectedPlayer?.id === p.id && selectedPlayer?._source === p._source ? null : p)}
                 >
                   <td className="py-0.5 px-2 font-bold text-xs truncate max-w-[80px]">{p.name}</td>
@@ -275,10 +284,31 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                     })()}
                   </td>
                   <td className="py-0.5 px-1 text-center text-gray-500">{p.fame || 0}</td>
+                  {isScoutable && (
+                    <td className="py-0.5 px-1 text-center" onClick={e => e.stopPropagation()}>
+                      {alreadyScouted
+                        ? <span className="text-[10px] text-green-400 font-bold">済</span>
+                        : <button
+                            className="text-[10px] px-1.5 py-0.5 bg-purple-700 hover:bg-purple-500 text-white rounded font-bold transition"
+                            onClick={() => {
+                              const teamData = TEAMS_DATA[userTeamName];
+                              const uniRank = teamData?.universityData?.rank || 'C';
+                              const reputation = teamData?.universityData?.reputation || 30;
+                              const result = addHighSchoolPlayerToScoutList(p, uniRank, reputation);
+                              setScoutAddMsg(result.success ? `${p.name} を候補追加` : '追加失敗');
+                              setTimeout(() => setScoutAddMsg(null), 2000);
+                              setScoutTick(v => v + 1);
+                            }}
+                          >+</button>
+                      }
+                    </td>
+                  )}
+                  {gameMode === 'university' && p._source !== 'highschool' && <td />}
                 </tr>
-              ))}
+                );
+              })}
               {filtered.length === 0 && (
-                <tr><td colSpan={17} className="py-8 text-center text-gray-500">
+                <tr><td colSpan={gameMode === 'university' ? 18 : 17} className="py-8 text-center text-gray-500">
                   {sources.highschool && !sources.university && !sources.released && !sources.teams && highSchoolPool.players.length === 0
                     ? '高校生プールは4月に生成されます。4月以降に再度確認してください。'
                     : sources.highschool && highSchoolPool.players.length === 0
