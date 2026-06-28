@@ -193,11 +193,46 @@ export function simulateUniversityLeagueDate(currentDate) {
   const leagues = WORLD_DATA.universityLeagues;
   if (!leagues) return;
 
-  // 大学モードではユーザーのリーグをスキップ（seasonData.schedule経由で管理）
+  // 大学モードではユーザー所属部の試合をスキップ（seasonData.schedule経由で管理）
+  // ただし同一リーグ内の他部（例: ユーザーが2部なら1部）は自動消化する
   const userRegion = WORLD_DATA.mode === 'university' ? WORLD_DATA.userLeagueId : null;
+  const userDiv = WORLD_DATA.mode === 'university' ? (WORLD_DATA.universityLeague?.userDivision || 1) : null;
 
   for (const [regionId, league] of Object.entries(leagues)) {
-    if (regionId === userRegion) continue;
+    if (regionId === userRegion) {
+      // 1部制はユーザー部しかないので完全スキップ
+      if (!league.divisions) continue;
+      // 2部制以上: ユーザー所属部以外を自動消化
+      const numDiv = league.numDivisions || 2;
+      for (const seasonKey of ['spring', 'fall']) {
+        const sData = league[seasonKey];
+        if (!sData || sData.done) continue;
+        const gamesToday = sData.schedule.filter(g =>
+          g.date?.year === currentDate.year &&
+          g.date?.month === currentDate.month &&
+          g.date?.day === currentDate.day &&
+          !g.result
+        );
+        for (const game of gamesToday) {
+          let gameDiv = 1;
+          for (let d = 1; d <= numDiv; d++) {
+            if (league.divTeams[d]?.includes(game.home)) { gameDiv = d; break; }
+          }
+          if (gameDiv === userDiv) continue; // ユーザー所属部はスキップ
+          const result = simulateUniversityGame(game.home, game.away);
+          game.result = result;
+          updateStandings(sData[`standings${gameDiv}`], game.home, game.away, result.homeScore, result.awayScore);
+          if (!league.results) league.results = [];
+          league.results.push({
+            date: { ...currentDate }, season: seasonKey === 'spring' ? '春' : '秋',
+            home: game.home, away: game.away,
+            homeScore: result.homeScore, awayScore: result.awayScore,
+            winner: result.winner,
+          });
+        }
+      }
+      continue;
+    }
     for (const seasonKey of ['spring', 'fall']) {
       const seasonData = league[seasonKey];
       if (!seasonData || seasonData.done) continue;
