@@ -439,12 +439,13 @@ export function optimizeSaveData(saveData) {
       saveData.seasonData.results = saveData.seasonData.results.map(r => ({
         gameId: r.gameId,
         date: r.date,
-        homeTeam: r.homeTeam,
-        awayTeam: r.awayTeam,
+        home: r.home,
+        away: r.away,
         homeScore: r.homeScore,
         awayScore: r.awayScore,
         winner: r.winner,
-        phase: r.phase
+        phase: r.phase,
+        result: r.result,
       }));
     }
 
@@ -455,8 +456,8 @@ export function optimizeSaveData(saveData) {
           return {
             gameId: g.gameId,
             date: g.date,
-            homeTeam: g.homeTeam,
-            awayTeam: g.awayTeam,
+            home: g.home,
+            away: g.away,
             phase: g.phase,
             result: {
               homeScore: g.result.homeScore,
