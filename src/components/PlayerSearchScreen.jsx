@@ -48,7 +48,7 @@ function collectAllPlayers() {
       entries.forEach(entry => {
         const p = entry.player || entry;
         if (p && p.name) {
-          results.push({ ...p, _source: 'university', _sourceLabel: p.universityTeamName || `大学(${year}年入学)`, _uniRank: entry.universityRank || p._destinationRank || '?' });
+          results.push({ ...p, _source: 'university', _sourceLabel: entry.universityTeamName || p.universityTeamName || `大学(${entry.universityRank || '?'}ランク)`, _uniRank: entry.universityRank || p._destinationRank || '?' });
         }
       });
     });
