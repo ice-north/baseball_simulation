@@ -213,6 +213,12 @@ export const initializeUniversityGame = (teamDef) => {
   } else {
     leagueTeams.forEach(t => allTeamNames.push(t.name));
   }
+  // ユーザーチームを先頭に移動（App.jsxが allTeams[0] をユーザーチームとして使うため）
+  const userNameIdx = allTeamNames.indexOf(userTeamName);
+  if (userNameIdx > 0) {
+    allTeamNames.splice(userNameIdx, 1);
+    allTeamNames.unshift(userTeamName);
+  }
 
   // 大学リーグ初期化（全16リーグ）
   initializeUniversityLeagues(2024);
