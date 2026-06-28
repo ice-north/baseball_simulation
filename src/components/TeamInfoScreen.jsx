@@ -57,6 +57,8 @@ const TeamInfoScreen = () => {
     if (key === 'avg') return stats.atBats > 0 ? stats.hits / stats.atBats : 0;
     if (key === 'meet') return player.batting?.meet || 0;
     if (key === 'power') return player.batting?.power || 0;
+    if (key === 'eye') return player.batting?.eye || 0;
+    if (key === 'steal') return player.batting?.steal || 0;
     if (key === 'speed') return player.physical?.speed || 0;
     if (key === 'defense') return player.fielding?.defense || 0;
     if (key === 'arm') return player.physical?.arm || 0;
@@ -306,7 +308,7 @@ const TeamInfoScreen = () => {
                     })}
                     {/* 今シーズン */}
                     {(pitching.games > 0) && (
-                      <tr className="border-b border-gray-700 bg-gray-750 hover:bg-gray-700">
+                      <tr className="border-b border-gray-700 bg-gray-800 hover:bg-gray-700">
                         <td className="px-2 py-1 text-cyan-400 font-bold">今季</td>
                         <td className="px-2 py-1 text-center">{pitching.games || 0}</td>
                         <td className="px-2 py-1 text-center">{pitching.wins || 0}</td>
@@ -631,11 +633,12 @@ const TeamInfoScreen = () => {
                 <tbody>
                   {pitchers.map((player, index) => {
                     const stats = player.seasonStats?.pitching;
+                    const gradeLabel = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
                     return (
-                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-750'}`}
+                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-800'}`}
                         onClick={() => { setSelectedPlayer(player); setDetailTab('ability'); }}>
                         <td className="px-2 py-1 text-white font-medium">{player.name}</td>
-                        <td className="px-2 py-1 text-gray-300 text-center">{player.age}</td>
+                        <td className="px-2 py-1 text-gray-300 text-center">{gradeLabel}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.velocity)}`}>{player.pitching?.velocity || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.control)}`}>{player.pitching?.control || '-'}</td>
@@ -683,6 +686,8 @@ const TeamInfoScreen = () => {
                     <SortableHeader label="走力" sortKey="speed" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="守備" sortKey="defense" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="肩" sortKey="arm" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
+                    <SortableHeader label="選球眼" sortKey="eye" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
+                    <SortableHeader label="盗塁力" sortKey="steal" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="体力" sortKey="bodyStamina" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="試合" sortKey="games" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="打席" sortKey="atBats" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
@@ -698,18 +703,21 @@ const TeamInfoScreen = () => {
                 <tbody>
                   {fielders.map((player, index) => {
                     const stats = player.seasonStats?.batting;
+                    const gradeLabel = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
                     return (
-                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-750'}`}
+                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-800'}`}
                         onClick={() => { setSelectedPlayer(player); setDetailTab('ability'); }}>
                         <td className="px-2 py-1 text-white font-medium">{player.name}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{POSITION_NAMES[player.position]}</td>
-                        <td className="px-2 py-1 text-gray-300 text-center">{player.age}</td>
+                        <td className="px-2 py-1 text-gray-300 text-center">{gradeLabel}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.meet)}`}>{player.batting?.meet || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.power)}`}>{player.batting?.power || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.speed)}`}>{player.physical?.speed || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.fielding?.defense)}`}>{player.fielding?.defense || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.arm)}`}>{player.physical?.arm || '-'}</td>
+                        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.eye)}`}>{player.batting?.eye || '-'}</td>
+                        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.steal)}`}>{player.batting?.steal || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.bodyStamina || 50)}`}>{player.physical?.bodyStamina || 50}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.games || 0}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.atBats || 0}</td>
