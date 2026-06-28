@@ -1536,25 +1536,47 @@ export function initUniversityScoutList(teamData, rank) {
 function discoverCandidatesFromPool(count, rank, reputation) {
   if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
 
-  const reputationMult = 0.8 + (reputation / 100) * 0.4;
-  const rankDiscoveryMult = { S: 0.2, A: 0.5, B: 1.0, C: 1.2, D: 1.5 }[rank] || 1.0;
-  const rankAbilityBonus = { S: 12, A: 6, B: 0, C: -3, D: -6 }[rank] || 0;
-
   const existingIds = new Set(
     (WORLD_DATA._universityScout?.candidates || []).map(c => c.id)
       .concat((WORLD_DATA._universityScout?.recruited || []).map(c => c.id))
   );
 
-  const scored = highSchoolPool.players
-    .filter(p => !p._universityReserved && !existingIds.has(p.id))
-    .map((p, idx) => {
-      const base = evaluatePlayerScore(p);
-      const fame = p.fame || 0;
-      const noise = (Math.random() - 0.5) * 25;
-      const repBonus = (reputationMult - 1.0) * 15;
-      const discoveryPenalty = -((100 - fame) / 100) * 8 * rankDiscoveryMult;
-      return { player: p, poolIndex: idx, score: base + noise + repBonus + discoveryPenalty + rankAbilityBonus };
-    });
+  const available = highSchoolPool.players
+    .filter(p => !p._universityReserved && !existingIds.has(p.id));
+  if (available.length === 0) return [];
+
+  // ランク別スカウト帯: 大学ランクに応じて高校生プールのどの層が見えるかを決める
+  // S大学=上位層(トップ人材)、D大学=中下位層(入部しやすい選手)
+  // 帯はオーバーラップあり。「無名の逸材」はどのランクでも帯内で発掘可能
+  const BAND_LO = { S: 0.00, A: 0.10, B: 0.22, C: 0.38, D: 0.55 };
+  const BAND_HI = { S: 0.40, A: 0.58, B: 0.72, C: 0.84, D: 0.96 };
+  const bandLo = BAND_LO[rank] ?? 0.38;
+  const bandHi = BAND_HI[rank] ?? 0.84;
+
+  // 全選手を能力順にソートして帯を切り出す
+  const byAbility = [...available]
+    .map((p, idx) => ({ player: p, poolIndex: highSchoolPool.players.indexOf(p), ability: evaluatePlayerScore(p) }))
+    .sort((a, b) => b.ability - a.ability);
+
+  const n = byAbility.length;
+  const loIdx = Math.floor(n * bandLo);
+  const hiIdx = Math.min(n, Math.floor(n * bandHi));
+  const band = byAbility.slice(loIdx, hiIdx);
+
+  // 帯内では知名度・成長力・ランダムで選手を発見
+  // 低知名度の逸材(fame低+growthPotential高)は鋭いスカウトが見つけられる
+  const reputationMult = 0.8 + (reputation / 100) * 0.4;
+  const scored = band.map(({ player: p, poolIndex, ability }) => {
+    const fame = p.fame || 0;
+    const gp = p.growthPotential || 1.0;
+    const noise = (Math.random() - 0.5) * 30;
+    const repBonus = (reputationMult - 1.0) * 10;
+    // 知名度が高い選手=見つかりやすい、低い選手=埋もれがち
+    const fameScore = fame * 0.5;
+    // 成長力が高い選手=素材の良さが滲み出て目に留まりやすい
+    const gemBonus = (gp - 1.0) * 25;
+    return { player: p, poolIndex, score: fameScore + gemBonus + noise + repBonus };
+  });
   scored.sort((a, b) => b.score - a.score);
 
   return scored.slice(0, count).map(entry => {
@@ -1605,20 +1627,26 @@ export function generateSelectionCandidates(rank, reputation, count = 15) {
       .concat((WORLD_DATA._universityScout?.recruited || []).map(c => c.id))
   );
 
-  // 推薦候補ほど上位ではない中間〜下位層を選ぶ
-  const rankAbilityBonus = { S: 5, A: 2, B: 0, C: -2, D: -5 }[rank] || 0;
-  const scored = highSchoolPool.players
-    .filter(p => !p._universityReserved && !existingIds.has(p.id))
-    .map(p => {
-      const base = evaluatePlayerScore(p);
-      const noise = (Math.random() - 0.5) * 30;
-      return { player: p, score: base + noise + rankAbilityBonus };
-    });
+  // セレクション=推薦より一段下の帯から選ぶ（推薦で取れる上位層は除く）
+  // ランク別に推薦帯の下半分〜さらに下位層を対象とする
+  const SEL_BAND_LO = { S: 0.20, A: 0.32, B: 0.46, C: 0.60, D: 0.72 };
+  const SEL_BAND_HI = { S: 0.60, A: 0.76, B: 0.88, C: 0.94, D: 1.00 };
+  const selLo = SEL_BAND_LO[rank] ?? 0.60;
+  const selHi = SEL_BAND_HI[rank] ?? 0.94;
 
-  // 上位は推薦で取られるので、中間層をメインに（上位20%をスキップ）
+  const available = highSchoolPool.players.filter(p => !p._universityReserved && !existingIds.has(p.id));
+  const byAbility = [...available]
+    .map(p => ({ player: p, ability: evaluatePlayerScore(p) }))
+    .sort((a, b) => b.ability - a.ability);
+
+  const n = byAbility.length;
+  const band = byAbility.slice(Math.floor(n * selLo), Math.min(n, Math.floor(n * selHi)));
+  const scored = band.map(({ player: p }) => {
+    const noise = (Math.random() - 0.5) * 30;
+    return { player: p, score: noise };
+  });
   scored.sort((a, b) => b.score - a.score);
-  const skipTop = Math.floor(scored.length * 0.2);
-  const pool = scored.slice(skipTop);
+  const pool = scored;
 
   return pool.slice(0, count).map(entry => {
     const p = JSON.parse(JSON.stringify(entry.player));
