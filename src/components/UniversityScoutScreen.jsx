@@ -412,29 +412,32 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-3">
-          <div>
-            <h1 className="text-xl font-black text-white">スポーツ推薦スカウト</h1>
-            <p className="text-gray-400 text-xs mt-0.5">
-              {userTeamName} ({rank}ランク) — 推薦枠: {remainingSlots}/{maxSlots}名
-              {recruited.length > 0 && <span className="text-green-400 ml-2">確保済{recruited.length}名</span>}
-              <span className="text-cyan-400 ml-2">接近中: {approachingCount}/{maxApproaches}名</span>
-            </p>
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button onClick={onBack}
+                className="px-3 py-1.5 rounded-lg text-sm font-bold bg-gray-700 hover:bg-gray-600 text-gray-300 transition flex items-center gap-1 flex-shrink-0">
+                ← 戻る
+              </button>
+            )}
+            <div>
+              <h1 className="text-xl font-black text-white">スポーツ推薦スカウト</h1>
+              <p className="text-gray-400 text-xs mt-0.5">
+                {userTeamName} ({rank}ランク) — 推薦枠: {remainingSlots}/{maxSlots}名
+                {recruited.length > 0 && <span className="text-green-400 ml-2">確保済{recruited.length}名</span>}
+                <span className="text-cyan-400 ml-2">接近中: {approachingCount}/{maxApproaches}名</span>
+              </p>
+            </div>
           </div>
           <div className="flex gap-2 items-center">
             <div className="text-gray-500 text-xs mr-2">
               調査: 5日 / 注目: +ゲージ速度
             </div>
-            {onComplete ? (
+            {onComplete && (
               <button onClick={handleFinalize}
                 className="px-4 py-2 rounded-lg font-bold text-sm bg-green-700 hover:bg-green-600 text-white transition">
                 推薦確定 → セレクションへ
               </button>
-            ) : onBack ? (
-              <button onClick={onBack}
-                className="px-4 py-2 rounded-lg font-bold text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 transition">
-                戻る
-              </button>
-            ) : null}
+            )}
           </div>
         </div>
 
@@ -632,6 +635,15 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {onBack && (
+          <div className="mt-6 pt-4 border-t border-gray-700/40">
+            <button onClick={onBack}
+              className="px-6 py-2.5 rounded-lg font-bold text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 transition flex items-center gap-2">
+              ← 戻る
+            </button>
           </div>
         )}
       </div>
