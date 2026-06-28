@@ -35,6 +35,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [showOtherLeagues, setShowOtherLeagues] = useState(false);
   const [showCorporateTournaments, setShowCorporateTournaments] = useState(false);
   const [showUniversityLeagues, setShowUniversityLeagues] = useState(false);
+  const [showUcTournament, setShowUcTournament] = useState(true);
+  const [showMjTournament, setShowMjTournament] = useState(true);
   const [expandedUniLeagues, setExpandedUniLeagues] = useState({});
   const [showNewspaper, setShowNewspaper] = useState(false);
   const [pendingPhaseEvent, setPendingPhaseEvent] = useState(null);
@@ -2439,28 +2441,44 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 {/* 全日本大学野球選手権大会 */}
                 {uc?.generated && (
                   <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-orange-700/30">
-                    <h2 className="text-sm font-bold text-orange-400 mb-2">全日本大学野球選手権大会</h2>
-                    {uc.champion && (
-                      <div className="bg-orange-900/30 border border-orange-700/50 rounded-lg p-2 mb-2 text-center">
-                        <span className="text-orange-400 font-bold">優勝: {uc.champion}</span>
-                        {uc.runnerUp && <span className="text-gray-400 ml-2">準優勝: {uc.runnerUp}</span>}
-                      </div>
-                    )}
-                    {uc.bracket && renderBracketWithLines(uc.bracket)}
+                    <h2
+                      className="text-sm font-bold text-orange-400 mb-2 flex items-center justify-between cursor-pointer select-none"
+                      onClick={() => setShowUcTournament(v => !v)}
+                    >
+                      <span>全日本大学野球選手権大会</span>
+                      <span className="text-[10px] text-gray-500">{showUcTournament ? '▲' : '▼'}</span>
+                    </h2>
+                    {showUcTournament && <>
+                      {uc.champion && (
+                        <div className="bg-orange-900/30 border border-orange-700/50 rounded-lg p-2 mb-2 text-center">
+                          <span className="text-orange-400 font-bold">優勝: {uc.champion}</span>
+                          {uc.runnerUp && <span className="text-gray-400 ml-2">準優勝: {uc.runnerUp}</span>}
+                        </div>
+                      )}
+                      {uc.bracket && renderBracketWithLines(uc.bracket)}
+                    </>}
                   </div>
                 )}
 
                 {/* 明治神宮野球大会 */}
                 {mj?.generated && (
                   <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-red-700/30">
-                    <h2 className="text-sm font-bold text-red-400 mb-2">明治神宮野球大会</h2>
-                    {mj.champion && (
-                      <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-2 mb-2 text-center">
-                        <span className="text-red-400 font-bold">優勝: {mj.champion}</span>
-                        {mj.runnerUp && <span className="text-gray-400 ml-2">準優勝: {mj.runnerUp}</span>}
-                      </div>
-                    )}
-                    {mj.bracket && renderBracketWithLines(mj.bracket)}
+                    <h2
+                      className="text-sm font-bold text-red-400 mb-2 flex items-center justify-between cursor-pointer select-none"
+                      onClick={() => setShowMjTournament(v => !v)}
+                    >
+                      <span>明治神宮野球大会</span>
+                      <span className="text-[10px] text-gray-500">{showMjTournament ? '▲' : '▼'}</span>
+                    </h2>
+                    {showMjTournament && <>
+                      {mj.champion && (
+                        <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-2 mb-2 text-center">
+                          <span className="text-red-400 font-bold">優勝: {mj.champion}</span>
+                          {mj.runnerUp && <span className="text-gray-400 ml-2">準優勝: {mj.runnerUp}</span>}
+                        </div>
+                      )}
+                      {mj.bracket && renderBracketWithLines(mj.bracket)}
+                    </>}
                   </div>
                 )}
               </div>
