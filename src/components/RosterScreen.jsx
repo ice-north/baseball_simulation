@@ -41,7 +41,6 @@ export const autoSelectActive = (players) => {
   const pitcherSlots = Math.round(ACTIVE_LIMIT * 0.4);  // 10
   const fielderSlots = ACTIVE_LIMIT - pitcherSlots;      // 15
 
-  // 必須ポジションを1名ずつ確保してから残りをスコア順
   const activated = new Set();
   for (const pos of REQUIRED_POSITIONS) {
     if (activated.size >= fielderSlots) break;
@@ -55,44 +54,81 @@ export const autoSelectActive = (players) => {
   pitchers.slice(0, pitcherSlots).forEach(p => { p.isActive = true; });
 };
 
+// 能力値セル（ラベル上・値下の縦2行）
+const Stat = ({ label, value, low, high }) => {
+  const color = value >= high ? 'text-green-400 font-bold'
+    : value >= low ? 'text-yellow-300'
+    : 'text-gray-500';
+  return (
+    <span className="flex flex-col items-center w-8 flex-shrink-0">
+      <span className="text-[8px] text-gray-600 leading-none">{label}</span>
+      <span className={`text-[11px] leading-none mt-0.5 ${color}`}>{value}</span>
+    </span>
+  );
+};
+
 // --- PlayerCard コンポーネント ---
 const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
   const isPitcher = player.position === 'pitcher';
-  const grade = player.universityYear ? `${player.universityYear}年生` : `${player.age}歳`;
-  const statLine = isPitcher
-    ? `${player.pitching?.velocity || 0}km  制${player.pitching?.control || 0}  耐${player.pitching?.stamina || 0}`
-    : `打${player.batting?.meet || 0}  力${player.batting?.power || 0}  守${player.fielding?.defense || 0}  走${player.physical?.speed || 0}`;
-
+  const grade = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
   const blocked = isActive ? isStarter : !canActivate;
   const tooltip = isActive
-    ? (isStarter ? 'スタメン出場中のため変更不可' : '▶ ベンチ外に移動')
-    : (canActivate ? '◀ 登録選手に追加' : `登録枠満員（${ACTIVE_LIMIT}名）`);
+    ? (isStarter ? 'スタメン出場中のため変更不可' : 'ベンチ外に移動')
+    : (canActivate ? '登録選手に追加' : `登録枠満員（${ACTIVE_LIMIT}名）`);
 
   return (
     <div
       title={tooltip}
       onClick={blocked ? undefined : onClick}
-      className={`flex items-center gap-2 px-2 py-1.5 rounded border text-xs select-none transition-colors
+      className={`flex items-center gap-1.5 px-2 py-1.5 rounded border text-xs select-none transition-colors
         ${blocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
         ${isActive
-          ? 'bg-gray-750 border-gray-600 ' + (blocked ? '' : 'hover:bg-red-950/60')
-          : 'bg-gray-800 border-gray-700 ' + (blocked ? '' : 'hover:bg-green-950/60')}
+          ? 'bg-gray-800 border-gray-600 ' + (blocked ? '' : 'hover:bg-red-950/60')
+          : 'bg-gray-900 border-gray-700 ' + (blocked ? '' : 'hover:bg-green-950/60')}
         ${isStarter ? 'border-yellow-600/40' : ''}`}
     >
+      {/* ポジションバッジ */}
       <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded text-[10px] font-bold
         ${isPitcher ? 'bg-blue-700 text-blue-100' : 'bg-emerald-700 text-emerald-100'}`}>
         {POS_NAMES[player.position] || '?'}
       </span>
 
-      <span className={`flex-1 font-medium truncate ${isStarter ? 'text-yellow-300' : 'text-white'}`}>
+      {/* 名前 */}
+      <span className={`w-20 flex-shrink-0 font-medium truncate ${isStarter ? 'text-yellow-300' : 'text-white'}`}>
         {player.name}
-        {isStarter && <span className="ml-1 text-[9px] text-yellow-500/80">先発</span>}
       </span>
 
-      <span className="text-gray-400 flex-shrink-0 text-[10px]">{grade}</span>
-      <span className="text-gray-300 flex-shrink-0 text-[10px] hidden md:inline">{statLine}</span>
+      {/* 学年/年齢 */}
+      <span className="text-gray-500 w-6 text-center flex-shrink-0 text-[10px]">{grade}</span>
 
-      <span className={`flex-shrink-0 font-bold text-[11px]
+      {/* 先発バッジ */}
+      {isStarter && <span className="text-[9px] text-yellow-500 flex-shrink-0 bg-yellow-950/60 px-1 rounded">先発</span>}
+
+      {/* 能力値 */}
+      <div className="flex items-center flex-1 justify-end">
+        {isPitcher ? (
+          <>
+            <Stat label="球速" value={player.pitching?.velocity || 0} low={130} high={145} />
+            <Stat label="制球" value={player.pitching?.control || 0} low={40} high={58} />
+            <Stat label="スタ" value={player.pitching?.stamina || 0} low={40} high={60} />
+            <span className="flex flex-col items-center w-8 flex-shrink-0">
+              <span className="text-[8px] text-gray-600 leading-none">変化球</span>
+              <span className="text-[11px] text-gray-300 leading-none mt-0.5">{player.pitching?.arsenal?.length || 0}種</span>
+            </span>
+          </>
+        ) : (
+          <>
+            <Stat label="ミート" value={player.batting?.meet || 0} low={35} high={52} />
+            <Stat label="パワー" value={player.batting?.power || 0} low={25} high={42} />
+            <Stat label="守備" value={player.fielding?.defense || 0} low={35} high={52} />
+            <Stat label="走力" value={player.physical?.speed || 0} low={30} high={48} />
+            <Stat label="選球眼" value={player.batting?.eye || 0} low={25} high={42} />
+          </>
+        )}
+      </div>
+
+      {/* 切替矢印 */}
+      <span className={`flex-shrink-0 font-bold text-[11px] ml-1
         ${blocked ? 'text-gray-600' : isActive ? 'text-red-400' : 'text-green-400'}`}>
         {isActive ? '▶' : '◀'}
       </span>
@@ -124,6 +160,7 @@ const PosStats = ({ activePlayers }) => {
 const RosterScreen = ({ seasonData, gameMode }) => {
   const [tick, setTick] = useState(0);
   const [activeTab, setActiveTab] = useState('roster');
+  const [sortMode, setSortMode] = useState('position');
   const refresh = () => setTick(v => v + 1);
 
   const userTeamName = seasonData?.userTeamName || Object.keys(TEAMS_DATA || {})[0];
@@ -164,19 +201,20 @@ const RosterScreen = ({ seasonData, gameMode }) => {
 
   const handleAutoSelect = () => {
     autoSelectActive(players);
-    // スタメン選手は強制的にアクティブ維持
     players.filter(p => starterIds.has(p.id)).forEach(p => { p.isActive = true; });
     refresh();
   };
 
-  const sortByPos = (arr) =>
-    [...arr].sort((a, b) => {
-      const ai = POS_ORDER.indexOf(a.position);
-      const bi = POS_ORDER.indexOf(b.position);
-      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-    });
-
-  const groupByPos = (arr) => {
+  const sortAndGroup = (arr) => {
+    if (sortMode === 'score') {
+      return [{ pos: null, players: [...arr].sort((a, b) => playerScore(b) - playerScore(a)) }];
+    }
+    if (sortMode === 'year') {
+      return [{ pos: null, players: [...arr].sort((a, b) =>
+        (b.universityYear || 0) - (a.universityYear || 0) || playerScore(b) - playerScore(a)
+      ) }];
+    }
+    // position
     const map = {};
     for (const p of arr) {
       const pos = p.position || 'other';
@@ -186,12 +224,12 @@ const RosterScreen = ({ seasonData, gameMode }) => {
     return POS_ORDER.filter(pos => map[pos]?.length > 0).map(pos => ({ pos, players: map[pos] }));
   };
 
-  const activeGroups = groupByPos(sortByPos(activePlayers));
-  const inactiveGroups = groupByPos(sortByPos(inactivePlayers));
+  const activeGroups = sortAndGroup(activePlayers);
+  const inactiveGroups = sortAndGroup(inactivePlayers);
 
   if (!isUniversityMode) {
     return (
-      <div className="p-4 max-w-6xl mx-auto">
+      <div className="p-4 max-w-7xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-4">スタメン・ロスター管理</h1>
         <LineupSettingScreen teamName={userTeamName} onBack={null} />
       </div>
@@ -199,7 +237,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   }
 
   return (
-    <div className="p-4 max-w-5xl mx-auto">
+    <div className="p-4 max-w-7xl mx-auto">
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
@@ -247,83 +285,107 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <LineupSettingScreen teamName={userTeamName} onBack={null} />
       )}
 
-      {/* ベンチ登録タブの説明 */}
+      {/* ベンチ登録タブ */}
       {activeTab === 'roster' && (
-      <div className="bg-gray-800/70 rounded p-2.5 mb-4 text-xs text-gray-400">
-        選手をクリックして<span className="text-white">登録選手 ↔ ベンチ外</span>を切り替えます。
-        スタメン出場中（<span className="text-yellow-400">先発</span>表示）は変更不可。
-        <span className="text-blue-400">AI自動選択</span>で投手10名・野手15名を自動登録します。
-      </div>
+        <>
+          {/* 説明 + 並替 */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-gray-800/70 rounded px-3 py-2 text-xs text-gray-400 flex-1">
+              選手をクリックして<span className="text-white font-medium">登録選手 ↔ ベンチ外</span>を切り替えます。
+              <span className="text-yellow-400 ml-2">先発</span>表示中は変更不可。
+              <span className="ml-3 text-green-400">■</span><span className="ml-0.5">高値</span>
+              <span className="ml-2 text-yellow-300">■</span><span className="ml-0.5">平均</span>
+              <span className="ml-2 text-gray-500">■</span><span className="ml-0.5">低値</span>
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0 bg-gray-800/70 rounded px-2 py-1.5">
+              <span className="text-[10px] text-gray-500 mr-1">並替:</span>
+              {[
+                { key: 'position', label: 'ポジション' },
+                { key: 'score',    label: 'スコア順' },
+                { key: 'year',     label: '学年順' },
+              ].map(s => (
+                <button key={s.key} onClick={() => setSortMode(s.key)}
+                  className={`text-[10px] px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 2パネル */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* 登録選手 */}
+            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/40">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-bold text-white">
+                  登録選手
+                  <span className={`ml-1.5 ${isFull ? 'text-red-400' : 'text-gray-400'}`}>
+                    ({activePlayers.length}/{ACTIVE_LIMIT})
+                  </span>
+                </h2>
+                {isFull && <span className="text-[10px] text-red-400 font-bold">満員</span>}
+              </div>
+
+              <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
+                {activeGroups.length === 0
+                  ? <p className="text-gray-500 text-xs text-center py-8">登録選手なし</p>
+                  : activeGroups.map(({ pos, players: ps }, i) => (
+                    <div key={pos || i}>
+                      {pos && (
+                        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-0.5 px-1">
+                          {POS_LABEL[pos] || pos}（{ps.length}）
+                        </div>
+                      )}
+                      <div className="space-y-0.5">
+                        {ps.map(p => (
+                          <PlayerCard key={p.id} player={p} isActive={true}
+                            canActivate={true} isStarter={starterIds.has(p.id)}
+                            onClick={() => handleDeactivate(p)} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            {/* ベンチ外 */}
+            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/40">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-bold text-white">
+                  ベンチ外
+                  <span className="ml-1.5 text-gray-400">({inactivePlayers.length}名)</span>
+                </h2>
+                {isFull && <span className="text-[10px] text-gray-500">枠が満員のため追加不可</span>}
+              </div>
+
+              <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
+                {inactiveGroups.length === 0
+                  ? <p className="text-gray-500 text-xs text-center py-8">
+                      {players.length <= ACTIVE_LIMIT ? '全員が登録済み' : 'ベンチ外なし'}
+                    </p>
+                  : inactiveGroups.map(({ pos, players: ps }, i) => (
+                    <div key={pos || i}>
+                      {pos && (
+                        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-0.5 px-1">
+                          {POS_LABEL[pos] || pos}（{ps.length}）
+                        </div>
+                      )}
+                      <div className="space-y-0.5">
+                        {ps.map(p => (
+                          <PlayerCard key={p.id} player={p} isActive={false}
+                            canActivate={!isFull} isStarter={false}
+                            onClick={() => handleActivate(p)} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+
+          <PosStats activePlayers={activePlayers} />
+        </>
       )}
-
-      {/* 2パネル（ベンチ登録タブのみ表示） */}
-      {activeTab === 'roster' && <div className="grid grid-cols-2 gap-4">
-        {/* 登録選手 */}
-        <div className="bg-gray-800 rounded-lg p-3 flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-2 flex-shrink-0">
-            <h2 className="text-sm font-bold text-white">
-              登録選手
-              <span className={`ml-1.5 ${isFull ? 'text-red-400' : 'text-gray-400'}`}>
-                ({activePlayers.length}/{ACTIVE_LIMIT})
-              </span>
-            </h2>
-            {isFull && <span className="text-[10px] text-red-400 font-bold">満員</span>}
-          </div>
-
-          <div className="overflow-y-auto space-y-2.5 max-h-[560px] pr-0.5">
-            {activeGroups.length === 0
-              ? <p className="text-gray-500 text-xs text-center py-8">登録選手なし</p>
-              : activeGroups.map(({ pos, players: ps }) => (
-                <div key={pos}>
-                  <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-0.5 px-1">
-                    {POS_LABEL[pos] || pos}（{ps.length}）
-                  </div>
-                  <div className="space-y-0.5">
-                    {ps.map(p => (
-                      <PlayerCard key={p.id} player={p} isActive={true}
-                        canActivate={true} isStarter={starterIds.has(p.id)}
-                        onClick={() => handleDeactivate(p)} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-
-        {/* ベンチ外 */}
-        <div className="bg-gray-800 rounded-lg p-3 flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-2 flex-shrink-0">
-            <h2 className="text-sm font-bold text-white">
-              ベンチ外
-              <span className="ml-1.5 text-gray-400">({inactivePlayers.length}名)</span>
-            </h2>
-            {isFull && <span className="text-[10px] text-gray-500">枠が満員のため追加不可</span>}
-          </div>
-
-          <div className="overflow-y-auto space-y-2.5 max-h-[560px] pr-0.5">
-            {inactiveGroups.length === 0
-              ? <p className="text-gray-500 text-xs text-center py-8">
-                  {players.length <= ACTIVE_LIMIT ? '全員が登録済み' : 'ベンチ外なし'}
-                </p>
-              : inactiveGroups.map(({ pos, players: ps }) => (
-                <div key={pos}>
-                  <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-0.5 px-1">
-                    {POS_LABEL[pos] || pos}（{ps.length}）
-                  </div>
-                  <div className="space-y-0.5">
-                    {ps.map(p => (
-                      <PlayerCard key={p.id} player={p} isActive={false}
-                        canActivate={!isFull} isStarter={false}
-                        onClick={() => handleActivate(p)} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-      </div>}
-
-      {activeTab === 'roster' && <PosStats activePlayers={activePlayers} />}
     </div>
   );
 };
