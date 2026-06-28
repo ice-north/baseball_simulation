@@ -3203,6 +3203,31 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
           {/* 大学リーグ順位表 */}
           {WORLD_DATA.initialized && (() => {
+            // 大学モード: ユーザーリーグの順位をWORLD_DATAに同期（simulateUniversityLeagueDateはユーザーリーグをスキップするため）
+            if (isUniversity && seasonData.standings?.length > 0) {
+              const uniInfo = WORLD_DATA.universityLeague;
+              const userRegionId = uniInfo?.userRegion;
+              const userDiv = uniInfo?.userDivision || 1;
+              const hasDivisions = (uniInfo?.numDivisions || 1) >= 2;
+              const league = WORLD_DATA.universityLeagues?.[userRegionId];
+              if (league) {
+                const month = currentDate?.month || 4;
+                const seasonKey = month >= 9 ? 'fall' : 'spring';
+                const seasonObj = league[seasonKey];
+                if (seasonObj) {
+                  const rows = seasonData.standings.map(s => ({
+                    team: s.team, wins: s.wins || 0, losses: s.losses || 0,
+                    draws: s.draws || 0, winRate: s.winRate || 0, gamesPlayed: s.gamesPlayed || 0,
+                  }));
+                  if (hasDivisions) {
+                    seasonObj[`standings${userDiv}`] = rows;
+                  } else {
+                    seasonObj.standings = rows;
+                  }
+                  seasonObj.done = seasonData.phase === 'off_season';
+                }
+              }
+            }
             const uniLeagues = getAllUniversityLeagues();
             if (uniLeagues.length === 0) return null;
             const activeLeagues = uniLeagues.filter(l => l.playedGames > 0 || l.currentSeason !== '終了');
