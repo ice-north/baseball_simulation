@@ -22,8 +22,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [benchFilter, setBenchFilter] = useState('all'); // ポジション別フィルタ
   const [benchCompact, setBenchCompact] = useState(true); // コンパクト表示
   const [compareIds, setCompareIds] = useState([]); // 選手比較用（最大3人）
-  const [releaseConfirm, setReleaseConfirm] = useState(null); // リリース確認対象
-  const [rosterSort, setRosterSort] = useState('position'); // ロスター並替
   const [roleLegendOpen, setRoleLegendOpen] = useState(false); // ロール解説開閉
 
   const team = TEAMS_DATA[teamName];
@@ -1020,7 +1018,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             { key: 'rotation', label: '投手起用',     icon: '⚾' },
             { key: 'defense',  label: '守備分析',     icon: '🛡' },
             { key: 'strategy', label: '作戦指示',     icon: '📋' },
-            { key: 'roster',   label: 'ロスター管理', icon: '📝' },
           ]}
           activeKey={tab}
           onChange={(key) => { setTab(key); setSelectedPitcherId(null); setSwapSource(null); setSelectedBenchPlayer(null); }}
@@ -2698,159 +2695,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   })}
                 </div>
               </div>
-            </div>
-          );
-        })()}
-
-        {tab === 'roster' && (() => {
-          const rosterPlayers = [...team.players].sort((a, b) => {
-            if (rosterSort === 'position') {
-              const posOrder = { pitcher: 0, catcher: 1, first: 2, second: 3, short: 4, third: 5, left: 6, center: 7, right: 8 };
-              return (posOrder[a.position] ?? 9) - (posOrder[b.position] ?? 9);
-            }
-            if (rosterSort === 'age') return (b.age || 0) - (a.age || 0);
-            if (rosterSort === 'name') return (a.name || '').localeCompare(b.name || '');
-            return 0;
-          });
-
-          const inLineupIds = new Set(lineup.filter(e => e.battingOrder >= 1 && e.battingOrder <= (useDH ? 9 : 8)).map(e => e.playerId));
-          const inRotationIds = new Set([
-            ...(team.pitchingRotation?.starters || []),
-            ...(team.pitchingRotation?.middleRelievers || []),
-            ...(team.pitchingRotation?.setupMen || []),
-            ...(team.pitchingRotation?.closer ? [team.pitchingRotation.closer] : []),
-          ]);
-
-          const handleRelease = (player) => {
-            const idx = team.players.findIndex(p => p.id === player.id);
-            if (idx === -1) return;
-            team.players.splice(idx, 1);
-            const lineupIdx = lineup.findIndex(e => e.playerId === player.id);
-            if (lineupIdx !== -1) lineup.splice(lineupIdx, 1);
-            const rot = team.pitchingRotation;
-            if (rot) {
-              rot.starters = (rot.starters || []).filter(id => id !== player.id);
-              rot.middleRelievers = (rot.middleRelievers || []).filter(id => id !== player.id);
-              rot.setupMen = (rot.setupMen || []).filter(id => id !== player.id);
-              if (rot.closer === player.id) rot.closer = null;
-              if (rot.pitcherRoles) delete rot.pitcherRoles[player.id];
-            }
-            setReleaseConfirm(null);
-            setUpdateTrigger(prev => prev + 1);
-          };
-
-          return (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-xl font-bold text-white">ロスター管理</h2>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-xs">並替:</span>
-                  {[
-                    { key: 'position', label: 'ポジション' },
-                    { key: 'age', label: '年齢' },
-                    { key: 'name', label: '名前' },
-                  ].map(s => (
-                    <button key={s.key} onClick={() => setRosterSort(s.key)}
-                      className={`text-xs px-2 py-0.5 rounded ${rosterSort === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
-                      {s.label}
-                    </button>
-                  ))}
-                  <span className="text-gray-500 text-xs ml-2">{team.players.length}人</span>
-                </div>
-              </div>
-
-              <div className="bg-gray-800 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-900/60 text-gray-400 text-xs">
-                      <th className="py-1.5 px-2 text-left w-8">位</th>
-                      <th className="py-1.5 px-2 text-left">選手名</th>
-                      <th className="py-1.5 px-1 text-center w-8">齢</th>
-                      <th className="py-1.5 px-1 text-center w-12">投打</th>
-                      <th className="py-1.5 px-1 text-center w-16">状態</th>
-                      <th className="py-1.5 px-1 text-center w-24">主要能力</th>
-                      <th className="py-1.5 px-1 text-center w-12">疲労</th>
-                      <th className="py-1.5 px-2 text-center w-20">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rosterPlayers.map(player => {
-                      const isInLineup = inLineupIds.has(player.id);
-                      const isInRotation = inRotationIds.has(player.id);
-                      const isPitcher = player.position === 'pitcher';
-                      const p = player.pitching || {};
-                      const b = player.batting || {};
-                      const ph = player.physical || {};
-                      const fatigue = player.fatigue || 0;
-
-                      return (
-                        <tr key={player.id} className="border-t border-gray-700/30 hover:bg-gray-700/30">
-                          <td className="py-1 px-2 text-blue-400 font-bold text-xs">{POSITION_NAMES[player.position]?.charAt(0) || '?'}</td>
-                          <td className="py-1 px-2">
-                            <button onClick={() => setDetailPlayer(player)} className="text-white font-bold hover:text-blue-300 transition text-sm text-left">
-                              {player.name}
-                            </button>
-                          </td>
-                          <td className="py-1 px-1 text-center text-gray-400 text-xs">{player.age || ''}</td>
-                          <td className="py-1 px-1 text-center text-gray-400 text-xs">
-                            {ph.throws === 'left' ? '左' : '右'}{(b.bats || ph.bats) === 'left' ? '左' : (b.bats || ph.bats) === 'switch' ? '両' : '右'}
-                          </td>
-                          <td className="py-1 px-1 text-center">
-                            {isInLineup && <span className="text-[10px] px-1 py-0.5 rounded bg-green-900/60 text-green-400 font-bold">先発</span>}
-                            {!isInLineup && isInRotation && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-900/60 text-blue-400 font-bold">登録</span>}
-                            {!isInLineup && !isInRotation && <span className="text-[10px] px-1 py-0.5 rounded bg-gray-700/60 text-gray-500">控え</span>}
-                          </td>
-                          <td className="py-1 px-1 text-center text-xs">
-                            {isPitcher ? (
-                              <span className="text-gray-300">
-                                <span className="text-gray-500">速</span>{p.velocity || 0}
-                                <span className="text-gray-600 mx-0.5">/</span>
-                                <span className="text-gray-500">制</span>{p.control || 0}
-                              </span>
-                            ) : (
-                              <span className="text-gray-300">
-                                <span className="text-gray-500">ミ</span>{b.meet || 0}
-                                <span className="text-gray-600 mx-0.5">/</span>
-                                <span className="text-gray-500">パ</span>{b.power || 0}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-1 px-1">
-                            <div className="flex items-center gap-1 justify-center">
-                              <div className="w-10 h-1.5 bg-gray-600 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${fatigue >= 60 ? 'bg-red-500' : fatigue >= 40 ? 'bg-yellow-400' : 'bg-green-500'}`}
-                                  style={{ width: `${Math.min(100, fatigue)}%` }} />
-                              </div>
-                              <span className="text-[10px] text-gray-500 w-4">{fatigue}</span>
-                            </div>
-                          </td>
-                          <td className="py-1 px-2 text-center">
-                            {releaseConfirm === player.id ? (
-                              <div className="flex items-center gap-1 justify-center">
-                                <button onClick={() => handleRelease(player)}
-                                  className="text-[10px] px-1.5 py-0.5 rounded bg-red-700 hover:bg-red-600 text-white font-bold">確定</button>
-                                <button onClick={() => setReleaseConfirm(null)}
-                                  className="text-[10px] px-1.5 py-0.5 rounded bg-gray-600 hover:bg-gray-500 text-gray-300">戻す</button>
-                              </div>
-                            ) : (
-                              <button onClick={() => setReleaseConfirm(player.id)}
-                                className={`text-[10px] px-2 py-0.5 rounded border transition ${
-                                  isInLineup || isInRotation
-                                    ? 'border-gray-600/30 text-gray-600 cursor-not-allowed'
-                                    : 'border-red-700/50 text-red-400/80 hover:bg-red-900/30 hover:text-red-300'
-                                }`}
-                                disabled={isInLineup || isInRotation}
-                                title={isInLineup || isInRotation ? 'スタメン/投手起用中の選手は解除してからリリースしてください' : ''}
-                              >リリース</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">スタメン・投手起用に登録中の選手はリリースできません。先に起用を外してください。</p>
             </div>
           );
         })()}
