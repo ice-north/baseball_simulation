@@ -479,10 +479,34 @@ export function distributeHighSchoolGraduates(enrollYear) {
   }));
   scored.sort((a, b) => b.score - a.score);
 
-  const total = scored.length;
+  // === 即戦力志望型 独立直行 ===
+  // B〜C帯スコア範囲で成長力が高い選手が、大学4年待ちより独立リーグを選ぶ
+  // (4年待てない即戦力志向 + 社会人S/Aには届かないがBには行きたくない層)
+  const indImpatient = [];
+  const skipIndices = new Set();
+  const n = scored.length;
+  const impatientLo = Math.floor(n * 0.18);  // B帯下位付近から
+  const impatientHi = Math.floor(n * 0.58);  // C帯上位付近まで
+  for (let i = impatientLo; i < impatientHi && indImpatient.length < 50; i++) {
+    const { player: p } = scored[i];
+    const gp = p.growthPotential || 1.0;
+    if (gp < 1.05) continue;
+    // 成長力が高いほど独立を選ぶ確率が上がる（gp1.05→3%, gp1.20→9%, gp1.35→15%）
+    const prob = Math.min(0.18, (gp - 1.0) * 0.60);
+    if (Math.random() < prob) {
+      p.age = Math.max(p.age || 18, 19);
+      p.origin = 'independent_impatient';
+      p._destinationRank = 'C';
+      indImpatient.push(p);
+      skipIndices.add(i);
+    }
+  }
+
+  const remaining = skipIndices.size > 0 ? scored.filter((_, i) => !skipIndices.has(i)) : scored;
+  const total = remaining.length;
   const university = { S: [], A: [], B: [], C: [], D: [] };
   const corporate = [];
-  const independent = [];
+  const independent = [...indImpatient];
   let cursor = 0;
 
   const uniSlots = getUniversitySlotsByRank();
@@ -495,7 +519,7 @@ export function distributeHighSchoolGraduates(enrollYear) {
     const corpCount = Math.floor(uniCount * corpRatio / (1 - corpRatio - indRatio));
     const indCount = Math.floor(uniCount * indRatio / (1 - corpRatio - indRatio));
     const slotCount = Math.min(uniCount + corpCount + indCount, total - cursor);
-    const slice = scored.slice(cursor, cursor + slotCount);
+    const slice = remaining.slice(cursor, cursor + slotCount);
     cursor += slotCount;
 
     slice.forEach((entry, i) => {
@@ -517,7 +541,7 @@ export function distributeHighSchoolGraduates(enrollYear) {
   }
 
   // 残り（どこにも入れなかった選手）は引退
-  const retired = scored.slice(cursor).map(s => s.player);
+  const retired = remaining.slice(cursor).map(s => s.player);
 
   // 高校生プールをクリア（推薦予約者は残す）
   const reserved = highSchoolPool.players.filter(p => p._universityReserved);

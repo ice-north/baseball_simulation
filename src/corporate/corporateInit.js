@@ -211,12 +211,12 @@ const adjustCorporateAge = (player, isIndependent = false) => {
   let targetAge;
   if (isIndependent) {
     // 独立リーグ: 若手中心（19-29）
-    if (roll < 0.15) targetAge = 19 + Math.floor(Math.random() * 2);      // 19-20 (15%)
-    else if (roll < 0.35) targetAge = 21 + Math.floor(Math.random() * 2); // 21-22 (20%)
-    else if (roll < 0.60) targetAge = 23 + Math.floor(Math.random() * 2); // 23-24 (25%)
-    else if (roll < 0.80) targetAge = 25 + Math.floor(Math.random() * 2); // 25-26 (20%)
-    else if (roll < 0.92) targetAge = 27 + Math.floor(Math.random() * 2); // 27-28 (12%)
-    else targetAge = 29 + Math.floor(Math.random() * 2);                  // 29-30 (8%)
+    if (roll < 0.25) targetAge = 19 + Math.floor(Math.random() * 2);      // 19-20 (25%) HS直行組
+    else if (roll < 0.50) targetAge = 21 + Math.floor(Math.random() * 2); // 21-22 (25%) 短大・早期転向
+    else if (roll < 0.70) targetAge = 23 + Math.floor(Math.random() * 2); // 23-24 (20%) 大学卒・社会人落ち
+    else if (roll < 0.85) targetAge = 25 + Math.floor(Math.random() * 2); // 25-26 (15%)
+    else if (roll < 0.95) targetAge = 27 + Math.floor(Math.random() * 2); // 27-28 (10%)
+    else targetAge = 29 + Math.floor(Math.random() * 2);                  // 29-30 (5%)
   } else {
     // 社会人: 幅広い年齢層（22-34）
     if (roll < 0.10) targetAge = 22 + Math.floor(Math.random() * 2);      // 22-23 (10%)
@@ -247,12 +247,12 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
   candidates.forEach((p, i) => { p.id = corporatePlayerIdBase + i; });
 
   // 独立リーグは球速・制球・変化球すべて社会人より低い
-  const IL_VEL_CAP = { B: 140, C: 133, D: 126 };
-  const IL_VEL_FLOOR = { B: 115, C: 108, D: 100 };
-  const IL_VEL_REDUCTION = { B: -8, C: -12, D: -20 };
-  const IL_CONTROL_OFFSET = { B: -5, C: -10, D: -20 };
-  const IL_CONTROL_CAP = { B: 58, C: 48, D: 38 };
-  const IL_ARSENAL_MULT = { B: 0.70, C: 0.55, D: 0.35 };
+  const IL_VEL_CAP = { B: 145, C: 138, D: 131 };
+  const IL_VEL_FLOOR = { B: 120, C: 114, D: 108 };
+  const IL_VEL_REDUCTION = { B: -5, C: -9, D: -16 };
+  const IL_CONTROL_OFFSET = { B: -3, C: -7, D: -16 };
+  const IL_CONTROL_CAP = { B: 63, C: 53, D: 43 };
+  const IL_ARSENAL_MULT = { B: 0.78, C: 0.62, D: 0.42 };
 
   const velReduction = (isIndependent ? IL_VEL_REDUCTION[rank] : null) ?? (RANK_VELOCITY_REDUCTION[rank] || 0);
   const velCap = (isIndependent ? IL_VEL_CAP[rank] : null) ?? (RANK_VELOCITY_CAP[rank] || 155);
@@ -265,7 +265,7 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
   // キャップ付近に集中しないよう、スケール係数はキャップの60-70%あたりを中央に設定
   // S: 中央45前後(cap72), A: 中央42(cap66), B: 中央37(cap60), C: 中央32(cap52), D: 中央27(cap45)
   const RANK_SCALE = { S: 0.95, A: 0.88, B: 0.80, C: 0.70, D: 0.58 };
-  const INDEPENDENT_RANK_SCALE = { B: 0.63, C: 0.53, D: 0.42 };
+  const INDEPENDENT_RANK_SCALE = { B: 0.71, C: 0.61, D: 0.51 };
   const scale = (isIndependent ? INDEPENDENT_RANK_SCALE[rank] : null) || RANK_SCALE[rank] || 0.70;
 
   // 三角分布ジッター（2つのrandIntの合算で中央寄り正規分布に近似）
@@ -494,7 +494,7 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
 
   // ソフトキャップ: キャップを超過した分を確率的に削減（上限に張り付かない自然な分布）
   const ctrlMax = controlCap + 8;
-  const IL_BATTING_CAP = { B: 52, C: 44, D: 36 };
+  const IL_BATTING_CAP = { B: 60, C: 51, D: 42 };
   const batCap = (isIndependent ? IL_BATTING_CAP[rank] : null) ?? (RANK_BATTING_CAP[rank] || 52);
   const softCap = (val, cap) => {
     if (val <= cap) return val;
@@ -518,7 +518,8 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
 
     // 独立リーグ: 成長力を抑制（プロに届かなかった選手が大半）
     if (isIndependent) {
-      const gpCap = rank === 'B' ? 1.15 : rank === 'C' ? 1.05 : 0.95;
+      // 独立リーグは「高成長の原石」が集まる場 → キャップを社会人より高く設定
+      const gpCap = rank === 'B' ? 1.42 : rank === 'C' ? 1.32 : 1.22;
       p.growthPotential = Math.min(p.growthPotential || 1.0, gpCap);
     }
 
