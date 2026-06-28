@@ -1522,12 +1522,15 @@ export function getUniversityScoutSlots(rank) {
   return UNI_SCOUT_SLOTS[rank] || 5;
 }
 
+// ランク別初期スカウト候補数: 強豪は広く発掘、弱小は絞り込まれた候補のみ
+// 接触数(5人)は全ランク共通 → 弱小ほど候補に占める接触割合が高い
+const INITIAL_SCOUT_COUNT = { S: 16, A: 13, B: 11, C: 9, D: 8 };
+
 export function initUniversityScoutList(teamData, rank) {
   if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
 
   const reputation = teamData?.universityData?.reputation || 30;
-  // 初回は6〜12名発見
-  const initialCount = Math.min(12, Math.max(6, Math.round(5 + reputation / 15)));
+  const initialCount = INITIAL_SCOUT_COUNT[rank] || 10;
 
   // 4月初期発見は20%スタート（以前から目をつけていた選手）
   const candidates = discoverCandidatesFromPool(initialCount, rank, reputation, 20);
@@ -1604,13 +1607,16 @@ function discoverCandidatesFromPool(count, rank, reputation, initialGauge = 0) {
  * 月初に新候補を発見（高校生プールから追加）
  * 月が進むほどスカウト網が広がり、発見数が増える
  */
+// ランク別月次追加発掘数（ベース）
+const MONTHLY_SCOUT_BASE = { S: 6, A: 5, B: 4, C: 3, D: 2 };
+
 export function discoverNewScoutCandidates(rank, reputation, month) {
   // 4月=初期化済、5月〜10月に毎月追加発見
   if (month < 5 || month > 10) return [];
-  // 後半ほど多く発見: 5月=4名、6-7月=5名、8-10月=6名
-  const baseCount = month <= 5 ? 4 : month <= 7 ? 5 : 6;
-  const repBonus = Math.floor(reputation / 30);
-  const count = Math.min(10, baseCount + repBonus);
+  const base = MONTHLY_SCOUT_BASE[rank] || 3;
+  // 後半ほど少し増える（スカウト網が広がる）
+  const phaseBonus = month >= 8 ? 1 : 0;
+  const count = base + phaseBonus;
 
   // 月次追加は10%スタート（途中から注目した選手）
   return discoverCandidatesFromPool(count, rank, reputation, 10);
@@ -1806,7 +1812,8 @@ export function attemptUniversityRecruit(player, uniRank, reputation) {
 // 候補に「接近」して毎日ゲージを蓄積、100%で推薦確定
 // ============================================================
 
-const MAX_CONCURRENT_APPROACHES = { S: 5, A: 4, B: 3, C: 3, D: 2 };
+// 同時接触数は全ランク共通5人。差別化は候補数（S=16人中5、D=8人中5）
+const MAX_CONCURRENT_APPROACHES = { S: 5, A: 5, B: 5, C: 5, D: 5 };
 
 export function getMaxApproaches(rank) {
   return MAX_CONCURRENT_APPROACHES[rank] || 3;
