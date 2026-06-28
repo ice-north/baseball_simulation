@@ -390,7 +390,8 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
       if (fielders.length > 0) {
         const pick = fielders[Math.floor(Math.random() * fielders.length)];
         pick.position = reqPos;
-        if (pick.positionFitness) pick.positionFitness[reqPos] = Math.max(pick.positionFitness[reqPos] || 0, 40);
+        // 転向後のメインポジションは100に設定（元のpositionFitnessを引き継ぎつつ上書き）
+        if (pick.positionFitness) pick.positionFitness[reqPos] = 100;
         const idx = remaining.findIndex(c => c.id === pick.id);
         if (idx >= 0) remaining.splice(idx, 1);
         roster.push(pick);

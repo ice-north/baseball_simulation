@@ -65,7 +65,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
 
   const blocked = isActive ? isStarter : !canActivate;
   const tooltip = isActive
-    ? (isStarter ? 'スタメン出場中のため変更不可' : '▶ 練習生に移動')
+    ? (isStarter ? 'スタメン出場中のため変更不可' : '▶ ベンチ外に移動')
     : (canActivate ? '◀ 登録選手に追加' : `登録枠満員（${ACTIVE_LIMIT}名）`);
 
   return (
@@ -250,7 +250,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
       {/* ベンチ登録タブの説明 */}
       {activeTab === 'roster' && (
       <div className="bg-gray-800/70 rounded p-2.5 mb-4 text-xs text-gray-400">
-        選手をクリックして<span className="text-white">登録選手 ↔ 練習生</span>を切り替えます。
+        選手をクリックして<span className="text-white">登録選手 ↔ ベンチ外</span>を切り替えます。
         スタメン出場中（<span className="text-yellow-400">先発</span>表示）は変更不可。
         <span className="text-blue-400">AI自動選択</span>で投手10名・野手15名を自動登録します。
       </div>
@@ -290,11 +290,11 @@ const RosterScreen = ({ seasonData, gameMode }) => {
           </div>
         </div>
 
-        {/* 練習生 */}
+        {/* ベンチ外 */}
         <div className="bg-gray-800 rounded-lg p-3 flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-2 flex-shrink-0">
             <h2 className="text-sm font-bold text-white">
-              練習生
+              ベンチ外
               <span className="ml-1.5 text-gray-400">({inactivePlayers.length}名)</span>
             </h2>
             {isFull && <span className="text-[10px] text-gray-500">枠が満員のため追加不可</span>}
@@ -303,7 +303,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
           <div className="overflow-y-auto space-y-2.5 max-h-[560px] pr-0.5">
             {inactiveGroups.length === 0
               ? <p className="text-gray-500 text-xs text-center py-8">
-                  {players.length <= ACTIVE_LIMIT ? '全員が登録済み' : '練習生なし'}
+                  {players.length <= ACTIVE_LIMIT ? '全員が登録済み' : 'ベンチ外なし'}
                 </p>
               : inactiveGroups.map(({ pos, players: ps }) => (
                 <div key={pos}>
