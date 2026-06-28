@@ -1529,11 +1529,12 @@ export function initUniversityScoutList(teamData, rank) {
   // 初回は6〜12名発見
   const initialCount = Math.min(12, Math.max(6, Math.round(5 + reputation / 15)));
 
-  const candidates = discoverCandidatesFromPool(initialCount, rank, reputation);
+  // 4月初期発見は20%スタート（以前から目をつけていた選手）
+  const candidates = discoverCandidatesFromPool(initialCount, rank, reputation, 20);
   return candidates;
 }
 
-function discoverCandidatesFromPool(count, rank, reputation) {
+function discoverCandidatesFromPool(count, rank, reputation, initialGauge = 0) {
   if (!highSchoolPool.players || highSchoolPool.players.length === 0) return [];
 
   const existingIds = new Set(
@@ -1592,7 +1593,7 @@ function discoverCandidatesFromPool(count, rank, reputation) {
     p._investigating = false;
     p._investigateReturn = null;
     p.recruitRate = calculateUniversityRecruitRate(p, rank, reputation, 0);
-    p._approachGauge = 0;
+    p._approachGauge = initialGauge;
     p._approaching = false;
     p._rivals = generateRivals(p, rank);
     return p;
@@ -1611,7 +1612,8 @@ export function discoverNewScoutCandidates(rank, reputation, month) {
   const repBonus = Math.floor(reputation / 30);
   const count = Math.min(10, baseCount + repBonus);
 
-  return discoverCandidatesFromPool(count, rank, reputation);
+  // 月次追加は10%スタート（途中から注目した選手）
+  return discoverCandidatesFromPool(count, rank, reputation, 10);
 }
 
 /**
