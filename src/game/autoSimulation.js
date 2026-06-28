@@ -135,8 +135,9 @@ export const generateAILineup = (teamData, teamName) => {
       const bEff = getEffectiveBatting(b);
       const aBat = aEff.meet + aEff.power;
       const bBat = bEff.meet + bEff.power;
-      const aFatigueMalus = aEff.fatiguePenalty >= 8 ? -20 : aEff.fatiguePenalty >= 5 ? -10 : 0;
-      const bFatigueMalus = bEff.fatiguePenalty >= 8 ? -20 : bEff.fatiguePenalty >= 5 ? -10 : 0;
+      // 疲労50超(fatiguePenalty>=2)から成長ペナルティが発生するため、休養を促す強めのマイナス補正
+      const aFatigueMalus = aEff.fatiguePenalty >= 6 ? -50 : aEff.fatiguePenalty >= 4 ? -25 : aEff.fatiguePenalty >= 2 ? -8 : 0;
+      const bFatigueMalus = bEff.fatiguePenalty >= 6 ? -50 : bEff.fatiguePenalty >= 4 ? -25 : bEff.fatiguePenalty >= 2 ? -8 : 0;
       return (bFit * 0.6 + bBat * 0.4 + bFatigueMalus) - (aFit * 0.6 + aBat * 0.4 + aFatigueMalus);
     });
 

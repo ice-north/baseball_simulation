@@ -138,6 +138,10 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
     </th>
   );
 
+  const FORM_SHORT = { overhand: 'OV', threeQuarter: '3Q', sidearm: 'SD', submarine: 'UN' };
+  const FORM_FULL = { overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' };
+  const handLabel = (v) => v === 'right' ? '右' : v === 'left' ? '左' : v === 'switch' ? '両' : '?';
+
   const StatVal = ({ value, isVel, isSta }) => {
     const rank = getAbilityRank(value, isVel, isSta);
     const color = getRankColor(rank);
@@ -241,6 +245,8 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="stamina" w="w-7">ス</SortTh>
                 <SortTh k="growth" w="w-8">成長</SortTh>
                 <th className="py-1 px-1 text-center w-7">知</th>
+                <th className="py-1 px-1 text-center w-10">投打</th>
+                <th className="py-1 px-1 text-center w-8">形</th>
                 {gameMode === 'university' && <th className="py-1 px-1 text-center w-8 text-purple-400">スカ</th>}
               </tr>
             </thead>
@@ -284,6 +290,12 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                     })()}
                   </td>
                   <td className="py-0.5 px-1 text-center text-gray-500">{p.fame || 0}</td>
+                  <td className="py-0.5 px-1 text-center text-gray-400 whitespace-nowrap text-[10px]">
+                    {handLabel(p.physical?.throws)}/{handLabel(p.batting?.bats)}
+                  </td>
+                  <td className="py-0.5 px-1 text-center text-gray-400 text-[10px]">
+                    {p.position === 'pitcher' ? (FORM_SHORT[p.pitching?.form] || '-') : '-'}
+                  </td>
                   {isScoutable && (
                     <td className="py-0.5 px-1 text-center" onClick={e => e.stopPropagation()}>
                       {alreadyScouted
@@ -308,7 +320,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={gameMode === 'university' ? 18 : 17} className="py-8 text-center text-gray-500">
+                <tr><td colSpan={gameMode === 'university' ? 20 : 19} className="py-8 text-center text-gray-500">
                   {sources.highschool && !sources.university && !sources.released && !sources.teams && highSchoolPool.players.length === 0
                     ? '高校生プールは4月に生成されます。4月以降に再度確認してください。'
                     : sources.highschool && highSchoolPool.players.length === 0
@@ -381,7 +393,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   ))}
                   <div className="flex justify-between">
                     <span className="text-gray-400">フォーム</span>
-                    <span className="text-gray-300">{selectedPlayer.pitching?.form || '-'}</span>
+                    <span className="text-gray-300">{FORM_FULL[selectedPlayer.pitching?.form] || '-'}</span>
                   </div>
                   {(selectedPlayer.pitching?.arsenal || []).filter(a => a.name !== 'ストレート' && a.type !== 'straight').map((a, i) => (
                     <div key={i} className="flex justify-between">
@@ -397,7 +409,8 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   {[['成長率', (selectedPlayer.growthPotential || 1.0).toFixed(2)],
                     ['体力', selectedPlayer.physical?.bodyStamina], ['回復', selectedPlayer.physical?.recovery],
                     ['知名度', selectedPlayer.fame || 0],
-                    ['投', selectedPlayer.physical?.throws], ['打', selectedPlayer.batting?.bats],
+                    ['投', selectedPlayer.physical?.throws ? handLabel(selectedPlayer.physical.throws) + '投' : '-'],
+                    ['打', selectedPlayer.batting?.bats ? handLabel(selectedPlayer.batting.bats) + '打' : '-'],
                   ].map(([label, val]) => (
                     <div key={label} className="flex justify-between">
                       <span className="text-gray-400">{label}</span>
