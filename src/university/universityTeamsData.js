@@ -32,8 +32,8 @@ export const UNIVERSITY_REGIONS = [
   { id: 'keiji', name: '京滋大学野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'kansai', name: '関西学生野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'kansai_rk', name: '関西六大学野球リーグ', teamCount: 6, divisions: 1 },
-  { id: 'hanshin', name: '阪神大学野球リーグ', teamCount: 6, divisions: 1 },
-  { id: 'kinki', name: '近畿学生野球リーグ', teamCount: 6, divisions: 1 },
+  { id: 'hanshin', name: '阪神大学野球リーグ', teamCount: 12, divisions: 2 },
+  { id: 'kinki', name: '近畿学生野球リーグ', teamCount: 12, divisions: 2 },
   // === 中国・四国 ===
   { id: 'hiroshima_rk', name: '広島六大学野球リーグ', teamCount: 6, divisions: 1 },
   { id: 'chugoku', name: '中国地区大学野球リーグ', teamCount: 12, divisions: 2 },
@@ -226,21 +226,35 @@ export const UNIVERSITY_TEAMS = [
   { id: 137, name: '日本福祉大学', region: 'aichi', rank: 'C', budget: 40, specialties: ['defense', 'versatility'] },
   { id: 138, name: '南山大学', region: 'aichi', rank: 'D', budget: 40, specialties: ['mental'] },
 
-  // ========== 阪神大学 1部（新規リーグ）==========
-  { id: 139, name: '天理大学', region: 'hanshin', rank: 'A', budget: 70, specialties: ['athletic', 'power', 'defense', 'stamina'] },
-  { id: 140, name: '大阪体育大学', region: 'hanshin', rank: 'B', budget: 55, specialties: ['athletic', 'stamina', 'power'] },
+  // ========== 阪神大学 1部 ==========
   { id: 141, name: '大阪産業大学', region: 'hanshin', rank: 'B', budget: 55, specialties: ['power', 'technique', 'athletic'] },
-  { id: 142, name: '甲南大学', region: 'hanshin', rank: 'C', budget: 45, specialties: ['technique', 'mental'] },
-  { id: 143, name: '大阪電気通信大学', region: 'hanshin', rank: 'C', budget: 40, specialties: ['stamina', 'defense'] },
+  { id: 139, name: '天理大学', region: 'hanshin', rank: 'A', budget: 70, specialties: ['athletic', 'power', 'defense', 'stamina'] },
   { id: 144, name: '関西国際大学', region: 'hanshin', rank: 'C', budget: 45, specialties: ['versatility', 'athletic'] },
+  { id: 143, name: '大阪電気通信大学', region: 'hanshin', rank: 'C', budget: 40, specialties: ['stamina', 'defense'] },
+  { id: 140, name: '大阪体育大学', region: 'hanshin', rank: 'B', budget: 55, specialties: ['athletic', 'stamina', 'power'] },
+  { id: 142, name: '甲南大学', region: 'hanshin', rank: 'C', budget: 45, specialties: ['technique', 'mental'] },
+  // ========== 阪神大学 2部 ==========
+  { id: 219, name: '関西外国語大学', region: 'hanshin', rank: 'C', budget: 40, specialties: ['mental', 'technique'] },
+  { id: 220, name: '桃山学院大学', region: 'hanshin', rank: 'C', budget: 40, specialties: ['technique', 'versatility'] },
+  { id: 150, name: '摂南大学', region: 'hanshin', rank: 'C', budget: 45, specialties: ['technique', 'versatility'] },
+  { id: 221, name: '追手門学院大学', region: 'hanshin', rank: 'C', budget: 40, specialties: ['athletic', 'mental'] },
+  { id: 147, name: '帝塚山大学', region: 'hanshin', rank: 'C', budget: 45, specialties: ['athletic', 'defense'] },
+  { id: 222, name: '大阪経済法科大学', region: 'hanshin', rank: 'D', budget: 35, specialties: ['mental'] },
 
-  // ========== 近畿学生 1部（新規リーグ）==========
+  // ========== 近畿学生 1部 ==========
   { id: 145, name: '奈良学園大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['defense', 'technique'] },
-  { id: 146, name: '大阪大谷大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['technique', 'stamina'] },
-  { id: 147, name: '帝塚山大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['athletic', 'defense'] },
   { id: 148, name: '和歌山大学', region: 'kinki', rank: 'D', budget: 40, specialties: ['mental'] },
+  { id: 223, name: '神戸医療未来大学', region: 'kinki', rank: 'C', budget: 40, specialties: ['stamina', 'defense'] },
+  { id: 224, name: '阪南大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['power', 'athletic'] },
   { id: 149, name: '大阪工業大学', region: 'kinki', rank: 'C', budget: 40, specialties: ['power', 'stamina'] },
-  { id: 150, name: '摂南大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['technique', 'versatility'] },
+  { id: 225, name: '大阪公立大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['technique', 'mental'] },
+  // ========== 近畿学生 2部 ==========
+  { id: 226, name: '大阪観光大学', region: 'kinki', rank: 'D', budget: 35, specialties: ['versatility'] },
+  { id: 227, name: '神戸大学', region: 'kinki', rank: 'C', budget: 40, specialties: ['mental', 'technique'] },
+  { id: 228, name: '大阪大学', region: 'kinki', rank: 'C', budget: 40, specialties: ['mental', 'technique'] },
+  { id: 146, name: '大阪大谷大学', region: 'kinki', rank: 'C', budget: 45, specialties: ['technique', 'stamina'] },
+  { id: 229, name: '奈良教育大学', region: 'kinki', rank: 'D', budget: 35, specialties: ['defense', 'mental'] },
+  { id: 230, name: '大阪教育大学', region: 'kinki', rank: 'D', budget: 35, specialties: ['mental'] },
 
   // ========== 四国地区大学（新規リーグ）==========
   { id: 151, name: '四国学院大学', region: 'shikoku', rank: 'B', budget: 55, specialties: ['athletic', 'technique', 'defense'] },
