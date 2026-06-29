@@ -46,7 +46,15 @@ const buildGridOrder = (npbStandings) => {
   return grid;
 };
 
-const KNOWN_ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位', 'ドラフト4位', 'ドラフト5位', 'ドラフト6位'];
+const KNOWN_ROUND_ORDER = ['ドラフト1位', 'ドラフト2位', 'ドラフト3位', 'ドラフト4位', 'ドラフト5位', 'ドラフト6位', 'ドラフト7位', 'ドラフト8位', 'ドラフト9位', 'ドラフト10位'];
+const sortRoundLabel = (label) => {
+  const idx = KNOWN_ROUND_ORDER.indexOf(label);
+  if (idx >= 0) return idx;
+  const regularMatch = label.match(/ドラフト(\d+)位/);
+  if (regularMatch) return parseInt(regularMatch[1]) - 1;
+  if (label.startsWith('育成')) return 100 + parseInt(label.match(/\d+/)?.[0] || '0');
+  return 999;
+};
 
 const ROUND_STYLES = {
   'ドラフト1位': { badge: 'bg-red-600 text-white shadow-[0_0_8px_rgba(239,68,68,0.6)]', border: 'border-l-4 border-red-500', glow: 'shadow-[0_2px_16px_rgba(239,68,68,0.18)]' },
@@ -159,11 +167,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     });
     const orderMap = {};
     KNOWN_ROUND_ORDER.forEach((r, i) => { orderMap[r] = i; });
-    rounds.sort((a, b) => {
-      const oa = orderMap[a] ?? (a.startsWith('育成') ? 100 + parseInt(a.match(/\d+/)?.[0] || '0') : 999);
-      const ob = orderMap[b] ?? (b.startsWith('育成') ? 100 + parseInt(b.match(/\d+/)?.[0] || '0') : 999);
-      return oa - ob;
-    });
+    rounds.sort((a, b) => sortRoundLabel(a) - sortRoundLabel(b));
     return { roundData: data, activeRounds: rounds };
   }, [draftedPlayers]);
 
@@ -808,12 +812,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
 
   const missHistory = useMemo(() => getLotteryMissHistory(firstRoundData), [firstRoundData]);
 
-  const sortRound = (label) => {
-    const idx = KNOWN_ROUND_ORDER.indexOf(label);
-    if (idx >= 0) return idx;
-    if (label.startsWith('育成')) return 100 + parseInt(label.match(/\d+/)?.[0] || '0');
-    return 999;
-  };
+  const sortRound = sortRoundLabel;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
@@ -886,12 +885,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
   const myTeamProBonus = proBonus?.filter(b => b.teamName === userTeamName) || [];
   const myTeamNearMiss = nearMissPlayers?.filter(n => n.teamName === userTeamName) || [];
 
-  const sortRound = (label) => {
-    const idx = KNOWN_ROUND_ORDER.indexOf(label);
-    if (idx >= 0) return idx;
-    if (label.startsWith('育成')) return 100 + parseInt(label.match(/\d+/)?.[0] || '0');
-    return 999;
-  };
+  const sortRound = sortRoundLabel;
 
   return (
     <div className="p-4 max-w-3xl mx-auto">
