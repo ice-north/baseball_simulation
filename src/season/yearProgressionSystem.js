@@ -1530,7 +1530,11 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
     const isUserTeam = teamName === seasonData.userTeamName;
     const maxRoster = isUserTeam ? 60 : Infinity;
     const targetSize = Math.min(getUniversityTargetRosterSize(rank), maxRoster);
-    const neededCount = Math.max(0, Math.max(graduates.length, targetSize - remaining.length) - scoutedPlayers.length);
+    const rawNeeded = Math.max(0, Math.max(graduates.length, targetSize - remaining.length) - scoutedPlayers.length);
+    // 一般入部はスカウト推薦合計の約半数に制限（スカウト未実施時は通常補充）
+    const neededCount = (isUserTeam && scoutedPlayers.length > 0)
+      ? Math.min(rawNeeded, Math.ceil(scoutedPlayers.length / 2))
+      : rawNeeded;
     const newPlayers = generateUniversityFreshmen(neededCount, rank, teamName, teamData, currentYear);
     const allNewPlayers = [...scoutedPlayers, ...newPlayers];
 
