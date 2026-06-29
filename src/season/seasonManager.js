@@ -90,7 +90,7 @@ export const getCurrentPhase = (month, day, options) => {
     if (month === 10 && day < 24) return SEASON_PHASES.REGULAR_SEASON;
     if (month === 10 && day === 24) return SEASON_PHASES.DRAFT;
     if (month === 10 && day > 24) return SEASON_PHASES.REGULAR_SEASON;
-    if (month === 11 && day <= 14) return SEASON_PHASES.REGULAR_SEASON;
+    if (month === 11 && day < 30) return SEASON_PHASES.REGULAR_SEASON; // 明治神宮大会は11月中旬〜下旬
     return SEASON_PHASES.OFF_SEASON;
   }
 

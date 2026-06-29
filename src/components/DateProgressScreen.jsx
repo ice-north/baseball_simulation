@@ -489,7 +489,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         return triggerPhaseEvent(newData, isCorporate ? 'corporate_departure' : 'contract');
       }
     }
-    if (month === 11 && day === 10 && newPhase === SEASON_PHASES.TRYOUT) {
+    if (month === 11 && day === 10 && (isUniversity || newPhase === SEASON_PHASES.TRYOUT)) {
       if (isUniversity) {
         return triggerPhaseEvent(newData, 'university_scout');
       } else {
@@ -500,7 +500,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (month === 11 && day === 30 && isCorporate && !seasonData?.settings?.clubMode) {
       return triggerPhaseEvent(newData, 'budget_settlement');
     }
-    if (month >= 12 || (month === 11 && day >= 30) || (isUniversity && month === 11 && day >= 15)) {
+    if (month >= 12 || (month === 11 && day >= 30)) {
       newData = { ...newData, phase: SEASON_PHASES.OFF_SEASON };
       return triggerPhaseEvent(newData, 'offseason');
     }
