@@ -144,7 +144,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     } else {
       if (selectionPicked.length >= selectionSlots) return;
       const orig = highSchoolPool.players?.find(hp => hp.id === player.id);
-      if (orig) orig._universityReserved = userTeamName;
+      if (orig) { orig._universityReserved = userTeamName; orig._isSelectionPick = true; }
       setSelectionPicked(prev => [...prev, player]);
     }
   };

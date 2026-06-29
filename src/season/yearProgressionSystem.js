@@ -1511,7 +1511,7 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
         p.universityTeamId = teamData.universityTeamId;
         p.universityTeamName = teamName;
         p.universityYear = 1;
-        p.recruitType = 'scouted';
+        p.recruitType = p._isSelectionPick ? 'selection' : 'scouted';
         p.age = 19;
         p.isStarter = false;
         p.battingOrder = 0;

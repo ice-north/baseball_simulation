@@ -3,7 +3,15 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, BALL_EFFECTS, PITCHING_FORM_EFFECTS, getAbilityColor } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
 
-const TeamInfoScreen = () => {
+const RECRUIT_TYPE_LABEL = {
+  scouted: { label: '推薦', cls: 'text-blue-400' },
+  selection: { label: 'セレクション', cls: 'text-green-400' },
+  recommended: { label: 'AI推薦', cls: 'text-gray-400' },
+  general: { label: '一般', cls: 'text-gray-500' },
+};
+
+const TeamInfoScreen = ({ gameMode }) => {
+  const isUniversity = gameMode === 'university';
   const teamNames = Object.keys(TEAMS_DATA || {});
   const [selectedTeam, setSelectedTeam] = useState(teamNames[0] || 'チームA');
   const [pitcherSortKey, setPitcherSortKey] = useState(null);
@@ -607,12 +615,14 @@ const TeamInfoScreen = () => {
           <p className="text-xs text-gray-500 mb-3">クリックで詳細表示</p>
           {pitchers.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-600 text-gray-200">
                     <SortableHeader label="名前" sortKey="name" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} align="left" />
                     <SortableHeader label="年齢" sortKey="age" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <th className="px-2 py-2 text-center">投</th>
+                    {isUniversity && <th className="px-2 py-2 text-center">出身校</th>}
+                    {isUniversity && <th className="px-2 py-2 text-center">入部</th>}
                     <SortableHeader label="球速" sortKey="velocity" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="制球" sortKey="control" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="スタミナ" sortKey="stamina" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
@@ -634,12 +644,15 @@ const TeamInfoScreen = () => {
                   {pitchers.map((player, index) => {
                     const stats = player.seasonStats?.pitching;
                     const gradeLabel = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
+                    const rt = RECRUIT_TYPE_LABEL[player.recruitType] || null;
                     return (
                       <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-800'}`}
                         onClick={() => { setSelectedPlayer(player); setDetailTab('ability'); }}>
-                        <td className="px-2 py-1 text-white font-medium">{player.name}</td>
+                        <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{gradeLabel}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}</td>
+                        {isUniversity && <td className="px-2 py-1 text-gray-400 text-center whitespace-nowrap">{player.highSchool?.name || '—'}</td>}
+                        {isUniversity && <td className={`px-2 py-1 text-center whitespace-nowrap font-bold ${rt ? rt.cls : 'text-gray-600'}`}>{rt ? rt.label : '—'}</td>}
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.velocity)}`}>{player.pitching?.velocity || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.control)}`}>{player.pitching?.control || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(Math.min(99, Math.floor((player.pitching?.stamina || 0) / 2)))}`}>{player.pitching?.stamina || '-'}</td>
@@ -674,13 +687,15 @@ const TeamInfoScreen = () => {
           <p className="text-xs text-gray-500 mb-3">クリックで詳細表示</p>
           {fielders.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-600 text-gray-200">
                     <SortableHeader label="名前" sortKey="name" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} align="left" />
                     <th className="px-2 py-2 text-center">守備</th>
                     <SortableHeader label="年齢" sortKey="age" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <th className="px-2 py-2 text-center">投打</th>
+                    {isUniversity && <th className="px-2 py-2 text-center">出身校</th>}
+                    {isUniversity && <th className="px-2 py-2 text-center">入部</th>}
                     <SortableHeader label="ミート" sortKey="meet" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="パワー" sortKey="power" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
                     <SortableHeader label="走力" sortKey="speed" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
@@ -704,13 +719,16 @@ const TeamInfoScreen = () => {
                   {fielders.map((player, index) => {
                     const stats = player.seasonStats?.batting;
                     const gradeLabel = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
+                    const rt = RECRUIT_TYPE_LABEL[player.recruitType] || null;
                     return (
                       <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-800'}`}
                         onClick={() => { setSelectedPlayer(player); setDetailTab('ability'); }}>
-                        <td className="px-2 py-1 text-white font-medium">{player.name}</td>
+                        <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{POSITION_NAMES[player.position]}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{gradeLabel}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</td>
+                        {isUniversity && <td className="px-2 py-1 text-gray-400 text-center whitespace-nowrap">{player.highSchool?.name || '—'}</td>}
+                        {isUniversity && <td className={`px-2 py-1 text-center whitespace-nowrap font-bold ${rt ? rt.cls : 'text-gray-600'}`}>{rt ? rt.label : '—'}</td>}
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.meet)}`}>{player.batting?.meet || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.power)}`}>{player.batting?.power || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.speed)}`}>{player.physical?.speed || '-'}</td>
