@@ -135,11 +135,18 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   };
 
   const handleSelectionPick = (player) => {
-    if (selectionPicked.length >= selectionSlots) return;
-    const orig = highSchoolPool.players?.find(hp => hp.id === player.id);
-    if (orig) orig._universityReserved = userTeamName;
-    setSelectionPicked(prev => [...prev, player]);
-    setSelectionCandidates(prev => prev.filter(p => p.id !== player.id));
+    const alreadyPicked = selectionPicked.some(p => p.id === player.id);
+    if (alreadyPicked) {
+      // 合格解除
+      const orig = highSchoolPool.players?.find(hp => hp.id === player.id);
+      if (orig && orig._universityReserved === userTeamName) orig._universityReserved = null;
+      setSelectionPicked(prev => prev.filter(p => p.id !== player.id));
+    } else {
+      if (selectionPicked.length >= selectionSlots) return;
+      const orig = highSchoolPool.players?.find(hp => hp.id === player.id);
+      if (orig) orig._universityReserved = userTeamName;
+      setSelectionPicked(prev => [...prev, player]);
+    }
   };
 
   const handleSelectionFinalize = () => {
@@ -299,6 +306,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                   <div key={i} className="bg-blue-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
                     <span className="text-white font-bold">{p.name}</span>
                     <span className="text-blue-300">{POSITION_NAMES[p.position]?.slice(0, 2)}</span>
+                    <span className="text-blue-400/60">{p.highSchool?.name || ''}</span>
                   </div>
                 ))}
               </div>
@@ -359,11 +367,13 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                   <tbody>
                     {selectionCandidates.map(p => {
                       const sa = p.scoutedAbilities || {};
-                      const canPick = selectionPicked.length < selectionSlots;
+                      const isPicked = selectionPicked.some(sp => sp.id === p.id);
+                      const canAdd = !isPicked && selectionPicked.length < selectionSlots;
                       return (
-                        <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-700/20 transition">
+                        <tr key={p.id} className={`border-b border-gray-800/50 hover:bg-gray-700/20 transition ${isPicked ? 'bg-green-950/30' : ''}`}>
                           <td className="py-1.5 px-1 whitespace-nowrap">
-                            <span className="text-white font-bold">{p.name}</span>
+                            {isPicked && <span className="text-green-400 text-[9px] mr-1">合格</span>}
+                            <span className={`font-bold ${isPicked ? 'text-green-300' : 'text-white'}`}>{p.name}</span>
                           </td>
                           <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
                           <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{throwLabel(p.physical?.throws)}{batLabel(p.batting?.bats)}</td>
@@ -388,11 +398,18 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.professionalism)}</td>
                           <td className={`py-1.5 px-1 text-center font-bold ${gpColor(p.growthPotential)}`}>{gpLabel(p.growthPotential)}</td>
                           <td className="py-1.5 px-1">
-                            {canPick && (
+                            {isPicked ? (
                               <button onClick={() => handleSelectionPick(p)}
-                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-800 text-green-200 hover:bg-green-700 transition">
-                                合格
+                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-800 text-green-200 hover:bg-red-900 hover:text-red-200 transition">
+                                合格 ✕
                               </button>
+                            ) : canAdd ? (
+                              <button onClick={() => handleSelectionPick(p)}
+                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-300 hover:bg-green-800 hover:text-green-200 transition">
+                                合格にする
+                              </button>
+                            ) : (
+                              <span className="text-gray-600 text-[10px]">枠なし</span>
                             )}
                           </td>
                         </tr>
@@ -461,7 +478,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                 <div key={i} className="bg-green-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
                   <span className="text-white font-bold">{p.name}</span>
                   <span className="text-green-300">{POSITION_NAMES[p.position]?.slice(0, 2)}</span>
-                  <span className="text-green-400/60">{p._scoutSource}</span>
+                  <span className="text-green-400/60">{p.highSchool?.name || p._scoutSource || ''}</span>
                 </div>
               ))}
             </div>
