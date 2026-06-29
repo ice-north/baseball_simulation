@@ -982,6 +982,23 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     highSchoolPool.players = highSchoolPool.players.filter(p => !hsDraftedIds.has(p.id));
   }
 
+  // 大学スポーツ推薦スカウトリストの候補にNPB指名情報を付与（候補はdeep copyのためpool削除では反映されない）
+  if (WORLD_DATA._universityScout?.candidates) {
+    const hsDraftMap = new Map();
+    draftedPlayers.forEach(({ playerId, npbTeam, draftRound, source }) => {
+      if (source === 'highschool') hsDraftMap.set(playerId, { team: npbTeam, round: draftRound });
+    });
+    if (hsDraftMap.size > 0) {
+      WORLD_DATA._universityScout.candidates.forEach(c => {
+        const info = hsDraftMap.get(c.id);
+        if (info) {
+          c._npbDrafted = info;
+          c._approaching = false; // 接近中止
+        }
+      });
+    }
+  }
+
   const uniDraftedIds = new Set(draftedPlayers.filter(d => d.source === 'university').map(d => d.playerId));
   if (uniDraftedIds.size > 0) {
     Object.keys(universityPool).forEach(enrollYear => {

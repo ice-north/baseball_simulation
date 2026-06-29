@@ -524,7 +524,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     const canApproach = !p._approaching && approachingCount < maxApproaches && remainingSlots > 0;
                     const rival = getRivalInfo(p);
                     return (
-                      <tr key={p.id} className={`border-b border-gray-800/50 hover:bg-gray-700/20 transition ${p._approaching ? 'bg-cyan-900/10' : ''}`}>
+                      <tr key={p.id} className={`border-b border-gray-800/50 hover:bg-gray-700/20 transition ${p._npbDrafted ? 'bg-red-950/20 opacity-70' : p._approaching ? 'bg-cyan-900/10' : ''}`}>
                         <td className={`py-1.5 px-1 text-center font-black ${recColor(recGrade)}`}>{recGrade}</td>
                         <td className="py-1.5 px-1 whitespace-nowrap">
                           <div className="flex items-center gap-1">
@@ -577,7 +577,13 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           )}
                         </td>
                         <td className="py-1.5 px-1 whitespace-nowrap" style={{ minWidth: '80px' }}>
-                          {rival && rival.count > 0 ? (
+                          {p._npbDrafted ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-red-400 text-[9px] font-bold">NPB指名済</span>
+                              <span className="text-red-300 text-[8px]">{p._npbDrafted.team.replace('ジャイアンツ','G').replace('タイガース','T').replace('ベイスターズ','De').replace('カープ','C').replace('ドラゴンズ','D').replace('スワローズ','S').replace('バファローズ','Bs').replace('ホークス','H').replace('ライオンズ','L').replace('ゴールデンイーグルス','E').replace('マリーンズ','M').replace('ファイターズ','F')}</span>
+                              <span className="text-red-500 text-[8px]">{p._npbDrafted.round}</span>
+                            </div>
+                          ) : rival && rival.count > 0 ? (
                             <div className="flex flex-col gap-0.5">
                               {rival.rivals.map((r, ri) => (
                                 <div key={ri} className="flex items-center gap-1">
@@ -597,6 +603,11 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           )}
                         </td>
                         <td className="py-1.5 px-1">
+                          {p._npbDrafted ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-500">
+                              交渉不可
+                            </span>
+                          ) : (
                           <div className="flex gap-1">
                             <button onClick={() => handleWatch(p.id)}
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
@@ -628,6 +639,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                               </button>
                             )}
                           </div>
+                          )}
                         </td>
                       </tr>
                     );
