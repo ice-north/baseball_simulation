@@ -1755,9 +1755,10 @@ export function processUniversityScoutDay(candidates, currentDate, uniRank, repu
       const c = s.candidate;
       const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
       if (orig) orig._universityReserved = s.rivalName;
+      // リストから削除せず_reservedByを付与して残す（競合欄に進学先を表示するため）
+      c._reservedBy = s.rivalName;
+      c._approaching = false;
       wd._rivalStolen.push({ name: c.name, position: c.position, rivalName: s.rivalName, rivalRank: s.rivalRank });
-      const idx = candidates.indexOf(c);
-      if (idx >= 0) candidates.splice(idx, 1);
     }
   }
 
