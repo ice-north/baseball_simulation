@@ -3,6 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
+import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage } from '../utils/indexedDBStorage.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
@@ -123,6 +124,13 @@ export const saveGameToSlot = async (slotIndex, gameState) => {
       corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? { done: true } : null,
       universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
       _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
+      _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
+      _uniTeamRepData: UNIVERSITY_TEAMS.reduce((acc, t) => {
+        if (t.reputation !== undefined || t.reputationHistory || t.rankPosition !== undefined) {
+          acc[t.name] = { rank: t.rank, reputation: t.reputation, reputationHistory: t.reputationHistory, rankPosition: t.rankPosition };
+        }
+        return acc;
+      }, {}),
     } : null;
 
     const saveData = {
@@ -225,6 +233,19 @@ export const loadGameFromSlot = async (slotIndex) => {
       WORLD_DATA.corporateRegionalTournament = wd.corporateRegionalTournament || null;
       WORLD_DATA.universityLeague = wd.universityLeague || null;
       WORLD_DATA._universityScout = wd._universityScout || null;
+      WORLD_DATA._teamRanking = wd._teamRanking || null;
+      // UNIVERSITY_TEAMSの注目度データを復元
+      if (wd._uniTeamRepData) {
+        for (const teamDef of UNIVERSITY_TEAMS) {
+          const d = wd._uniTeamRepData[teamDef.name];
+          if (d) {
+            if (d.rank) teamDef.rank = d.rank;
+            if (d.reputation !== undefined) teamDef.reputation = d.reputation;
+            if (d.reputationHistory) teamDef.reputationHistory = d.reputationHistory;
+            if (d.rankPosition !== undefined) teamDef.rankPosition = d.rankPosition;
+          }
+        }
+      }
     }
 
     // 大学プール復元

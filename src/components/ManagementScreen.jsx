@@ -35,6 +35,7 @@ import ClubRecruitScreen from './ClubRecruitScreen.jsx';
 import BudgetSettlementScreen from './BudgetSettlementScreen.jsx';
 import UniversityScoutScreen from './UniversityScoutScreen.jsx';
 import PlayerSearchScreen from './PlayerSearchScreen.jsx';
+import TeamRankingScreen from './TeamRankingScreen.jsx';
 
 const ManagementScreen = ({
   managementView,
@@ -572,6 +573,11 @@ const ManagementScreen = ({
     userTeamName={userTeamName}
   />;
   if (managementView === 'ranking') return <AbilityRankingScreen />;
+  if (managementView === 'team_ranking') return <TeamRankingScreen
+    userTeamName={userTeamName}
+    gameMode={gameMode}
+    onBack={() => setManagementView('dateprogress')}
+  />;
   if (managementView === 'halloffame') return <HallOfFameScreen
     hallOfFamePlayers={hallOfFamePlayers}
     allTeams={TEAMS_DATA}
