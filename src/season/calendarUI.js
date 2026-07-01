@@ -45,9 +45,10 @@ export const getGamesForDate = (schedule, date) => {
  * @param {number} month - 月
  * @returns {Array} チーム別カレンダー
  */
-export const generateTeamCalendar = (schedule, teamName, year, month) => {
+export const generateTeamCalendar = (schedule, teamName, year, month, options = {}) => {
   const teamSchedule = getTeamSchedule(schedule, teamName);
   const calendar = generateMonthCalendar(year, month, teamSchedule);
+  const { universityMode = false } = options;
 
   return calendar.map(day => {
     if (!day.day) return day;
@@ -59,11 +60,13 @@ export const generateTeamCalendar = (schedule, teamName, year, month) => {
     // 11月30日は「シーズン終了」を表示
     if (month === 11 && day.day === 30) {
       eventLabel = 'シーズン終了';
+    } else if (universityMode && month === 11 && day.day === 29) {
+      eventLabel = '推薦締切';
     } else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
     else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
     else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
     else if (phase === SEASON_PHASES.CONTRACT) eventLabel = '契約更改';
-    else if (phase === SEASON_PHASES.TRYOUT) eventLabel = 'トライアウト';
+    else if (!universityMode && phase === SEASON_PHASES.TRYOUT) eventLabel = 'トライアウト';
     else if (phase === SEASON_PHASES.OFF_SEASON) eventLabel = 'オフシーズン';
 
     const game = day.games[0]; // チーム別なので1日1試合

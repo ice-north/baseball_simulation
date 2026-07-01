@@ -141,7 +141,7 @@ const ManagementScreen = ({
     }}
   />;
   if (managementView === 'university_scout') {
-    const isForced = seasonData.currentDate?.month === 11 && seasonData.currentDate?.day >= 10;
+    const isForced = seasonData.currentDate?.month === 11 && seasonData.currentDate?.day >= 29;
     return <UniversityScoutScreen
       seasonData={seasonData}
       onBack={!isForced ? () => setManagementView('dateprogress') : null}

@@ -489,13 +489,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         return triggerPhaseEvent(newData, isCorporate ? 'corporate_departure' : 'contract');
       }
     }
-    if (month === 11 && day === 10 && (isUniversity || newPhase === SEASON_PHASES.TRYOUT)) {
-      if (isUniversity) {
-        return triggerPhaseEvent(newData, 'university_scout');
-      } else {
-        const isClub = seasonData?.settings?.clubMode;
-        return triggerPhaseEvent(newData, isCorporate ? (isClub ? 'club_recruit' : 'corporate_scout') : 'tryout');
-      }
+    if (month === 11 && day === 10 && !isUniversity && newPhase === SEASON_PHASES.TRYOUT) {
+      const isClub = seasonData?.settings?.clubMode;
+      return triggerPhaseEvent(newData, isCorporate ? (isClub ? 'club_recruit' : 'corporate_scout') : 'tryout');
+    }
+    if (month === 11 && day === 29 && isUniversity) {
+      return triggerPhaseEvent(newData, 'university_scout');
     }
     if (month === 11 && day === 30 && isCorporate && !seasonData?.settings?.clubMode) {
       return triggerPhaseEvent(newData, 'budget_settlement');

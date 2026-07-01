@@ -43,12 +43,20 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
     return null;
   }
 
-  // 11月10日〜29日: トライアウト強制
-  if (month === 11 && day >= 10 && day < 30 && (newPhase === SEASON_PHASES.TRYOUT || newPhase === SEASON_PHASES.CONTRACT)) {
+  // 11月10日〜29日: トライアウト強制（大学モードは11/29に別途university_scoutが発火するため除外）
+  const isUniversityMode = newSeasonData.settings?.universityMode;
+  if (!isUniversityMode && month === 11 && day >= 10 && day < 30 && (newPhase === SEASON_PHASES.TRYOUT || newPhase === SEASON_PHASES.CONTRACT)) {
     newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.TRYOUT };
     setSeasonData(newSeasonData);
     setScreenMode('management');
     setManagementView('tryout');
+    return null;
+  }
+  // 大学モード: 11月29日にuniversity_scout強制
+  if (isUniversityMode && month === 11 && day === 29) {
+    setSeasonData(newSeasonData);
+    setScreenMode('management');
+    setManagementView('university_scout');
     return null;
   }
 

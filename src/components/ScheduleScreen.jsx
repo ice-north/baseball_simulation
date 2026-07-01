@@ -267,7 +267,7 @@ const ScheduleScreen = ({
 
   // 当月のカレンダーデータを生成
   const calendarData = seasonData && selectedMonth
-    ? generateTeamCalendar(seasonData.schedule, userTeamName, currentDate.year, selectedMonth)
+    ? generateTeamCalendar(seasonData.schedule, userTeamName, currentDate.year, selectedMonth, { universityMode: !!seasonData?.settings?.universityMode })
     : [];
 
   // 当日の試合を取得
@@ -469,6 +469,7 @@ const ScheduleScreen = ({
                     day.eventLabel === 'オフシーズン' ? 'text-gray-400' :
                     day.eventLabel === 'キャンプ' ? 'text-green-400' :
                     day.eventLabel === 'ドラフト' ? 'text-purple-400' :
+                    day.eventLabel === '推薦締切' ? 'text-pink-400' :
                     'text-gray-500'
                   }`}>{day.eventLabel}</div>
                 ) : (
