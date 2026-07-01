@@ -5,10 +5,13 @@ import { generateTeamCalendar } from '../season/calendarUI.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 
 // 全選手の成績を取得してランキング形式に変換（IDで重複排除）
-const getAllPlayersStats = () => {
+// teamNames を渡すとそのチームのみに絞り込む（大学/社会人モードで並行世界チームを除外）
+const getAllPlayersStats = (teamNames = null) => {
   const seen = new Set();
   const allPlayers = [];
+  const filterSet = teamNames ? new Set(teamNames) : null;
   Object.keys(TEAMS_DATA || {}).forEach(teamName => {
+    if (filterSet && !filterSet.has(teamName)) return;
     const team = TEAMS_DATA[teamName];
     team.players.forEach(player => {
       if (player.id != null && seen.has(player.id)) return;
@@ -19,8 +22,8 @@ const getAllPlayersStats = () => {
   return allPlayers;
 };
 
-const getBattingAverageRanking = () => {
-  const players = getAllPlayersStats()
+const getBattingAverageRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.batting?.atBats > 0)
     .map(p => {
       const stats = p.seasonStats.batting;
@@ -40,8 +43,8 @@ const getBattingAverageRanking = () => {
   return players;
 };
 
-const getHomeRunRanking = () => {
-  const players = getAllPlayersStats()
+const getHomeRunRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.batting?.homeruns > 0)
     .map(p => ({
       rank: 0,
@@ -57,8 +60,8 @@ const getHomeRunRanking = () => {
   return players;
 };
 
-const getRBIRanking = () => {
-  const players = getAllPlayersStats()
+const getRBIRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.batting?.rbis > 0)
     .map(p => ({
       rank: 0,
@@ -74,8 +77,8 @@ const getRBIRanking = () => {
   return players;
 };
 
-const getStolenBaseRanking = () => {
-  const players = getAllPlayersStats()
+const getStolenBaseRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.batting?.stolenBases > 0)
     .map(p => ({
       rank: 0,
@@ -91,8 +94,8 @@ const getStolenBaseRanking = () => {
   return players;
 };
 
-const getERARanking = () => {
-  const players = getAllPlayersStats()
+const getERARanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.pitching?.inningsPitched > 0)
     .map(p => {
       const stats = p.seasonStats.pitching;
@@ -112,8 +115,8 @@ const getERARanking = () => {
   return players;
 };
 
-const getWinsRanking = () => {
-  const players = getAllPlayersStats()
+const getWinsRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.pitching?.wins > 0)
     .map(p => ({
       rank: 0,
@@ -129,8 +132,8 @@ const getWinsRanking = () => {
   return players;
 };
 
-const getOPSRanking = () => {
-  const players = getAllPlayersStats()
+const getOPSRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.batting?.atBats > 0)
     .map(p => {
       const s = p.seasonStats.batting;
@@ -145,8 +148,8 @@ const getOPSRanking = () => {
   return players;
 };
 
-const getWHIPRanking = () => {
-  const players = getAllPlayersStats()
+const getWHIPRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.pitching?.inningsPitched > 0)
     .map(p => {
       const s = p.seasonStats.pitching;
@@ -160,8 +163,8 @@ const getWHIPRanking = () => {
   return players;
 };
 
-const getHoldsRanking = () => {
-  const players = getAllPlayersStats()
+const getHoldsRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.pitching?.holds > 0)
     .map(p => ({
       rank: 0,
@@ -177,8 +180,8 @@ const getHoldsRanking = () => {
   return players;
 };
 
-const getSavesRanking = () => {
-  const players = getAllPlayersStats()
+const getSavesRanking = (teamNames) => {
+  const players = getAllPlayersStats(teamNames)
     .filter(p => p.seasonStats?.pitching?.saves > 0)
     .map(p => ({
       rank: 0,
@@ -282,7 +285,21 @@ const ScheduleScreen = ({
       <div className="max-w-7xl mx-auto px-4 py-5">
       {/* シーズンタイムライン */}
       {(() => {
-        const phases = [
+        const isUniversity = seasonData?.settings?.universityMode;
+        const isCorporate = seasonData?.settings?.corporateMode;
+        const phases = isUniversity ? [
+          { key: 'spring_camp',     label: 'キャンプ', month: 1,  endMonth: 3,  color: '#22c55e' },
+          { key: 'regular_season',  label: '春季リーグ', month: 4, endMonth: 6, color: '#3b82f6' },
+          { key: 'regular_season',  label: '秋季リーグ', month: 9, endMonth: 11, color: '#60a5fa' },
+          { key: 'draft',           label: 'ドラフト', month: 10, endMonth: 10, color: '#a855f7', point: true },
+          { key: 'off_season',      label: 'オフ',    month: 12, endMonth: 12, color: '#6b7280' },
+        ] : isCorporate ? [
+          { key: 'spring_camp',     label: 'キャンプ', month: 1,  endMonth: 3,  color: '#22c55e' },
+          { key: 'regular_season',  label: 'リーグ戦', month: 4,  endMonth: 9,  color: '#3b82f6' },
+          { key: 'regular_season',  label: '都市対抗', month: 8,  endMonth: 8,  color: '#f59e0b' },
+          { key: 'draft',           label: 'ドラフト', month: 10, endMonth: 10, color: '#a855f7', point: true },
+          { key: 'off_season',      label: 'オフ',    month: 11, endMonth: 12, color: '#6b7280' },
+        ] : [
           { key: 'spring_camp',     label: 'キャンプ', month: 1,  endMonth: 3,  color: '#22c55e' },
           { key: 'regular_season',  label: 'シーズン', month: 4,  endMonth: 9,  color: '#3b82f6' },
           { key: 'playoffs',        label: 'PO',      month: 10, endMonth: 10, color: '#eab308' },
@@ -659,21 +676,21 @@ const ScheduleScreen = ({
 
       {scheduleTab === 'batting' && (
         <div className="grid grid-cols-5 gap-4">
-          <RankingTable title="打率ランキング" data={seasonData?.finalRankings?.battingAverage || getBattingAverageRanking()} valueLabel="打率" />
-          <RankingTable title="本塁打ランキング" data={seasonData?.finalRankings?.homeRuns || getHomeRunRanking()} valueLabel="本塁打" />
-          <RankingTable title="打点ランキング" data={seasonData?.finalRankings?.rbis || getRBIRanking()} valueLabel="打点" />
-          <RankingTable title="盗塁ランキング" data={seasonData?.finalRankings?.stolenBases || getStolenBaseRanking()} valueLabel="盗塁" />
-          <RankingTable title="OPSランキング" data={seasonData?.finalRankings?.ops || getOPSRanking()} valueLabel="OPS" />
+          <RankingTable title="打率ランキング" data={seasonData?.finalRankings?.battingAverage || getBattingAverageRanking(teamNamesList)} valueLabel="打率" />
+          <RankingTable title="本塁打ランキング" data={seasonData?.finalRankings?.homeRuns || getHomeRunRanking(teamNamesList)} valueLabel="本塁打" />
+          <RankingTable title="打点ランキング" data={seasonData?.finalRankings?.rbis || getRBIRanking(teamNamesList)} valueLabel="打点" />
+          <RankingTable title="盗塁ランキング" data={seasonData?.finalRankings?.stolenBases || getStolenBaseRanking(teamNamesList)} valueLabel="盗塁" />
+          <RankingTable title="OPSランキング" data={seasonData?.finalRankings?.ops || getOPSRanking(teamNamesList)} valueLabel="OPS" />
         </div>
       )}
 
       {scheduleTab === 'pitching' && (
         <div className="grid grid-cols-5 gap-4">
-          <RankingTable title="防御率ランキング" data={seasonData?.finalRankings?.era || getERARanking()} valueLabel="防御率" />
-          <RankingTable title="WHIPランキング" data={seasonData?.finalRankings?.whip || getWHIPRanking()} valueLabel="WHIP" />
-          <RankingTable title="勝利数ランキング" data={seasonData?.finalRankings?.wins || getWinsRanking()} valueLabel="勝利" />
-          <RankingTable title="ホールドランキング" data={seasonData?.finalRankings?.holds || getHoldsRanking()} valueLabel="ホールド" />
-          <RankingTable title="セーブランキング" data={seasonData?.finalRankings?.saves || getSavesRanking()} valueLabel="セーブ" />
+          <RankingTable title="防御率ランキング" data={seasonData?.finalRankings?.era || getERARanking(teamNamesList)} valueLabel="防御率" />
+          <RankingTable title="WHIPランキング" data={seasonData?.finalRankings?.whip || getWHIPRanking(teamNamesList)} valueLabel="WHIP" />
+          <RankingTable title="勝利数ランキング" data={seasonData?.finalRankings?.wins || getWinsRanking(teamNamesList)} valueLabel="勝利" />
+          <RankingTable title="ホールドランキング" data={seasonData?.finalRankings?.holds || getHoldsRanking(teamNamesList)} valueLabel="ホールド" />
+          <RankingTable title="セーブランキング" data={seasonData?.finalRankings?.saves || getSavesRanking(teamNamesList)} valueLabel="セーブ" />
         </div>
       )}
     </div>
