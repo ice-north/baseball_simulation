@@ -128,16 +128,20 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
       const fitness = ps.player.positionFitness?.[pos] || 0;
       if (pos !== 'dh') {
         // 守備重視: 適性70未満は除外（ファースト/レフトは50）
-        // 標準: 20未満除外（ファースト/レフトは除外なし）
+        // 標準: 本来ポジションは0以上、難ポジ(短/捕/中/二)は40以上、他は0以上（ファースト/レフトは除外なし）
         // 打撃重視: 10未満除外（ファースト/レフトは除外なし）
         const isLenient = pos === 'first' || pos === 'left';
+        const isNative = ps.player.position === pos;
+        const hardPos = pos === 'short' || pos === 'catcher' || pos === 'center' || pos === 'second';
         const threshold = mode === 'defense' ? (isLenient ? 50 : 70)
           : mode === 'offense' ? (isLenient ? 0 : 10)
-          : (isLenient ? 0 : 20);
+          : (isNative ? 0 : isLenient ? 0 : hardPos ? 40 : 20);
         if (fitness < threshold) return;
       }
 
-      const value = calcPositionValue(ps.player, pos, mode);
+      // 本来のポジションには強いボーナス（本来の守備位置が優先されるように）
+      const nativeBonus = ps.player.position === pos ? 50 : 0;
+      const value = calcPositionValue(ps.player, pos, mode) + nativeBonus;
       if (value > bestValue) {
         bestValue = value;
         bestCandidate = ps;
@@ -158,7 +162,9 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
       let best = null;
       let bestValue = -Infinity;
       for (const ps of unassignedPlayers) {
-        const value = calcPositionValue(ps.player, pos, mode);
+        // フォールバックでも本来ポジション優先ボーナスを付与
+        const nativeBonus = ps.player.position === pos ? 50 : 0;
+        const value = calcPositionValue(ps.player, pos, mode) + nativeBonus;
         if (value > bestValue) {
           bestValue = value;
           best = ps;
@@ -373,11 +379,12 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
     : Math.min(numSlots + 4, fielders.length);
   const candidates = sortedCandidates.slice(0, candidatePoolSize);
 
-  // 守備専任ポジション（捕手・遊撃）: 適性の高い選手が候補にいない場合、ロスターから追加
+  // 難守備ポジション（捕手・遊撃・二塁・中堅）: 適性の高い選手が候補にいない場合、ロスターから追加
+  // 閾値50で判定（元80は高すぎて適性79の本来の遊撃手が追加されないバグがあった）
   const candidateIds = new Set(candidates.map(ps => ps.player.id));
-  for (const mustPos of ['catcher', 'short']) {
-    if (candidates.some(ps => (ps.player.positionFitness?.[mustPos] || 0) >= 80)) continue;
-    const best = sortedCandidates.find(ps => !candidateIds.has(ps.player.id) && (ps.player.positionFitness?.[mustPos] || 0) >= 80);
+  for (const mustPos of ['catcher', 'short', 'second', 'center']) {
+    if (candidates.some(ps => (ps.player.positionFitness?.[mustPos] || 0) >= 50)) continue;
+    const best = sortedCandidates.find(ps => !candidateIds.has(ps.player.id) && (ps.player.positionFitness?.[mustPos] || 0) >= 50);
     if (best) { candidates.push(best); candidateIds.add(best.player.id); }
   }
 
