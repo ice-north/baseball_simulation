@@ -177,7 +177,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
   if (graduationReport) {
     const r = graduationReport;
     const npbDrafted = r.npbDrafted || [];
-    const pathLabel = { corporate: '社会人', independent: '独立L', retired: '引退' };
+    const pathLabel = { corporate: '社会人', independent: '独立L', club: 'クラブ', retired: '引退' };
     const posLabel = POSITION_NAMES || {};
     // チーム別にグループ化
     const teamGroups = {};
@@ -238,7 +238,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                 卒業生の進路
               </h3>
               <p className="text-xs text-gray-500 mb-3">
-                社会人 {r.postGradPaths.corporate}名 / 独立リーグ {r.postGradPaths.independent}名 / 引退 {r.postGradPaths.retired}名
+                社会人 {r.postGradPaths.corporate}名 / 独立リーグ {r.postGradPaths.independent}名 / クラブ {r.postGradPaths.club || 0}名 / 引退 {r.postGradPaths.retired}名
               </p>
               {Object.entries(teamGroups).map(([team, grads]) => (
                 <div key={team} className="mb-3 last:mb-0">
@@ -248,15 +248,20 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                       <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
                         g.path === 'corporate' ? 'bg-blue-900/20' :
                         g.path === 'independent' ? 'bg-green-900/20' :
+                        g.path === 'club' ? 'bg-cyan-900/20' :
                         'bg-gray-800/30'
                       }`}>
                         <span className={`font-bold text-[10px] w-14 text-center rounded px-1 py-0.5 ${
                           g.path === 'corporate' ? 'bg-blue-800/50 text-blue-300' :
                           g.path === 'independent' ? 'bg-green-800/50 text-green-300' :
+                          g.path === 'club' ? 'bg-cyan-800/50 text-cyan-300' :
                           'bg-gray-700/50 text-gray-400'
                         }`}>{pathLabel[g.path]}</span>
                         <span className="text-white font-bold flex-1">{g.name}</span>
                         <span className="text-gray-400 text-xs w-6 text-center">{posLabel[g.position] || g.position}</span>
+                        {g.nextYearTeam && (
+                          <span className="text-amber-400/80 text-[10px] font-bold shrink-0">→ {g.nextYearTeam}</span>
+                        )}
                         {g.stats && (
                           <span className="text-gray-500 text-[10px] tabular-nums w-28 text-right">
                             {g.position === 'pitcher'

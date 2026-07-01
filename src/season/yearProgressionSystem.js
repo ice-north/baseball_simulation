@@ -1435,18 +1435,25 @@ export function updateGrowthModifiers(allTeams, awards) {
  * - 全チームに推薦入学+一般入部で新1年生を補充
  */
 function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
+  const userTeamName = seasonData.userTeamName || Object.keys(allTeams)[0];
   const report = {
-    graduated: [],
-    recruited: [],
+    graduated: [],    // ユーザーチームの卒業生のみ
+    recruited: [],    // ユーザーチームの新入生のみ
     npbDrafted: [],
-    postGradPaths: { corporate: 0, independent: 0, retired: 0 },
+    postGradPaths: { corporate: 0, independent: 0, club: 0, retired: 0 },
+    clubGraduates: [], // クラブ行き卒業生（step 5.65で使用）
   };
+
+  // === Pass 1: 全チームの卒業生を収集し合算スコアで相対評価 ===
+  // 絶対値閾値ではなく順位ベースで振り分けることで、ランクに関係なく適切な比率が保たれる
+  const allGradsScored = [];
+  const perTeamData = {};
 
   for (const [teamName, teamData] of Object.entries(allTeams)) {
     if (!teamData?.players || !teamData.universityData) continue;
     const rank = teamData.universityData.rank || 'C';
+    const isUserTeam = teamName === userTeamName;
 
-    // 4年生を特定（年齢22歳以上、または universityYear >= 4）
     const graduates = [];
     const remaining = [];
     teamData.players.forEach(p => {
@@ -1457,54 +1464,83 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
       }
     });
 
-    // 卒業生の進路振り分け
     graduates.forEach(grad => {
-      const score = grad.position === 'pitcher'
+      const abilityScore = grad.position === 'pitcher'
         ? ((grad.pitching?.velocity || 120) - 120) * 1.5 + (grad.pitching?.control || 0) + (grad.pitching?.stamina || 0) * 0.4
         : (grad.batting?.meet || 0) + (grad.batting?.power || 0) + (grad.batting?.eye || 0) * 0.5 + (grad.physical?.speed || 0) * 0.3;
 
-      grad.isStarter = false;
-      grad.battingOrder = 0;
-      grad.origin = 'university';
-      grad.isReleasedCandidate = true;
-
-      if (score >= 120) {
-        grad.postGradPath = 'corporate';
-        report.postGradPaths.corporate++;
-        releasedPlayersPool.push(grad);
-      } else if (score >= 80) {
-        grad.postGradPath = 'independent';
-        report.postGradPaths.independent++;
-        releasedPlayersPool.push(grad);
-      } else {
-        grad.postGradPath = 'retired';
-        report.postGradPaths.retired++;
-      }
-
-      report.graduated.push({
-        name: grad.name,
-        team: teamName,
-        position: grad.position,
-        age: grad.age,
-        path: grad.postGradPath,
-        stats: grad.position === 'pitcher'
-          ? { velocity: grad.pitching?.velocity, control: grad.pitching?.control, stamina: grad.pitching?.stamina }
-          : { meet: grad.batting?.meet, power: grad.batting?.power, eye: grad.batting?.eye, speed: grad.physical?.speed },
-        careerStats: grad.careerStats ? {
-          batting: { atBats: grad.careerStats.batting?.atBats || 0, hits: grad.careerStats.batting?.hits || 0, homeruns: grad.careerStats.batting?.homeruns || 0 },
-          pitching: { wins: grad.careerStats.pitching?.wins || 0, saves: grad.careerStats.pitching?.saves || 0, inningsPitched: grad.careerStats.pitching?.inningsPitched || 0 },
-        } : null,
-      });
+      const gp = grad.growthPotential || 1.0;
+      const discipline = grad.personality?.discipline ?? 50;
+      // 成長力・プロ意識ボーナス: 低能力でも伸びしろがある選手が一定数残れるように
+      // gp1.0→+5, gp1.2→+15, gp1.5→+30 / disc60→+6, disc80→+12, disc100→+18
+      const gpBonus = Math.max(0, (gp - 0.9) * 50);
+      const discBonus = Math.max(0, (discipline - 40) * 0.3);
+      allGradsScored.push({ player: grad, teamName, abilityScore, gp, discipline,
+        compositeScore: abilityScore + gpBonus + discBonus });
     });
 
-    // 在校生の学年を進める
+    perTeamData[teamName] = { graduates, remaining, rank, isUserTeam, teamData };
+  }
+
+  // スコア降順ソート → パーセンテージで進路振り分け
+  allGradsScored.sort((a, b) => b.compositeScore - a.compositeScore);
+  const total = allGradsScored.length;
+  const corpCut = Math.floor(total * 0.22);  // 上位22%→社会人
+  const indCut  = Math.floor(total * 0.37);  // 次の15%→独立リーグ
+  // 残り: gp≥1.1かつdiscipline≥60 → クラブ、それ以外 → 引退
+
+  allGradsScored.forEach(({ player: grad, gp, discipline }, idx) => {
+    grad.isStarter = false;
+    grad.battingOrder = 0;
+    grad.origin = 'university';
+    grad.isReleasedCandidate = true;
+
+    if (idx < corpCut) {
+      grad.postGradPath = 'corporate';
+      releasedPlayersPool.push(grad);
+    } else if (idx < indCut) {
+      grad.postGradPath = 'independent';
+      releasedPlayersPool.push(grad);
+    } else if (gp >= 1.1 && discipline >= 60) {
+      grad.postGradPath = 'club';
+      report.clubGraduates.push(grad);
+    } else {
+      grad.postGradPath = 'retired';
+    }
+  });
+
+  // === Pass 2: チームごとにロスター更新 / ユーザーチームのみレポート生成 ===
+  for (const [teamName, { graduates, remaining, rank, isUserTeam, teamData }] of Object.entries(perTeamData)) {
+    if (isUserTeam) {
+      graduates.forEach(grad => {
+        report.postGradPaths[grad.postGradPath]++;
+        report.graduated.push({
+          name: grad.name,
+          team: teamName,
+          position: grad.position,
+          age: grad.age,
+          path: grad.postGradPath,
+          gp: grad.growthPotential,
+          discipline: grad.personality?.discipline,
+          stats: grad.position === 'pitcher'
+            ? { velocity: grad.pitching?.velocity, control: grad.pitching?.control, stamina: grad.pitching?.stamina }
+            : { meet: grad.batting?.meet, power: grad.batting?.power, eye: grad.batting?.eye, speed: grad.physical?.speed },
+          careerStats: grad.careerStats ? {
+            batting: { atBats: grad.careerStats.batting?.atBats || 0, hits: grad.careerStats.batting?.hits || 0, homeruns: grad.careerStats.batting?.homeruns || 0 },
+            pitching: { wins: grad.careerStats.pitching?.wins || 0, saves: grad.careerStats.pitching?.saves || 0, inningsPitched: grad.careerStats.pitching?.inningsPitched || 0 },
+          } : null,
+          _playerRef: grad, // 配属完了後に nextYearTeam を転記するための一時参照
+        });
+      });
+    }
+
     remaining.forEach(p => {
       if (p.universityYear) p.universityYear++;
     });
 
-    // スカウト推薦入部者をhighSchoolPoolから取得
+    // スカウト推薦入部者（ユーザーチームのみ）
     const scoutedPlayers = [];
-    if (teamName === Object.keys(allTeams)[0] && highSchoolPool.players) {
+    if (isUserTeam && highSchoolPool.players) {
       const reserved = highSchoolPool.players.filter(p => p._universityReserved === teamName);
       reserved.forEach(p => {
         delete p._universityReserved;
@@ -1526,32 +1562,22 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
       highSchoolPool.players = highSchoolPool.players.filter(p => p._universityReserved !== teamName);
     }
 
-    // 新入生を補充（卒業人数分 + ロスター下限調整 - スカウト入部者）
-    const isUserTeam = teamName === seasonData.userTeamName;
     const maxRoster = isUserTeam ? 60 : Infinity;
     const targetSize = Math.min(getUniversityTargetRosterSize(rank), maxRoster);
     const rawNeeded = Math.max(0, Math.max(graduates.length, targetSize - remaining.length) - scoutedPlayers.length);
-    // 一般入部はスカウト推薦合計の約半数に制限（スカウト未実施時は通常補充）
     const neededCount = (isUserTeam && scoutedPlayers.length > 0)
       ? Math.min(rawNeeded, Math.ceil(scoutedPlayers.length / 2))
       : rawNeeded;
     const newPlayers = generateUniversityFreshmen(neededCount, rank, teamName, teamData, currentYear);
     const allNewPlayers = [...scoutedPlayers, ...newPlayers];
 
-    report.recruited.push(...allNewPlayers.map(p => ({
-      name: p.name,
-      team: teamName,
-      position: p.position,
-      type: p.recruitType,
-    })));
-
-    // ユーザーチームの新入生は練習生（isActive=false）として登録。
-    // 既存選手のisActive状態は維持。ロスター管理画面で入れ替え可能。
     if (isUserTeam) {
+      report.recruited.push(...allNewPlayers.map(p => ({
+        name: p.name, team: teamName, position: p.position, type: p.recruitType,
+      })));
       allNewPlayers.forEach(p => { p.isActive = false; });
     }
 
-    // ロスター更新（splice方式でTEAMS_DATAを直接変更）、ユーザーチームは60人上限
     const finalRoster = [...remaining, ...allNewPlayers];
     if (isUserTeam && finalRoster.length > 60) finalRoster.splice(60);
     teamData.players.splice(0, teamData.players.length, ...finalRoster);
@@ -1787,6 +1813,7 @@ function replenishCorporateRosters(allTeams, currentYear) {
       if (usedIndices.has(entry.idx)) continue;
       if (entry.player.age && entry.player.age > 28) continue;
 
+      entry.player._nextYearTeam = teamInfo.teamName; // レポート転記用
       const p = { ...entry.player };
       p.isStarter = false;
       p.battingOrder = 0;
@@ -1969,6 +1996,7 @@ function replenishIndependentLeagueRosters(allTeams, currentYear) {
       if (taken >= availableFromPool) break;
 
       const candidate = poolCandidates[candidateIdx];
+      candidate.player._nextYearTeam = teamInfo.teamName; // レポート転記用
       const p = JSON.parse(JSON.stringify(candidate.player));
       p.isStarter = false;
       p.battingOrder = 0;
@@ -2208,7 +2236,11 @@ export function advanceToNextYear(seasonData, allTeams) {
   if (clubTeamEntries.length > 0) {
     // 引退扱いの高校卒・大学卒からクラブチームへ振り分け
     const clubCandidates = [];
-    // 大学卒で「引退」判定の選手の一部
+    // TEAMS_DATAチームの卒業生でclubパスになった選手（成長力・プロ意識が高い層）
+    if (universityGraduationReport?.clubGraduates) {
+      clubCandidates.push(...universityGraduationReport.clubGraduates);
+    }
+    // 大学プール卒業生で「引退」判定の一部（成長力・プロ意識に関わらずランダムに拾う）
     gradScored.forEach(entry => {
       if (entry.player.postGradPath === 'retired' && Math.random() < 0.3) {
         clubCandidates.push(entry.player);
@@ -2242,6 +2274,7 @@ export function advanceToNextYear(seasonData, allTeams) {
       clubCandidates.forEach(p => {
         const target = sortedClubs[Math.floor(Math.random() * Math.min(5, sortedClubs.length))];
         if (target && target.team.players) {
+          p._nextYearTeam = target.name; // レポート転記用
           const player = { ...p };
           player.isStarter = false;
           player.battingOrder = 0;
@@ -2264,6 +2297,14 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 5.9. 社会人AIチームのロスター補充（リリースプールから毎年選手を獲得）
   if (seasonData.settings?.corporateMode || seasonData.settings?.universityMode) {
     replenishCorporateRosters(teamsAfterRetirement, currentYear);
+  }
+
+  // 5.95. 卒業レポートに nextYearTeam を転記（5.65/5.9 の配属完了後）
+  if (universityGraduationReport?.graduated) {
+    universityGraduationReport.graduated.forEach(entry => {
+      if (entry._playerRef?._nextYearTeam) entry.nextYearTeam = entry._playerRef._nextYearTeam;
+      delete entry._playerRef;
+    });
   }
 
   // 6. 新シーズンデータ作成
