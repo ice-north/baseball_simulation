@@ -36,7 +36,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const [sortKey, setSortKey] = useState('gaugeRate');
   const [sortAsc, setSortAsc] = useState(false);
   const [newDiscoveryCount, setNewDiscoveryCount] = useState(0);
-  const [gaugeCompletePlayer, setGaugeCompletePlayer] = useState(null);
+  const [gaugeCompleteCount, setGaugeCompleteCount] = useState(0);
   const [rivalStolenList, setRivalStolenList] = useState([]);
   const [selectionCandidates, setSelectionCandidates] = useState([]);
   const [selectionPicked, setSelectionPicked] = useState([]);
@@ -65,13 +65,11 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
       setCandidates([...(wd.candidates || [])]);
       wd._newDiscoveries = 0;
     }
-    const gc = wd._gaugeRecruitedCount || 0;
+    const gc = wd._gaugeCompleteCount || 0;
     if (gc > 0) {
-      const lastRecruited = (wd.recruited || []).slice(-gc);
-      if (lastRecruited.length > 0) setGaugeCompletePlayer(lastRecruited[lastRecruited.length - 1]);
       setCandidates([...(wd.candidates || [])]);
-      setRecruited([...(wd.recruited || [])]);
-      wd._gaugeRecruitedCount = 0;
+      setGaugeCompleteCount(prev => prev + gc);
+      wd._gaugeCompleteCount = 0;
     }
     const rs = wd._rivalStolen || [];
     if (rs.length > 0) {
@@ -122,6 +120,21 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     if (!c) return;
     stopUniversityApproach(c);
     setCandidates([...candidates]);
+  };
+
+  const handleConfirmRecruit = (id) => {
+    const c = candidates.find(p => p.id === id);
+    if (!c || !c._gaugeComplete || c._reservedBy || remainingSlots <= 0) return;
+    const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
+    if (orig) orig._universityReserved = userTeamName;
+    const newCandidates = candidates.filter(p => p.id !== id);
+    const newRecruited = [...recruited, c];
+    setCandidates(newCandidates);
+    setRecruited(newRecruited);
+    if (WORLD_DATA._universityScout) {
+      WORLD_DATA._universityScout.candidates = newCandidates;
+      WORLD_DATA._universityScout.recruited = newRecruited;
+    }
   };
 
   const totalSlots = TOTAL_NEW_MEMBERS[rank] || 9;
@@ -217,35 +230,6 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     if (level >= 1) return <span className="text-yellow-400 text-[9px]">概要</span>;
     return <span className="text-gray-500 text-[9px]">未知</span>;
   };
-
-  if (gaugeCompletePlayer) {
-    const gp = gaugeCompletePlayer;
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-4 flex items-center justify-center">
-        <div className="max-w-md w-full">
-          <div className="rounded-xl p-6 border bg-green-900/30 border-green-700/50">
-            <div className="text-center mb-4">
-              <span className="text-2xl font-black text-green-400">推薦確定!</span>
-            </div>
-            <div className="text-center mb-2">
-              <span className="text-white font-bold text-lg">{gp.name}</span>
-              <span className="text-gray-400 text-sm ml-2">{POSITION_NAMES[gp.position] || gp.position}</span>
-            </div>
-            <div className="text-center text-gray-400 text-sm mb-1">{gp._scoutSource}</div>
-            <div className="text-center text-green-300 text-sm mb-4">
-              スポーツ推薦枠で入部が決定しました (残り{remainingSlots}枠)
-            </div>
-            <div className="text-center">
-              <button onClick={() => setGaugeCompletePlayer(null)}
-                className="px-6 py-2 rounded-xl font-bold text-white bg-blue-700 hover:bg-blue-600 transition">
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (rivalStolenList.length > 0) {
     return (
@@ -470,6 +454,18 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
           </div>
         )}
 
+        {gaugeCompleteCount > 0 && (
+          <div className="bg-green-900/30 border border-green-600/50 rounded-xl p-2 mb-3 flex items-center justify-between">
+            <span className="text-green-300 text-xs font-bold">
+              ゲージが満タンになった選手が{gaugeCompleteCount}名います！「推薦確定」ボタンを押して確定してください
+            </span>
+            <button onClick={() => setGaugeCompleteCount(0)}
+              className="text-green-500 hover:text-green-300 text-xs px-2">
+              ✕
+            </button>
+          </div>
+        )}
+
         {recruited.length > 0 && (
           <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-2 mb-3">
             <div className="text-[10px] text-green-400 font-bold mb-1">確保済み選手</div>
@@ -579,7 +575,14 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           {p._approaching && <span className="text-gray-500 text-[9px] ml-0.5">({daysLeft}日)</span>}
                         </td>
                         <td className="py-1.5 px-1" style={{ minWidth: '90px' }}>
-                          {p._approaching ? (
+                          {p._gaugeComplete ? (
+                            <div className="flex items-center gap-1">
+                              <div className="w-14 h-2.5 bg-gray-700 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full bg-green-400 animate-pulse" style={{ width: '100%' }} />
+                              </div>
+                              <span className="text-green-400 text-[10px] font-black">FULL!</span>
+                            </div>
+                          ) : p._approaching ? (
                             <div className="flex items-center gap-1">
                               <div className="w-14 h-2.5 bg-gray-700 rounded-full overflow-hidden">
                                 <div className={`h-full rounded-full transition-all ${gauge >= 80 ? 'bg-green-500' : gauge >= 50 ? 'bg-yellow-500' : 'bg-cyan-500'}`}
@@ -629,6 +632,17 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-800 text-gray-500">
                               交渉不可
                             </span>
+                          ) : p._gaugeComplete ? (
+                            <button
+                              onClick={() => handleConfirmRecruit(p.id)}
+                              disabled={remainingSlots <= 0}
+                              className={`px-2 py-0.5 rounded text-[10px] font-black transition animate-pulse ${
+                                remainingSlots > 0
+                                  ? 'bg-green-600 text-white hover:bg-green-500 shadow-lg shadow-green-900/50'
+                                  : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                              }`}>
+                              {remainingSlots > 0 ? '✓ 推薦確定!' : '枠なし'}
+                            </button>
                           ) : (
                           <div className="flex gap-1">
                             <button onClick={() => handleWatch(p.id)}

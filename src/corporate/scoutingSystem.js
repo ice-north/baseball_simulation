@@ -1773,21 +1773,14 @@ export function processUniversityScoutDay(candidates, currentDate, uniRank, repu
     }
   }
 
-  // ゲージMAXの選手を自動確保
+  // ゲージMAXの選手を確定待ち状態に（手動確定に変更 → 自動追加しない）
   if (gaugeCompleted.length > 0 && WORLD_DATA._universityScout) {
     const wd = WORLD_DATA._universityScout;
-    const userTeamName = Object.keys(TEAMS_DATA)[0] || '';
-    const maxSlots = getUniversityScoutSlots(uniRank);
     for (const c of gaugeCompleted) {
-      if ((wd.recruited || []).length >= maxSlots) break;
-      const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
-      if (orig) orig._universityReserved = userTeamName;
-      if (!wd.recruited) wd.recruited = [];
-      wd.recruited.push(c);
-      const idx = candidates.indexOf(c);
-      if (idx >= 0) candidates.splice(idx, 1);
+      c._gaugeComplete = true;
+      c._approaching = false;
     }
-    wd._gaugeRecruitedCount = (wd._gaugeRecruitedCount || 0) + gaugeCompleted.length;
+    wd._gaugeCompleteCount = (wd._gaugeCompleteCount || 0) + gaugeCompleted.length;
   }
 
   return completed;
