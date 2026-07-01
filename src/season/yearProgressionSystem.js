@@ -1570,7 +1570,7 @@ function getUniversityTargetRosterSize(rank) {
 // 選手能力の簡易スコア（円環インポート回避のためローカル定義）
 function calcFreshmanScore(p) {
   if (p.position === 'pitcher') {
-    return (p.pitching?.velocity || 130) * 1.5 + (p.pitching?.control || 40) + (p.pitching?.stamina || 60) * 0.4;
+    return ((p.pitching?.velocity || 130) - 120) * 1.5 + (p.pitching?.control || 40) + (p.pitching?.stamina || 60) * 0.4;
   }
   return (p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) * 0.5 + (p.fielding?.defense || 0) * 0.3;
 }
@@ -1595,8 +1595,16 @@ function generateUniversityFreshmen(count, rank, teamName, teamData, currentYear
 
     const n = scored.length;
     const band = scored.slice(Math.floor(n * lo), Math.min(n, Math.ceil(n * hi)));
-    band.sort(() => Math.random() - 0.5);
-    const picks = band.slice(0, count);
+
+    // 投手比率を約35%に制限（能力スコアで投手に偏らないよう位置別均等選出）
+    const pitcherTarget = Math.round(count * 0.35);
+    const fielderTarget = count - pitcherTarget;
+    const bandPitchers = band.filter(e => e.p.position === 'pitcher').sort(() => Math.random() - 0.5);
+    const bandFielders = band.filter(e => e.p.position !== 'pitcher').sort(() => Math.random() - 0.5);
+    const picks = [
+      ...bandPitchers.slice(0, pitcherTarget),
+      ...bandFielders.slice(0, fielderTarget),
+    ].sort(() => Math.random() - 0.5);
 
     if (picks.length > 0) {
       const takenIds = new Set(picks.map(({ p }) => p.id));

@@ -1649,14 +1649,18 @@ export function generateSelectionCandidates(rank, reputation, count = 15) {
 
   const n = byAbility.length;
   const band = byAbility.slice(Math.floor(n * selLo), Math.min(n, Math.floor(n * selHi)));
-  const scored = band.map(({ player: p }) => {
-    const noise = (Math.random() - 0.5) * 30;
-    return { player: p, score: noise };
-  });
-  scored.sort((a, b) => b.score - a.score);
-  const pool = scored;
 
-  return pool.slice(0, count).map(entry => {
+  // 投手比率を約32%に調整（投手過多バグ対策）
+  const pitcherCount = Math.round(count * 0.32);
+  const fielderCount = count - pitcherCount;
+  const bandPitchers = band.filter(e => e.player.position === 'pitcher').sort(() => Math.random() - 0.5);
+  const bandFielders = band.filter(e => e.player.position !== 'pitcher').sort(() => Math.random() - 0.5);
+  const selected = [
+    ...bandPitchers.slice(0, pitcherCount),
+    ...bandFielders.slice(0, fielderCount),
+  ].sort(() => Math.random() - 0.5);
+
+  return selected.slice(0, count).map(entry => {
     const p = JSON.parse(JSON.stringify(entry.player));
     // セレクションでは能力がほぼ見える状態
     p.scoutAccuracy = 80;
