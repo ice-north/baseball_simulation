@@ -150,7 +150,7 @@ const ManagementScreen = ({
         const selection = result?.selection || [];
         const newData = {
           ...seasonData,
-          currentDate: { ...seasonData.currentDate, month: 11, day: 15 },
+          currentDate: { ...seasonData.currentDate, month: 11, day: 30 },
           phase: 'off_season',
           universityRecruits: [
             ...recommended.map(p => ({ id: p.id, name: p.name, position: p.position, source: p._scoutSource, type: 'recommended' })),
