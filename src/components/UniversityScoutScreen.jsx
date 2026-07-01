@@ -37,7 +37,6 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const [sortAsc, setSortAsc] = useState(false);
   const [newDiscoveryCount, setNewDiscoveryCount] = useState(0);
   const [gaugeCompleteCount, setGaugeCompleteCount] = useState(0);
-  const [rivalStolenList, setRivalStolenList] = useState([]);
   const [selectionCandidates, setSelectionCandidates] = useState([]);
   const [selectionPicked, setSelectionPicked] = useState([]);
 
@@ -71,9 +70,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
       setGaugeCompleteCount(prev => prev + gc);
       wd._gaugeCompleteCount = 0;
     }
-    const rs = wd._rivalStolen || [];
-    if (rs.length > 0) {
-      setRivalStolenList(prev => [...prev, ...rs]);
+    if ((wd._rivalStolen || []).length > 0) {
       setCandidates([...(wd.candidates || [])]);
       wd._rivalStolen = [];
     }
@@ -230,39 +227,6 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     if (level >= 1) return <span className="text-yellow-400 text-[9px]">概要</span>;
     return <span className="text-gray-500 text-[9px]">未知</span>;
   };
-
-  if (rivalStolenList.length > 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-4 flex items-center justify-center">
-        <div className="max-w-md w-full">
-          <div className="rounded-xl p-6 border bg-red-900/20 border-red-800/30">
-            <div className="text-center mb-4">
-              <span className="text-2xl font-black text-red-400">他大学に先を越された!</span>
-            </div>
-            {rivalStolenList.map((s, i) => (
-              <div key={i} className="mb-3 p-3 bg-gray-800/50 rounded-lg">
-                <div className="text-center">
-                  <span className="text-white font-bold">{s.name}</span>
-                  <span className="text-gray-400 text-sm ml-2">{POSITION_NAMES[s.position] || s.position}</span>
-                </div>
-                <div className="text-center text-red-300 text-sm mt-1">
-                  → <span className="font-bold">{s.rivalName}</span>
-                  <span className="text-gray-500 text-xs ml-1">({s.rivalRank}ランク)</span>
-                  が推薦確定
-                </div>
-              </div>
-            ))}
-            <div className="text-center mt-4">
-              <button onClick={() => setRivalStolenList([])}
-                className="px-6 py-2 rounded-xl font-bold text-white bg-blue-700 hover:bg-blue-600 transition">
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (phase === 'selection') {
     return (
@@ -605,8 +569,8 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             </div>
                           ) : p._reservedBy ? (
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-gray-400 text-[9px] font-bold">進学決定</span>
-                              <span className="text-gray-300 text-[9px]">{p._reservedBy}</span>
+                              <span className="text-pink-400 text-[9px] font-bold">進学決定</span>
+                              <span className="text-pink-300 text-[9px]">{p._reservedBy}</span>
                             </div>
                           ) : rival && rival.count > 0 ? (
                             <div className="flex flex-col gap-0.5">
