@@ -119,9 +119,11 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     setCandidates([...candidates]);
   };
 
-  const handleConfirmRecruit = (id) => {
+  const handleConfirmRecruit = (id, force = false) => {
     const c = candidates.find(p => p.id === id);
-    if (!c || !c._gaugeComplete || c._reservedBy || remainingSlots <= 0) return;
+    const gauge = c?._approachGauge || 0;
+    const eligible = c._gaugeComplete || (force && gauge >= 80);
+    if (!c || !eligible || c._reservedBy || remainingSlots <= 0) return;
     const orig = highSchoolPool.players?.find(hp => hp.id === c.id);
     if (orig) orig._universityReserved = userTeamName;
     const newCandidates = candidates.filter(p => p.id !== id);
@@ -606,6 +608,12 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                               }`}>
                               {remainingSlots > 0 ? '✓ 推薦確定!' : '枠なし'}
+                            </button>
+                          ) : (onComplete && !p._npbDrafted && !p._reservedBy && (p._approachGauge || 0) >= 80 && remainingSlots > 0) ? (
+                            <button
+                              onClick={() => handleConfirmRecruit(p.id, true)}
+                              className="px-2 py-0.5 rounded text-[10px] font-black transition bg-yellow-600 text-white hover:bg-yellow-500 shadow-lg shadow-yellow-900/50">
+                              推薦確定(80%+)
                             </button>
                           ) : (
                           <div className="flex gap-1">
