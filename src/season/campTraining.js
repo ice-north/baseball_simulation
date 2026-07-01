@@ -47,10 +47,11 @@ export const TRAINING_MENUS = {
     category: 'fielding'
   },
   control: {
-    name: '制球練習',
+    name: '投げ込み',
     icon: '🎯',
-    description: '制球力を強化',
-    targets: ['control'],
+    description: '制球力を強化し、スタミナも向上（投手向け）',
+    targets: ['control', 'stamina'],
+    growthMultipliers: { stamina: 0.5 },
     category: 'pitching'
   },
   velocity: {
