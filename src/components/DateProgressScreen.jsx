@@ -19,6 +19,12 @@ import { checkScoutMissionCompletion, SCOUT_TARGETS, processAutoInvestigation, a
 import { generateUniversityChampionship, generateMeijiJinguTournament, simulateUniversityTournamentOnDate, autoPlayUniversityTournament, getUserUniversityTournamentMatchOnDate, getUniversityTournamentDatesForCalendar } from '../university/universityTournament.js';
 import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 
+const Collapse = ({ open, children, className = '' }) => (
+  <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+    <div className={`overflow-hidden ${className}`}>{children}</div>
+  </div>
+);
+
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -2492,7 +2498,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       <span>全日本大学野球選手権大会</span>
                       <span className="text-[10px] text-gray-500">{showUcTournament ? '▲' : '▼'}</span>
                     </h2>
-                    {showUcTournament && <>
+                    <Collapse open={showUcTournament}>
                       {uc.champion && (
                         <div className="bg-orange-900/30 border border-orange-700/50 rounded-lg p-2 mb-2 text-center">
                           <span className="text-orange-400 font-bold">優勝: {uc.champion}</span>
@@ -2500,7 +2506,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         </div>
                       )}
                       {uc.bracket && renderBracketWithLines(uc.bracket)}
-                    </>}
+                    </Collapse>
                   </div>
                 )}
 
@@ -2514,7 +2520,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       <span>明治神宮野球大会</span>
                       <span className="text-[10px] text-gray-500">{showMjTournament ? '▲' : '▼'}</span>
                     </h2>
-                    {showMjTournament && <>
+                    <Collapse open={showMjTournament}>
                       {mj.champion && (
                         <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-2 mb-2 text-center">
                           <span className="text-red-400 font-bold">優勝: {mj.champion}</span>
@@ -2522,7 +2528,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         </div>
                       )}
                       {mj.bracket && renderBracketWithLines(mj.bracket)}
-                    </>}
+                    </Collapse>
                   </div>
                 )}
               </div>
@@ -3080,7 +3086,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span>🌐</span> 独立リーグ状況
                   <span className="text-[10px] text-gray-500 ml-auto">{showOtherLeagues ? '▲' : '▼'}</span>
                 </h2>
-                {showOtherLeagues && <div className="space-y-2">
+                <Collapse open={showOtherLeagues}><div className="space-y-2">
                   {parallelLeagues.map(league => {
                     const leagueDef = INDEPENDENT_LEAGUES[league.id];
                     const isTwoLeague = leagueDef?.leagueFormat === 'two';
@@ -3184,7 +3190,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       </div>
                     );
                   })()}
-                </div>}
+                </div></Collapse>
               </div>
             );
           })()}
@@ -3232,7 +3238,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span>🏢</span> 社会人トーナメント
                   <span className="text-[10px] text-gray-500 ml-auto">{showCorporateTournaments ? '▲' : '▼'}</span>
                 </h2>
-                {showCorporateTournaments && <div className="space-y-1.5">
+                <Collapse open={showCorporateTournaments}><div className="space-y-1.5">
                   {tournaments.map((t, i) => (
                     <div key={i} className={`rounded-lg p-2 border ${bgColors[t.color] || bgColors.yellow}`}>
                       <div className={`text-xs font-bold ${thColors[t.color] || 'text-yellow-400'} mb-0.5 flex items-center gap-1`}>
@@ -3258,7 +3264,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       )}
                     </div>
                   ))}
-                </div>}
+                </div></Collapse>
               </div>
             );
           })()}
@@ -3304,7 +3310,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span className="text-[10px] text-gray-500 ml-1">({uniLeagues.length}リーグ)</span>
                   <span className="text-[10px] text-gray-500 ml-auto">{showUniversityLeagues ? '▲' : '▼'}</span>
                 </h2>
-                {showUniversityLeagues && <div className="space-y-1">
+                <Collapse open={showUniversityLeagues}><div className="space-y-1">
                   {uniLeagues.map(league => {
                     const isExpanded = expandedUniLeagues[league.id] || false;
                     const toggleLeague = () => setExpandedUniLeagues(prev => ({ ...prev, [league.id]: !prev[league.id] }));
@@ -3334,7 +3340,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                             <span className="text-[10px] text-gray-600">{isExpanded ? '▲' : '▼'}</span>
                           </span>
                         </div>
-                        {isExpanded && <div className="mt-1 space-y-0.5">
+                        <Collapse open={isExpanded}><div className="mt-1 space-y-0.5">
                           {league.divisions ? (
                             <div className="space-y-1.5">
                               {Array.from({ length: league.numDivisions || 2 }, (_, d) => {
@@ -3356,11 +3362,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               {(Array.isArray(league.standings) ? league.standings : []).map((s, i) => renderStandingsRow(s, i))}
                             </div>
                           )}
-                        </div>}
+                        </div></Collapse>
                       </div>
                     );
                   })}
-                </div>}
+                </div></Collapse>
               </div>
             );
           })()}
