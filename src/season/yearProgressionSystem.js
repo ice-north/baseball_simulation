@@ -1567,26 +1567,76 @@ function getUniversityTargetRosterSize(rank) {
   return sizes[rank] || 32;
 }
 
-// 新入生を生成（推薦入学 + 一般入部）
+// 選手能力の簡易スコア（円環インポート回避のためローカル定義）
+function calcFreshmanScore(p) {
+  if (p.position === 'pitcher') {
+    return (p.pitching?.velocity || 130) * 1.5 + (p.pitching?.control || 40) + (p.pitching?.stamina || 60) * 0.4;
+  }
+  return (p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) * 0.5 + (p.fielding?.defense || 0) * 0.3;
+}
+
+// 新入生を高校生プールから選出（セレクション・一般入部ともにプール由来）
 function generateUniversityFreshmen(count, rank, teamName, teamData, currentYear) {
+  if (count <= 0) return [];
   const newPlayers = [];
-  const maxId = Object.values(TEAMS_DATA).flatMap(t => t.players || []).reduce((max, p) => Math.max(max, p.id || 0), 0);
 
-  // 推薦枠: ランクに応じて(S: 40%, A: 30%, B: 20%, C: 15%, D: 10%)
-  const recommendRate = { S: 0.4, A: 0.3, B: 0.2, C: 0.15, D: 0.1 };
-  const recCount = Math.max(1, Math.round(count * (recommendRate[rank] || 0.15)));
-  const genCount = count - recCount;
+  if (highSchoolPool.players && highSchoolPool.players.length > 0) {
+    const available = highSchoolPool.players.filter(p => !p._universityReserved);
 
-  for (let i = 0; i < count; i++) {
-    const isRecommended = i < recCount;
-    const player = generateFreshmanPlayer(maxId + newPlayers.length + 1, rank, isRecommended);
-    player.universityTeamId = teamData.universityTeamId;
-    player.universityTeamName = teamName;
-    player.universityYear = 1;
-    player.recruitType = isRecommended ? 'recommended' : 'general';
-    if (!player.careerHistory) player.careerHistory = [];
-    player.careerHistory.push({ type: 'university', year: currentYear + 1, label: teamName });
-    newPlayers.push(player);
+    // ランク別能力帯（セレクション帯より若干下位）
+    const GEN_BAND_LO = { S: 0.35, A: 0.48, B: 0.60, C: 0.70, D: 0.78 };
+    const GEN_BAND_HI = { S: 0.85, A: 0.90, B: 0.93, C: 0.96, D: 1.00 };
+    const lo = GEN_BAND_LO[rank] ?? 0.70;
+    const hi = GEN_BAND_HI[rank] ?? 0.96;
+
+    const scored = available
+      .map(p => ({ p, score: calcFreshmanScore(p) }))
+      .sort((a, b) => b.score - a.score);
+
+    const n = scored.length;
+    const band = scored.slice(Math.floor(n * lo), Math.min(n, Math.ceil(n * hi)));
+    band.sort(() => Math.random() - 0.5);
+    const picks = band.slice(0, count);
+
+    if (picks.length > 0) {
+      const takenIds = new Set(picks.map(({ p }) => p.id));
+      // 選んだ選手をプールから即除去（他チームとの重複を防ぐ）
+      highSchoolPool.players = highSchoolPool.players.filter(p => !takenIds.has(p.id));
+
+      for (const { p: orig } of picks) {
+        const p = JSON.parse(JSON.stringify(orig));
+        p.universityTeamId = teamData.universityTeamId;
+        p.universityTeamName = teamName;
+        p.universityYear = 1;
+        p.recruitType = 'general';
+        p.age = 19;
+        p.isStarter = false;
+        p.battingOrder = 0;
+        if (!p.positionFitness) p.positionFitness = generatePositionFitness(p.position);
+        syncPositionToFitness(p);
+        if (!p.careerHistory) p.careerHistory = [];
+        p.careerHistory.push({ type: 'university', year: currentYear + 1, label: teamName });
+        p.seasonStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0, caughtStealing: 0, sacrificeBunts: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0, battersFaced: 0, homeruns: 0 } };
+        if (!p.careerStats) p.careerStats = { batting: { atBats: 0, hits: 0, doubles: 0, triples: 0, homeruns: 0, walks: 0, strikeouts: 0, rbis: 0, stolenBases: 0 }, pitching: { inningsPitched: 0, hits: 0, walks: 0, strikeouts: 0, earnedRuns: 0, wins: 0, losses: 0, saves: 0, gamesStarted: 0, gamesRelieved: 0 } };
+        newPlayers.push(p);
+      }
+    }
+  }
+
+  // プール不足時のフォールバック生成
+  if (newPlayers.length < count) {
+    const remaining = count - newPlayers.length;
+    const maxId = Object.values(TEAMS_DATA).flatMap(t => t.players || []).reduce((max, p) => Math.max(max, p.id || 0), 10000);
+    for (let i = 0; i < remaining; i++) {
+      const player = generateFreshmanPlayer(maxId + newPlayers.length + i + 1, rank, false);
+      player.universityTeamId = teamData.universityTeamId;
+      player.universityTeamName = teamName;
+      player.universityYear = 1;
+      player.recruitType = 'general';
+      if (!player.careerHistory) player.careerHistory = [];
+      player.careerHistory.push({ type: 'university', year: currentYear + 1, label: teamName });
+      newPlayers.push(player);
+    }
   }
 
   return newPlayers;
@@ -2117,6 +2167,13 @@ export function advanceToNextYear(seasonData, allTeams) {
     }
   });
 
+  // 5.55. 大学モード: 4年生卒業＋ロスター入れ替え
+  // ※distributeHighSchoolGraduates より先に実行してプールから一般入部を選出する
+  let universityGraduationReport = null;
+  if (seasonData.settings?.universityMode) {
+    universityGraduationReport = processUniversityTeamGraduation(teamsAfterRetirement, seasonData, currentYear);
+  }
+
   // 5.6. 高校生プールの残り（ドラフト漏れ）をランク別に進路振り分け
   // 高校生プールは4月に生成、10月ドラフトで上位が除去済み
   let hsDistribution = { university: {}, corporate: [], independent: [], retired: [] };
@@ -2189,12 +2246,6 @@ export function advanceToNextYear(seasonData, allTeams) {
         sortedClubs.sort((a, b) => a.count - b.count);
       });
     }
-  }
-
-  // 5.7. 大学モード: 4年生卒業＋ロスター入れ替え（TEAMS_DATA上のチーム）
-  let universityGraduationReport = null;
-  if (seasonData.settings?.universityMode) {
-    universityGraduationReport = processUniversityTeamGraduation(teamsAfterRetirement, seasonData, currentYear);
   }
 
   // 5.8. 独立リーグAIチームの補充（リリースプールから獲得＋新人生成）
