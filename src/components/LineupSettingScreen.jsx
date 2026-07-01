@@ -1383,9 +1383,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <SortHeader label="名前" sortKey="name" className="pl-1" />
                         <SortHeader label="齢" sortKey="age" className="text-center" />
                         <SortHeader label="守備" sortKey="position" />
-                        <SortHeader label={benchFilter === 'pitcher' ? '速' : 'ミ'} sortKey={benchFilter === 'pitcher' ? 'velocity' : 'meet'} className="text-center border-l border-gray-700/40" />
-                        <SortHeader label={benchFilter === 'pitcher' ? '制' : 'パ'} sortKey={benchFilter === 'pitcher' ? 'control' : 'power'} className="text-center" />
-                        <SortHeader label={benchFilter === 'pitcher' ? 'ス' : '走'} sortKey={benchFilter === 'pitcher' ? 'stamina' : 'speed'} className="text-center" />
+                        <SortHeader label={benchFilter === 'pitcher' ? '速' : benchFilter === 'all' ? '速/ミ' : 'ミ'} sortKey={benchFilter === 'pitcher' ? 'velocity' : 'meet'} className="text-center border-l border-gray-700/40" />
+                        <SortHeader label={benchFilter === 'pitcher' ? '制' : benchFilter === 'all' ? '制/パ' : 'パ'} sortKey={benchFilter === 'pitcher' ? 'control' : 'power'} className="text-center" />
+                        <SortHeader label={benchFilter === 'pitcher' ? 'ス' : benchFilter === 'all' ? 'ス/走' : '走'} sortKey={benchFilter === 'pitcher' ? 'stamina' : 'speed'} className="text-center" />
                         <SortHeader label="疲労" sortKey="fatigue" className="text-center border-l border-gray-700/40" />
                         <th className="py-1 px-1 text-center text-gray-500 border-l border-gray-700/40">成績</th>
                       </tr>
