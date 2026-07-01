@@ -3679,6 +3679,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 /** 試合前モーダル：先発投手選択・スタメン簡易変更・相手ラインナップ確認 */
 const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher, handleGameChoice, setShowGameChoiceModal, tournamentInfo }) => {
   const [swapTarget, setSwapTarget] = useState(null);
+  const [selectedBench, setSelectedBench] = useState(null);
   const [, setTick] = useState(0);
   const [benchFilter, setBenchFilter] = useState('fielder');
 
@@ -3748,6 +3749,12 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
   };
 
   const handleSwap = (order) => {
+    if (selectedBench !== null) {
+      // 控え先選択済み → このスタメン枠と交代
+      handleSubstitute(selectedBench, order);
+      setSelectedBench(null);
+      return;
+    }
     if (swapTarget === null) {
       setSwapTarget(order);
     } else if (swapTarget === order) {
@@ -3834,8 +3841,10 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
     const order = player._battingOrder || (i + 1);
     const pos = player._position || player.position;
     const cond = player.condition ?? CONDITION_LEVELS.NORMAL;
-    const isSelected = isUser && swapTarget === order;
-    const isSwapCandidate = isUser && swapTarget !== null && swapTarget !== order && pos !== 'pitcher';
+    const isSelected = isUser && swapTarget === order && selectedBench === null;
+    const isSwapCandidate = isUser && pos !== 'pitcher' && (
+      (swapTarget !== null && swapTarget !== order) || selectedBench !== null
+    );
     return (
       <div key={player.id}
         onClick={() => isUser && pos !== 'pitcher' && handleSwap(order)}
@@ -3869,11 +3878,26 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
     );
   };
 
-  const renderBenchPlayer = (player, canSwap) => (
+  const renderBenchPlayer = (player) => {
+    const isSelectedBench = selectedBench === player.id;
+    const canSwap = swapTarget !== null;
+    const handleBenchClick = () => {
+      if (canSwap) {
+        handleSubstitute(player.id, swapTarget);
+      } else if (isSelectedBench) {
+        setSelectedBench(null);
+      } else {
+        setSelectedBench(player.id);
+        setSwapTarget(null);
+      }
+    };
+    return (
     <div key={player.id}
-      onClick={() => canSwap && handleSubstitute(player.id, swapTarget)}
-      className={`flex items-center gap-1 rounded px-1.5 py-1 transition-all ${
-        canSwap ? 'bg-gray-800 hover:bg-blue-900 ring-1 ring-blue-800/50 cursor-pointer' : 'bg-gray-800/60'
+      onClick={handleBenchClick}
+      className={`flex items-center gap-1 rounded px-1.5 py-1 transition-all cursor-pointer ${
+        isSelectedBench ? 'bg-blue-900 ring-1 ring-blue-400' :
+        canSwap ? 'bg-gray-800 hover:bg-blue-900 ring-1 ring-blue-800/50' :
+        'bg-gray-800/60 hover:bg-gray-700'
       }`}
     >
       <PosBadge pos={player.position} />
@@ -3892,6 +3916,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
       <BattingStats player={player} />
     </div>
   );
+  };
 
   const renderPitcherRow = (pitcher, { showRole = false, teamRotation = null } = {}) => {
     const role = teamRotation?.pitcherRoles?.[pitcher.id];
@@ -3972,7 +3997,9 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             {/* スタメン */}
             <div className="bg-gray-900 rounded-lg p-2.5">
               <h3 className="text-[10px] font-bold text-gray-400 mb-1">スタメン
-                <span className="text-gray-600 font-normal ml-1">{swapTarget !== null ? '（入替先をタップ）' : '（タップで打順入替）'}</span>
+                <span className="text-gray-600 font-normal ml-1">
+                  {selectedBench !== null ? '（交代先をタップ）' : swapTarget !== null ? '（入替先をタップ）' : '（タップで打順入替）'}
+                </span>
               </h3>
               <div className="space-y-0.5">{userStarters.map((p, i) => renderPlayerRow(p, i, { isUser: true }))}</div>
             </div>
@@ -3981,7 +4008,11 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             <div className="bg-gray-900 rounded-lg p-2.5">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-[10px] font-bold text-gray-400">
-                  控え{swapTarget !== null && <span className="text-blue-400 ml-1">→ {swapTarget}番と交代</span>}
+                  控え{swapTarget !== null
+                    ? <span className="text-blue-400 ml-1">→ {swapTarget}番と交代</span>
+                    : selectedBench !== null
+                    ? <span className="text-blue-400 ml-1">（スタメンをタップして交代）</span>
+                    : null}
                 </h3>
                 <div className="flex gap-1">
                   <button onClick={() => setBenchFilter('fielder')}
@@ -3993,7 +4024,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
               <div className="space-y-0.5 text-[10px] max-h-40 overflow-y-auto">
                 {benchFilter === 'fielder' ? (
                   benchFielders.length === 0 ? <div className="text-gray-500 text-center py-1">控え野手なし</div> :
-                  benchFielders.map(p => renderBenchPlayer(p, swapTarget !== null))
+                  benchFielders.map(p => renderBenchPlayer(p))
                 ) : (
                   benchPitchers.length === 0 ? <div className="text-gray-500 text-center py-1">控え投手なし</div> :
                   benchPitchers.map(p => renderPitcherRow(p, { showRole: true, teamRotation: rotation }))
