@@ -33,10 +33,27 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [showTournamentMatchModal, setShowTournamentMatchModal] = useState(null);
   const [scoutReportNotifications, setScoutReportNotifications] = useState([]);
   const [showOtherLeagues, setShowOtherLeagues] = useState(false);
-  const [showCorporateTournaments, setShowCorporateTournaments] = useState(false);
+  const [showCorporateTournaments, setShowCorporateTournaments] = useState(() => {
+    const ct = WORLD_DATA.corporateToshitaikou;
+    const cn = WORLD_DATA.corporateNihonSenshuken;
+    const cc = WORLD_DATA.corporateClubSenshuken;
+    const cr = WORLD_DATA.corporateRegionalTournament;
+    return (
+      (cr?.generated && cr?.phase !== 'done') ||
+      (ct?.generated && !ct?.mainDone) ||
+      (cn?.generated && !cn?.done) ||
+      (cc?.generated && !cc?.done)
+    ) || false;
+  });
   const [showUniversityLeagues, setShowUniversityLeagues] = useState(false);
-  const [showUcTournament, setShowUcTournament] = useState(true);
-  const [showMjTournament, setShowMjTournament] = useState(true);
+  const [showUcTournament, setShowUcTournament] = useState(() => {
+    const uc = seasonData?.universityChampionship;
+    return !!uc?.generated && !uc?.champion;
+  });
+  const [showMjTournament, setShowMjTournament] = useState(() => {
+    const mj = seasonData?.meijiJingu;
+    return !!mj?.generated && !mj?.champion;
+  });
   const [expandedUniLeagues, setExpandedUniLeagues] = useState({});
   const [showNewspaper, setShowNewspaper] = useState(false);
   const [pendingPhaseEvent, setPendingPhaseEvent] = useState(null);
@@ -1046,6 +1063,34 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   useEffect(() => {
     if (onRegisterAdvance) onRegisterAdvance(() => handleProgressDate(1));
   });
+
+  // 大学トーナメント終了時に自動折り畳み
+  useEffect(() => {
+    if (seasonData?.universityChampionship?.champion) setShowUcTournament(false);
+    else if (seasonData?.universityChampionship?.generated) setShowUcTournament(true);
+  }, [seasonData?.universityChampionship?.champion, seasonData?.universityChampionship?.generated]);
+
+  useEffect(() => {
+    if (seasonData?.meijiJingu?.champion) setShowMjTournament(false);
+    else if (seasonData?.meijiJingu?.generated) setShowMjTournament(true);
+  }, [seasonData?.meijiJingu?.champion, seasonData?.meijiJingu?.generated]);
+
+  // 社会人トーナメント（背景世界）全終了時に自動折り畳み
+  useEffect(() => {
+    const ct = WORLD_DATA.corporateToshitaikou;
+    const cn = WORLD_DATA.corporateNihonSenshuken;
+    const cc = WORLD_DATA.corporateClubSenshuken;
+    const cr = WORLD_DATA.corporateRegionalTournament;
+    const anyGenerated = cr?.generated || ct?.generated || cn?.generated || cc?.generated;
+    const anyActive = (
+      (cr?.generated && cr?.phase !== 'done') ||
+      (ct?.generated && !ct?.mainDone) ||
+      (cn?.generated && !cn?.done) ||
+      (cc?.generated && !cc?.done)
+    );
+    if (anyGenerated && !anyActive) setShowCorporateTournaments(false);
+    else if (anyActive) setShowCorporateTournaments(true);
+  }, [seasonData?.currentDate?.month, seasonData?.currentDate?.day]);
 
   const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
   const getFirstDayOfWeek = (year, month) => new Date(year, month - 1, 1).getDay();
