@@ -1871,7 +1871,7 @@ function generateRivals(player, userRank) {
 
   return picked.map(t => {
     const rep = RANK_REPUTATION_BASE[t.rank] || 40;
-    const startDelay = Math.floor(Math.random() * 45) + 5;
+    const startDelay = Math.floor(Math.random() * 45) + 30; // 最短5/1(4月から30日後)〜最長6月中旬
     return {
       universityName: t.name,
       rank: t.rank,
