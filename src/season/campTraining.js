@@ -961,19 +961,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
           }
         }
       }
-      if (targetStat === 'arm' && newValue !== currentValue && player.position !== 'pitcher') {
-        // 野手: 肩力変動→球速連動（1pt肩力 ≈ 0.5km球速）
-        const velChange = Math.round((newValue - currentValue) * 0.5);
-        if (velChange !== 0) {
-          const velPath = getStatPath('velocity');
-          const currentVel = getNestedValue(updatedPlayer, velPath) || 120;
-          const newVel = Math.max(100, Math.min(getVelocityCap(newValue), currentVel + velChange));
-          if (newVel !== currentVel) {
-            updatedPlayer = setNestedValue(updatedPlayer, velPath, newVel);
-            growthReport.push({ stat: 'velocity', statName: getStatName('velocity'), before: currentVel, after: newVel, growth: newVel - currentVel, isAwakening: false, isLinked: true });
-          }
-        }
-      }
+      // 肩力→球速の連動はサブ練習「遠投」(long_throw)で処理。メイン練習では肩力のみ成長
     }
   });
 
