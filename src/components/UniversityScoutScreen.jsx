@@ -39,6 +39,8 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const [gaugeCompleteCount, setGaugeCompleteCount] = useState(0);
   const [selectionCandidates, setSelectionCandidates] = useState([]);
   const [selectionPicked, setSelectionPicked] = useState([]);
+  const [selSortKey, setSelSortKey] = useState(null);
+  const [selSortAsc, setSelSortAsc] = useState(false);
 
   useEffect(() => {
     if (candidates.length === 0 && highSchoolPool.players?.length > 0 && !scoutData.initialized) {
@@ -230,7 +232,49 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     return <span className="text-gray-500 text-[9px]">未知</span>;
   };
 
+  const getSelVal = (p, key) => {
+    const sa = p.scoutedAbilities || {};
+    switch (key) {
+      case 'velocity': return typeof sa.pitching?.velocity === 'number' ? sa.pitching.velocity : -Infinity;
+      case 'control': return typeof sa.pitching?.control === 'number' ? sa.pitching.control : -Infinity;
+      case 'stamina': return typeof sa.pitching?.stamina === 'number' ? sa.pitching.stamina : -Infinity;
+      case 'meet': return typeof sa.batting?.meet === 'number' ? sa.batting.meet : -Infinity;
+      case 'power': return typeof sa.batting?.power === 'number' ? sa.batting.power : -Infinity;
+      case 'eye': return typeof sa.batting?.eye === 'number' ? sa.batting.eye : -Infinity;
+      case 'speed': return typeof sa.physical?.speed === 'number' ? sa.physical.speed : -Infinity;
+      case 'arm': return typeof sa.physical?.arm === 'number' ? sa.physical.arm : -Infinity;
+      case 'defense': return typeof sa.fielding?.defense === 'number' ? sa.fielding.defense : -Infinity;
+      case 'mental': return typeof sa.mental === 'number' ? sa.mental : -Infinity;
+      case 'professionalism': return typeof sa.professionalism === 'number' ? sa.professionalism : -Infinity;
+      case 'growthPotential': return p.growthPotential ?? -Infinity;
+      case 'age': return p.age ?? 0;
+      default: return 0;
+    }
+  };
+
+  const handleSelSort = (key) => {
+    if (selSortKey === key) setSelSortAsc(prev => !prev);
+    else { setSelSortKey(key); setSelSortAsc(false); }
+  };
+
+  const sortedSelectionCandidates = selSortKey
+    ? [...selectionCandidates].sort((a, b) => {
+        const av = getSelVal(a, selSortKey);
+        const bv = getSelVal(b, selSortKey);
+        return selSortAsc ? av - bv : bv - av;
+      })
+    : selectionCandidates;
+
   if (phase === 'selection') {
+    const SelTh = ({ label, sortK, title }) => (
+      <th
+        className={`py-1 px-1 cursor-pointer select-none whitespace-nowrap ${selSortKey === sortK ? 'text-amber-400' : 'text-gray-500'} hover:text-amber-300 transition`}
+        onClick={() => handleSelSort(sortK)}
+        title={title}
+      >
+        {label}{selSortKey === sortK ? (selSortAsc ? '▲' : '▼') : ''}
+      </th>
+    );
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-950 to-gray-900 p-3">
         <div className="max-w-[1800px] mx-auto">
@@ -296,26 +340,26 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       <th className="py-1 px-1 text-gray-500">守</th>
                       <th className="py-1 px-1 text-gray-500">投打</th>
                       <th className="py-1 px-1 text-gray-500">フォーム</th>
-                      <th className="py-1 px-1 text-gray-500">年</th>
+                      <SelTh label="年" sortK="age" title="年齢でソート" />
                       <th className="py-1 px-1 text-gray-500">体</th>
                       <th className="py-1 px-1 text-gray-500">出身校</th>
-                      <th className="py-1 px-1 text-gray-500">球速</th>
-                      <th className="py-1 px-1 text-gray-500">制球</th>
-                      <th className="py-1 px-1 text-gray-500">ス</th>
-                      <th className="py-1 px-1 text-gray-500">ミ</th>
-                      <th className="py-1 px-1 text-gray-500">パ</th>
-                      <th className="py-1 px-1 text-gray-500">眼</th>
-                      <th className="py-1 px-1 text-gray-500">走</th>
-                      <th className="py-1 px-1 text-gray-500">肩</th>
-                      <th className="py-1 px-1 text-gray-500">守</th>
-                      <th className="py-1 px-1 text-gray-500">精神</th>
-                      <th className="py-1 px-1 text-gray-500">プロ</th>
-                      <th className="py-1 px-1 text-gray-500">成長</th>
+                      <SelTh label="球速" sortK="velocity" title="球速でソート" />
+                      <SelTh label="制球" sortK="control" title="制球でソート" />
+                      <SelTh label="ス" sortK="stamina" title="スタミナでソート" />
+                      <SelTh label="ミ" sortK="meet" title="ミートでソート" />
+                      <SelTh label="パ" sortK="power" title="パワーでソート" />
+                      <SelTh label="眼" sortK="eye" title="選球眼でソート" />
+                      <SelTh label="走" sortK="speed" title="走力でソート" />
+                      <SelTh label="肩" sortK="arm" title="肩力でソート" />
+                      <SelTh label="守" sortK="defense" title="守備でソート" />
+                      <SelTh label="精神" sortK="mental" title="精神力でソート" />
+                      <SelTh label="プロ" sortK="professionalism" title="プロ意識でソート" />
+                      <SelTh label="成長" sortK="growthPotential" title="成長力でソート" />
                       <th className="py-1 px-1 text-gray-500">操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectionCandidates.map(p => {
+                    {sortedSelectionCandidates.map(p => {
                       const sa = p.scoutedAbilities || {};
                       const isPicked = selectionPicked.some(sp => sp.id === p.id);
                       const canAdd = !isPicked && selectionPicked.length < selectionSlots;
