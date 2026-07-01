@@ -1146,16 +1146,26 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 className="bg-gray-700/70 border border-gray-600/50 text-white rounded px-1 py-0 text-xs"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {!useDH && <option value="pitcher">投手</option>}
-                                <option value="catcher">捕手</option>
-                                <option value="first">一塁</option>
-                                <option value="second">二塁</option>
-                                <option value="third">三塁</option>
-                                <option value="short">遊撃</option>
-                                <option value="left">左翼</option>
-                                <option value="center">中堅</option>
-                                <option value="right">右翼</option>
-                                {useDH && <option value="dh">DH</option>}
+                                {(() => {
+                                  const takenPositions = new Set(lineup.filter(e => e.battingOrder !== order).map(e => e.position));
+                                  const opts = [
+                                    ...(!useDH ? [{ value: 'pitcher', label: '投手' }] : []),
+                                    { value: 'catcher', label: '捕手' },
+                                    { value: 'first', label: '一塁' },
+                                    { value: 'second', label: '二塁' },
+                                    { value: 'third', label: '三塁' },
+                                    { value: 'short', label: '遊撃' },
+                                    { value: 'left', label: '左翼' },
+                                    { value: 'center', label: '中堅' },
+                                    { value: 'right', label: '右翼' },
+                                    ...(useDH ? [{ value: 'dh', label: 'DH' }] : []),
+                                  ];
+                                  return opts.map(({ value, label }) => (
+                                    <option key={value} value={value} disabled={takenPositions.has(value)}>
+                                      {label}
+                                    </option>
+                                  ));
+                                })()}
                               </select>
                               {(() => {
                                 const subs = getSubPositions(player, entry.position);
