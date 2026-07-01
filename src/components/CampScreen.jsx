@@ -50,7 +50,7 @@ function sortedStatKeys(stats, ascending = true) {
   return Object.entries(stats).sort((a,b) => ascending ? a[1]-b[1] : b[1]-a[1]).map(e => e[0]);
 }
 function pitcherStatToMain(statKey) {
-  return statKey === 'velocity' ? 'velocity' : statKey === 'control' ? 'control' : 'stamina';
+  return statKey === 'velocity' ? 'velocity' : 'control';
 }
 function fielderStatToMain(statKey) {
   if (statKey === 'meet' || statKey === 'power' || statKey === 'eye') return 'batting';

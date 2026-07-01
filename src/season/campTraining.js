@@ -46,14 +46,6 @@ export const TRAINING_MENUS = {
     growthMultipliers: { arm: 1.5 },
     category: 'fielding'
   },
-  stamina: {
-    name: 'スタミナ練習',
-    icon: '💪',
-    description: '投手スタミナを強化',
-    targets: ['stamina'],
-    growthMultipliers: { stamina: 1.5 },
-    category: 'pitching'
-  },
   control: {
     name: '制球練習',
     icon: '🎯',
@@ -148,8 +140,8 @@ export const SUB_TRAINING_MENUS = {
   running: {
     name: 'ランニング',
     icon: '🏃',
-    description: '基礎体力UP（走力+体力+スタミナ微増）',
-    targets: ['speed', 'stamina_sub', 'bodyStamina_sub'],
+    description: '走力+体力UP（投手はスタミナも強化）',
+    targets: ['speed', 'stamina', 'bodyStamina_sub'],
   },
   muscle: {
     name: '筋トレ',
@@ -251,9 +243,14 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         player.physical.speed = Math.min(100, (player.physical.speed || 50) + spd);
         growthReport.push({ statName: '走力', before: player.physical.speed - spd, after: player.physical.speed, growth: spd });
       }
-      if (player.pitching?.stamina && Math.random() < 0.2) {
-        player.pitching.stamina = Math.min(200, player.pitching.stamina + 1);
-        growthReport.push({ statName: 'スタミナ', before: player.pitching.stamina - 1, after: player.pitching.stamina, growth: 1 });
+      // 投手スタミナ: サブ練習標準確率（40%で+1、そのうち30%で+2）
+      if (player.position === 'pitcher' && player.pitching) {
+        const stmGain = growthAmount();
+        if (stmGain > 0) {
+          const before = player.pitching.stamina || 80;
+          player.pitching.stamina = Math.min(200, before + stmGain);
+          growthReport.push({ statName: 'スタミナ', before, after: player.pitching.stamina, growth: stmGain });
+        }
       }
       // 体力UP（100%で+1〜4）
       if (player.physical) {
@@ -1081,7 +1078,7 @@ export function executeTeamCampTraining(team, trainingAssignments, newPitchSelec
   const updatedPlayers = team.players.map(player => {
     const trainingType = trainingAssignments[player.id];
     if (!trainingType) {
-      const autoTraining = player.position === 'pitcher' ? 'stamina' : 'batting';
+      const autoTraining = player.position === 'pitcher' ? 'control' : 'batting';
       const { player: trained, growthReport } = executeCampTraining(player, autoTraining, undefined, staffBonus);
       allReports.push({ player: trained, trainingType: autoTraining, growthReport });
       return trained;
