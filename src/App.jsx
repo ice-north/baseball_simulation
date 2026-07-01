@@ -211,7 +211,13 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         initializeAllPlayersCondition();
 
         setScreenMode('management');
-        setManagementView('dateprogress');
+        // オフシーズンで保存された場合はオフシーズン画面に戻す（12/1等の日付が日程画面に表示されるバグを防ぐ）
+        const savedPhase = saveData.seasonData?.phase;
+        if (savedPhase === 'off_season') {
+          setManagementView('offseason');
+        } else {
+          setManagementView('dateprogress');
+        }
         setGameFlowState('season');
         return result;
       };

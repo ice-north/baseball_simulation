@@ -60,9 +60,12 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
     return null;
   }
 
-  // 11月30日〜: オフシーズン強制
+  // 11月30日〜: オフシーズン強制（日付を11/30に正規化して12/1以降がセーブされるバグを防ぐ）
   if (month >= 12 || (month === 11 && day >= 30)) {
-    newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.OFF_SEASON };
+    const offseasonDate = month >= 12
+      ? { ...newSeasonData.currentDate, month: 11, day: 30 }
+      : newSeasonData.currentDate;
+    newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.OFF_SEASON, currentDate: offseasonDate };
     setSeasonData(newSeasonData);
     setScreenMode('management');
     setManagementView('offseason');
