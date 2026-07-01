@@ -138,10 +138,16 @@ export function initializeUniversityLeagues(year) {
 
     if (numDivisions >= 2) {
       const perDiv = Math.floor(teams.length / numDivisions);
-      const divTeams = {};
+      const defaultDivTeams = {};
       for (let d = 1; d <= numDivisions; d++) {
-        divTeams[d] = teams.slice((d - 1) * perDiv, d * perDiv).map(t => t.name);
+        defaultDivTeams[d] = teams.slice((d - 1) * perDiv, d * perDiv).map(t => t.name);
       }
+
+      // 既存divTeams（昇降格処理済み）があれば引き継ぐ。なければ静的データの初期配置を使用
+      const existing = WORLD_DATA.universityLeagues[region.id];
+      const divTeams = (existing?.divTeams && Object.keys(existing.divTeams).length === numDivisions)
+        ? existing.divTeams
+        : defaultDivTeams;
 
       const makeSeason = (season) => {
         let schedule = [];
