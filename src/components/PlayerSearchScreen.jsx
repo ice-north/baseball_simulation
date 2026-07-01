@@ -26,6 +26,7 @@ const FILTER_DEFS = [
   { key: 'control', label: '制球', get: p => p.pitching?.control || 0 },
   { key: 'stamina', label: 'スタミナ', get: p => p.pitching?.stamina || 0, min: 0, max: 200, step: 1 },
   { key: 'growth', label: '成長率', get: p => p.growthPotential || 1.0, min: 0.5, max: 1.5, step: 0.05, decimal: true },
+  { key: 'discipline', label: 'プロ意識', get: p => p.personality?.discipline ?? 50 },
 ];
 
 const DEFAULT_FILTERS = {};
@@ -244,6 +245,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="control" w="w-7">制</SortTh>
                 <SortTh k="stamina" w="w-7">ス</SortTh>
                 <SortTh k="growth" w="w-8">成長</SortTh>
+                <SortTh k="discipline" w="w-7">意欲</SortTh>
                 <th className="py-1 px-1 text-center w-7">知</th>
                 <th className="py-1 px-1 text-center w-10">投打</th>
                 <th className="py-1 px-1 text-center w-8">形</th>
@@ -289,6 +291,13 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                       return <span className={`${color} font-bold`}>{g.toFixed(2)}</span>;
                     })()}
                   </td>
+                  <td className="py-0.5 px-1 text-center">
+                    {(() => {
+                      const d = p.personality?.discipline ?? 50;
+                      const color = d >= 80 ? 'text-pink-400' : d >= 65 ? 'text-orange-400' : d >= 50 ? 'text-yellow-400' : 'text-gray-400';
+                      return <span className={`${color} font-bold`}>{d}</span>;
+                    })()}
+                  </td>
                   <td className="py-0.5 px-1 text-center text-gray-500">{p.fame || 0}</td>
                   <td className="py-0.5 px-1 text-center text-gray-400 whitespace-nowrap text-[10px]">
                     {handLabel(p.physical?.throws)}/{handLabel(p.batting?.bats)}
@@ -320,7 +329,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={gameMode === 'university' ? 20 : 19} className="py-8 text-center text-gray-500">
+                <tr><td colSpan={gameMode === 'university' ? 21 : 20} className="py-8 text-center text-gray-500">
                   {sources.highschool && !sources.university && !sources.released && !sources.teams && highSchoolPool.players.length === 0
                     ? '高校生プールは4月に生成されます。4月以降に再度確認してください。'
                     : sources.highschool && highSchoolPool.players.length === 0
@@ -407,6 +416,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <div className="text-[10px] text-gray-500 font-bold mb-1">その他</div>
                 <div className="space-y-0.5 text-xs">
                   {[['成長率', (selectedPlayer.growthPotential || 1.0).toFixed(2)],
+                    ['プロ意識', selectedPlayer.personality?.discipline ?? 50],
                     ['体力', selectedPlayer.physical?.bodyStamina], ['回復', selectedPlayer.physical?.recovery],
                     ['知名度', selectedPlayer.fame || 0],
                     ['投', selectedPlayer.physical?.throws ? handLabel(selectedPlayer.physical.throws) + '投' : '-'],
