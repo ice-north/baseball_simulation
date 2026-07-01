@@ -126,15 +126,15 @@ export const saveGameToSlot = async (slotIndex, gameState) => {
       _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
       _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
       _uniTeamRepData: UNIVERSITY_TEAMS.reduce((acc, t) => {
-        if (t.reputation !== undefined || t.reputationHistory || t.rankPosition !== undefined) {
-          acc[t.name] = { rank: t.rank, reputation: t.reputation, reputationHistory: t.reputationHistory, rankPosition: t.rankPosition };
+        if (t.reputation !== undefined || t.reputationHistory || t.rankPosition !== undefined || t.rankingScore !== undefined) {
+          acc[t.name] = { rank: t.rank, reputation: t.reputation, reputationHistory: t.reputationHistory, rankPosition: t.rankPosition, rankingScore: t.rankingScore };
         }
         return acc;
       }, {}),
     } : null;
 
     const saveData = {
-      version: '2.13.0',
+      version: '2.14.0',
       timestamp: new Date().toISOString(),
       slotIndex,
       seasonData: gameState.seasonData,
@@ -243,6 +243,7 @@ export const loadGameFromSlot = async (slotIndex) => {
             if (d.reputation !== undefined) teamDef.reputation = d.reputation;
             if (d.reputationHistory) teamDef.reputationHistory = d.reputationHistory;
             if (d.rankPosition !== undefined) teamDef.rankPosition = d.rankPosition;
+            if (d.rankingScore !== undefined) teamDef.rankingScore = d.rankingScore;
           }
         }
       }

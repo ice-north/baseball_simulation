@@ -5,6 +5,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 const RANK_COLOR = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-400' };
 const RANK_BG = { S: 'bg-yellow-900/40 border-yellow-700/60', A: 'bg-orange-900/30 border-orange-700/50', B: 'bg-green-900/30 border-green-700/50', C: 'bg-blue-900/20 border-blue-700/40', D: 'bg-gray-900/20 border-gray-700/30' };
 const TYPE_LABEL = { corporate: '社会人', worldUniversity: '大学', university: '大学', independent: '独立' };
+const RANK_BAND_PCT = { S: '上位5%', A: '6-20%', B: '21-45%', C: '46-75%', D: '下位25%' };
 
 const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
   const [filterType, setFilterType] = useState('all');
@@ -27,7 +28,11 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
 
   const filtered = useMemo(() => {
     return enriched.filter(e => {
-      if (filterType !== 'all' && e.displayType !== filterType) return false;
+      if (filterType !== 'all') {
+        if (filterType === 'university') {
+          if (e.displayType !== 'university' && e.displayType !== 'worldUniversity') return false;
+        } else if (e.displayType !== filterType) return false;
+      }
       if (filterRank !== 'all' && e.rank !== filterRank) return false;
       if (searchText && !e.name.includes(searchText)) return false;
       return true;
@@ -68,12 +73,15 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
       {/* User team highlight */}
       {userEntry && (
         <div className={`mb-4 p-3 rounded-lg border-2 border-yellow-500/60 bg-yellow-900/20`}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="text-yellow-400 font-bold text-sm">あなたのチーム</div>
             <div className="font-bold">{userEntry.name}</div>
             <div className={`font-bold text-lg ${RANK_COLOR[userEntry.rank]}`}>{userEntry.rank}ランク</div>
             <div className="text-gray-300 text-sm">#{userEntry.position} / {totalTeams}</div>
-            <div className="ml-auto text-sm text-gray-300">スコア {userEntry.score}</div>
+            <div className="ml-auto text-sm">
+              <span className="text-gray-400">Eloスコア </span>
+              <span className="text-white font-mono font-bold">{userEntry.score}</span>
+            </div>
             <div className="text-sm text-gray-400">注目度 {userEntry.reputation}</div>
           </div>
         </div>
@@ -83,8 +91,9 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
       <div className="flex gap-2 mb-4">
         {['S', 'A', 'B', 'C', 'D'].map(r => (
           <div key={r} className={`flex-1 text-center p-2 rounded border ${RANK_BG[r]}`}>
-            <div className={`font-bold ${RANK_COLOR[r]}`}>{r}ランク</div>
+            <div className={`font-bold ${RANK_COLOR[r]}`}>{r}</div>
             <div className="text-xs text-gray-300">{rankCounts[r]}チーム</div>
+            <div className="text-[10px] text-gray-500">{RANK_BAND_PCT[r]}</div>
           </div>
         ))}
       </div>
@@ -92,7 +101,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-3">
         <div className="flex gap-1">
-          {[['all', '全て'], ['corporate', '社会人'], ['worldUniversity', '大学'], ['independent', '独立']].map(([v, label]) => (
+          {[['all', '全て'], ['corporate', '社会人'], ['university', '大学'], ['independent', '独立']].map(([v, label]) => (
             <button key={v} onClick={() => setFilterType(v)}
               className={`px-2 py-1 rounded text-xs font-medium ${filterType === v ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
               {label}
@@ -125,7 +134,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
               <th className="text-right pr-2 py-2 w-12">順位</th>
               <th className="text-left py-2 pl-1">チーム名</th>
               <th className="text-center py-2 w-14">ランク</th>
-              <th className="text-center py-2 w-16">スコア</th>
+              <th className="text-center py-2 w-20">Eloスコア</th>
               <th className="text-center py-2 w-14">注目度</th>
               <th className="text-center py-2 w-14">種別</th>
             </tr>
@@ -146,7 +155,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
                   <td className="text-center py-1.5">
                     <span className={`font-bold text-sm ${RANK_COLOR[entry.rank]}`}>{entry.rank}</span>
                   </td>
-                  <td className="text-center py-1.5 text-gray-200 font-mono">{entry.score}</td>
+                  <td className="text-center py-1.5 text-gray-200 font-mono font-bold">{entry.score}</td>
                   <td className="text-center py-1.5">
                     <div className="flex items-center justify-center gap-1">
                       <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -165,7 +174,9 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
 
       {/* Score explanation */}
       <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-500">
-        スコア = 今年の注目度×1.0 + 昨年×0.6 + 一昨年×0.3（3年加重平均）。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D
+        <span className="font-bold text-gray-400">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
+        重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
+        初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D
       </div>
     </div>
   );

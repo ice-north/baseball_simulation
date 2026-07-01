@@ -172,6 +172,43 @@ const RANK_BATTING_CAP = { S: 72, A: 66, B: 60, C: 52, D: 45 };
 // 注目度が高い → スカウト成功率UP、企業資金UP、優秀な選手が集まる
 const RANK_INITIAL_REPUTATION = { S: 85, A: 65, B: 40, C: 20, D: 5 };
 
+// ============================================================
+// Eloランキングスコア（FIFAランキング方式）
+// rankingScore: 試合結果に基づく加算型スコア（0-100上限の reputation とは独立）
+// 式: ΔP = I × (W - We), We = 1 / (10^(-(self - opp)/400) + 1)
+// ============================================================
+const INITIAL_RANKING_SCORE = { S: 1200, A: 1050, B: 900, C: 750, D: 600 };
+const ELO_DIVISOR = 400;
+const ELO_CLAMP_MIN = 100;
+const ELO_CLAMP_MAX = 2000;
+
+// 試合重要度係数（I）
+const ELO_I = {
+  regular: 50,      // 社会人レギュラーシーズン（シーズン全体を1単位として計算）
+  league: 40,       // 大学・独立リーグ（春・秋それぞれ）
+  tournament: 40,   // 社会人全国大会（1試合あたり基礎値、後半戦ほど上昇）
+  uniNational: 35,  // 大学全国大会（1試合あたり基礎値）
+};
+
+// 期待勝率 We
+const getExpectedWinRate = (selfScore, oppScore) =>
+  1 / (Math.pow(10, -(selfScore - oppScore) / ELO_DIVISOR) + 1);
+
+// トーナメントブラケットから勝者・敗者ペアを取得
+const getBracketMatchResults = (bracket) => {
+  const results = [];
+  if (!bracket?.rounds) return results;
+  const total = bracket.rounds.length;
+  for (let r = 0; r < total; r++) {
+    for (const match of bracket.rounds[r]) {
+      if (match.winner && match.loser && !match.isBye) {
+        results.push({ winner: match.winner, loser: match.loser, roundIdx: r, totalRounds: total });
+      }
+    }
+  }
+  return results;
+};
+
 let corporatePlayerIdBase = 20000;
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -1338,35 +1375,21 @@ export const updateUniversityRankFromReputation = (teamData) => {
   return null;
 };
 
-// 3年分の加重平均スコア（当年×1.0 + 1年前×0.6 + 2年前×0.3）
-const computeEffectiveScore = (dataObj) => {
-  const cur = dataObj.reputation || 0;
-  const hist = dataObj.reputationHistory || [];
-  const h1 = hist.length >= 1 ? hist[hist.length - 1] : cur;
-  const h2 = hist.length >= 2 ? hist[hist.length - 2] : h1;
-  return cur * 1.0 + h1 * 0.6 + h2 * 0.3;
-};
-
-// 全チームのeffectiveScoreを公開（TeamRankingScreenで使用）
-export const getTeamEffectiveScore = (dataObj) => computeEffectiveScore(dataObj);
-
-// 全チーム（社会人＋独立＋大学）のランク変動を一括処理（パーセンテージ方式）
+// 全チーム（社会人＋独立＋大学）のランク変動を一括処理（FIFAスタイルElo方式）
 export const updateAllRanks = (seasonData) => {
-  // 1. 社会人・独立リーグの注目度を最終更新
+  const standings = seasonData.standings || [];
+
+  // === Step 1: reputation更新（game mechanics用: スカウト・予算・リクルート成功率など）===
   updateAllTeamReputations(seasonData);
 
-  // 2. TEAMS_DATA内の大学チーム（プレイヤーチーム）の注目度更新
-  const standings = seasonData.standings || [];
-  const standingsMap = {};
-  standings.forEach(s => { standingsMap[s.team] = s; });
+  // TEAMS_DATA大学チームのreputation更新
+  const sortedStandings = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
   const ucChampion = seasonData.universityChampionship?.champion || null;
   const mjChampion = seasonData.meijiJingu?.champion || null;
-
   for (const teamName of Object.keys(TEAMS_DATA)) {
     const teamData = TEAMS_DATA[teamName];
     if (!teamData?.universityData) continue;
-    const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-    const leaguePosition = sorted.findIndex(st => st.team === teamName) + 1;
+    const leaguePosition = sortedStandings.findIndex(st => st.team === teamName) + 1;
     updateUniversityReputation(teamData, {
       leaguePosition,
       tournamentChampion: teamName === ucChampion || teamName === mjChampion,
@@ -1374,7 +1397,7 @@ export const updateAllRanks = (seasonData) => {
     });
   }
 
-  // 3. WORLD_DATA大学チームの注目度更新（全リーグ分を集計してから一括適用）
+  // WORLD_DATA大学チームのreputation更新（注目度・歴史記録）
   const ucSource = seasonData.universityChampionship || WORLD_DATA._uniTournaments?.uc;
   const mjSource = seasonData.meijiJingu || WORLD_DATA._uniTournaments?.mj;
   const worldUcWins = ucSource?.bracket ? countBracketWins(ucSource.bracket) : {};
@@ -1391,12 +1414,12 @@ export const updateAllRanks = (seasonData) => {
       for (const seasonKey of ['spring', 'fall']) {
         const sd = league[seasonKey];
         if (!sd?.done) continue;
-        const allStandings = league.divisions
+        const allSt = league.divisions
           ? [...(sd.standings1 || []), ...(sd.standings2 || [])]
           : (sd.standings || []);
-        if (allStandings.length === 0) continue;
-        const sorted = [...allStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-        for (const st of allStandings) {
+        if (allSt.length === 0) continue;
+        const sorted = [...allSt].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+        for (const st of allSt) {
           if (!worldTeamGains[st.team]) worldTeamGains[st.team] = 0;
           const pos = sorted.findIndex(s => s.team === st.team) + 1;
           if (pos === 1) worldTeamGains[st.team] += UNI_REPUTATION_GAINS.position1st;
@@ -1406,44 +1429,147 @@ export const updateAllRanks = (seasonData) => {
       }
     }
   }
-  // 全国大会ボーナスを追加
   for (const teamName of Object.keys(worldTeamGains)) {
     const tWins = (worldUcWins[teamName] || 0) + (worldMjWins[teamName] || 0);
     if (tWins > 0) worldTeamGains[teamName] += tWins * UNI_REPUTATION_GAINS.tournamentWin;
     if (teamName === worldUcChampion || teamName === worldMjChampion) worldTeamGains[teamName] += UNI_REPUTATION_GAINS.tournamentChampion;
     else if (teamName === worldUcRunnerUp || teamName === worldMjRunnerUp) worldTeamGains[teamName] += UNI_REPUTATION_GAINS.tournamentRunnerUp;
   }
-  // UNIVERSITY_TEAMSに一括適用（年1回、reputationHistory更新込み）
   const managedTeamNames = new Set(Object.keys(TEAMS_DATA));
   for (const teamDef of UNIVERSITY_TEAMS) {
-    if (managedTeamNames.has(teamDef.name)) continue; // TEAMS_DATAで管理済み
+    if (managedTeamNames.has(teamDef.name)) continue;
     if (teamDef.reputation === undefined) teamDef.reputation = RANK_INITIAL_REPUTATION[teamDef.rank] || 20;
     if (!teamDef.reputationHistory) teamDef.reputationHistory = [];
     teamDef.reputationHistory.push(teamDef.reputation);
     if (teamDef.reputationHistory.length > 2) teamDef.reputationHistory.shift();
-    const gain = worldTeamGains[teamDef.name] || 0;
-    teamDef.reputation = clamp(teamDef.reputation - UNI_REPUTATION_DECAY + gain, 0, 100);
+    teamDef.reputation = clamp(teamDef.reputation - UNI_REPUTATION_DECAY + (worldTeamGains[teamDef.name] || 0), 0, 100);
   }
 
-  // 4. 全チームのeffectiveScoreを収集
+  // === Step 2: 全エントリー収集・rankingScore初期化 ===
   const allEntries = [];
   for (const [teamName, teamData] of Object.entries(TEAMS_DATA)) {
     if (teamData?.corporateData) {
-      allEntries.push({ name: teamName, dataObj: teamData.corporateData, type: 'corporate' });
+      const cd = teamData.corporateData;
+      if (cd.rankingScore === undefined) cd.rankingScore = INITIAL_RANKING_SCORE[cd.rank] || 900;
+      allEntries.push({ name: teamName, dataObj: cd, type: teamData.independentLeagueId ? 'independent' : 'corporate' });
     }
     if (teamData?.universityData) {
-      allEntries.push({ name: teamName, dataObj: teamData.universityData, type: 'university' });
+      const ud = teamData.universityData;
+      if (ud.rankingScore === undefined) ud.rankingScore = INITIAL_RANKING_SCORE[ud.rank] || 900;
+      allEntries.push({ name: teamName, dataObj: ud, type: 'university' });
     }
   }
   for (const teamDef of UNIVERSITY_TEAMS) {
     if (managedTeamNames.has(teamDef.name)) continue;
-    if (teamDef.reputation === undefined) teamDef.reputation = RANK_INITIAL_REPUTATION[teamDef.rank] || 20;
+    if (teamDef.rankingScore === undefined) teamDef.rankingScore = INITIAL_RANKING_SCORE[teamDef.rank] || 900;
     allEntries.push({ name: teamDef.name, dataObj: teamDef, type: 'worldUniversity', teamDef });
   }
 
-  // 5. effectiveScoreでソートしてパーセンテージ別ランク割り当て
-  allEntries.forEach(e => { e.effectiveScore = computeEffectiveScore(e.dataObj); });
-  allEntries.sort((a, b) => b.effectiveScore - a.effectiveScore);
+  // === Step 3: Eloデルタ計算（試合前スコアのスナップショットを使用）===
+  const scoreMap = {};
+  allEntries.forEach(e => { scoreMap[e.name] = e.dataObj.rankingScore; });
+
+  const deltas = {};
+  const addDelta = (name, d) => { deltas[name] = (deltas[name] || 0) + d; };
+
+  // 3a. 社会人レギュラーシーズン（シーズン全体のW vs We）
+  const corpSt = standings.filter(s => {
+    const td = TEAMS_DATA[s.team];
+    return td?.corporateData && !td.independentLeagueId;
+  });
+  if (corpSt.length > 1) {
+    const avgScore = corpSt.reduce((acc, s) => acc + (scoreMap[s.team] || 900), 0) / corpSt.length;
+    for (const st of corpSt) {
+      const selfScore = scoreMap[st.team];
+      if (selfScore === undefined) continue;
+      const games = (st.wins || 0) + (st.losses || 0) + (st.draws || 0);
+      if (games === 0) continue;
+      const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
+      addDelta(st.team, ELO_I.regular * (W - getExpectedWinRate(selfScore, avgScore)));
+    }
+  }
+
+  // 3b. 独立リーグ（全独立チームをひとまとめに）
+  const indSt = standings.filter(s => TEAMS_DATA[s.team]?.independentLeagueId);
+  if (indSt.length > 1) {
+    const avgScore = indSt.reduce((acc, s) => acc + (scoreMap[s.team] || 900), 0) / indSt.length;
+    for (const st of indSt) {
+      const selfScore = scoreMap[st.team];
+      if (selfScore === undefined) continue;
+      const games = (st.wins || 0) + (st.losses || 0) + (st.draws || 0);
+      if (games === 0) continue;
+      const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
+      addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
+    }
+  }
+
+  // 3c. TEAMS_DATA大学チームのリーグElo
+  const uniMgSt = standings.filter(s => TEAMS_DATA[s.team]?.universityData);
+  if (uniMgSt.length > 1) {
+    const avgScore = uniMgSt.reduce((acc, s) => acc + (scoreMap[s.team] || 900), 0) / uniMgSt.length;
+    for (const st of uniMgSt) {
+      const selfScore = scoreMap[st.team];
+      if (selfScore === undefined) continue;
+      const games = (st.wins || 0) + (st.losses || 0) + (st.draws || 0);
+      if (games === 0) continue;
+      const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
+      addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
+    }
+  }
+
+  // 3d. WORLD_DATA大学リーグ（春・秋、部別に適用）
+  if (uniLeagues) {
+    for (const league of Object.values(uniLeagues)) {
+      for (const seasonKey of ['spring', 'fall']) {
+        const sd = league[seasonKey];
+        if (!sd?.done) continue;
+        const divGroups = league.divisions
+          ? [sd.standings1 || [], sd.standings2 || []]
+          : [sd.standings || []];
+        for (const divSt of divGroups) {
+          if (divSt.length < 2) continue;
+          const avgScore = divSt.reduce((acc, s) => acc + (scoreMap[s.team] || 900), 0) / divSt.length;
+          for (const st of divSt) {
+            const selfScore = scoreMap[st.team];
+            if (selfScore === undefined) continue;
+            const games = (st.wins || 0) + (st.losses || 0) + (st.draws || 0);
+            if (games === 0) continue;
+            const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
+            addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
+          }
+        }
+      }
+    }
+  }
+
+  // 3e. トーナメントElo（ブラケットの勝者・敗者ペアから直接計算）
+  const applyBracketElo = (bracket, baseI) => {
+    if (!bracket) return;
+    for (const { winner, loser, roundIdx, totalRounds } of getBracketMatchResults(bracket)) {
+      const ws = scoreMap[winner], ls = scoreMap[loser];
+      if (ws === undefined || ls === undefined) continue;
+      // 後半戦ほど重要度を1.0〜1.5倍にスケール
+      const I = baseI * (1 + (roundIdx / Math.max(totalRounds - 1, 1)) * 0.5);
+      const We = getExpectedWinRate(ws, ls);
+      addDelta(winner, I * (1 - We));
+      addDelta(loser,  I * (0 - (1 - We)));
+    }
+  };
+  // 社会人全国大会
+  applyBracketElo(seasonData.toshitaikou?.mainTournament?.bracket, ELO_I.tournament);
+  applyBracketElo(seasonData.nihonSenshuken?.mainTournament?.bracket, ELO_I.tournament);
+  // 大学全国大会
+  applyBracketElo(ucSource?.bracket, ELO_I.uniNational);
+  applyBracketElo(mjSource?.bracket, ELO_I.uniNational);
+
+  // === Step 4: デルタをrankingScoreに一括適用 ===
+  for (const e of allEntries) {
+    const d = deltas[e.name] || 0;
+    e.dataObj.rankingScore = clamp((e.dataObj.rankingScore || 900) + d, ELO_CLAMP_MIN, ELO_CLAMP_MAX);
+  }
+
+  // === Step 5: rankingScoreでソートしてパーセンテージ別ランク割り当て ===
+  allEntries.sort((a, b) => b.dataObj.rankingScore - a.dataObj.rankingScore);
 
   const total = allEntries.length;
   const PCT_BANDS = [
@@ -1463,33 +1589,30 @@ export const updateAllRanks = (seasonData) => {
     e.position = i + 1;
     e.newRank = newRank;
 
-    let oldRank;
-    if (e.type === 'corporate' || e.type === 'university') {
-      oldRank = e.dataObj.rank;
-      const prevPos = e.dataObj.rankPosition;
+    if (e.type === 'corporate' || e.type === 'university' || e.type === 'independent') {
+      const oldRank = e.dataObj.rank;
       e.dataObj.rankPosition = i + 1;
       if (newRank !== oldRank) {
         e.dataObj.rank = newRank;
-        rankChanges.push({ team: e.name, from: oldRank, to: newRank, score: e.effectiveScore, type: e.type });
+        rankChanges.push({ team: e.name, from: oldRank, to: newRank, score: e.dataObj.rankingScore, type: e.type });
       }
     } else {
-      oldRank = e.teamDef.rank;
-      const prevPos = e.teamDef.rankPosition;
+      const oldRank = e.teamDef.rank;
       e.teamDef.rankPosition = i + 1;
       if (newRank !== oldRank) {
         e.teamDef.rank = newRank;
-        rankChanges.push({ team: e.name, from: oldRank, to: newRank, score: e.effectiveScore, type: 'university' });
+        rankChanges.push({ team: e.name, from: oldRank, to: newRank, score: e.dataObj.rankingScore, type: 'university' });
       }
     }
   }
 
-  // 6. ランキングスナップショットを保存（TeamRankingScreenで参照）
+  // === Step 6: ランキングスナップショット保存（TeamRankingScreenで参照）===
   WORLD_DATA._teamRanking = allEntries.map(e => ({
     position: e.position,
     name: e.name,
     rank: e.newRank,
-    score: Math.round(e.effectiveScore * 10) / 10,
-    reputation: Math.round(e.dataObj?.reputation ?? e.teamDef?.reputation ?? 0),
+    score: Math.round(e.dataObj.rankingScore),
+    reputation: Math.round(e.dataObj?.reputation ?? 0),
     type: e.type,
   }));
 
