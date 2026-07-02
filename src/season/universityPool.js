@@ -180,11 +180,10 @@ function generateHighSchoolPlayer(id) {
 
   let abilities;
   if (isTwoWay) {
-    const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
+    const velTierBonus = { S: 12, A: 6, B: 2, C: 0, D: -2, E: -4 };
     if (isPitcher) {
       // 投手登録二刀流: 投手能力メイン、打撃は原石レベル
       const twoWayArm = Math.max(10, baseArm + r(8, 16));
-      const velCap = getVelocityCap(twoWayArm);
       let velocity = Math.round(nrm(126, 7) + velTierBonus[tier]);
       if (isSideOrUnder) velocity -= 3;
       if (throws === 'left') velocity -= 3;
@@ -198,14 +197,14 @@ function generateHighSchoolPlayer(id) {
         defense: g(40, 10, 0.4, 1),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
         recovery: g(44, 10, 0, 15),
-        velocity: Math.max(110, Math.min(velCap, velocity)),
+        velocity: Math.max(110, Math.min(165, velocity)),
         control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
         stamina: Math.max(25, Math.round(nrm(63, 12) + off * 1.5))
       };
     } else {
       // 野手登録二刀流: 野手能力メイン、肩が強く投手もそこそこ
       const twoWayArm = Math.max(10, baseArm + r(10, 20));
-      const velCap = getVelocityCap(twoWayArm);
+      const velCap = getVelocityCap(twoWayArm); // 野手二刀流は肩力依存の自然な球速上限を維持
       abilities = {
         meet: Math.max(5, Math.round(nrm(22, 9) + off)),
         power: Math.max(3, Math.round(nrm(18, 10) + off + buildMod.power)),
@@ -222,7 +221,10 @@ function generateHighSchoolPlayer(id) {
       };
     }
   } else if (isPitcher) {
-    const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
+    // ランクボーナスを大きめに設定（S才能投手で150km超えが年数人現れる程度）
+    // 初期生成時はvelCapを適用しない（18歳時点の球速は才能そのもの）
+    // velCapは成長フェーズで使用（肩力以上には鍛えられない）
+    const velTierBonus = { S: 12, A: 6, B: 2, C: 0, D: -2, E: -4 };
     let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
     if (isSideOrUnder) velocity -= 3;
     if (throws === 'left') velocity -= 3;
@@ -234,7 +236,6 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
     const armValue = Math.max(10, baseArm + r(2, 8));
-    const velCap = getVelocityCap(armValue);
     abilities = {
       meet: g(14, 6, 0.3, 3),
       power: g(10 + buildMod.power * 0.3, 5, 0.3, 3),
@@ -245,7 +246,7 @@ function generateHighSchoolPlayer(id) {
       defense: g(35, 10, 0.4, 1),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(43, 10, 0, 15),
-      velocity: Math.max(110, Math.min(velCap, velocity)),
+      velocity: Math.max(110, Math.min(165, velocity)),
       control: Math.max(5, control),
       stamina: Math.max(25, stamina)
     };
