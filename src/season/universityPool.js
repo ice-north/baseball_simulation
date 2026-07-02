@@ -5,7 +5,7 @@
 // ============================================================
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
-import { generatePositionFitness, generateRandomArsenal } from './tryoutSystem.js';
+import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
@@ -131,6 +131,15 @@ function generateHighSchoolPlayer(id) {
   if (throws === 'left') pitcherChance = cl(pitcherChance + 0.10, 0.10, 0.80);
   const isPitcher = Math.random() < pitcherChance;
 
+  const isTwoWay = Math.random() < 0.01;
+  let twoWaySubPosition = null;
+  if (isTwoWay && isPitcher) {
+    const fieldPositions = throws === 'left'
+      ? ['first', 'left', 'center', 'right']
+      : ['first', 'second', 'third', 'short', 'left', 'center', 'right'];
+    twoWaySubPosition = fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
+  }
+
   // === Phase 4: ポジションを能力・体格から決定 ===
   let position;
   if (isPitcher) {
@@ -170,7 +179,49 @@ function generateHighSchoolPlayer(id) {
     Math.max(floor, Math.round(nrm(mu, sigma) + off * tf));
 
   let abilities;
-  if (isPitcher) {
+  if (isTwoWay) {
+    const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
+    if (isPitcher) {
+      // 投手登録二刀流: 投手能力メイン、打撃は原石レベル
+      const twoWayArm = Math.max(10, baseArm + r(8, 16));
+      const velCap = getVelocityCap(twoWayArm);
+      let velocity = Math.round(nrm(126, 7) + velTierBonus[tier]);
+      if (isSideOrUnder) velocity -= 3;
+      if (throws === 'left') velocity -= 3;
+      abilities = {
+        meet: g(28, 8, 0.3, 5),
+        power: g(22, 7, 0.3, 3),
+        eye: g(28, 8, 0.3, 5),
+        steal: Math.max(1, Math.round(nrm(20, 8) + buildMod.steal * 0.5)),
+        speed: baseSpeed,
+        arm: twoWayArm,
+        defense: g(40, 10, 0.4, 1),
+        bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
+        recovery: g(44, 10, 0, 15),
+        velocity: Math.max(110, Math.min(velCap, velocity)),
+        control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
+        stamina: Math.max(25, Math.round(nrm(63, 12) + off * 1.5))
+      };
+    } else {
+      // 野手登録二刀流: 野手能力メイン、肩が強く投手もそこそこ
+      const twoWayArm = Math.max(10, baseArm + r(10, 20));
+      const velCap = getVelocityCap(twoWayArm);
+      abilities = {
+        meet: Math.max(5, Math.round(nrm(22, 9) + off)),
+        power: Math.max(3, Math.round(nrm(18, 10) + off + buildMod.power)),
+        eye: Math.max(5, Math.round(nrm(20, 8) + off * 0.8)),
+        steal: Math.max(1, Math.round(nrm(22, 8) + off * 0.4 + buildMod.steal)),
+        speed: baseSpeed,
+        arm: twoWayArm,
+        defense: Math.max(1, Math.round(nrm(42, 10) + off * 0.6 + buildMod.defense)),
+        bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
+        recovery: g(44, 10, 0, 15),
+        velocity: Math.max(100, Math.min(velCap, Math.round(nrm(110 + twoWayArm * 0.3, 5)))),
+        control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
+        stamina: Math.max(25, Math.round(nrm(55, 10) + off))
+      };
+    }
+  } else if (isPitcher) {
     const velTierBonus = { S: 3, A: 2, B: 1, C: 0, D: -1, E: -2 };
     let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
     if (isSideOrUnder) velocity -= 3;
@@ -277,15 +328,17 @@ function generateHighSchoolPlayer(id) {
       velocity: abilities.velocity, control: abilities.control,
       stamina: abilities.stamina, spinRate: r(20, 50),
       form: pitchingForm,
-      arsenal: isPitcher ? generateRandomArsenal(0, true) : generateFielderArsenalBasic()
+      arsenal: (isPitcher || isTwoWay) ? generateRandomArsenal(0, true) : generateFielderArsenalBasic()
     },
+    isTwoWay,
+    twoWaySubPosition,
     growthPotential,
     growthModifier: 0,
     personality: {
       discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
       mental: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
     },
-    positionFitness: generatePositionFitness(position),
+    positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
     fame,
     highSchool: highSchool ? { name: highSchool.name, rank: highSchool.rank, pref: highSchool.pref } : null,
     fatigue: 0,
