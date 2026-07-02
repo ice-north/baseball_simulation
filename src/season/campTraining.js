@@ -739,6 +739,17 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   const growthReport = [];
   let updatedPlayer = JSON.parse(JSON.stringify(player));
 
+  // 全選手があらゆる練習を受けられるよう、不足する能力オブジェクトをデフォルト値で初期化
+  if (!updatedPlayer.batting) {
+    updatedPlayer.batting = { meet: 0, power: 0, eye: 0, steal: 0, bunt: 0, bats: 'right' };
+  }
+  if (!updatedPlayer.pitching) {
+    updatedPlayer.pitching = { velocity: 110, control: 30, stamina: 80, spinRate: 30, form: 'threeQuarter', arsenal: [{ id: 1, type: 'straight', level: 30 }] };
+  }
+  if (!updatedPlayer.fielding) {
+    updatedPlayer.fielding = { defense: 0 };
+  }
+
   // スタッフ指導補正: 練習カテゴリに対応するスタッフ能力で0.7〜1.3倍
   const staffAbilityKey = CATEGORY_TO_STAFF_ABILITY[menu.category];
   const staffAbilityValue = staffBonus && staffAbilityKey ? (staffBonus[staffAbilityKey] || 50) : 50;
@@ -813,7 +824,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   }
 
   // 通常の能力練習（成長量抑制: プロ級へ到達しにくくする）
-  menu.targets.forEach(targetStat => {
+  menu.targets.forEach((targetStat, targetIdx) => {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
     const ageBase = getAgeGrowthBase(age, isPhysical);
     const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.10);
@@ -888,7 +899,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
 
     const statPath = getStatPath(targetStat);
     if (statPath) {
-      const currentValue = getNestedValue(updatedPlayer, statPath) || 50;
+      const currentValue = getNestedValue(updatedPlayer, statPath) ?? 0;
 
       // フォーム別成長補正（オーバー→球速伸びやすい、アンダー→制球伸びやすい）
       const formEffect = PITCHING_FORM_EFFECTS[updatedPlayer.pitching?.form] || PITCHING_FORM_EFFECTS.threeQuarter;
@@ -932,6 +943,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       }
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
+      // 主対象能力（targets[0]）は最低+1を保証（クロスポジション練習でも効果が出る）
+      if (targetIdx === 0 && totalGrowth < 1 && !menu.intensive) totalGrowth = 1;
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
       if (targetStat === 'defense' && totalGrowth < 1) totalGrowth = 1;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
