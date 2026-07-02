@@ -128,14 +128,14 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
       const fitness = ps.player.positionFitness?.[pos] || 0;
       if (pos !== 'dh') {
         // 守備重視: 適性70未満は除外（ファースト/レフトは50）
-        // 標準: 本来ポジションは0以上、難ポジ(短/捕/中/二)は40以上、他は0以上（ファースト/レフトは除外なし）
+        // 標準: 本来ポジションは0以上、難ポジ(短/捕/中/二)は40以上、ファースト/レフトは40以上、他は20以上
         // 打撃重視: 10未満除外（ファースト/レフトは除外なし）
         const isLenient = pos === 'first' || pos === 'left';
         const isNative = ps.player.position === pos;
         const hardPos = pos === 'short' || pos === 'catcher' || pos === 'center' || pos === 'second';
         const threshold = mode === 'defense' ? (isLenient ? 50 : 70)
           : mode === 'offense' ? (isLenient ? 0 : 10)
-          : (isNative ? 0 : isLenient ? 0 : hardPos ? 40 : 20);
+          : (isNative ? 0 : hardPos ? 40 : 40);
         if (fitness < threshold) return;
       }
 
@@ -161,7 +161,13 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
       if (unassignedPlayers.length === 0) return;
       let best = null;
       let bestValue = -Infinity;
-      for (const ps of unassignedPlayers) {
+      // フォールバックでも適性30未満は除外（ただしDHは除く）
+      const fallbackThreshold = pos === 'dh' ? 0 : 30;
+      const eligible = unassignedPlayers.filter(ps =>
+        (ps.player.positionFitness?.[pos] || 0) >= fallbackThreshold || ps.player.position === pos
+      );
+      const pool = eligible.length > 0 ? eligible : unassignedPlayers; // 全員除外なら緊急措置
+      for (const ps of pool) {
         // フォールバックでも本来ポジション優先ボーナスを付与
         const nativeBonus = ps.player.position === pos ? 50 : 0;
         const value = calcPositionValue(ps.player, pos, mode) + nativeBonus;
