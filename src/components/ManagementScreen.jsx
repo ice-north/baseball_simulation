@@ -542,15 +542,7 @@ const ManagementScreen = ({
     campTitle="夏季合宿"
     completeLabel="秋季リーグへ"
     onComplete={() => {
-      setSeasonData(prev => {
-        const calYear = 2024 + prev.year - 1;
-        return {
-          ...prev,
-          currentDate: { year: calYear, month: 9, day: 1 },
-          summerCampDone: true,
-        };
-      });
-      setSelectedMonth(9);
+      setSeasonData(prev => ({ ...prev, summerCampDone: true }));
       setManagementView('dateprogress');
     }}
   />;
