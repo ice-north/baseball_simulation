@@ -393,7 +393,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     });
 
     const userStaffBonus = userTeam.corporateData?.staff ? getTeamStaffBonus(userTeam.corporateData.staff) : null;
-    const awakeningMult = gameMode === 'university' ? 0 : gameMode === 'independent' ? 1.5 : 1.0;
+    const awakeningMult = gameMode === 'university' ? 0.5 : gameMode === 'independent' ? 1.5 : 1.0;
     const { updatedTeam, allReports } = executeTeamCampTraining(
       userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult
     );
