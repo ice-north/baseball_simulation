@@ -53,11 +53,12 @@ const calcDefenseScore = (player, position, mode = 'standard') => {
   const ph = player.physical || {};
   const fitness = player.positionFitness?.[position] || 0;
 
-  // defense: fitness²曲線 — 30%→0.09, 50%→0.25, 70%→0.49, 100%→1.0
-  // standard: 0.5〜1.0 線形
+  // 適性曲線（ラインナップ生成専用。ゲームシミュレーション本体は別計算）
+  // defense: fitness²曲線 — 30→0.09, 50→0.25, 70→0.49, 100→1.0
+  // standard/offense: fitness^1.5 — 30→0.16, 50→0.35, 70→0.59, 100→1.0 (旧:0.5+f/200で30→0.65)
   const fitnessMult = mode === 'defense'
-    ? (fitness / 100) * (fitness / 100)
-    : 0.5 + (fitness / 100) * 0.5;
+    ? (fitness / 100) ** 2
+    : (fitness / 100) ** 1.5;
 
   let baseDefense;
   if (position === 'catcher') {
@@ -84,7 +85,14 @@ const calcPositionValue = (player, position, mode = 'standard') => {
   const w = weights[position] || { offenseWeight: 0.5, defenseWeight: 0.5 };
   const offense = calcOffenseScore(player);
   const defense = calcDefenseScore(player, position, mode);
-  return offense * w.offenseWeight + defense * w.defenseWeight;
+
+  // 適性ペナルティ: 打撃力で適性のなさを穴埋めできないようにする
+  // sqrt(fitness/100): 適性30→×0.55, 50→×0.71, 70→×0.84, 100→×1.0
+  // これにより適性30の外野手がファーストで高打撃力を持っていても不適切
+  const fitness = player.positionFitness?.[position] || 0;
+  const fitnessPenalty = position === 'dh' ? 1.0 : Math.sqrt(fitness / 100);
+
+  return (offense * w.offenseWeight + defense * w.defenseWeight) * fitnessPenalty;
 };
 
 // 貪欲法によるポジション割り当て
