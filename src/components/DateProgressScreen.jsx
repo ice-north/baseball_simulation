@@ -3008,9 +3008,46 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               );
             }
 
+            // 大学モード: 春秋制ラベルと春季アーカイブ表示
+            const isUniversityMode = seasonData?.settings?.universityMode;
+            const curMonth = currentDate?.month || 4;
+            const spStandings = seasonData?.springStandings || null;
+            const isFallSeason = isUniversityMode && spStandings != null;
+            const isSummerBreak = isUniversityMode && !isFallSeason && curMonth >= 7 && curMonth <= 8;
+            const tableTitle = isUniversityMode
+              ? isFallSeason ? '秋季順位表' : isSummerBreak ? '春季最終順位' : '春季順位表'
+              : '順位表';
+            const tableColor = isUniversityMode
+              ? isFallSeason ? 'text-orange-400' : 'text-green-400'
+              : 'text-white';
+
             return (
-              <div className="space-y-0">
-                {renderStandingsTable(standings, '順位表', 'text-white')}
+              <div className="space-y-3">
+                {renderStandingsTable(standings, tableTitle, tableColor)}
+                {isFallSeason && spStandings?.length > 0 && (() => {
+                  const sorted = [...spStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+                  return (
+                    <div className="bg-gray-800/50 rounded-xl p-3 border border-gray-700/40">
+                      <h3 className="text-xs font-bold text-green-400 mb-2">春季最終順位</h3>
+                      <div className="space-y-0.5">
+                        {sorted.map((s, i) => {
+                          const wr = (s.wins + s.losses) > 0 ? (s.wins / (s.wins + s.losses)).toFixed(3) : '.000';
+                          const isUser = s.team === userTeamName;
+                          return (
+                            <div key={i} className={`flex items-center text-xs gap-1 px-1 py-0.5 rounded ${isUser ? 'bg-blue-900/30' : ''}`}>
+                              <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-400' : 'text-gray-500'}`}>{i + 1}</span>
+                              <span className={`flex-1 truncate ${isUser ? 'text-yellow-300 font-bold' : 'text-gray-300'}`}>{s.team}</span>
+                              <span className="text-green-400 w-4 text-right">{s.wins}</span>
+                              <span className="text-gray-600">-</span>
+                              <span className="text-red-400 w-4">{s.losses}</span>
+                              <span className="text-gray-400 w-8 text-right font-mono">{wr}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {renderPlayoffBracket()}
               </div>
             );

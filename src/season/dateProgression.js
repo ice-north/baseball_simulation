@@ -158,8 +158,24 @@ export const progressToDate = (seasonData, targetDate) => {
  * @returns {Object} 更新されたシーズンデータ
  */
 export const recordGameResult = (seasonData, gameResult) => {
+  // 大学モード春秋制: 秋季初試合（9月以降）を記録する前に春季順位をスナップショット
+  let baseData = seasonData;
+  if (
+    seasonData.settings?.universityMode &&
+    !seasonData.springStandings &&
+    (gameResult.date?.month || 0) >= 9
+  ) {
+    baseData = {
+      ...seasonData,
+      springStandings: seasonData.standings.map(s => ({ ...s })),
+      standings: seasonData.standings.map(s => ({
+        team: s.team, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0,
+      })),
+    };
+  }
+
   // スケジュールの該当試合を更新
-  const updatedSchedule = seasonData.schedule.map(game => {
+  const updatedSchedule = baseData.schedule.map(game => {
     if (
       game.date.year === gameResult.date.year &&
       game.date.month === gameResult.date.month &&
@@ -179,21 +195,17 @@ export const recordGameResult = (seasonData, gameResult) => {
   });
 
   // 順位表を更新
-  const updatedStandings = updateStandings(seasonData.standings, gameResult);
+  const updatedStandings = updateStandings(baseData.standings, gameResult);
 
   // 試合結果リストに追加
-  const updatedResults = [...seasonData.results, gameResult];
+  const updatedResults = [...baseData.results, gameResult];
 
-  let result = {
-    ...seasonData,
+  return {
+    ...baseData,
     schedule: updatedSchedule,
     standings: updatedStandings,
     results: updatedResults
   };
-
-  // 前後期制は廃止（split処理を削除）
-
-  return result;
 };
 
 /**

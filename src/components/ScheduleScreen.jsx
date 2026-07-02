@@ -242,6 +242,7 @@ const ScheduleScreen = ({
   currentDate,
   currentPhase,
   leagueStandings,
+  springStandings,
   userTeamName,
   onProgressDate,
   onProgressToNextGame,
@@ -662,6 +663,15 @@ const ScheduleScreen = ({
           );
         };
 
+        // 大学モード: 春季/秋季ラベルと春季アーカイブ表示
+        const isUniversity = seasonData?.settings?.universityMode;
+        const month = currentDate?.month || 4;
+        const isFallSeason = isUniversity && springStandings != null;
+        const isSummerBreak = isUniversity && !isFallSeason && month >= 7 && month <= 8;
+        const activeLabel = isUniversity
+          ? isFallSeason ? '秋季順位表' : isSummerBreak ? '春季最終順位' : '春季順位表'
+          : 'リーグ順位表';
+
         if (isTwoLeague) {
           const l1 = leagueStandings.filter(s => league1Teams.includes(s.team));
           const l2 = leagueStandings.filter(s => league2Teams.includes(s.team));
@@ -672,7 +682,48 @@ const ScheduleScreen = ({
             </div>
           );
         }
-        return renderStandingsTable(leagueStandings, 'リーグ順位表');
+
+        return (
+          <div className="space-y-4">
+            {renderStandingsTable(leagueStandings, activeLabel, isFallSeason ? 'text-orange-400' : 'text-green-400')}
+            {isFallSeason && springStandings?.length > 0 && (() => {
+              const sorted = [...springStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+              return (
+                <div className="bg-gray-800/60 rounded-lg p-4 border border-gray-700/40">
+                  <h2 className="text-lg font-bold text-green-400 mb-3">春季最終順位</h2>
+                  <table className="w-full text-white text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left py-2">順位</th>
+                        <th className="text-left py-2">チーム</th>
+                        <th className="text-center py-2">試</th>
+                        <th className="text-center py-2">勝</th>
+                        <th className="text-center py-2">敗</th>
+                        <th className="text-center py-2">分</th>
+                        <th className="text-center py-2">勝率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map((team, i) => {
+                        const wr = (team.wins + team.losses) > 0 ? (team.wins / (team.wins + team.losses)).toFixed(3) : '.000';
+                        return (
+                          <tr key={i} className={`border-b border-gray-700/50 ${i === 0 ? 'text-yellow-300' : 'text-gray-300'}`}>
+                            <td className="py-1.5 font-bold">{i + 1}</td>
+                            <td className="py-1.5 font-bold">{team.team}</td>
+                            <td className="text-center py-1.5">{team.gamesPlayed || team.wins + team.losses + (team.draws || 0)}</td>
+                            <td className="text-center py-1.5">{team.wins}</td>
+                            <td className="text-center py-1.5">{team.losses}</td>
+                            <td className="text-center py-1.5">{team.draws || 0}</td>
+                            <td className="text-center py-1.5 font-mono">{wr}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}</div>
+        );
       })()}
 
       {scheduleTab === 'batting' && (

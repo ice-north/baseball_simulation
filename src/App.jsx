@@ -233,6 +233,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const currentDate = seasonData?.currentDate || { year: 2024, month: 3, day: 1 };
       const currentPhase = seasonData?.phase || SEASON_PHASES.REGULAR_SEASON;
       const leagueStandings = seasonData?.standings || [];
+      const springStandings = seasonData?.springStandings || null;
 
       // 変化球の効果設定（外部ファイルから読み込み）
       const [ballEffects, setBallEffects] = useState(BALL_EFFECTS);
@@ -5089,6 +5090,7 @@ if (newOuts === 3) {
                 currentDate={currentDate}
                 currentPhase={currentPhase}
                 leagueStandings={leagueStandings}
+                springStandings={springStandings}
                 userTeamName={userTeamName}
                 allTeams={allTeams}
                 gameMode={gameMode}
