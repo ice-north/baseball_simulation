@@ -2401,6 +2401,32 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 大学リーグの入替戦 → 新シーズン初期化 + 社会人トーナメント結果リセット
   let universityPromotions = [];
   if (WORLD_DATA.initialized) {
+    // 大学モード2部制: ユーザー部の成績をWORLD_DATAの秋季順位表に同期してから入替戦判定
+    // （ユーザー部の試合はseasonData.standingsにのみ記録され、WORLD_DATA側は0のまま。
+    //   またleague.fall.doneも立たないためprocessUniversityPromotionRelegationがスキップする）
+    if (seasonData.settings?.universityMode && WORLD_DATA.universityLeague) {
+      const ul = WORLD_DATA.universityLeague;
+      const regionId = ul.userRegion || seasonData.settings?.universityRegion;
+      const userDiv = ul.userDivision || 1;
+      const uLeague = WORLD_DATA.universityLeagues?.[regionId];
+      if (uLeague?.divisions && uLeague.fall) {
+        const standingsKey = `standings${userDiv}`;
+        if (uLeague.fall[standingsKey] && seasonData.standings?.length) {
+          uLeague.fall[standingsKey].forEach(s => {
+            const found = seasonData.standings.find(st => st.team === s.team);
+            if (found) {
+              s.wins = found.wins || 0;
+              s.losses = found.losses || 0;
+              s.draws = found.draws || 0;
+              s.winRate = found.winRate || 0;
+              s.gamesPlayed = found.gamesPlayed || 0;
+            }
+          });
+          uLeague.fall[standingsKey].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+        }
+        uLeague.fall.done = true;
+      }
+    }
     universityPromotions = processUniversityPromotionRelegation();
     initializeUniversityLeagues(newSeasonData.currentDate?.year || 2024);
     WORLD_DATA.corporateToshitaikou = null;
