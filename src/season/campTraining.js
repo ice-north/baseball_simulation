@@ -727,7 +727,7 @@ function getFormPitchAffinity(form, pitchType) {
  * @param {string} [newPitchType] - 新球種習得時の球種キー
  * @returns {Object} - 成長結果 { player, growthReport }
  */
-export function executeCampTraining(player, trainingType, newPitchType, staffBonus = null) {
+export function executeCampTraining(player, trainingType, newPitchType, staffBonus = null, awakeningMult = 1.0) {
   const menu = TRAINING_MENUS[trainingType];
   if (!menu) {
     console.warn(`Unknown training type: ${trainingType}`);
@@ -879,8 +879,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * physFitMult * battCoachMult);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
-      const awakeningChance = experience >= 30 ? Math.floor(experience / 15) : 0;
-      isAwakening = Math.random() * 100 < awakeningChance;
+      const awakeningChance = experience >= 30 ? Math.floor(experience / 15) * awakeningMult : 0;
+      isAwakening = awakeningMult > 0 && Math.random() * 100 < awakeningChance;
       // 才能依存の能力は覚醒量も抑制
       const rawAwakening = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
       awakeningGrowth = isAwakening ? Math.max(1, Math.round(rawAwakening * talentMult)) : 0;
@@ -1074,19 +1074,19 @@ export function applyBatteryMentalEffect(players, staffBonus) {
   return reports;
 }
 
-export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null) {
+export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null, awakeningMult = 1.0) {
   const allReports = [];
   const updatedPlayers = team.players.map(player => {
     const trainingType = trainingAssignments[player.id];
     if (!trainingType) {
       const autoTraining = player.position === 'pitcher' ? 'control' : 'batting';
-      const { player: trained, growthReport } = executeCampTraining(player, autoTraining, undefined, staffBonus);
+      const { player: trained, growthReport } = executeCampTraining(player, autoTraining, undefined, staffBonus, awakeningMult);
       allReports.push({ player: trained, trainingType: autoTraining, growthReport });
       return trained;
     }
 
     const newPitchType = trainingType === 'newpitch' ? newPitchSelections[player.id] : undefined;
-    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType, staffBonus);
+    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType, staffBonus, awakeningMult);
     allReports.push({ player: trained, trainingType, growthReport });
     return trained;
   });

@@ -393,8 +393,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     });
 
     const userStaffBonus = userTeam.corporateData?.staff ? getTeamStaffBonus(userTeam.corporateData.staff) : null;
+    const awakeningMult = gameMode === 'university' ? 0 : gameMode === 'independent' ? 1.5 : 1.0;
     const { updatedTeam, allReports } = executeTeamCampTraining(
-      userTeam, finalAssignments, newPitchSelections, userStaffBonus
+      userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult
     );
     TEAMS_DATA[userTeamName] = updatedTeam;
 
@@ -475,7 +476,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         }
       });
       const aiStaffBonus = aiTeam.corporateData?.staff ? getTeamStaffBonus(aiTeam.corporateData.staff) : null;
-      const aiResult = executeTeamCampTraining(aiTeam, aiAssign, {}, aiStaffBonus);
+      const aiResult = executeTeamCampTraining(aiTeam, aiAssign, {}, aiStaffBonus, awakeningMult);
       TEAMS_DATA[tn] = aiResult.updatedTeam;
       if (aiStaffBonus) {
         applyMotivationEffect(aiResult.updatedTeam.players, aiStaffBonus);
