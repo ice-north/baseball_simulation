@@ -440,6 +440,13 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
 
+    // 大学モード: 夏季合宿（7月1日）
+    if (isUniversity && month === 7 && day >= 1 && !newData.summerCampDone) {
+      setSeasonData(newData);
+      setManagementView('summer_camp');
+      return newData;
+    }
+
     // 大学モード: 全日本大学野球選手権大会（6月）
     if (isUniversity && month === 6 && day >= 5 && !newData.universityChampionship?.generated) {
       const calYear = newData.currentDate.year;

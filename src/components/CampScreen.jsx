@@ -5,7 +5,7 @@ import { POSITION_NAMES, getAbilityRank, getRankColor, POSITION_ORDER } from '..
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
 
-const MAX_CAMP_ROUNDS = 4;
+// MAX_CAMP_ROUNDS is now a prop (maxRounds)
 
 function getCampCoachComment(player, round) {
   if (round < 2) return null;
@@ -254,7 +254,8 @@ const CAMP_PRESETS = {
   },
 };
 
-const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
+const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4, campTitle = '春季キャンプ', completeLabel = 'シーズン開始' }) => {
+  const MAX_CAMP_ROUNDS = maxRounds;
   const teamNames = Object.keys(TEAMS_DATA || {});
   const userTeamName = teamNames[0] || 'チームA';
   const userTeam = TEAMS_DATA[userTeamName];
@@ -626,13 +627,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-white">春季キャンプ - {userTeamName}</h1>
+            <h1 className="text-xl font-bold text-white">{campTitle} - {userTeamName}</h1>
             {dispatchedPlayers.length > 0 && (
               <span className="text-orange-400 text-xs font-bold">派遣中: {dispatchedPlayers.length}人</span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            {[1, 2, 3, 4].map(r => (
+            {Array.from({ length: MAX_CAMP_ROUNDS }, (_, i) => i + 1).map(r => (
               <div key={r} className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
                 r < currentRound ? 'bg-green-600 text-white'
                   : r === currentRound ? 'bg-blue-600 text-white ring-2 ring-blue-400'
@@ -1378,7 +1379,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
           return (
             <>
               <div className="flex items-center justify-between mb-2">
-                <h1 className="text-xl font-bold text-white">春季キャンプ成長レポート - {userTeamName}</h1>
+                <h1 className="text-xl font-bold text-white">{campTitle}成長レポート - {userTeamName}</h1>
               </div>
               <div className="flex gap-4 text-[10px] mb-1 ml-1">
                 <span className="text-green-400">■ キャンプ成長</span>
@@ -1475,7 +1476,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode }) => {
                   onClick={onComplete}
                   className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
                 >
-                  シーズン開始
+                  {completeLabel}
                 </button>
               </div>
             </>

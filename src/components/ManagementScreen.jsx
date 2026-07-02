@@ -534,6 +534,26 @@ const ManagementScreen = ({
       setManagementView('camp');
     }}
   />;
+  if (managementView === 'summer_camp') return <CampScreen
+    seasonData={seasonData}
+    allTeams={allTeams}
+    gameMode={gameMode}
+    maxRounds={2}
+    campTitle="夏季合宿"
+    completeLabel="秋季リーグへ"
+    onComplete={() => {
+      setSeasonData(prev => {
+        const calYear = 2024 + prev.year - 1;
+        return {
+          ...prev,
+          currentDate: { year: calYear, month: 9, day: 1 },
+          summerCampDone: true,
+        };
+      });
+      setSelectedMonth(9);
+      setManagementView('dateprogress');
+    }}
+  />;
   if (managementView === 'camp') return <CampScreen
     seasonData={seasonData}
     allTeams={allTeams}
