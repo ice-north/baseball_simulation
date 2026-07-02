@@ -141,7 +141,7 @@ export const SUB_TRAINING_MENUS = {
   running: {
     name: 'ランニング',
     icon: '🏃',
-    description: '走力+体力UP（投手はスタミナも強化）',
+    description: '走力+体力UP（全選手：スタミナ20%で+1）',
     targets: ['speed', 'stamina', 'bodyStamina_sub'],
   },
   muscle: {
@@ -244,13 +244,12 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         player.physical.speed = Math.min(100, (player.physical.speed || 50) + spd);
         growthReport.push({ statName: '走力', before: player.physical.speed - spd, after: player.physical.speed, growth: spd });
       }
-      // 投手スタミナ: サブ練習標準確率（40%で+1、そのうち30%で+2）
-      if (player.position === 'pitcher' && player.pitching) {
-        const stmGain = growthAmount();
-        if (stmGain > 0) {
+      // スタミナ: 全選手20%で+1（コンバート対応。野手でも投手スタミナを鍛えられる）
+      if (player.pitching) {
+        if (Math.random() < 0.2) {
           const before = player.pitching.stamina || 80;
-          player.pitching.stamina = Math.min(200, before + stmGain);
-          growthReport.push({ statName: 'スタミナ', before, after: player.pitching.stamina, growth: stmGain });
+          player.pitching.stamina = Math.min(200, before + 1);
+          growthReport.push({ statName: 'スタミナ', before, after: player.pitching.stamina, growth: 1 });
         }
       }
       // 体力UP（100%で+1〜4）
