@@ -161,9 +161,11 @@ export function executeDispatchTraining(player, destKey, options = {}) {
   const dest = DISPATCH_DESTINATIONS[destKey];
   if (!dest) return;
 
-  const experience = player.experience || 0;
-  const leapChance = 0.25 + Math.min(0.15, experience / 250);
-  const minorChance = Math.max(0.05, 0.15 - experience / 300);
+  // 飛躍率はプロ意識で決まる（学ぶ姿勢がなければ派遣先で伸びない）
+  // d=20: leap=17%, minor=23% / d=50: leap=28%, minor=16% / d=80: leap=38%, minor=8% / d=100: leap=45%, minor=3%
+  const discipline = player.personality?.discipline || 50;
+  const leapChance = Math.min(0.45, 0.10 + discipline * 0.0035);
+  const minorChance = Math.max(0.03, 0.28 - discipline * 0.0025);
   const roll = Math.random();
   let outcome;
   if (roll < leapChance) {
