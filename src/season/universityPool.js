@@ -133,6 +133,8 @@ function generateHighSchoolPlayer(id) {
 
   const isTwoWay = Math.random() < 0.01;
   let twoWaySubPosition = null;
+  let isPositionCandidate = false; // 投手登録だが野手適性が高い選手（約10%）
+  let candidateFieldPos = null;
   if (isTwoWay && isPitcher) {
     const fieldPositions = throws === 'left'
       ? ['first', 'left', 'center', 'right']
@@ -235,15 +237,53 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'technician') control += r(10, 20);
     else if (specialty === 'iron_arm') stamina += r(15, 25);
 
+    // 投手はチームで最も身体能力が高い選手が指名される傾向があるため、
+    // 打撃・野手能力のベースを引き上げる（野手には及ばないが一定の素質を持つ）
+    // さらに10%は「投手に烙印を押されなければ野手だった」型として野手能力が準野手レベル
+    isPositionCandidate = Math.random() < 0.10;
+    if (isPositionCandidate) {
+      candidateFieldPos = throws === 'left'
+        ? weightedPick({
+            first:  10 + (build === 'large' ? 12 : 0),
+            left:   10,
+            center: 10 + Math.max(0, baseSpeed - 35) * 0.4,
+            right:  10 + Math.max(0, baseArm - 35) * 0.3,
+          })
+        : weightedPick({
+            first:  8 + (build === 'large' ? 12 : 0),
+            second: 8 + Math.max(0, baseSpeed - 35) * 0.3,
+            third:  10 + Math.max(0, baseArm - 30) * 0.3,
+            short:  8 + Math.max(0, baseSpeed - 35) * 0.3 + Math.max(0, baseArm - 35) * 0.2,
+            left:   8 + (build === 'large' ? 4 : 0),
+            center: 8 + Math.max(0, baseSpeed - 35) * 0.4,
+            right:  8 + Math.max(0, baseArm - 35) * 0.3,
+          });
+    }
+
     const armValue = Math.max(10, baseArm + r(2, 8));
-    abilities = {
-      meet: g(14, 6, 0.3, 3),
-      power: g(10 + buildMod.power * 0.3, 5, 0.3, 3),
-      eye: g(16, 6, 0.3, 5),
-      steal: Math.max(1, Math.round(nrm(16, 7) + buildMod.steal * 0.5)),
+    abilities = isPositionCandidate ? {
+      // 野手向き投手: 打撃能力は準野手レベル、転向候補
+      meet:  g(30, 9, 0.7, 12),
+      power: g(25, 11, 0.6, 5),
+      eye:   g(27, 8, 0.6, 8),
+      steal: Math.max(1, Math.round(nrm(24, 9) + buildMod.steal * 0.8)),
       speed: baseSpeed,
       arm: armValue,
-      defense: g(35, 10, 0.4, 1),
+      defense: g(40, 10, 0.5, 5),
+      bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
+      recovery: g(44, 10, 0, 15),
+      velocity: Math.max(110, Math.min(165, velocity)),
+      control: Math.max(5, control),
+      stamina: Math.max(25, stamina)
+    } : {
+      // 通常投手: 打撃は野手より低いが、チームの中心選手らしく一定の素質あり
+      meet:  g(20, 8, 0.4, 5),
+      power: g(16, 10, 0.4, 3),
+      eye:   g(20, 7, 0.4, 5),
+      steal: Math.max(1, Math.round(nrm(18, 8) + buildMod.steal * 0.6)),
+      speed: baseSpeed,
+      arm: armValue,
+      defense: g(36, 10, 0.4, 1),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(43, 10, 0, 15),
       velocity: Math.max(110, Math.min(165, velocity)),
@@ -357,7 +397,11 @@ function generateHighSchoolPlayer(id) {
       discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
       mental: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
     },
-    positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
+    positionFitness: isTwoWay
+      ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws)
+      : (isPositionCandidate && candidateFieldPos)
+        ? generateTwoWayPositionFitness('pitcher', candidateFieldPos, throws)
+        : generatePositionFitness(position),
     fame,
     highSchool: highSchool ? { name: highSchool.name, rank: highSchool.rank, pref: highSchool.pref } : null,
     fatigue: 0,
