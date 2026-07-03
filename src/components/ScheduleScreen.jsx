@@ -462,7 +462,7 @@ const ScheduleScreen = ({
                     )}
                   </>
                 ) : day.eventLabel ? (
-                  <div className={`text-xs font-bold ${
+                  <div className={`font-bold ${day.eventLabel === 'セレクション' ? 'text-sm' : 'text-xs'} ${
                     day.eventLabel === 'シーズン終了' ? 'text-red-400' :
                     day.eventLabel === 'プレーオフ' ? 'text-yellow-400' :
                     day.eventLabel === '契約更改' ? 'text-teal-400' :
