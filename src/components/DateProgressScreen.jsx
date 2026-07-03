@@ -2549,11 +2549,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               </div>
             );
           })()}
-          {seasonData.settings?.corporateMode ? (() => {
-            const td = seasonData.toshitaikou;
-            const rtData = seasonData.regionalTournament;
-            const ns = seasonData.nihonSenshuken;
-            const cs = seasonData.clubSenshuken;
+          {(isCorporate || isUniversity) ? (() => {
+            const td = isCorporate ? seasonData.toshitaikou : WORLD_DATA.corporateToshitaikou;
+            const rtData = isCorporate ? seasonData.regionalTournament : WORLD_DATA.corporateRegionalTournament;
+            const ns = isCorporate ? seasonData.nihonSenshuken : WORLD_DATA.corporateNihonSenshuken;
+            const cs = isCorporate ? seasonData.clubSenshuken : WORLD_DATA.corporateClubSenshuken;
             const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
 
             // 利用可能なトーナメントタブを構築（時系列順）
@@ -3247,8 +3247,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 社会人トーナメント（非社会人モード用） */}
-          {!isCorporate && WORLD_DATA.initialized && (() => {
+          {/* 社会人トーナメント（非社会人・非大学モード用） */}
+          {!isCorporate && !isUniversity && WORLD_DATA.initialized && (() => {
             const corpToshi = WORLD_DATA.corporateToshitaikou;
             const corpNS = WORLD_DATA.corporateNihonSenshuken;
             const corpCS = WORLD_DATA.corporateClubSenshuken;
