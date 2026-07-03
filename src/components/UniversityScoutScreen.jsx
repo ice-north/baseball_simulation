@@ -334,9 +334,9 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
           ) : (
             <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-700/50 text-[10px]">
+                    <tr className="border-b border-gray-700/50 text-xs">
                       <th className="py-1 px-1 text-gray-500">名前</th>
                       <th className="py-1 px-1 text-gray-500">守</th>
                       <th className="py-1 px-1 text-gray-500">投打</th>
@@ -368,7 +368,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       return (
                         <tr key={p.id} className={`border-b border-gray-800/50 hover:bg-gray-700/20 transition ${isPicked ? 'bg-green-950/30' : ''}`}>
                           <td className="py-1.5 px-1 whitespace-nowrap">
-                            {isPicked && <span className="text-green-400 text-[9px] mr-1">合格</span>}
+                            {isPicked && <span className="text-green-400 text-[10px] mr-1">合格</span>}
                             <span className={`font-bold ${isPicked ? 'text-green-300' : 'text-white'}`}>{p.name}</span>
                           </td>
                           <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
@@ -397,16 +397,16 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           <td className="py-1.5 px-1">
                             {isPicked ? (
                               <button onClick={() => handleSelectionPick(p)}
-                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-800 text-green-200 hover:bg-red-900 hover:text-red-200 transition">
+                                className="px-2 py-0.5 rounded text-xs font-bold bg-green-800 text-green-200 hover:bg-red-900 hover:text-red-200 transition">
                                 合格 ✕
                               </button>
                             ) : canAdd ? (
                               <button onClick={() => handleSelectionPick(p)}
-                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-300 hover:bg-green-800 hover:text-green-200 transition">
+                                className="px-2 py-0.5 rounded text-xs font-bold bg-gray-700 text-gray-300 hover:bg-green-800 hover:text-green-200 transition">
                                 合格にする
                               </button>
                             ) : (
-                              <span className="text-gray-600 text-[10px]">枠なし</span>
+                              <span className="text-gray-600 text-xs">枠なし</span>
                             )}
                           </td>
                         </tr>
