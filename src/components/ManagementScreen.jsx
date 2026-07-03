@@ -225,6 +225,7 @@ const ManagementScreen = ({
       else if (eventType === 'corporate_scout') setManagementView('corporate_scout');
       else if (eventType === 'club_recruit') setManagementView('club_recruit');
       else if (eventType === 'university_scout') setManagementView('university_scout');
+      else if (eventType === 'summer_camp') setManagementView('summer_camp');
       else if (eventType === 'budget_settlement') setManagementView('budget_settlement');
       else if (eventType === 'tryout') setManagementView('tryout');
       else if (eventType === 'draft') {

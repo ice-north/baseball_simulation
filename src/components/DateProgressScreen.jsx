@@ -443,7 +443,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     // 大学モード: 夏季合宿（8月20日）
     if (isUniversity && month === 8 && day >= 20 && !newData.summerCampDone) {
       setSeasonData(newData);
-      setManagementView('summer_camp');
+      if (onForceEvent) onForceEvent('summer_camp');
       return newData;
     }
 
