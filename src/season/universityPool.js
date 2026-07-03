@@ -184,19 +184,19 @@ function generateHighSchoolPlayer(id) {
   if (isTwoWay) {
     const velTierBonus = { S: 12, A: 6, B: 2, C: 0, D: -2, E: -4 };
     if (isPitcher) {
-      // 投手登録二刀流: 投手能力メイン、打撃は原石レベル
+      // 投手登録二刀流: 投手能力メイン、打撃は野手水準（転向候補を上回る本物の両刀）
       const twoWayArm = Math.max(10, baseArm + r(8, 16));
       let velocity = Math.round(nrm(126, 7) + velTierBonus[tier]);
       if (isSideOrUnder) velocity -= 3;
       if (throws === 'left') velocity -= 3;
       abilities = {
-        meet: g(28, 8, 0.3, 5),
-        power: g(22, 7, 0.3, 3),
-        eye: g(28, 8, 0.3, 5),
-        steal: Math.max(1, Math.round(nrm(20, 8) + buildMod.steal * 0.5)),
+        meet:  g(36, 8, 0.8, 15),
+        power: g(28, 10, 0.7, 8),
+        eye:   g(33, 8, 0.7, 10),
+        steal: Math.max(1, Math.round(nrm(24, 8) + buildMod.steal * 0.7)),
         speed: baseSpeed,
         arm: twoWayArm,
-        defense: g(40, 10, 0.4, 1),
+        defense: g(42, 10, 0.5, 5),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
         recovery: g(44, 10, 0, 15),
         velocity: Math.max(110, Math.min(165, velocity)),
