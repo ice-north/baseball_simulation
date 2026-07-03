@@ -201,7 +201,7 @@ function generateHighSchoolPlayer(id) {
         recovery: g(44, 10, 0, 15),
         velocity: Math.max(110, Math.min(165, velocity)),
         control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
-        stamina: Math.max(25, Math.round(nrm(63, 12) + off * 1.5))
+        stamina: Math.max(60, Math.round(nrm(70, 12) + off * 1.5))
       };
     } else {
       // 野手登録二刀流: 野手能力メイン、肩が強く投手もそこそこ
@@ -219,7 +219,7 @@ function generateHighSchoolPlayer(id) {
         recovery: g(44, 10, 0, 15),
         velocity: Math.max(100, Math.min(velCap, Math.round(nrm(110 + twoWayArm * 0.3, 5)))),
         control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
-        stamina: Math.max(25, Math.round(nrm(55, 10) + off))
+        stamina: Math.max(50, Math.round(nrm(62, 10) + off))
       };
     }
   } else if (isPitcher) {
@@ -231,7 +231,7 @@ function generateHighSchoolPlayer(id) {
     if (isSideOrUnder) velocity -= 3;
     if (throws === 'left') velocity -= 3;
     let control = Math.round(nrm(24, 9) + off + controlAdjust);
-    let stamina = Math.round(nrm(63, 14) + off * 1.5);
+    let stamina = Math.round(nrm(70, 14) + off * 1.5);
 
     if (specialty === 'power_arm') velocity += r(5, 10);
     else if (specialty === 'technician') control += r(10, 20);
@@ -274,7 +274,7 @@ function generateHighSchoolPlayer(id) {
       recovery: g(44, 10, 0, 15),
       velocity: Math.max(110, Math.min(165, velocity)),
       control: Math.max(5, control),
-      stamina: Math.max(25, stamina)
+      stamina: Math.max(60, stamina)
     } : {
       // 通常投手: 打撃は野手より低いが、チームの中心選手らしく一定の素質あり
       meet:  g(20, 8, 0.4, 5),
@@ -288,7 +288,7 @@ function generateHighSchoolPlayer(id) {
       recovery: g(43, 10, 0, 15),
       velocity: Math.max(110, Math.min(165, velocity)),
       control: Math.max(5, control),
-      stamina: Math.max(25, stamina)
+      stamina: Math.max(60, stamina)
     };
   } else {
     // ポジション別補正
