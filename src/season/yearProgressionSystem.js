@@ -461,9 +461,9 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   // 1. チーム選手（社会人 / 独立リーグ / 大学）
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team.players) return;
-    const source = team.corporateData ? 'corporate'
+    const source = team.independentLeagueId ? 'independent'
+                 : team.corporateData ? 'corporate'
                  : team.universityData ? 'university_team'
-                 : team.independentLeagueId ? 'independent'
                  : 'independent';
     team.players.forEach(player => {
       if (player.age >= 30) return;

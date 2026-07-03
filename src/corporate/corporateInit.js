@@ -645,12 +645,21 @@ export const initializeIndependentLeagues = (excludeLeagueId = null, existingTea
       if (TEAMS_DATA[teamDef.name] || existingSet.has(teamDef.name)) continue;
 
       const roster = generateCorporateRoster(teamDef, 1);
+      const indRank = teamDef.rank || 'C';
       TEAMS_DATA[teamDef.name] = {
         name: teamDef.name,
         abbreviation: teamDef.abbreviation || makeAbbreviation(teamDef.name),
         players: roster,
         pitchingRotation: null,
         independentLeagueId: leagueId,
+        corporateData: {
+          rank: indRank,
+          type: 'independent',
+          reputation: RANK_INITIAL_REPUTATION[indRank] || 20,
+          rankingScore: INITIAL_RANKING_SCORE[indRank] || 900,
+          proDraftCount: 0,
+          tournamentWins: 0,
+        },
       };
       teamNames.push(teamDef.name);
     }
