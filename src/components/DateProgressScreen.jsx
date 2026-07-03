@@ -2550,11 +2550,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               </div>
             );
           })()}
-          {(isCorporate || isUniversity) ? (() => {
-            const td = isCorporate ? seasonData.toshitaikou : WORLD_DATA.corporateToshitaikou;
-            const rtData = isCorporate ? seasonData.regionalTournament : WORLD_DATA.corporateRegionalTournament;
-            const ns = isCorporate ? seasonData.nihonSenshuken : WORLD_DATA.corporateNihonSenshuken;
-            const cs = isCorporate ? seasonData.clubSenshuken : WORLD_DATA.corporateClubSenshuken;
+          {isCorporate ? (() => {
+            const td = seasonData.toshitaikou;
+            const rtData = seasonData.regionalTournament;
+            const ns = seasonData.nihonSenshuken;
+            const cs = seasonData.clubSenshuken;
             const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
 
             // 利用可能なトーナメントタブを構築（時系列順）
@@ -3419,6 +3419,78 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                       </div>
                     );
                   })}
+                </div></Collapse>
+              </div>
+            );
+          })()}
+
+          {/* 大学モード: 社会人トーナメント（折りたたみ式コンパクト表示） */}
+          {isUniversity && WORLD_DATA.initialized && (() => {
+            const corpToshi = WORLD_DATA.corporateToshitaikou;
+            const corpNS = WORLD_DATA.corporateNihonSenshuken;
+            const corpCS = WORLD_DATA.corporateClubSenshuken;
+            const corpRT = WORLD_DATA.corporateRegionalTournament;
+            if (!corpToshi?.generated && !corpNS?.generated && !corpCS?.generated && !corpRT?.generated) return null;
+            const tournaments = [];
+            if (corpRT?.generated) {
+              const champions = [];
+              const inProgress = [];
+              for (const regionId of Object.keys(corpRT.brackets || {})) {
+                const r = corpRT.brackets[regionId];
+                if (r?.champion) champions.push({ region: r.regionName, team: r.champion });
+                else inProgress.push(r?.regionName);
+              }
+              const status = corpRT.phase === 'done' ? null : `${inProgress.length}地域 進行中`;
+              tournaments.push({ label: '地域T', color: 'green', champions, status });
+            }
+            if (corpToshi?.generated) {
+              const status = corpToshi.mainDone ? null : !corpToshi.qualifiersDone ? '予選中' : corpToshi.mainTournament ? '本戦中' : '本戦 準備中';
+              tournaments.push({ label: '都市対抗', color: 'yellow', champion: corpToshi.mainDone ? corpToshi.champion : null, runnerUp: corpToshi.mainDone ? corpToshi.runnerUp : null, status });
+            }
+            if (corpNS?.generated) {
+              const status = corpNS.done ? null : corpNS.phase === 'main' ? '本戦中' : '予選中';
+              tournaments.push({ label: '日本選手権', color: 'red', champion: corpNS.done ? corpNS.champion : null, runnerUp: corpNS.done ? corpNS.runnerUp : null, status });
+            }
+            if (corpCS?.generated) {
+              const status = corpCS.done ? null : corpCS.phase === 'main' ? '本戦中' : '予選中';
+              tournaments.push({ label: 'クラブ選手権', color: 'purple', champion: corpCS.done ? corpCS.champion : null, runnerUp: corpCS.done ? corpCS.runnerUp : null, status });
+            }
+            if (tournaments.length === 0) return null;
+            const thColors = { yellow: 'text-yellow-400', red: 'text-red-400', green: 'text-green-400', purple: 'text-purple-400' };
+            const bgColors = { yellow: 'bg-yellow-900/20 border-yellow-700/30', red: 'bg-red-900/20 border-red-700/30', green: 'bg-green-900/20 border-green-700/30', purple: 'bg-purple-900/20 border-purple-700/30' };
+            return (
+              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-yellow-700/30 mt-3">
+                <h2
+                  className="text-sm font-bold text-yellow-400 flex items-center gap-1.5 cursor-pointer select-none"
+                  onClick={() => setShowCorporateTournaments(prev => !prev)}
+                >
+                  <span>🏢</span> 社会人トーナメント
+                  <span className="text-[10px] text-gray-500 ml-auto">{showCorporateTournaments ? '▲' : '▼'}</span>
+                </h2>
+                <Collapse open={showCorporateTournaments}><div className="space-y-1 mt-2">
+                  {tournaments.map((t, i) => (
+                    <div key={i} className={`rounded-lg px-2 py-1.5 border ${bgColors[t.color] || bgColors.yellow}`}>
+                      <div className={`text-xs font-bold ${thColors[t.color] || 'text-yellow-400'} flex items-center gap-1`}>
+                        {t.champion ? '🏆' : '⚾'} {t.label}
+                        {t.status && <span className="text-[10px] text-gray-500 font-normal ml-auto">{t.status}</span>}
+                      </div>
+                      {t.champions ? (
+                        <div className="flex flex-wrap gap-x-2 mt-0.5">
+                          {t.champions.map((c, ci) => (
+                            <span key={ci} className="text-[10px]"><span className="text-gray-500">{c.region}:</span> <span className="text-gray-200">{c.team}</span></span>
+                          ))}
+                          {t.champions.length === 0 && <span className="text-[10px] text-gray-500">開催中...</span>}
+                        </div>
+                      ) : t.champion ? (
+                        <div className="text-[10px] text-gray-300 mt-0.5">
+                          <span className={`${thColors[t.color] || 'text-yellow-300'} font-bold`}>優勝: {t.champion}</span>
+                          {t.runnerUp && <span className="text-gray-500 ml-2">準優勝: {t.runnerUp}</span>}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-gray-500 mt-0.5">開催中...</div>
+                      )}
+                    </div>
+                  ))}
                 </div></Collapse>
               </div>
             );
