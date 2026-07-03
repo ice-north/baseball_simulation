@@ -62,6 +62,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     return !!mj?.generated && !mj?.champion;
   });
   const [expandedUniLeagues, setExpandedUniLeagues] = useState({});
+  const [uniStandingsTab, setUniStandingsTab] = useState('fall'); // 'spring' | 'fall'
   const [showNewspaper, setShowNewspaper] = useState(false);
   const [pendingPhaseEvent, setPendingPhaseEvent] = useState(null);
 
@@ -3060,47 +3061,106 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               );
             }
 
-            // 大学モード: 春秋制ラベルと春季アーカイブ表示
+            // 大学モード: 春秋制タブ付き順位表
             const isUniversityMode = seasonData?.settings?.universityMode;
             const curMonth = currentDate?.month || 4;
             const spStandings = seasonData?.springStandings || null;
             const isFallSeason = isUniversityMode && spStandings != null;
-            const isSummerBreak = isUniversityMode && !isFallSeason && curMonth >= 7 && curMonth <= 8;
-            const isPreFall = isUniversityMode && !isFallSeason && curMonth >= 9;
-            const tableTitle = isUniversityMode
-              ? isFallSeason ? '秋季順位表' : (isSummerBreak || isPreFall) ? '春季最終順位' : '春季順位表'
-              : '順位表';
-            const tableColor = isUniversityMode
-              ? isFallSeason ? 'text-orange-400' : 'text-green-400'
-              : 'text-white';
+            const hasBothSeasons = isUniversityMode && isFallSeason && spStandings?.length > 0;
+
+            if (!isUniversityMode) {
+              return (
+                <div className="space-y-3">
+                  {renderStandingsTable(standings, '順位表', 'text-white')}
+                  {renderPlayoffBracket()}
+                </div>
+              );
+            }
+
+            // 大学モード: タブ表示
+            const isSummerBreak = !isFallSeason && curMonth >= 7 && curMonth <= 8;
+            const isPreFall = !isFallSeason && curMonth >= 9;
+            const activeTab = hasBothSeasons ? uniStandingsTab : (isFallSeason ? 'fall' : 'spring');
+            const springLabel = (isSummerBreak || isPreFall || isFallSeason) ? '春季最終' : '春季';
+            const fallLabel = '秋季';
+
+            const springTableData = hasBothSeasons
+              ? [...spStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins)
+              : isFallSeason ? [] : [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+            const fallTableData = standings;
+
+            const showingData = activeTab === 'fall' ? fallTableData : springTableData;
+            const showingTitle = activeTab === 'fall' ? `${fallLabel}順位表` : `${springLabel}順位`;
+            const showingColor = activeTab === 'fall' ? 'text-orange-400' : 'text-green-400';
 
             return (
               <div className="space-y-3">
-                {renderStandingsTable(standings, tableTitle, tableColor)}
-                {isFallSeason && spStandings?.length > 0 && (() => {
-                  const sorted = [...spStandings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-                  return (
-                    <div className="bg-gray-800/50 rounded-xl p-3 border border-gray-700/40">
-                      <h3 className="text-xs font-bold text-green-400 mb-2">春季最終順位</h3>
-                      <div className="space-y-0.5">
-                        {sorted.map((s, i) => {
-                          const wr = (s.wins + s.losses) > 0 ? (s.wins / (s.wins + s.losses)).toFixed(3) : '.000';
-                          const isUser = s.team === userTeamName;
-                          return (
-                            <div key={i} className={`flex items-center text-xs gap-1 px-1 py-0.5 rounded ${isUser ? 'bg-blue-900/30' : ''}`}>
-                              <span className={`w-4 text-center font-bold ${i === 0 ? 'text-yellow-400' : 'text-gray-500'}`}>{i + 1}</span>
-                              <span className={`flex-1 truncate ${isUser ? 'text-yellow-300 font-bold' : 'text-gray-300'}`}>{s.team}</span>
-                              <span className="text-green-400 w-4 text-right">{s.wins}</span>
-                              <span className="text-gray-600">-</span>
-                              <span className="text-red-400 w-4">{s.losses}</span>
-                              <span className="text-gray-400 w-8 text-right font-mono">{wr}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30">
+                  {/* タブ（両シーズンある場合のみ） */}
+                  {hasBothSeasons && (
+                    <div className="flex gap-1 mb-3">
+                      <button
+                        onClick={() => setUniStandingsTab('spring')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${activeTab === 'spring' ? 'bg-green-700/60 text-green-300 border border-green-600/40' : 'bg-gray-700/40 text-gray-400 hover:text-gray-300'}`}
+                      >🌸 {springLabel}</button>
+                      <button
+                        onClick={() => setUniStandingsTab('fall')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${activeTab === 'fall' ? 'bg-orange-700/60 text-orange-300 border border-orange-600/40' : 'bg-gray-700/40 text-gray-400 hover:text-gray-300'}`}
+                      >🍂 {fallLabel}</button>
                     </div>
-                  );
-                })()}
+                  )}
+                  <h2 className={`text-base font-bold mb-2.5 ${showingColor} flex items-center gap-2`}>
+                    <div className="w-7 h-7 rounded-lg bg-gray-700/60 flex items-center justify-center text-sm">📊</div>
+                    {showingTitle}
+                  </h2>
+                  <table className="w-full text-white text-sm">
+                    <thead>
+                      <tr className="border-b-2 border-gray-600/50 text-gray-400 text-[11px]">
+                        <th className="py-1.5 px-0.5 text-center w-6">#</th>
+                        <th className="py-1.5 px-1 text-left">チーム</th>
+                        <th className="py-1.5 px-0.5 text-center">試</th>
+                        <th className="py-1.5 px-0.5 text-center">勝</th>
+                        <th className="py-1.5 px-0.5 text-center">負</th>
+                        <th className="py-1.5 px-0.5 text-center">分</th>
+                        <th className="py-1.5 px-0.5 text-center">率</th>
+                        {activeTab === 'fall' && <th className="py-1.5 px-0.5 text-center">差</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {showingData.map((team, index) => {
+                        const isUser = team.team === userTeamName;
+                        const wr = (team.wins || 0) + (team.losses || 0) > 0
+                          ? ((team.wins || 0) / ((team.wins || 0) + (team.losses || 0))).toFixed(3) : '.000';
+                        let gb = '';
+                        if (index === 0) {
+                          gb = '-';
+                        } else {
+                          const leader = showingData[0];
+                          const gbVal = ((leader.wins - team.wins) + (team.losses - leader.losses)) / 2;
+                          gb = gbVal > 0 ? gbVal.toFixed(1) : '-';
+                        }
+                        return (
+                          <tr key={index} className={`border-b border-gray-700/20 ${isUser ? 'bg-blue-900/20' : index % 2 === 0 ? 'bg-gray-800/20' : ''}`}>
+                            <td className="py-1.5 px-0.5 text-center">
+                              <span className={`text-xs font-bold ${index === 0 ? 'text-yellow-400' : index <= 2 ? 'text-gray-300' : 'text-gray-500'}`}>{index + 1}</span>
+                            </td>
+                            <td className="py-1.5 px-1">
+                              <span className={`text-xs ${isUser ? 'text-yellow-300 font-bold' : 'text-gray-200'}`}>
+                                {team.team}{isUser && <span className="text-[10px] text-blue-400 ml-1">you</span>}
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-0.5 text-center text-xs text-gray-400">{(team.wins || 0) + (team.losses || 0) + (team.draws || 0)}</td>
+                            <td className="py-1.5 px-0.5 text-center text-xs text-green-400 font-bold">{team.wins || 0}</td>
+                            <td className="py-1.5 px-0.5 text-center text-xs text-red-400">{team.losses || 0}</td>
+                            <td className="py-1.5 px-0.5 text-center text-xs text-gray-400">{team.draws || 0}</td>
+                            <td className="py-1.5 px-0.5 text-center text-xs font-mono text-gray-300">{wr}</td>
+                            {activeTab === 'fall' && <td className="py-1.5 px-0.5 text-center text-xs text-gray-400">{gb}</td>}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
                 {renderPlayoffBracket()}
               </div>
             );
