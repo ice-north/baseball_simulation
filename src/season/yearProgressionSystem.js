@@ -2337,9 +2337,18 @@ export function advanceToNextYear(seasonData, allTeams) {
   }
 
   // 5.95. 卒業レポートに nextYearTeam を転記（5.65/5.9 の配属完了後）
+  // 実際の配属先チームのタイプに合わせて path ラベルも更新する
   if (universityGraduationReport?.graduated) {
     universityGraduationReport.graduated.forEach(entry => {
-      if (entry._playerRef?._nextYearTeam) entry.nextYearTeam = entry._playerRef._nextYearTeam;
+      if (entry._playerRef?._nextYearTeam) {
+        entry.nextYearTeam = entry._playerRef._nextYearTeam;
+        const destTeam = teamsAfterRetirement[entry.nextYearTeam];
+        if (destTeam) {
+          if (destTeam.independentLeagueId) entry.path = 'independent';
+          else if (destTeam.corporateData?.type === 'club') entry.path = 'club';
+          else if (destTeam.corporateData) entry.path = 'corporate';
+        }
+      }
       delete entry._playerRef;
     });
   }
