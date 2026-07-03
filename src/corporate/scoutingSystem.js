@@ -1860,16 +1860,15 @@ function generateRivals(player, userRank) {
   const fame = player.fame || 0;
 
   // 知名度が低い選手は他大学のスカウトに発見されにくい
-  // 高校生の知名度は最大30程度なので30を基準にスケール
-  // fame=0: 10% / fame=10: 37% / fame=20: 63% / fame=30: 90%
-  const discoverChance = Math.min(0.90, 0.10 + (fame / 30) * 0.80);
+  // fame=0: 25% / fame=10: 48% / fame=20: 72% / fame=30: 95%
+  const discoverChance = Math.min(0.95, 0.25 + (fame / 30) * 0.70);
   if (Math.random() > discoverChance) return [];
 
-  // 知名度で上限人数を制限（無名選手が多数のライバルから注目されるのは不自然）
-  const maxByFame = fame < 8 ? 1 : fame < 18 ? 2 : 3;
-  const maxByScore = score >= 70 ? 3 : score >= 50 ? 2 : score >= 30 ? 1 : (Math.random() < 0.4 ? 1 : 0);
+  // 知名度で上限人数を制限
+  const maxByFame = fame < 6 ? 1 : fame < 15 ? 2 : fame < 28 ? 3 : 4;
+  // 能力でも上限を設定（低能力選手にも最低1校は接近）
+  const maxByScore = score >= 70 ? 4 : score >= 50 ? 3 : score >= 30 ? 2 : 1;
   const rivalCount = Math.min(maxByScore, maxByFame);
-  if (rivalCount === 0) return [];
 
   const userTeamName = Object.keys(TEAMS_DATA)[0] || '';
   const userTeamId = UNIVERSITY_TEAMS.find(t => t.name === userTeamName)?.id;
@@ -1889,9 +1888,10 @@ function generateRivals(player, userRank) {
 
   return picked.map(t => {
     const rep = RANK_REPUTATION_BASE[t.rank] || 40;
-    const fameOffset = Math.floor((100 - (player.fame || 0)) * 0.3); // 知名度100→+0日, 知名度0→+30日
-    const startDelay = Math.floor(Math.random() * 30) + 30 + fameOffset;
-    // 知名度100: 30-59日(5月〜6月初) / 知名度50: 45-74日(5月中〜6月中) / 知名度0: 60-89日(6月〜7月)
+    // 知名度が高い選手は4月から即座に動き出す
+    // fame=30: delay 0-14日(4月) / fame=15: delay 7-22日(4月中〜下) / fame=0: delay 15-30日(4月下〜5月)
+    const fameOffset = Math.floor((30 - Math.min(30, fame)) * 0.5);
+    const startDelay = Math.floor(Math.random() * 15) + fameOffset;
     return {
       universityName: t.name,
       rank: t.rank,
