@@ -63,6 +63,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   });
   const [expandedUniLeagues, setExpandedUniLeagues] = useState({});
   const [uniStandingsTab, setUniStandingsTab] = useState('fall'); // 'spring' | 'fall'
+  const [expandedCorpTournaments, setExpandedCorpTournaments] = useState({});
+  const [uniRtRegionTab, setUniRtRegionTab] = useState(null);
   const [showNewspaper, setShowNewspaper] = useState(false);
   const [pendingPhaseEvent, setPendingPhaseEvent] = useState(null);
 
@@ -3537,40 +3539,110 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 大学モード: 社会人トーナメント（折りたたみ式コンパクト表示） */}
+          {/* 大学モード: 社会人トーナメント（折りたたみ式・トーナメント表付き） */}
           {isUniversity && WORLD_DATA.initialized && (() => {
             const corpToshi = WORLD_DATA.corporateToshitaikou;
             const corpNS = WORLD_DATA.corporateNihonSenshuken;
             const corpCS = WORLD_DATA.corporateClubSenshuken;
             const corpRT = WORLD_DATA.corporateRegionalTournament;
             if (!corpToshi?.generated && !corpNS?.generated && !corpCS?.generated && !corpRT?.generated) return null;
-            const tournaments = [];
+
+            const thColors = { yellow: 'text-yellow-400', red: 'text-red-400', green: 'text-green-400', purple: 'text-purple-400' };
+            const bgColors = { yellow: 'bg-yellow-900/20 border-yellow-700/30', red: 'bg-red-900/20 border-red-700/30', green: 'bg-green-900/20 border-green-700/30', purple: 'bg-purple-900/20 border-purple-700/30' };
+
+            // トーナメント表レンダラー（大学モード向け・観戦のみ）
+            const renderUniCorpBracket = (key, data) => {
+              if (key === 'rt') {
+                const brackets = data.brackets || {};
+                const regionIds = Object.keys(brackets);
+                if (regionIds.length === 0) return null;
+                const activeId = (uniRtRegionTab && brackets[uniRtRegionTab]) ? uniRtRegionTab : regionIds[0];
+                const active = brackets[activeId];
+                return (
+                  <div>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {regionIds.map(rid => {
+                        const r = brackets[rid];
+                        return (
+                          <button key={rid} onClick={() => setUniRtRegionTab(rid)}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${rid === activeId ? 'bg-green-600 text-white' : r.champion ? 'bg-gray-700/50 text-gray-500' : 'bg-gray-700/50 text-gray-400 hover:text-gray-200'}`}>
+                            {r.regionName}{r.champion ? '✓' : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {active?.bracket
+                      ? renderBracketWithLines(active.bracket, active.teamDefsMap)
+                      : <div className="text-[10px] text-gray-500 text-center py-2">ブラケット未生成</div>
+                    }
+                  </div>
+                );
+              }
+              if (key === 'toshi') {
+                const mt = data.mainTournament;
+                if (mt?.bracket) {
+                  return (
+                    <div>
+                      {data.mainDone && data.champion && <div className="text-[10px] text-yellow-300 font-bold text-center mb-1">🏆 優勝: {data.champion}{data.runnerUp ? ` / 準優勝: ${data.runnerUp}` : ''}</div>}
+                      {renderBracketWithLines(mt.bracket, mt.teamDefsMap)}
+                    </div>
+                  );
+                }
+                // 本戦未開始 → 最初の予選を表示
+                const qualifiers = data.qualifiers || {};
+                const firstQId = Object.keys(qualifiers)[0];
+                const firstQ = qualifiers[firstQId];
+                if (firstQ?.mainBracket) {
+                  return (
+                    <div>
+                      <div className="text-[10px] text-gray-400 mb-1">{firstQ.regionName} 地区予選（他地域省略）</div>
+                      {renderBracketWithLines(firstQ.mainBracket, firstQ.teamDefsMap)}
+                    </div>
+                  );
+                }
+                return <div className="text-[10px] text-gray-500 text-center py-2">予選進行中</div>;
+              }
+              if (key === 'ns' || key === 'cs') {
+                const mt = data.mainTournament;
+                const color = key === 'ns' ? 'text-red-300' : 'text-purple-300';
+                if (mt?.bracket) {
+                  return (
+                    <div>
+                      {data.done && data.champion && <div className={`text-[10px] ${color} font-bold text-center mb-1`}>🏆 優勝: {data.champion}{data.runnerUp ? ` / 準優勝: ${data.runnerUp}` : ''}</div>}
+                      {renderBracketWithLines(mt.bracket, mt.teamDefsMap)}
+                    </div>
+                  );
+                }
+                return <div className="text-[10px] text-gray-500 text-center py-2">予選進行中（本戦ブラケット未生成）</div>;
+              }
+              return null;
+            };
+
+            const tournamentList = [];
             if (corpRT?.generated) {
               const champions = [];
-              const inProgress = [];
-              for (const regionId of Object.keys(corpRT.brackets || {})) {
-                const r = corpRT.brackets[regionId];
+              for (const rid of Object.keys(corpRT.brackets || {})) {
+                const r = corpRT.brackets[rid];
                 if (r?.champion) champions.push({ region: r.regionName, team: r.champion });
-                else inProgress.push(r?.regionName);
               }
-              const status = corpRT.phase === 'done' ? null : `${inProgress.length}地域 進行中`;
-              tournaments.push({ label: '地域T', color: 'green', champions, status });
+              const inProgressCount = Object.keys(corpRT.brackets || {}).length - champions.length;
+              const status = inProgressCount > 0 ? `${inProgressCount}地域 進行中` : null;
+              tournamentList.push({ key: 'rt', label: '地域トーナメント', color: 'green', champions, status, data: corpRT });
             }
             if (corpToshi?.generated) {
               const status = corpToshi.mainDone ? null : !corpToshi.qualifiersDone ? '予選中' : corpToshi.mainTournament ? '本戦中' : '本戦 準備中';
-              tournaments.push({ label: '都市対抗', color: 'yellow', champion: corpToshi.mainDone ? corpToshi.champion : null, runnerUp: corpToshi.mainDone ? corpToshi.runnerUp : null, status });
+              tournamentList.push({ key: 'toshi', label: '都市対抗', color: 'yellow', champion: corpToshi.mainDone ? corpToshi.champion : null, runnerUp: corpToshi.mainDone ? corpToshi.runnerUp : null, status, data: corpToshi });
             }
             if (corpNS?.generated) {
               const status = corpNS.done ? null : corpNS.phase === 'main' ? '本戦中' : '予選中';
-              tournaments.push({ label: '日本選手権', color: 'red', champion: corpNS.done ? corpNS.champion : null, runnerUp: corpNS.done ? corpNS.runnerUp : null, status });
+              tournamentList.push({ key: 'ns', label: '日本選手権', color: 'red', champion: corpNS.done ? corpNS.champion : null, runnerUp: corpNS.done ? corpNS.runnerUp : null, status, data: corpNS });
             }
             if (corpCS?.generated) {
               const status = corpCS.done ? null : corpCS.phase === 'main' ? '本戦中' : '予選中';
-              tournaments.push({ label: 'クラブ選手権', color: 'purple', champion: corpCS.done ? corpCS.champion : null, runnerUp: corpCS.done ? corpCS.runnerUp : null, status });
+              tournamentList.push({ key: 'cs', label: 'クラブ選手権', color: 'purple', champion: corpCS.done ? corpCS.champion : null, runnerUp: corpCS.done ? corpCS.runnerUp : null, status, data: corpCS });
             }
-            if (tournaments.length === 0) return null;
-            const thColors = { yellow: 'text-yellow-400', red: 'text-red-400', green: 'text-green-400', purple: 'text-purple-400' };
-            const bgColors = { yellow: 'bg-yellow-900/20 border-yellow-700/30', red: 'bg-red-900/20 border-red-700/30', green: 'bg-green-900/20 border-green-700/30', purple: 'bg-purple-900/20 border-purple-700/30' };
+            if (tournamentList.length === 0) return null;
+
             return (
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-yellow-700/30 mt-3">
                 <h2
@@ -3580,30 +3652,47 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   <span>🏢</span> 社会人トーナメント
                   <span className="text-[10px] text-gray-500 ml-auto">{showCorporateTournaments ? '▲' : '▼'}</span>
                 </h2>
-                <Collapse open={showCorporateTournaments}><div className="space-y-1 mt-2">
-                  {tournaments.map((t, i) => (
-                    <div key={i} className={`rounded-lg px-2 py-1.5 border ${bgColors[t.color] || bgColors.yellow}`}>
-                      <div className={`text-xs font-bold ${thColors[t.color] || 'text-yellow-400'} flex items-center gap-1`}>
-                        {t.champion ? '🏆' : '⚾'} {t.label}
-                        {t.status && <span className="text-[10px] text-gray-500 font-normal ml-auto">{t.status}</span>}
+                <Collapse open={showCorporateTournaments}><div className="space-y-1.5 mt-2">
+                  {tournamentList.map((t) => {
+                    const isExpanded = expandedCorpTournaments[t.key] || false;
+                    return (
+                      <div key={t.key} className={`rounded-lg border ${bgColors[t.color]}`}>
+                        {/* ヘッダー行（クリックでトーナメント表開閉） */}
+                        <div
+                          className="px-2 py-1.5 flex items-center gap-1 cursor-pointer select-none"
+                          onClick={() => setExpandedCorpTournaments(prev => ({ ...prev, [t.key]: !prev[t.key] }))}
+                        >
+                          <span className={`text-xs font-bold ${thColors[t.color]}`}>{t.champion || (t.champions?.length > 0 && !t.status) ? '🏆' : '⚾'} {t.label}</span>
+                          {t.status && <span className="text-[10px] text-gray-500 font-normal ml-1">{t.status}</span>}
+                          <span className="text-[10px] text-gray-600 ml-auto">{isExpanded ? '▲' : '▼'}</span>
+                        </div>
+                        {/* 結果サマリー */}
+                        <div className="px-2 pb-1.5">
+                          {t.champions ? (
+                            <div className="flex flex-wrap gap-x-2">
+                              {t.champions.map((c, ci) => (
+                                <span key={ci} className="text-[10px]"><span className="text-gray-500">{c.region}:</span> <span className="text-gray-200">{c.team}</span></span>
+                              ))}
+                              {t.champions.length === 0 && <span className="text-[10px] text-gray-500">開催中...</span>}
+                            </div>
+                          ) : t.champion ? (
+                            <div className="text-[10px] text-gray-300">
+                              <span className={`${thColors[t.color]} font-bold`}>優勝: {t.champion}</span>
+                              {t.runnerUp && <span className="text-gray-500 ml-2">準優勝: {t.runnerUp}</span>}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-gray-500">開催中...</div>
+                          )}
+                        </div>
+                        {/* トーナメント表（展開時） */}
+                        <Collapse open={isExpanded}>
+                          <div className="px-2 pb-2 border-t border-gray-700/40 pt-2">
+                            {renderUniCorpBracket(t.key, t.data)}
+                          </div>
+                        </Collapse>
                       </div>
-                      {t.champions ? (
-                        <div className="flex flex-wrap gap-x-2 mt-0.5">
-                          {t.champions.map((c, ci) => (
-                            <span key={ci} className="text-[10px]"><span className="text-gray-500">{c.region}:</span> <span className="text-gray-200">{c.team}</span></span>
-                          ))}
-                          {t.champions.length === 0 && <span className="text-[10px] text-gray-500">開催中...</span>}
-                        </div>
-                      ) : t.champion ? (
-                        <div className="text-[10px] text-gray-300 mt-0.5">
-                          <span className={`${thColors[t.color] || 'text-yellow-300'} font-bold`}>優勝: {t.champion}</span>
-                          {t.runnerUp && <span className="text-gray-500 ml-2">準優勝: {t.runnerUp}</span>}
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-gray-500 mt-0.5">開催中...</div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div></Collapse>
               </div>
             );
