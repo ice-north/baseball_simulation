@@ -1380,13 +1380,21 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const allTeamNames = userLeagueTeamSet.size > 0
       ? Object.keys(TEAMS_DATA || {}).filter(tn => userLeagueTeamSet.has(tn))
       : Object.keys(TEAMS_DATA || {});
+    // 社会人・大学モードはTEAMS_DATAに選手が入っている全チームを対象にする
+    const allPlayersTeams = (seasonData?.settings?.corporateMode || seasonData?.settings?.universityMode)
+      ? Object.keys(TEAMS_DATA || {})
+      : allTeamNames;
     const allPlayers = [];
-    allTeamNames.forEach(tn => {
+    allPlayersTeams.forEach(tn => {
       (TEAMS_DATA[tn]?.players || []).forEach(p => allPlayers.push({ ...p, teamName: tn }));
     });
 
     // 直前の試合結果からトピック生成
-    const recentResults = (seasonData.results || []).slice(-allTeamNames.length);
+    // 社会人・大学モードはsettings.teamNamesが自チームのみのため、結果を広めに取る
+    const recentCount = (seasonData?.settings?.corporateMode || seasonData?.settings?.universityMode)
+      ? Math.min(40, (seasonData.results || []).length)
+      : Math.max(allTeamNames.length, 1);
+    const recentResults = (seasonData.results || []).slice(-recentCount);
     recentResults.forEach(r => {
       if (!r.result || r.result.cancelled) return;
       const hs = r.result.homeScore;
