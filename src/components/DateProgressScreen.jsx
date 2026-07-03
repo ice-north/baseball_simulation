@@ -3030,8 +3030,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const spStandings = seasonData?.springStandings || null;
             const isFallSeason = isUniversityMode && spStandings != null;
             const isSummerBreak = isUniversityMode && !isFallSeason && curMonth >= 7 && curMonth <= 8;
+            const isPreFall = isUniversityMode && !isFallSeason && curMonth >= 9;
             const tableTitle = isUniversityMode
-              ? isFallSeason ? '秋季順位表' : isSummerBreak ? '春季最終順位' : '春季順位表'
+              ? isFallSeason ? '秋季順位表' : (isSummerBreak || isPreFall) ? '春季最終順位' : '春季順位表'
               : '順位表';
             const tableColor = isUniversityMode
               ? isFallSeason ? 'text-orange-400' : 'text-green-400'
@@ -3346,6 +3347,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     seasonObj.standings = rows;
                   }
                   seasonObj.done = seasonData.phase === 'off_season';
+                  // 秋季に入ったら春季をdone=trueにし、秋季_activeフラグを立てる（getAllUniversityLeagues用）
+                  if (seasonKey === 'fall') {
+                    if (league.spring) league.spring.done = true;
+                    seasonObj._active = true;
+                  }
                 }
               }
             }

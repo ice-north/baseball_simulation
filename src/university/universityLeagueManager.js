@@ -291,11 +291,12 @@ export function getAllUniversityLeagues() {
   return Object.entries(leagues).map(([id, data]) => {
     const springDone = data.spring?.done || false;
     const fallDone = data.fall?.done || false;
-    const fallHasGames = data.fall?.schedule?.some(g => g.result) || false;
+    // ユーザーリーグは手動試合のためscheduleにresultが入らない。_activeフラグで秋季開始を検出
+    const fallHasGames = data.fall?.schedule?.some(g => g.result) || data.fall?._active || false;
 
     // 秋季開始前は春季結果を表示
     let displayKey, seasonLabel;
-    if (!springDone) {
+    if (!springDone && !fallHasGames) {
       displayKey = 'spring'; seasonLabel = '春季';
     } else if (!fallDone && !fallHasGames) {
       displayKey = 'spring'; seasonLabel = '春季終了';
