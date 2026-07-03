@@ -1339,14 +1339,25 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       if (reliever) selectedRoleLabel = '緊急中継ぎ';
     }
 
-    // 最終フォールバック: 全員疲労でも最もスタミナの残っている投手を選ぶ
+    // 最終フォールバック: 先発ローテーション投手を除いた上で最もスタミナの残っている投手を選ぶ
+    // （先発をpitcherAppearancesに入れるとセーブ・ホールド判定が狂うため先発は最後の手段）
     if (!reliever) {
-      const allPitchers = defenseTeam.players
-        .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id))
+      const starterIdsSet = new Set(rotation.starters || []);
+      const nonStarterPitchers = defenseTeam.players
+        .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id) && !starterIdsSet.has(p.id))
         .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
-      if (allPitchers.length > 0) {
-        reliever = allPitchers[0];
+      if (nonStarterPitchers.length > 0) {
+        reliever = nonStarterPitchers[0];
         selectedRoleLabel = '緊急登板';
+      } else {
+        // 本当に誰もいない場合のみ先発投手を緊急起用
+        const starterPitchers = defenseTeam.players
+          .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id))
+          .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
+        if (starterPitchers.length > 0) {
+          reliever = starterPitchers[0];
+          selectedRoleLabel = '緊急登板(先発)';
+        }
       }
     }
 
@@ -2070,13 +2081,23 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
               );
               if (reliever) selectedRoleLabel = '緊急中継ぎ';
               if (!reliever) {
-                // 最終手段: 最もスタミナの残っている投手を選ぶ
+                // 最終手段: 先発ローテーション投手も除外せず最もスタミナの残っている投手を選ぶ
+                // （先発がpitcherAppearancesに入るとセーブ判定が狂うため、先発は除外して探す）
                 const allPitchers = team.players
-                  .filter(p => isPitcher(p) && p.battingOrder === 0 && p.id !== pitcher.id)
+                  .filter(p => isPitcher(p) && p.battingOrder === 0 && p.id !== pitcher.id && !starterIds.has(p.id))
                   .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
                 if (allPitchers.length > 0) {
                   reliever = allPitchers[0];
                   selectedRoleLabel = '緊急登板';
+                } else {
+                  // 本当に誰もいない場合のみ先発投手を緊急起用
+                  const starterPitchers = team.players
+                    .filter(p => isPitcher(p) && p.battingOrder === 0 && p.id !== pitcher.id && starterIds.has(p.id))
+                    .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
+                  if (starterPitchers.length > 0) {
+                    reliever = starterPitchers[0];
+                    selectedRoleLabel = '緊急登板(先発)';
+                  }
                 }
               }
             }

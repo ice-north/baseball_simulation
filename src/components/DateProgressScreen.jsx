@@ -133,25 +133,23 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     }
 
     // セーブ: 以下の条件をすべて満たすリリーフ
-    // 1) 勝ちチームの最後の投手 2) 勝ち投手ではない 3) 以下のいずれか:
-    //    a) 3点差以内でリード時に登板し1回以上投げた
-    //    b) 同点の走者を出塁させた状態で登板
-    //    c) 3イニング以上投げた
+    // 1) 勝ちチームで最後に投球したリリーフ投手 2) 勝ち投手ではない 3) 先発投手ではない
+    // 4) 以下のいずれか:
+    //    a) 3点差以内でリード時に1アウト以上取得
+    //    b) 3イニング以上投げた
     const scoreDiff = Math.abs(gameResult.homeScore - gameResult.awayScore);
     if (winPitchers.length > 1) {
-      // pitcherAppearancesから最後に登板した投手を特定（roster順ではなく登板順）
       const teamKey = isHomeWin ? 'home' : 'away';
       const appearances = gameResult.pitcherAppearances?.[teamKey] || [];
+      // pitcherAppearancesを逆順に検索し、実際にアウトを取った最後のリリーフを特定
+      // （最後に登板した投手が0アウトの場合は1つ前のリリーフを探す）
       let lastPitcher;
-      if (appearances.length > 0) {
-        const lastApp = appearances[appearances.length - 1];
-        lastPitcher = winPitchers.find(p => p.id === lastApp.id);
+      for (let i = appearances.length - 1; i >= 0; i--) {
+        const found = winPitchers.find(p => p.id === appearances[i].id);
+        if (found) { lastPitcher = found; break; }
       }
-      if (!lastPitcher) {
-        // フォールバック: 先発が完投した場合は先発がlast
-        lastPitcher = winStarter;
-      }
-      if (lastPitcher && lastPitcher !== decisions.winningPitcher) {
+      // リリーフ投手（winReliefIdsに含まれる）かつ勝ち投手でない場合のみセーブ対象
+      if (lastPitcher && lastPitcher !== decisions.winningPitcher && winReliefIds.has(lastPitcher.id)) {
         const outs = lastPitcher.gameStats.pitching.outs;
         if ((scoreDiff <= 3 && outs >= 3) || outs >= 9) {
           decisions.savePitcher = lastPitcher;
