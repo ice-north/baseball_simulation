@@ -263,6 +263,22 @@ function generateHighSchoolPlayer(id) {
       right:   { meet: 0, power: 2, eye: 0, defense: 1, steal: 0 }
     }[position] || { meet: 0, power: 0, eye: 0, defense: 0, steal: 0 };
 
+    // ポジション適性に基づいた走力・肩力の方向付け
+    // 指導者は小中学校から各選手の特性に合ったポジションで育てるため、
+    // ポジションと身体能力に強い相関が生まれる
+    const physMod = {
+      catcher: { speedAdj: -10, armAdj:  12 }, // 強肩・鈍足型が捕手に
+      first:   { speedAdj: -10, armAdj:  -5 }, // パワー型・遅足が一塁に
+      second:  { speedAdj:   8, armAdj:   0 }, // 俊足で器用な選手が二塁に
+      short:   { speedAdj:   8, armAdj:   7 }, // 俊足強肩が遊撃に
+      third:   { speedAdj:  -2, armAdj:   7 }, // 強肩が三塁に
+      left:    { speedAdj:  -3, armAdj:  -6 }, // 肩が弱い選手が左翼に
+      center:  { speedAdj:  12, armAdj:   0 }, // 最速の選手が中堅に
+      right:   { speedAdj:   2, armAdj:   5 }, // 強肩が右翼に
+    }[position] || { speedAdj: 0, armAdj: 0 };
+    baseSpeed = Math.max(1, baseSpeed + physMod.speedAdj);
+    baseArm   = Math.max(1, baseArm   + physMod.armAdj);
+
     let meet = Math.round(nrm(19, 9) + off + pm.meet);
     let power = Math.round(nrm(15, 12) + off + buildMod.power + pm.power);
     let eye = Math.round(nrm(18, 8) + off * 0.8 + pm.eye);
