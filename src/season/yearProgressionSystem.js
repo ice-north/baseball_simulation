@@ -471,16 +471,23 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         // 大学: 4年生（22歳）のみ指名対象
         if (player.age < 22 || (player.universityYear && player.universityYear < 4)) return;
       } else if (source === 'corporate') {
-        // 社会人: 高卒3年目(21歳〜)、大卒2年目(24歳〜)
+        // 社会人: 高卒3年目(21歳〜)、大卒3年目(25歳〜)
+        // 大卒社会人は23歳で入社→2年の経験を積んで25歳がドラフトターゲット
         const hasUniHistory = player.careerHistory?.some(h => h.type === 'university');
         if (hasUniHistory) {
-          if (player.age < 24) return;
+          if (player.age < 25) return;
         } else {
           if (player.age < 21) return;
         }
       }
       // 独立リーグ: 年齢制限なし（1年目から指名対象）
-      const bonus = awardBonusMap[player.id]?.bonus || 0;
+      const baseBonus = awardBonusMap[player.id]?.bonus || 0;
+      // 大卒社会人経験ボーナス: age25-26はageBonus(-10〜-22)を補正
+      const hasUniHistoryForBonus = source === 'corporate' && player.careerHistory?.some(h => h.type === 'university');
+      const corpExpBonus = hasUniHistoryForBonus && player.age >= 25 && player.age <= 26
+        ? Math.max(0, (27 - player.age) * 5)  // 25歳:+10, 26歳:+5
+        : 0;
+      const bonus = baseBonus + corpExpBonus;
       const awards = awardBonusMap[player.id]?.awards || [];
       const { totalScore } = checkNPBDraftEligibility(player, bonus);
       const isClub = source === 'corporate' && team.corporateData?.type === 'club';
