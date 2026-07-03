@@ -1155,6 +1155,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const phase = getCurrentPhase(selectedMonth, day, phaseOpts);
       let eventLabel = null;
       if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
+      else if (isUniversity && selectedMonth === 8 && day >= 20 && day <= 31) eventLabel = '夏合宿';
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
       else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'グランドCS';
       else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
