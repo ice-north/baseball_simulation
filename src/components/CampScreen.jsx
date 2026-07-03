@@ -332,6 +332,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         case 'power': return p.batting?.power || 0;
         case 'speed': return p.physical?.speed || 0;
         case 'arm': return p.physical?.arm || 0;
+        case 'dexterity': return p.physical?.dexterity || 0;
         case 'defense': return p.fielding?.defense || 0;
         case 'clead': return p.catching?.lead || 0;
         case 'eye': return p.batting?.eye || 0;
@@ -858,6 +859,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <S k="power" w="w-8">パ</S>
                         <S k="speed" w="w-8">走</S>
                         <S k="arm" w="w-8">肩</S>
+                        <S k="dexterity" w="w-8" title="器用さ">器</S>
                         <S k="defense" w="w-8">守</S>
                         <S k="clead" w="w-8">Cリ</S>
                         <S k="eye" w="w-8">眼</S>
@@ -947,6 +949,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.power||0} label="パワー" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.speed||0} label="走力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.arm||0} label="肩力" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.dexterity||50} label="器用さ" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={f.defense||0} label="守備" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={player.catching?.lead||0} label="Cリード" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.eye||0} label="選球眼" /></td>

@@ -183,7 +183,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     const map = {
       velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
       meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
-      speed: sa.physical?.speed, arm: sa.physical?.arm, defense: sa.fielding?.defense,
+      speed: sa.physical?.speed, arm: sa.physical?.arm, dexterity: sa.physical?.dexterity, defense: sa.fielding?.defense,
       professionalism: sa.professionalism,
       mental: sa.mental, growth: p.growthPotential,
     };
@@ -243,6 +243,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
       case 'eye': return typeof sa.batting?.eye === 'number' ? sa.batting.eye : -Infinity;
       case 'speed': return typeof sa.physical?.speed === 'number' ? sa.physical.speed : -Infinity;
       case 'arm': return typeof sa.physical?.arm === 'number' ? sa.physical.arm : -Infinity;
+      case 'dexterity': return typeof sa.physical?.dexterity === 'number' ? sa.physical.dexterity : -Infinity;
       case 'defense': return typeof sa.fielding?.defense === 'number' ? sa.fielding.defense : -Infinity;
       case 'mental': return typeof sa.mental === 'number' ? sa.mental : -Infinity;
       case 'professionalism': return typeof sa.professionalism === 'number' ? sa.professionalism : -Infinity;
@@ -351,6 +352,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       <SelTh label="眼" sortK="eye" title="選球眼でソート" />
                       <SelTh label="走" sortK="speed" title="走力でソート" />
                       <SelTh label="肩" sortK="arm" title="肩力でソート" />
+                      <SelTh label="器" sortK="dexterity" title="器用さでソート" />
                       <SelTh label="守" sortK="defense" title="守備でソート" />
                       <SelTh label="精神" sortK="mental" title="精神力でソート" />
                       <SelTh label="プロ" sortK="professionalism" title="プロ意識でソート" />
@@ -387,6 +389,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.arm)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.dexterity)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.mental)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.professionalism)}</td>
@@ -525,6 +528,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     <SortHeader k="eye" label="眼" />
                     <SortHeader k="speed" label="走" />
                     <SortHeader k="arm" label="肩" />
+                    <SortHeader k="dexterity" label="器" />
                     <SortHeader k="defense" label="守" />
                     <SortHeader k="mental" label="精神" />
                     <SortHeader k="professionalism" label="プロ" />
@@ -574,6 +578,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.arm)}</td>
+                        <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.dexterity)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.mental)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.professionalism)}</td>

@@ -492,10 +492,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             {!isPitcher && (
               <div>
                 <h4 className="text-cyan-400 text-[10px] font-bold uppercase tracking-wider mb-1.5">フィジカル</h4>
-                <div className="grid grid-cols-5 gap-1 bg-gray-700/40 rounded-lg p-2">
+                <div className="grid grid-cols-6 gap-1 bg-gray-700/40 rounded-lg p-2">
                   <StatBox label="走力" value={ph.speed || 0} highlight />
                   <StatBox label="肩力" value={ph.arm || 0} highlight />
                   <StatBox label="守備" value={f.defense || 0} highlight />
+                  <StatBox label="器用さ" value={ph.dexterity || 50} />
                   <StatBox label="体力" value={ph.bodyStamina || 50} />
                   <StatBox label="回復" value={ph.recovery || 50} />
                 </div>
