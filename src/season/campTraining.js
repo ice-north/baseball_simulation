@@ -166,7 +166,7 @@ export const SUB_TRAINING_MENUS = {
   form_change: {
     name: 'フォーム改造',
     icon: '🔄',
-    description: '投球フォーム変更に挑戦（成功20%/失敗で制球低下）',
+    description: '投球フォーム変更に挑戦（成功20%: フォーム変更+能力UP / 失敗: フォーム変更+制球低下）',
     targets: ['control', 'meet'],
   },
   switch_hit: {
@@ -366,18 +366,18 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           ? options.targetForm
           : forms.filter(f => f !== currentForm)[Math.floor(Math.random() * (forms.length - 1))];
         const FORM_NAMES = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
-        // ハイリスクハイリターン: 20%で成功、成功時は制球+球速ボーナス、失敗時は制球低下
+        // 成功/失敗にかかわらずフォームは変わる
+        player.pitching.form = targetForm;
         if (Math.random() < 0.20) {
-          player.pitching.form = targetForm;
-          growthReport.push({ statName: 'フォーム', before: FORM_NAMES[currentForm], after: FORM_NAMES[targetForm], growth: 0, isAwakening: true });
-          // 成功ボーナス: 制球+3~5
+          // 成功: フォーム変更 + 制球+3~5 大幅アップ
+          growthReport.push({ statName: 'フォーム改造成功', before: FORM_NAMES[currentForm], after: FORM_NAMES[targetForm], growth: 0, isAwakening: true });
           const bonus = Math.floor(Math.random() * 3) + 3;
           const oldCtrl = player.pitching.control || 50;
           player.pitching.control = oldCtrl + bonus;
           growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: bonus });
         } else {
-          growthReport.push({ statName: 'フォーム改造', before: FORM_NAMES[currentForm], after: '変更失敗', growth: 0 });
-          // 失敗ペナルティ: 制球-1~3
+          // 失敗: フォーム変更 + 制球-1~3 ダウン
+          growthReport.push({ statName: 'フォーム改造', before: FORM_NAMES[currentForm], after: FORM_NAMES[targetForm], growth: 0 });
           const penalty = Math.floor(Math.random() * 3) + 1;
           if (player.pitching.control > 20) {
             const oldCtrl = player.pitching.control;
