@@ -823,7 +823,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   }
 
   // 通常の能力練習（成長量抑制: プロ級へ到達しにくくする）
-  menu.targets.forEach(targetStat => {
+  menu.targets.forEach((targetStat, targetIdx) => {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
     const ageBase = getAgeGrowthBase(age, isPhysical);
     const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.10);
@@ -950,6 +950,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       }
 
       let totalGrowth = Math.max(0, adjustedBaseGrowth + awakeningGrowth);
+      // 主対象能力（targets[0]）は最低+1を保証（投手が打撃練習、野手が球速練習でも必ず効果が出る）
+      if (targetIdx === 0 && totalGrowth < 1 && !menu.intensive) totalGrowth = 1;
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && totalGrowth < 1) totalGrowth = 1;
       if (targetStat === 'defense' && totalGrowth < 1) totalGrowth = 1;
       const armForCap = getNestedValue(updatedPlayer, getStatPath('arm')) || 50;
