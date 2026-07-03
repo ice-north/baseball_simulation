@@ -31,9 +31,18 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
 
   const { month, day } = newSeasonData.currentDate;
   const isCorporate = newSeasonData.settings?.corporateMode;
+  const isUniversityMode = newSeasonData.settings?.universityMode;
 
   // 社会人モード: 都市対抗予選（6月） - DateProgressScreen側で処理するためここでは何もしない
   // 社会人モード: 都市対抗本戦（8月） - DateProgressScreen側で処理するためここでは何もしない
+
+  // 大学モード: 夏季合宿（8月20日）
+  if (isUniversityMode && month === 8 && day >= 20 && !newSeasonData.summerCampDone) {
+    setSeasonData(newSeasonData);
+    setScreenMode('management');
+    setManagementView('summer_camp');
+    return null;
+  }
 
   // 11月9日: 契約更改強制
   if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
@@ -44,7 +53,6 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
   }
 
   // 11月10日〜29日: トライアウト強制（大学モードは11/29に別途university_scoutが発火するため除外）
-  const isUniversityMode = newSeasonData.settings?.universityMode;
   if (!isUniversityMode && month === 11 && day >= 10 && day < 30 && (newPhase === SEASON_PHASES.TRYOUT || newPhase === SEASON_PHASES.CONTRACT)) {
     newSeasonData = { ...newSeasonData, phase: SEASON_PHASES.TRYOUT };
     setSeasonData(newSeasonData);
