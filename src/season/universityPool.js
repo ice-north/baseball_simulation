@@ -353,16 +353,20 @@ function generateHighSchoolPlayer(id) {
   const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
   const growthPotential = cl(gpCenter[tier] + normal * 0.28, 0.35, 1.50);
 
-  let fame = 0;
-  if (tier === 'S') {
-    fame = Math.random() < 0.10 ? r(0, 5) : r(15, 40);
-  } else if (tier === 'A') {
-    fame = Math.random() < 0.10 ? r(0, 5) : r(5, 20);
-  } else if (tier === 'B' && Math.random() < 0.3) {
-    fame = r(1, 10);
-  }
-
   const highSchool = assignHighSchool(tier);
+
+  // 高校知名度の計算: 出身校ランク + 能力（投手=球速、野手=パワー） + 揺らぎ
+  // 高校野球分析サイトの評価軸（強豪校在籍・MAX球速・通算本塁打）を模倣
+  const schoolRankFame = { S: 12, A: 8, B: 5, C: 3, D: 2, E: 1, F: 0 }[highSchool?.rank ?? 'F'];
+  const abilityFame = (isPitcher || isTwoWay)
+    ? (abilities.velocity >= 150 ? 15 : abilities.velocity >= 145 ? 10 : abilities.velocity >= 140 ? 6 : abilities.velocity >= 135 ? 3 : 0)
+    : (abilities.power >= 60 ? 12 : abilities.power >= 50 ? 8 : abilities.power >= 40 ? 5 : abilities.power >= 30 ? 3 : 0);
+  // 総合能力による揺らぎ: 同ランク・同球速でも選手ごとに差をつける
+  const overallBonus = Math.round(
+    isPitcher ? abilities.control * 0.05 + abilities.stamina * 0.03 : abilities.meet * 0.04 + abilities.speed * 0.03 + abilities.defense * 0.03
+  );
+  const famNoise = Math.round((Math.random() - 0.5) * 8);
+  const fame = Math.max(0, Math.min(50, schoolRankFame + abilityFame + overallBonus + famNoise));
 
   return {
     id,
