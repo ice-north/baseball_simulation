@@ -917,15 +917,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         </td>
         {/* コンパクト: 主要能力のみ */}
         {benchCompact ? (<>
-          {isPitcher ? (<>
-            <StatCell value={player.pitching?.velocity || 0} isVelocity className="border-l border-gray-700/40" />
-            <StatCell value={player.pitching?.control || 0} />
-            <StatCell value={player.pitching?.stamina || 0} />
-          </>) : (<>
-            <StatCell value={player.batting?.meet || 0} className="border-l border-gray-700/40" />
-            <StatCell value={player.batting?.power || 0} />
-            <StatCell value={player.physical?.speed || 0} />
-          </>)}
+          <StatCell value={player.batting?.meet || 0} className="border-l border-gray-700/40" />
+          <StatCell value={player.batting?.power || 0} />
+          <StatCell value={player.physical?.speed || 0} />
           <td className="py-1.5 px-1 text-[11px] text-center border-l border-gray-700/40">
             {(() => {
               const f = player.fatigue || 0;
@@ -964,9 +958,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               return <span className={`font-semibold ${color}`}>{f}</span>;
             })()}
           </td>
-          <StatCell value={player.pitching?.velocity || 0} isVelocity className="border-l border-gray-700/40" />
-          <StatCell value={player.pitching?.control || 0} />
-          <StatCell value={player.pitching?.stamina || 0} />
           <td className="py-1.5 px-2 text-[10px] text-center whitespace-nowrap border-l border-gray-700/40">
             {isPitcher ? (() => {
               const ps2 = player.seasonStats?.pitching;
@@ -1393,9 +1384,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <SortHeader label="名前" sortKey="name" className="pl-1" />
                         <SortHeader label="齢" sortKey="age" className="text-center" />
                         <SortHeader label="守備" sortKey="position" />
-                        <SortHeader label={benchFilter === 'pitcher' ? '速' : benchFilter === 'all' ? '速/ミ' : 'ミ'} sortKey={benchFilter === 'pitcher' ? 'velocity' : 'meet'} className="text-center border-l border-gray-700/40" />
-                        <SortHeader label={benchFilter === 'pitcher' ? '制' : benchFilter === 'all' ? '制/パ' : 'パ'} sortKey={benchFilter === 'pitcher' ? 'control' : 'power'} className="text-center" />
-                        <SortHeader label={benchFilter === 'pitcher' ? 'ス' : benchFilter === 'all' ? 'ス/走' : '走'} sortKey={benchFilter === 'pitcher' ? 'stamina' : 'speed'} className="text-center" />
+                        <SortHeader label="ミ" sortKey="meet" className="text-center border-l border-gray-700/40" />
+                        <SortHeader label="パ" sortKey="power" className="text-center" />
+                        <SortHeader label="走" sortKey="speed" className="text-center" />
                         <SortHeader label="疲労" sortKey="fatigue" className="text-center border-l border-gray-700/40" />
                         <th className="py-1 px-1 text-center text-gray-500 border-l border-gray-700/40">成績</th>
                       </tr>
@@ -1407,7 +1398,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <th colSpan={1} className="py-1 px-1 text-center text-gray-500">投打</th>
                         <th colSpan={7} className="py-1 px-1 text-center text-blue-400/60 border-l border-gray-700/40">野手能力</th>
                         <th colSpan={1} className="py-1 px-1 text-center text-yellow-400/60 border-l border-gray-700/40">状態</th>
-                        <th colSpan={3} className="py-1 px-1 text-center text-red-400/60 border-l border-gray-700/40">投手能力</th>
                         <th colSpan={1} className="py-1 px-1 text-center text-gray-500 border-l border-gray-700/40">成績</th>
                       </tr>
                       <tr className="bg-gray-800 border-b border-gray-700/50 text-[10px] text-gray-400">
@@ -1424,9 +1414,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <SortHeader label="体" sortKey="bodyStamina" className="text-center" />
                         <SortHeader label="回" sortKey="recovery" className="text-center" />
                         <SortHeader label="疲" sortKey="fatigue" className="text-center border-l border-gray-700/40" />
-                        <SortHeader label="速" sortKey="velocity" className="text-center border-l border-gray-700/40" />
-                        <SortHeader label="制" sortKey="control" className="text-center" />
-                        <SortHeader label="ス" sortKey="stamina" className="text-center" />
                         <th className="py-1 px-1 text-center border-l border-gray-700/40">成績</th>
                       </tr>
                     </>)}
