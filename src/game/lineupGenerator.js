@@ -147,8 +147,10 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
         if (fitness < threshold) return;
       }
 
-      // 本来のポジションには強いボーナス（本来の守備位置が優先されるように）
-      const nativeBonus = ps.player.position === pos ? 50 : 0;
+      // 本来のポジションには優先ボーナス
+      // standard: 30（同程度なら本来ポジション優先）
+      // offense/defense: 5（モード特化スコアが本来ポジション優先を上回れるように）
+      const nativeBonus = ps.player.position === pos ? (mode === 'standard' ? 30 : 5) : 0;
       const value = calcPositionValue(ps.player, pos, mode) + nativeBonus;
       if (value > bestValue) {
         bestValue = value;
@@ -176,8 +178,7 @@ function greedyAssignment(candidates, positions, trialSeed, mode = 'standard') {
       );
       const pool = eligible.length > 0 ? eligible : unassignedPlayers; // 全員除外なら緊急措置
       for (const ps of pool) {
-        // フォールバックでも本来ポジション優先ボーナスを付与
-        const nativeBonus = ps.player.position === pos ? 50 : 0;
+        const nativeBonus = ps.player.position === pos ? (mode === 'standard' ? 30 : 5) : 0;
         const value = calcPositionValue(ps.player, pos, mode) + nativeBonus;
         if (value > bestValue) {
           bestValue = value;
@@ -381,9 +382,16 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
   // 候補選出: モードに応じてソート基準を変える
   const sortedCandidates = [...playerScores].sort((a, b) => {
     if (mode === 'defense') {
+      // 守備重視: 各ポジションで発揮できる最大守備スコアでソート
       const aVal = Math.max(...positions.map(pos => calcDefenseScore(a.player, pos, mode)));
       const bVal = Math.max(...positions.map(pos => calcDefenseScore(b.player, pos, mode)));
       return bVal - aVal;
+    }
+    if (mode === 'offense') {
+      // 打撃重視: ミート+パワーの合計でソート（ユーザー要望通り）
+      const aOff = (a.player.batting?.meet || 0) + (a.player.batting?.power || 0);
+      const bOff = (b.player.batting?.meet || 0) + (b.player.batting?.power || 0);
+      return bOff - aOff;
     }
     return b.offense - a.offense;
   });
