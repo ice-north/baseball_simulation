@@ -1947,8 +1947,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         throws, bats, source, orgName, headline, subline,
         isPitcher, fame: p.fame || 0, score: draft.totalScore,
         velocity: p.pitching?.velocity, control: p.pitching?.control,
+        stamina: p.pitching?.stamina || 0,
+        arsenalCount: (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length,
         meet: p.batting?.meet, power: p.batting?.power, speed: p.physical?.speed,
         arm: p.physical?.arm, defense: p.fielding?.defense,
+        eye: p.batting?.eye || 0, steal: p.batting?.steal || 0,
         growthPotential: p.growthPotential,
       };
     };
@@ -1961,7 +1964,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         .filter(x => x.draft.totalScore >= 80)
         .sort((a, b) => b.draft.totalScore - a.draft.totalScore);
       if (sorted.length > 0) hsTop = makeCard(sorted[0].player, 'highschool', sorted[0].player.highSchool?.name || '高校');
-      hsOthers = sorted.slice(1, 5).map(x => makeCard(x.player, 'highschool', x.player.highSchool?.name || '高校'));
+      hsOthers = sorted.slice(1, 9).map(x => makeCard(x.player, 'highschool', x.player.highSchool?.name || '高校'));
     }
 
     // 大学注目選手（3〜4年生）
@@ -1985,7 +1988,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     });
     uniAll.sort((a, b) => b.score - a.score);
     const uniTop = uniAll.length > 0 ? uniAll[0].card : null;
-    const uniOthers = uniAll.slice(1, 5).map(x => x.card);
+    const uniOthers = uniAll.slice(1, 9).map(x => x.card);
 
     // 社会人・独立
     const corpAll = [];
@@ -1993,7 +1996,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
       if (!team?.players) return;
       const isCorp = team.corporateData?.type === 'enterprise' || team.corporateData?.type === 'club';
-      const isInd = !isCorp && !team.corporateData && teamName !== userTeamName;
+      const isInd = !isCorp && !!team.independentLeagueId && teamName !== userTeamName;
       if (!isCorp && !isInd) return;
       team.players.forEach(p => {
         if (p.age >= 30) return;
@@ -2019,11 +2022,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const ps = p.seasonStats?.pitching;
         if (!bs && !ps) return;
         let star = false, note = '';
-        if (bs?.atBats >= 30 && bs.hits / bs.atBats >= 0.330) { star = true; note = `打率${(bs.hits / bs.atBats).toFixed(3)}`; }
-        if (bs?.homeruns >= 10) { star = true; note = `${bs.homeruns}本塁打`; }
-        if (ps?.wins >= 5) { star = true; note = `${ps.wins}勝`; }
-        if (ps?.saves >= 5) { star = true; note = `${ps.saves}S`; }
-        if (ps?.inningsPitched >= 30 && (ps.earnedRuns / (ps.inningsPitched / 3)) * 9 <= 2.0) {
+        if (bs?.atBats >= 25 && bs.hits / bs.atBats >= 0.300) { star = true; note = `打率${(bs.hits / bs.atBats).toFixed(3)}`; }
+        if (bs?.homeruns >= 6) { star = true; note = `${bs.homeruns}本塁打`; }
+        if (ps?.wins >= 4) { star = true; note = `${ps.wins}勝`; }
+        if (ps?.saves >= 3) { star = true; note = `${ps.saves}S`; }
+        if (ps?.inningsPitched >= 20 && (ps.earnedRuns / (ps.inningsPitched / 3)) * 9 <= 2.5) {
           star = true; note = `防御率${((ps.earnedRuns / (ps.inningsPitched / 3)) * 9).toFixed(2)}`;
         }
         if (star) {
@@ -2042,7 +2045,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const ns = seasonData.nihonSenshuken;
     if (ns?.champion) tournamentNews.push(`日本選手権 優勝:${ns.champion}`);
 
-    return { hsTop, hsOthers, uniTop, uniOthers, corpTop: corpAll[0]?.card || null, corpOthers: corpAll.slice(1, 4).map(x => x.card), indPlayers: indAll.slice(0, 3).map(x => x.card), leagueStars: leagueStars.slice(0, 4), tournamentNews };
+    return { hsTop, hsOthers, uniTop, uniOthers, corpTop: corpAll[0]?.card || null, corpOthers: corpAll.slice(1, 7).map(x => x.card), indPlayers: indAll.slice(0, 5).map(x => x.card), leagueStars: leagueStars.slice(0, 8), tournamentNews };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showNewspaper, seasonData.results?.length, seasonData.currentDate?.day]);
 
@@ -3870,136 +3873,150 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       {showNewspaper && newspaperData && (() => {
         const d = newspaperData;
         const curDate = seasonData.currentDate;
-        const MiniCard = ({ c, accent = 'text-gray-300' }) => (
-          <div className="flex items-baseline gap-1 leading-tight">
-            <span className="text-[9px] text-gray-500 shrink-0">{c.position}</span>
-            <span className="text-[11px] text-white font-bold truncate">{c.name}</span>
-            <span className="text-[9px] text-gray-500">{c.age}</span>
-          </div>
-        );
-        const FeatureCard = ({ c, label, labelColor }) => (
-          <div className="border border-gray-700/40 rounded-lg p-2 bg-gray-800/40">
-            <div className="flex items-center gap-1 mb-0.5">
-              <span className={`text-[9px] font-bold px-1 rounded ${labelColor}`}>{label}</span>
-              <span className="text-[9px] text-gray-500">{c.position} {c.throws}投{c.bats}打 {c.age}歳</span>
+
+        const gpBadge = (gp) => gp >= 1.5 ? '成長◎◎' : gp >= 1.3 ? '成長◎' : gp >= 1.1 ? '成長○' : null;
+
+        const FeatureCard = ({ c, label, labelColor }) => {
+          if (!c) return null;
+          const stats = c.isPitcher
+            ? [c.velocity && `${c.velocity}km`, c.control && `制球${c.control}`, c.stamina && `スタ${c.stamina}`, c.arsenalCount && `${c.arsenalCount}球種`].filter(Boolean)
+            : [c.meet && `ミ${c.meet}`, c.power && `パ${c.power}`, c.speed && `走${c.speed}`, c.defense && `守${c.defense}`, c.eye && `眼${c.eye}`].filter(Boolean);
+          const gp = gpBadge(c.growthPotential || 1.0);
+          return (
+            <div className="border border-gray-700/50 rounded-lg p-3 bg-gray-800/60 flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${labelColor}`}>{label}</span>
+                <span className="text-[10px] text-gray-400">{c.position} {c.throws}投{c.bats}打 {c.age}歳</span>
+                {gp && <span className="ml-auto text-[9px] font-bold text-yellow-400 shrink-0">{gp}</span>}
+              </div>
+              <div className="text-lg font-black text-white leading-tight">{c.name}</div>
+              <div className="text-[10px] text-gray-500 truncate">{c.orgName}</div>
+              <div className={`text-xs font-bold ${c.isPitcher ? 'text-red-300' : 'text-cyan-300'}`}>{c.headline}</div>
+              <div className="text-[10px] text-gray-400">{stats.join(' · ')}</div>
+              {c.fame > 10 && <div className="text-[9px] text-yellow-700 mt-0.5">注目度{c.fame} · Dスコア{c.score}</div>}
             </div>
-            <div className="text-sm font-black text-white leading-tight">{c.name}</div>
-            <div className="text-[9px] text-gray-500 truncate">{c.orgName}</div>
-            <div className={`text-[11px] font-bold mt-0.5 ${c.isPitcher ? 'text-red-300' : 'text-cyan-300'}`}>{c.headline}</div>
-            <div className="text-[9px] text-gray-400">{c.subline}</div>
-          </div>
-        );
+          );
+        };
+
+        const PlayerRow = ({ c, accentColor = 'text-gray-300', extra = '' }) => {
+          const statStr = c.isPitcher
+            ? `${c.velocity || '-'}km 制${c.control || '-'} ${c.arsenalCount || 0}球種`
+            : `ミ${c.meet || '-'} パ${c.power || '-'} 走${c.speed || '-'}`;
+          return (
+            <div className="py-1 border-b border-gray-800/40 last:border-0">
+              <div className="flex items-baseline gap-1 leading-tight">
+                <span className="text-[9px] text-gray-500 w-3.5 shrink-0">{c.position}</span>
+                <span className="text-[11px] font-bold text-white truncate">{c.name}</span>
+                <span className="text-[9px] text-gray-500 shrink-0">{c.age}歳</span>
+                {extra && <span className="text-[8px] text-blue-400 shrink-0">{extra}</span>}
+              </div>
+              <div className="flex items-center pl-4 gap-1">
+                <span className={`text-[9px] ${accentColor} truncate`}>{c.headline}</span>
+                <span className="ml-auto text-[9px] text-gray-500 shrink-0 font-mono">{statStr}</span>
+              </div>
+              <div className="text-[8px] text-gray-600 pl-4 truncate">{c.orgName}</div>
+            </div>
+          );
+        };
+
         const hasContent = d.hsTop || d.uniTop || d.corpTop || d.indPlayers.length > 0 || d.leagueStars.length > 0;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-2" onClick={() => setShowNewspaper(false)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3" onClick={() => setShowNewspaper(false)}>
             <div className="absolute inset-0 bg-black/80" />
-            <div className="relative w-full max-w-2xl bg-amber-50 rounded shadow-2xl border-2 border-amber-900/30" onClick={e => e.stopPropagation()} style={{ maxHeight: '98vh' }}>
+            <div className="relative w-full max-w-5xl bg-gray-900 rounded-xl shadow-2xl border-2 border-amber-900/30 flex flex-col" onClick={e => e.stopPropagation()} style={{ maxHeight: '95vh' }}>
               {/* Masthead */}
-              <div className="bg-gray-900 text-center py-1.5 px-3 border-b-4 border-double border-gray-700 relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] text-gray-500">{curDate.year}年{curDate.month}月{curDate.day}日</div>
-                <div className="text-[8px] text-gray-500 tracking-[0.3em]">DRAFT WATCH</div>
-                <h2 className="text-lg font-black text-white tracking-widest" style={{ fontFamily: 'serif' }}>ドラフト戦線</h2>
-                <button onClick={() => setShowNewspaper(false)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-lg leading-none px-1">✕</button>
+              <div className="bg-gray-950 text-center py-2 px-4 border-b-4 border-double border-amber-900/40 relative shrink-0">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">{curDate.year}年{curDate.month}月{curDate.day}日</div>
+                <div className="text-[8px] text-amber-700 tracking-[0.4em] uppercase">Draft Watch · Sports Report</div>
+                <h2 className="text-2xl font-black text-white tracking-widest" style={{ fontFamily: 'serif' }}>ドラフト戦線</h2>
+                <div className="text-[9px] text-gray-500">全国高校・大学・社会人 注目選手速報</div>
+                <button onClick={() => setShowNewspaper(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xl leading-none px-1">✕</button>
               </div>
 
               {hasContent ? (
-                <div className="bg-gray-900 p-2">
-                  {/* Top headline row: 2 featured players */}
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    {d.hsTop && <FeatureCard c={d.hsTop} label="高校" labelColor="bg-green-800 text-green-200" />}
-                    {d.uniTop && <FeatureCard c={d.uniTop} label={`大学${d.uniTop.uniRank || ''}`} labelColor="bg-blue-800 text-blue-200" />}
-                    {!d.hsTop && d.corpTop && <FeatureCard c={d.corpTop} label="社会人" labelColor="bg-amber-800 text-amber-200" />}
-                    {!d.uniTop && d.indPlayers[0] && <FeatureCard c={d.indPlayers[0]} label="独立" labelColor="bg-purple-800 text-purple-200" />}
-                  </div>
-
+                <div className="overflow-y-auto flex-1 p-3">
                   {/* Tournament ticker */}
                   {d.tournamentNews.length > 0 && (
-                    <div className="bg-yellow-900/40 border border-yellow-700/30 rounded px-2 py-1 mb-2 flex gap-3 items-center overflow-hidden">
-                      <span className="text-[9px] font-bold text-yellow-500 shrink-0">NEWS</span>
+                    <div className="bg-yellow-900/40 border border-yellow-700/30 rounded px-3 py-1.5 mb-3 flex gap-4 items-center">
+                      <span className="text-[10px] font-bold text-yellow-500 shrink-0">速報</span>
                       {d.tournamentNews.map((t, i) => (
-                        <span key={i} className="text-[10px] text-yellow-300 whitespace-nowrap">{t}</span>
+                        <span key={i} className="text-[11px] text-yellow-300">{t}</span>
                       ))}
                     </div>
                   )}
 
-                  {/* Main grid: 4 columns */}
-                  <div className="grid grid-cols-4 gap-2">
-                    {/* Column 1: 高校 others */}
+                  {/* Top Feature Cards — 3 columns */}
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    {d.hsTop && <FeatureCard c={d.hsTop} label="高校 注目No.1" labelColor="bg-green-800 text-green-200" />}
+                    {d.uniTop && <FeatureCard c={d.uniTop} label={`大学${d.uniTop.uniRank ? `[${d.uniTop.uniRank}]` : ''} 注目No.1`} labelColor="bg-blue-800 text-blue-200" />}
+                    {d.corpTop && <FeatureCard c={d.corpTop} label="社会人 注目No.1" labelColor="bg-amber-800 text-amber-200" />}
+                    {!d.corpTop && d.indPlayers[0] && <FeatureCard c={d.indPlayers[0]} label="独立 注目No.1" labelColor="bg-purple-800 text-purple-200" />}
+                  </div>
+
+                  <div className="h-px bg-gray-700/40 mb-3" />
+
+                  {/* Sub lists — 4 columns */}
+                  <div className="grid grid-cols-4 gap-3">
+                    {/* 高校注目 */}
                     <div>
-                      <div className="text-[9px] font-bold text-green-400 border-b border-green-800/50 pb-0.5 mb-1">高校注目</div>
-                      <div className="space-y-1.5">
-                        {d.hsOthers.map((c, i) => (
-                          <div key={i}>
-                            <MiniCard c={c} />
-                            <div className="text-[9px] text-green-300/80 truncate">{c.headline}</div>
-                            <div className="text-[8px] text-gray-500 truncate">{c.orgName}</div>
-                          </div>
-                        ))}
-                        {d.hsOthers.length === 0 && <div className="text-[9px] text-gray-600">情報なし</div>}
+                      <div className="text-[10px] font-bold text-green-400 border-b border-green-800/50 pb-1 mb-1.5 flex justify-between">
+                        <span>高校注目</span><span className="text-gray-600 font-normal">{d.hsOthers.length}名</span>
                       </div>
+                      {d.hsOthers.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-green-300" />)}
+                      {d.hsOthers.length === 0 && <div className="text-[9px] text-gray-600">情報なし</div>}
                     </div>
 
-                    {/* Column 2: 大学 others */}
+                    {/* 大学注目 */}
                     <div>
-                      <div className="text-[9px] font-bold text-blue-400 border-b border-blue-800/50 pb-0.5 mb-1">大学注目</div>
-                      <div className="space-y-1.5">
-                        {d.uniOthers.map((c, i) => (
-                          <div key={i}>
-                            <MiniCard c={c} />
-                            <div className="text-[9px] text-blue-300/80 truncate">{c.headline}</div>
-                            <div className="text-[8px] text-gray-500 truncate">{c.orgName}{c.year ? ` ${c.year}年` : ''}</div>
-                          </div>
-                        ))}
-                        {d.uniOthers.length === 0 && <div className="text-[9px] text-gray-600">情報なし</div>}
+                      <div className="text-[10px] font-bold text-blue-400 border-b border-blue-800/50 pb-1 mb-1.5 flex justify-between">
+                        <span>大学注目</span><span className="text-gray-600 font-normal">{d.uniOthers.length}名</span>
                       </div>
+                      {d.uniOthers.map((c, i) => (
+                        <PlayerRow key={i} c={c} accentColor="text-blue-300" extra={c.year ? `${c.year}年` : ''} />
+                      ))}
+                      {d.uniOthers.length === 0 && <div className="text-[9px] text-gray-600">情報なし</div>}
                     </div>
 
-                    {/* Column 3: 社会人 + 独立 */}
+                    {/* 社会人 + 独立 */}
                     <div>
-                      <div className="text-[9px] font-bold text-amber-400 border-b border-amber-800/50 pb-0.5 mb-1">社会人</div>
-                      <div className="space-y-1.5">
-                        {(d.hsTop && d.corpTop ? [d.corpTop, ...d.corpOthers] : d.corpOthers).slice(0, 3).map((c, i) => (
-                          <div key={i}>
-                            <MiniCard c={c} />
-                            <div className="text-[9px] text-amber-300/80 truncate">{c.headline}</div>
-                            <div className="text-[8px] text-gray-500 truncate">{c.orgName}</div>
-                          </div>
-                        ))}
-                      </div>
-                      {d.indPlayers.length > 0 && (d.uniTop || d.indPlayers.length > 1) && (
+                      {d.corpOthers.length > 0 && (
                         <>
-                          <div className="text-[9px] font-bold text-purple-400 border-b border-purple-800/50 pb-0.5 mb-1 mt-2">独立リーグ</div>
-                          <div className="space-y-1.5">
-                            {(d.uniTop ? d.indPlayers : d.indPlayers.slice(1)).slice(0, 2).map((c, i) => (
-                              <div key={i}>
-                                <MiniCard c={c} />
-                                <div className="text-[9px] text-purple-300/80 truncate">{c.headline}</div>
-                                <div className="text-[8px] text-gray-500 truncate">{c.orgName}</div>
-                              </div>
-                            ))}
+                          <div className="text-[10px] font-bold text-amber-400 border-b border-amber-800/50 pb-1 mb-1.5 flex justify-between">
+                            <span>社会人</span><span className="text-gray-600 font-normal">{(d.hsTop && d.corpTop ? [d.corpTop, ...d.corpOthers] : d.corpOthers).slice(0, 6).length}名</span>
                           </div>
+                          {(d.hsTop && d.corpTop ? [d.corpTop, ...d.corpOthers] : d.corpOthers).slice(0, 6).map((c, i) => (
+                            <PlayerRow key={i} c={c} accentColor="text-amber-300" />
+                          ))}
+                        </>
+                      )}
+                      {d.indPlayers.length > (d.uniTop ? 0 : 1) && (
+                        <>
+                          <div className={`text-[10px] font-bold text-purple-400 border-b border-purple-800/50 pb-1 mb-1.5 flex justify-between ${d.corpOthers.length > 0 ? 'mt-2' : ''}`}>
+                            <span>独立リーグ</span>
+                          </div>
+                          {(d.uniTop ? d.indPlayers : d.indPlayers.slice(1)).map((c, i) => (
+                            <PlayerRow key={i} c={c} accentColor="text-purple-300" />
+                          ))}
                         </>
                       )}
                     </div>
 
-                    {/* Column 4: リーグ活躍 */}
+                    {/* リーグ戦線 */}
                     <div>
-                      <div className="text-[9px] font-bold text-red-400 border-b border-red-800/50 pb-0.5 mb-1">リーグ戦線</div>
-                      <div className="space-y-1.5">
-                        {d.leagueStars.map((c, i) => (
-                          <div key={i}>
-                            <MiniCard c={c} />
-                            <div className="text-[9px] text-red-300/80 truncate">{c.headline}</div>
-                            <div className="text-[8px] text-gray-500 truncate">{c.orgName}</div>
-                          </div>
-                        ))}
-                        {d.leagueStars.length === 0 && <div className="text-[9px] text-gray-600">シーズン序盤</div>}
+                      <div className="text-[10px] font-bold text-red-400 border-b border-red-800/50 pb-1 mb-1.5 flex justify-between">
+                        <span>リーグ戦線</span><span className="text-gray-600 font-normal">{d.leagueStars.length}名</span>
                       </div>
+                      {d.leagueStars.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-red-300" />)}
+                      {d.leagueStars.length === 0 && <div className="text-[9px] text-gray-600">シーズン序盤</div>}
                     </div>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-gray-800/50 text-[9px] text-gray-600 text-center">
+                    ※ドラフト評価スコアは模擬値です。実際の指名は10月に確定します。
                   </div>
                 </div>
               ) : (
-                <div className="bg-gray-900 p-6 text-center text-gray-500 text-xs">まだ注目選手の情報がありません</div>
+                <div className="p-8 text-center text-gray-500 text-sm">まだ注目選手の情報がありません</div>
               )}
             </div>
           </div>
