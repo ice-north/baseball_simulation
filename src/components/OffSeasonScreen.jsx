@@ -398,36 +398,51 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         })()}
 
         {/* 順位表（コンパクト） */}
-        {seasonSummary?.standings && seasonSummary.standings.length > 1 && (
-          <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-5">
-            <h3 className="text-base font-black text-white mb-3">最終順位表</h3>
-            <div className="space-y-1.5">
-              {seasonSummary.standings.map((s, idx) => (
-                <div
-                  key={s.team}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
-                    idx === 0
-                      ? 'bg-yellow-800/30 border border-yellow-600/30'
-                      : 'bg-gray-700/40'
-                  }`}
-                >
-                  <span className={`font-black text-base w-6 text-center ${
-                    idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'
-                  }`}>{idx + 1}</span>
-                  <span className={`font-bold text-base flex-1 ${idx === 0 ? 'text-yellow-200' : 'text-white'}`}>
-                    {s.team}
-                  </span>
-                  <span className="text-gray-300 text-sm font-semibold tabular-nums">
-                    {s.wins}勝{s.losses}敗{s.draws > 0 ? `${s.draws}分` : ''}
-                  </span>
-                  <span className="text-gray-400 text-sm tabular-nums w-12 text-right">
-                    {(s.winRate || 0).toFixed(3)}
-                  </span>
-                </div>
-              ))}
+        {seasonSummary?.standings && seasonSummary.standings.length > 1 && (() => {
+          const renderStandingsRows = (rows) => rows.map((s, idx) => (
+            <div
+              key={s.team}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
+                idx === 0
+                  ? 'bg-yellow-800/30 border border-yellow-600/30'
+                  : 'bg-gray-700/40'
+              }`}
+            >
+              <span className={`font-black text-base w-6 text-center ${
+                idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'
+              }`}>{idx + 1}</span>
+              <span className={`font-bold text-base flex-1 ${idx === 0 ? 'text-yellow-200' : 'text-white'}`}>
+                {s.team}
+              </span>
+              <span className="text-gray-300 text-sm font-semibold tabular-nums">
+                {s.wins}勝{s.losses}敗{s.draws > 0 ? `${s.draws}分` : ''}
+              </span>
+              <span className="text-gray-400 text-sm tabular-nums w-12 text-right">
+                {(s.winRate || 0).toFixed(3)}
+              </span>
             </div>
-          </div>
-        )}
+          ));
+          const springRows = gameMode === 'university' && seasonData.springStandings?.length > 0
+            ? [...seasonData.springStandings].sort((a, b) => b.winRate - a.winRate)
+            : null;
+          const fallLabel = gameMode === 'university' ? '秋季最終順位' : '最終順位表';
+          return (
+            <div className="bg-gray-800/80 rounded-2xl border border-gray-700/50 p-4 mb-5">
+              {springRows && (
+                <>
+                  <h3 className="text-base font-black text-white mb-3">春季最終順位</h3>
+                  <div className="space-y-1.5 mb-5">
+                    {renderStandingsRows(springRows)}
+                  </div>
+                </>
+              )}
+              <h3 className="text-base font-black text-white mb-3">{fallLabel}</h3>
+              <div className="space-y-1.5">
+                {renderStandingsRows(seasonSummary.standings)}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 社会人モード: チーム注目度・ランク */}
         {(() => {
