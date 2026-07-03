@@ -1860,12 +1860,13 @@ function generateRivals(player, userRank) {
   const fame = player.fame || 0;
 
   // 知名度が低い選手は他大学のスカウトに発見されにくい
-  // fame=0: 15%のみライバル出現 / fame=40: 49% / fame=70: 75% / fame=100: 100%
-  const discoverChance = 0.15 + (fame / 100) * 0.85;
+  // 高校生の知名度は最大30程度なので30を基準にスケール
+  // fame=0: 10% / fame=10: 37% / fame=20: 63% / fame=30: 90%
+  const discoverChance = Math.min(0.90, 0.10 + (fame / 30) * 0.80);
   if (Math.random() > discoverChance) return [];
 
   // 知名度で上限人数を制限（無名選手が多数のライバルから注目されるのは不自然）
-  const maxByFame = fame < 30 ? 1 : fame < 60 ? 2 : 3;
+  const maxByFame = fame < 8 ? 1 : fame < 18 ? 2 : 3;
   const maxByScore = score >= 70 ? 3 : score >= 50 ? 2 : score >= 30 ? 1 : (Math.random() < 0.4 ? 1 : 0);
   const rivalCount = Math.min(maxByScore, maxByFame);
   if (rivalCount === 0) return [];
