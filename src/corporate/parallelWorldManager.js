@@ -6,7 +6,7 @@
 import { WORLD_DATA } from './worldData.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
-import { simulateUniversityLeagueDate, getAllUniversityLeagues } from '../university/universityLeagueManager.js';
+import { simulateUniversityLeagueDate, getAllUniversityLeagues, processSpringPromotionRelegation, regenerateFallSchedules } from '../university/universityLeagueManager.js';
 import { generateUniversityChampionship, generateMeijiJinguTournament, autoPlayUniversityTournament } from '../university/universityTournament.js';
 import { INDEPENDENT_LEAGUES } from './independentLeagueData.js';
 
@@ -265,4 +265,4 @@ export const autoPlayGrandChampionship = (gc) => {
   }
 };
 
-export { getAllUniversityLeagues };
+export { getAllUniversityLeagues, processSpringPromotionRelegation, regenerateFallSchedules };

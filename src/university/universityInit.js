@@ -290,6 +290,19 @@ export const getUniversityLeagueSchedule = (regionId) => {
   return schedule;
 };
 
+// 春季入替後の新divTeamsでユーザーの秋季スケジュールを取得
+export const getUserFallSchedule = (regionId) => {
+  const league = WORLD_DATA.universityLeagues?.[regionId];
+  if (!league?.fall?.schedule) return [];
+  const userDiv = WORLD_DATA.universityLeague?.userDivision || 1;
+  const divTeamSet = (league.divisions && league.divTeams?.[userDiv])
+    ? new Set(league.divTeams[userDiv])
+    : null;
+  return league.fall.schedule
+    .filter(g => !divTeamSet || divTeamSet.has(g.home))
+    .map((g, i) => ({ id: i, date: { ...g.date }, home: g.home, away: g.away, result: null, season: 'fall' }));
+};
+
 // ユーザーリーグの順位表を初期化（部制の場合はユーザーの部のみ）
 export const getUniversityLeagueStandings = (regionId, teamNames) => {
   const league = WORLD_DATA.universityLeagues?.[regionId];

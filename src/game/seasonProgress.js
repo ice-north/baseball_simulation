@@ -6,7 +6,8 @@ import { autoSimulateGame } from './autoSimulation.js';
 import { updateAllTeamReputations } from '../corporate/corporateInit.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, generateNihonSenshuken, generateClubSenshuken, createSenshukenMainTournament, generateRegionalTournament, autoPlayBracket } from '../corporate/toshitaikou.js';
-import { generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
+import { generateGrandChampionship, autoPlayGrandChampionship, processSpringPromotionRelegation, regenerateFallSchedules } from '../corporate/parallelWorldManager.js';
+import { getUserFallSchedule } from '../university/universityInit.js';
 
 // 注目度の中間更新月（2ヶ月ごと: 6月, 8月, 10月）
 const REPUTATION_UPDATE_MONTHS = new Set([6, 8, 10]);
@@ -42,6 +43,38 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
     setScreenMode('management');
     setManagementView('summer_camp');
     return null;
+  }
+
+  // 大学モード: 9月突入 → 春季入替戦＋秋季スケジュール再生成
+  if (isUniversityMode && month >= 9 && !newSeasonData.springPromotionDone && WORLD_DATA.universityLeagues) {
+    const uniInfo = WORLD_DATA.universityLeague;
+    const userRegionId = uniInfo?.userRegion;
+    const userDiv = uniInfo?.userDivision || 1;
+    const hasDivisions = (uniInfo?.numDivisions || 1) >= 2;
+    const league = WORLD_DATA.universityLeagues?.[userRegionId];
+    if (league) {
+      const springObj = league.spring;
+      if (springObj) {
+        const rows = newSeasonData.standings.map(s => ({
+          team: s.team, wins: s.wins || 0, losses: s.losses || 0,
+          draws: s.draws || 0, winRate: s.winRate || 0, gamesPlayed: s.gamesPlayed || 0,
+        }));
+        if (hasDivisions) springObj[`standings${userDiv}`] = rows;
+        else springObj.standings = rows;
+        springObj.done = true;
+      }
+    }
+    processSpringPromotionRelegation();
+    regenerateFallSchedules(newSeasonData.currentDate.year);
+    if (userRegionId) {
+      const fallGames = getUserFallSchedule(userRegionId);
+      const springGames = newSeasonData.schedule.filter(g => g.season !== 'fall');
+      const nextId = springGames.length;
+      const newFallGames = fallGames.map((g, i) => ({ ...g, id: nextId + i }));
+      newSeasonData = { ...newSeasonData, schedule: [...springGames, ...newFallGames], springPromotionDone: true };
+    } else {
+      newSeasonData = { ...newSeasonData, springPromotionDone: true };
+    }
   }
 
   // 11月9日: 契約更改強制

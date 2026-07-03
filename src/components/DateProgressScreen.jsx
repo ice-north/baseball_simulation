@@ -5,7 +5,8 @@ import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
 import { generateToshitaikou, createMainTournament, autoPlayMainTournament, autoPlayQualifier, autoPlayBracket, getRoundName, getUserNextMatch, simulateQualifierOnDate, simulateMainTournamentOnDate, getUserMatchOnDate, getTournamentDatesForCalendar, simulateQuickMatch, recordResult as recordTournamentResult, generateNihonSenshuken, generateClubSenshuken, simulateNihonSenshukenOnDate, getUserNihonSenshukenMatchOnDate, getNihonSenshukenDatesForCalendar, createSenshukenMainTournament, generateRegionalTournament, simulateRegionalTournamentOnDate, getUserRegionalTournamentMatchOnDate, getRegionalTournamentDatesForCalendar } from '../corporate/toshitaikou.js';
-import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues, generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
+import { simulateParallelWorldDate, getAllParallelLeagues, getAllUniversityLeagues, generateGrandChampionship, autoPlayGrandChampionship, processSpringPromotionRelegation, regenerateFallSchedules } from '../corporate/parallelWorldManager.js';
+import { getUserFallSchedule } from '../university/universityInit.js';
 import { generateAprilHighSchoolClass, checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
@@ -445,6 +446,41 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       setSeasonData(newData);
       if (onForceEvent) onForceEvent('summer_camp');
       return newData;
+    }
+
+    // 大学モード: 9月突入 → 春季入替戦＋秋季スケジュール再生成
+    if (isUniversity && month >= 9 && !newData.springPromotionDone && WORLD_DATA.universityLeagues) {
+      const uniInfo = WORLD_DATA.universityLeague;
+      const userRegionId = uniInfo?.userRegion;
+      const userDiv = uniInfo?.userDivision || 1;
+      const hasDivisions = (uniInfo?.numDivisions || 1) >= 2;
+      const league = WORLD_DATA.universityLeagues?.[userRegionId];
+      // ユーザーの春季順位をWORLD_DATAに同期してspring.done=trueにセット
+      if (league) {
+        const springObj = league.spring;
+        if (springObj) {
+          const rows = newData.standings.map(s => ({
+            team: s.team, wins: s.wins || 0, losses: s.losses || 0,
+            draws: s.draws || 0, winRate: s.winRate || 0, gamesPlayed: s.gamesPlayed || 0,
+          }));
+          if (hasDivisions) springObj[`standings${userDiv}`] = rows;
+          else springObj.standings = rows;
+          springObj.done = true;
+        }
+      }
+      // 全リーグ春季入替戦 → 全リーグ秋季スケジュール再生成
+      processSpringPromotionRelegation();
+      regenerateFallSchedules(newData.currentDate.year);
+      // ユーザーのseasonData.scheduleの秋季ゲームを新divTeamsで差し替え
+      if (userRegionId) {
+        const fallGames = getUserFallSchedule(userRegionId);
+        const springGames = newData.schedule.filter(g => g.season !== 'fall');
+        const nextId = springGames.length;
+        const newFallGames = fallGames.map((g, i) => ({ ...g, id: nextId + i }));
+        newData = { ...newData, schedule: [...springGames, ...newFallGames], springPromotionDone: true };
+      } else {
+        newData = { ...newData, springPromotionDone: true };
+      }
     }
 
     // 大学モード: 全日本大学野球選手権大会（6月）

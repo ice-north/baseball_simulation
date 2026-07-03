@@ -407,3 +407,89 @@ export function resetUniversityLeagues() {
     WORLD_DATA.universityLeagues = {};
   }
 }
+
+// 春季終了後の入替戦処理（春季順位表ベース）
+// ※ユーザーリーグのspring.doneは呼び出し元が事前にセットすること
+export function processSpringPromotionRelegation() {
+  const leagues = WORLD_DATA.universityLeagues;
+  if (!leagues) return [];
+  const changes = [];
+
+  for (const [regionId, league] of Object.entries(leagues)) {
+    if (!league.divisions || !league.divTeams) continue;
+    const numDiv = league.numDivisions || 2;
+    const springData = league.spring;
+    if (!springData?.done) continue;
+
+    for (let d = 1; d < numDiv; d++) {
+      const upper = [...(springData[`standings${d}`] || [])].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+      const lower = [...(springData[`standings${d + 1}`] || [])].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+      const relegated = upper[upper.length - 1]?.team;
+      const promoted = lower[0]?.team;
+      if (!relegated || !promoted) continue;
+
+      const upperTeams = league.divTeams[d];
+      const lowerTeams = league.divTeams[d + 1];
+      const relIdx = upperTeams.indexOf(relegated);
+      const proIdx = lowerTeams.indexOf(promoted);
+      if (relIdx >= 0 && proIdx >= 0) {
+        upperTeams[relIdx] = promoted;
+        lowerTeams[proIdx] = relegated;
+        if (d === 1) {
+          league.div1Teams = [...upperTeams];
+          league.div2Teams = [...lowerTeams];
+        }
+        changes.push({
+          league: league.name,
+          regionId,
+          promoted: { team: promoted, from: `${d + 1}部`, to: `${d}部` },
+          relegated: { team: relegated, from: `${d}部`, to: `${d + 1}部` },
+        });
+      }
+    }
+  }
+
+  // ユーザーの部が変わった場合、WORLD_DATAを更新
+  if (WORLD_DATA.universityLeague) {
+    const ul = WORLD_DATA.universityLeague;
+    const league = leagues[ul.userRegion];
+    if (league?.divisions && league.divTeams) {
+      for (let d = 1; d <= (league.numDivisions || 2); d++) {
+        if (league.divTeams[d]?.includes(ul.userTeam)) {
+          ul.userDivision = d;
+          ul.leagueTeams = [...league.divTeams[d]];
+          break;
+        }
+      }
+    }
+  }
+
+  return changes;
+}
+
+// 入替戦後の新divTeamsで全リーグの秋季スケジュール＋順位表を再生成
+export function regenerateFallSchedules(year) {
+  const leagues = WORLD_DATA.universityLeagues;
+  if (!leagues) return;
+
+  for (const league of Object.values(leagues)) {
+    const numDivisions = league.numDivisions || 1;
+    if (numDivisions >= 2 && league.divTeams) {
+      let schedule = [];
+      const standings = {};
+      for (let d = 1; d <= numDivisions; d++) {
+        const divTeamNames = league.divTeams[d] || [];
+        schedule = schedule.concat(generateLeagueSchedule(divTeamNames, year, 'fall'));
+        standings[`standings${d}`] = divTeamNames.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }));
+      }
+      league.fall = { schedule, ...standings, done: false };
+    } else {
+      const teamNames = league.teams || [];
+      league.fall = {
+        schedule: generateLeagueSchedule(teamNames, year, 'fall'),
+        standings: teamNames.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 })),
+        done: false,
+      };
+    }
+  }
+}
