@@ -1857,7 +1857,17 @@ const RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
 
 function generateRivals(player, userRank) {
   const score = evaluatePlayerScore(player);
-  const rivalCount = score >= 70 ? 3 : score >= 50 ? 2 : score >= 30 ? 1 : (Math.random() < 0.4 ? 1 : 0);
+  const fame = player.fame || 0;
+
+  // 知名度が低い選手は他大学のスカウトに発見されにくい
+  // fame=0: 15%のみライバル出現 / fame=40: 49% / fame=70: 75% / fame=100: 100%
+  const discoverChance = 0.15 + (fame / 100) * 0.85;
+  if (Math.random() > discoverChance) return [];
+
+  // 知名度で上限人数を制限（無名選手が多数のライバルから注目されるのは不自然）
+  const maxByFame = fame < 30 ? 1 : fame < 60 ? 2 : 3;
+  const maxByScore = score >= 70 ? 3 : score >= 50 ? 2 : score >= 30 ? 1 : (Math.random() < 0.4 ? 1 : 0);
+  const rivalCount = Math.min(maxByScore, maxByFame);
   if (rivalCount === 0) return [];
 
   const userTeamName = Object.keys(TEAMS_DATA)[0] || '';
