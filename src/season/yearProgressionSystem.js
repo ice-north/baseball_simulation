@@ -1484,7 +1484,7 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
     const graduates = [];
     const remaining = [];
     teamData.players.forEach(p => {
-      if (p.age >= 22 || (p.universityYear && p.universityYear >= 4)) {
+      if (p.age >= 23 || (p.universityYear && p.universityYear >= 4)) {
         graduates.push(p);
       } else {
         remaining.push(p);
@@ -1575,7 +1575,7 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
         p.universityTeamName = teamName;
         p.universityYear = 1;
         p.recruitType = p._isSelectionPick ? 'selection' : 'scouted';
-        p.age = 18;
+        p.age = 19;
         p.isStarter = false;
         p.battingOrder = 0;
         if (!p.positionFitness) p.positionFitness = generatePositionFitness(p.position);
@@ -1670,7 +1670,7 @@ function generateUniversityFreshmen(count, rank, teamName, teamData, currentYear
         p.universityTeamName = teamName;
         p.universityYear = 1;
         p.recruitType = 'general';
-        p.age = 18;
+        p.age = 19;
         p.isStarter = false;
         p.battingOrder = 0;
         if (!p.positionFitness) p.positionFitness = generatePositionFitness(p.position);
@@ -1760,7 +1760,7 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
   return {
     id,
     name,
-    age: 18,
+    age: 19,
     position,
     battingOrder: 0,
     isStarter: false,
