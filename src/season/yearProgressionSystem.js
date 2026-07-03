@@ -1859,6 +1859,16 @@ function replenishCorporateRosters(allTeams, currentYear) {
     releasedPlayersPool.length = 0;
     remaining.forEach(p => releasedPlayersPool.push(p));
   }
+
+  // 未配属の社会人進路卒業生にも行き先チームを付与（卒業レポートの行先表示用）
+  const allCorpNames = Object.keys(allTeams).filter(name => allTeams[name]?.corporateData);
+  if (allCorpNames.length > 0) {
+    releasedPlayersPool.forEach(p => {
+      if (p.postGradPath === 'corporate' && !p._nextYearTeam) {
+        p._nextYearTeam = allCorpNames[Math.floor(Math.random() * allCorpNames.length)];
+      }
+    });
+  }
 }
 
 // ============================================================
