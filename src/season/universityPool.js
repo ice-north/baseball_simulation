@@ -266,15 +266,17 @@ function generateHighSchoolPlayer(id) {
     // ポジション適性に基づいた走力・肩力の方向付け
     // 指導者は小中学校から各選手の特性に合ったポジションで育てるため、
     // ポジションと身体能力に強い相関が生まれる
+    // あくまで傾向としての補正（強制ではなく偏りを作るだけ）
+    // σ=14の正規分布に対して±5程度なので、3σ超えの素材は傾向を覆せる
     const physMod = {
-      catcher: { speedAdj: -10, armAdj:  12 }, // 強肩・鈍足型が捕手に
-      first:   { speedAdj: -10, armAdj:  -5 }, // パワー型・遅足が一塁に
-      second:  { speedAdj:   8, armAdj:   0 }, // 俊足で器用な選手が二塁に
-      short:   { speedAdj:   8, armAdj:   7 }, // 俊足強肩が遊撃に
-      third:   { speedAdj:  -2, armAdj:   7 }, // 強肩が三塁に
-      left:    { speedAdj:  -3, armAdj:  -6 }, // 肩が弱い選手が左翼に
-      center:  { speedAdj:  12, armAdj:   0 }, // 最速の選手が中堅に
-      right:   { speedAdj:   2, armAdj:   5 }, // 強肩が右翼に
+      catcher: { speedAdj:  -5, armAdj:  6 }, // やや鈍足・強肩傾向
+      first:   { speedAdj:  -5, armAdj: -3 }, // やや鈍足傾向
+      second:  { speedAdj:   4, armAdj:  0 }, // やや俊足傾向
+      short:   { speedAdj:   4, armAdj:  4 }, // 俊足・強肩傾向
+      third:   { speedAdj:  -1, armAdj:  4 }, // やや強肩傾向
+      left:    { speedAdj:  -2, armAdj: -3 }, // やや弱肩傾向
+      center:  { speedAdj:   6, armAdj:  0 }, // 俊足傾向（最も強め）
+      right:   { speedAdj:   1, armAdj:  3 }, // やや強肩傾向
     }[position] || { speedAdj: 0, armAdj: 0 };
     baseSpeed = Math.max(1, baseSpeed + physMod.speedAdj);
     baseArm   = Math.max(1, baseArm   + physMod.armAdj);
