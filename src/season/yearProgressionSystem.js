@@ -471,11 +471,11 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         // 大学: 4年生（22歳）のみ指名対象
         if (player.age < 22 || (player.universityYear && player.universityYear < 4)) return;
       } else if (source === 'corporate') {
-        // 社会人: 高卒3年目(21歳〜)、大卒3年目(25歳〜)
-        // 大卒社会人は23歳で入社→2年の経験を積んで25歳がドラフトターゲット
+        // 社会人: 高卒3年目(21歳〜)、大卒2年目(24歳〜)
+        // 大卒社会人は23歳で入社→2年目の24歳でドラフト、翌年25歳でNPB入り
         const hasUniHistory = player.careerHistory?.some(h => h.type === 'university');
         if (hasUniHistory) {
-          if (player.age < 25) return;
+          if (player.age < 24) return;
         } else {
           if (player.age < 21) return;
         }
