@@ -470,7 +470,7 @@ const ScheduleScreen = ({
                     day.eventLabel === 'オフシーズン' ? 'text-gray-400' :
                     day.eventLabel === 'キャンプ' ? 'text-green-400' :
                     day.eventLabel === 'ドラフト' ? 'text-purple-400' :
-                    day.eventLabel === '推薦締切' ? 'text-pink-400' :
+                    day.eventLabel === 'セレクション' ? 'text-pink-400' :
                     'text-gray-500'
                   }`}>{day.eventLabel}</div>
                 ) : (

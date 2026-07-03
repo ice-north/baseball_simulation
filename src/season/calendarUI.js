@@ -61,7 +61,7 @@ export const generateTeamCalendar = (schedule, teamName, year, month, options = 
     if (month === 11 && day.day === 30) {
       eventLabel = 'シーズン終了';
     } else if (universityMode && month === 11 && day.day === 29) {
-      eventLabel = '推薦締切';
+      eventLabel = 'セレクション';
     } else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
     else if (phase === SEASON_PHASES.PLAYOFFS) eventLabel = 'プレーオフ';
     else if (phase === SEASON_PHASES.DRAFT) eventLabel = 'ドラフト';
