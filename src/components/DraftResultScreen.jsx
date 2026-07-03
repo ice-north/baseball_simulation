@@ -202,10 +202,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     if (!currentTeamMap || isFirstRound) return [];
     const roundPicks = draftedPlayers.filter(p => p.draftRound === currentRound);
     const seen = new Set();
-    return roundPicks
+    const withPicks = roundPicks
       .filter(p => { if (seen.has(p.npbTeam)) return false; seen.add(p.npbTeam); return true; })
       .map(p => p.npbTeam);
-  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound]);
+    const withoutPicks = gridOrder.filter(t => !seen.has(t.name)).map(t => t.name);
+    return [...withPicks, ...withoutPicks];
+  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder]);
 
   const collisionColors = useMemo(() => {
     if (!currentPhase) return {};
@@ -409,11 +411,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const hasPick = picks.length > 0;
     const revealed = waiverRevealed.has(team.name);
     const rank = rankLabels[team.name];
-    const showHeader = !hasPick || revealed;
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
         <div className="flex items-center bg-gray-200 px-1 py-0.5 shrink-0" style={{ minHeight: '24px', maxHeight: '28px' }}>
-          {showHeader && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
+          {revealed && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
           <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
             <span className="text-gray-600 truncate">{team.short}</span>
             {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
@@ -421,7 +422,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
         </div>
         <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
           {!hasPick ? (
-            <div className="text-gray-300 text-xs text-center">指名なし</div>
+            <div className="text-gray-400 text-xs text-center">選択終了</div>
           ) : (
             <div className="w-full space-y-1">
               {picks.map((entry, pi) => (
@@ -430,12 +431,10 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             </div>
           )}
         </div>
-        {hasPick && (
-          <div className="absolute inset-0 z-20"
-               style={{ opacity: revealed ? 0 : 1, transition: revealed ? 'opacity 0.8s ease-out' : 'none', pointerEvents: revealed ? 'none' : 'auto' }}>
-            <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
-          </div>
-        )}
+        <div className="absolute inset-0 z-20"
+             style={{ opacity: revealed ? 0 : 1, transition: revealed ? 'opacity 0.8s ease-out' : 'none', pointerEvents: revealed ? 'none' : 'auto' }}>
+          <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
+        </div>
       </div>
     );
   };
