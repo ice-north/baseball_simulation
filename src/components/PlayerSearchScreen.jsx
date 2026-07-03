@@ -72,7 +72,7 @@ function collectAllPlayers() {
 
 const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const [filters, setFilters] = useState(() => JSON.parse(JSON.stringify(DEFAULT_FILTERS)));
-  const [sources, setSources] = useState({ highschool: true, university: true, released: true, teams: false });
+  const [sources, setSources] = useState({ highschool: true, university: true, released: true, teams: gameMode === 'university' });
   const [posFilter, setPosFilter] = useState('all');
   const [nameQuery, setNameQuery] = useState('');
   const [sortKey, setSortKey] = useState('meet');

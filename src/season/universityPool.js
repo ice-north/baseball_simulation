@@ -875,7 +875,8 @@ export function enrollInUniversity(players, enrollYear) {
 
   const teamCounts = {};
   const assignTeam = (rank) => {
-    const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank);
+    // TEAMS_DATAに存在するチーム（ユーザーの実プレイ大学）はNPC配属から除外
+    const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank && !TEAMS_DATA[t.name]);
     if (teams.length === 0) return null;
     let minCount = Infinity;
     let candidates = [];
