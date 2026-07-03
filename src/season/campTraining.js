@@ -841,8 +841,9 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       else if (age <= 29) aptitudeFactor = 0.8;
       else aptitudeFactor = 0.6;
     } else {
-      // 技術系: 経験が生きる
-      aptitudeFactor = Math.min(1.2, 0.7 + (experience / 300));
+      // 技術系: 経験で伸びる。初年度でも基本練習の効果が出るよう最低1.0に設定
+      // 旧0.7スタートは他の掛け算(0.14×discipline等)と組み合わさって常に0になっていた
+      aptitudeFactor = Math.min(1.2, 1.0 + (experience / 300));
     }
 
     // 才能依存の能力は練習だけでは伸びにくい（グローバル補正）
