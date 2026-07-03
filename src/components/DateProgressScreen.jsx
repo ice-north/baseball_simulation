@@ -3422,6 +3422,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           {/* 大学リーグ順位表 */}
           {WORLD_DATA.initialized && (() => {
             // 大学モード: ユーザーリーグの順位をWORLD_DATAに同期（simulateUniversityLeagueDateはユーザーリーグをスキップするため）
+            // springStandings != null = recordGameResultが秋季初試合でリセット済み → 実際に秋季が始まっている
             if (isUniversity && seasonData.standings?.length > 0) {
               const uniInfo = WORLD_DATA.universityLeague;
               const userRegionId = uniInfo?.userRegion;
@@ -3429,8 +3430,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               const hasDivisions = (uniInfo?.numDivisions || 1) >= 2;
               const league = WORLD_DATA.universityLeagues?.[userRegionId];
               if (league) {
-                const month = currentDate?.month || 4;
-                const seasonKey = month >= 9 ? 'fall' : 'spring';
+                const isAutumnStarted = seasonData.springStandings != null;
+                const seasonKey = isAutumnStarted ? 'fall' : 'spring';
                 const seasonObj = league[seasonKey];
                 if (seasonObj) {
                   const rows = seasonData.standings.map(s => ({
@@ -3443,8 +3444,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     seasonObj.standings = rows;
                   }
                   seasonObj.done = seasonData.phase === 'off_season';
-                  // 秋季に入ったら春季をdone=trueにし、秋季_activeフラグを立てる（getAllUniversityLeagues用）
-                  if (seasonKey === 'fall') {
+                  if (isAutumnStarted) {
                     if (league.spring) league.spring.done = true;
                     seasonObj._active = true;
                   }
