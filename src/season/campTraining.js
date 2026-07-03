@@ -888,8 +888,15 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const battCoachMult = targetStat === 'control' ? batteryMult : 1.0;
       baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * physFitMult * battCoachMult);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
-      // 覚醒判定（経験値依存、プロ経験浅い選手は覚醒しにくい）
-      const awakeningChance = experience >= 30 ? Math.floor(experience / 15) * awakeningMult : 0;
+      // 覚醒判定（経験値 × プロ意識の相乗効果）
+      // discipline < 30: 努力しない選手は飛躍しない（係数0）
+      // discipline = 50: 標準(1.0倍), 70→2.0倍, 100→2.5倍（上限）
+      const awakeningDisciplineFactor = discipline < 30
+        ? 0
+        : Math.min(2.5, (discipline - 30) / 20);
+      const awakeningChance = experience >= 30
+        ? Math.floor(experience / 15) * awakeningMult * awakeningDisciplineFactor
+        : 0;
       isAwakening = awakeningMult > 0 && Math.random() * 100 < awakeningChance;
       // 才能依存の能力は覚醒量も抑制
       const rawAwakening = isAwakening ? Math.floor(Math.random() * 4) + 3 : 0;
