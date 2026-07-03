@@ -478,7 +478,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const springGames = newData.schedule.filter(g => g.season !== 'fall');
         const nextId = springGames.length;
         const newFallGames = fallGames.map((g, i) => ({ ...g, id: nextId + i }));
-        newData = { ...newData, schedule: [...springGames, ...newFallGames], springPromotionDone: true };
+        // processSpringPromotionRelegation後の新部のチームリストで秋季順位表を初期化
+        const newLeagueTeams = WORLD_DATA.universityLeague?.leagueTeams;
+        const fallStandingsInit = newLeagueTeams
+          ? newLeagueTeams.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }))
+          : newData.standings.map(s => ({ team: s.team, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }));
+        newData = {
+          ...newData,
+          schedule: [...springGames, ...newFallGames],
+          springPromotionDone: true,
+          springStandings: newData.standings.map(s => ({ ...s })),
+          standings: fallStandingsInit,
+        };
       } else {
         newData = { ...newData, springPromotionDone: true };
       }

@@ -71,7 +71,17 @@ export const checkPhaseTransitionAndNavigate = (oldSeasonData, newSeasonData, { 
       const springGames = newSeasonData.schedule.filter(g => g.season !== 'fall');
       const nextId = springGames.length;
       const newFallGames = fallGames.map((g, i) => ({ ...g, id: nextId + i }));
-      newSeasonData = { ...newSeasonData, schedule: [...springGames, ...newFallGames], springPromotionDone: true };
+      const newLeagueTeams = WORLD_DATA.universityLeague?.leagueTeams;
+      const fallStandingsInit = newLeagueTeams
+        ? newLeagueTeams.map(t => ({ team: t, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }))
+        : newSeasonData.standings.map(s => ({ team: s.team, wins: 0, losses: 0, draws: 0, winRate: 0, gamesPlayed: 0 }));
+      newSeasonData = {
+        ...newSeasonData,
+        schedule: [...springGames, ...newFallGames],
+        springPromotionDone: true,
+        springStandings: newSeasonData.standings.map(s => ({ ...s })),
+        standings: fallStandingsInit,
+      };
     } else {
       newSeasonData = { ...newSeasonData, springPromotionDone: true };
     }
