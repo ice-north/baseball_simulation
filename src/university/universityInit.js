@@ -58,13 +58,14 @@ const makeAbbreviation = (name) => {
   return name.slice(0, 3);
 };
 
-// 大学生の年齢分布（19-22歳、1-4年生）
+// 大学生の年齢分布（18-21歳、1-4年生）
+// ※オフシーズンにupdateAllPlayerAgesで+1されるため、初期値は-1した値を設定
 const assignUniversityAge = (player) => {
   const roll = Math.random();
-  if (roll < 0.25) player.age = 19;       // 1年生
-  else if (roll < 0.50) player.age = 20;  // 2年生
-  else if (roll < 0.75) player.age = 21;  // 3年生
-  else player.age = 22;                   // 4年生
+  if (roll < 0.25) player.age = 18;       // 1年生
+  else if (roll < 0.50) player.age = 19;  // 2年生
+  else if (roll < 0.75) player.age = 20;  // 3年生
+  else player.age = 21;                   // 4年生
 };
 
 // 大学チームのロスターを生成（学年別人数を均等に配分）
@@ -91,7 +92,7 @@ const generateUniversityRoster = (teamDef, isUserTeam = false) => {
   roster.forEach((p, i) => {
     // 学年を均等配分: grade 1〜4 を繰り返す
     const grade = (i % 4) + 1;
-    p.age = 18 + grade;
+    p.age = 17 + grade; // 1年生=18歳、2年生=19歳、3年生=20歳、4年生=21歳（オフシーズンに+1されて卒業判定）
 
     // 大学生らしい能力レンジに調整（ソフトキャップ）
     if (p.position === 'pitcher') {
