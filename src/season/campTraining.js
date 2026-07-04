@@ -1086,7 +1086,7 @@ function getPitchTypeName(type) {
   };
   return names[type] || type;
 }
-export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity };
+export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY };
 
 /**
  * チーム全体のキャンプ練習を実行
