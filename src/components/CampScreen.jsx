@@ -499,6 +499,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     setCurrentRound(currentRound + 1);
     setRoundResults(null);
     setViewMode('select');
+    // 新球種選択のステイル状態をクリア（前クールで習得した球種が残り続けるのを防ぐ）
+    setNewPitchSelections({});
   };
 
   const getArsenalDisplay = (player) => {

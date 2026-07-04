@@ -773,7 +773,9 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   if (trainingType === 'newpitch') {
     const arsenal = updatedPlayer.pitching?.arsenal || [];
     const existingTypes = arsenal.map(p => p.type);
-    const targetType = newPitchType || ALL_PITCH_TYPES.find(t => !existingTypes.includes(t));
+    // newPitchTypeが指定されていても既習得済みなら無視して自動選択（クール間の選択状態が古くなる場合の対策）
+    const validNewPitchType = newPitchType && !existingTypes.includes(newPitchType) ? newPitchType : null;
+    const targetType = validNewPitchType || ALL_PITCH_TYPES.find(t => !existingTypes.includes(t));
     if (targetType && !existingTypes.includes(targetType)) {
       // フォーム適性ボーナス（適性球種は失敗率が下がる）
       const formAff = getFormPitchAffinity(updatedPlayer.pitching?.form, targetType);
