@@ -462,26 +462,36 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
 
           // 基本プール4〜8ポイント、補正後も整数に丸める
           const rawPool = Math.floor(Math.random() * 5) + 4;
-          const effectivePool = Math.max(nonStraight.length, Math.round(rawPool * ageMult * dextMult * battMult));
+          const effectivePool = Math.max(1, Math.round(rawPool * ageMult * dextMult * battMult));
 
-          // プールを球種数で均等分配し、余りはランダムな球種に+1
-          const count = nonStraight.length;
-          const base = Math.floor(effectivePool / count);
-          const extraCount = effectivePool - base * count;
-          const extraSet = new Set(
-            [...Array(count).keys()].sort(() => Math.random() - 0.5).slice(0, extraCount)
-          );
+          // MAXに達した球種は配分対象から除外（プールを無駄にしない）
+          const growable = nonStraight.filter(p => p.level < 100);
+          const maxed = nonStraight.filter(p => p.level >= 100);
 
-          nonStraight.forEach((pitch, i) => {
-            const formAff = getFormPitchAffinity(playerForm, pitch.type);
-            // フォーム適性球種はさらに+1ボーナス
-            const formBonus = formAff ? 1 : 0;
-            const growth = base + (extraSet.has(i) ? 1 : 0) + formBonus;
-            const before = pitch.level;
-            pitch.level = Math.min(100, before + growth);
-            const affinityTag = formAff ? ' [適性]' : '';
-            growthReport.push({ statName: `${getPitchTypeName(pitch.type)}${affinityTag}`, before, after: pitch.level, growth: pitch.level - before });
+          // MAX球種はレポートに表示するだけ
+          maxed.forEach(pitch => {
+            growthReport.push({ statName: `${getPitchTypeName(pitch.type)} [MAX]`, before: pitch.level, after: pitch.level, growth: 0 });
           });
+
+          if (growable.length > 0) {
+            // プールをレベルアップ可能な球種で均等分配し、余りはランダムな球種に+1
+            const count = growable.length;
+            const base = Math.floor(effectivePool / count);
+            const extraCount = effectivePool - base * count;
+            const extraSet = new Set(
+              [...Array(count).keys()].sort(() => Math.random() - 0.5).slice(0, extraCount)
+            );
+
+            growable.forEach((pitch, i) => {
+              const formAff = getFormPitchAffinity(playerForm, pitch.type);
+              const formBonus = formAff ? 1 : 0;
+              const growth = base + (extraSet.has(i) ? 1 : 0) + formBonus;
+              const before = pitch.level;
+              pitch.level = Math.min(100, before + growth);
+              const affinityTag = formAff ? ' [適性]' : '';
+              growthReport.push({ statName: `${getPitchTypeName(pitch.type)}${affinityTag}`, before, after: pitch.level, growth: pitch.level - before });
+            });
+          }
         }
       }
       break;
