@@ -269,24 +269,27 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'muscle': {
-      // パワー/肩力/走力のいずれか1つをランダムに強化（+0〜2）
-      // パワー特化を緩和し、打撃練習との重ね掛けによるパワーヒッター量産を抑制
-      const statChoices = ['power', 'arm', 'speed'];
-      const chosenStat = statChoices[Math.floor(Math.random() * statChoices.length)];
+      // パワー/肩力/走力のうち訓練可能な能力だけをリストし、その中からランダム選択
+      // （転向選手など batting/physical が欠落している場合にサイレント空振りしない）
+      const muscleChoices = [];
+      if (player.batting) muscleChoices.push('power');
+      if (player.physical) muscleChoices.push('arm', 'speed');
+      if (muscleChoices.length === 0) break;
+      const chosenStat = muscleChoices[Math.floor(Math.random() * muscleChoices.length)];
       const gainRaw = growthAmount();
       if (gainRaw > 0) {
-        if (chosenStat === 'power' && player.batting) {
+        if (chosenStat === 'power') {
           const oldPwr = player.batting.power || 50;
           const pwr = applyTechStatDecay(oldPwr, gainRaw);
           if (pwr > 0) {
             player.batting.power = Math.min(100, oldPwr + pwr);
             growthReport.push({ statName: 'パワー', before: oldPwr, after: player.batting.power, growth: pwr });
           }
-        } else if (chosenStat === 'arm' && player.physical) {
+        } else if (chosenStat === 'arm') {
           const oldArm = player.physical.arm || 50;
           player.physical.arm = Math.min(100, oldArm + gainRaw);
           growthReport.push({ statName: '肩力', before: oldArm, after: player.physical.arm, growth: gainRaw });
-        } else if (chosenStat === 'speed' && player.physical) {
+        } else if (chosenStat === 'speed') {
           const oldSpd = player.physical.speed || 50;
           player.physical.speed = Math.min(100, oldSpd + gainRaw);
           growthReport.push({ statName: '走力', before: oldSpd, after: player.physical.speed, growth: gainRaw });
