@@ -27,6 +27,7 @@ const FILTER_DEFS = [
   { key: 'stamina', label: 'スタミナ', get: p => p.pitching?.stamina || 0, min: 0, max: 200, step: 1 },
   { key: 'growth', label: '成長率', get: p => p.growthPotential || 1.0, min: 0.5, max: 1.5, step: 0.05, decimal: true },
   { key: 'discipline', label: 'プロ意識', get: p => p.personality?.discipline ?? 50 },
+  { key: 'fame', label: '知名度', get: p => p.fame || 0 },
 ];
 
 const DEFAULT_FILTERS = {};
@@ -246,7 +247,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="stamina" w="w-7">ス</SortTh>
                 <SortTh k="growth" w="w-8">成長</SortTh>
                 <SortTh k="discipline" w="w-7">意欲</SortTh>
-                <th className="py-1 px-1 text-center w-7">知</th>
+                <SortTh k="fame" w="w-7">知</SortTh>
                 <th className="py-1 px-1 text-center w-10">投打</th>
                 <th className="py-1 px-1 text-center w-8">形</th>
                 {gameMode === 'university' && <th className="py-1 px-1 text-center w-8 text-purple-400">スカ</th>}
