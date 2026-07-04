@@ -416,7 +416,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
         </div>
         <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
           {!hasPick ? (
-            <div className="text-gray-400 text-xs text-center">選択終了</div>
+            <div className="text-gray-900 text-base text-center font-bold">選択終了</div>
           ) : (
             <div className="w-full space-y-1">
               {picks.map((entry, pi) => (
