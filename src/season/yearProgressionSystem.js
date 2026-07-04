@@ -19,7 +19,7 @@ import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputat
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
-export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calculateSeasonExperience, updateAllPlayersExperience, applyMotivationEffect, applyBatteryMentalEffect } from './campTraining.js';
+export { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, executeCampTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, calculateSeasonExperience, updateAllPlayersExperience, applyMotivationEffect, applyBatteryMentalEffect } from './campTraining.js';
 export { DISPATCH_DESTINATIONS, DISPATCH_LIMITS, calcPlayerOverall, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, getUniversityDispatchOptions, getAvailableDispatchKeys } from './dispatchSystem.js';
 
 /**

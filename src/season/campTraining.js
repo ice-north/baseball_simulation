@@ -725,6 +725,22 @@ function getFormPitchAffinity(form, pitchType) {
   return FORM_PITCH_AFFINITY[form]?.[pitchType] || null;
 }
 
+// 速球系変化球・緩急系変化球の分類
+const FAST_PITCH_TYPES = ['slider', 'cutter', 'sinker', 'twoSeam', 'shoot'];
+const SLOW_PITCH_TYPES = ['curve', 'changeup', 'fork', 'splitter', 'palm', 'knuckle'];
+
+// 保有球種の緩急バランスから第2適性を算出（球種習得のたびに動的更新）
+// 速球系≥緩急系なら緩急系から、逆なら速球系から補完するよう選ぶ
+export function calcSecondAffinity(arsenal) {
+  const existingTypes = arsenal.map(p => p.type);
+  const fastCount = existingTypes.filter(t => FAST_PITCH_TYPES.includes(t)).length;
+  const slowCount = existingTypes.filter(t => SLOW_PITCH_TYPES.includes(t)).length;
+  const pool = fastCount >= slowCount ? SLOW_PITCH_TYPES : FAST_PITCH_TYPES;
+  const candidates = pool.filter(t => !existingTypes.includes(t));
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 /**
  * キャンプ練習を実行（1クール分）
  * 成長量は1/4に調整済み
@@ -779,7 +795,10 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     if (targetType && !existingTypes.includes(targetType)) {
       // フォーム適性ボーナス（適性球種は失敗率が下がる）
       const formAff = getFormPitchAffinity(updatedPlayer.pitching?.form, targetType);
-      const affinityBonus = formAff ? formAff.affinity : 0;
+      const formBonus = formAff ? formAff.affinity : 0;
+      // 第2適性（緩急補完）ボーナス
+      const hasSecondAffinity = updatedPlayer.pitching?.secondAffinity === targetType;
+      const affinityBonus = formBonus + (hasSecondAffinity ? 0.08 : 0);
       // 基本: 覚醒10%, 大成功15%, 成功20%, 習得25%, 失敗30%
       // 適性ボーナス分だけ失敗率が減り、成功率に上乗せ
       const failRate = Math.max(0.05, 0.30 - affinityBonus);
@@ -790,7 +809,10 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         : roll < 0.45 ? 'success'
         : roll < (0.45 + learnedRate) ? 'learned'
         : 'failure';
-      const affinityTag = formAff ? ' [適性]' : '';
+      const affinityTag = (formAff && hasSecondAffinity) ? ' [フォーム+緩急適性]'
+        : formAff ? ' [フォーム適性]'
+        : hasSecondAffinity ? ' [緩急適性]'
+        : '';
       if (outcome === 'failure') {
         growthReport.push({
           stat: 'newpitch',
@@ -815,6 +837,8 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
         }
         arsenal.push({ id: newId, type: targetType, level: startLevel });
         updatedPlayer.pitching.arsenal = arsenal;
+        // 球種構成が変わったので第2適性を動的に再計算
+        updatedPlayer.pitching.secondAffinity = calcSecondAffinity(arsenal);
         growthReport.push({
           stat: 'newpitch',
           statName: `${getPitchTypeName(targetType)}習得${label}${affinityTag}`,
@@ -1037,7 +1061,7 @@ function getPitchTypeName(type) {
   };
   return names[type] || type;
 }
-export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY };
+export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity };
 
 /**
  * チーム全体のキャンプ練習を実行

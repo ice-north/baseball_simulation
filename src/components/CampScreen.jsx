@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
+import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor, POSITION_ORDER } from '../utils/constants.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
@@ -287,6 +287,17 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const [sortAsc, setSortAsc] = useState(true);
   const [showCampReview, setShowCampReview] = useState(false);
   const [campFilter, setCampFilter] = useState('all');
+
+  // 旧セーブデータ対応: 第2適性が未設定の投手にキャンプ開始時に初期値を付与
+  useEffect(() => {
+    const team = TEAMS_DATA[userTeamName];
+    if (!team?.players) return;
+    team.players.forEach(p => {
+      if (p.position === 'pitcher' && p.pitching && p.pitching.secondAffinity === undefined) {
+        p.pitching.secondAffinity = calcSecondAffinity(p.pitching.arsenal || []);
+      }
+    });
+  }, [userTeamName]);
 
   // キャンプ開始時のステータスを保存（成長合計計算用）
   const [preCampStats] = useState(() => {
@@ -1011,8 +1022,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-28"
                               >
                                 {availableNewPitches.map(pt => {
-                                  const hasAffinity = FORM_PITCH_AFFINITY[p.form]?.[pt];
-                                  return <option key={pt} value={pt}>{getPitchTypeName(pt)}{hasAffinity ? ' ★適性' : ''}</option>;
+                                  const hasForm = !!FORM_PITCH_AFFINITY[p.form]?.[pt];
+                                  const hasSecond = p.secondAffinity === pt;
+                                  const tag = (hasForm && hasSecond) ? ' ★◆適性'
+                                    : hasForm ? ' ★フォーム適性'
+                                    : hasSecond ? ' ◆緩急適性'
+                                    : '';
+                                  return <option key={pt} value={pt}>{getPitchTypeName(pt)}{tag}</option>;
                                 })}
                               </select>
                             )}
