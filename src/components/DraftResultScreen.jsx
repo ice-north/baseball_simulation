@@ -198,12 +198,27 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     return currentPhase.picks.map(p => p.npbTeam).sort((a, b) => (pos[a] ?? 99) - (pos[b] ?? 99));
   }, [currentPhase, gridOrder]);
 
-  // 各チームが最初に選択終了になるラウンドindex
+  // 各チームが最初に選択終了になるラウンドindex（本指名ラウンドのみ）
   const firstSelectionComplete = useMemo(() => {
     const result = {};
     NPB_TEAMS_INFO.forEach(t => {
       for (let i = 0; i < activeRounds.length; i++) {
         const rd = activeRounds[i];
+        if (rd.startsWith('育成')) continue;
+        const picks = roundData[rd]?.[t.name] || [];
+        if (picks.length === 0) { result[t.name] = i; break; }
+      }
+    });
+    return result;
+  }, [roundData, activeRounds]);
+
+  // 各チームが育成ラウンドで最初に選択終了になるラウンドindex
+  const firstIkuSelectionComplete = useMemo(() => {
+    const result = {};
+    NPB_TEAMS_INFO.forEach(t => {
+      for (let i = 0; i < activeRounds.length; i++) {
+        const rd = activeRounds[i];
+        if (!rd.startsWith('育成')) continue;
         const picks = roundData[rd]?.[t.name] || [];
         if (picks.length === 0) { result[t.name] = i; break; }
       }
@@ -213,13 +228,16 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
   const waiverRevealOrder = useMemo(() => {
     if (!currentTeamMap || isFirstRound) return [];
+    const isIku = currentRound?.startsWith('育成');
     const roundPicks = new Set(draftedPlayers.filter(p => p.draftRound === currentRound).map(p => p.npbTeam));
     return gridOrder.filter(t => {
       if (roundPicks.has(t.name)) return true;
       // 初回選択終了のみフラッグ開示に含める（2回目以降は即表示）
-      return firstSelectionComplete[t.name] === currentRoundIdx;
+      // 育成ラウンドは育成内での初回を別途追跡
+      const sc = isIku ? firstIkuSelectionComplete[t.name] : firstSelectionComplete[t.name];
+      return sc === currentRoundIdx;
     }).map(t => t.name);
-  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder, firstSelectionComplete, currentRoundIdx]);
+  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder, firstSelectionComplete, firstIkuSelectionComplete, currentRoundIdx]);
 
   const collisionColors = useMemo(() => {
     if (!currentPhase) return {};
@@ -423,8 +441,9 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const hasPick = picks.length > 0;
     const revealed = waiverRevealed.has(team.name);
     const rank = rankLabels[team.name];
-    // 初回選択終了はフラッグ開示、2回目以降は即表示
-    const isFirstSC = !hasPick && firstSelectionComplete[team.name] === currentRoundIdx;
+    // 初回選択終了はフラッグ開示、2回目以降は即表示（育成ラウンドは育成内での初回を追跡）
+    const sc = isIkuRound ? firstIkuSelectionComplete[team.name] : firstSelectionComplete[team.name];
+    const isFirstSC = !hasPick && sc === currentRoundIdx;
     const needsReveal = hasPick || isFirstSC;
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
