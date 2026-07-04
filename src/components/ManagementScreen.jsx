@@ -215,7 +215,7 @@ const ManagementScreen = ({
       if (gameMode === 'sandbox' && (eventType === 'contract' || eventType === 'tryout' || eventType === 'draft' || eventType === 'corporate_departure' || eventType === 'corporate_scout' || eventType === 'club_recruit' || eventType === 'budget_settlement' || eventType === 'university_scout')) {
         const update = {};
         if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
-        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         if (Object.keys(update).length > 0) setSeasonData(prev => ({ ...prev, ...update }));
         setManagementView('offseason');
         return;
@@ -232,7 +232,7 @@ const ManagementScreen = ({
         // プロ指名で選手が消える前にランキング・表彰を確定する
         const preUpdate = {};
         if (!seasonData.frozenAwards) preUpdate.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
-        if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (!seasonData.finalRankings) preUpdate.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         if (Object.keys(preUpdate).length > 0) setSeasonData(prev => ({ ...prev, ...preUpdate }));
         const results = processNPBDraft(TEAMS_DATA, seasonData.year);
         setDraftResults(results);
@@ -284,7 +284,7 @@ const ManagementScreen = ({
       else if (eventType === 'offseason') {
         const update = {};
         if (!seasonData.frozenAwards) update.frozenAwards = processSeasonEnd(seasonData, TEAMS_DATA);
-        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA);
+        if (!seasonData.finalRankings) update.finalRankings = snapshotRankings(TEAMS_DATA, seasonData.settings?.teamNames);
         if (Object.keys(update).length > 0) setSeasonData(prev => ({ ...prev, ...update }));
         setManagementView('offseason');
       }

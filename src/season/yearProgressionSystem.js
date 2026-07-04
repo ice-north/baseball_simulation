@@ -120,7 +120,12 @@ export function processSeasonEnd(seasonData, allTeams) {
     awards.champion = sortedStandings[0].team;
   }
 
-  const allPlayers = collectAllPlayers(allTeams);
+  // 大学/社会人モード等では自チームリーグのみを対象にする
+  const eligibleTeamNames = seasonData.settings?.teamNames;
+  const filteredTeams = eligibleTeamNames?.length
+    ? Object.fromEntries(Object.entries(allTeams).filter(([name]) => eligibleTeamNames.includes(name)))
+    : allTeams;
+  const allPlayers = collectAllPlayers(filteredTeams);
   const qualifiedBatters = allPlayers.filter(p => p.seasonStats.batting.atBats >= 100);
   const qualifiedPitchers = allPlayers.filter(p => p.seasonStats.pitching.inningsPitched >= 30);
 
@@ -166,8 +171,11 @@ export function processSeasonEnd(seasonData, allTeams) {
  * ランキングのスナップショットを生成（シーズン確定時に呼び出し）
  * プレーオフ後にseasonDataに保存し、選手が引退/解雇されても成績が残る
  */
-export function snapshotRankings(allTeams) {
-  const allPlayers = collectAllPlayers(allTeams);
+export function snapshotRankings(allTeams, eligibleTeamNames) {
+  const filteredTeams = eligibleTeamNames?.length
+    ? Object.fromEntries(Object.entries(allTeams).filter(([name]) => eligibleTeamNames.includes(name)))
+    : allTeams;
+  const allPlayers = collectAllPlayers(filteredTeams);
 
   const buildRanking = (filterFn, getValue, formatValue, ascending = false) => {
     return allPlayers.filter(filterFn)
