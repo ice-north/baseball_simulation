@@ -1154,7 +1154,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                       </td>
                       <td className="py-1 px-2">
                         <div className="flex flex-wrap gap-0.5">
-                          {result.growthReport.map((growth, gIdx) => (
+                          {result.growthReport.filter(g => g.growth !== 0 || g.isAwakening || g.isPenalty || g.stat === 'newpitch').map((growth, gIdx) => (
                             <span
                               key={gIdx}
                               className={`px-1.5 py-0 rounded text-[10px] leading-relaxed ${
@@ -1174,7 +1174,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                               {growth.isPenalty && ' 代償'}
                             </span>
                           ))}
-                          {result.growthReport.length === 0 && (
+                          {result.growthReport.filter(g => g.growth !== 0 || g.isAwakening || g.isPenalty || g.stat === 'newpitch').length === 0 && (
                             <span className="text-gray-500 text-[10px]">変化なし</span>
                           )}
                         </div>
