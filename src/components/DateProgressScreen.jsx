@@ -1204,6 +1204,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const phase = getCurrentPhase(selectedMonth, day, phaseOpts);
       let eventLabel = null;
       if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
+      else if (isUniversity && selectedMonth === 11 && day === 29) eventLabel = 'セレクション';
       else if (isUniversity && selectedMonth === 8 && day >= 20 && day <= 31) eventLabel = '夏合宿';
       else if (phase === SEASON_PHASES.SPRING_CAMP) eventLabel = 'キャンプ';
       else if (phase === SEASON_PHASES.PLAYOFFS && !isCorporate) eventLabel = 'グランドCS';
@@ -2061,6 +2062,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (label === '退団') return 'text-red-400';
     if (label === 'トライアウト') return 'text-orange-400';
     if (label === 'スカウト入団') return 'text-cyan-400';
+    if (label === 'セレクション') return 'text-pink-400';
     if (label === 'オフシーズン') return 'text-gray-400';
     if (label === 'キャンプ') return 'text-green-400';
     if (label === 'ドラフト') return 'text-purple-400';
