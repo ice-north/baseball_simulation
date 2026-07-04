@@ -2037,13 +2037,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       });
     });
 
-    // 大会情報
+    // 大会情報（社会人モード: seasonData、大学/独立モード: WORLD_DATA）
     const tournamentNews = [];
-    const td = seasonData.toshitaikou;
-    if (td?.champion) tournamentNews.push(`都市対抗 優勝:${td.champion}`);
-    else if (td?.mainTournament) tournamentNews.push('都市対抗本戦 開催中');
-    const ns = seasonData.nihonSenshuken;
-    if (ns?.champion) tournamentNews.push(`日本選手権 優勝:${ns.champion}`);
+    const td = seasonData.toshitaikou || (WORLD_DATA.initialized ? WORLD_DATA.corporateToshitaikou : null);
+    if (td?.champion) tournamentNews.push(`都市対抗 優勝: ${td.champion}`);
+    else if (td?.mainTournament && td.mainTournament.phase !== 'done') tournamentNews.push('都市対抗 本戦開催中');
+    else if (td?.generated && !td?.qualifiersDone) tournamentNews.push('都市対抗 予選進行中');
+    const ns = seasonData.nihonSenshuken || (WORLD_DATA.initialized ? WORLD_DATA.corporateNihonSenshuken : null);
+    if (ns?.champion) tournamentNews.push(`日本選手権 優勝: ${ns.champion}`);
+    else if (ns?.generated && !ns?.done) tournamentNews.push('日本選手権 進行中');
+    const cs = seasonData.clubSenshuken || (WORLD_DATA.initialized ? WORLD_DATA.corporateClubSenshuken : null);
+    if (cs?.champion) tournamentNews.push(`クラブ選手権 優勝: ${cs.champion}`);
 
     return { hsTop, hsOthers, uniTop, uniOthers, corpTop: corpAll[0]?.card || null, corpOthers: corpAll.slice(1, 7).map(x => x.card), indPlayers: indAll.slice(0, 5).map(x => x.card), leagueStars: leagueStars.slice(0, 8), tournamentNews };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3359,8 +3363,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 社会人トーナメント（非社会人・非大学モード用） */}
-          {!isCorporate && !isUniversity && WORLD_DATA.initialized && (() => {
+          {/* 社会人トーナメント（独立・大学モード用） */}
+          {!isCorporate && WORLD_DATA.initialized && (() => {
             const corpToshi = WORLD_DATA.corporateToshitaikou;
             const corpNS = WORLD_DATA.corporateNihonSenshuken;
             const corpCS = WORLD_DATA.corporateClubSenshuken;
