@@ -355,15 +355,14 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           growthReport.push({ statName: 'バント', before: oldBunt, after: player.batting.bunt, growth: buntGrowth });
         }
       }
-      // 守備適正も微増
-      if (player.positionFitness && Math.random() < 0.3) {
-        const positions = Object.keys(player.positionFitness);
-        const weakPos = positions.filter(p => (player.positionFitness[p] || 0) < 70);
-        if (weakPos.length > 0) {
-          const pos = weakPos[Math.floor(Math.random() * weakPos.length)];
-          const old = player.positionFitness[pos] || 0;
-          player.positionFitness[pos] = Math.min(100, old + 3);
-          growthReport.push({ statName: `${POSITION_NAMES_MAP[pos] || pos}適正`, before: old, after: old + 3, growth: 3 });
+      // 守備適正も微増（現在ポジション優先: 30%で+3）
+      if (player.positionFitness && player.position && player.position !== 'pitcher' && Math.random() < 0.3) {
+        const curPos = player.position;
+        const old = player.positionFitness[curPos] || 0;
+        if (old < 100) {
+          player.positionFitness[curPos] = Math.min(100, old + 3);
+          const gained = player.positionFitness[curPos] - old;
+          growthReport.push({ statName: `${POSITION_NAMES_MAP[curPos] || curPos}適正`, before: old, after: player.positionFitness[curPos], growth: gained });
         }
       }
       break;
@@ -1065,6 +1064,22 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
             growth: newVal - currentVal, isAwakening: false, isPenalty: true
           });
         }
+      });
+    }
+  }
+
+  // 守備練習: 現在ポジションの適正を微増（野手のみ、40%で+1、さらに30%で+2）
+  if (trainingType === 'fielding' && updatedPlayer.position !== 'pitcher' && updatedPlayer.positionFitness) {
+    const curPos = updatedPlayer.position;
+    const curFit = updatedPlayer.positionFitness[curPos] || 0;
+    if (curFit < 100 && Math.random() < 0.4) {
+      const gain = Math.random() < 0.3 ? 2 : 1;
+      const newFit = Math.min(100, curFit + gain);
+      updatedPlayer.positionFitness[curPos] = newFit;
+      growthReport.push({
+        stat: 'positionFitness',
+        statName: `${POSITION_NAMES_MAP[curPos] || curPos}適正`,
+        before: curFit, after: newFit, growth: newFit - curFit, isAwakening: false
       });
     }
   }
