@@ -37,10 +37,19 @@ FILTER_DEFS.forEach(f => {
 
 function collectAllPlayers() {
   const results = [];
+  const seen = new Set();
+
+  const push = (p, source, label, extra = {}) => {
+    if (!p || !p.name) return;
+    const key = `${source}::${p.id ?? p.name}::${label}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    results.push({ ...p, _source: source, _sourceLabel: label, ...extra });
+  };
 
   if (highSchoolPool.players?.length > 0) {
     highSchoolPool.players.forEach(p => {
-      results.push({ ...p, _source: 'highschool', _sourceLabel: p.highSchool?.name || '高校生' });
+      push(p, 'highschool', p.highSchool?.name || '高校生');
     });
   }
 
@@ -49,22 +58,23 @@ function collectAllPlayers() {
       if (!entries) return;
       entries.forEach(entry => {
         const p = entry.player || entry;
-        if (p && p.name) {
-          results.push({ ...p, _source: 'university', _sourceLabel: entry.universityTeamName || p.universityTeamName || `大学(${entry.universityRank || '?'}ランク)`, _uniRank: entry.universityRank || p._destinationRank || '?' });
-        }
+        push(p, 'university',
+          entry.universityTeamName || p.universityTeamName || `大学(${entry.universityRank || '?'}ランク)`,
+          { _uniRank: entry.universityRank || p._destinationRank || '?' }
+        );
       });
     });
   }
 
   if (releasedPlayersPool?.length > 0) {
     releasedPlayersPool.forEach(p => {
-      results.push({ ...p, _source: 'released', _sourceLabel: p.previousTeam || '自由契約' });
+      push(p, 'released', p.previousTeam || '自由契約');
     });
   }
 
   Object.entries(TEAMS_DATA || {}).forEach(([teamName, teamData]) => {
     (teamData.players || []).forEach(p => {
-      results.push({ ...p, _source: 'teams', _sourceLabel: teamName });
+      push(p, 'teams', teamName);
     });
   });
 
