@@ -444,26 +444,41 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'breaking': {
-      // 変化球練習（サブ練習版）- フォーム適性で成長ボーナス + バッテリー指導補正
+      // 変化球練習（サブ練習版）
+      // 合計4〜8ポイントを保有変化球に分配。1球種のみの投手は集中練習として一気に上昇
       if (player.position === 'pitcher' && player.pitching) {
         const arsenal = player.pitching?.arsenal || [];
         const nonStraight = arsenal.filter(p => p.type !== 'straight');
         const playerForm = player.pitching?.form;
         const battVal = staffBonus ? (staffBonus.batteryCoach || 50) : 50;
         const battMult = 0.9 + (battVal / 100) * 0.2;
+
         if (nonStraight.length > 0) {
-          nonStraight.forEach(pitch => {
-            const age = player.age || 20;
-            const ageBase = getAgeGrowthBase(age, false);
-            const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.15);
+          const age = player.age || 20;
+          const ageBase = getAgeGrowthBase(age, false);
+          const ageMult = Math.max(0.6, 1.0 + ageBase * 0.12); // 0.6〜1.1
+          const dext = player.physical?.dexterity ?? 50;
+          const dextMult = 0.85 + (dext / 100) * 0.30; // 0.85〜1.15
+
+          // 基本プール4〜8ポイント、補正後も整数に丸める
+          const rawPool = Math.floor(Math.random() * 5) + 4;
+          const effectivePool = Math.max(nonStraight.length, Math.round(rawPool * ageMult * dextMult * battMult));
+
+          // プールを球種数で均等分配し、余りはランダムな球種に+1
+          const count = nonStraight.length;
+          const base = Math.floor(effectivePool / count);
+          const extraCount = effectivePool - base * count;
+          const extraSet = new Set(
+            [...Array(count).keys()].sort(() => Math.random() - 0.5).slice(0, extraCount)
+          );
+
+          nonStraight.forEach((pitch, i) => {
             const formAff = getFormPitchAffinity(playerForm, pitch.type);
-            const formMult = formAff ? formAff.growth : 1.0;
-            const dext = player.physical?.dexterity ?? 50;
-            const dextMult = 0.5 + (dext / 100) * 1.0;
-            const rawGrowth = (Math.floor(Math.random() * 3) + 1 + Math.floor(Math.random() * 4) + 1) * ageMultiplier;
-            const growth = Math.max(1, Math.round(rawGrowth * 0.167 * formMult * dextMult * battMult));
+            // フォーム適性球種はさらに+1ボーナス
+            const formBonus = formAff ? 1 : 0;
+            const growth = base + (extraSet.has(i) ? 1 : 0) + formBonus;
             const before = pitch.level;
-            pitch.level = before + growth;
+            pitch.level = Math.min(100, before + growth);
             const affinityTag = formAff ? ' [適性]' : '';
             growthReport.push({ statName: `${getPitchTypeName(pitch.type)}${affinityTag}`, before, after: pitch.level, growth: pitch.level - before });
           });
