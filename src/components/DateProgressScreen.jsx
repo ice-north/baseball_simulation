@@ -79,11 +79,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const getStartingPitcher = (teamName) => {
     const team = TEAMS_DATA[teamName];
-    if (!team || !team.pitchingRotation || !team.pitchingRotation.starters) return null;
+    if (!team || !team.pitchingRotation?.starters?.length) return null;
     const rotation = team.pitchingRotation;
-    const index = rotation.currentStarterIndex || 0;
-    const starterId = rotation.starters[index];
-    return team.players.find(p => p.id === starterId);
+    const validStarters = rotation.starters.filter(id => team.players.some(p => p.id === id));
+    if (validStarters.length === 0) return null;
+    const index = (rotation.currentStarterIndex || 0) % validStarters.length;
+    return team.players.find(p => p.id === validStarters[index]) || null;
   };
 
   const determinePitcherDecisions = (gameResult, homeTeamData, awayTeamData) => {

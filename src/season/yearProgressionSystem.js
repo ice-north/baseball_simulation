@@ -58,7 +58,14 @@ export function cleanupPlayerReferences(team, playerId) {
 
   if (rotation.starters) {
     const idx = rotation.starters.indexOf(playerId);
-    if (idx !== -1) rotation.starters.splice(idx, 1);
+    if (idx !== -1) {
+      rotation.starters.splice(idx, 1);
+      if (rotation.starters.length > 0) {
+        rotation.currentStarterIndex = (rotation.currentStarterIndex || 0) % rotation.starters.length;
+      } else {
+        rotation.currentStarterIndex = 0;
+      }
+    }
   }
   if (rotation.closer === playerId) {
     rotation.closer = null;
