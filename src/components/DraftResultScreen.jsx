@@ -198,11 +198,28 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     return currentPhase.picks.map(p => p.npbTeam).sort((a, b) => (pos[a] ?? 99) - (pos[b] ?? 99));
   }, [currentPhase, gridOrder]);
 
+  // 各チームが最初に選択終了になるラウンドindex
+  const firstSelectionComplete = useMemo(() => {
+    const result = {};
+    NPB_TEAMS_INFO.forEach(t => {
+      for (let i = 0; i < activeRounds.length; i++) {
+        const rd = activeRounds[i];
+        const picks = roundData[rd]?.[t.name] || [];
+        if (picks.length === 0) { result[t.name] = i; break; }
+      }
+    });
+    return result;
+  }, [roundData, activeRounds]);
+
   const waiverRevealOrder = useMemo(() => {
     if (!currentTeamMap || isFirstRound) return [];
     const roundPicks = new Set(draftedPlayers.filter(p => p.draftRound === currentRound).map(p => p.npbTeam));
-    return gridOrder.filter(t => roundPicks.has(t.name)).map(t => t.name);
-  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder]);
+    return gridOrder.filter(t => {
+      if (roundPicks.has(t.name)) return true;
+      // 初回選択終了のみフラッグ開示に含める（2回目以降は即表示）
+      return firstSelectionComplete[t.name] === currentRoundIdx;
+    }).map(t => t.name);
+  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder, firstSelectionComplete, currentRoundIdx]);
 
   const collisionColors = useMemo(() => {
     if (!currentPhase) return {};
@@ -406,10 +423,13 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     const hasPick = picks.length > 0;
     const revealed = waiverRevealed.has(team.name);
     const rank = rankLabels[team.name];
+    // 初回選択終了はフラッグ開示、2回目以降は即表示
+    const isFirstSC = !hasPick && firstSelectionComplete[team.name] === currentRoundIdx;
+    const needsReveal = hasPick || isFirstSC;
     return (
       <div key={team.name} className="relative rounded-lg overflow-hidden shadow-lg flex flex-col" style={{ aspectRatio: '3/2' }}>
         <div className="flex items-center bg-gray-200 px-1 py-0.5 shrink-0" style={{ minHeight: '24px', maxHeight: '28px' }}>
-          {revealed && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
+          {(revealed || !needsReveal) && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
           <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
             <span className="text-gray-600 truncate">{team.short}</span>
             {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
@@ -426,7 +446,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             </div>
           )}
         </div>
-        {hasPick && (
+        {needsReveal && (
           <div className="absolute inset-0 z-20"
                style={{ opacity: revealed ? 0 : 1, transition: revealed ? 'opacity 0.8s ease-out' : 'none', pointerEvents: revealed ? 'none' : 'auto' }}>
             <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
