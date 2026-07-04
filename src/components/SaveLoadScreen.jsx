@@ -3,10 +3,12 @@ import React, { useState } from 'react';
 // セーブ＆ロード画面（3スロット対応）
 const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onReturnToTitle }) => {
   const [saveStatus, setSaveStatus] = useState(null);
+  const [saveProgress, setSaveProgress] = useState(0);
 
   const handleSave = async (slotIndex) => {
+    setSaveProgress(0);
     setSaveStatus({ type: 'saving' });
-    const result = await onSave(slotIndex);
+    const result = await onSave(slotIndex, (pct) => setSaveProgress(pct));
     if (result?.success) {
       setSaveStatus({ type: 'saved' });
     } else {
@@ -63,13 +65,25 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
       {/* ステータスメッセージ */}
       {saveStatus && (
         <div className={`mb-6 p-4 rounded-lg font-bold text-center ${
-          saveStatus.type === 'saving' || saveStatus.type === 'loading' ? 'bg-gray-600 text-white animate-pulse' :
+          saveStatus.type === 'saving' ? 'bg-gray-700 text-white' :
+          saveStatus.type === 'loading' ? 'bg-gray-600 text-white animate-pulse' :
           saveStatus.type === 'saved' ? 'bg-green-600 text-white' :
           saveStatus.type === 'loaded' ? 'bg-blue-600 text-white' :
           saveStatus.type === 'deleted' ? 'bg-yellow-600 text-white' :
           'bg-red-600 text-white'
         }`}>
-          {saveStatus.type === 'saving' && '💾 セーブ中...'}
+          {saveStatus.type === 'saving' && (
+            <div>
+              <div className="mb-2">💾 セーブ中...</div>
+              <div className="w-full bg-gray-500 rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-3 rounded-full bg-green-400 transition-all duration-300"
+                  style={{ width: `${saveProgress}%` }}
+                />
+              </div>
+              <div className="text-xs text-gray-300 mt-1">{saveProgress}%</div>
+            </div>
+          )}
           {saveStatus.type === 'loading' && '📂 ロード中...'}
           {saveStatus.type === 'saved' && '✅ セーブしました'}
           {saveStatus.type === 'loaded' && '✅ ロードしました'}

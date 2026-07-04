@@ -94,8 +94,10 @@ export const migrateOldSaveData = () => {
 };
 
 // ゲームデータを保存（async版）
-export const saveGameToSlot = async (slotIndex, gameState) => {
+export const saveGameToSlot = async (slotIndex, gameState, onProgress) => {
+  const progress = (pct) => { if (onProgress) onProgress(pct); };
   try {
+    progress(10);
     const worldDataSnapshot = WORLD_DATA.initialized ? {
       initialized: WORLD_DATA.initialized,
       mode: WORLD_DATA.mode,
@@ -133,6 +135,7 @@ export const saveGameToSlot = async (slotIndex, gameState) => {
       }, {}),
     } : null;
 
+    progress(30);
     const saveData = {
       version: '2.14.0',
       timestamp: new Date().toISOString(),
@@ -151,8 +154,11 @@ export const saveGameToSlot = async (slotIndex, gameState) => {
       universityPool: serializeUniversityPool()
     };
 
+    progress(55);
     const compressed = await compressDataAsync(saveData);
+    progress(85);
     await storageSetItem(SAVE_SLOT_KEYS[slotIndex], compressed);
+    progress(100);
     return { success: true, storage: useIDB ? 'IndexedDB' : 'localStorage' };
   } catch (error) {
     console.error('セーブ失敗:', error);

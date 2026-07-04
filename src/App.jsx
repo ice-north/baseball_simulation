@@ -187,11 +187,11 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         LEAGUE_SETTINGS.useDH = seasonData?.settings?.useDH || false;
       }, [seasonData?.settings?.useDH]);
 
-      const saveGame = async (slotIndex = 0) => {
+      const saveGame = async (slotIndex = 0, onProgress) => {
         const result = await saveGameToSlot(slotIndex, {
           seasonData, leagueConfig, screenMode, managementView,
           gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory
-        });
+        }, onProgress);
         if (result.success) await refreshSaveSlots();
         return result;
       };
