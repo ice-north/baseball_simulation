@@ -355,12 +355,13 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           growthReport.push({ statName: 'バント', before: oldBunt, after: player.batting.bunt, growth: buntGrowth });
         }
       }
-      // 守備適正も微増（現在ポジション優先: 30%で+3）
-      if (player.positionFitness && player.position && player.position !== 'pitcher' && Math.random() < 0.3) {
+      // 守備適正: 現在ポジションを確定で+4〜8
+      if (player.positionFitness && player.position && player.position !== 'pitcher') {
         const curPos = player.position;
         const old = player.positionFitness[curPos] || 0;
         if (old < 100) {
-          player.positionFitness[curPos] = Math.min(100, old + 3);
+          const gain = Math.floor(Math.random() * 5) + 4;
+          player.positionFitness[curPos] = Math.min(100, old + gain);
           const gained = player.positionFitness[curPos] - old;
           growthReport.push({ statName: `${POSITION_NAMES_MAP[curPos] || curPos}適正`, before: old, after: player.positionFitness[curPos], growth: gained });
         }
@@ -1068,12 +1069,12 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     }
   }
 
-  // 守備練習: 現在ポジションの適正を微増（野手のみ、40%で+1、さらに30%で+2）
+  // 守備練習: 現在ポジションの適正を確定で+4〜8（野手のみ）
   if (trainingType === 'fielding' && updatedPlayer.position !== 'pitcher' && updatedPlayer.positionFitness) {
     const curPos = updatedPlayer.position;
     const curFit = updatedPlayer.positionFitness[curPos] || 0;
-    if (curFit < 100 && Math.random() < 0.4) {
-      const gain = Math.random() < 0.3 ? 2 : 1;
+    if (curFit < 100) {
+      const gain = Math.floor(Math.random() * 5) + 4;
       const newFit = Math.min(100, curFit + gain);
       updatedPlayer.positionFitness[curPos] = newFit;
       growthReport.push({
