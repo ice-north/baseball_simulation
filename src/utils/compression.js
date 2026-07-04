@@ -490,7 +490,7 @@ export function optimizeSaveData(saveData) {
 }
 
 /**
- * Compress JSON data for localStorage
+ * Compress JSON data for localStorage (synchronous LZ fallback)
  * @param {Object} data - Data to compress
  * @returns {string} Compressed string
  */
@@ -498,6 +498,63 @@ export function compressData(data) {
   optimizeSaveData(data);
   const jsonStr = JSON.stringify(data);
   return 'LZ:' + compressToBase64(jsonStr);
+}
+
+/**
+ * Compress JSON data using native CompressionStream API (async, much faster).
+ * Falls back to synchronous LZ if CompressionStream is unavailable.
+ * @param {Object} data - Data to compress (will be mutated by optimizeSaveData)
+ * @returns {Promise<string>} Compressed string with 'GZ:' or 'LZ:' prefix
+ */
+export async function compressDataAsync(data) {
+  optimizeSaveData(data);
+  const jsonStr = JSON.stringify(data);
+
+  if (typeof CompressionStream !== 'undefined') {
+    try {
+      const cs = new CompressionStream('gzip');
+      const stream = new Blob([jsonStr]).stream().pipeThrough(cs);
+      const buf = await new Response(stream).arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      // Chunk-based binary→base64 to avoid stack overflow on large data
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.byteLength)));
+      }
+      return 'GZ:' + btoa(binary);
+    } catch (e) {
+      console.warn('CompressionStream失敗、LZにフォールバック:', e);
+    }
+  }
+
+  return 'LZ:' + compressToBase64(jsonStr);
+}
+
+/**
+ * Decompress data from localStorage (supports GZ:, LZ:, and plain JSON).
+ * @param {string} compressed - Compressed string
+ * @returns {Promise<Object|null>} Decompressed data or null if failed
+ */
+export async function decompressDataAsync(compressed) {
+  if (!compressed) return null;
+
+  if (compressed.startsWith('GZ:')) {
+    try {
+      const binary = atob(compressed.slice(3));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const ds = new DecompressionStream('gzip');
+      const stream = new Blob([bytes]).stream().pipeThrough(ds);
+      const text = await new Response(stream).text();
+      return JSON.parse(text);
+    } catch (e) {
+      console.error('GZ解凍失敗:', e);
+      return null;
+    }
+  }
+
+  // LZ: or plain JSON — use synchronous path
+  return decompressData(compressed);
 }
 
 /**

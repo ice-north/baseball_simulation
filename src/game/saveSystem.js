@@ -1,4 +1,4 @@
-import { compressData, decompressData, getLocalStorageUsage } from '../utils/compression.js';
+import { compressData, compressDataAsync, decompressData, decompressDataAsync, getLocalStorageUsage } from '../utils/compression.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
@@ -62,7 +62,7 @@ export const readSaveSlots = async () => {
     try {
       const savedData = await storageGetItem(key);
       if (!savedData) { results.push(null); continue; }
-      const data = decompressData(savedData);
+      const data = await decompressDataAsync(savedData);
       if (!data) { results.push(null); continue; }
       results.push({
         timestamp: data.timestamp,
@@ -151,7 +151,7 @@ export const saveGameToSlot = async (slotIndex, gameState) => {
       universityPool: serializeUniversityPool()
     };
 
-    const compressed = compressData(saveData);
+    const compressed = await compressDataAsync(saveData);
     await storageSetItem(SAVE_SLOT_KEYS[slotIndex], compressed);
     return { success: true, storage: useIDB ? 'IndexedDB' : 'localStorage' };
   } catch (error) {
@@ -185,7 +185,7 @@ export const loadGameFromSlot = async (slotIndex) => {
       return { success: false, error: 'セーブデータがありません' };
     }
 
-    const saveData = decompressData(savedData);
+    const saveData = await decompressDataAsync(savedData);
     if (!saveData) {
       return { success: false, error: 'セーブデータの解凍に失敗しました。データが破損している可能性があります。' };
     }
