@@ -93,7 +93,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     const seen = new Set();
     const bench = team.players.filter(pl => {
       if (!isEligible(pl)) return false;
-      if (fieldIds.has(pl.id)) return false;
+      if (lpIds.has(pl.id)) return false;
       if (seen.has(pl.id)) return false;
       seen.add(pl.id);
       return true;

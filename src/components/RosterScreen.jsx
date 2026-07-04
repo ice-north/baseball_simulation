@@ -174,9 +174,13 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   const players = team.players || [];
   const lineup = team.lineupSettings?.battingOrder || [];
 
-  // isActive 未初期化なら自動選択
-  if (isUniversityMode && players.length > 0 && players.every(p => p.isActive === undefined)) {
-    autoSelectActive(players);
+  // isActive 未初期化なら自動選択、一部だけundefinedならfalse(ベンチ外)に正規化
+  if (isUniversityMode && players.length > 0) {
+    if (players.every(p => p.isActive === undefined)) {
+      autoSelectActive(players);
+    } else {
+      players.forEach(p => { if (p.isActive === undefined) p.isActive = false; });
+    }
   }
 
   const starterIds = new Set(
