@@ -200,14 +200,8 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
   const waiverRevealOrder = useMemo(() => {
     if (!currentTeamMap || isFirstRound) return [];
-    const roundPicks = draftedPlayers.filter(p => p.draftRound === currentRound);
-    const seen = new Set();
-    const withPicks = roundPicks
-      .filter(p => { if (seen.has(p.npbTeam)) return false; seen.add(p.npbTeam); return true; })
-      .map(p => p.npbTeam);
-    const withoutPicks = gridOrder.filter(t => !seen.has(t.name)).map(t => t.name);
-    return [...withPicks, ...withoutPicks];
-  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder]);
+    return gridOrder.map(t => t.name);
+  }, [currentTeamMap, isFirstRound, gridOrder]);
 
   const collisionColors = useMemo(() => {
     if (!currentPhase) return {};
