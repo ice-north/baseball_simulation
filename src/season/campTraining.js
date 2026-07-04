@@ -61,6 +61,13 @@ export const TRAINING_MENUS = {
     targets: ['velocity'],
     category: 'pitching'
   },
+  stamina: {
+    name: 'スタミナ練習',
+    icon: '🏋️',
+    description: 'スタミナを重点強化（投手向け）',
+    targets: ['stamina'],
+    category: 'pitching'
+  },
   newpitch: {
     name: '新球種習得',
     icon: '✨',
