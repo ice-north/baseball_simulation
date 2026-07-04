@@ -209,7 +209,7 @@ function generateHighSchoolPlayer(id) {
       const velCap = getVelocityCap(twoWayArm); // 野手二刀流は肩力依存の自然な球速上限を維持
       abilities = {
         meet: Math.max(5, Math.round(nrm(22, 9) + off)),
-        power: Math.max(3, Math.round(nrm(18, 10) + off + buildMod.power)),
+        power: Math.max(8, Math.round(nrm(21, 10) + off + buildMod.power)),
         eye: Math.max(5, Math.round(nrm(20, 8) + off * 0.8)),
         steal: Math.max(1, Math.round(nrm(22, 8) + off * 0.4 + buildMod.steal)),
         speed: baseSpeed,
@@ -264,7 +264,7 @@ function generateHighSchoolPlayer(id) {
     abilities = isPositionCandidate ? {
       // 野手向き投手: 打撃能力は準野手レベル、転向候補
       meet:  g(30, 9, 0.7, 12),
-      power: g(25, 11, 0.6, 5),
+      power: g(28, 11, 0.6, 8),
       eye:   g(27, 8, 0.6, 8),
       steal: Math.max(1, Math.round(nrm(24, 9) + buildMod.steal * 0.8)),
       speed: baseSpeed,
@@ -278,7 +278,7 @@ function generateHighSchoolPlayer(id) {
     } : {
       // 通常投手: 打撃は野手より低いが、チームの中心選手らしく一定の素質あり
       meet:  g(20, 8, 0.4, 5),
-      power: g(16, 10, 0.4, 3),
+      power: g(19, 10, 0.4, 6),
       eye:   g(20, 7, 0.4, 5),
       steal: Math.max(1, Math.round(nrm(18, 8) + buildMod.steal * 0.6)),
       speed: baseSpeed,
@@ -322,7 +322,7 @@ function generateHighSchoolPlayer(id) {
     baseArm   = Math.max(1, baseArm   + physMod.armAdj);
 
     let meet = Math.round(nrm(19, 9) + off + pm.meet);
-    let power = Math.round(nrm(15, 12) + off + buildMod.power + pm.power);
+    let power = Math.round(nrm(18, 12) + off + buildMod.power + pm.power);
     let eye = Math.round(nrm(18, 8) + off * 0.8 + pm.eye);
     let defense = Math.round(nrm(38, 13) + off * 0.6 + buildMod.defense + pm.defense);
     let steal = Math.round(nrm(22, 9) + off * 0.4 + buildMod.steal + pm.steal);
@@ -334,7 +334,7 @@ function generateHighSchoolPlayer(id) {
     else if (specialty === 'cannon') baseArm += r(18, 30);
 
     abilities = {
-      meet: Math.max(5, meet), power: Math.max(3, power),
+      meet: Math.max(5, meet), power: Math.max(8, power),
       eye: Math.max(5, eye), steal: Math.max(1, steal),
       speed: Math.max(1, baseSpeed), arm: Math.max(1, baseArm),
       defense: Math.max(1, defense),
