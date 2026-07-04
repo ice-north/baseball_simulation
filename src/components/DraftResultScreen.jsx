@@ -200,8 +200,9 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
   const waiverRevealOrder = useMemo(() => {
     if (!currentTeamMap || isFirstRound) return [];
-    return gridOrder.map(t => t.name);
-  }, [currentTeamMap, isFirstRound, gridOrder]);
+    const roundPicks = new Set(draftedPlayers.filter(p => p.draftRound === currentRound).map(p => p.npbTeam));
+    return gridOrder.filter(t => roundPicks.has(t.name)).map(t => t.name);
+  }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder]);
 
   const collisionColors = useMemo(() => {
     if (!currentPhase) return {};
@@ -231,7 +232,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
 
   useEffect(() => {
     if (isFirstRound || roundComplete) return;
-    if (waiverRevealOrder.length > 0 && waiverRevealOrder.every(n => waiverRevealed.has(n))) {
+    if (waiverRevealOrder.length === 0 || waiverRevealOrder.every(n => waiverRevealed.has(n))) {
       setRoundComplete(true);
     }
   }, [isFirstRound, waiverRevealOrder, waiverRevealed, roundComplete]);
@@ -425,10 +426,12 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             </div>
           )}
         </div>
-        <div className="absolute inset-0 z-20"
-             style={{ opacity: revealed ? 0 : 1, transition: revealed ? 'opacity 0.8s ease-out' : 'none', pointerEvents: revealed ? 'none' : 'auto' }}>
-          <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
-        </div>
+        {hasPick && (
+          <div className="absolute inset-0 z-20"
+               style={{ opacity: revealed ? 0 : 1, transition: revealed ? 'opacity 0.8s ease-out' : 'none', pointerEvents: revealed ? 'none' : 'auto' }}>
+            <img src={`/flag/${team.flag}.png`} alt="" className="w-full h-full object-cover" />
+          </div>
+        )}
       </div>
     );
   };
