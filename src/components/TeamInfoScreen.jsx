@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { formatInnings } from '../utils/physics.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 
 const RECRUIT_TYPE_LABEL = {
