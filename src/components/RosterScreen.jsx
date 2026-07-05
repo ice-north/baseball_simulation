@@ -61,7 +61,7 @@ const Stat = ({ label, value, low, high }) => {
     : 'text-gray-500';
   return (
     <span className="flex flex-col items-center w-8 flex-shrink-0">
-      <span className="text-[8px] text-gray-600 leading-none">{label}</span>
+      <span className="text-[8px] text-gray-400 leading-none">{label}</span>
       <span className={`text-[11px] leading-none mt-0.5 ${color}`}>{value}</span>
     </span>
   );
@@ -88,8 +88,12 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
         ${isStarter ? 'border-yellow-600/40' : ''}`}
     >
       {/* ポジションバッジ */}
-      <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded text-[10px] font-bold
-        ${isPitcher ? 'bg-blue-700 text-blue-100' : 'bg-emerald-700 text-emerald-100'}`}>
+      <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded text-[10px] font-bold ${
+        player.position === 'pitcher' ? 'bg-red-700 text-red-100' :
+        player.position === 'catcher' ? 'bg-cyan-700 text-cyan-100' :
+        ['first','second','third','short'].includes(player.position) ? 'bg-yellow-600 text-yellow-100' :
+        'bg-green-700 text-green-100'
+      }`}>
         {POS_NAMES[player.position] || '?'}
       </span>
 
@@ -112,7 +116,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
             <Stat label="制球" value={player.pitching?.control || 0} low={40} high={58} />
             <Stat label="スタ" value={player.pitching?.stamina || 0} low={40} high={60} />
             <span className="flex flex-col items-center w-8 flex-shrink-0">
-              <span className="text-[8px] text-gray-600 leading-none">変化球</span>
+              <span className="text-[8px] text-gray-400 leading-none">変化球</span>
               <span className="text-[11px] text-gray-300 leading-none mt-0.5">{player.pitching?.arsenal?.length || 0}種</span>
             </span>
           </>
@@ -120,9 +124,9 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
           <>
             <Stat label="ミート" value={player.batting?.meet || 0} low={35} high={52} />
             <Stat label="パワー" value={player.batting?.power || 0} low={25} high={42} />
+            <Stat label="足" value={player.physical?.speed || 0} low={30} high={48} />
+            <Stat label="肩" value={player.physical?.arm || 0} low={30} high={48} />
             <Stat label="守備" value={player.fielding?.defense || 0} low={35} high={52} />
-            <Stat label="走力" value={player.physical?.speed || 0} low={30} high={48} />
-            <Stat label="選球眼" value={player.batting?.eye || 0} low={25} high={42} />
           </>
         )}
       </div>
