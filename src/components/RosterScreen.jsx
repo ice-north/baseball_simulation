@@ -6,7 +6,7 @@ const POS_NAMES = {
   pitcher: '投', catcher: '捕', first: '一', second: '二',
   third: '三', short: '遊', left: '左', center: '中', right: '右'
 };
-const POS_ORDER = ['pitcher', 'catcher', 'short', 'second', 'third', 'first', 'left', 'center', 'right'];
+const POS_ORDER = ['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
 const POS_LABEL = {
   pitcher: '投手', catcher: '捕手', first: '一塁', second: '二塁',
   third: '三塁', short: '遊撃', left: '左翼', center: '中堅', right: '右翼'
