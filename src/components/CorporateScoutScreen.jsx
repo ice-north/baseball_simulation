@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PlayerDetailModal from './PlayerDetailModal.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import {
@@ -27,6 +28,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   const [sortKey, setSortKey] = useState('rate');
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedScoutId, setSelectedScoutId] = useState(null);
+  const [modalPlayer, setModalPlayer] = useState(null);
 
   const staff = teamData?.corporateData?.staff || [];
   const scouts = staff.filter(s =>
@@ -411,11 +413,17 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                     }`}
                   >
                     <td className="px-1.5 py-2 text-center">
-                      <span className={`inline-block w-4 h-4 rounded border text-xs leading-4 text-center ${
-                        selected ? 'bg-green-600 border-green-500 text-white' : 'border-gray-600'
-                      }`}>
-                        {selected ? '✓' : ''}
-                      </span>
+                      <div className="flex items-center gap-1 justify-center">
+                        <span className={`inline-block w-4 h-4 rounded border text-xs leading-4 text-center ${
+                          selected ? 'bg-green-600 border-green-500 text-white' : 'border-gray-600'
+                        }`}>
+                          {selected ? '✓' : ''}
+                        </span>
+                        <button
+                          onClick={e => { e.stopPropagation(); setModalPlayer(player); }}
+                          className="px-1 py-0.5 rounded text-[9px] font-bold bg-gray-700 text-gray-300 hover:bg-gray-500 transition"
+                        >詳</button>
+                      </div>
                     </td>
                     <td className="px-1.5 py-2 text-center">
                       <span className={`font-bold ${recColor(rec)}`}>{rec}</span>
@@ -488,6 +496,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm"
         >獲得なしで進む</button>
       </div>
+      {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
     </div>
   );
 };

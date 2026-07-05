@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { exportDraftedPlayers } from '../game/saveSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
+import PlayerDetailModal from './PlayerDetailModal.jsx';
 
 const NPB_TEAMS_CE = [
   { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', flag: 'giants' },
@@ -43,6 +44,16 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const [activeTab, setActiveTab] = useState('npbdraft');
   const [statCategory, setStatCategory] = useState('avg');
   const [expandedPlayer, setExpandedPlayer] = useState(null);
+  const [modalPlayer, setModalPlayer] = useState(null);
+
+  const openModal = (entry) => {
+    const normalized = {
+      ...entry,
+      physical: { ...(entry.physical || {}), throws: entry.throws || entry.physical?.throws || 'right' },
+      batting: { ...(entry.batting || {}), bats: entry.bats || entry.batting?.bats || 'right' },
+    };
+    setModalPlayer(normalized);
+  };
   const [selectedTeamForHistory, setSelectedTeamForHistory] = useState(null);
   const [expandedYear, setExpandedYear] = useState(null);
   const [draftHistoryYear, setDraftHistoryYear] = useState(null);
@@ -469,7 +480,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 }
                                 const srcInfo = SOURCE_LABELS[player.source];
                                 return (
-                                  <tr key={idx} className={`border-b border-gray-700/50 hover:bg-gray-700/30 ${player.hallOfFame ? 'bg-yellow-900/20' : ''}`}>
+                                  <tr key={idx} className={`border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer ${player.hallOfFame ? 'bg-yellow-900/20' : ''}`} onClick={() => openModal(player)}>
                                     <td className="py-1.5 px-2">
                                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                                         player.draftRound === 'ドラフト1位' ? 'bg-red-600/60 text-red-200' :
@@ -668,7 +679,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       const val = currentCategory.getValue(player.careerStats);
                       const isP = player.position === 'pitcher';
                       return (
-                        <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                        <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer" onClick={() => openModal(player)}>
                           <td className="py-1.5 px-2 text-center">
                             <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
                               {idx + 1}
@@ -1020,6 +1031,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           </div>
         )}
       </div>
+      {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
     </div>
   );
 };

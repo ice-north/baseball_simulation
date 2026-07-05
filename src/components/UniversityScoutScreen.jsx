@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PlayerDetailModal from './PlayerDetailModal.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import {
@@ -41,6 +42,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const [selectionPicked, setSelectionPicked] = useState([]);
   const [selSortKey, setSelSortKey] = useState(null);
   const [selSortAsc, setSelSortAsc] = useState(false);
+  const [modalPlayer, setModalPlayer] = useState(null);
 
   useEffect(() => {
     if (candidates.length === 0 && highSchoolPool.players?.length > 0 && !scoutData.initialized) {
@@ -666,6 +668,10 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             </button>
                           ) : (
                           <div className="flex gap-1">
+                            <button onClick={() => setModalPlayer(p)}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-600 text-gray-200 hover:bg-gray-500 transition">
+                              詳細
+                            </button>
                             <button onClick={() => handleWatch(p.id)}
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
                                 p._watching ? 'bg-yellow-700 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
@@ -716,6 +722,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
           </div>
         )}
       </div>
+      {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
     </div>
   );
 };
