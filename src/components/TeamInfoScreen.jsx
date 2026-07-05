@@ -132,7 +132,7 @@ const TeamInfoScreen = ({ gameMode }) => {
 
     return (
       <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setSelectedPlayer(null)}>
-        <div className="bg-gray-800 rounded-lg p-6 max-w-3xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-white">{player.name}</h2>
             <button onClick={() => setSelectedPlayer(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
@@ -191,27 +191,21 @@ const TeamInfoScreen = ({ gameMode }) => {
           </div>
 
           {detailTab === 'ability' && (<>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            {/* 野手能力 */}
+          <div className="grid grid-cols-3 gap-4 mb-4">
+
+            {/* フィジカル系 */}
             <div className="bg-gray-700 rounded p-3">
-              <h3 className="text-sm font-bold text-white mb-2">打撃・走塁・守備</h3>
-              <StatBar label="ミート" value={player.batting?.meet || 0} />
-              <StatBar label="パワー" value={player.batting?.power || 0} />
+              <h3 className="text-sm font-bold text-blue-300 mb-2">フィジカル系</h3>
               <StatBar label="走力" value={player.physical?.speed || 0} />
               <StatBar label="肩力" value={player.physical?.arm || 0} />
-              <StatBar label="守備" value={player.fielding?.defense || 0} />
-              <StatBar label="選球眼" value={player.batting?.eye || 0} />
-              <StatBar label="盗塁" value={player.batting?.steal || 0} />
-              <StatBar label="バント" value={player.batting?.bunt || 0} />
               <div className="border-t border-gray-600 mt-2 pt-2">
                 <StatBar label="体力" value={player.physical?.bodyStamina || 50} />
                 <StatBar label="回復" value={player.physical?.recovery || 50} />
               </div>
               <div className="border-t border-gray-600 mt-2 pt-2">
-                <StatBar label="プロ意識" value={player.personality?.discipline || 50} />
-                <StatBar label="精神力" value={player.personality?.mental || 50} />
+                <StatBar label="筋力" value={player.physical?.muscle ?? 50} />
               </div>
-              <div className="mt-2 text-xs text-gray-400 grid grid-cols-2 gap-1">
+              <div className="border-t border-gray-600 mt-2 pt-2 text-xs text-gray-400 space-y-1">
                 <div>体格: <span className="text-white">{player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}</span></div>
                 <div>成長: <span className={`font-bold ${(player.growthPotential ?? 1.0) >= 1.1 ? 'text-orange-400' : 'text-white'}`}>
                   {Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0))).toFixed(2)}
@@ -219,39 +213,60 @@ const TeamInfoScreen = ({ gameMode }) => {
               </div>
             </div>
 
-            {/* 投手能力 */}
+            {/* 技術系 */}
             <div className="bg-gray-700 rounded p-3">
-              <h3 className="text-sm font-bold text-white mb-2">投球能力</h3>
-              <StatBar label="球速" value={player.pitching?.velocity || 0} max={165} />
-              <StatBar label="制球" value={player.pitching?.control || 0} />
-              <StatBar label="スタミナ" value={player.pitching?.stamina || 0} />
-              <StatBar label="回転" value={player.pitching?.spinRate ?? 50} />
-              <div className="mt-2 text-xs text-gray-400">
-                フォーム: <span className="text-white">{formName}</span>
+              <h3 className="text-sm font-bold text-green-300 mb-2">技術系</h3>
+              {player.batting && (<>
+                <div className="text-xs text-gray-500 mb-1">打撃・走塁</div>
+                <StatBar label="ミート" value={player.batting?.meet || 0} />
+                <StatBar label="パワー" value={player.batting?.power || 0} />
+                <StatBar label="選球眼" value={player.batting?.eye || 0} />
+                <StatBar label="盗塁" value={player.batting?.steal || 0} />
+                <StatBar label="バント" value={player.batting?.bunt || 0} />
+              </>)}
+              <div className={player.batting ? 'border-t border-gray-600 mt-2 pt-2' : ''}>
+                <div className="text-xs text-gray-500 mb-1">守備</div>
+                <StatBar label="守備" value={player.fielding?.defense || 0} />
+                {catcherLead !== undefined && <StatBar label="リード" value={catcherLead} />}
               </div>
-              {/* 変化球 */}
-              <div className="mt-2">
-                <div className="text-xs text-gray-400 mb-1">変化球:</div>
-                {arsenal.length > 0 ? arsenal.filter(p => p.type !== 'straight').map((pitch, i) => (
-                  <div key={i} className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs text-white w-24">{BALL_EFFECTS[pitch.type]?.name || pitch.type}</span>
-                    <div className="flex-1 bg-gray-600 rounded h-2">
-                      <div className="h-2 rounded bg-purple-500" style={{ width: `${pitch.level}%` }} />
-                    </div>
-                    <span className={`text-xs font-bold ${getAbilityColor(pitch.level)}`}>{pitch.level}</span>
-                  </div>
-                )) : <div className="text-xs text-gray-500">なし</div>}
-              </div>
+              {player.pitching && (<>
+                <div className="border-t border-gray-600 mt-2 pt-2">
+                  <div className="text-xs text-gray-500 mb-1">投球</div>
+                  <StatBar label="球速" value={player.pitching?.velocity || 0} max={165} />
+                  <StatBar label="制球" value={player.pitching?.control || 0} />
+                  <StatBar label="スタミナ" value={player.pitching?.stamina || 0} />
+                  <StatBar label="回転" value={player.pitching?.spinRate ?? 50} />
+                </div>
+              </>)}
+            </div>
+
+            {/* 精神系 + 投球詳細 */}
+            <div className="bg-gray-700 rounded p-3">
+              <h3 className="text-sm font-bold text-yellow-300 mb-2">精神系</h3>
+              <StatBar label="プロ意識" value={player.personality?.discipline || 50} />
+              <StatBar label="精神力" value={player.personality?.mental || 50} />
+              {player.pitching && (<>
+                <div className="border-t border-gray-600 mt-2 pt-2 text-xs text-gray-400">
+                  フォーム: <span className="text-white">{formName}</span>
+                </div>
+                <div className="mt-2">
+                  <div className="text-xs text-gray-500 mb-1">変化球</div>
+                  {arsenal.filter(p => p.type !== 'straight').length > 0
+                    ? arsenal.filter(p => p.type !== 'straight').map((pitch, i) => (
+                      <div key={i} className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs text-white w-20">{BALL_EFFECTS[pitch.type]?.name || pitch.type}</span>
+                        <div className="flex-1 bg-gray-600 rounded h-2">
+                          <div className="h-2 rounded bg-purple-500" style={{ width: `${pitch.level}%` }} />
+                        </div>
+                        <span className={`text-xs font-bold ${getAbilityColor(pitch.level)}`}>{pitch.level}</span>
+                      </div>
+                    ))
+                    : <div className="text-xs text-gray-500">なし</div>
+                  }
+                </div>
+              </>)}
             </div>
           </div>
-
-          {/* キャッチャーリード */}
-          {catcherLead !== undefined && (
-            <div className="bg-gray-700 rounded p-3 mb-4">
-              <h3 className="text-sm font-bold text-white mb-2">捕手能力</h3>
-              <StatBar label="リード" value={catcherLead} />
-            </div>
-          )}
 
           {/* ポジション適性 */}
           <div className="bg-gray-700 rounded p-3 mb-4">
