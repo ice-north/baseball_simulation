@@ -404,7 +404,7 @@ function decompressFromBase64(input) {
  * @returns {Object} Optimized save data
  */
 function stripPoolPlayer(p) {
-  const { seasonStats, careerStats, careerHistory, gameLog, lastAtBat, lastPitch, ...core } = p;
+  const { seasonStats, careerStats, gameLog, lastAtBat, lastPitch, ...core } = p;
   if (core.catching && core.position !== 'catcher' && !core.catching.lead) delete core.catching;
   return core;
 }

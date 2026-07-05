@@ -1371,7 +1371,7 @@ export function getUniversityPoolSummary() {
 function clonePlayerLite(p) {
   const clone = {};
   for (const key of Object.keys(p)) {
-    if (key === 'seasonStats' || key === 'careerStats' || key === 'careerHistory' || key === 'gameLog' || key === 'lastAtBat' || key === 'lastPitch') continue;
+    if (key === 'seasonStats' || key === 'careerStats' || key === 'gameLog' || key === 'lastAtBat' || key === 'lastPitch') continue;
     const v = p[key];
     clone[key] = (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
   }
