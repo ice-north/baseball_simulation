@@ -349,15 +349,15 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       <th className="py-1 px-1 text-gray-500">出身校</th>
                       <SelTh label="球速" sortK="velocity" title="球速でソート" />
                       <SelTh label="制球" sortK="control" title="制球でソート" />
-                      <SelTh label="ス" sortK="stamina" title="スタミナでソート" />
-                      <SelTh label="ミ" sortK="meet" title="ミートでソート" />
-                      <SelTh label="パ" sortK="power" title="パワーでソート" />
-                      <SelTh label="眼" sortK="eye" title="選球眼でソート" />
-                      <SelTh label="走" sortK="speed" title="走力でソート" />
-                      <SelTh label="肩" sortK="arm" title="肩力でソート" />
+                      <SelTh label="スタ" sortK="stamina" title="スタミナでソート" />
+                      <SelTh label="ミー" sortK="meet" title="ミートでソート" />
+                      <SelTh label="パワ" sortK="power" title="パワーでソート" />
+                      <SelTh label="選眼" sortK="eye" title="選球眼でソート" />
+                      <SelTh label="走力" sortK="speed" title="走力でソート" />
+                      <SelTh label="肩力" sortK="arm" title="肩力でソート" />
                       <SelTh label="筋力" sortK="bodyStamina" title="体力でソート" />
-                      <SelTh label="器" sortK="dexterity" title="器用さでソート" />
-                      <SelTh label="守" sortK="defense" title="守備でソート" />
+                      <SelTh label="器用" sortK="dexterity" title="器用さでソート" />
+                      <SelTh label="守備" sortK="defense" title="守備でソート" />
                       <SelTh label="精神" sortK="mental" title="精神力でソート" />
                       <SelTh label="プロ" sortK="professionalism" title="プロ意識でソート" />
                       <SelTh label="成長" sortK="growthPotential" title="成長力でソート" />
@@ -527,15 +527,15 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     <th className="py-1 px-1 text-gray-500">情報</th>
                     <SortHeader k="velocity" label="球速" />
                     <SortHeader k="control" label="制球" />
-                    <SortHeader k="stamina" label="ス" />
-                    <SortHeader k="meet" label="ミ" />
-                    <SortHeader k="power" label="パ" />
-                    <SortHeader k="eye" label="眼" />
-                    <SortHeader k="speed" label="走" />
-                    <SortHeader k="arm" label="肩" />
+                    <SortHeader k="stamina" label="スタ" />
+                    <SortHeader k="meet" label="ミー" />
+                    <SortHeader k="power" label="パワ" />
+                    <SortHeader k="eye" label="選眼" />
+                    <SortHeader k="speed" label="走力" />
+                    <SortHeader k="arm" label="肩力" />
                     <SortHeader k="bodyStamina" label="筋力" />
-                    <SortHeader k="dexterity" label="器" />
-                    <SortHeader k="defense" label="守" />
+                    <SortHeader k="dexterity" label="器用" />
+                    <SortHeader k="defense" label="守備" />
                     <SortHeader k="mental" label="精神" />
                     <SortHeader k="professionalism" label="プロ" />
                     <SortHeader k="growth" label="成長" />
