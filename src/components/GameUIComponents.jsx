@@ -413,7 +413,7 @@ export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
 );
 
 // --- SidebarButton コンポーネント ---
-const BLOCKING_VIEWS = new Set(['draft', 'contract', 'tryout', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement', 'university_scout']);
+const BLOCKING_VIEWS = new Set(['draft', 'contract', 'tryout', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement']);
 
 export const SidebarButton = ({ view, icon, label, color = 'green', onActiveClick, screenMode, managementView, setScreenMode, setManagementView }) => {
   const isActive = screenMode === 'management' && managementView === view;

@@ -413,6 +413,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         arm: hidden,
         dexterity: hidden,
         recovery: hidden,
+        bodyStamina: hidden,
       },
       fielding: {
         defense: visible.has('defense') ? blur(player.fielding?.defense || 0) : hidden,
@@ -439,6 +440,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
         arm: blur(player.physical?.arm || 0),
         dexterity: blur(player.physical?.dexterity || 50),
         recovery: hidden,
+        bodyStamina: blur(player.physical?.bodyStamina || 50),
       },
       fielding: {
         defense: isPitcher ? hidden : blur(player.fielding?.defense || 0),
@@ -465,6 +467,7 @@ function obscureAbilities(player, accuracy, stage = 'full') {
       arm: blur(player.physical?.arm || 0),
       dexterity: blur(player.physical?.dexterity || 50),
       recovery: blur(player.physical?.recovery || 50),
+      bodyStamina: blur(player.physical?.bodyStamina || 50),
     },
     fielding: {
       defense: blur(player.fielding?.defense || 0),

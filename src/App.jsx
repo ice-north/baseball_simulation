@@ -2527,7 +2527,7 @@ if (newOuts === 3) {
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
-          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement', 'university_scout'].includes(managementView) && <Sidebar
+          {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) && <Sidebar
             gameMode={gameMode}
             userTeamName={userTeamName}
             seasonData={seasonData}
@@ -2541,7 +2541,7 @@ if (newOuts === 3) {
             importTeam={(name) => importTeam(name)}
           />}
 
-          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement', 'university_scout'].includes(managementView) ? 'ml-56' : ''}>
+          <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
               <div className="p-2">
           {/* 管理画面へボタン（采配モード中は非表示） */}
