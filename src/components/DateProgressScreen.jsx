@@ -118,16 +118,17 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const loseReliefIds = new Set(gameResult.pitcherAppearances?.[loseTeamKey]?.map(a => a.id) || []);
     const winStarter = winPitchers.find(p => !winReliefIds.has(p.id)) || winPitchers[0];
 
-    // 勝ち投手: 先発が5回以上投げてチームが最後までリードを守れば先発の勝ち
-    // そうでなければ、リードを奪った時点で投げていたリリーフ（最多投球回の中継ぎ）
+    // 勝ち投手: 先発が5回（15アウト）以上→先発の勝ち
+    // それ以外→先発を除く最多投球回リリーフの勝ち（先発は5回未満では勝ち資格なし）
     if (winStarter && winStarter.gameStats.pitching.outs >= 15) {
       decisions.winningPitcher = winStarter;
     } else {
-      const relievers = winPitchers.filter(p => p !== winStarter || (winStarter && winStarter.gameStats.pitching.outs < 15));
+      const relievers = winPitchers.filter(p => p !== winStarter);
       if (relievers.length > 0) {
         relievers.sort((a, b) => b.gameStats.pitching.outs - a.gameStats.pitching.outs);
         decisions.winningPitcher = relievers[0];
       } else if (winPitchers.length > 0) {
+        // リリーフなし（雨天コールド等）のみ先発に付与
         decisions.winningPitcher = winPitchers[0];
       }
     }

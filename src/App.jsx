@@ -3609,10 +3609,14 @@ if (newOuts === 3) {
                 const winTeam = isHomeWin ? homeTeam : awayTeam;
                 const loseTeam = isHomeWin ? awayTeam : homeTeam;
 
-                // 勝利投手: 勝ちチームで最も長く投げた投手（先発5回以上 or 最多アウト）
+                // 勝利投手: 先発が5回（15アウト）以上→先発の勝ち、それ以外→最多投球回リリーフの勝ち
                 const winPitchers = winTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0).sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
                 const starter = winPitchers.find(p => p.originalPosition === 'pitcher' || p.battingOrder === 9);
-                const winPitcher = !isDraw ? (starter && (starter.stats?.pitching?.outs || 0) >= 15 ? starter : winPitchers[0]) : null;
+                const winPitcher = !isDraw ? (
+                  starter && (starter.stats?.pitching?.outs || 0) >= 15
+                    ? starter
+                    : winPitchers.find(p => p !== starter) || winPitchers[0]
+                ) : null;
 
                 // 敗戦投手: 先発が失点していれば先発、そうでなければ最多失点のリリーフ
                 const losePitchers = loseTeam.players.filter(p => (p.stats?.pitching?.outs || 0) > 0);
@@ -3623,9 +3627,16 @@ if (newOuts === 3) {
                     : losePitchers.sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0))[0] || null
                 ) : null;
 
-                // セーブ投手: 勝ちチームの最後の投手（勝利投手と異なり、3アウト以上取得）
-                const lastPitcher = winPitchers.length > 1 ? winPitchers.find(p => p !== winPitcher && p.position === 'pitcher') || winPitchers.find(p => p !== winPitcher) : null;
-                const savePitcher = !isDraw && lastPitcher && lastPitcher !== winPitcher && (lastPitcher.stats?.pitching?.outs || 0) >= 3 ? lastPitcher : null;
+                // セーブ投手: 勝ちチームの最後の投手で以下のいずれか:
+                //   a) 3点差以内でリード時に1イニング以上(3アウト以上)
+                //   b) 3イニング以上(9アウト以上)
+                const scoreDiff = Math.abs(score.home - score.away);
+                const lastPitcher = winPitchers.length > 1
+                  ? [...winPitchers].filter(p => p !== winPitcher).sort((a, b) => (a.stats?.pitching?.outs || 0) - (b.stats?.pitching?.outs || 0))[0]
+                  : null;
+                const saveOuts = lastPitcher?.stats?.pitching?.outs || 0;
+                const savePitcher = !isDraw && lastPitcher && lastPitcher !== winPitcher &&
+                  ((scoreDiff <= 3 && saveOuts >= 3) || saveOuts >= 9) ? lastPitcher : null;
 
                 // 本塁打を打った選手
                 const hrHitters = [
