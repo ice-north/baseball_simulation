@@ -2337,6 +2337,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
         // QS/HQS判定（先発投手のみ）
         if (wasStarter) {
+          season.gamesStarted = (season.gamesStarted || 0) + 1;
           const innings = p.outs; // アウト数（18アウト = 6回）
           const earnedRuns = p.runsAllowed; // 簡易版：全て自責点
           // QS: 6回以上 && 自責点3以下

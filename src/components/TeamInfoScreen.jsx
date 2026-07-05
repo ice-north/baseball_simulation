@@ -28,7 +28,7 @@ const TeamInfoScreen = ({ gameMode }) => {
 
   const handlePitcherSort = (key) => {
     if (pitcherSortKey === key) setPitcherSortDir(pitcherSortDir === 'asc' ? 'desc' : 'asc');
-    else { setPitcherSortKey(key); setPitcherSortDir(['era', 'losses'].includes(key) ? 'asc' : 'desc'); }
+    else { setPitcherSortKey(key); setPitcherSortDir(['era', 'bb9', 'losses'].includes(key) ? 'asc' : 'desc'); }
   };
 
   const handleFielderSort = (key) => {
@@ -47,8 +47,13 @@ const TeamInfoScreen = ({ gameMode }) => {
 
   const getPitcherValue = (player, key) => {
     const stats = player.seasonStats?.pitching;
-    if (!stats) return 0;
-    if (key === 'era') return stats.inningsPitched > 0 ? (stats.earnedRuns * 27) / stats.inningsPitched : 999;
+    if (!stats) return key === 'era' || key === 'k9' || key === 'bb9' ? 999 : 0;
+    const ip = stats.inningsPitched || 0;
+    if (key === 'era') return ip > 0 ? (stats.earnedRuns * 27) / ip : 999;
+    if (key === 'k9') return ip > 0 ? (stats.strikeouts * 27) / ip : 0;
+    if (key === 'bb9') return ip > 0 ? (stats.walks * 27) / ip : 999;
+    if (key === 'qsPct') { const gs = stats.gamesStarted || 0; return gs > 0 ? (stats.qualityStarts || 0) / gs : 0; }
+    if (key === 'hqsPct') { const gs = stats.gamesStarted || 0; return gs > 0 ? (stats.highQualityStarts || 0) / gs : 0; }
     if (key === 'velocity') return player.pitching?.velocity || 0;
     if (key === 'control') return player.pitching?.control || 0;
     if (key === 'stamina') return player.pitching?.stamina || 0;
@@ -78,9 +83,14 @@ const TeamInfoScreen = ({ gameMode }) => {
 
   const pitchers = team.players.filter(p => p.position === 'pitcher').map(p => {
     const stats = p.seasonStats?.pitching;
-    const era = stats?.inningsPitched > 0 ? (stats.earnedRuns * 27) / stats.inningsPitched : null;
-    const ip = stats?.inningsPitched > 0 ? formatInnings(stats.inningsPitched) : '0';
-    return { ...p, _era: era, _ip: ip };
+    const ip = stats?.inningsPitched || 0;
+    const era = ip > 0 ? (stats.earnedRuns * 27) / ip : null;
+    const k9 = ip > 0 ? (stats.strikeouts * 27) / ip : null;
+    const bb9 = ip > 0 ? (stats.walks * 27) / ip : null;
+    const gs = stats?.gamesStarted || 0;
+    const qsPct = gs > 0 ? (stats.qualityStarts || 0) / gs * 100 : null;
+    const hqsPct = gs > 0 ? (stats.highQualityStarts || 0) / gs * 100 : null;
+    return { ...p, _era: era, _ip: ip > 0 ? formatInnings(ip) : '0', _k9: k9, _bb9: bb9, _qsPct: qsPct, _hqsPct: hqsPct, _gs: gs };
   });
   if (pitcherSortKey) {
     pitchers.sort((a, b) => {
@@ -153,7 +163,7 @@ const TeamInfoScreen = ({ gameMode }) => {
           <p className="text-xs text-gray-500 mb-3">クリックで詳細表示</p>
           {pitchers.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="min-w-max w-full text-xs">
                 <thead>
                   <tr className="bg-gray-600 text-gray-200">
                     <SortableHeader label="名前" sortKey="name" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} align="left" />
@@ -167,6 +177,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                     <SortableHeader label="回転" sortKey="spinRate" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="体力" sortKey="bodyStamina" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="試合" sortKey="games" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
+                    <SortableHeader label="先発" sortKey="gamesStarted" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="勝" sortKey="wins" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="敗" sortKey="losses" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="H" sortKey="holds" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
@@ -176,6 +187,10 @@ const TeamInfoScreen = ({ gameMode }) => {
                     <SortableHeader label="奪三振" sortKey="strikeouts" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="与四球" sortKey="walks" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <SortableHeader label="防御率" sortKey="era" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
+                    <SortableHeader label="K/9" sortKey="k9" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
+                    <SortableHeader label="BB/9" sortKey="bb9" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
+                    <SortableHeader label="QS%" sortKey="qsPct" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
+                    <SortableHeader label="HQS%" sortKey="hqsPct" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                   </tr>
                 </thead>
                 <tbody>
@@ -197,6 +212,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.spinRate ?? 50)}`}>{player.pitching?.spinRate ?? 50}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.bodyStamina || 50)}`}>{player.physical?.bodyStamina || 50}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.games || 0}</td>
+                        <td className="px-2 py-1 text-gray-300 text-center">{player._gs}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.wins || 0}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.losses || 0}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.holds || 0}</td>
@@ -207,6 +223,18 @@ const TeamInfoScreen = ({ gameMode }) => {
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.walks || 0}</td>
                         <td className="px-2 py-1 text-yellow-400 text-center font-bold">
                           {player._era !== null ? player._era.toFixed(2) : '-.--'}
+                        </td>
+                        <td className="px-2 py-1 text-cyan-400 text-center font-bold">
+                          {player._k9 !== null ? player._k9.toFixed(1) : '-.–'}
+                        </td>
+                        <td className="px-2 py-1 text-orange-400 text-center font-bold">
+                          {player._bb9 !== null ? player._bb9.toFixed(1) : '-.–'}
+                        </td>
+                        <td className="px-2 py-1 text-green-400 text-center font-bold">
+                          {player._qsPct !== null ? `${Math.round(player._qsPct)}%` : (player._gs > 0 ? '0%' : '—')}
+                        </td>
+                        <td className="px-2 py-1 text-blue-400 text-center font-bold">
+                          {player._hqsPct !== null ? `${Math.round(player._hqsPct)}%` : (player._gs > 0 ? '0%' : '—')}
                         </td>
                       </tr>
                     );
