@@ -186,6 +186,7 @@ function generateHighSchoolPlayer(id) {
     if (isPitcher) {
       // 投手登録二刀流: 投手能力メイン、打撃は野手水準（転向候補を上回る本物の両刀）
       const twoWayArm = Math.max(10, baseArm + r(8, 16));
+      const twoWayVelCap = getVelocityCap(twoWayArm);
       let velocity = Math.round(nrm(126, 7) + velTierBonus[tier]);
       if (isSideOrUnder) velocity -= 3;
       if (throws === 'left') velocity -= 3;
@@ -199,7 +200,7 @@ function generateHighSchoolPlayer(id) {
         defense: g(42, 10, 0.5, 5),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
         recovery: g(44, 10, 0, 15),
-        velocity: Math.max(110, Math.min(165, velocity)),
+        velocity: Math.max(110, Math.min(twoWayVelCap, velocity)),
         control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
         stamina: Math.max(60, Math.round(nrm(70, 12) + off * 1.5))
       };
@@ -224,8 +225,7 @@ function generateHighSchoolPlayer(id) {
     }
   } else if (isPitcher) {
     // ランクボーナスを大きめに設定（S才能投手で150km超えが年数人現れる程度）
-    // 初期生成時はvelCapを適用しない（18歳時点の球速は才能そのもの）
-    // velCapは成長フェーズで使用（肩力以上には鍛えられない）
+    // velCapは生成・成長すべてに適用（肩力が球速の物理的上限を決める）
     const velTierBonus = { S: 12, A: 6, B: 2, C: 0, D: -2, E: -4 };
     let velocity = Math.round(nrm(126, 9) + velTierBonus[tier]);
     if (isSideOrUnder) velocity -= 3;
@@ -261,6 +261,7 @@ function generateHighSchoolPlayer(id) {
     }
 
     const armValue = Math.max(10, baseArm + r(2, 8));
+    const velCap = getVelocityCap(armValue);
     abilities = isPositionCandidate ? {
       // 野手向き投手: 打撃能力は準野手レベル、転向候補
       meet:  g(30, 9, 0.7, 12),
@@ -272,7 +273,7 @@ function generateHighSchoolPlayer(id) {
       defense: g(40, 10, 0.5, 5),
       bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(44, 10, 0, 15),
-      velocity: Math.max(110, Math.min(165, velocity)),
+      velocity: Math.max(110, Math.min(velCap, velocity)),
       control: Math.max(5, control),
       stamina: Math.max(60, stamina)
     } : {
@@ -286,7 +287,7 @@ function generateHighSchoolPlayer(id) {
       defense: g(36, 10, 0.4, 1),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(43, 10, 0, 15),
-      velocity: Math.max(110, Math.min(165, velocity)),
+      velocity: Math.max(110, Math.min(velCap, velocity)),
       control: Math.max(5, control),
       stamina: Math.max(60, stamina)
     };
