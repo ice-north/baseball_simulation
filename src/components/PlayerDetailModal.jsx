@@ -63,6 +63,15 @@ export default function PlayerDetailModal({ player, onClose }) {
             }
             if (player.previousTeam) steps.push({ label: player.previousTeam, type: 'corporate' });
           }
+          // careerHistoryに大学ステップがなくても、player.universityTeamNameがあれば挿入
+          const uniName = player.universityTeamName || player.universityName;
+          if (uniName && !steps.some(s => s.type === 'university')) {
+            let insertIdx = 0;
+            for (let i = steps.length - 1; i >= 0; i--) {
+              if (steps[i].type === 'highschool') { insertIdx = i + 1; break; }
+            }
+            steps.splice(insertIdx, 0, { label: uniName, type: 'university' });
+          }
           if (player.draftInfo) {
             steps.push({ label: `${player.draftInfo.year}年目 ${player.draftInfo.round}巡目入団`, type: 'draft' });
           }
