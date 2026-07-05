@@ -21,6 +21,8 @@ const FILTER_DEFS = [
   { key: 'eye', label: '選球眼', get: p => p.batting?.eye || 0 },
   { key: 'speed', label: '走力', get: p => p.physical?.speed || 0 },
   { key: 'arm', label: '肩力', get: p => p.physical?.arm || 0 },
+  { key: 'bodyStamina', label: '筋力', get: p => p.physical?.bodyStamina || 0 },
+  { key: 'dexterity', label: '器用さ', get: p => p.physical?.dexterity || 0 },
   { key: 'defense', label: '守備', get: p => p.fielding?.defense || 0 },
   { key: 'steal', label: '盗塁', get: p => p.batting?.steal || 0 },
   { key: 'velocity', label: '球速', get: p => p.pitching?.velocity || 0, min: 100, max: 170, step: 1 },
@@ -250,6 +252,8 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="power" w="w-7">パ</SortTh>
                 <SortTh k="speed" w="w-7">走</SortTh>
                 <SortTh k="arm" w="w-7">肩</SortTh>
+                <SortTh k="bodyStamina" w="w-7">筋力</SortTh>
+                <SortTh k="dexterity" w="w-7">器用</SortTh>
                 <SortTh k="defense" w="w-7">守</SortTh>
                 <SortTh k="eye" w="w-7">眼</SortTh>
                 <SortTh k="steal" w="w-7">盗</SortTh>
@@ -290,6 +294,8 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.power || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.speed || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.arm || 0} /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.bodyStamina || 0} /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.dexterity || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.fielding?.defense || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.eye || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.steal || 0} /></td>
@@ -341,7 +347,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={gameMode === 'university' ? 21 : 20} className="py-8 text-center text-gray-500">
+                <tr><td colSpan={gameMode === 'university' ? 23 : 22} className="py-8 text-center text-gray-500">
                   {sources.highschool && !sources.university && !sources.released && !sources.teams && highSchoolPool.players.length === 0
                     ? '高校生プールは4月に生成されます。4月以降に再度確認してください。'
                     : sources.highschool && highSchoolPool.players.length === 0
