@@ -204,6 +204,7 @@ const TeamInfoScreen = ({ gameMode }) => {
               </div>
               <div className="border-t border-gray-600 mt-2 pt-2">
                 <StatBar label="筋力" value={player.physical?.muscle ?? 50} />
+                <StatBar label="器用さ" value={player.physical?.dexterity ?? 50} />
               </div>
               <div className="border-t border-gray-600 mt-2 pt-2 text-xs text-gray-400 space-y-1">
                 <div>体格: <span className="text-white">{player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}</span></div>
@@ -229,40 +230,38 @@ const TeamInfoScreen = ({ gameMode }) => {
                 <StatBar label="守備" value={player.fielding?.defense || 0} />
                 {catcherLead !== undefined && <StatBar label="リード" value={catcherLead} />}
               </div>
-              {player.pitching && (<>
-                <div className="border-t border-gray-600 mt-2 pt-2">
-                  <div className="text-xs text-gray-500 mb-1">投球</div>
-                  <StatBar label="球速" value={player.pitching?.velocity || 0} max={165} />
-                  <StatBar label="制球" value={player.pitching?.control || 0} />
-                  <StatBar label="スタミナ" value={player.pitching?.stamina || 0} />
-                  <StatBar label="回転" value={player.pitching?.spinRate ?? 50} />
-                </div>
-              </>)}
             </div>
 
-            {/* 精神系 + 投球詳細 */}
+            {/* 精神系 + 投球系 */}
             <div className="bg-gray-700 rounded p-3">
               <h3 className="text-sm font-bold text-yellow-300 mb-2">精神系</h3>
               <StatBar label="プロ意識" value={player.personality?.discipline || 50} />
               <StatBar label="精神力" value={player.personality?.mental || 50} />
               {player.pitching && (<>
-                <div className="border-t border-gray-600 mt-2 pt-2 text-xs text-gray-400">
-                  フォーム: <span className="text-white">{formName}</span>
-                </div>
-                <div className="mt-2">
-                  <div className="text-xs text-gray-500 mb-1">変化球</div>
-                  {arsenal.filter(p => p.type !== 'straight').length > 0
-                    ? arsenal.filter(p => p.type !== 'straight').map((pitch, i) => (
-                      <div key={i} className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs text-white w-20">{BALL_EFFECTS[pitch.type]?.name || pitch.type}</span>
-                        <div className="flex-1 bg-gray-600 rounded h-2">
-                          <div className="h-2 rounded bg-purple-500" style={{ width: `${pitch.level}%` }} />
+                <div className="border-t border-gray-600 mt-3 pt-2">
+                  <h3 className="text-sm font-bold text-red-300 mb-2">投球系</h3>
+                  <StatBar label="球速" value={player.pitching?.velocity || 0} max={165} />
+                  <StatBar label="制球" value={player.pitching?.control || 0} />
+                  <StatBar label="スタミナ" value={player.pitching?.stamina || 0} />
+                  <StatBar label="回転" value={player.pitching?.spinRate ?? 50} />
+                  <div className="mt-2 text-xs text-gray-400">
+                    フォーム: <span className="text-white">{formName}</span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="text-xs text-gray-500 mb-1">変化球</div>
+                    {arsenal.filter(p => p.type !== 'straight').length > 0
+                      ? arsenal.filter(p => p.type !== 'straight').map((pitch, i) => (
+                        <div key={i} className="flex items-center gap-2 mb-0.5">
+                          <span className="text-xs text-white w-20">{BALL_EFFECTS[pitch.type]?.name || pitch.type}</span>
+                          <div className="flex-1 bg-gray-600 rounded h-2">
+                            <div className="h-2 rounded bg-purple-500" style={{ width: `${pitch.level}%` }} />
+                          </div>
+                          <span className={`text-xs font-bold ${getAbilityColor(pitch.level)}`}>{pitch.level}</span>
                         </div>
-                        <span className={`text-xs font-bold ${getAbilityColor(pitch.level)}`}>{pitch.level}</span>
-                      </div>
-                    ))
-                    : <div className="text-xs text-gray-500">なし</div>
-                  }
+                      ))
+                      : <div className="text-xs text-gray-500">なし</div>
+                    }
+                  </div>
                 </div>
               </>)}
             </div>
