@@ -132,13 +132,13 @@ const TeamInfoScreen = ({ gameMode }) => {
 
     return (
       <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setSelectedPlayer(null)}>
-        <div className="bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-          <div className="flex justify-between items-center mb-4">
+        <div className="bg-gray-800 rounded-lg p-6 max-w-5xl w-full mx-4 h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="flex justify-between items-center mb-4 flex-shrink-0">
             <h2 className="text-2xl font-bold text-white">{player.name}</h2>
             <button onClick={() => setSelectedPlayer(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
           </div>
 
-          <div className="grid grid-cols-4 gap-2 text-sm text-gray-300 mb-4">
+          <div className="grid grid-cols-4 gap-2 text-sm text-gray-300 mb-4 flex-shrink-0">
             <div>守備: <span className="text-white">{POSITION_NAMES[player.position] || player.position}</span></div>
             <div>年齢: <span className="text-white">{player.age || '?'}歳</span></div>
             <div>投: <span className="text-white">{player.physical?.throws === 'left' ? '左' : '右'}</span></div>
@@ -179,7 +179,7 @@ const TeamInfoScreen = ({ gameMode }) => {
           })()}
 
           {/* タブ切り替え */}
-          <div className="flex gap-1 mb-4 border-b border-gray-600">
+          <div className="flex gap-1 mb-4 border-b border-gray-600 flex-shrink-0">
             {['ability', 'stats', 'abilityHistory'].map(tab => (
               <button key={tab}
                 className={`px-4 py-2 text-sm font-bold rounded-t transition ${detailTab === tab ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}
@@ -189,6 +189,9 @@ const TeamInfoScreen = ({ gameMode }) => {
               </button>
             ))}
           </div>
+
+          {/* タブコンテンツ（全タブ共通の固定高さエリア） */}
+          <div className="flex-1 overflow-y-auto min-h-0">
 
           {detailTab === 'ability' && (<>
           <div className="grid grid-cols-3 gap-4 mb-4">
@@ -575,6 +578,8 @@ const TeamInfoScreen = ({ gameMode }) => {
               </div>
             );
           })()}
+
+          </div>{/* end タブコンテンツ */}
         </div>
       </div>
     );
