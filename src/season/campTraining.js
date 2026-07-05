@@ -35,7 +35,7 @@ export const TRAINING_MENUS = {
     icon: '🏃',
     description: '走力・盗塁・バントを強化',
     targets: ['speed', 'steal', 'bunt'],
-    growthMultipliers: { speed: 1.5, bunt: 0.5 },
+    growthMultipliers: { speed: 0.75, bunt: 0.5 },
     category: 'batting'
   },
   fielding: {
@@ -246,7 +246,8 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
 
   switch (subType) {
     case 'running': {
-      const spd = growthAmount();
+      // 走力は才能依存が強いため半減（50%の確率で適用）
+      const spd = Math.random() < 0.5 ? growthAmount() : 0;
       if (spd > 0 && player.physical) {
         player.physical.speed = Math.min(100, (player.physical.speed || 50) + spd);
         growthReport.push({ statName: '走力', before: player.physical.speed - spd, after: player.physical.speed, growth: spd });
@@ -543,10 +544,12 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
     }
     case 'long_throw': {
       if (player.physical) {
+        // 肩力は才能依存が強いため半減（50%の確率で適用）
         const armRaw = Math.random() < 0.5 ? (Math.random() < 0.35 ? 3 : Math.random() < 0.5 ? 2 : 1) : (Math.random() < 0.3 ? 1 : 0);
-        if (armRaw > 0) {
+        const armRawHalved = Math.random() < 0.5 ? armRaw : 0;
+        if (armRawHalved > 0) {
           const oldArm = player.physical.arm || 50;
-          const armGain = Math.min(armRaw, 100 - oldArm);
+          const armGain = Math.min(armRawHalved, 100 - oldArm);
           if (armGain > 0) {
             player.physical.arm = oldArm + armGain;
             growthReport.push({ statName: '肩力', before: oldArm, after: player.physical.arm, growth: armGain });
@@ -562,6 +565,18 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
                 }
               }
             }
+          }
+        }
+      }
+      // 回転（ノビ）: 投手は遠投で回転数を伸ばせる（40%で+1、15%で+2）
+      if (player.pitching) {
+        const spinRaw = Math.random() < 0.4 ? (Math.random() < 0.15 ? 2 : 1) : 0;
+        if (spinRaw > 0) {
+          const oldSpin = player.pitching.spinRate || 50;
+          if (oldSpin < 100) {
+            const spinGain = Math.min(spinRaw, 100 - oldSpin);
+            player.pitching.spinRate = oldSpin + spinGain;
+            growthReport.push({ statName: '回転/ノビ', before: oldSpin, after: player.pitching.spinRate, growth: spinGain });
           }
         }
       }
