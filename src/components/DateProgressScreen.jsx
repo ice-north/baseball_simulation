@@ -3366,8 +3366,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 社会人トーナメント（独立・大学モード用） */}
-          {!isCorporate && WORLD_DATA.initialized && (() => {
+          {/* 社会人トーナメント（独立リーグモード用） */}
+          {!isCorporate && !isUniversity && WORLD_DATA.initialized && (() => {
             const corpToshi = WORLD_DATA.corporateToshitaikou;
             const corpNS = WORLD_DATA.corporateNihonSenshuken;
             const corpCS = WORLD_DATA.corporateClubSenshuken;
