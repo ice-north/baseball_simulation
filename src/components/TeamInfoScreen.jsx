@@ -488,7 +488,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                       }).join(', ');
                       return (
                         <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
-                          <td className="px-2 py-1 text-white font-bold">{h.year}年目</td>
+                          <td className="px-2 py-1 text-white font-bold">{i + 1}年目</td>
                           <td className="px-2 py-1 text-center">{a.age}歳</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.velocity)}>{a.velocity}</span>{diff(a, prevA, 'velocity')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.control)}>{a.control}</span>{diff(a, prevA, 'control')}</td>
@@ -547,7 +547,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                       };
                       return (
                         <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
-                          <td className="px-2 py-1 text-white font-bold">{h.year}年目</td>
+                          <td className="px-2 py-1 text-white font-bold">{i + 1}年目</td>
                           <td className="px-2 py-1 text-center">{a.age}歳</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.meet)}>{a.meet}</span>{diff(a, prevA, 'meet')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{diff(a, prevA, 'power')}</td>
