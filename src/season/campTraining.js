@@ -296,6 +296,14 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           growthReport.push({ statName: '走力', before: oldSpd, after: player.physical.speed, growth: gainRaw });
         }
       }
+      // 筋トレで筋力(muscle)が必ず+2上昇（成長倍率に影響する隠しパラメータ）
+      if (player.physical) {
+        const oldMuscle = player.physical.muscle ?? 50;
+        if (oldMuscle < 100) {
+          player.physical.muscle = Math.min(100, oldMuscle + 2);
+          growthReport.push({ statName: '筋力', before: oldMuscle, after: player.physical.muscle, growth: 2 });
+        }
+      }
       break;
     }
     case 'stretch': {
