@@ -420,7 +420,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                             'bg-yellow-700/70 text-yellow-200'
                                           }`}>{roundLabel}</span>
                                         </td>
-                                        <td className="py-1 pl-1 text-white font-bold text-xs whitespace-nowrap" style={{ minWidth: '7em' }}>{entry.name}</td>
+                                        <td className="py-1 pl-1 text-white font-bold text-xs whitespace-nowrap cursor-pointer hover:text-yellow-300 transition" style={{ minWidth: '7em' }} onClick={() => openModal(entry)}>{entry.name}</td>
                                         <td className="py-1 whitespace-nowrap pl-1">
                                           <span className="text-blue-300">{getPositionName(entry.position)}</span>
                                           <span className="inline-block w-2" />

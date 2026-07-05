@@ -668,10 +668,6 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             </button>
                           ) : (
                           <div className="flex gap-1">
-                            <button onClick={() => setModalPlayer(p)}
-                              className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-600 text-gray-200 hover:bg-gray-500 transition">
-                              詳細
-                            </button>
                             <button onClick={() => handleWatch(p.id)}
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
                                 p._watching ? 'bg-yellow-700 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
