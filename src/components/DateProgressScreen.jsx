@@ -81,10 +81,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const team = TEAMS_DATA[teamName];
     if (!team || !team.pitchingRotation?.starters?.length) return null;
     const rotation = team.pitchingRotation;
-    const validStarters = rotation.starters.filter(id => team.players.some(p => p.id === id));
-    if (validStarters.length === 0) return null;
-    const index = (rotation.currentStarterIndex || 0) % validStarters.length;
-    return team.players.find(p => p.id === validStarters[index]) || null;
+    const starters = rotation.starters;
+    if (!starters.length) return null;
+    // autoSimulation と同じロジック: currentStarterIndex で直接引く
+    const index = (rotation.currentStarterIndex || 0) % starters.length;
+    const exact = team.players.find(p => p.id === starters[index]);
+    if (exact) return exact;
+    // ゾンビIDの場合は次の有効な先発を返す
+    for (let i = 1; i < starters.length; i++) {
+      const candidate = team.players.find(p => p.id === starters[(index + i) % starters.length]);
+      if (candidate) return candidate;
+    }
+    return null;
   };
 
   const determinePitcherDecisions = (gameResult, homeTeamData, awayTeamData) => {
