@@ -58,10 +58,15 @@ export default function PlayerDetailModal({ player, onClose }) {
           } else {
             const uniName = player.universityTeamName || player.universityName;
             if (uniName) {
-              steps.push({ label: '高校卒', type: 'highschool' });
+              steps.push({ label: player.highSchool?.name || '高校卒', type: 'highschool' });
               steps.push({ label: uniName, type: 'university' });
             }
             if (player.previousTeam) steps.push({ label: player.previousTeam, type: 'corporate' });
+          }
+          // highschoolステップのラベルをplayer.highSchool.nameで上書き（古いデータ対応）
+          const hsName = player.highSchool?.name;
+          if (hsName) {
+            steps.forEach(s => { if (s.type === 'highschool') s.label = hsName; });
           }
           // careerHistoryに大学ステップがなくても、player.universityTeamNameがあれば挿入
           const uniName = player.universityTeamName || player.universityName;
