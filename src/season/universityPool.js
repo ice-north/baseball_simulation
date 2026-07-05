@@ -1294,7 +1294,7 @@ function distributeToCorporateTeams(gameYear) {
       p.isStarter = false;
       p.battingOrder = 0;
       if (!p.careerHistory) p.careerHistory = [];
-      p.careerHistory.push({ type: 'corporate_join', year: gameYear, label: `${teamInfo.name}入社` });
+      p.careerHistory.push({ type: 'corporate_join', year: gameYear, label: teamInfo.name });
       teamInfo.team.players.push(p);
       usedIndices.add(entry.idx);
       added++;
