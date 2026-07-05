@@ -26,11 +26,23 @@ export function getLeagueChampions(seasonKey, userSeasonData = null) {
     let champion = null;
 
     if (region.id === userRegion && userSeasonData) {
-      // ユーザーリーグ: seasonData.standings から取得
-      const standings = userSeasonData.standings;
-      if (standings && standings.length > 0) {
-        const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-        champion = sorted[0].team;
+      const userDiv = WORLD_DATA.universityLeague?.userDivision || 1;
+      if (!region.divisions || userDiv === 1) {
+        // ユーザーが1部（または部制なし）: userSeasonData.standings から取得
+        const standings = userSeasonData.standings;
+        if (standings && standings.length > 0) {
+          const sorted = [...standings].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          champion = sorted[0].team;
+        }
+      } else {
+        // ユーザーが2部以下: WORLD_DATA の1部standings から1部優勝チームを取得
+        // 2部優勝チームは全日本・明治神宮大会に出場資格なし
+        const league = WORLD_DATA.universityLeagues?.[region.id];
+        const seasonData = league?.[seasonKey];
+        if (seasonData?.standings1?.length > 0) {
+          const sorted = [...seasonData.standings1].sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+          champion = sorted[0].team;
+        }
       }
     } else {
       // 他リーグ: WORLD_DATA から取得
