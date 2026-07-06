@@ -2349,7 +2349,7 @@ export function advanceToNextYear(seasonData, allTeams) {
   }
 
   // 5.8. 独立リーグAIチームの補充（リリースプールから獲得＋新人生成）
-  if (!seasonData.settings?.corporateMode && !seasonData.settings?.universityMode) {
+  if (!seasonData.settings?.corporateMode) {
     replenishIndependentLeagueRosters(teamsAfterRetirement, currentYear);
   }
 
