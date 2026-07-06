@@ -85,11 +85,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (!starters.length) return null;
     // autoSimulation と同じロジック: currentStarterIndex で直接引く
     const index = (rotation.currentStarterIndex || 0) % starters.length;
-    const exact = team.players.find(p => p.id === starters[index]);
+    const exact = team.players.find(p => p.id === starters[index] && p.isActive !== false);
     if (exact) return exact;
-    // ゾンビIDの場合は次の有効な先発を返す
+    // ゾンビIDや非アクティブの場合は次の有効な先発を返す
     for (let i = 1; i < starters.length; i++) {
-      const candidate = team.players.find(p => p.id === starters[(index + i) % starters.length]);
+      const candidate = team.players.find(p => p.id === starters[(index + i) % starters.length] && p.isActive !== false);
       if (candidate) return candidate;
     }
     return null;
@@ -4120,14 +4120,14 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
           if (entry.position === 'pitcher' && rotationStarter) {
             return { ...rotationStarter, _position: 'pitcher', _battingOrder: entry.battingOrder };
           }
-          const player = team.players.find(p => p.id === entry.playerId);
+          const player = team.players.find(p => p.id === entry.playerId && p.isActive !== false);
           return player ? { ...player, _position: entry.position, _battingOrder: entry.battingOrder } : null;
         })
         .filter(Boolean);
       return starters;
     }
     return team.players
-      .filter(p => p.battingOrder > 0 && p.battingOrder <= 9)
+      .filter(p => p.battingOrder > 0 && p.battingOrder <= 9 && p.isActive !== false)
       .sort((a, b) => a.battingOrder - b.battingOrder);
   };
 

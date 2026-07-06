@@ -47,10 +47,16 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const [modalPlayer, setModalPlayer] = useState(null);
 
   const openModal = (entry) => {
+    // draftStats にドラフト時点の能力値スナップショットが入っている
+    const ds = entry.draftStats || {};
     const normalized = {
       ...entry,
-      physical: { ...(entry.physical || {}), throws: entry.throws || entry.physical?.throws || 'right' },
-      batting: { ...(entry.batting || {}), bats: entry.bats || entry.batting?.bats || 'right' },
+      physical: { ...(ds.physical || {}), ...(entry.physical || {}), throws: entry.throws || entry.physical?.throws || 'right' },
+      batting: { ...(ds.batting || {}), ...(entry.batting || {}), bats: entry.bats || entry.batting?.bats || 'right' },
+      fielding: ds.fielding || entry.fielding,
+      pitching: ds.pitching || entry.pitching,
+      positionFitness: ds.positionFitness || entry.positionFitness,
+      traits: ds.traits || entry.traits,
     };
     setModalPlayer(normalized);
   };

@@ -246,7 +246,7 @@ export const autoPlayGrandChampionship = (gc) => {
       const home = TEAMS_DATA[match.team1];
       const away = TEAMS_DATA[match.team2];
       if (home && away) {
-        const result = autoSimulateGame(match.team1, match.team2);
+        const result = autoSimulateGame(match.team1, match.team2, true);
         match.winner = result.winner;
         match.score = `${result.homeScore}-${result.awayScore}`;
       } else {

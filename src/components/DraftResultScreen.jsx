@@ -230,13 +230,28 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
     if (!currentTeamMap || isFirstRound) return [];
     const isIku = currentRound?.startsWith('育成');
     const roundPicks = new Set(draftedPlayers.filter(p => p.draftRound === currentRound).map(p => p.npbTeam));
-    return gridOrder.filter(t => {
+    const filtered = gridOrder.filter(t => {
       if (roundPicks.has(t.name)) return true;
       // 初回選択終了のみフラッグ開示に含める（2回目以降は即表示）
       // 育成ラウンドは育成内での初回を別途追跡
       const sc = isIku ? firstIkuSelectionComplete[t.name] : firstSelectionComplete[t.name];
       return sc === currentRoundIdx;
-    }).map(t => t.name);
+    });
+    // ウェーバー（下位から）か逆ウェーバー（上位から）かで発表順を変える
+    // 本指名: ドラフト2位(idx=1)=ウェーバー, 3位(idx=2)=逆ウェーバー, 4位(idx=3)=ウェーバー…
+    // 育成: 育成1巡目=ウェーバー, 育成2巡目=逆ウェーバー…
+    let isWaiverRound = false;
+    if (isIku) {
+      const ikuNum = parseInt(currentRound.match(/\d+/)?.[0] || '1');
+      isWaiverRound = ikuNum % 2 === 1;
+    } else {
+      const roundNum = parseInt(currentRound.match(/(\d+)/)?.[1] || '1');
+      // ドラフトN位 → yearProgressionSystemのround変数 = N-1
+      // round=1(2位)→ウェーバー, round=2(3位)→逆ウェーバー
+      isWaiverRound = roundNum >= 2 && (roundNum - 1) % 2 === 1;
+    }
+    const ordered = isWaiverRound ? [...filtered].reverse() : filtered;
+    return ordered.map(t => t.name);
   }, [currentTeamMap, isFirstRound, draftedPlayers, currentRound, gridOrder, firstSelectionComplete, firstIkuSelectionComplete, currentRoundIdx]);
 
   const collisionColors = useMemo(() => {
