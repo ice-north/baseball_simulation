@@ -2189,6 +2189,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                             })()}
                           </div>
                         )}
+                        {cell.eventLabel && cell.games.length > 0 && (
+                          <div className={`text-[10px] font-bold leading-tight mb-0.5 ${getEventColor(cell.eventLabel)}`}>{cell.eventLabel}</div>
+                        )}
                         {cell.games.length > 0 ? (
                           <div className="space-y-0">
                             {cell.games.map((game, gIdx) => {
