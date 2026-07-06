@@ -895,7 +895,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <span>スタッフを派遣して候補選手を発見・調査</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-24 text-gray-500 shrink-0">10月24日</span>
+                <span className="w-24 text-gray-500 shrink-0">10月第4木曜</span>
                 <span>NPBドラフト（有力選手がプロに指名される）</span>
               </div>
               <div className="flex items-center gap-2">

@@ -77,19 +77,36 @@ export const getDaysInMonth = (year, month) => {
 };
 
 /**
+ * 10月第4木曜日（NPBドラフト開催日）を返す
+ * @param {number} year - ゲーム内年度
+ * @returns {number} 日付（例: 24）
+ */
+export const getNPBDraftDay = (year) => {
+  // 10月1日の曜日を取得（0=日, 1=月, ..., 4=木, 6=土）
+  const oct1DayOfWeek = new Date(year, 9, 1).getDay();
+  // 最初の木曜日までの日数
+  const daysToFirstThursday = (4 - oct1DayOfWeek + 7) % 7;
+  const firstThursday = 1 + daysToFirstThursday;
+  return firstThursday + 21; // 第4木曜日 = 第1木曜日 + 21日
+};
+
+/**
  * 現在のフェーズを取得
  * @param {number} month
  * @param {number} day
  * @param {Object} [options] - { universityMode: bool }
+ * @param {number} [year] - ゲーム内年度（ドラフト日の曜日計算に使用）
  */
-export const getCurrentPhase = (month, day, options) => {
+export const getCurrentPhase = (month, day, options, year) => {
+  const draftDay = year ? getNPBDraftDay(year) : 24;
+
   if (options?.universityMode) {
     // 大学モード: プレーオフ/契約更改/トライアウトなし
     if (month >= 1 && month <= 3) return SEASON_PHASES.SPRING_CAMP;
     if (month >= 4 && month <= 9) return SEASON_PHASES.REGULAR_SEASON;
-    if (month === 10 && day < 24) return SEASON_PHASES.REGULAR_SEASON;
-    if (month === 10 && day === 24) return SEASON_PHASES.DRAFT;
-    if (month === 10 && day > 24) return SEASON_PHASES.REGULAR_SEASON;
+    if (month === 10 && day < draftDay) return SEASON_PHASES.REGULAR_SEASON;
+    if (month === 10 && day === draftDay) return SEASON_PHASES.DRAFT;
+    if (month === 10 && day > draftDay) return SEASON_PHASES.REGULAR_SEASON;
     if (month === 11 && day < 30) return SEASON_PHASES.REGULAR_SEASON; // 明治神宮大会は11月中旬〜下旬
     return SEASON_PHASES.OFF_SEASON;
   }
@@ -102,11 +119,11 @@ export const getCurrentPhase = (month, day, options) => {
     return SEASON_PHASES.REGULAR_SEASON;
   } else if (month === 10 && day >= 10 && day <= 20) {
     return SEASON_PHASES.PLAYOFFS;
-  } else if (month === 10 && day >= 21 && day < 24) {
+  } else if (month === 10 && day >= 21 && day < draftDay) {
     return SEASON_PHASES.OFF_SEASON;
-  } else if (month === 10 && day === 24) {
+  } else if (month === 10 && day === draftDay) {
     return SEASON_PHASES.DRAFT;
-  } else if (month === 10 && day > 24) {
+  } else if (month === 10 && day > draftDay) {
     return SEASON_PHASES.OFF_SEASON;
   } else if (month === 11 && day < 9) {
     return SEASON_PHASES.OFF_SEASON;

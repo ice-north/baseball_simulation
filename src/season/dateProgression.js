@@ -3,7 +3,7 @@
 // 日付を進めてフェーズを遷移
 // ============================================================
 
-import { advanceDate, getCurrentPhase, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
+import { advanceDate, getCurrentPhase, getNPBDraftDay, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 import { updateAllPlayersCondition } from '../game/condition.js';
@@ -17,7 +17,7 @@ import { updateAllPlayersCondition } from '../game/condition.js';
 export const progressDate = (seasonData, days = 1) => {
   const newDate = advanceDate(seasonData.currentDate, days);
   const phaseOpts = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts);
+  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts, newDate.year);
 
   // 投手の疲労を回復（1日あたり20）+ コンディション更新
   for (let i = 0; i < days; i++) {
@@ -48,7 +48,7 @@ export const progressToNextGame = (seasonData, teamName = null) => {
 
   const newDate = { ...nextGame.date };
   const phaseOpts = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts);
+  const newPhase = getCurrentPhase(newDate.month, newDate.day, phaseOpts, newDate.year);
 
   return {
     ...seasonData,
@@ -75,8 +75,8 @@ export const progressToNextPhase = (seasonData) => {
 
     case SEASON_PHASES.REGULAR_SEASON:
       if (seasonData.settings?.universityMode) {
-        // 大学モード: レギュラーシーズン → ドラフト（10月24日）
-        targetDate = { year: seasonData.currentDate.year, month: 10, day: 24 };
+        // 大学モード: レギュラーシーズン → ドラフト（10月第4木曜日）
+        targetDate = { year: seasonData.currentDate.year, month: 10, day: getNPBDraftDay(seasonData.currentDate.year) };
       } else {
         // レギュラーシーズン → プレーオフ（10月10日）
         targetDate = { year: seasonData.currentDate.year, month: 10, day: 10 };
@@ -84,8 +84,8 @@ export const progressToNextPhase = (seasonData) => {
       break;
 
     case SEASON_PHASES.PLAYOFFS:
-      // プレーオフ → ドラフト（10月24日）
-      targetDate = { year: seasonData.currentDate.year, month: 10, day: 24 };
+      // プレーオフ → ドラフト（10月第4木曜日）
+      targetDate = { year: seasonData.currentDate.year, month: 10, day: getNPBDraftDay(seasonData.currentDate.year) };
       break;
 
     case SEASON_PHASES.DRAFT:
@@ -119,7 +119,7 @@ export const progressToNextPhase = (seasonData) => {
   }
 
   const phaseOpts2 = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts2);
+  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts2, targetDate.year);
 
   return {
     ...seasonData,
@@ -137,7 +137,7 @@ export const progressToNextPhase = (seasonData) => {
  */
 export const progressToDate = (seasonData, targetDate) => {
   const phaseOpts3 = seasonData.settings?.universityMode ? { universityMode: true } : undefined;
-  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts3);
+  const newPhase = getCurrentPhase(targetDate.month, targetDate.day, phaseOpts3, targetDate.year);
 
   return {
     ...seasonData,

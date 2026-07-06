@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
-import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase } from '../season/seasonManager.js';
+import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
@@ -567,7 +567,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       return null;
     };
 
-    if (month === 10 && day === 24 && newPhase === SEASON_PHASES.DRAFT) {
+    if (month === 10 && day === getNPBDraftDay(newData.currentDate.year) && newPhase === SEASON_PHASES.DRAFT) {
       return triggerPhaseEvent(newData, 'draft');
     }
     if (month === 11 && day === 9 && newPhase === SEASON_PHASES.CONTRACT) {
@@ -1210,7 +1210,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const gamesOnDay = getScheduleByDate(seasonData.schedule, dateObj);
       const isToday = seasonData.currentDate.year === year && seasonData.currentDate.month === selectedMonth && seasonData.currentDate.day === day;
       const phaseOpts = isUniversity ? { universityMode: true } : undefined;
-      const phase = getCurrentPhase(selectedMonth, day, phaseOpts);
+      const phase = getCurrentPhase(selectedMonth, day, phaseOpts, year);
       let eventLabel = null;
       if (selectedMonth === 11 && day === 30) eventLabel = 'シーズン終了';
       else if (isUniversity && selectedMonth === 11 && day === 29) eventLabel = 'セレクション';
