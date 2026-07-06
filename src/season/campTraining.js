@@ -575,9 +575,10 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           }
         }
       }
-      // 回転（ノビ）: 投手は遠投で回転数を伸ばせる（40%で+1、15%で+2）
+      // 回転（ノビ）: 投手は遠投で回転数を伸ばせる（20%で+0、40%で+1、30%で+2、10%で+3）
       if (player.pitching) {
-        const spinRaw = Math.random() < 0.4 ? (Math.random() < 0.15 ? 2 : 1) : 0;
+        const spinRoll = Math.random();
+        const spinRaw = spinRoll < 0.2 ? 0 : spinRoll < 0.6 ? 1 : spinRoll < 0.9 ? 2 : 3;
         if (spinRaw > 0) {
           const oldSpin = player.pitching.spinRate || 50;
           if (oldSpin < 100) {
