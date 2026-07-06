@@ -1434,8 +1434,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         )}
 
         {tab === 'rotation' && (() => {
-          // 全選手をロール別にグループ分け
-          const allPlayers = team.players || [];
+          // 全選手をロール別にグループ分け（ベンチ外選手=isActive:falseを除外）
+          const allPlayers = (team.players || []).filter(p => p.isActive !== false);
           const starterPitchers = allPlayers.filter(p => ['ace', 'complete', 'short', 'quality', 'auto_s'].includes(getPitcherRole(p.id)));
           const starterOrder = team.pitchingRotation.starters || [];
           starterPitchers.sort((a, b) => {

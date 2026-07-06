@@ -4137,10 +4137,10 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
   const currentStarter = getStartingPitcher(userTeamName);
   if (currentStarter) starterIds.add(currentStarter.id);
 
-  const benchFielders = (userTeam?.players || []).filter(p => !starterIds.has(p.id) && !isPitcherPlayer(p));
+  const benchFielders = (userTeam?.players || []).filter(p => !starterIds.has(p.id) && !isPitcherPlayer(p) && p.isActive !== false);
   const rotation = userTeam?.pitchingRotation;
-  const rotationStarters = (rotation?.starters || []).map(id => userTeam?.players?.find(p => p.id === id)).filter(Boolean);
-  const benchPitchers = (userTeam?.players || []).filter(p => isPitcherPlayer(p) && !starterIds.has(p.id));
+  const rotationStarters = (rotation?.starters || []).map(id => userTeam?.players?.find(p => p.id === id)).filter(p => p && p.isActive !== false);
+  const benchPitchers = (userTeam?.players || []).filter(p => isPitcherPlayer(p) && !starterIds.has(p.id) && p.isActive !== false);
   const opponentStarter = getStartingPitcher(opponentName);
   const opponentStarters = getStarters(opponentTeam, opponentName);
 

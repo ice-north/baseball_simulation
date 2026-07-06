@@ -42,7 +42,7 @@ export const generateAILineup = (teamData, teamName) => {
 
   // 先発投手を先に決定（二刀流選手のフィールド配置に影響するため）
   const rotation = teamData.pitchingRotation;
-  const allPitchers = players.filter(p => isPitcherPlayer(p));
+  const allPitchers = players.filter(p => isPitcherPlayer(p) && p.isActive !== false);
   let starter = null;
 
   if (rotation?.starters?.length > 0) {
@@ -360,7 +360,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     if ((userSelected || teamData.lineupSettings?.battingOrder?.length > 0) && rotation?.starters?.length > 0) {
       const index = rotation.currentStarterIndex || 0;
       const starterId = rotation.starters[index];
-      const starter = teamData.players.find(p => p.id === starterId);
+      const starter = teamData.players.find(p => p.id === starterId && p.isActive !== false);
       if (starter) {
         // generateAILineupで既にindex進行済みの場合があるので、重複進行を防止
         const teamsRot = TEAMS_DATA[teamName]?.pitchingRotation;
@@ -382,13 +382,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
     // AIチーム / ローテーション未設定: 疲労チェック付きで先発を選択
     if (!rotation || !rotation.starters || rotation.starters.length === 0) {
-      const fallback = teamData.players.filter(p => isPitcherPlayer(p)).sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0))[0];
+      const fallback = teamData.players.filter(p => isPitcherPlayer(p) && p.isActive !== false).sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0))[0];
       if (fallback) {
         fallback.battingOrder = pitcherBattingOrder;
         fallback.position = 'pitcher';
       }
       return fallback;
     }
+
+    const isEligible = (p) => p && p.isActive !== false && (p.fatigue || 0) < 80;
 
     let starter = null;
 
@@ -398,7 +400,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       const topCount = Math.min(3, rotation.starters.length);
       const candidates = rotation.starters
         .map((id, idx) => ({ id, idx, player: teamData.players.find(p => p.id === id) }))
-        .filter(({ player }) => player && (player.fatigue || 0) < 80)
+        .filter(({ player }) => isEligible(player))
         .sort((a, b) => {
           const aTop = a.idx < topCount;
           const bTop = b.idx < topCount;
@@ -408,14 +410,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       if (candidates.length > 0) {
         starter = candidates[0].player;
       } else {
-        // 全員疲労している場合: ローテ全体から最も疲労の少ない投手
-        const allPitchers = teamData.players.filter(p => isPitcherPlayer(p));
+        // 全員疲労/ベンチ外: ローテ全体から最も疲労の少ない登録中の投手
+        const allPitchers = teamData.players.filter(p => isPitcherPlayer(p) && p.isActive !== false);
         allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
         starter = allPitchers[0];
       }
       // カップ戦はローテ進行しない（リーグ戦のインデックスを維持）
     } else {
-      // リーグ戦: ローテーション順に疲労チェックして選択
+      // リーグ戦: ローテーション順に疲労・ベンチ外チェックして選択
       const index = rotation.currentStarterIndex || 0;
       let selectedIdx = index;
 
@@ -423,7 +425,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         const candidateIdx = (index + i) % rotation.starters.length;
         const candidateId = rotation.starters[candidateIdx];
         const candidate = teamData.players.find(p => p.id === candidateId);
-        if (candidate && (candidate.fatigue || 0) < 80) {
+        if (isEligible(candidate)) {
           starter = candidate;
           selectedIdx = candidateIdx;
           break;
@@ -431,7 +433,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       }
 
       if (!starter) {
-        const allPitchers = teamData.players.filter(p => isPitcherPlayer(p));
+        const allPitchers = teamData.players.filter(p => isPitcherPlayer(p) && p.isActive !== false);
         allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
         starter = allPitchers[0];
       }
