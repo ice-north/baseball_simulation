@@ -118,8 +118,8 @@ function updateStandings(standings, home, away, homeScore, awayScore) {
   if (homeScore > awayScore) { sh.wins++; sa.losses++; }
   else if (awayScore > homeScore) { sa.wins++; sh.losses++; }
   else { sh.draws = (sh.draws || 0) + 1; sa.draws = (sa.draws || 0) + 1; }
-  sh.winRate = sh.gamesPlayed > 0 ? sh.wins / sh.gamesPlayed : 0;
-  sa.winRate = sa.gamesPlayed > 0 ? sa.wins / sa.gamesPlayed : 0;
+  sh.winRate = (sh.wins + sh.losses) > 0 ? sh.wins / (sh.wins + sh.losses) : 0;
+  sa.winRate = (sa.wins + sa.losses) > 0 ? sa.wins / (sa.wins + sa.losses) : 0;
   standings.sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
 }
 

@@ -317,7 +317,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
 
     if (!isUserTeam) {
       // AI監督が毎試合スタメンを決定
+      // currentStarterIndex は selectStarterFromRotation が進める責務を持つため、
+      // generateAILineup が進めた分を復元して二重進行を防ぐ
+      const rot = TEAMS_DATA[teamName]?.pitchingRotation;
+      const savedIdx = rot?.currentStarterIndex;
       generateAILineup(teamData, teamName);
+      if (rot && savedIdx !== undefined) rot.currentStarterIndex = savedIdx;
       return;
     }
 
