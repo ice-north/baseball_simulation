@@ -353,6 +353,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         case 'stamina': return p.pitching?.stamina || 0;
         case 'bodyStamina': return p.physical?.bodyStamina || 0;
         case 'recovery': return p.physical?.recovery || 0;
+        case 'muscle': return p.physical?.muscle ?? 50;
         default: return 0;
       }
     };
@@ -883,6 +884,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <S k="stamina" w="w-9">ス</S>
                         <S k="bodyStamina" w="w-8">体</S>
                         <S k="recovery" w="w-8">回</S>
+                        <S k="muscle" w="w-8" title="筋力（成長倍率に影響）">筋</S>
                         <th className="py-1.5 px-2 text-left">変化球</th>
                         <th className="py-1.5 px-2 text-left">前年成績</th>
                       </>);
@@ -973,6 +975,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={p.stamina||0} label="スタミナ" isStamina={true} /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
+                        <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.muscle??50} label="筋力" /></td>
                         <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
                         <td className="py-1 px-2 text-[10px] font-mono text-gray-400 whitespace-nowrap">
                           {(() => {
@@ -1390,6 +1393,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             { key: 'pitching.stamina', stat: 'stamina', name: 'ス', get: (s) => s.pitching?.stamina || 0, isStamina: true },
             { key: 'physical.bodyStamina', stat: 'bodyStamina', name: '体', get: (s) => s.physical?.bodyStamina || 50 },
             { key: 'physical.recovery', stat: 'recovery', name: '回', get: (s) => s.physical?.recovery || 50 },
+            { key: 'physical.muscle', stat: 'muscle', name: '筋', get: (s) => s.physical?.muscle ?? 50 },
           ];
           const ageReports = seasonData?.ageReports || [];
           const ageReportMap = {};
