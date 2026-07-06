@@ -683,6 +683,30 @@ export const initializeIndependentLeagues = (excludeLeagueId = null, existingTea
   }
 };
 
+// 年度移行時に独立リーグのスケジュール・順位表を新年度でリセット
+export const resetIndependentLeagueSchedules = (calendarYear) => {
+  for (const [leagueId, leagueData] of Object.entries(WORLD_DATA.independentLeagues)) {
+    if (!leagueData) continue;
+    const leagueDef = INDEPENDENT_LEAGUES[leagueId];
+    if (!leagueDef) continue;
+    const teams = leagueData.teams;
+    if (!teams || teams.length === 0) continue;
+
+    const schedule = generateFullSeasonSchedule({
+      teams,
+      gamesPerSeason: leagueDef.gamesPerSeason,
+      startDate: { year: calendarYear, month: 4, day: 1 },
+      endDate: { year: calendarYear, month: 9, day: 30 },
+      leagueFormat: leagueDef.leagueFormat || 'single',
+      leagueNames: leagueDef.leagueNames,
+    });
+
+    leagueData.schedule = schedule;
+    leagueData.standings = initializeStandings(teams);
+    leagueData.results = [];
+  }
+};
+
 // ============================================================
 // 地域リーグ生成（社会人モードのレギュラーシーズン）
 // ユーザーの地域から8-12チームを選出してリーグ戦を組む

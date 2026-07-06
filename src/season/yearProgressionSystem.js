@@ -15,7 +15,7 @@ import { generatePositionFitness } from './tryoutSystem.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
-import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
@@ -2496,7 +2496,9 @@ export function advanceToNextYear(seasonData, allTeams) {
       }
     }
     universityPromotions = processUniversityPromotionRelegation();
-    initializeUniversityLeagues(newSeasonData.currentDate?.year || 2024);
+    const nextCalendarYear = newSeasonData.currentDate?.year || 2025;
+    initializeUniversityLeagues(nextCalendarYear);
+    resetIndependentLeagueSchedules(nextCalendarYear);
     WORLD_DATA.corporateToshitaikou = null;
     WORLD_DATA.corporateNihonSenshuken = null;
     WORLD_DATA.corporateClubSenshuken = null;
@@ -2576,7 +2578,9 @@ export function advanceToNextYearSandbox(seasonData, allTeams) {
   newSeasonData.standings = initializeStandings(teams);
 
   if (WORLD_DATA.initialized) {
-    initializeUniversityLeagues(newSeasonData.currentDate?.year || 2024);
+    const nextCalYear = newSeasonData.currentDate?.year || 2025;
+    initializeUniversityLeagues(nextCalYear);
+    resetIndependentLeagueSchedules(nextCalYear);
   }
 
   return {
