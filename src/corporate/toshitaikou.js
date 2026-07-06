@@ -276,7 +276,7 @@ export function simulateQuickMatch(team1Def, team2Def) {
   const t1Name = team1Def.displayName || team1Def.name;
   const t2Name = team2Def.displayName || team2Def.name;
 
-  const result = autoSimulateGame(t1Name, t2Name);
+  const result = autoSimulateGame(t1Name, t2Name, true);
   if (result && (result.homeScore !== undefined) && (result.homeScore + result.awayScore > 0)) {
     const homeWon = result.homeScore > result.awayScore;
     return {

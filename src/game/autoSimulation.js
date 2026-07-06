@@ -297,7 +297,7 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
   });
 };
 
-export const autoSimulateGame = (homeTeamName, awayTeamName) => {
+export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) => {
 
   // TEAMS_DATAからチームデータを取得
   if (!TEAMS_DATA || !TEAMS_DATA[homeTeamName] || !TEAMS_DATA[awayTeamName]) {
@@ -390,30 +390,60 @@ export const autoSimulateGame = (homeTeamName, awayTeamName) => {
       return fallback;
     }
 
-    const index = rotation.currentStarterIndex || 0;
     let starter = null;
 
-    for (let i = 0; i < rotation.starters.length; i++) {
-      const candidateIdx = (index + i) % rotation.starters.length;
-      const candidateId = rotation.starters[candidateIdx];
-      const candidate = teamData.players.find(p => p.id === candidateId);
-      if (candidate && (candidate.fatigue || 0) < 80) {
-        starter = candidate;
-        break;
+    if (isCupGame) {
+      // カップ戦: ローテ上位（エース級）から疲労の少ない投手を選ぶ
+      // ローテ進行なし（リーグ戦のローテに影響させない）
+      const topCount = Math.min(3, rotation.starters.length);
+      const candidates = rotation.starters
+        .map((id, idx) => ({ id, idx, player: teamData.players.find(p => p.id === id) }))
+        .filter(({ player }) => player && (player.fatigue || 0) < 80)
+        .sort((a, b) => {
+          const aTop = a.idx < topCount;
+          const bTop = b.idx < topCount;
+          if (aTop !== bTop) return aTop ? -1 : 1;
+          return (a.player.fatigue || 0) - (b.player.fatigue || 0);
+        });
+      if (candidates.length > 0) {
+        starter = candidates[0].player;
+      } else {
+        // 全員疲労している場合: ローテ全体から最も疲労の少ない投手
+        const allPitchers = teamData.players.filter(p => isPitcherPlayer(p));
+        allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
+        starter = allPitchers[0];
+      }
+      // カップ戦はローテ進行しない（リーグ戦のインデックスを維持）
+    } else {
+      // リーグ戦: ローテーション順に疲労チェックして選択
+      const index = rotation.currentStarterIndex || 0;
+      let selectedIdx = index;
+
+      for (let i = 0; i < rotation.starters.length; i++) {
+        const candidateIdx = (index + i) % rotation.starters.length;
+        const candidateId = rotation.starters[candidateIdx];
+        const candidate = teamData.players.find(p => p.id === candidateId);
+        if (candidate && (candidate.fatigue || 0) < 80) {
+          starter = candidate;
+          selectedIdx = candidateIdx;
+          break;
+        }
+      }
+
+      if (!starter) {
+        const allPitchers = teamData.players.filter(p => isPitcherPlayer(p));
+        allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
+        starter = allPitchers[0];
+      }
+
+      if (starter) {
+        // selectedIdx+1 でローテを進める（選んだ投手の次から開始してスキップ連鎖を防ぐ）
+        TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
+          (selectedIdx + 1) % rotation.starters.length;
       }
     }
 
-    if (!starter) {
-      const allPitchers = teamData.players.filter(p => isPitcherPlayer(p));
-      allPitchers.sort((a, b) => (a.fatigue || 0) - (b.fatigue || 0));
-      starter = allPitchers[0];
-    }
-
     if (starter) {
-      // index+1 でローテを進める（wrap時に同じ位置に固定されるバグを防ぐ）
-      TEAMS_DATA[teamName].pitchingRotation.currentStarterIndex =
-        (index + 1) % rotation.starters.length;
-
       teamData.players.forEach(p => {
         if (p.id === starter.id) {
           p.battingOrder = pitcherBattingOrder;
