@@ -2338,18 +2338,18 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
 
         // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
-        // 先発は登板基礎疲労(30) + 投球数ベース疲労で、4-5日間隔のローテーションが必要になる
-        const isStarterPitcher = p.outs >= 15;
+        // 先発かどうかはリリーフリストに含まれないかで判定（投球回数ではなく登板種別）
+        // ショートスターターも先発登板扱いにしてリリーフより多く疲労が溜まる
+        const wasStarter = !reliefIds.has(player.id);
         const bodyStamina = playerData.physical?.bodyStamina || 50;
         const staminaBonus = (bodyStamina / 100) * 1.5;
-        const baseDivisor = isStarterPitcher ? 1.5 : 3;
+        const baseDivisor = wasStarter ? 1.5 : 3;
         const pitchFatigue = Math.floor(p.pitches / (baseDivisor + staminaBonus));
-        const startBonus = isStarterPitcher ? 30 : 0;
-        const fatigueGain = isStarterPitcher ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
+        const startBonus = wasStarter ? 30 : 0;
+        const fatigueGain = wasStarter ? pitchFatigue + startBonus : Math.max(11, pitchFatigue);
         playerData.fatigue = (playerData.fatigue || 0) + fatigueGain;
 
         // 成長率変動: 先発はイニング数ベース、リリーフは登板数ベース
-        const wasStarter = !reliefIds.has(player.id);
         if (wasStarter) {
           // 先発: 15イニング(45アウト)ごとに+0.01
           const prevTotalOuts = season.inningsPitched - p.outs;
