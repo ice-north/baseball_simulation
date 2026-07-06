@@ -66,7 +66,7 @@ export const generateAILineup = (teamData, teamName) => {
         const candidateIdx = (index + i) % rotation.starters.length;
         const candidateId = rotation.starters[candidateIdx];
         const candidate = allPitchers.find(p => p.id === candidateId);
-        if (candidate && (candidate.fatigue || 0) < 80) {
+        if (candidate && (candidate.fatigue || 0) < 40) {
           starter = candidate;
           if (TEAMS_DATA[teamName]?.pitchingRotation) {
             // index+1 でローテを進める（candidateIdx+1 だとwrap時に同じ位置に戻るバグを防ぐ）
@@ -80,7 +80,7 @@ export const generateAILineup = (teamData, teamName) => {
   }
 
   if (!starter) {
-    const availablePitchers = allPitchers.filter(p => (p.fatigue || 0) < 80);
+    const availablePitchers = allPitchers.filter(p => (p.fatigue || 0) < 40);
     if (availablePitchers.length > 0) {
       availablePitchers.sort((a, b) => {
         const staminaA = a.pitching?.stamina || 100;
@@ -390,7 +390,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       return fallback;
     }
 
-    const isEligible = (p) => p && p.isActive !== false && (p.fatigue || 0) < 80;
+    const isEligible = (p) => p && p.isActive !== false && (p.fatigue || 0) < 40;
 
     let starter = null;
 
