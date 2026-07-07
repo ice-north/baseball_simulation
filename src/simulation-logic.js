@@ -340,10 +340,10 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   }
 
   // 風や打球の伸びによるフェンスギリギリHR（低パワーでもごく稀に出る）
-  if (distance > 93 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 135) {
-    const evFactor = Math.max(0, (exitVelocity - 135) / 20);
-    const distFactor = Math.max(0, (distance - 93) / 15);
-    const hrProb = evFactor * distFactor * 0.04;
+  if (distance > 88 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 127) {
+    const evFactor = Math.max(0, (exitVelocity - 127) / 22);
+    const distFactor = Math.max(0, (distance - 88) / 16);
+    const hrProb = evFactor * distFactor * 0.055;
     if (Math.random() < hrProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス直撃）' };
     }
