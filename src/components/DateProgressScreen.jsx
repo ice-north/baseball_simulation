@@ -10,7 +10,7 @@ import { getUserFallSchedule } from '../university/universityInit.js';
 import { generateAprilHighSchoolClass, checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
-import { updateAllTeamReputations } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
@@ -1187,6 +1187,19 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   useEffect(() => {
     if (onRegisterAdvance) onRegisterAdvance(() => handleProgressDate(1));
   });
+
+  // マウント時: 独立リーグスケジュールが古い年度のものであればリセット（セーブロード後の取りこぼし対策）
+  useEffect(() => {
+    if (!WORLD_DATA.initialized || !WORLD_DATA.independentLeagues) return;
+    const calYear = seasonData?.currentDate?.year;
+    if (!calYear) return;
+    const stale = Object.values(WORLD_DATA.independentLeagues).find(ld => {
+      if (!ld?.schedule?.length) return false;
+      const schedYear = ld.schedule.find(g => g.date?.year)?.date?.year;
+      return schedYear && schedYear < calYear;
+    });
+    if (stale) resetIndependentLeagueSchedules(calYear);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 大学トーナメント終了時に自動折り畳み
   useEffect(() => {
