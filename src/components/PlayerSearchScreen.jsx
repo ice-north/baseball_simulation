@@ -31,6 +31,7 @@ const FILTER_DEFS = [
   { key: 'growth', label: '成長率', get: p => p.growthPotential || 1.0, min: 0.5, max: 1.5, step: 0.05, decimal: true },
   { key: 'discipline', label: 'プロ意識', get: p => p.personality?.discipline ?? 50 },
   { key: 'fame', label: '知名度', get: p => p.fame || 0 },
+  { key: 'muscle', label: '筋力', get: p => p.physical?.muscle ?? 50 },
   { key: 'catcherLead', label: 'Cリード', get: p => p.catching?.lead || 0 },
   { key: 'breakingCount', label: '変化球数', get: p => (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length, min: 0, max: 8, step: 1 },
 ];
@@ -262,6 +263,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="velocity" w="w-8">球速</SortTh>
                 <SortTh k="control" w="w-7">制</SortTh>
                 <SortTh k="stamina" w="w-7">ス</SortTh>
+                <SortTh k="muscle" w="w-7">筋力</SortTh>
                 <SortTh k="catcherLead" w="w-7">C</SortTh>
                 <SortTh k="breakingCount" w="w-7">変</SortTh>
                 <SortTh k="growth" w="w-8">成長</SortTh>
@@ -306,6 +308,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.velocity || 0} isVel /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.control || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.stamina || 0} isSta /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.muscle ?? 50} /></td>
                   <td className="py-0.5 px-1 text-center">
                     {p.position === 'catcher' && (p.catching?.lead ?? null) !== null
                       ? <StatVal value={p.catching?.lead || 0} />
@@ -365,7 +368,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={gameMode === 'university' ? 25 : 24} className="py-8 text-center text-gray-500">
+                <tr><td colSpan={gameMode === 'university' ? 26 : 25} className="py-8 text-center text-gray-500">
                   {sources.highschool && !sources.university && !sources.released && !sources.teams && highSchoolPool.players.length === 0
                     ? '高校生プールは4月に生成されます。4月以降に再度確認してください。'
                     : sources.highschool && highSchoolPool.players.length === 0
