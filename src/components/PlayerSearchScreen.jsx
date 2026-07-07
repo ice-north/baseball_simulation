@@ -33,7 +33,7 @@ const FILTER_DEFS = [
   { key: 'fame', label: '知名度', get: p => p.fame || 0 },
   { key: 'muscle', label: '筋力', get: p => p.physical?.muscle ?? 50 },
   { key: 'catcherLead', label: 'Cリード', get: p => p.catching?.lead || 0 },
-  { key: 'breakingCount', label: '変化球数', get: p => (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length, min: 0, max: 8, step: 1 },
+  { key: 'breakingCount', label: '変化球数', get: p => (p.pitching?.arsenal || []).filter(a => a.type !== 'straight' && (a.level || 0) >= 20).length, min: 0, max: 8, step: 1 },
 ];
 
 const DEFAULT_FILTERS = {};
@@ -317,7 +317,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   <td className="py-0.5 px-1 text-center">
                     {p.position === 'pitcher'
                       ? (() => {
-                          const cnt = (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length;
+                          const cnt = (p.pitching?.arsenal || []).filter(a => a.type !== 'straight' && (a.level || 0) >= 20).length;
                           const color = cnt >= 4 ? 'text-pink-400' : cnt >= 3 ? 'text-orange-400' : cnt >= 2 ? 'text-yellow-400' : cnt >= 1 ? 'text-gray-300' : 'text-gray-600';
                           return <span className={`${color} font-bold`}>{cnt}</span>;
                         })()
