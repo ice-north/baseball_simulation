@@ -255,16 +255,16 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="power" w="w-7">パ</SortTh>
                 <SortTh k="speed" w="w-7">走</SortTh>
                 <SortTh k="arm" w="w-7">肩</SortTh>
-                <SortTh k="bodyStamina" w="w-7">体力</SortTh>
-                <SortTh k="dexterity" w="w-7">器用</SortTh>
                 <SortTh k="defense" w="w-7">守</SortTh>
+                <SortTh k="catcherLead" w="w-7">C</SortTh>
                 <SortTh k="eye" w="w-7">眼</SortTh>
                 <SortTh k="steal" w="w-7">盗</SortTh>
+                <SortTh k="bodyStamina" w="w-7">体力</SortTh>
+                <SortTh k="muscle" w="w-7">筋力</SortTh>
+                <SortTh k="dexterity" w="w-7">器用</SortTh>
                 <SortTh k="velocity" w="w-8">球速</SortTh>
                 <SortTh k="control" w="w-7">制</SortTh>
                 <SortTh k="stamina" w="w-7">ス</SortTh>
-                <SortTh k="muscle" w="w-7">筋力</SortTh>
-                <SortTh k="catcherLead" w="w-7">C</SortTh>
                 <SortTh k="breakingCount" w="w-7">変</SortTh>
                 <SortTh k="growth" w="w-8">成長</SortTh>
                 <SortTh k="discipline" w="w-7">意欲</SortTh>
@@ -300,20 +300,20 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.power || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.speed || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.arm || 0} /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.bodyStamina || 0} /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.dexterity || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.fielding?.defense || 0} /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.eye || 0} /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.steal || 0} /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.velocity || 0} isVel /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.control || 0} /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.stamina || 0} isSta /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.muscle ?? 50} /></td>
                   <td className="py-0.5 px-1 text-center">
                     {p.position === 'catcher' && (p.catching?.lead ?? null) !== null
                       ? <StatVal value={p.catching?.lead || 0} />
                       : <span className="text-gray-600">-</span>}
                   </td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.eye || 0} /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.steal || 0} /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.bodyStamina || 0} /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.muscle ?? 50} /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.dexterity || 0} /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.velocity || 0} isVel /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.control || 0} /></td>
+                  <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.stamina || 0} isSta /></td>
                   <td className="py-0.5 px-1 text-center">
                     {p.position === 'pitcher'
                       ? (() => {
