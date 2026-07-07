@@ -10,28 +10,30 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - 守備位置適正: `fitnessMult = 0.5 + (fitness / 100) * 0.5`（適正100=100%, 適正0=50%）
 
 ## 主要ファイル
-- `src/App.jsx` (~4600行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
-- `src/game/autoSimulation.js` (~2000行) - 自動シミュレーション・buildDefense
-- `src/game/aiManager.js` (~600行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
-- `src/game/lineupGenerator.js` (~250行) - AIオーダー編成・投手ローテーション生成
-- `src/game/gameControls.js` (~180行) - resetGame・multiPitch・simMode
-- `src/game/gameSetup.js` (~400行) - setupManagedGame・handleManagedGameEnd
-- `src/game/saveSystem.js` (~160行) - セーブ/ロード/エクスポート/インポート
-- `src/game/seasonProgress.js` (~230行) - 日程進行ハンドラー
-- `src/simulation-logic.js` (~520行) - 物理演算（打球・投球）
-- `src/components/ScheduleScreen.jsx` (~500行) - 日程/順位表/成績ランキング
-- `src/components/LineupSettingScreen.jsx` (~1620行) - スタメン/投手起用/守備分析の3タブ
-- `src/components/DateProgressScreen.jsx` (~1620行) - 日程進行画面
-- `src/components/ManagementScreen.jsx` (~330行) - 管理画面ルーター
-- `src/components/GameFlowScreens.jsx` (~160行) - ゲームフロー画面群
-- `src/components/UniversityScoutScreen.jsx` (~260行) - 大学スポーツ推薦スカウト画面
-- `src/components/GameUIComponents.jsx` (~380行) - Sidebar・RenderBases・AccordionSection
+- `src/App.jsx` (~5130行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
+- `src/game/autoSimulation.js` (~2430行) - 自動シミュレーション・buildDefense
+- `src/game/aiManager.js` (~640行) - 監督AI（自動投手交代・代打・守備固め・盗塁判定）
+- `src/game/lineupGenerator.js` (~625行) - AIオーダー編成・投手ローテーション生成
+- `src/game/gameControls.js` (~185行) - resetGame・multiPitch・simMode
+- `src/game/gameSetup.js` (~750行) - setupManagedGame・handleManagedGameEnd
+- `src/game/saveSystem.js` (~470行) - セーブ/ロード/エクスポート/インポート
+- `src/game/seasonProgress.js` (~420行) - 日程進行ハンドラー
+- `src/simulation-logic.js` (~675行) - 物理演算（打球・投球）
+- `src/components/ScheduleScreen.jsx` (~760行) - 日程/順位表/成績ランキング
+- `src/components/LineupSettingScreen.jsx` (~2720行) - スタメン/投手起用/守備分析の3タブ
+- `src/components/DateProgressScreen.jsx` (~4510行) - 日程進行画面
+- `src/components/ManagementScreen.jsx` (~635行) - 管理画面ルーター
+- `src/components/GameFlowScreens.jsx` (~570行) - ゲームフロー画面群
+- `src/components/UniversityScoutScreen.jsx` (~730行) - 大学スポーツ推薦スカウト画面
+- `src/components/GameUIComponents.jsx` (~505行) - Sidebar・RenderBases・AccordionSection
 - `src/components/` - 各画面コンポーネント（Camp, Tryout, OffSeason, Draft等）
 - `src/season/` - シーズン管理（スケジュール生成, 日付進行, トライアウト, 年間進行）
-- `src/season/universityPool.js` (~550行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
-- `src/corporate/scoutingSystem.js` (~400行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
-- `src/university/universityTeamsData.js` - 大学チームデータ（27リーグ204校（2部制7リーグ×12校＋1部制20リーグ×6校）、ランク別成長倍率定義）
-- `src/university/universityLeagueManager.js` (~280行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
+- `src/season/universityPool.js` (~1425行) - 大学プール（高卒世代生成・進路振分・ランク別成長・4年間成長・卒業）
+- `src/season/yearProgressionSystem.js` (~2780行) - 年間進行・キャンプ・オフシーズン処理
+- `src/corporate/corporateInit.js` (~1700行) - 社会人/独立リーグ初期化・チームランク変動
+- `src/corporate/scoutingSystem.js` (~2005行) - 社会人モード入退団（退団処理・スカウト候補生成・AI自動処理）
+- `src/university/universityTeamsData.js` (~455行) - 大学チームデータ（27リーグ234校（2部制12リーグ×12校＋1部制15リーグ×6校）、ランク別成長倍率定義）
+- `src/university/universityLeagueManager.js` (~495行) - 大学リーグ戦シミュレーション（27リーグ春季・秋季、スケジュール生成・試合シミュレーション・順位表管理）
 - `src/data/playerNames.js` (210KB) - 姓3200件+名3000件の重み付き名前DB
 - `src/players.js` - 初期選手データ
 - `src/teams-data.js` - チームデータ
@@ -68,14 +70,14 @@ App.jsxは大きいファイルなので、作業に関連するセクション�
 ```
 【独立リーグモード】
 NEW GAME → レギュレーション設定 → トライアウト(24人ドラフト) → キャンプ
-→ 4月(高校3年生3000人生成) → レギュラーシーズン(日付進行で自動消化)
+→ 4月(高校3年生5000人生成) → レギュラーシーズン(日付進行で自動消化)
 → プレーオフ → ドラフト(10月:チーム選手+高校生からNPB指名)
 → 契約更改 → トライアウト → オフシーズン(表彰/引退/高校生ランク別振り分け/大学プール処理)
 → Year 2+(キャンプ...)
 
 【社会人モード】
 NEW GAME → 企業チーム選択 → キャンプ
-→ 4月(高校3年生3000人生成+スカウト対象に) → レギュラーシーズン(日付進行)
+→ 4月(高校3年生5000人生成+スカウト対象に) → レギュラーシーズン(日付進行)
 → 都市対抗予選(6月) → 都市対抗本戦(8月)
 → ドラフト(10月:高校生+チーム選手からNPB指名) → 日本選手権(11月)
 → 退団(11/9) → スカウト入団(11/10) → オフシーズン(高校生ランク別振り分け)
@@ -83,14 +85,14 @@ NEW GAME → 企業チーム選択 → キャンプ
 
 【大学モード】
 NEW GAME → 大学チーム選択 → キャンプ
-→ 4月(高校3年生3000人生成) → 春季リーグ(4-6月) → 全日本大学選手権(6月)
+→ 4月(高校3年生5000人生成) → 春季リーグ(4-6月) → 全日本大学選手権(6月)
 → 秋季リーグ(9-11月) → 明治神宮大会(11月)
 → ドラフト(10月) → スポーツ推薦スカウト(11/10) → オフシーズン(卒業+入部+振り分け)
 → Year 2+(キャンプ...)
 ```
 
 ## 高校生・大学プールシステム (`src/season/universityPool.js`)
-- **高校3年生生成（4月）**: `generateAprilHighSchoolClass(year)` で3000人を `highSchoolPool` に生成
+- **高校3年生生成（4月）**: `generateAprilHighSchoolClass(year)` で5000人を `highSchoolPool` に生成（`HIGH_SCHOOL_CLASS_SIZE = 5000`）
   - **体格**: large(25%)/medium(50%)/small(25%)。体格がパワー・肩・走力・守備等に影響
     - 大柄: パワー+6, 肩+5, 走力-5, 守備-3 / 小柄: 走力+5, 守備+3, 盗塁+4, パワー-5
   - **能力ベースの投手決定**: 肩力が高い子ほど投手になる確率が上がる（全体~40%）
@@ -121,8 +123,10 @@ NEW GAME → 大学チーム選択 → キャンプ
   - 大学生が指名されたらuniversityPoolから除去（残りは卒業後にreleasedPoolへ）
 - **ランク別進路振り分け（オフシーズン）**: `distributeHighSchoolGraduates(enrollYear)` でドラフト漏れをS→A→B→C→Dの順に配分
   - 各大学ランクの1チームあたり受け入れ数: S=15名, A=13名, B=11名, C=9名, D=7名
-  - 大学チーム数×受け入れ数で各ランクの大学スロットを決定（S:120, A:286, B:495, C:648, D:357）
-  - 社会人・独立候補は大学スロットの5-10%程度。残りは引退
+  - 大学チーム数×受け入れ数で各ランクの大学スロットを決定（S:150, A:286, B:517, C:864, D:413）合計2230名
+  - 社会人: 社会人127名程度、独立: スロットベース83名+即戦力志向型40名程度
+  - **5000人の進路内訳（概算）**: NPB指名20名(0.4%)、大学2230名(44.6%)、社会人127名(2.5%)、独立123名(2.5%)、引退2500名(50%)
+  - **即戦力志向型独立直行**: スコアランキング18〜58%帯でgrowthPotential≥1.05の選手が確率で独立を選択（最大50名）
 - **大学在学**: `universityPool` にグローバル保持。4年間（or 22歳）で卒業。在学中は毎年ランク別成長処理
   - 入学ブーストなし（4年間の年次成長に統合済み）
   - 各エントリに `universityRank` を保持。成長倍率: S=1.55, A=1.35, B=1.15, C=1.00, D=0.85
@@ -148,7 +152,7 @@ NEW GAME → 大学チーム選択 → キャンプ
   - 有名選手(fame=100)はどのチームでも候補に挙がる
 
 ## チームランク変動システム (`src/corporate/corporateInit.js`)
-- **対象**: 社会人(300チーム)・独立リーグ(26チーム)・大学(198校) すべてのチーム
+- **対象**: 社会人(300チーム: 企業93+クラブ208、初期化は179チーム)・独立リーグ(5リーグ26チーム)・大学(234校) すべてのチーム
 - **注目度(reputation)**: 0〜100の値。成績に応じて毎年変動。ランク昇降格の判定基準
   - 初期値: S=85, A=65, B=40, C=20, D=5
   - 年間減衰: -3pt（実績なしなら自然低下）
@@ -165,14 +169,15 @@ NEW GAME → 大学チーム選択 → キャンプ
 - **WORLD_DATA内の他リーグ大学**: 順位表から簡易計算してランク変動を適用
 
 ## 大学リーグシステム (`src/university/`)
-- **チームデータ** (`universityTeamsData.js`): `UNIVERSITY_TEAMS` に204校定義（27リーグ、2部制7リーグ）
-  - 首都圏7リーグ(72校): 東京六大学, 東都1部+2部, 首都1部+2部, 東京新1部+2部, 千葉県1部+2部, 神奈川, 関甲新1部+2部
-  - 地方20リーグ(132校): 北海道学生, 札幌学生, 北東北大学, 仙台六大学, 南東北大学, 愛知1部+2部, 東海地区, 北陸, 関西学生, 関西六大学, 京滋大学, 阪神大学, 近畿学生, 広島六大学, 中国地区1部+2部, 四国地区, 福岡六大学, 九州六大学, 九州地区, 南部九州
+- **チームデータ** (`universityTeamsData.js`): `UNIVERSITY_TEAMS` に234校定義（27リーグ、2部制12リーグ×12校＋1部制15リーグ×6校）
+  - ランク分布: S=10校, A=22校, B=47校, C=96校, D=59校
+  - 2部制12リーグ: 札幌, 北東北, 関甲新, 東都, 首都, 東京新, 千葉県, 愛知, 阪神, 近畿, 中国地区, ＋他
+  - 1部制15リーグ: 北海道学生, 仙台六大学, 南東北大学, 東京六大学, 神奈川, 北陸, 東海地区, 京滋, 関西学生, 関西六大学, 広島六大学, 四国地区, 福岡六大学, 九州六大学, 九州地区, 南部九州
 - **リーグ戦** (`universityLeagueManager.js`): 27リーグの春季(4/5〜6/10)・秋季(9/6〜11/5)リーグ戦
   - ランク別戦力値 `{ S: 78, A: 65, B: 50, C: 38, D: 25 }` で簡易シミュレーション
-  - 部制はUNIVERSITY_REGIONSの`divisions`フィールドで汎用管理（7リーグが2部制、他1部制）。将来の3部制も対応可
+  - 部制はUNIVERSITY_REGIONSの`divisions`フィールドで汎用管理（12リーグが2部制、他1部制）。将来の3部制も対応可
   - 試合日: 火・水・土・日。`WORLD_DATA.universityLeagues` に格納
-  - DateProgressScreenで折りたたみ表示（全26リーグ個別展開可）
+  - DateProgressScreenで折りたたみ表示（全27リーグ個別展開可）。**全モード（独立・大学・社会人）で表示**
 - **ランク別成長**: `UNIVERSITY_RANK_GROWTH` — S=1.55倍, A=1.35倍, B=1.15倍, C=1.00倍, D=0.85倍
   - `applyUniversityGrowth()` で自動適用。universityPool の各エントリに `universityRank` を保持
   - 旧入学ブーストを廃止し、4年間の年次成長に統合。S校とD校の差がより明確に
@@ -181,6 +186,8 @@ NEW GAME → 大学チーム選択 → キャンプ
   - specialty該当: ×1.2倍、非該当: ×0.85倍。能力→分野マッピング: 制球=technique, 球速=power, スタミナ=stamina, ミート=technique, パワー=power, 選球眼=mental, 走力=athletic, 守備=defense
   - **新球種習得**: 投手に毎年判定。technique/versatility持ち=15%, それ以外=5%。フォーム適性球種を優先
   - **サブポジ成長**: 野手に毎年判定。defense/versatility持ち=35%, それ以外=12%。適正+4〜14
+- **社会人トーナメント表示**: 独立・大学モードでも地域トーナメント/都市対抗/日本選手権/クラブ選手権のトーナメント表を折りたたみ式で表示（`!isCorporate` 条件）
+  - セーブロード後の再生成時は、現在月が大会終了月を過ぎている場合に自動キャッチアップ完了
 - **将来のゲームモード**: `gameMode = 'university'` として社会人モードと並行実装可能
 
 ## 社会人モード入退団 (`src/corporate/scoutingSystem.js`)
