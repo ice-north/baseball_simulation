@@ -392,7 +392,7 @@ function generateHighSchoolPlayer(id) {
       velocity: abilities.velocity, control: abilities.control,
       stamina: abilities.stamina, spinRate: r(20, 50),
       form: pitchingForm,
-      arsenal: (isPitcher || isTwoWay) ? generateRandomArsenal(Math.floor(Math.random() * 3), true) : generateFielderArsenalBasic()
+      arsenal: (isPitcher || isTwoWay) ? (() => { const rv = Math.random(); const ex = rv < 0.4 ? 0 : rv < 0.7 ? 1 : rv < 0.9 ? 2 : 3; return generateRandomArsenal(ex, true); })() : generateFielderArsenalBasic()
     },
     isTwoWay,
     twoWaySubPosition,
