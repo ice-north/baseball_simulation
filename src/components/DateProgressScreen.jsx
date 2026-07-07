@@ -372,6 +372,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     if (!isCorporate && WORLD_DATA.initialized) {
       const calYear = newData.currentDate.year;
       // 地域トーナメント（4月〜生成）
+      const rtWasNull = !WORLD_DATA.corporateRegionalTournament?.generated;
       if (month >= 4 && !WORLD_DATA.corporateRegionalTournament?.generated) {
         try {
           const rt = generateRegionalTournament({ userTeamName: null, calendarYear: calYear });
@@ -380,7 +381,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           WORLD_DATA.corporateRegionalTournament = { generated: true, done: true };
         }
       }
+      // catch-up: 6月以降に初回生成（セーブロード後の再生成）→ 即完了
+      if (rtWasNull && WORLD_DATA.corporateRegionalTournament?.generated && !WORLD_DATA.corporateRegionalTournament.done && month >= 6) {
+        const rt = WORLD_DATA.corporateRegionalTournament;
+        for (const regionId of Object.keys(rt.brackets || {})) {
+          const r = rt.brackets[regionId];
+          autoPlayBracket(r.bracket, r.teamDefsMap);
+          if (r.bracket.champion) { r.champion = r.bracket.champion; r.phase = 'done'; }
+        }
+        rt.phase = 'done'; rt.done = true;
+      }
       // 都市対抗予選（5月〜生成）
+      const toshiWasNull = !WORLD_DATA.corporateToshitaikou?.generated;
       if (month >= 5 && !WORLD_DATA.corporateToshitaikou?.generated) {
         try {
           const tournament = generateToshitaikou({ userTeamName: null, calendarYear: calYear });
@@ -389,7 +401,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           WORLD_DATA.corporateToshitaikou = { generated: true, qualifiersDone: true, mainDone: true };
         }
       }
+      // catch-up: 7月以降に初回生成 → 予選を即完了
+      if (toshiWasNull && WORLD_DATA.corporateToshitaikou?.generated && !WORLD_DATA.corporateToshitaikou.qualifiersDone && WORLD_DATA.corporateToshitaikou.qualifiers && month >= 7) {
+        const td = WORLD_DATA.corporateToshitaikou;
+        for (const rid of Object.keys(td.qualifiers)) autoPlayQualifier(td.qualifiers[rid], null);
+        td.qualifiersDone = true;
+      }
       // 都市対抗本戦（予選完了後に生成）
+      const toshiMainWasNull = !!(WORLD_DATA.corporateToshitaikou?.qualifiersDone && !WORLD_DATA.corporateToshitaikou?.mainTournament && !WORLD_DATA.corporateToshitaikou?.mainDone);
       if (WORLD_DATA.corporateToshitaikou?.qualifiersDone && !WORLD_DATA.corporateToshitaikou?.mainTournament && !WORLD_DATA.corporateToshitaikou?.mainDone) {
         try {
           const td = WORLD_DATA.corporateToshitaikou;
@@ -399,7 +418,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           WORLD_DATA.corporateToshitaikou = { ...WORLD_DATA.corporateToshitaikou, mainDone: true };
         }
       }
+      // catch-up: 9月以降に本戦が初回生成 → 即完了
+      if (toshiMainWasNull && WORLD_DATA.corporateToshitaikou?.mainTournament && !WORLD_DATA.corporateToshitaikou.mainDone && month >= 9) {
+        const td = WORLD_DATA.corporateToshitaikou;
+        autoPlayMainTournament(td.mainTournament);
+        td.champion = td.mainTournament.champion; td.runnerUp = td.mainTournament.runnerUp; td.mainDone = true;
+      }
       // 日本選手権（9月〜生成）
+      const nsWasNull = !WORLD_DATA.corporateNihonSenshuken?.generated;
       if (month >= 9 && !WORLD_DATA.corporateNihonSenshuken?.generated) {
         try {
           const ns = generateNihonSenshuken({ userTeamName: null, calendarYear: calYear });
@@ -408,7 +434,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           WORLD_DATA.corporateNihonSenshuken = { generated: true, done: true };
         }
       }
+      // catch-up: 11月以降に初回生成 → 予選を即完了
+      if (nsWasNull && WORLD_DATA.corporateNihonSenshuken?.generated && !WORLD_DATA.corporateNihonSenshuken.done && WORLD_DATA.corporateNihonSenshuken.qualifiers && month >= 11) {
+        const ns = WORLD_DATA.corporateNihonSenshuken;
+        for (const rid of Object.keys(ns.qualifiers)) autoPlayQualifier(ns.qualifiers[rid], null);
+        ns.phase = 'qualifiers_done';
+      }
       // 日本選手権本戦（予選完了後に生成）
+      const nsMainWasNull = !!(WORLD_DATA.corporateNihonSenshuken?.phase === 'qualifiers_done' && !WORLD_DATA.corporateNihonSenshuken?.mainTournament);
       if (WORLD_DATA.corporateNihonSenshuken?.phase === 'qualifiers_done' && !WORLD_DATA.corporateNihonSenshuken?.mainTournament) {
         try {
           const ns = WORLD_DATA.corporateNihonSenshuken;
@@ -418,7 +451,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           WORLD_DATA.corporateNihonSenshuken = { ...WORLD_DATA.corporateNihonSenshuken, done: true };
         }
       }
+      // catch-up: 11月以降に本戦が初回生成 → 即完了
+      if (nsMainWasNull && WORLD_DATA.corporateNihonSenshuken?.mainTournament && !WORLD_DATA.corporateNihonSenshuken.done && month >= 11) {
+        const ns = WORLD_DATA.corporateNihonSenshuken;
+        autoPlayMainTournament(ns.mainTournament);
+        ns.champion = ns.mainTournament.champion; ns.runnerUp = ns.mainTournament.runnerUp; ns.done = true;
+      }
       // クラブ選手権（9月〜生成）
+      const csWasNull = !WORLD_DATA.corporateClubSenshuken?.generated;
       if (month >= 9 && !WORLD_DATA.corporateClubSenshuken?.generated) {
         try {
           const cs = generateClubSenshuken({ userTeamName: null, calendarYear: calYear });
@@ -427,7 +467,14 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           WORLD_DATA.corporateClubSenshuken = { generated: true, done: true };
         }
       }
+      // catch-up: 11月以降に初回生成 → 予選を即完了
+      if (csWasNull && WORLD_DATA.corporateClubSenshuken?.generated && !WORLD_DATA.corporateClubSenshuken.done && WORLD_DATA.corporateClubSenshuken.qualifiers && month >= 11) {
+        const cs = WORLD_DATA.corporateClubSenshuken;
+        for (const rid of Object.keys(cs.qualifiers)) autoPlayQualifier(cs.qualifiers[rid], null);
+        cs.phase = 'qualifiers_done';
+      }
       // クラブ選手権本戦（予選完了後に生成）
+      const csMainWasNull = !!(WORLD_DATA.corporateClubSenshuken?.phase === 'qualifiers_done' && !WORLD_DATA.corporateClubSenshuken?.mainTournament);
       if (WORLD_DATA.corporateClubSenshuken?.phase === 'qualifiers_done' && !WORLD_DATA.corporateClubSenshuken?.mainTournament) {
         try {
           const cs = WORLD_DATA.corporateClubSenshuken;
@@ -436,6 +483,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         } catch (_) {
           WORLD_DATA.corporateClubSenshuken = { ...WORLD_DATA.corporateClubSenshuken, done: true };
         }
+      }
+      // catch-up: 11月以降に本戦が初回生成 → 即完了
+      if (csMainWasNull && WORLD_DATA.corporateClubSenshuken?.mainTournament && !WORLD_DATA.corporateClubSenshuken.done && month >= 11) {
+        const cs = WORLD_DATA.corporateClubSenshuken;
+        autoPlayMainTournament(cs.mainTournament);
+        cs.champion = cs.mainTournament.champion; cs.runnerUp = cs.mainTournament.runnerUp; cs.done = true;
       }
     }
 
@@ -3378,80 +3431,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 社会人トーナメント（独立リーグモード用） */}
-          {!isCorporate && !isUniversity && WORLD_DATA.initialized && (() => {
-            const corpToshi = WORLD_DATA.corporateToshitaikou;
-            const corpNS = WORLD_DATA.corporateNihonSenshuken;
-            const corpCS = WORLD_DATA.corporateClubSenshuken;
-            const corpRT = WORLD_DATA.corporateRegionalTournament;
-            if (!corpToshi?.generated && !corpNS?.generated && !corpCS?.generated && !corpRT?.generated) return null;
-            const tournaments = [];
-            if (corpRT?.generated) {
-              const champions = [];
-              const inProgress = [];
-              for (const regionId of Object.keys(corpRT.brackets || {})) {
-                const r = corpRT.brackets[regionId];
-                if (r?.champion) champions.push({ region: r.regionName, team: r.champion });
-                else inProgress.push(r?.regionName);
-              }
-              const status = corpRT.phase === 'done' ? null : `${inProgress.length}地域 進行中`;
-              tournaments.push({ label: '地域トーナメント', color: 'green', champions, status });
-            }
-            if (corpToshi?.generated) {
-              const status = corpToshi.mainDone ? null : !corpToshi.qualifiersDone ? '予選 進行中' : corpToshi.mainTournament ? '本戦 進行中' : '本戦 準備中';
-              tournaments.push({ label: '都市対抗野球大会', color: 'yellow', champion: corpToshi.mainDone ? corpToshi.champion : null, runnerUp: corpToshi.mainDone ? corpToshi.runnerUp : null, status });
-            }
-            if (corpNS?.generated) {
-              const status = corpNS.done ? null : corpNS.phase === 'main' ? '本戦 進行中' : '予選 進行中';
-              tournaments.push({ label: '日本選手権大会', color: 'red', champion: corpNS.done ? corpNS.champion : null, runnerUp: corpNS.done ? corpNS.runnerUp : null, status });
-            }
-            if (corpCS?.generated) {
-              const status = corpCS.done ? null : corpCS.phase === 'main' ? '本戦 進行中' : '予選 進行中';
-              tournaments.push({ label: 'クラブ野球選手権', color: 'purple', champion: corpCS.done ? corpCS.champion : null, runnerUp: corpCS.done ? corpCS.runnerUp : null, status });
-            }
-            if (tournaments.length === 0) return null;
-            const thColors = { yellow: 'text-yellow-400', red: 'text-red-400', green: 'text-green-400', purple: 'text-purple-400' };
-            const bgColors = { yellow: 'bg-yellow-900/20 border-yellow-700/30', red: 'bg-red-900/20 border-red-700/30', green: 'bg-green-900/20 border-green-700/30', purple: 'bg-purple-900/20 border-purple-700/30' };
-            return (
-              <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-yellow-700/30 mt-3">
-                <h2
-                  className="text-sm font-bold text-yellow-400 mb-2 flex items-center gap-1.5 cursor-pointer select-none"
-                  onClick={() => setShowCorporateTournaments(prev => !prev)}
-                >
-                  <span>🏢</span> 社会人トーナメント
-                  <span className="text-[10px] text-gray-500 ml-auto">{showCorporateTournaments ? '▲' : '▼'}</span>
-                </h2>
-                <Collapse open={showCorporateTournaments}><div className="space-y-1.5">
-                  {tournaments.map((t, i) => (
-                    <div key={i} className={`rounded-lg p-2 border ${bgColors[t.color] || bgColors.yellow}`}>
-                      <div className={`text-xs font-bold ${thColors[t.color] || 'text-yellow-400'} mb-0.5 flex items-center gap-1`}>
-                        {t.champion ? '🏆' : '⚾'} {t.label}
-                        {t.status && <span className="text-[10px] text-gray-500 font-normal ml-auto">{t.status}</span>}
-                      </div>
-                      {t.champions ? (
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                          {t.champions.map((c, ci) => (
-                            <span key={ci} className="text-[11px]">
-                              <span className="text-gray-500">{c.region}:</span> <span className="text-gray-200">{c.team}</span>
-                            </span>
-                          ))}
-                          {t.champions.length === 0 && <span className="text-[11px] text-gray-500">開催中...</span>}
-                        </div>
-                      ) : t.champion ? (
-                        <div className="text-[11px] text-gray-300">
-                          <span className={`${thColors[t.color] || 'text-yellow-300'} font-bold`}>優勝: {t.champion}</span>
-                          {t.runnerUp && <span className="text-gray-500 ml-2">準優勝: {t.runnerUp}</span>}
-                        </div>
-                      ) : (
-                        <div className="text-[11px] text-gray-500">開催中...</div>
-                      )}
-                    </div>
-                  ))}
-                </div></Collapse>
-              </div>
-            );
-          })()}
-
           {/* 大学リーグ順位表 */}
           {WORLD_DATA.initialized && (() => {
             // 大学モード: ユーザーリーグの順位をWORLD_DATAに同期（simulateUniversityLeagueDateはユーザーリーグをスキップするため）
@@ -3559,8 +3538,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* 大学モード: 社会人トーナメント（折りたたみ式・トーナメント表付き） */}
-          {isUniversity && WORLD_DATA.initialized && (() => {
+          {/* 社会人トーナメント（全非社会人モード: 折りたたみ式・トーナメント表付き） */}
+          {!isCorporate && WORLD_DATA.initialized && (() => {
             const corpToshi = WORLD_DATA.corporateToshitaikou;
             const corpNS = WORLD_DATA.corporateNihonSenshuken;
             const corpCS = WORLD_DATA.corporateClubSenshuken;

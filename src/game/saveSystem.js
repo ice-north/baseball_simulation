@@ -109,21 +109,27 @@ export const saveGameToSlot = async (slotIndex, gameState, onProgress) => {
       draft: JSON.parse(JSON.stringify(WORLD_DATA.draft)),
       corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
         generated: WORLD_DATA.corporateToshitaikou.generated,
+        qualifiersDone: WORLD_DATA.corporateToshitaikou.qualifiersDone,
         mainDone: WORLD_DATA.corporateToshitaikou.mainDone,
         champion: WORLD_DATA.corporateToshitaikou.champion,
         runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
       } : null,
       corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken ? {
+        generated: WORLD_DATA.corporateNihonSenshuken.generated,
         done: WORLD_DATA.corporateNihonSenshuken.done,
         champion: WORLD_DATA.corporateNihonSenshuken.champion,
         runnerUp: WORLD_DATA.corporateNihonSenshuken.runnerUp,
       } : null,
       corporateClubSenshuken: WORLD_DATA.corporateClubSenshuken ? {
+        generated: WORLD_DATA.corporateClubSenshuken.generated,
         done: WORLD_DATA.corporateClubSenshuken.done,
         champion: WORLD_DATA.corporateClubSenshuken.champion,
         runnerUp: WORLD_DATA.corporateClubSenshuken.runnerUp,
       } : null,
-      corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? { done: true } : null,
+      corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? {
+        generated: WORLD_DATA.corporateRegionalTournament.generated,
+        done: WORLD_DATA.corporateRegionalTournament.phase === 'done' || !!WORLD_DATA.corporateRegionalTournament.done,
+      } : null,
       universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
       _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
       _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
@@ -233,10 +239,15 @@ export const loadGameFromSlot = async (slotIndex) => {
         }
       }
       WORLD_DATA.draft = wd.draft || { draftedPlayers: [], history: [] };
-      WORLD_DATA.corporateToshitaikou = wd.corporateToshitaikou || null;
-      WORLD_DATA.corporateNihonSenshuken = wd.corporateNihonSenshuken || null;
-      WORLD_DATA.corporateClubSenshuken = wd.corporateClubSenshuken || null;
-      WORLD_DATA.corporateRegionalTournament = wd.corporateRegionalTournament || null;
+      // 未完了トーナメントはnullにリセット → checkAndTriggerEventsで再生成＋キャッチアップ
+      const ctd = wd.corporateToshitaikou;
+      WORLD_DATA.corporateToshitaikou = (ctd && ctd.mainDone) ? ctd : null;
+      const cns = wd.corporateNihonSenshuken;
+      WORLD_DATA.corporateNihonSenshuken = (cns && cns.done) ? cns : null;
+      const ccs = wd.corporateClubSenshuken;
+      WORLD_DATA.corporateClubSenshuken = (ccs && ccs.done) ? ccs : null;
+      const crt = wd.corporateRegionalTournament;
+      WORLD_DATA.corporateRegionalTournament = (crt && crt.done) ? { generated: true, done: true, phase: 'done' } : null;
       WORLD_DATA.universityLeague = wd.universityLeague || null;
       WORLD_DATA._universityScout = wd._universityScout || null;
       WORLD_DATA._teamRanking = wd._teamRanking || null;
