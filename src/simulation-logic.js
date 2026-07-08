@@ -314,35 +314,36 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   const safeDefense = defense || {};
   const { exitVelocity, launchAngle, distance, hangTime, direction } = battedBall || {};
 
-  // 本塁打判定（バレルゾーン）
-  // MLB基準: EV154km/h以上かつフェンス越えの飛距離
-  if (distance > 108 && launchAngle >= 23 && launchAngle <= 37 && exitVelocity >= 153) {
-    // 確率的HR: EV高いほど確実、境界EVでは取られることもある
-    // EV153: 42%, EV163: 80%, EV173: 95%（上限）
+  // スタジアム形状: ポール際99m, センター122m, 方向で補間
+  // direction 0°=センター→122m, ±45°=ポール際→99m をcos²で補間
+  const absDir = Math.abs(direction || 0);
+  const fenceDistBase = 99 + 23 * Math.pow(Math.cos(absDir * Math.PI / 90), 2);
+
+  // Type 1: バレルゾーン強打HR（フェンスを8m以上クリア）
+  if (distance > fenceDistBase + 8 && launchAngle >= 23 && launchAngle <= 37 && exitVelocity >= 153) {
+    // EV153: 42%, EV163: 80%, EV173: 95%
     const hr1Prob = Math.min(0.95, 0.42 + (exitVelocity - 153) / 27);
     if (Math.random() < hr1Prob) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！' };
     }
   }
 
-  // 長打圏フライ（100m以上の深いフライ、速度とパワー依存確率）
-  // 中堅〜パワー型の境界HRを底上げしつつ、過度なHR量産は抑える
-  if (distance > 100 && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 144) {
-    // 速度要因: EV144-162で 0→1
-    const velocityFactor = Math.max(0, (exitVelocity - 144) / 18);
-    // パワー要因: power 30-95 で 0→1（低パワーでも芯を食えばHRの可能性）
+  // Type 2: フェンス越えHR（方向別壁距離を基準に判定）
+  if (distance > fenceDistBase && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 130) {
+    const velocityFactor = Math.max(0, (exitVelocity - 130) / 20);
     const powerFactor = Math.max(0, ((batter.power || 50) - 30) / 65);
-    // velocity主体 + power補正（最大約25%）
-    const hrProb = velocityFactor * 0.16 + powerFactor * 0.09;
+    // 余裕が大きいほど確率上昇（15m以上余裕があれば×1.5倍）
+    const clearanceFactor = Math.min(1.5, 1 + Math.max(0, distance - fenceDistBase) / 15);
+    const hrProb = (velocityFactor * 0.15 + powerFactor * 0.07) * clearanceFactor;
     if (Math.random() < hrProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス越え）' };
     }
   }
 
-  // 風や打球の伸びによるフェンスギリギリHR（低パワーでもごく稀に出る）
-  if (distance > 77 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 110) {
+  // Type 3: ギリギリHR（風・打球の伸び, フェンス8m手前から発動）
+  if (distance > fenceDistBase - 8 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 110) {
     const evFactor = Math.max(0, (exitVelocity - 110) / 35);
-    const distFactor = Math.max(0, (distance - 77) / 25);
+    const distFactor = Math.max(0, (distance - (fenceDistBase - 8)) / 15);
     const hrProb = evFactor * distFactor * 0.13;
     if (Math.random() < hrProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス直撃）' };
