@@ -71,9 +71,8 @@ export const TRAINING_MENUS = {
   physique: {
     name: '基礎体力',
     icon: '🏃',
-    description: '体幹・体力を集中強化（低年次選手の基礎づくり）',
-    targets: ['bodyStamina'],
-    growthMultipliers: { bodyStamina: 3.0 },
+    description: '体力+2〜4・体幹+2〜3/クール（低年次選手の基礎づくり）',
+    targets: [],
     category: 'fielding'
   },
   newpitch: {
@@ -1100,11 +1099,21 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     }
   }
 
-  // 基礎体力練習: 体幹を確定で+3〜4成長（サブ筋トレ+2より大きい）
+  // 基礎体力練習: 体力+2〜4、体幹+2〜3 を確定成長
   if (trainingType === 'physique' && updatedPlayer.physical) {
+    const bsBefore = updatedPlayer.physical.bodyStamina ?? 50;
+    if (bsBefore < 99) {
+      const bsGain = Math.floor(Math.random() * 3) + 2; // +2〜4
+      updatedPlayer.physical.bodyStamina = Math.min(99, bsBefore + bsGain);
+      growthReport.push({
+        stat: 'bodyStamina', statName: '体力',
+        before: bsBefore, after: updatedPlayer.physical.bodyStamina,
+        growth: updatedPlayer.physical.bodyStamina - bsBefore, isAwakening: false
+      });
+    }
     const oldMuscle = updatedPlayer.physical.muscle ?? 50;
     if (oldMuscle < 100) {
-      const mGain = Math.floor(Math.random() * 2) + 3;
+      const mGain = Math.floor(Math.random() * 2) + 2; // +2〜3
       updatedPlayer.physical.muscle = Math.min(100, oldMuscle + mGain);
       growthReport.push({
         stat: 'muscle', statName: '体幹',
