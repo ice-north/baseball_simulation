@@ -59,15 +59,12 @@ function fielderStatToMain(statKey) {
   return 'batting';
 }
 function pitcherStatToSub(statKey) {
-  if (statKey === 'velocity') return 'muscle';
-  if (statKey === 'stamina') return 'running';
-  return 'running';
+  return 'physique';
 }
 function fielderStatToSub(statKey) {
   if (statKey === 'eye') return 'eye';
-  if (statKey === 'speed') return 'running';
   if (statKey === 'defense') return 'defense_sub';
-  return 'muscle';
+  return 'physique';
 }
 
 const CAMP_PRESETS = {
@@ -92,16 +89,12 @@ const CAMP_PRESETS = {
     },
     getSub: (p) => {
       if (p.position === 'pitcher') {
-        const top = sortedStatKeys(getPitcherStats(p), false)[0];
-        if (top === 'velocity') return 'muscle';
-        if (top === 'stamina') return 'running';
         return 'stretch';
       }
       const top = sortedStatKeys(getFielderStats(p), false)[0];
       if (top === 'eye') return 'eye';
-      if (top === 'speed') return 'running';
       if (top === 'defense') return 'defense_sub';
-      return 'muscle';
+      return 'physique';
     },
   },
   balanced: {
@@ -117,8 +110,7 @@ const CAMP_PRESETS = {
       return 'baserunning';
     },
     getSub: (p) => {
-      if (p.position === 'pitcher') return 'running';
-      return 'running';
+      return 'physique';
     },
   },
   physical: {
@@ -131,8 +123,7 @@ const CAMP_PRESETS = {
       return spd <= pow ? 'baserunning' : 'batting';
     },
     getSub: (p) => {
-      if (p.position === 'pitcher') return 'running';
-      return 'muscle';
+      return 'physique';
     },
   },
   technical: {
@@ -162,10 +153,10 @@ const CAMP_PRESETS = {
     getSub: (p) => {
       if (p.position === 'pitcher') {
         const control = p.pitching?.control || 50;
-        return control >= 55 ? 'breaking' : 'running';
+        return control >= 55 ? 'breaking' : 'physique';
       }
       const def = p.fielding?.defense||0;
-      return def < 40 ? 'defense_sub' : 'running';
+      return def < 40 ? 'defense_sub' : 'physique';
     },
   },
   coach: {
@@ -235,10 +226,10 @@ const CAMP_PRESETS = {
           ? arsenal.filter(a => a.name !== 'ストレート').reduce((sum, a) => sum + (a.level || 0), 0) / breakingCount
           : 0;
         if (avgBreaking < 35 && breakingCount >= 2) return 'breaking';
-        if (s < 80) return 'running';
+        if (s < 80) return 'physique';
         if (breakingCount >= 2 && avgBreaking < 55) return 'breaking';
         if (age >= 29) return 'stretch';
-        return 'running';
+        return 'physique';
       }
       const def = p.fielding?.defense || 0;
       const eye = p.batting?.eye || 0;
@@ -248,8 +239,7 @@ const CAMP_PRESETS = {
       if (def < 35) return 'defense_sub';
       if (eye < 30) return 'eye';
       if (age >= 29) return 'stretch';
-      if (speed < 40) return 'running';
-      return 'muscle';
+      return 'physique';
     },
   },
 };
@@ -271,7 +261,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   });
   const [subAssignments, setSubAssignments] = useState(() => {
     const init = {};
-    userTeam?.players?.forEach(p => { init[p.id] = 'running'; });
+    userTeam?.players?.forEach(p => { init[p.id] = 'physique'; });
     return init;
   });
   const [newPitchSelections, setNewPitchSelections] = useState({});
@@ -413,7 +403,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     TEAMS_DATA[userTeamName] = updatedTeam;
 
     updatedTeam.players.forEach(p => {
-      const subType = subAssignments[p.id] || 'running';
+      const subType = subAssignments[p.id] || 'physique';
       const subOptions = {
         targetPosition: subPositionSelections[p.id],
         targetForm: formSelections[p.id],
@@ -478,8 +468,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
       }
 
       const aiAssign = {};
-      const pitcherMenus = ['stamina', 'control', 'velocity', 'newpitch', 'physique'];
-      const batterMenus = ['batting', 'baserunning', 'fielding', 'physique'];
+      const pitcherMenus = ['stamina', 'control', 'velocity', 'newpitch'];
+      const batterMenus = ['batting', 'baserunning', 'fielding'];
       aiTeam.players.forEach(p => {
         if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
         if (p.position === 'pitcher') {

@@ -68,13 +68,6 @@ export const TRAINING_MENUS = {
     targets: ['stamina'],
     category: 'pitching'
   },
-  physique: {
-    name: '基礎体力',
-    icon: '🏃',
-    description: '体力+2〜4・体幹+2〜3/クール（低年次選手の基礎づくり）',
-    targets: [],
-    category: 'fielding'
-  },
   newpitch: {
     name: '新球種習得',
     icon: '✨',
@@ -152,17 +145,10 @@ export const TRAINING_MENUS = {
  * サブ練習メニュー（基礎体力・弱点補強系）
  */
 export const SUB_TRAINING_MENUS = {
-  running: {
-    name: 'ランニング',
+  physique: {
+    name: '基礎体力',
     icon: '🏃',
-    description: '走力+体力UP（投手：スタミナ+1〜2確定）',
-    targets: ['speed', 'stamina', 'bodyStamina_sub'],
-  },
-  muscle: {
-    name: '筋トレ',
-    icon: '💪',
-    description: 'パワー/肩力/走力のいずれか微増',
-    targets: ['power', 'arm', 'speed'],
+    description: '体力+2〜4・体幹+2〜3/クール確定（投手：スタミナ+1〜2も）',
   },
   stretch: {
     name: 'ストレッチ',
@@ -252,63 +238,29 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
   const growthAmount = () => Math.random() < 0.4 ? (Math.random() < 0.3 ? 2 : 1) : 0;
 
   switch (subType) {
-    case 'running': {
-      // 走力は才能依存が強いため半減（50%の確率で適用）
-      const spd = Math.random() < 0.5 ? growthAmount() : 0;
-      if (spd > 0 && player.physical) {
-        player.physical.speed = Math.min(100, (player.physical.speed || 50) + spd);
-        growthReport.push({ statName: '走力', before: player.physical.speed - spd, after: player.physical.speed, growth: spd });
+    case 'physique': {
+      // 体力+2〜4（確定）
+      if (player.physical) {
+        const bsBefore = player.physical.bodyStamina ?? 50;
+        if (bsBefore < 99) {
+          const bsGrowth = Math.floor(Math.random() * 3) + 2; // 2〜4
+          player.physical.bodyStamina = Math.min(99, bsBefore + bsGrowth);
+          growthReport.push({ statName: '体力', before: bsBefore, after: player.physical.bodyStamina, growth: player.physical.bodyStamina - bsBefore });
+        }
+        // 体幹+2〜3（確定）
+        const oldMuscle = player.physical.muscle ?? 50;
+        if (oldMuscle < 100) {
+          const mGrowth = Math.floor(Math.random() * 2) + 2; // 2〜3
+          player.physical.muscle = Math.min(100, oldMuscle + mGrowth);
+          growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
+        }
       }
-      // スタミナ: 投手100%で+1〜2（努力で必ず向上）
+      // 投手はスタミナ+1〜2も上昇
       if (player.pitching) {
         const staGrowth = Math.random() < 0.4 ? 2 : 1;
         const before = player.pitching.stamina || 80;
         player.pitching.stamina = Math.min(200, before + staGrowth);
         growthReport.push({ statName: 'スタミナ', before, after: player.pitching.stamina, growth: staGrowth });
-      }
-      // 体力UP（100%で+1〜4）
-      if (player.physical) {
-        const bsBefore = player.physical.bodyStamina || 50;
-        const bsGrowth = Math.floor(Math.random() * 4) + 1; // 1〜4
-        player.physical.bodyStamina = Math.min(99, bsBefore + bsGrowth);
-        growthReport.push({ statName: '体力', before: bsBefore, after: player.physical.bodyStamina, growth: bsGrowth });
-      }
-      break;
-    }
-    case 'muscle': {
-      // パワー/肩力/走力のうち訓練可能な能力だけをリストし、その中からランダム選択
-      // （転向選手など batting/physical が欠落している場合にサイレント空振りしない）
-      const muscleChoices = [];
-      if (player.batting) muscleChoices.push('power');
-      if (player.physical) muscleChoices.push('arm', 'speed');
-      if (muscleChoices.length === 0) break;
-      const chosenStat = muscleChoices[Math.floor(Math.random() * muscleChoices.length)];
-      const gainRaw = growthAmount();
-      if (gainRaw > 0) {
-        if (chosenStat === 'power') {
-          const oldPwr = player.batting.power || 50;
-          const pwr = applyTechStatDecay(oldPwr, gainRaw);
-          if (pwr > 0) {
-            player.batting.power = Math.min(100, oldPwr + pwr);
-            growthReport.push({ statName: 'パワー', before: oldPwr, after: player.batting.power, growth: pwr });
-          }
-        } else if (chosenStat === 'arm') {
-          const oldArm = player.physical.arm || 50;
-          player.physical.arm = Math.min(100, oldArm + gainRaw);
-          growthReport.push({ statName: '肩力', before: oldArm, after: player.physical.arm, growth: gainRaw });
-        } else if (chosenStat === 'speed') {
-          const oldSpd = player.physical.speed || 50;
-          player.physical.speed = Math.min(100, oldSpd + gainRaw);
-          growthReport.push({ statName: '走力', before: oldSpd, after: player.physical.speed, growth: gainRaw });
-        }
-      }
-      // 筋トレで体幹(muscle)が必ず+2上昇（成長倍率に影響する隠しパラメータ）
-      if (player.physical) {
-        const oldMuscle = player.physical.muscle ?? 50;
-        if (oldMuscle < 100) {
-          player.physical.muscle = Math.min(100, oldMuscle + 2);
-          growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: 2 });
-        }
       }
       break;
     }
@@ -1095,30 +1047,6 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
             growth: newVal - currentVal, isAwakening: false, isPenalty: true
           });
         }
-      });
-    }
-  }
-
-  // 基礎体力練習: 体力+2〜4、体幹+2〜3 を確定成長
-  if (trainingType === 'physique' && updatedPlayer.physical) {
-    const bsBefore = updatedPlayer.physical.bodyStamina ?? 50;
-    if (bsBefore < 99) {
-      const bsGain = Math.floor(Math.random() * 3) + 2; // +2〜4
-      updatedPlayer.physical.bodyStamina = Math.min(99, bsBefore + bsGain);
-      growthReport.push({
-        stat: 'bodyStamina', statName: '体力',
-        before: bsBefore, after: updatedPlayer.physical.bodyStamina,
-        growth: updatedPlayer.physical.bodyStamina - bsBefore, isAwakening: false
-      });
-    }
-    const oldMuscle = updatedPlayer.physical.muscle ?? 50;
-    if (oldMuscle < 100) {
-      const mGain = Math.floor(Math.random() * 2) + 2; // +2〜3
-      updatedPlayer.physical.muscle = Math.min(100, oldMuscle + mGain);
-      growthReport.push({
-        stat: 'muscle', statName: '体幹',
-        before: oldMuscle, after: updatedPlayer.physical.muscle,
-        growth: updatedPlayer.physical.muscle - oldMuscle, isAwakening: false
       });
     }
   }
