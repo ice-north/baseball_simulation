@@ -121,7 +121,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                   <StatBar label="回復" value={player.physical?.recovery || 50} />
                 </div>
                 <div className="border-t border-gray-600 mt-2 pt-2">
-                  <StatBar label="筋力" value={player.physical?.muscle ?? 50} />
+                  <StatBar label="体幹" value={player.physical?.muscle ?? 50} />
                   <StatBar label="器用さ" value={player.physical?.dexterity ?? 50} />
                 </div>
                 <div className="border-t border-gray-600 mt-2 pt-2 text-xs text-gray-400 space-y-1">

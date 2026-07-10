@@ -295,12 +295,12 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           growthReport.push({ statName: '走力', before: oldSpd, after: player.physical.speed, growth: gainRaw });
         }
       }
-      // 筋トレで筋力(muscle)が必ず+2上昇（成長倍率に影響する隠しパラメータ）
+      // 筋トレで体幹(muscle)が必ず+2上昇（成長倍率に影響する隠しパラメータ）
       if (player.physical) {
         const oldMuscle = player.physical.muscle ?? 50;
         if (oldMuscle < 100) {
           player.physical.muscle = Math.min(100, oldMuscle + 2);
-          growthReport.push({ statName: '筋力', before: oldMuscle, after: player.physical.muscle, growth: 2 });
+          growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: 2 });
         }
       }
       break;
@@ -934,12 +934,12 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     const TALENT_STAT_MULTIPLIERS = {
       arm: 0.5,       // 肩力: 生まれ持った体格に依存
       speed: 0.6,     // 走力: 先天的な筋繊維に依存
-      power: 0.8,     // パワー: 筋力トレーニングで伸びる余地あり
+      power: 0.8,     // パワー: 体幹トレーニングで伸びる余地あり
       velocity: 0.8,  // 球速: フォーム改善等で伸びる余地あり
     };
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
 
-    // 筋力/器用さによる成長方向の補正（0.5〜1.5倍）
+    // 体幹/器用さによる成長方向の補正（0.5〜1.5倍）
     const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
     const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal', 'bunt'];
     const muscle = player.physical?.muscle ?? 50;

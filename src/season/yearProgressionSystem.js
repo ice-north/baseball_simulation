@@ -2636,7 +2636,7 @@ export function applyAgeCurveChanges(allTeams) {
           const AGE_TALENT_MULT = { arm: 0.5, speed: 0.6, power: 0.8, velocity: 0.8 };
           const ageTalentMult = AGE_TALENT_MULT[stat] ?? 1.0;
 
-          // 筋力/器用さによる成長方向の補正（成長方向のみ適用、衰退には影響しない）
+          // 体幹/器用さによる成長方向の補正（成長方向のみ適用、衰退には影響しない）
           const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
           const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal'];
           const muscle = player.physical?.muscle ?? 50;
@@ -2658,7 +2658,7 @@ export function applyAgeCurveChanges(allTeams) {
 
           // 最終変動値（四捨五入、±0の場合もある）
           let rawChange = base + variance;
-          // 成長方向: ポテンシャル + 筋力/器用さ補正（プロ意識は練習に集中）
+          // 成長方向: ポテンシャル + 体幹/器用さ補正（プロ意識は練習に集中）
           // 衰退方向: マイナスポテンシャルで加速 + プロ意識で緩和
           let change = rawChange > 0
             ? Math.round(rawChange * ageTalentMult * growthPotential * physiqueMult)
@@ -2676,7 +2676,7 @@ export function applyAgeCurveChanges(allTeams) {
           const formVelMult = stat === 'velocity' ? (formEff.velocityGrowthMult || 1.0) : 1.0;
           const formCtrlMult = stat === 'control' ? (formEff.controlGrowthMult || 1.0) : 1.0;
 
-          // 球速は変動幅を1.2倍に（スケールが大きいため）+ フォーム補正 + 筋力補正
+          // 球速は変動幅を1.2倍に（スケールが大きいため）+ フォーム補正 + 体幹補正
           if (stat === 'velocity') change = rawChange > 0
             ? Math.round(rawChange * 1.2 * ageTalentMult * growthPotential * formVelMult * physiqueMult)
             : Math.round(rawChange * 1.2 * decayMult * decayDiscMult);

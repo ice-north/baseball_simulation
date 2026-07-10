@@ -31,7 +31,7 @@ const FILTER_DEFS = [
   { key: 'growth', label: '成長率', get: p => p.growthPotential || 1.0, min: 0.5, max: 1.5, step: 0.05, decimal: true },
   { key: 'discipline', label: 'プロ意識', get: p => p.personality?.discipline ?? 50 },
   { key: 'fame', label: '知名度', get: p => p.fame || 0 },
-  { key: 'muscle', label: '筋力', get: p => p.physical?.muscle ?? 50 },
+  { key: 'muscle', label: '体幹', get: p => p.physical?.muscle ?? 50 },
   { key: 'catcherLead', label: 'Cリード', get: p => p.catching?.lead || 0 },
   { key: 'breakingCount', label: '球種数', get: p => (p.pitching?.arsenal || []).filter(a => (a.level || 0) >= 20).length, min: 0, max: 9, step: 1 },
 ];
@@ -260,7 +260,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 <SortTh k="eye" w="w-7">眼</SortTh>
                 <SortTh k="steal" w="w-7">盗</SortTh>
                 <SortTh k="bodyStamina" w="w-7">体力</SortTh>
-                <SortTh k="muscle" w="w-7">筋力</SortTh>
+                <SortTh k="muscle" w="w-7">体幹</SortTh>
                 <SortTh k="dexterity" w="w-7">器用</SortTh>
                 <SortTh k="velocity" w="w-8">球速</SortTh>
                 <SortTh k="control" w="w-7">制</SortTh>

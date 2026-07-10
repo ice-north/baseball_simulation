@@ -355,7 +355,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       <SelTh label="選眼" sortK="eye" title="選球眼でソート" />
                       <SelTh label="走力" sortK="speed" title="走力でソート" />
                       <SelTh label="肩力" sortK="arm" title="肩力でソート" />
-                      <SelTh label="筋力" sortK="bodyStamina" title="体力でソート" />
+                      <SelTh label="体幹" sortK="bodyStamina" title="体力でソート" />
                       <SelTh label="器用" sortK="dexterity" title="器用さでソート" />
                       <SelTh label="守備" sortK="defense" title="守備でソート" />
                       <SelTh label="精神" sortK="mental" title="精神力でソート" />
@@ -533,7 +533,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                     <SortHeader k="eye" label="選眼" />
                     <SortHeader k="speed" label="走力" />
                     <SortHeader k="arm" label="肩力" />
-                    <SortHeader k="bodyStamina" label="筋力" />
+                    <SortHeader k="bodyStamina" label="体幹" />
                     <SortHeader k="dexterity" label="器用" />
                     <SortHeader k="defense" label="守備" />
                     <SortHeader k="mental" label="精神" />
