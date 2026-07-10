@@ -478,8 +478,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
       }
 
       const aiAssign = {};
-      const pitcherMenus = ['stamina', 'control', 'velocity', 'newpitch'];
-      const batterMenus = ['batting', 'baserunning', 'fielding'];
+      const pitcherMenus = ['stamina', 'control', 'velocity', 'newpitch', 'physique'];
+      const batterMenus = ['batting', 'baserunning', 'fielding', 'physique'];
       aiTeam.players.forEach(p => {
         if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
         if (p.position === 'pitcher') {

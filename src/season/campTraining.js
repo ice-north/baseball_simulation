@@ -68,6 +68,14 @@ export const TRAINING_MENUS = {
     targets: ['stamina'],
     category: 'pitching'
   },
+  physique: {
+    name: '基礎体力',
+    icon: '🏃',
+    description: '体幹・体力を集中強化（低年次選手の基礎づくり）',
+    targets: ['bodyStamina'],
+    growthMultipliers: { bodyStamina: 3.0 },
+    category: 'fielding'
+  },
   newpitch: {
     name: '新球種習得',
     icon: '✨',
@@ -1088,6 +1096,20 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
             growth: newVal - currentVal, isAwakening: false, isPenalty: true
           });
         }
+      });
+    }
+  }
+
+  // 基礎体力練習: 体幹を確定で+3〜4成長（サブ筋トレ+2より大きい）
+  if (trainingType === 'physique' && updatedPlayer.physical) {
+    const oldMuscle = updatedPlayer.physical.muscle ?? 50;
+    if (oldMuscle < 100) {
+      const mGain = Math.floor(Math.random() * 2) + 3;
+      updatedPlayer.physical.muscle = Math.min(100, oldMuscle + mGain);
+      growthReport.push({
+        stat: 'muscle', statName: '体幹',
+        before: oldMuscle, after: updatedPlayer.physical.muscle,
+        growth: updatedPlayer.physical.muscle - oldMuscle, isAwakening: false
       });
     }
   }
