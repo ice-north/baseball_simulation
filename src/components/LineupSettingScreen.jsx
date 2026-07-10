@@ -921,6 +921,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           <StatCell value={player.batting?.meet || 0} className="border-l border-gray-700/40" />
           <StatCell value={player.batting?.power || 0} />
           <StatCell value={player.physical?.speed || 0} />
+          <StatCell value={player.physical?.arm || 0} />
+          <StatCell value={player.fielding?.defense || 0} />
           <td className="py-1.5 px-1 text-[11px] text-center border-l border-gray-700/40">
             {(() => {
               const f = player.fatigue || 0;
@@ -1387,7 +1389,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <SortHeader label="守備" sortKey="position" />
                         <SortHeader label="ミ" sortKey="meet" className="text-center border-l border-gray-700/40" />
                         <SortHeader label="パ" sortKey="power" className="text-center" />
-                        <SortHeader label="走" sortKey="speed" className="text-center" />
+                        <SortHeader label="足" sortKey="speed" className="text-center" />
+                        <SortHeader label="肩" sortKey="arm" className="text-center" />
+                        <SortHeader label="守" sortKey="defense" className="text-center" />
                         <SortHeader label="疲労" sortKey="fatigue" className="text-center border-l border-gray-700/40" />
                         <th className="py-1 px-1 text-center text-gray-500 border-l border-gray-700/40">成績</th>
                       </tr>
