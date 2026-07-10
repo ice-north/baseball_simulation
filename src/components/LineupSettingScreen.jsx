@@ -1054,6 +1054,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     </button>
                   ))}
                 </div>
+                {!lineup.some(e => e.position === 'catcher') && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[10px] text-red-400 bg-red-950/40 border border-red-700/30 rounded px-2 py-1">
+                    <span className="font-bold">!</span>
+                    <span>捕手が未設定です。スタメンに捕手を入れてください。</span>
+                  </div>
+                )}
               </div>
               <div className="p-2 space-y-1">
                 {(useDH ? [1,2,3,4,5,6,7,8,9] : [1,2,3,4,5,6,7,8,9]).map(order => {
@@ -1301,8 +1307,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 const posNames = { catcher: '捕手', first: '一塁', second: '二塁', short: '遊撃', third: '三塁', left: '左翼', center: '中堅', right: '右翼' };
                 if (missing.length === 0) return null;
                 return (
-                  <div className="mt-2 text-center text-xs text-yellow-400/80">
-                    未配置: {missing.map(p => posNames[p]).join('・')}
+                  <div className="mt-2 text-center text-xs">
+                    未配置:{' '}
+                    {missing.map((p, i) => (
+                      <span key={p} className={p === 'catcher' ? 'text-red-400 font-bold' : 'text-yellow-400/80'}>
+                        {i > 0 && '・'}{posNames[p]}
+                      </span>
+                    ))}
                   </div>
                 );
               })()}
