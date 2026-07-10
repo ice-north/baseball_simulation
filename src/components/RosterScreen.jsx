@@ -126,7 +126,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
             <Stat label="パワー" value={player.batting?.power || 0} low={25} high={42} />
             <Stat label="足" value={player.physical?.speed || 0} low={30} high={48} />
             <Stat label="肩" value={player.physical?.arm || 0} low={30} high={48} />
-            <Stat label="守備" value={player.fielding?.defense || 0} low={35} high={52} />
+            <Stat label="守" value={player.fielding?.defense || 0} low={35} high={52} />
           </>
         )}
       </div>
