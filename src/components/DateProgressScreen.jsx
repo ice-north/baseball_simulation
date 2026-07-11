@@ -2165,7 +2165,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}
-        <div className="w-[700px] shrink-0">
+        <div className="w-[800px] shrink-0">
           <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mb-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -2269,7 +2269,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                                 (league2Teams.includes(game.home) && league2Teams.includes(game.away)) ? 'border-l border-orange-500/50 pl-0.5' :
                                 'border-l border-green-500/50 pl-0.5';
                               if (showAsScheduled || !game.result) {
-                                return <div key={gIdx} className={`text-xs leading-tight text-center font-medium ${isUserInGame ? 'text-yellow-300' : 'text-white'} ${leagueColor}`}>{awayShort}-{homeShort}</div>;
+                                return <div key={gIdx} className={`text-xs leading-tight text-center font-medium whitespace-nowrap overflow-hidden ${isUserInGame ? 'text-yellow-300' : 'text-white'} ${leagueColor}`}>{awayShort}-{homeShort}</div>;
                               }
                               if (game.result?.cancelled) return null;
                               const awayWin = game.result.awayScore > game.result.homeScore;
@@ -2297,7 +2297,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                               }
                               return (
                                 <div key={gIdx} className={`leading-tight text-center ${leagueColor}`}>
-                                  <div className="text-xs">
+                                  <div className="text-xs whitespace-nowrap overflow-hidden">
                                     <span className={awayWin ? 'text-green-400 font-bold' : 'text-gray-300'}>{awayShort}</span>
                                     <span className="text-white mx-px font-mono text-xs">{game.result.awayScore}-{game.result.homeScore}</span>
                                     <span className={homeWin ? 'text-green-400 font-bold' : 'text-gray-300'}>{homeShort}</span>
