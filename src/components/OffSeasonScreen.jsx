@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
+import { generatePitchingRotation } from '../game/lineupGenerator.js';
 import { getUniversityPoolSummary } from '../season/universityPool.js';
 
 const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots, gameMode }) => {
@@ -109,6 +110,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       setSeasonData(result.newSeasonData);
       Object.keys(result.updatedTeams).forEach(teamName => {
         TEAMS_DATA[teamName] = result.updatedTeams[teamName];
+      });
+      // 全CPUチームのピッチングローテーションを新ロスターで再生成
+      // （引退・加入後にIDが陳腐化するのを防ぐ。ユーザーチームは手動設定を保持）
+      const userTeamNameForRotation = seasonData.settings?.teamNames?.[0];
+      Object.keys(TEAMS_DATA).forEach(teamName => {
+        if (teamName !== userTeamNameForRotation) {
+          try { generatePitchingRotation(teamName); } catch (e) { /* skip */ }
+        }
       });
       if (onAddHallOfFamePlayers && result.retirements && result.retirements.length > 0) {
         const retiredPlayers = result.retirements.map(r => ({
