@@ -39,7 +39,7 @@ export const TRAINING_MENUS = {
     category: 'batting'
   },
   fielding: {
-    name: '守備練習',
+    name: 'ノック',
     icon: '🧤',
     description: '守備力と肩力を強化（投手野手共通）',
     targets: ['defense', 'arm'],
@@ -54,11 +54,12 @@ export const TRAINING_MENUS = {
     growthMultipliers: { stamina: 0.5 },
     category: 'pitching'
   },
-  velocity: {
-    name: '球速練習',
-    icon: '⚡',
-    description: '球速を強化（投手のみ）',
-    targets: ['velocity'],
+  running: {
+    name: '走り込み',
+    icon: '🏃',
+    description: '長距離走でスタミナ基盤を強化（投手向け）・全員の体力も向上',
+    targets: ['stamina', 'bodyStamina'],
+    growthMultipliers: { bodyStamina: 0.7 },
     category: 'pitching'
   },
   newpitch: {
@@ -208,6 +209,11 @@ export const SUB_TRAINING_MENUS = {
     icon: '✨',
     description: '新球種習得に挑戦（成功率12%、ランダム球種）',
     targets: ['newpitch'],
+  },
+  spin_analysis: {
+    name: 'スピン解析',
+    icon: '🎥',
+    description: '高速カメラで回転を分析・スピン+2〜5確定、変化球Lv向上、制球微増（投手のみ）',
   },
 };
 
@@ -532,6 +538,37 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
           }
         } else {
           growthReport.push({ statName: '新球種', before: '-', after: '習得済み', growth: 0 });
+        }
+      }
+      break;
+    }
+    case 'spin_analysis': {
+      if (!player.pitching) break;
+      // スピン（回転数）+2〜5（確定）
+      const oldSpin = player.pitching.spinRate || 50;
+      if (oldSpin < 100) {
+        const spinGrowth = Math.floor(Math.random() * 4) + 2;
+        const newSpin = Math.min(100, oldSpin + spinGrowth);
+        player.pitching.spinRate = newSpin;
+        growthReport.push({ statName: 'スピン', before: oldSpin, after: newSpin, growth: newSpin - oldSpin });
+      }
+      // 既習得変化球1球種のレベルを +2〜4
+      const arsenal = player.pitching.arsenal || [];
+      const upgradeable = arsenal.filter(a => a.type !== 'straight' && (a.level || 0) < 100);
+      if (upgradeable.length > 0) {
+        const tgt = upgradeable[Math.floor(Math.random() * upgradeable.length)];
+        const oldLv = tgt.level || 0;
+        const lv = Math.floor(Math.random() * 3) + 2;
+        tgt.level = Math.min(100, oldLv + lv);
+        growthReport.push({ statName: `${getPitchTypeName(tgt.type)}LV`, before: oldLv, after: tgt.level, growth: tgt.level - oldLv });
+      }
+      // 制球 +0〜1（40%の確率・高能力値減衰あり）
+      if (Math.random() < 0.4) {
+        const oldCtrl = player.pitching.control || 50;
+        const ctrlGain = applyTechStatDecay(oldCtrl, 1);
+        if (ctrlGain > 0) {
+          player.pitching.control = Math.min(100, oldCtrl + ctrlGain);
+          growthReport.push({ statName: '制球', before: oldCtrl, after: player.pitching.control, growth: ctrlGain });
         }
       }
       break;
@@ -1107,7 +1144,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     }
   }
 
-  // 守備練習: 現在ポジションの適正を確定で+4〜8（野手のみ）
+  // ノック: 現在ポジションの適正を確定で+4〜8（野手のみ）
   if (trainingType === 'fielding' && updatedPlayer.position !== 'pitcher' && updatedPlayer.positionFitness) {
     const curPos = updatedPlayer.position;
     const curFit = updatedPlayer.positionFitness[curPos] || 0;

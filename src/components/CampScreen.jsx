@@ -50,7 +50,7 @@ function sortedStatKeys(stats, ascending = true) {
   return Object.entries(stats).sort((a,b) => ascending ? a[1]-b[1] : b[1]-a[1]).map(e => e[0]);
 }
 function pitcherStatToMain(statKey) {
-  return statKey === 'velocity' ? 'velocity' : 'control';
+  return statKey === 'velocity' ? 'running' : 'control';
 }
 function fielderStatToMain(statKey) {
   if (statKey === 'meet' || statKey === 'power' || statKey === 'eye') return 'batting';
@@ -115,9 +115,9 @@ const CAMP_PRESETS = {
   },
   physical: {
     name: 'フィジカル', icon: '🏃',
-    desc: '投手は球速、野手は走力・パワーを重点強化',
+    desc: '投手は走り込み、野手は走力・パワーを重点強化',
     getMain: (p) => {
-      if (p.position === 'pitcher') return 'velocity';
+      if (p.position === 'pitcher') return 'running';
       const spd = p.physical?.speed||0;
       const pow = p.batting?.power||0;
       return spd <= pow ? 'baserunning' : 'batting';
@@ -176,12 +176,12 @@ const CAMP_PRESETS = {
         if (s < 65) return 'control';
         if (c < 35) return 'control';
         if (breakingCount <= 1) return 'newpitch';
-        if (age <= 23 && v < 148) return 'velocity';
+        if (age <= 23 && v < 148) return 'running';
         if (age <= 23 && v >= 148 && c < 50) return 'control';
         if (c < 50) return 'control';
         if (avgBreaking < 40 && breakingCount >= 2) return 'control';
         if (age >= 29) return 'control';
-        return v < 145 ? 'velocity' : 'control';
+        return v < 145 ? 'running' : 'control';
       }
       const meet = p.batting?.meet || 0;
       const power = p.batting?.power || 0;
@@ -466,7 +466,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
       }
 
       const aiAssign = {};
-      const pitcherMenus = ['control', 'velocity', 'newpitch'];
+      const pitcherMenus = ['control', 'running', 'newpitch'];
       const batterMenus = ['batting', 'baserunning', 'fielding'];
       aiTeam.players.forEach(p => {
         if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
