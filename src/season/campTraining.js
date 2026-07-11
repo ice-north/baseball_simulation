@@ -865,6 +865,23 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     return { player: updatedPlayer, growthReport };
   }
 
+  // 成長停止年齢: gp(個人差) + 疲労管理(growthModifier) + プロ意識で延長
+  // 停止後もdisciplineが高ければ練習で微量カバー可能
+  const _gp = player.growthPotential ?? 1.0;
+  const _growthMod = player.growthModifier || 0;
+  const _discipline = player.personality?.discipline ?? 50;
+  const _stopAge = Math.min(32, Math.max(22,
+    Math.round(26 + (_gp - 1.0) * 15)
+    + Math.min(2, Math.max(0, _growthMod * 5))              // 疲労管理: 良管理で最大+2歳
+    + Math.min(2, Math.max(0, (_discipline - 60) * 0.05))   // プロ意識80→+1, 100→+2歳
+  ));
+  // stopAge到達後: discipline次第で衰えをカバー（discipline 50→0%, 80→9%, 100→15%）
+  const _postStopFloor = Math.max(0, (_discipline - 50) * 0.003);
+  // stopAge4年前から緩やかに減衰 → 停止後はpostStopFloorのみ
+  const stopAgeGate = age >= _stopAge
+    ? _postStopFloor
+    : Math.max(_postStopFloor, 1.0 - Math.max(0, age - (_stopAge - 4)) / 4 * (1.0 - _postStopFloor));
+
   // 通常の能力練習（成長量抑制: プロ級へ到達しにくくする）
   menu.targets.forEach((targetStat, targetIdx) => {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
@@ -930,7 +947,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
       const physFitMult = isPhysical ? fitnessMult : 1.0;
       const battCoachMult = targetStat === 'control' ? batteryMult : 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * physFitMult * battCoachMult);
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * physFitMult * battCoachMult * stopAgeGate);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値 × プロ意識の相乗効果）
       // discipline < 30: 努力しない選手は飛躍しない（係数0）

@@ -1922,9 +1922,16 @@ function applyCorporatePlayerGrowth(allTeams) {
       const gp = player.growthPotential || 1.0;
       const discipline = player.personality?.discipline ?? 50;
 
-      // 成長停止年齢: growthPotentialによる個人差（22〜30歳）
-      // gp=0.8→23歳, gp=1.0→26歳, gp=1.2→29歳
-      const stopAge = Math.min(30, Math.max(22, Math.round(26 + (gp - 1.0) * 15)));
+      // 成長停止年齢: gp(個人差) + 試合活動量 + プロ意識で延長
+      // gp=0.8→23歳, gp=1.0→26歳, gp=1.2→29歳（基準）+ 最大+4歳
+      const activity = player.position === 'pitcher'
+        ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
+        : (player.seasonStats?.batting?.atBats || 0);
+      const gameBonus = Math.min(2, activity / 200);                            // 試合活動: 最大+2歳
+      const discBonus = Math.min(2, Math.max(0, (discipline - 60) * 0.05));    // プロ意識: 最大+2歳
+      const stopAge = Math.min(32, Math.max(22,
+        Math.round(26 + (gp - 1.0) * 15) + Math.floor(gameBonus + discBonus)
+      ));
 
       // 年齢別成長倍率: 18歳が最大(1.0)、stopAgeで0に線形減衰。停止後は成長なし
       const ageGrowthMult = age >= stopAge
