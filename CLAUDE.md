@@ -3,6 +3,26 @@
 ## 技術スタック
 Vite + React (JSX, no TypeScript), Tailwind CSS
 
+## UIデザイン原則（必ず守ること）
+
+### 1. 文字サイズ
+- **最小サイズは `text-xs`（12px）**。`text-[9px]`・`text-[10px]`・`text-[11px]` は使用禁止
+- データ表・ラベル類は `text-xs` 以上、本文は `text-sm` 以上を基本とする
+- 新規UIを書くときは必ず `text-xs` を下限として意識すること
+
+### 2. 文字色・コントラスト
+- **`text-gray-400`（低コントラスト）は原則禁止**。最低でも `text-gray-300` を使う
+- 補足・無効テキストは `text-gray-400` まで許容するが、読ませたい情報には使わない
+- `bg-gray-900` 背景には `text-gray-100`〜`text-gray-200` を基本とする
+- `bg-gray-800` 背景には `text-gray-100` または `text-white` を使う
+- 薄い文字（`text-gray-500` 以下）は「意図的に読ませない装飾」以外に使わない
+
+### 3. スクロールバー抑制
+- コンテナに `overflow-y-auto` や `overflow-auto` を安易に付けない
+- 画面全体のレイアウトは `h-screen` + flexboxで高さを分配し、**画面外にはみ出さない**設計にする
+- スクロールが必要な領域は必ず **高さを明示**（`h-64`、`flex-1 min-h-0` 等）してから `overflow-y-auto` を付ける
+- `min-h-0` を忘れると flex子要素が親をはみ出してスクロールバーが出るため、flex内スクロール領域には必ず付ける
+
 ## アーキテクチャ要点
 - **TEAMS_DATA** はグローバルミュータブルオブジェクト（React stateではない）
 - 変更後 `setUpdateTrigger(prev => prev + 1)` で再レンダリング
