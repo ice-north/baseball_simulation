@@ -1942,9 +1942,11 @@ function applyCorporatePlayerGrowth(allTeams) {
 
       // プロ意識による成長倍率（環境ごとに自主性の重要度が異なる）
       //
-      // クラブ: 自主鍛錬のみ。2乗曲線で低disciplineはほぼ成長しない（尖ったスタイル）
-      //   discipline 50→0.11x, 70→0.80x, 80→1.37x, 90→2.02x, 100→2.80x
-      //   ランクD(×0.80)込み実質: 70→0.64x, 80→1.10x, 90→1.62x
+      // プロ意識による成長倍率（環境ごとに自主性の重要度が異なる）
+      //
+      // クラブ: 自主鍛錬のみ。べき乗曲線でdiscipline 70あたりから実用的な成長
+      //   discipline 50→0.27x, 60→0.75x, 70→1.38x, 80→2.12x, 90→2.96x, 100→3.90x
+      //   ランクD(×0.80)込み実質: 60→0.60x, 70→1.10x, 80→1.70x, 90→2.37x
       //
       // 独立: キャンプあり。disciplineがcamp効果を増幅（やや急峻な線形）
       //   discipline 50→1.0x, 70→1.4x, 90→1.8x
@@ -1953,7 +1955,7 @@ function applyCorporatePlayerGrowth(allTeams) {
       // 企業: 環境が補完。disciplineの影響は控えめ（緩やかな線形）
       //   discipline 50→1.0x, 70→1.3x, 90→1.6x
       const disciplineMult = isClub
-        ? Math.max(0.05, Math.pow(Math.max(0, (discipline - 40) / 60), 1.8) * 2.8)
+        ? Math.max(0.05, Math.pow(Math.max(0, (discipline - 40) / 60), 1.5) * 3.9)
         : isIndependent
           ? 1.0 + Math.max(0, (discipline - 50) * 0.020)
           : 1.0 + Math.max(0, (discipline - 50) * 0.015);
