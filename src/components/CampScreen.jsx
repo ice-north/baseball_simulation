@@ -850,31 +850,31 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         </th>
                       );
                       return (<>
-                        <th className="py-1.5 px-2 text-left w-20">選手</th>
-                        <S k="position" w="w-7">位</S>
-                        <S k="age" w="w-6">齢</S>
-                        <S k="build" w="w-7" title="体格">体</S>
+                        <th className="py-1.5 px-2 text-left w-20">氏名</th>
+                        <S k="position" w="w-9">ポジ</S>
+                        <S k="age" w="w-9">年齢</S>
+                        <S k="build" w="w-9" title="体格">体格</S>
                         <S k="growth" w="w-10" title="成長率 (基礎+変動)">成長</S>
                         <S k="discipline" w="w-8" title="プロ意識">プ意</S>
                         <S k="mental" w="w-8" title="精神力">精神</S>
                         <th className="py-1.5 px-1 text-center w-8">投/打</th>
                         <th className="py-1.5 px-1 text-center w-12">フォーム</th>
-                        <S k="meet" w="w-8">ミ</S>
-                        <S k="power" w="w-8">パ</S>
-                        <S k="speed" w="w-8">走</S>
+                        <S k="meet" w="w-10">ミート</S>
+                        <S k="power" w="w-10">パワー</S>
+                        <S k="speed" w="w-9">走力</S>
                         <S k="arm" w="w-8">肩</S>
-                        <S k="dexterity" w="w-8" title="器用さ">器</S>
-                        <S k="defense" w="w-8">守</S>
+                        <S k="dexterity" w="w-9" title="器用さ">器用</S>
+                        <S k="defense" w="w-9">守備</S>
                         <S k="clead" w="w-8">Cリ</S>
-                        <S k="eye" w="w-8">眼</S>
-                        <S k="bunt" w="w-8">バ</S>
-                        <S k="velocity" w="w-9">速</S>
-                        <S k="control" w="w-8">制</S>
-                        <th className="py-1.5 px-1 text-center w-8">伸び</th>
+                        <S k="eye" w="w-9">選球</S>
+                        <S k="bunt" w="w-10">バント</S>
+                        <S k="velocity" w="w-9">球速</S>
+                        <S k="control" w="w-9">制球</S>
+                        <th className="py-1.5 px-1 text-center w-10">スピン</th>
                         <S k="stamina" w="w-9">ス</S>
-                        <S k="bodyStamina" w="w-8">体</S>
-                        <S k="recovery" w="w-8">回</S>
-                        <S k="muscle" w="w-8" title="体幹（成長倍率に影響）">幹</S>
+                        <S k="bodyStamina" w="w-9">体力</S>
+                        <S k="recovery" w="w-9">回復</S>
+                        <S k="muscle" w="w-9" title="体幹（成長倍率に影響）">体幹</S>
                         <th className="py-1.5 px-2 text-left">変化球</th>
                         <th className="py-1.5 px-2 text-left">前年成績</th>
                       </>);
@@ -1135,7 +1135,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-700/50 text-gray-400 text-xs">
-                    <th className="py-1 px-2 text-left w-20">選手</th>
+                    <th className="py-1 px-2 text-left w-20">氏名</th>
                     <th className="py-1 px-2 text-left w-20">メイン</th>
                     <th className="py-1 px-2 text-left">メイン結果</th>
                     <th className="py-1 px-2 text-left w-20">サブ</th>
@@ -1406,8 +1406,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-700/80 text-gray-400 text-xs">
-                      <th className="py-1.5 px-2 text-left w-20">選手</th>
-                      <th className="py-1.5 px-1 text-center w-7">位</th>
+                      <th className="py-1.5 px-2 text-left w-20">氏名</th>
+                      <th className="py-1.5 px-1 text-center w-9">ポジ</th>
                       {STAT_DEFS.map(sd => (
                         <th key={sd.key} className="py-1.5 px-1 text-center w-16">{sd.name}</th>
                       ))}
