@@ -1912,8 +1912,10 @@ function applyCorporatePlayerGrowth(allTeams) {
     if (!team?.corporateData && !team?.independentLeagueId) continue;
     if (!team.players) continue;
 
-    const rank = team.corporateData?.rank || 'D';
     const isClub = team.corporateData?.type === 'club';
+    const isIndependent = !!team.independentLeagueId;
+    // 独立リーグはキャンプがあるためクラブよりも環境が整っている → ランクC相当
+    const rank = team.corporateData?.rank || (isIndependent ? 'C' : 'D');
     const rankMult = { S: 1.15, A: 1.05, B: 1.0, C: 0.90, D: 0.80 }[rank] || 1.0;
 
     for (const player of team.players) {
@@ -1938,15 +1940,23 @@ function applyCorporatePlayerGrowth(allTeams) {
         ? 0
         : Math.max(0, 1.0 - (age - 18) / (stopAge - 18));
 
-      // プロ意識による成長倍率
-      // クラブチーム: 自己鍛錬力が成長を大きく左右する。threshold=60で普通の選手は恩恵なし
-      //   discipline 60→1.0x, 70→1.45x, 80→1.9x, 100→2.8x
-      //   ランクD(×0.80)込み実質: 60→0.80x, 80→1.52x, 100→2.24x
-      // 企業/独立: 環境が整っているためプロ意識の影響は控えめ
+      // プロ意識による成長倍率（環境ごとに自主性の重要度が異なる）
+      //
+      // クラブ: 自主鍛錬のみ。2乗曲線で低disciplineはほぼ成長しない（尖ったスタイル）
+      //   discipline 50→0.11x, 70→0.80x, 80→1.37x, 90→2.02x, 100→2.80x
+      //   ランクD(×0.80)込み実質: 70→0.64x, 80→1.10x, 90→1.62x
+      //
+      // 独立: キャンプあり。disciplineがcamp効果を増幅（やや急峻な線形）
+      //   discipline 50→1.0x, 70→1.4x, 90→1.8x
+      //   ランクC(×0.90)込み実質: 50→0.90x, 70→1.26x, 90→1.62x
+      //
+      // 企業: 環境が補完。disciplineの影響は控えめ（緩やかな線形）
       //   discipline 50→1.0x, 70→1.3x, 90→1.6x
       const disciplineMult = isClub
-        ? 1.0 + Math.max(0, (discipline - 60) * 0.045)
-        : 1.0 + Math.max(0, (discipline - 50) * 0.015);
+        ? Math.max(0.05, Math.pow(Math.max(0, (discipline - 40) / 60), 1.8) * 2.8)
+        : isIndependent
+          ? 1.0 + Math.max(0, (discipline - 50) * 0.020)
+          : 1.0 + Math.max(0, (discipline - 50) * 0.015);
 
       // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
       // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
