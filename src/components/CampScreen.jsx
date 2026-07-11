@@ -739,11 +739,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               };
               return (
                 <div className="mb-2 flex items-center gap-3 bg-gray-800/60 rounded px-3 py-1.5 text-xs flex-wrap">
-                  <span className="text-gray-500 font-bold">コーチ効果:</span>
+                  <span className="text-gray-300 font-bold">コーチ効果:</span>
                   {items.map(it => (
-                    <span key={it.label} className="text-gray-400">
+                    <span key={it.label} className="text-gray-300">
                       {it.label}
-                      <span className={`font-bold ml-0.5 ${it.val >= 70 ? 'text-yellow-400' : it.val >= 40 ? 'text-green-400' : 'text-gray-500'}`}>
+                      <span className={`font-bold ml-0.5 ${it.val >= 70 ? 'text-yellow-400' : it.val >= 40 ? 'text-green-400' : 'text-gray-400'}`}>
                         {it.val}
                       </span>
                       <span className="text-gray-600 ml-0.5">
@@ -763,7 +763,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             })()}
             {/* プリセット一括設定 */}
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-              <span className="text-gray-500 text-xs font-bold">プリセット:</span>
+              <span className="text-gray-400 text-xs font-bold">プリセット:</span>
               {Object.entries(CAMP_PRESETS).map(([key, preset]) => (
                 <button
                   key={key}
@@ -774,8 +774,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   {preset.icon} {preset.name}
                 </button>
               ))}
-              <span className="text-gray-500 mx-1">|</span>
-              <span className="text-gray-500 text-xs font-bold">一括:</span>
+              <span className="text-gray-400 mx-1">|</span>
+              <span className="text-gray-400 text-xs font-bold">一括:</span>
               {Object.entries(TRAINING_MENUS).filter(([k, m]) => !['newpitch'].includes(k) && !m.intensive).map(([key, menu]) => (
                 <button
                   key={key}
@@ -816,7 +816,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
             {/* 投手/野手フィルタ */}
             <div className="flex items-center gap-1.5 mb-2">
-              <span className="text-gray-500 text-xs font-bold">表示:</span>
+              <span className="text-gray-400 text-xs font-bold">表示:</span>
               {[
                 { key: 'all', label: '全員', count: allActivePlayers.length },
                 { key: 'pitcher', label: '投手', count: allActivePlayers.filter(p => p.position === 'pitcher').length },
@@ -907,9 +907,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           </span>
                         </td>
                         <td className="py-1 px-1 text-center">
-                          <span className="text-xs text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
+                          <span className="text-xs text-gray-300">{POSITION_NAMES[player.position] || player.position}</span>
                         </td>
-                        <td className="py-1 px-1 text-center text-gray-500 text-xs">{player.age || 20}</td>
+                        <td className="py-1 px-1 text-center text-gray-300 text-xs">{player.age || 20}</td>
                         <td className="py-1 px-1 text-center text-xs">
                           <span className={ph.build === 'large' ? 'text-orange-400' : ph.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                             {ph.build === 'large' ? '大柄' : ph.build === 'small' ? '小柄' : '中肉'}
@@ -943,9 +943,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           })()}
                         </td>
                         <td className="py-1 px-1 text-center text-xs">
-                          <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>{ph.throws === 'left' ? '左' : '右'}</span>
+                          <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-300'}>{ph.throws === 'left' ? '左' : '右'}</span>
                           <span className="text-gray-500">/</span>
-                          <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
+                          <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-300'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
                         </td>
                         <td className="py-1 px-1 text-center text-xs text-gray-400">
                           {({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-')}

@@ -22,9 +22,9 @@ export default function PlayerDetailModal({ player, onClose }) {
 
   const StatBar = ({ label, value, max = 99 }) => (
     <div className="flex items-center gap-2 mb-1">
-      <span className="text-xs text-gray-400 w-12">{label}</span>
-      <div className="flex-1 bg-gray-700 rounded h-3">
-        <div className={`h-3 rounded ${value >= 80 ? 'bg-red-500' : value >= 60 ? 'bg-yellow-500' : value >= 40 ? 'bg-green-500' : 'bg-blue-500'}`}
+      <span className="text-xs text-gray-300 w-14">{label}</span>
+      <div className="flex-1 bg-gray-700 rounded h-2.5">
+        <div className={`h-2.5 rounded ${value >= 80 ? 'bg-red-500' : value >= 60 ? 'bg-yellow-500' : value >= 40 ? 'bg-green-500' : 'bg-blue-500'}`}
           style={{ width: `${Math.min(100, (value / max) * 100)}%` }} />
       </div>
       <span className={`text-sm font-bold w-8 text-right ${getAbilityColor(value)}`}>{value}</span>
@@ -98,7 +98,7 @@ export default function PlayerDetailModal({ player, onClose }) {
         <div className="flex gap-1 mb-4 border-b border-gray-600 flex-shrink-0">
           {['ability', 'stats', 'abilityHistory'].map(tab => (
             <button key={tab}
-              className={`px-4 py-2 text-sm font-bold rounded-t transition ${detailTab === tab ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+              className={`px-4 py-2 text-sm font-bold rounded-t transition ${detailTab === tab ? 'bg-gray-700 text-white' : 'text-gray-300 hover:text-white'}`}
               onClick={() => setDetailTab(tab)}
             >
               {tab === 'ability' ? '能力' : tab === 'stats' ? '年度別成績' : '年度別能力値'}

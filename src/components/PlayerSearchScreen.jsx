@@ -149,9 +149,9 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
     setNameQuery('');
   };
 
-  const SortTh = ({ k, children, w }) => (
-    <th className={`py-1 px-1 text-center ${w || ''} cursor-pointer hover:text-white transition ${sortKey === k ? 'text-yellow-400' : ''}`}
-      onClick={() => toggleSort(k)}>
+  const SortTh = ({ k, children, w, cls = '' }) => (
+    <th className={`py-1 px-1 text-center ${w || ''} ${cls} cursor-pointer hover:text-white transition ${sortKey === k ? 'text-yellow-400' : ''}`}
+      onClick={() => toggleSort(k)} title={children}>
       {children}{sortKey === k ? (sortAsc ? '↑' : '↓') : ''}
     </th>
   );
@@ -241,36 +241,44 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
         </div>
 
         {/* Results */}
-        <div className="text-xs text-gray-400 mb-1">{filtered.length}件{filtered.length >= 200 ? '（上位200件表示）' : ''}</div>
+        <div className="text-xs text-gray-300 mb-1">{filtered.length}件{filtered.length >= 200 ? '（上位200件表示）' : ''}</div>
         <div className="bg-gray-800 rounded-lg overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-700/80 text-gray-400 text-xs">
-                <th className="py-1 px-2 text-left w-20">選手</th>
-                <th className="py-1 px-1 text-center w-6">位</th>
-                <SortTh k="age" w="w-6">齢</SortTh>
-                <th className="py-1 px-1 text-center w-7">体</th>
+              {/* グループ行 */}
+              <tr className="bg-gray-700/60 text-gray-500 text-xs border-b border-gray-600/50">
+                <th colSpan={5} className="py-0.5 px-2 text-left text-gray-400 font-bold">選手</th>
+                <th colSpan={8} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-blue-400/70 font-bold">野手</th>
+                <th colSpan={3} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-400 font-bold">フィジカル</th>
+                <th colSpan={4} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-red-400/70 font-bold">投手</th>
+                <th colSpan={gameMode === 'university' ? 6 : 5} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-400 font-bold">属性</th>
+              </tr>
+              <tr className="bg-gray-700/80 text-gray-300 text-xs">
+                <th className="py-1 px-2 text-left w-20">選手名</th>
+                <th className="py-1 px-1 text-center w-8">ポジ</th>
+                <SortTh k="age" w="w-7">年齢</SortTh>
+                <th className="py-1 px-1 text-center w-8">体格</th>
                 <th className="py-1 px-1 text-left w-24 max-w-[96px] truncate">所属</th>
-                <SortTh k="meet" w="w-7">ミ</SortTh>
-                <SortTh k="power" w="w-7">パ</SortTh>
-                <SortTh k="speed" w="w-7">走</SortTh>
-                <SortTh k="arm" w="w-7">肩</SortTh>
-                <SortTh k="defense" w="w-7">守</SortTh>
-                <SortTh k="catcherLead" w="w-7">C</SortTh>
-                <SortTh k="eye" w="w-7">眼</SortTh>
-                <SortTh k="steal" w="w-7">盗</SortTh>
-                <SortTh k="bodyStamina" w="w-7">体力</SortTh>
+                <SortTh k="meet" w="w-8" cls="border-l border-gray-600/50">ミート</SortTh>
+                <SortTh k="power" w="w-8">パワー</SortTh>
+                <SortTh k="speed" w="w-7">走力</SortTh>
+                <SortTh k="arm" w="w-7">肩力</SortTh>
+                <SortTh k="defense" w="w-7">守備</SortTh>
+                <SortTh k="catcherLead" w="w-8">Cリード</SortTh>
+                <SortTh k="eye" w="w-8">選球眼</SortTh>
+                <SortTh k="steal" w="w-7">盗塁</SortTh>
+                <SortTh k="bodyStamina" w="w-7" cls="border-l border-gray-600/50">体力</SortTh>
                 <SortTh k="muscle" w="w-7">体幹</SortTh>
                 <SortTh k="dexterity" w="w-7">器用</SortTh>
-                <SortTh k="velocity" w="w-8">球速</SortTh>
-                <SortTh k="control" w="w-7">制</SortTh>
-                <SortTh k="stamina" w="w-7">ス</SortTh>
-                <SortTh k="breakingCount" w="w-7">球種</SortTh>
-                <SortTh k="growth" w="w-8">成長</SortTh>
-                <SortTh k="discipline" w="w-7">意欲</SortTh>
-                <SortTh k="fame" w="w-7">知</SortTh>
-                <th className="py-1 px-1 text-center w-10">投打</th>
-                <th className="py-1 px-1 text-center w-8">形</th>
+                <SortTh k="velocity" w="w-9" cls="border-l border-gray-600/50">球速</SortTh>
+                <SortTh k="control" w="w-8">制球</SortTh>
+                <SortTh k="stamina" w="w-8">スタ</SortTh>
+                <SortTh k="breakingCount" w="w-8">球種</SortTh>
+                <SortTh k="growth" w="w-9" cls="border-l border-gray-600/50">成長率</SortTh>
+                <SortTh k="discipline" w="w-8">意欲</SortTh>
+                <SortTh k="fame" w="w-8">知名度</SortTh>
+                <th className="py-1 px-1 text-center w-10">投/打</th>
+                <th className="py-1 px-1 text-center w-8">投法</th>
                 {gameMode === 'university' && <th className="py-1 px-1 text-center w-8 text-purple-400">スカ</th>}
               </tr>
             </thead>
@@ -288,15 +296,15 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   onClick={() => setSelectedPlayer(selectedPlayer?.id === p.id && selectedPlayer?._source === p._source ? null : p)}
                 >
                   <td className="py-0.5 px-2 font-bold text-xs truncate max-w-[80px]">{p.name}</td>
-                  <td className="py-0.5 px-1 text-center text-gray-500">{POSITION_NAMES[p.position] || p.position}</td>
-                  <td className="py-0.5 px-1 text-center text-gray-500">{p.age || '?'}</td>
+                  <td className="py-0.5 px-1 text-center text-gray-300">{POSITION_NAMES[p.position] || p.position}</td>
+                  <td className="py-0.5 px-1 text-center text-gray-300">{p.age || '?'}</td>
                   <td className="py-0.5 px-1 text-center">
                     <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                       {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
                     </span>
                   </td>
-                  <td className="py-0.5 px-1 text-left text-gray-500 truncate max-w-[96px]" title={p._sourceLabel}>{p._sourceLabel}</td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.meet || 0} /></td>
+                  <td className="py-0.5 px-1 text-left text-gray-300 truncate max-w-[96px]" title={p._sourceLabel}>{p._sourceLabel}</td>
+                  <td className="py-0.5 px-1 text-center border-l border-gray-700/50"><StatVal value={p.batting?.meet || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.power || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.speed || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.arm || 0} /></td>
@@ -308,22 +316,22 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   </td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.eye || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.steal || 0} /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.bodyStamina || 0} /></td>
+                  <td className="py-0.5 px-1 text-center border-l border-gray-700/50"><StatVal value={p.physical?.bodyStamina || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.muscle ?? 50} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.physical?.dexterity || 0} /></td>
-                  <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.velocity || 0} isVel /></td>
+                  <td className="py-0.5 px-1 text-center border-l border-gray-700/50"><StatVal value={p.pitching?.velocity || 0} isVel /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.control || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.pitching?.stamina || 0} isSta /></td>
                   <td className="py-0.5 px-1 text-center">
                     {p.position === 'pitcher'
                       ? (() => {
                           const cnt = (p.pitching?.arsenal || []).filter(a => (a.level || 0) >= 20).length;
-                          const color = cnt >= 5 ? 'text-pink-400' : cnt >= 4 ? 'text-orange-400' : cnt >= 3 ? 'text-yellow-400' : cnt >= 2 ? 'text-gray-300' : 'text-gray-500';
+                          const color = cnt >= 5 ? 'text-pink-400' : cnt >= 4 ? 'text-orange-400' : cnt >= 3 ? 'text-yellow-400' : cnt >= 2 ? 'text-gray-300' : 'text-gray-400';
                           return <span className={`${color} font-bold`}>{cnt}</span>;
                         })()
                       : <span className="text-gray-600">-</span>}
                   </td>
-                  <td className="py-0.5 px-1 text-center">
+                  <td className="py-0.5 px-1 text-center border-l border-gray-700/50">
                     {(() => {
                       const g = p.growthPotential || 1.0;
                       const color = g >= 1.3 ? 'text-pink-400' : g >= 1.15 ? 'text-orange-400' : g >= 1.0 ? 'text-yellow-400' : 'text-gray-400';
@@ -337,11 +345,11 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                       return <span className={`${color} font-bold`}>{d}</span>;
                     })()}
                   </td>
-                  <td className="py-0.5 px-1 text-center text-gray-500">{p.fame || 0}</td>
-                  <td className="py-0.5 px-1 text-center text-gray-400 whitespace-nowrap text-xs">
+                  <td className="py-0.5 px-1 text-center text-gray-300">{p.fame || 0}</td>
+                  <td className="py-0.5 px-1 text-center text-gray-300 whitespace-nowrap text-xs">
                     {handLabel(p.physical?.throws)}/{handLabel(p.batting?.bats)}
                   </td>
-                  <td className="py-0.5 px-1 text-center text-gray-400 text-xs">
+                  <td className="py-0.5 px-1 text-center text-gray-300 text-xs">
                     {p.position === 'pitcher' ? (FORM_SHORT[p.pitching?.form] || '-') : '-'}
                   </td>
                   {isScoutable && (

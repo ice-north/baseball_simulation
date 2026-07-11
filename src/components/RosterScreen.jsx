@@ -58,11 +58,11 @@ export const autoSelectActive = (players) => {
 const Stat = ({ label, value, low, high }) => {
   const color = value >= high ? 'text-green-400 font-bold'
     : value >= low ? 'text-yellow-300'
-    : 'text-gray-500';
+    : 'text-gray-400';
   return (
-    <span className="flex flex-col items-center w-8 flex-shrink-0">
-      <span className="text-[8px] text-gray-400 leading-none">{label}</span>
-      <span className={`text-xs leading-none mt-0.5 ${color}`}>{value}</span>
+    <span className="flex flex-col items-center w-9 flex-shrink-0">
+      <span className="text-xs text-gray-400 leading-none truncate w-full text-center">{label}</span>
+      <span className={`text-xs leading-none mt-0.5 font-bold ${color}`}>{value}</span>
     </span>
   );
 };
@@ -103,7 +103,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
       </span>
 
       {/* 学年/年齢 */}
-      <span className="text-gray-500 w-6 text-center flex-shrink-0 text-xs">{grade}</span>
+      <span className="text-gray-300 w-6 text-center flex-shrink-0 text-xs">{grade}</span>
 
       {/* 先発バッジ */}
       {isStarter && <span className="text-xs text-yellow-500 flex-shrink-0 bg-yellow-950/60 px-1 rounded">先発</span>}
@@ -115,18 +115,18 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
             <Stat label="球速" value={player.pitching?.velocity || 0} low={130} high={145} />
             <Stat label="制球" value={player.pitching?.control || 0} low={40} high={58} />
             <Stat label="スタ" value={player.pitching?.stamina || 0} low={40} high={60} />
-            <span className="flex flex-col items-center w-8 flex-shrink-0">
-              <span className="text-[8px] text-gray-400 leading-none">変化球</span>
-              <span className="text-xs text-gray-300 leading-none mt-0.5">{player.pitching?.arsenal?.length || 0}種</span>
+            <span className="flex flex-col items-center w-9 flex-shrink-0">
+              <span className="text-xs text-gray-400 leading-none">変化</span>
+              <span className="text-xs text-gray-300 leading-none mt-0.5 font-bold">{player.pitching?.arsenal?.length || 0}種</span>
             </span>
           </>
         ) : (
           <>
-            <Stat label="ミート" value={player.batting?.meet || 0} low={35} high={52} />
-            <Stat label="パワー" value={player.batting?.power || 0} low={25} high={42} />
-            <Stat label="足" value={player.physical?.speed || 0} low={30} high={48} />
-            <Stat label="肩" value={player.physical?.arm || 0} low={30} high={48} />
-            <Stat label="守" value={player.fielding?.defense || 0} low={35} high={52} />
+            <Stat label="ミト" value={player.batting?.meet || 0} low={35} high={52} />
+            <Stat label="パワ" value={player.batting?.power || 0} low={25} high={42} />
+            <Stat label="走力" value={player.physical?.speed || 0} low={30} high={48} />
+            <Stat label="肩力" value={player.physical?.arm || 0} low={30} high={48} />
+            <Stat label="守備" value={player.fielding?.defense || 0} low={35} high={52} />
           </>
         )}
       </div>
@@ -340,7 +340,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                   : activeGroups.map(({ pos, players: ps }, i) => (
                     <div key={pos || i}>
                       {pos && (
-                        <div className="text-xs font-bold text-gray-500 tracking-wider mb-0.5 px-1">
+                        <div className="text-xs font-bold text-gray-400 tracking-wider mb-0.5 px-1">
                           {POS_LABEL[pos] || pos}（{ps.length}）
                         </div>
                       )}
@@ -374,7 +374,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                   : inactiveGroups.map(({ pos, players: ps }, i) => (
                     <div key={pos || i}>
                       {pos && (
-                        <div className="text-xs font-bold text-gray-500 tracking-wider mb-0.5 px-1">
+                        <div className="text-xs font-bold text-gray-400 tracking-wider mb-0.5 px-1">
                           {POS_LABEL[pos] || pos}（{ps.length}）
                         </div>
                       )}
