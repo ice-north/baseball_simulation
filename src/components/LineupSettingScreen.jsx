@@ -900,7 +900,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           </span>
           {isInLineup && <span className="ml-1 text-xs text-blue-400 bg-blue-900/30 px-1 py-0.5 rounded">出場中</span>}
         </td>
-        <td className="py-1.5 px-1 text-xs text-gray-500 text-center">{player.age}</td>
+        <td className="py-1.5 px-1 text-xs text-gray-300 text-center">{player.age}</td>
         <td className="py-1.5 px-1 text-xs whitespace-nowrap">
           <button
             onClick={(e) => { e.stopPropagation(); setPosConvertPlayer(player); }}
@@ -939,12 +939,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             })() : (() => {
               const bs2 = player.seasonStats?.batting;
               if (!bs2 || !bs2.atBats) return <span className="text-gray-700">-</span>;
-              return <><span className="text-blue-300 font-semibold">{(bs2.hits / bs2.atBats).toFixed(3)}</span><span className="text-gray-500 ml-1">{bs2.homeruns||0}本</span></>;
+              return <><span className="text-blue-300 font-semibold">{(bs2.hits / bs2.atBats).toFixed(3)}</span><span className="text-gray-400 ml-1">{bs2.homeruns||0}本</span></>;
             })()}
           </td>
         </>) : (<>
           {/* 詳細: 全列 */}
-          <td className="py-1.5 px-1 text-xs text-gray-500 whitespace-nowrap">
+          <td className="py-1.5 px-1 text-xs text-gray-300 whitespace-nowrap">
             {getThrowsLabel(player.physical?.throws)}{getBatsLabel(player.batting?.bats || player.physical?.bats)}
           </td>
           <StatCell value={player.batting?.meet || 0} className="border-l border-gray-700/40" />
@@ -1174,10 +1174,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                   <span key={i} className={`text-xs font-medium ${s.color}`}>{s.label}</span>
                                 ));
                               })()}
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-gray-300">
                                 {getThrowsLabel(player.physical?.throws)}{player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打'}
                               </span>
-                              <span className="text-xs text-gray-500">{player.age}歳</span>
+                              <span className="text-xs text-gray-300">{player.age}歳</span>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleRemoveFromLineup(player.id); }}
                                 className="ml-auto shrink-0 text-gray-600 hover:text-red-400 text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-red-900/30 transition"
@@ -1231,7 +1231,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 if (!bs || !bs.atBats) return null;
                                 const avg = bs.atBats > 0 ? (bs.hits / bs.atBats).toFixed(3) : '.000';
                                 return (
-                                  <div className="text-xs text-gray-500 ml-1 shrink-0">
+                                  <div className="text-xs text-gray-400 ml-1 shrink-0">
                                     <span className="text-blue-300 font-semibold">{avg}</span>
                                     <span className="ml-1">{bs.homeruns || 0}本</span>
                                     <span className="ml-1">{bs.rbis || 0}点</span>
@@ -1287,13 +1287,13 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                         <circle cx={coord.x} cy={coord.y} r={player ? 16 : 12} fill={player ? '#1e293b' : '#0f172a'} stroke={player ? fitnessColor : '#475569'} strokeWidth={player ? 2 : 1} opacity={player ? 1 : 0.5}/>
                         {player ? (
                           <>
-                            <text x={coord.x} y={coord.y - 4} textAnchor="middle" fill="white" fontSize="8" fontWeight="bold">{posLabelsShort[pos]}</text>
-                            <text x={coord.x} y={coord.y + 7} textAnchor="middle" fill="#94a3b8" fontSize="6.5">
+                            <text x={coord.x} y={coord.y - 4} textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">{posLabelsShort[pos]}</text>
+                            <text x={coord.x} y={coord.y + 7} textAnchor="middle" fill="#cbd5e1" fontSize="8">
                               {player.name.length > 3 ? player.name.slice(0, 3) : player.name}
                             </text>
                           </>
                         ) : (
-                          <text x={coord.x} y={coord.y + 3} textAnchor="middle" fill="#64748b" fontSize="8">{posLabelsShort[pos]}</text>
+                          <text x={coord.x} y={coord.y + 3} textAnchor="middle" fill="#94a3b8" fontSize="9">{posLabelsShort[pos]}</text>
                         )}
                       </g>
                     );
@@ -1714,20 +1714,20 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <span className={`font-bold text-sm truncate ${player.position === 'pitcher' ? 'text-white' : 'text-cyan-300'}`} style={{ width: '5.5rem', minWidth: '5.5rem', maxWidth: '5.5rem' }}>
                   {player.name}
                 </span>
-                <span className="text-xs text-gray-500 shrink-0 w-4">{player.age || ''}</span>
+                <span className="text-xs text-gray-300 shrink-0 w-4">{player.age || ''}</span>
                 <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                   {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
                 </span>
-                <span className="text-xs text-gray-500 shrink-0" style={{ width: '4.5rem', minWidth: '4.5rem' }}>{throwsChar}{formChar && `/${formChar}`}</span>
+                <span className="text-xs text-gray-400 shrink-0" style={{ width: '4.5rem', minWidth: '4.5rem' }}>{throwsChar}{formChar && `/${formChar}`}</span>
                 <div className="flex items-center gap-0.5 text-xs shrink-0" style={{ width: '10rem', minWidth: '10rem' }}>
-                  <span className="text-gray-500 text-xs">速</span><StatVal label="" value={p.velocity || 0} isVelocity />
-                  <span className="text-gray-500">/</span>
-                  <span className="text-gray-500 text-xs">制</span><StatVal label="" value={p.control || 0} />
-                  <span className="text-gray-500">/</span>
-                  <span className="text-gray-500 text-xs">ス</span><StatVal label="" value={p.stamina || 0} />
+                  <span className="text-gray-400 text-xs">速</span><StatVal label="" value={p.velocity || 0} isVelocity />
+                  <span className="text-gray-400">/</span>
+                  <span className="text-gray-400 text-xs">制</span><StatVal label="" value={p.control || 0} />
+                  <span className="text-gray-400">/</span>
+                  <span className="text-gray-400 text-xs">ス</span><StatVal label="" value={p.stamina || 0} />
                 </div>
                 {ps?.games > 0 && (
-                  <span className="text-xs text-gray-500 shrink-0">
+                  <span className="text-xs text-gray-400 shrink-0">
                     {ps.wins||0}勝{ps.losses||0}敗{era && <span className="text-orange-300/70 ml-0.5">{era}</span>}
                   </span>
                 )}
@@ -2454,9 +2454,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
                             {/* 守力・走力の小アイコン */}
                             <text x={coord.x - 16} y={coord.y + markerSize + 37} textAnchor="middle"
-                              fill="white" fontSize="9" fontWeight="bold" filter="url(#textShadow)">守{def}</text>
+                              fill="white" fontSize="10" fontWeight="bold" filter="url(#textShadow)">守{def}</text>
                             <text x={coord.x + 16} y={coord.y + markerSize + 37} textAnchor="middle"
-                              fill="white" fontSize="9" fontWeight="bold" filter="url(#textShadow)">走{spd}</text>
+                              fill="white" fontSize="10" fontWeight="bold" filter="url(#textShadow)">走{spd}</text>
                           </>
                         )}
                         {!player && (
@@ -2477,7 +2477,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     ].map((item, i) => (
                       <g key={i} transform={`translate(${35 + i * 40}, 0)`}>
                         <circle cx="0" cy="-3" r="5" fill={item.color} opacity="0.8" />
-                        <text x="8" y="0" fill="white" fontSize="8" filter="url(#textShadow)">{item.label}</text>
+                        <text x="8" y="0" fill="white" fontSize="9" filter="url(#textShadow)">{item.label}</text>
                       </g>
                     ))}
                   </g>

@@ -384,7 +384,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                               {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
                             </span>
                           </td>
-                          <td className="py-1.5 px-1 text-gray-500 whitespace-nowrap">{p.highSchool?.name || '高校'}</td>
+                          <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{p.highSchool?.name || '高校'}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
@@ -574,7 +574,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
                           </span>
                         </td>
-                        <td className="py-1.5 px-1 text-gray-500 whitespace-nowrap">{p._scoutSource}</td>
+                        <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{p._scoutSource}</td>
                         <td className="py-1.5 px-1 text-center">{revealLabel(p._revealLevel || 0)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
@@ -622,8 +622,8 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           {p._npbDrafted ? (
                             <div className="flex flex-col gap-0.5">
                               <span className="text-red-400 text-xs font-bold">NPB指名済</span>
-                              <span className="text-red-300 text-[8px]">{p._npbDrafted.team.replace('ジャイアンツ','G').replace('タイガース','T').replace('ベイスターズ','De').replace('カープ','C').replace('ドラゴンズ','D').replace('スワローズ','S').replace('バファローズ','Bs').replace('ホークス','H').replace('ライオンズ','L').replace('ゴールデンイーグルス','E').replace('マリーンズ','M').replace('ファイターズ','F')}</span>
-                              <span className="text-red-500 text-[8px]">{p._npbDrafted.round}</span>
+                              <span className="text-red-300 text-xs">{p._npbDrafted.team.replace('ジャイアンツ','G').replace('タイガース','T').replace('ベイスターズ','De').replace('カープ','C').replace('ドラゴンズ','D').replace('スワローズ','S').replace('バファローズ','Bs').replace('ホークス','H').replace('ライオンズ','L').replace('ゴールデンイーグルス','E').replace('マリーンズ','M').replace('ファイターズ','F')}</span>
+                              <span className="text-red-500 text-xs">{p._npbDrafted.round}</span>
                             </div>
                           ) : p._reservedBy ? (
                             <div className="flex flex-col gap-0.5">
@@ -641,7 +641,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                                     <div className={`h-full rounded-full ${r.gauge >= 70 ? 'bg-red-500' : r.gauge >= 40 ? 'bg-orange-500' : 'bg-gray-500'}`}
                                       style={{ width: `${r.gauge}%` }} />
                                   </div>
-                                  <span className="text-gray-500 text-[8px]">{r.gauge}%</span>
+                                  <span className="text-gray-400 text-xs">{r.gauge}%</span>
                                 </div>
                               ))}
                             </div>
