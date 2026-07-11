@@ -213,7 +213,7 @@ export const SUB_TRAINING_MENUS = {
   spin_analysis: {
     name: 'スピン解析',
     icon: '🎥',
-    description: '高速カメラで回転を分析・スピン+2〜5確定、変化球Lv向上、制球微増（投手のみ）',
+    description: '高速カメラで回転を分析・スピン+1〜3（器用さ係数）、変化球Lv向上、制球微増（投手のみ）',
   },
 };
 
@@ -544,10 +544,13 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
     }
     case 'spin_analysis': {
       if (!player.pitching) break;
-      // スピン（回転数）+2〜5（確定）
+      // スピン（回転数）+1〜3（器用さ係数）
       const oldSpin = player.pitching.spinRate || 50;
       if (oldSpin < 100) {
-        const spinGrowth = Math.floor(Math.random() * 4) + 2;
+        const dex = player.physical?.dexterity || 50;
+        const dexMult = 0.5 + (dex / 100) * 1.0; // 器用さ0→0.5倍, 50→1.0倍, 100→1.5倍
+        const rawSpin = Math.floor(Math.random() * 3) + 1; // 1〜3
+        const spinGrowth = Math.max(1, Math.min(3, Math.round(rawSpin * dexMult)));
         const newSpin = Math.min(100, oldSpin + spinGrowth);
         player.pitching.spinRate = newSpin;
         growthReport.push({ statName: 'スピン', before: oldSpin, after: newSpin, growth: newSpin - oldSpin });
