@@ -61,13 +61,6 @@ export const TRAINING_MENUS = {
     targets: ['velocity'],
     category: 'pitching'
   },
-  stamina: {
-    name: 'スタミナ練習',
-    icon: '🏋️',
-    description: 'スタミナを重点強化（投手向け）',
-    targets: ['stamina'],
-    category: 'pitching'
-  },
   newpitch: {
     name: '新球種習得',
     icon: '✨',
@@ -149,6 +142,11 @@ export const SUB_TRAINING_MENUS = {
     name: '基礎体力',
     icon: '🏃',
     description: '体力+2〜4・体幹+2〜3/クール確定（投手：スタミナ+1〜2も）',
+  },
+  weight: {
+    name: 'ウエイト',
+    icon: '🏋️',
+    description: '体幹+1〜3（確定）・パワー+0〜1・肩力+0〜1',
   },
   stretch: {
     name: 'ストレッチ',
@@ -261,6 +259,47 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         const before = player.pitching.stamina || 80;
         player.pitching.stamina = Math.min(200, before + staGrowth);
         growthReport.push({ statName: 'スタミナ', before, after: player.pitching.stamina, growth: staGrowth });
+      }
+      break;
+    }
+    case 'weight': {
+      // 体幹 +1〜3（確定）
+      if (player.physical) {
+        const oldMuscle = player.physical.muscle ?? 50;
+        if (oldMuscle < 100) {
+          const mGrowth = Math.floor(Math.random() * 3) + 1;
+          player.physical.muscle = Math.min(100, oldMuscle + mGrowth);
+          growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
+        }
+        // 肩力 +0〜1（40%で+1）投手は球速連動
+        if (Math.random() < 0.4) {
+          const oldArm = player.physical.arm || 50;
+          if (oldArm < 100) {
+            player.physical.arm = Math.min(100, oldArm + 1);
+            growthReport.push({ statName: '肩力', before: oldArm, after: player.physical.arm, growth: 1 });
+            if (player.pitching) {
+              const armNow = player.physical.arm;
+              const velChange = Math.round(0.5 * getVelocityCatchupMult(armNow, player.pitching.velocity || 120));
+              if (velChange > 0) {
+                const oldVel = player.pitching.velocity || 120;
+                const newVel = Math.min(getVelocityCap(armNow), oldVel + velChange);
+                if (newVel > oldVel) {
+                  player.pitching.velocity = newVel;
+                  growthReport.push({ statName: '球速', before: oldVel, after: newVel, growth: newVel - oldVel, isLinked: true });
+                }
+              }
+            }
+          }
+        }
+      }
+      // パワー +0〜1（40%で+1）
+      if (player.batting && Math.random() < 0.4) {
+        const oldPower = player.batting.power || 0;
+        const powerGrowth = applyTechStatDecay(oldPower, 1);
+        if (powerGrowth > 0) {
+          player.batting.power = Math.min(100, oldPower + powerGrowth);
+          growthReport.push({ statName: 'パワー', before: oldPower, after: player.batting.power, growth: powerGrowth });
+        }
       }
       break;
     }

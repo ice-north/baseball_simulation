@@ -140,11 +140,10 @@ const CAMP_PRESETS = {
   },
   role_focused: {
     name: '実戦重視', icon: '🏟️',
-    desc: '先発投手はスタミナ、リリーフは制球、野手は打撃/守備を強化',
+    desc: '投手は制球・投げ込み、野手は打撃/守備を強化',
     getMain: (p) => {
       if (p.position === 'pitcher') {
-        const stamina = p.pitching?.stamina || 80;
-        return stamina >= 90 ? 'control' : 'stamina';
+        return 'control';
       }
       const meet = p.batting?.meet||0;
       const def = p.fielding?.defense||0;
@@ -174,15 +173,14 @@ const CAMP_PRESETS = {
         const avgBreaking = breakingCount > 0
           ? arsenal.filter(a => a.name !== 'ストレート').reduce((sum, a) => sum + (a.level || 0), 0) / breakingCount
           : 0;
-        if (s < 65) return 'stamina';
+        if (s < 65) return 'control';
         if (c < 35) return 'control';
         if (breakingCount <= 1) return 'newpitch';
         if (age <= 23 && v < 148) return 'velocity';
         if (age <= 23 && v >= 148 && c < 50) return 'control';
         if (c < 50) return 'control';
         if (avgBreaking < 40 && breakingCount >= 2) return 'control';
-        if (s < 90 && s <= c) return 'stamina';
-        if (age >= 29) return c <= s ? 'control' : 'stamina';
+        if (age >= 29) return 'control';
         return v < 145 ? 'velocity' : 'control';
       }
       const meet = p.batting?.meet || 0;
@@ -255,7 +253,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const [assignments, setAssignments] = useState(() => {
     const init = {};
     userTeam?.players?.forEach(p => {
-      init[p.id] = p.position === 'pitcher' ? 'stamina' : 'batting';
+      init[p.id] = p.position === 'pitcher' ? 'control' : 'batting';
     });
     return init;
   });
@@ -392,7 +390,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     const finalAssignments = {};
     userTeam.players.forEach(p => {
       if (p.dispatchedThisCamp) return; // 派遣済みの選手はスキップ
-      finalAssignments[p.id] = assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting');
+      finalAssignments[p.id] = assignments[p.id] || (isPitcher(p) ? 'control' : 'batting');
     });
 
     const userStaffBonus = userTeam.corporateData?.staff ? getTeamStaffBonus(userTeam.corporateData.staff) : null;
@@ -468,7 +466,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
       }
 
       const aiAssign = {};
-      const pitcherMenus = ['stamina', 'control', 'velocity', 'newpitch'];
+      const pitcherMenus = ['control', 'velocity', 'newpitch'];
       const batterMenus = ['batting', 'baserunning', 'fielding'];
       aiTeam.players.forEach(p => {
         if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
@@ -782,7 +780,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   onClick={() => {
                     const updated = {};
                     userTeam?.players?.forEach(p => {
-                      updated[p.id] = TRAINING_MENUS[key] ? key : (assignments[p.id] || (isPitcher(p) ? 'stamina' : 'batting'));
+                      updated[p.id] = TRAINING_MENUS[key] ? key : (assignments[p.id] || (isPitcher(p) ? 'control' : 'batting'));
                     });
                     setAssignments(updated);
                   }}
@@ -895,7 +893,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     const ph = player.physical || {};
                     const f = player.fielding || {};
                     const pf = player.positionFitness || {};
-                    const currentTraining = assignments[player.id] || (isPitcher(player) ? 'stamina' : 'batting');
+                    const currentTraining = assignments[player.id] || (isPitcher(player) ? 'control' : 'batting');
                     const showNewPitchSelect = currentTraining === 'newpitch';
                     const availableNewPitches = getAvailableNewPitches(player);
 
