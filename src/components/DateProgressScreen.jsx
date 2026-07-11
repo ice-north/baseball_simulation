@@ -2515,10 +2515,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           {(() => {
             const allPlayers = [];
             const seenIds = new Set();
-            const userLeagueTeams = new Set(seasonData?.settings?.teamNames || []);
+            // standings（= 所属リーグの順位表）からチーム名セットを作成。
+            // settings.teamNames は社会人/大学モードでは自チームのみのため standings を使う。
+            const leagueTeamSet = new Set(standings.map(s => s.team));
+            // spring/fall 両方あるときは springStandings も含める
+            if (seasonData?.springStandings) {
+              seasonData.springStandings.forEach(s => leagueTeamSet.add(s.team));
+            }
             Object.entries(TEAMS_DATA || {}).forEach(([teamName, team]) => {
               if (!team?.players) return;
-              if (userLeagueTeams.size > 0 && !userLeagueTeams.has(teamName)) return;
+              if (leagueTeamSet.size > 0 && !leagueTeamSet.has(teamName)) return;
               if (isTwoLeague && rankingLeague === 'l1' && !league1Teams.includes(teamName)) return;
               if (isTwoLeague && rankingLeague === 'l2' && !league2Teams.includes(teamName)) return;
               team.players.forEach(p => {
