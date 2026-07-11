@@ -3162,6 +3162,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
             // 大学モード: 春秋制タブ付き順位表
             const isUniversityMode = seasonData?.settings?.universityMode;
+            const userLeagueName = isUniversityMode
+              ? (UNIVERSITY_REGIONS.find(r => r.id === WORLD_DATA.userLeagueId)?.name || '')
+              : (INDEPENDENT_LEAGUES[WORLD_DATA.userLeagueId]?.name || '');
             const curMonth = currentDate?.month || 4;
             const spStandings = seasonData?.springStandings || null;
             const isFallSeason = isUniversityMode && spStandings != null;
@@ -3170,7 +3173,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             if (!isUniversityMode) {
               return (
                 <div className="space-y-3">
-                  {renderStandingsTable(standings, '順位表', 'text-white')}
+                  {renderStandingsTable(standings, userLeagueName ? `${userLeagueName}　順位` : '順位表', 'text-white')}
                   {renderPlayoffBracket()}
                 </div>
               );
@@ -3189,7 +3192,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             const fallTableData = standings;
 
             const showingData = activeTab === 'fall' ? fallTableData : springTableData;
-            const showingTitle = activeTab === 'fall' ? `${fallLabel}順位表` : `${springLabel}順位`;
+            const showingTitle = activeTab === 'fall'
+              ? `${userLeagueName ? userLeagueName + '　' : ''}${fallLabel}順位表`
+              : `${userLeagueName ? userLeagueName + '　' : ''}${springLabel}順位`;
             const showingColor = activeTab === 'fall' ? 'text-orange-400' : 'text-green-400';
 
             return (

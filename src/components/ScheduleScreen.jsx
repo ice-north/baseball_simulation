@@ -3,6 +3,9 @@ import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { generateTeamCalendar } from '../season/calendarUI.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
+import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 
 // 全選手の成績を取得してランキング形式に変換（IDで重複排除）
 // teamNames を渡すとそのチームのみに絞り込む（大学/社会人モードで並行世界チームを除外）
@@ -675,9 +678,13 @@ const ScheduleScreen = ({
         const month = currentDate?.month || 4;
         const isFallSeason = isUniversity && springStandings != null;
         const isSummerBreak = isUniversity && !isFallSeason && month >= 7 && month <= 8;
+        const userLeagueName = isUniversity
+          ? (UNIVERSITY_REGIONS.find(r => r.id === WORLD_DATA.userLeagueId)?.name || '')
+          : (INDEPENDENT_LEAGUES[WORLD_DATA.userLeagueId]?.name || '');
+        const leaguePrefix = userLeagueName ? userLeagueName + '　' : '';
         const activeLabel = isUniversity
-          ? isFallSeason ? '秋季順位表' : isSummerBreak ? '春季最終順位' : '春季順位表'
-          : 'リーグ順位表';
+          ? isFallSeason ? `${leaguePrefix}秋季順位表` : isSummerBreak ? `${leaguePrefix}春季最終順位` : `${leaguePrefix}春季順位表`
+          : `${leaguePrefix}順位`;
 
         if (isTwoLeague) {
           const l1 = leagueStandings.filter(s => league1Teams.includes(s.team));
