@@ -219,7 +219,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const SortHeader = ({ label, sortKeyVal, className = '' }) => (
     <th
-      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none text-[10px] ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
+      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none text-xs ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
       onClick={() => handleSort(sortKeyVal)}
     >
       {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
@@ -236,20 +236,20 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
   const StaffPreview = ({ preview }) => (
     <div className="mt-1 pl-2 border-l-2 border-cyan-700/50">
-      <div className="flex items-center gap-2 text-[10px]">
+      <div className="flex items-center gap-2 text-xs">
         <span className={`font-bold ${gradeColor(preview.grade)}`}>{STAFF_GRADES[preview.grade]?.label}</span>
         <span className="text-cyan-400">コーチ</span>
         <span className="text-gray-400">年俸{getStaffSalary(preview).toLocaleString()}万</span>
         <span className="text-cyan-600">元選手</span>
       </div>
-      <div className="flex gap-2 mt-0.5 text-[10px] flex-wrap">
+      <div className="flex gap-2 mt-0.5 text-xs flex-wrap">
         {preview.strengths.map(key => (
           <span key={key} className="bg-cyan-900/30 text-cyan-400 px-1 py-0.5 rounded">
             {STAFF_ABILITIES[key]?.name || key}
           </span>
         ))}
       </div>
-      <div className="flex gap-2 mt-0.5 text-[10px] text-gray-500">
+      <div className="flex gap-2 mt-0.5 text-xs text-gray-500">
         {Object.entries(STAFF_ABILITIES).slice(0, 5).map(([key, info]) => (
           <span key={key}>
             {info.name.slice(0, 2)}
@@ -267,7 +267,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       if (staffReplacements[playerId]) {
         const replaced = staff.find(s => s.id === staffReplacements[playerId]);
         return replaced ? (
-          <div className="mt-1 text-[10px] text-orange-400">
+          <div className="mt-1 text-xs text-orange-400">
             → {replaced.name}（{STAFF_GRADES[replaced.grade]?.label}）と入替
             <button onClick={() => {
               const next = { ...staffReplacements };
@@ -284,12 +284,12 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
     }
     return (
       <div className="mt-2 p-2 bg-gray-800 rounded border border-orange-700/50">
-        <p className="text-[10px] text-orange-400 mb-1.5 font-bold">スタッフ枠が上限（{MAX_STAFF}名）です。入替えるスタッフを選んでください：</p>
+        <p className="text-xs text-orange-400 mb-1.5 font-bold">スタッフ枠が上限（{MAX_STAFF}名）です。入替えるスタッフを選んでください：</p>
         <div className="space-y-1">
           {staff.map(s => (
             <button key={s.id}
               onClick={() => selectStaffToReplace(playerId, s.id)}
-              className="w-full flex items-center gap-2 px-2 py-1 bg-gray-700 hover:bg-red-900/40 rounded text-left text-[10px] transition">
+              className="w-full flex items-center gap-2 px-2 py-1 bg-gray-700 hover:bg-red-900/40 rounded text-left text-xs transition">
               <span className={`font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
               <span className="text-white">{s.name}</span>
               <span className="text-gray-400">{s.role === 'coach' ? 'コーチ' : s.role === 'manager' ? 'マネ' : 'トレ'}</span>
@@ -300,15 +300,15 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           ))}
         </div>
         <button onClick={() => setReplaceStaffFor(null)}
-          className="mt-1.5 text-[10px] text-gray-500 hover:text-gray-300">キャンセル</button>
+          className="mt-1.5 text-xs text-gray-500 hover:text-gray-300">キャンセル</button>
       </div>
     );
   };
 
   const DecisionBadge = ({ decision }) => {
-    if (decision === 'release') return <span className="text-red-400 font-bold text-[10px] bg-red-900/40 px-1.5 py-0.5 rounded">解雇</span>;
-    if (decision === 'retire') return <span className="text-yellow-400 font-bold text-[10px] bg-yellow-900/40 px-1.5 py-0.5 rounded">引退</span>;
-    return <span className="text-green-400 font-bold text-[10px] bg-green-900/40 px-1.5 py-0.5 rounded">契約</span>;
+    if (decision === 'release') return <span className="text-red-400 font-bold text-xs bg-red-900/40 px-1.5 py-0.5 rounded">解雇</span>;
+    if (decision === 'retire') return <span className="text-yellow-400 font-bold text-xs bg-yellow-900/40 px-1.5 py-0.5 rounded">引退</span>;
+    return <span className="text-green-400 font-bold text-xs bg-green-900/40 px-1.5 py-0.5 rounded">契約</span>;
   };
 
   if (confirmed) {
@@ -360,7 +360,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                     <span className="text-cyan-400">コーチ</span>
                     <span className="text-white font-medium">{preview.name}</span>
                     <span className="text-gray-500">({preview.age}歳)</span>
-                    <span className="text-cyan-600 text-[10px]">元選手</span>
+                    <span className="text-cyan-600 text-xs">元選手</span>
                   </div>
                 );
               })}
@@ -411,7 +411,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-500">
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
           <span>基本{baseBudget.toLocaleString()}</span>
           {reputationBonus > 0 && <span className="text-green-500">+注目度{reputationBonus.toLocaleString()}</span>}
           {managingBonus > 0 && <span className="text-cyan-500">+マネージング{managingBonus.toLocaleString()}</span>}
@@ -468,12 +468,12 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                       <div className="flex items-center gap-2">
                         <span className="text-yellow-300 text-xs">{POSITION_NAMES[r.position]}</span>
                         <span className="text-gray-300 text-xs font-medium">{r.name}</span>
-                        <span className="text-gray-500 text-[10px]">{r.age}歳 / {r.reason}</span>
+                        <span className="text-gray-500 text-xs">{r.age}歳 / {r.reason}</span>
                         {!isClub && <button
                           onClick={() => {
                             if (player) toggleStaffConversion(r.id);
                           }}
-                          className={`ml-auto px-2 py-0.5 text-[10px] font-bold rounded transition ${
+                          className={`ml-auto px-2 py-0.5 text-xs font-bold rounded transition ${
                             isConverting
                               ? 'bg-cyan-700 text-cyan-100'
                               : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
@@ -504,10 +504,10 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
       {/* 選手一覧 */}
       <div className="overflow-x-auto mb-3">
-        <table className="w-full text-[10px] text-gray-300 border-collapse">
+        <table className="w-full text-xs text-gray-300 border-collapse">
           <thead className="bg-gray-800 text-gray-400">
             <tr>
-              <th className="py-1 px-1 w-12 text-[10px]">判定</th>
+              <th className="py-1 px-1 w-12 text-xs">判定</th>
               <SortHeader label="名前" sortKeyVal="name" />
               <SortHeader label="年齢" sortKeyVal="age" />
               <SortHeader label="守" sortKeyVal="position" />
@@ -578,7 +578,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleStaffConversion(player.id); }}
-                          className={`px-2 py-0.5 text-[10px] font-bold rounded transition ${
+                          className={`px-2 py-0.5 text-xs font-bold rounded transition ${
                             staffConversions[player.id]
                               ? 'bg-cyan-700 text-cyan-100'
                               : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
@@ -607,7 +607,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           <p className="text-red-400 text-xs font-bold mb-1">
             ⚠️ 予算超過: {Math.abs(budgetBalance).toLocaleString()}万円の赤字です
           </p>
-          <div className="text-[10px] text-red-300 space-y-0.5">
+          <div className="text-xs text-red-300 space-y-0.5">
             <p>赤字のまま確定すると以下のペナルティが発生します:</p>
             <p>• 注目度低下（最大-15）</p>
             <p>• スポンサー離脱リスク</p>

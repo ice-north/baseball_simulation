@@ -93,7 +93,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
           <div key={r} className={`flex-1 text-center p-2 rounded border ${RANK_BG[r]}`}>
             <div className={`font-bold ${RANK_COLOR[r]}`}>{r}</div>
             <div className="text-xs text-gray-300">{rankCounts[r]}チーム</div>
-            <div className="text-[10px] text-gray-500">{RANK_BAND_PCT[r]}</div>
+            <div className="text-xs text-gray-500">{RANK_BAND_PCT[r]}</div>
           </div>
         ))}
       </div>

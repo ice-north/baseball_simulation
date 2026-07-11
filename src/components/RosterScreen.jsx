@@ -62,7 +62,7 @@ const Stat = ({ label, value, low, high }) => {
   return (
     <span className="flex flex-col items-center w-8 flex-shrink-0">
       <span className="text-[8px] text-gray-400 leading-none">{label}</span>
-      <span className={`text-[11px] leading-none mt-0.5 ${color}`}>{value}</span>
+      <span className={`text-xs leading-none mt-0.5 ${color}`}>{value}</span>
     </span>
   );
 };
@@ -88,7 +88,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
         ${isStarter ? 'border-yellow-600/40' : ''}`}
     >
       {/* ポジションバッジ */}
-      <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded text-[10px] font-bold ${
+      <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded text-xs font-bold ${
         player.position === 'pitcher' ? 'bg-red-700 text-red-100' :
         player.position === 'catcher' ? 'bg-cyan-700 text-cyan-100' :
         ['first','second','third','short'].includes(player.position) ? 'bg-yellow-600 text-yellow-100' :
@@ -103,10 +103,10 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
       </span>
 
       {/* 学年/年齢 */}
-      <span className="text-gray-500 w-6 text-center flex-shrink-0 text-[10px]">{grade}</span>
+      <span className="text-gray-500 w-6 text-center flex-shrink-0 text-xs">{grade}</span>
 
       {/* 先発バッジ */}
-      {isStarter && <span className="text-[9px] text-yellow-500 flex-shrink-0 bg-yellow-950/60 px-1 rounded">先発</span>}
+      {isStarter && <span className="text-xs text-yellow-500 flex-shrink-0 bg-yellow-950/60 px-1 rounded">先発</span>}
 
       {/* 能力値 */}
       <div className="flex items-center flex-1 justify-end">
@@ -117,7 +117,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
             <Stat label="スタ" value={player.pitching?.stamina || 0} low={40} high={60} />
             <span className="flex flex-col items-center w-8 flex-shrink-0">
               <span className="text-[8px] text-gray-400 leading-none">変化球</span>
-              <span className="text-[11px] text-gray-300 leading-none mt-0.5">{player.pitching?.arsenal?.length || 0}種</span>
+              <span className="text-xs text-gray-300 leading-none mt-0.5">{player.pitching?.arsenal?.length || 0}種</span>
             </span>
           </>
         ) : (
@@ -132,7 +132,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
       </div>
 
       {/* 切替矢印 */}
-      <span className={`flex-shrink-0 font-bold text-[11px] ml-1
+      <span className={`flex-shrink-0 font-bold text-xs ml-1
         ${blocked ? 'text-gray-600' : isActive ? 'text-red-400' : 'text-green-400'}`}>
         {isActive ? '▶' : '◀'}
       </span>
@@ -306,14 +306,14 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               <span className="ml-2 text-gray-500">■</span><span className="ml-0.5">低値</span>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0 bg-gray-800/70 rounded px-2 py-1.5">
-              <span className="text-[10px] text-gray-500 mr-1">並替:</span>
+              <span className="text-xs text-gray-500 mr-1">並替:</span>
               {[
                 { key: 'position', label: 'ポジション' },
                 { key: 'score',    label: 'スコア順' },
                 { key: 'year',     label: '学年順' },
               ].map(s => (
                 <button key={s.key} onClick={() => setSortMode(s.key)}
-                  className={`text-[10px] px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                  className={`text-xs px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
                   {s.label}
                 </button>
               ))}
@@ -331,7 +331,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                     ({activePlayers.length}/{ACTIVE_LIMIT})
                   </span>
                 </h2>
-                {isFull && <span className="text-[10px] text-red-400 font-bold">満員</span>}
+                {isFull && <span className="text-xs text-red-400 font-bold">満員</span>}
               </div>
 
               <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
@@ -340,7 +340,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                   : activeGroups.map(({ pos, players: ps }, i) => (
                     <div key={pos || i}>
                       {pos && (
-                        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-0.5 px-1">
+                        <div className="text-xs font-bold text-gray-500 tracking-wider mb-0.5 px-1">
                           {POS_LABEL[pos] || pos}（{ps.length}）
                         </div>
                       )}
@@ -363,7 +363,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                   ベンチ外
                   <span className="ml-1.5 text-gray-400">({inactivePlayers.length}名)</span>
                 </h2>
-                {isFull && <span className="text-[10px] text-gray-500">枠が満員のため追加不可</span>}
+                {isFull && <span className="text-xs text-gray-500">枠が満員のため追加不可</span>}
               </div>
 
               <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
@@ -374,7 +374,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                   : inactiveGroups.map(({ pos, players: ps }, i) => (
                     <div key={pos || i}>
                       {pos && (
-                        <div className="text-[10px] font-bold text-gray-500 tracking-wider mb-0.5 px-1">
+                        <div className="text-xs font-bold text-gray-500 tracking-wider mb-0.5 px-1">
                           {POS_LABEL[pos] || pos}（{ps.length}）
                         </div>
                       )}

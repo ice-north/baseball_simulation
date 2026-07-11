@@ -175,10 +175,10 @@ const ScoutBadges = ({ npbScouts, amScouts }) => {
   return (
     <div className="flex flex-wrap gap-0.5">
       {npbScouts?.map(t => (
-        <span key={t} className="text-[9px] px-1 py-0 rounded bg-red-900/40 text-red-300 leading-tight">{t}</span>
+        <span key={t} className="text-xs px-1 py-0 rounded bg-red-900/40 text-red-300 leading-tight">{t}</span>
       ))}
       {amScouts?.map(t => (
-        <span key={t} className="text-[9px] px-1 py-0 rounded bg-purple-900/40 text-purple-300 leading-tight">{t}</span>
+        <span key={t} className="text-xs px-1 py-0 rounded bg-purple-900/40 text-purple-300 leading-tight">{t}</span>
       ))}
     </div>
   );

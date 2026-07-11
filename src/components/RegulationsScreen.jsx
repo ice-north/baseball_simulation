@@ -152,7 +152,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               <option value="tournament">4チームトーナメント</option>
             </select>
           </SettingRow>
-          <div className="text-[10px] text-gray-500 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
+          <div className="text-xs text-gray-500 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
           <SettingRow label="延長最大回数">
             <input type="number" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({ ...tempSettings, maxExtraInnings: parseInt(e.target.value) })} disabled={!canModify} min="0" max="30" className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-20" />
           </SettingRow>
@@ -252,7 +252,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               ))}
             </div>
           )}
-          <p className="text-gray-500 text-[10px] mt-2">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表で使用</p>
+          <p className="text-gray-500 text-xs mt-2">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表で使用</p>
         </div>
       )}
 

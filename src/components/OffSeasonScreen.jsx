@@ -251,7 +251,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                         g.path === 'club' ? 'bg-cyan-900/20' :
                         'bg-gray-800/30'
                       }`}>
-                        <span className={`font-bold text-[10px] w-14 text-center rounded px-1 py-0.5 ${
+                        <span className={`font-bold text-xs w-14 text-center rounded px-1 py-0.5 ${
                           g.path === 'corporate' ? 'bg-blue-800/50 text-blue-300' :
                           g.path === 'independent' ? 'bg-green-800/50 text-green-300' :
                           g.path === 'club' ? 'bg-cyan-800/50 text-cyan-300' :
@@ -260,10 +260,10 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                         <span className="text-white font-bold flex-1">{g.name}</span>
                         <span className="text-gray-400 text-xs w-6 text-center">{posLabel[g.position] || g.position}</span>
                         {g.nextYearTeam && (
-                          <span className="text-amber-400/80 text-[10px] font-bold shrink-0">→ {g.nextYearTeam}</span>
+                          <span className="text-amber-400/80 text-xs font-bold shrink-0">→ {g.nextYearTeam}</span>
                         )}
                         {g.stats && (
-                          <span className="text-gray-500 text-[10px] tabular-nums w-28 text-right">
+                          <span className="text-gray-500 text-xs tabular-nums w-28 text-right">
                             {g.position === 'pitcher'
                               ? `${g.stats.velocity}km / 制球${g.stats.control}`
                               : `M${g.stats.meet} P${g.stats.power} E${g.stats.eye} S${g.stats.speed}`
@@ -388,7 +388,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
             <div className="grid grid-cols-4 gap-2.5 mb-5">
               {titles.map((t, i) => (
                 <div key={i} className={`bg-gray-800/80 rounded-xl border ${t.border} p-2.5 text-center`}>
-                  <p className={`${t.titleColor} text-[10px] font-bold tracking-wide mb-0.5`}>{t.label}</p>
+                  <p className={`${t.titleColor} text-xs font-bold tracking-wide mb-0.5`}>{t.label}</p>
                   <p className="text-white font-black text-sm leading-tight">{t.name}</p>
                   <p className={`${t.valueColor} text-lg font-black mt-0.5`}>{t.value}</p>
                 </div>

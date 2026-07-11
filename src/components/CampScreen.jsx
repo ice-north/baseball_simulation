@@ -365,7 +365,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const FitnessValue = ({ value }) => {
     if (value === undefined || value === null) return <span className="text-gray-700">-</span>;
     const color = value >= 80 ? 'text-green-400' : value >= 60 ? 'text-yellow-400' : value >= 40 ? 'text-orange-400' : 'text-red-400';
-    return <span className={`${color} text-[10px]`}>{value}</span>;
+    return <span className={`${color} text-xs`}>{value}</span>;
   };
 
   const getAvailableNewPitches = (player) => {
@@ -570,7 +570,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 <span className="text-white font-bold text-sm">{uni.universityName}</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-gray-400 text-[10px]">OB {uni.obCount}人</span>
+                                <span className="text-gray-400 text-xs">OB {uni.obCount}人</span>
                                 <span className={`text-xs font-bold ${canDispatch ? 'text-orange-400' : 'text-gray-500'}`}>
                                   残{uni.remaining}/{uni.slots}枠
                                 </span>
@@ -578,7 +578,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </div>
                             <div className="flex gap-1 flex-wrap">
                               {uni.specialties.map(s => (
-                                <span key={s} className="px-1.5 py-0 rounded text-[10px] bg-gray-600/80 text-gray-300">
+                                <span key={s} className="px-1.5 py-0 rounded text-xs bg-gray-600/80 text-gray-300">
                                   {SPECIALTY_ICONS?.[s] || ''}{SPECIALTY_LABELS?.[s] || s}
                                 </span>
                               ))}
@@ -698,7 +698,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 );
               })}
             </div>
-            <div className="text-[10px] text-gray-500 mt-1">チーム運営画面からスタッフを補充できます</div>
+            <div className="text-xs text-gray-500 mt-1">チーム運営画面からスタッフを補充できます</div>
           </div>
         )}
 
@@ -715,7 +715,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 </div>
               ))}
             </div>
-            <div className="text-[10px] text-gray-500 mt-1">来季は予算内での運営を心がけましょう</div>
+            <div className="text-xs text-gray-500 mt-1">来季は予算内での運営を心がけましょう</div>
           </div>
         )}
 
@@ -738,7 +738,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 return m >= 1.0 ? `×${m.toFixed(2)}` : `×${m.toFixed(2)}`;
               };
               return (
-                <div className="mb-2 flex items-center gap-3 bg-gray-800/60 rounded px-3 py-1.5 text-[10px] flex-wrap">
+                <div className="mb-2 flex items-center gap-3 bg-gray-800/60 rounded px-3 py-1.5 text-xs flex-wrap">
                   <span className="text-gray-500 font-bold">コーチ効果:</span>
                   {items.map(it => (
                     <span key={it.label} className="text-gray-400">
@@ -769,7 +769,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   key={key}
                   onClick={() => applyPreset(key)}
                   title={preset.desc}
-                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded px-2 py-0.5 text-[11px] text-gray-300 hover:text-blue-300 transition"
+                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded px-2 py-0.5 text-xs text-gray-300 hover:text-blue-300 transition"
                 >
                   {preset.icon} {preset.name}
                 </button>
@@ -786,7 +786,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     });
                     setAssignments(updated);
                   }}
-                  className="px-2 py-0.5 text-[11px] rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition"
+                  className="px-2 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition"
                 >
                   {menu.icon} {menu.name}
                 </button>
@@ -804,9 +804,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     const uniName = p.dispatchUniversityName;
                     return (
                       <div key={idx} className="flex items-center gap-1 bg-gray-700/50 rounded px-2 py-0.5">
-                        <span className={`font-bold text-[10px] ${p.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
-                        <span className="text-gray-500 text-[10px]">{dest?.icon} {uniName || dest?.name}</span>
-                        <span className="text-orange-400 text-[10px]">（結果はキャンプ終了時）</span>
+                        <span className={`font-bold text-xs ${p.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
+                        <span className="text-gray-500 text-xs">{dest?.icon} {uniName || dest?.name}</span>
+                        <span className="text-orange-400 text-xs">（結果はキャンプ終了時）</span>
                       </div>
                     );
                   })}
@@ -840,7 +840,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+                  <tr className="bg-gray-700/80 text-gray-400 text-xs">
                     {(() => {
                       const S = ({ k, w, children, title, align = 'center' }) => (
                         <th className={`py-1.5 px-1 ${align === 'left' ? 'text-left px-2' : 'text-center'} ${w || ''}`} title={title}>
@@ -907,15 +907,15 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           </span>
                         </td>
                         <td className="py-1 px-1 text-center">
-                          <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
+                          <span className="text-xs text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
                         </td>
-                        <td className="py-1 px-1 text-center text-gray-500 text-[10px]">{player.age || 20}</td>
-                        <td className="py-1 px-1 text-center text-[10px]">
+                        <td className="py-1 px-1 text-center text-gray-500 text-xs">{player.age || 20}</td>
+                        <td className="py-1 px-1 text-center text-xs">
                           <span className={ph.build === 'large' ? 'text-orange-400' : ph.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                             {ph.build === 'large' ? '大柄' : ph.build === 'small' ? '小柄' : '中肉'}
                           </span>
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px]">
+                        <td className="py-1 px-1 text-center text-xs">
                           {(() => {
                             const base = player.growthPotential ?? 1.0;
                             const mod = player.growthModifier || 0;
@@ -928,26 +928,26 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             );
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px]">
+                        <td className="py-1 px-1 text-center text-xs">
                           {(() => {
                             const d = player.personality?.discipline ?? 50;
                             const c = d >= 80 ? 'text-red-400' : d >= 60 ? 'text-orange-400' : d >= 40 ? 'text-yellow-400' : d >= 20 ? 'text-blue-400' : 'text-gray-400';
                             return <span className={c}>{d}</span>;
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px]">
+                        <td className="py-1 px-1 text-center text-xs">
                           {(() => {
                             const m = player.personality?.mental ?? 50;
                             const c = m >= 80 ? 'text-red-400' : m >= 60 ? 'text-orange-400' : m >= 40 ? 'text-yellow-400' : m >= 20 ? 'text-blue-400' : 'text-gray-400';
                             return <span className={c}>{m}</span>;
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px]">
+                        <td className="py-1 px-1 text-center text-xs">
                           <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>{ph.throws === 'left' ? '左' : '右'}</span>
                           <span className="text-gray-500">/</span>
                           <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
                         </td>
-                        <td className="py-1 px-1 text-center text-[10px] text-gray-400">
+                        <td className="py-1 px-1 text-center text-xs text-gray-400">
                           {({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-')}
                         </td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
@@ -966,8 +966,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.muscle??50} label="体幹" /></td>
-                        <td className="py-1 px-2 text-yellow-400 text-[10px] font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
-                        <td className="py-1 px-2 text-[10px] font-mono text-gray-400 whitespace-nowrap">
+                        <td className="py-1 px-2 text-yellow-400 text-xs font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
+                        <td className="py-1 px-2 text-xs font-mono text-gray-400 whitespace-nowrap">
                           {(() => {
                             const prev = player.previousSeasonStats;
                             if (!prev) return <span className="text-gray-500">-</span>;
@@ -986,7 +986,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         {subPosHeaders.map(pos => (
                           <td key={pos} className="py-1 px-0.5 text-center font-mono">
                             {pos === player.position
-                              ? <span className="text-white text-[10px] font-bold">主</span>
+                              ? <span className="text-white text-xs font-bold">主</span>
                               : <FitnessValue value={pf[pos]} />
                             }
                           </td>
@@ -1094,7 +1094,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                     onClick={() => eligible && setDispatchConfirm({ playerId: player.id, destKey })}
                                     disabled={!eligible}
                                     title={eligible ? `${dest.name}に派遣\n${dest.desc}` : reason}
-                                    className={`px-1 py-0.5 rounded text-[10px] font-bold transition ${
+                                    className={`px-1 py-0.5 rounded text-xs font-bold transition ${
                                       eligible
                                         ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
                                         : 'bg-gray-700 text-gray-500 cursor-not-allowed'
@@ -1134,7 +1134,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               </div>
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-700/50 text-gray-400 text-[10px]">
+                  <tr className="bg-gray-700/50 text-gray-400 text-xs">
                     <th className="py-1 px-2 text-left w-20">選手</th>
                     <th className="py-1 px-2 text-left w-20">メイン</th>
                     <th className="py-1 px-2 text-left">メイン結果</th>
@@ -1157,10 +1157,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           {result.player.name}
                         </span>
                         {coachComment && (
-                          <div className={`text-[9px] ${coachComment.color}`}>📋{coachComment.text}</div>
+                          <div className={`text-xs ${coachComment.color}`}>📋{coachComment.text}</div>
                         )}
                       </td>
-                      <td className="py-1 px-2 text-gray-500 text-[10px]">
+                      <td className="py-1 px-2 text-gray-500 text-xs">
                         {TRAINING_MENUS[result.trainingType]?.icon} {TRAINING_MENUS[result.trainingType]?.name}
                       </td>
                       <td className="py-1 px-2">
@@ -1168,7 +1168,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           {result.growthReport.map((growth, gIdx) => (
                             <span
                               key={gIdx}
-                              className={`px-1.5 py-0 rounded text-[10px] leading-relaxed ${
+                              className={`px-1.5 py-0 rounded text-xs leading-relaxed ${
                                 growth.isPenalty
                                   ? 'bg-red-700/80 text-red-100'
                                   : growth.isAwakening
@@ -1186,11 +1186,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           ))}
                           {result.growthReport.length === 0 && (
-                            <span className="text-gray-500 text-[10px]">変化なし</span>
+                            <span className="text-gray-500 text-xs">変化なし</span>
                           )}
                         </div>
                       </td>
-                      <td className="py-1 px-2 text-gray-500 text-[10px]">
+                      <td className="py-1 px-2 text-gray-500 text-xs">
                         {result.subTrainingType && SUB_TRAINING_MENUS[result.subTrainingType] && (
                           <>{SUB_TRAINING_MENUS[result.subTrainingType].icon} {SUB_TRAINING_MENUS[result.subTrainingType].name}</>
                         )}
@@ -1200,7 +1200,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           {(result.subGrowthReport || []).map((growth, gIdx) => (
                             <span
                               key={gIdx}
-                              className={`px-1.5 py-0 rounded text-[10px] leading-relaxed ${
+                              className={`px-1.5 py-0 rounded text-xs leading-relaxed ${
                                 growth.isAwakening
                                   ? 'bg-yellow-500 text-black font-bold'
                                   : growth.growth > 0
@@ -1217,7 +1217,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           ))}
                           {(!result.subGrowthReport || result.subGrowthReport.length === 0) && (
-                            <span className="text-gray-500 text-[10px]">変化なし</span>
+                            <span className="text-gray-500 text-xs">変化なし</span>
                           )}
                         </div>
                       </td>
@@ -1336,7 +1336,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                       {result.growthReport.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {result.growthReport.map((g, gIdx) => (
-                            <span key={gIdx} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            <span key={gIdx} className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                               g.isAwakening ? 'bg-yellow-500 text-black' : 'bg-green-700 text-green-100'
                             }`}>
                               {g.statName}: {g.before}→{g.after} +{g.growth}{g.isAwakening && ' 覚醒!'}
@@ -1397,7 +1397,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <div className="flex items-center justify-between mb-2">
                 <h1 className="text-xl font-bold text-white">{campTitle}成長レポート - {userTeamName}</h1>
               </div>
-              <div className="flex gap-4 text-[10px] mb-1 ml-1">
+              <div className="flex gap-4 text-xs mb-1 ml-1">
                 <span className="text-green-400">■ キャンプ成長</span>
                 <span className="text-cyan-400">■ 自然成長()</span>
                 <span className="text-red-400">■ 衰退</span>
@@ -1405,7 +1405,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto mb-3">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+                    <tr className="bg-gray-700/80 text-gray-400 text-xs">
                       <th className="py-1.5 px-2 text-left w-20">選手</th>
                       <th className="py-1.5 px-1 text-center w-7">位</th>
                       {STAT_DEFS.map(sd => (
@@ -1443,20 +1443,20 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           </td>
                           <td className="py-1 px-1 text-center">
-                            <span className="text-[10px] text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
+                            <span className="text-xs text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
                           </td>
                           {diffs.map(d => {
                             const bgClass = d.diff >= 5 ? 'bg-yellow-400/15' : d.diff >= 3 ? 'bg-green-400/10' : d.diff < -2 ? 'bg-red-400/10' : '';
                             return (
-                              <td key={d.key} className={`py-1 px-1 text-center font-mono text-[10px] ${bgClass}`}>
+                              <td key={d.key} className={`py-1 px-1 text-center font-mono text-xs ${bgClass}`}>
                                 {d.diff !== 0 ? (
                                   <span>
-                                    <span className={`font-bold text-[11px] ${d.diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    <span className={`font-bold text-xs ${d.diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
                                       {d.diff > 0 ? `+${d.diff}` : d.diff}
                                     </span>
-                                    <span className="text-gray-600 ml-0.5 text-[9px]">{d.after}</span>
+                                    <span className="text-gray-600 ml-0.5 text-xs">{d.after}</span>
                                     {d.naturalDiff !== 0 && (
-                                      <span className={`ml-0.5 text-[9px] ${d.naturalDiff > 0 ? 'text-cyan-400' : 'text-red-300'}`}>
+                                      <span className={`ml-0.5 text-xs ${d.naturalDiff > 0 ? 'text-cyan-400' : 'text-red-300'}`}>
                                         ({d.naturalDiff > 0 ? `+${d.naturalDiff}` : d.naturalDiff})
                                       </span>
                                     )}
@@ -1467,7 +1467,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                               </td>
                             );
                           })}
-                          <td className="py-1 px-2 text-[10px]">
+                          <td className="py-1 px-2 text-xs">
                             {newPitches.length > 0 ? (
                               <span className="text-yellow-400 font-bold">
                                 {newPitches.map(t => getPitchTypeName(t)).join(', ')}

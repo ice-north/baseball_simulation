@@ -649,11 +649,11 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         }`}
                       >
                         <div>
-                          <div className={`text-[10px] font-bold ${n.urgency === 'critical' ? 'text-red-400' : 'text-blue-400'}`}>
+                          <div className={`text-xs font-bold ${n.urgency === 'critical' ? 'text-red-400' : 'text-blue-400'}`}>
                             {n.label} ({n.current}/{n.ideal})
                           </div>
                           <div className="text-white text-xs font-bold">{n.player.name}</div>
-                          <div className="text-gray-500 text-[10px]">
+                          <div className="text-gray-500 text-xs">
                             {POSITION_NAMES[n.player.position]} {n.player.age}歳
                             {n.player.position === 'pitcher'
                               ? ` ${n.player.pitching?.velocity || 0}km 制${n.player.pitching?.control || 0}`
@@ -669,8 +669,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
             })()}
 
             <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 mb-5">
-              <table className="w-full text-[11px] text-left">
-                <thead className="bg-gray-800 text-gray-400 text-[10px] sticky top-0 border-b border-gray-700/50">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-gray-800 text-gray-400 text-xs sticky top-0 border-b border-gray-700/50">
                   <tr>
                     {[
                       { label: '名前', key: 'name', tip: null },
@@ -720,7 +720,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                           {player.name}
                           {player.isReleasedCandidate && (
                             <span
-                              className="ml-0.5 inline-block px-0.5 text-[9px] bg-amber-700 text-amber-100 rounded align-middle"
+                              className="ml-0.5 inline-block px-0.5 text-xs bg-amber-700 text-amber-100 rounded align-middle"
                               title={`前所属: ${player.previousTeam || '不明'} / 解雇 ${player.releasedYear || '?'}年目`}
                             >
                               FA
@@ -739,7 +739,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.spinRate??50))}`}>{getAbilityRank(player.pitching?.spinRate??50)}</td>
-                        <td className="px-1 py-1 text-[10px] whitespace-nowrap">
+                        <td className="px-1 py-1 text-xs whitespace-nowrap">
                           {(() => {
                             const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
                             if (arsenal.length === 0) return <span className="text-gray-500">-</span>;
@@ -751,7 +751,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         </td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(fRank)}`}>{fRank}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(pRank)}`}>{pRank}</td>
-                        <td className="px-1 py-1 text-[10px] leading-tight">
+                        <td className="px-1 py-1 text-xs leading-tight">
                           {(() => {
                             const comment = player.scoutComment || generateScoutComment(player);
                             const sc = typeof comment === 'string' ? { text: comment, potentialHint: '', potentialLevel: 3 } : comment;

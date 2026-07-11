@@ -375,7 +375,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />
             <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
               <span className="text-gray-600 truncate">{team.short}</span>
-              {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
+              {rank && <span className="text-gray-400 text-xs shrink-0">{rank}</span>}
             </div>
           </div>
           <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
@@ -407,23 +407,23 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
             {revealed && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
             <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
               <span className="text-gray-600 truncate">{team.short}</span>
-              {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
+              {rank && <span className="text-gray-400 text-xs shrink-0">{rank}</span>}
             </div>
           </div>
           <div className={`${cardBg} ${borderClass} flex-1 flex flex-col justify-center p-2 min-h-0`}>
             {phaseState === 'lotteryShown' && isLoser ? (
               <div className="text-center">
                 <div className="text-red-400 text-xs font-bold">抽選外れ</div>
-                <div className="text-gray-400 text-[10px] mt-1">再指名待ち...</div>
+                <div className="text-gray-400 text-xs mt-1">再指名待ち...</div>
               </div>
             ) : (
               <div className="w-full space-y-1">
                 <PlayerCardContent name={phasePick.name} position={phasePick.position} teamName={phasePick.teamName} />
                 {(phaseState === 'revealing' || phaseState === 'allRevealed') && hasCollision && cStyle && (
-                  <div className={`text-center text-[10px] font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
+                  <div className={`text-center text-xs font-bold mt-1 ${cStyle.label}`}>※ 競合</div>
                 )}
                 {phaseState === 'lotteryShown' && isWinner && (
-                  <div className="text-center text-green-600 text-[10px] font-bold mt-1">✓ 抽選当選</div>
+                  <div className="text-center text-green-600 text-xs font-bold mt-1">✓ 抽選当選</div>
                 )}
               </div>
             )}
@@ -442,7 +442,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />
           <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
             <span className="text-gray-600 truncate">{team.short}</span>
-            {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
+            {rank && <span className="text-gray-400 text-xs shrink-0">{rank}</span>}
           </div>
         </div>
         <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
@@ -467,7 +467,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
           {(revealed || !needsReveal) && <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '20px', width: '30px' }} />}
           <div className="flex-1 flex items-center justify-center gap-1 px-1 font-bold text-xs tracking-wide min-w-0">
             <span className="text-gray-600 truncate">{team.short}</span>
-            {rank && <span className="text-gray-400 text-[10px] shrink-0">{rank}</span>}
+            {rank && <span className="text-gray-400 text-xs shrink-0">{rank}</span>}
           </div>
         </div>
         <div className="bg-white flex-1 flex flex-col justify-center p-2 min-h-0">
@@ -648,7 +648,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <div className="text-center mb-5">
-        <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
+        <div className="text-green-300/60 text-xs tracking-[0.3em] uppercase mb-0.5">NPB Draft Conference</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">プロ野球ドラフト会議</h1>
         <div className="flex items-center justify-center gap-4 mt-2">
           <div className="h-px w-16 bg-gradient-to-r from-transparent to-red-500/60" />
@@ -678,7 +678,7 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
               }}
             />
           </div>
-          <span className="text-[10px] text-gray-500 whitespace-nowrap">{Math.round(((currentRoundIdx + 1) / activeRounds.length) * 100)}%</span>
+          <span className="text-xs text-gray-500 whitespace-nowrap">{Math.round(((currentRoundIdx + 1) / activeRounds.length) * 100)}%</span>
         </div>
       </div>
 
@@ -753,7 +753,7 @@ const DraftPlayerDetail = ({ player }) => {
       {traits.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {traits.map((t, i) => (
-            <span key={i} className="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded">
+            <span key={i} className="text-xs font-bold px-1.5 py-0.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded">
               {TRAIT_NAMES[t] || t}
             </span>
           ))}
@@ -762,7 +762,7 @@ const DraftPlayerDetail = ({ player }) => {
 
       {isPitcher && (
         <div>
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">投球能力</div>
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">投球能力</div>
           <div className="space-y-1">
             <StatBar label="球速" value={p.pitching?.velocity || 0} suffix="km" maxVal={170} />
             <StatBar label="制球" value={p.pitching?.control || 0} />
@@ -770,7 +770,7 @@ const DraftPlayerDetail = ({ player }) => {
           </div>
           {p.pitching?.arsenal?.length > 0 && (
             <div className="mt-2">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">球種</div>
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">球種</div>
               <div className="flex flex-wrap gap-1.5">
                 {p.pitching.arsenal.map((b, i) => (
                   <span key={i} className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-0.5 text-xs">
@@ -785,7 +785,7 @@ const DraftPlayerDetail = ({ player }) => {
       )}
 
       <div>
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">打撃能力</div>
+        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">打撃能力</div>
         <div className="space-y-1">
           <StatBar label="ミート" value={p.batting?.meet || 0} />
           <StatBar label="パワー" value={p.batting?.power || 0} />
@@ -796,7 +796,7 @@ const DraftPlayerDetail = ({ player }) => {
       </div>
 
       <div>
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">フィジカル</div>
+        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">フィジカル</div>
         <div className="space-y-1">
           <StatBar label="走力" value={p.physical?.speed || 0} />
           <StatBar label="肩力" value={p.physical?.arm || 0} />
@@ -808,13 +808,13 @@ const DraftPlayerDetail = ({ player }) => {
 
       {p.position === 'catcher' && p.catching?.lead != null && (
         <div>
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">捕手能力</div>
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">捕手能力</div>
           <StatBar label="リード" value={p.catching.lead} />
         </div>
       )}
 
       <div>
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">素質</div>
+        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">素質</div>
         <div className="space-y-1">
           {p.growthPotential != null && <StatBar label="成長力" value={Math.round(p.growthPotential * 50)} />}
           {p.personality?.discipline != null && <StatBar label="プロ意識" value={p.personality.discipline} />}
@@ -868,7 +868,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-800 via-green-900 to-green-950 p-3 sm:p-6">
       <div className="text-center mb-5">
-        <div className="text-green-300/60 text-[10px] tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
+        <div className="text-green-300/60 text-xs tracking-[0.3em] uppercase mb-0.5">NPB Draft Results</div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">全球団指名一覧</h1>
       </div>
       <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
@@ -892,7 +892,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                       {isFirst && misses.length > 0 && (
                         <div className="px-3 py-1.5 bg-red-50">
                           {misses.map((m, mi) => (
-                            <div key={mi} className="flex items-center gap-1.5 text-red-400 text-[10px]">
+                            <div key={mi} className="flex items-center gap-1.5 text-red-400 text-xs">
                               <span className="font-bold">✕ 外れ{mi > 0 ? '外れ'.repeat(mi) : ''}</span>
                               <span>{m.playerName}</span>
                             </div>
@@ -902,7 +902,7 @@ const DraftTeamSummaryScreen = ({ draftedPlayers, firstRoundData, npbStandings, 
                       <div className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
                            onClick={() => setSelectedEntry(entry)}>
                         <div className="flex items-baseline gap-1.5 whitespace-nowrap overflow-hidden">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
                             isFirst ? 'bg-red-100 text-red-700' :
                             entry.draftRound.startsWith('育成') ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'
                           }`}>{displayLabel}</span>

@@ -205,7 +205,7 @@ const RankingTable = ({ title, data, valueLabel }) => (
     </div>
     <table className="w-full text-sm">
       <thead>
-        <tr className="border-b border-gray-700/40 text-[10px] text-gray-500 font-medium">
+        <tr className="border-b border-gray-700/40 text-xs text-gray-500 font-medium">
           <th className="text-left py-1.5 pl-3 w-8">#</th>
           <th className="text-left py-1.5">選手名</th>
           <th className="text-left py-1.5 w-14">チーム</th>
@@ -218,7 +218,7 @@ const RankingTable = ({ title, data, valueLabel }) => (
             <tr key={index} className={`border-b border-gray-700/30 hover:bg-gray-700/30 transition-colors ${index === 0 ? 'bg-yellow-900/10' : ''}`}>
               <td className={`py-1.5 pl-3 font-bold text-xs ${index === 0 ? 'text-yellow-400' : index < 3 ? 'text-gray-300' : 'text-gray-600'}`}>{player.rank}</td>
               <td className="py-1.5 text-white text-xs font-medium">{player.name}</td>
-              <td className="py-1.5 text-[10px] text-gray-400">{getTeamAbbreviation(player.team)}</td>
+              <td className="py-1.5 text-xs text-gray-400">{getTeamAbbreviation(player.team)}</td>
               <td className={`text-right py-1.5 pr-3 font-bold text-sm ${index === 0 ? 'text-yellow-300' : 'text-gray-200'}`}>{player.value}</td>
             </tr>
           ))
@@ -328,7 +328,7 @@ const ScheduleScreen = ({
                 return (
                   <div key={p.key} className="absolute h-4 rounded-sm flex items-center justify-center overflow-hidden transition-all"
                     style={{ left: `${left}%`, width: `${width}%`, backgroundColor: isActive ? p.color : `${p.color}33`, border: isActive ? `1.5px solid ${p.color}` : '1px solid transparent' }}>
-                    <span className={`text-[9px] font-bold ${isActive ? 'text-white' : 'text-gray-500'}`}>{p.label}</span>
+                    <span className={`text-xs font-bold ${isActive ? 'text-white' : 'text-gray-500'}`}>{p.label}</span>
                   </div>
                 );
               })}
@@ -347,7 +347,7 @@ const ScheduleScreen = ({
             </div>
             <div className="flex justify-between mt-1">
               {[1,4,7,10,12].map(m => (
-                <span key={m} className={`text-[9px] ${currentDate.month === m ? 'text-white font-bold' : 'text-gray-600'}`}>{m}月</span>
+                <span key={m} className={`text-xs ${currentDate.month === m ? 'text-white font-bold' : 'text-gray-600'}`}>{m}月</span>
               ))}
             </div>
           </div>
@@ -424,13 +424,13 @@ const ScheduleScreen = ({
       <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-3 mb-4">
         <div className="text-xs font-semibold text-gray-300 mb-2 px-1">{selectedMonth}月の日程（{userTeamName}）</div>
         <div className="grid grid-cols-7 gap-0.5">
-          <div className="text-center text-red-400 font-bold py-1 text-[10px]">日</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">月</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">火</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">水</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">木</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-[10px]">金</div>
-          <div className="text-center text-blue-400 font-bold py-1 text-[10px]">土</div>
+          <div className="text-center text-red-400 font-bold py-1 text-xs">日</div>
+          <div className="text-center text-gray-500 font-bold py-1 text-xs">月</div>
+          <div className="text-center text-gray-500 font-bold py-1 text-xs">火</div>
+          <div className="text-center text-gray-500 font-bold py-1 text-xs">水</div>
+          <div className="text-center text-gray-500 font-bold py-1 text-xs">木</div>
+          <div className="text-center text-gray-500 font-bold py-1 text-xs">金</div>
+          <div className="text-center text-blue-400 font-bold py-1 text-xs">土</div>
           {calendarData.map((day, index) => {
             if (!day.day) {
               return <div key={index} className="p-2"></div>;
@@ -505,7 +505,7 @@ const ScheduleScreen = ({
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-center flex-1">
                         <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.away)}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">{awayP ? awayP.name : '先発未定'}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{awayP ? awayP.name : '先発未定'}</div>
                       </div>
                       <div className="text-gray-600 text-xs font-mono px-1">
                         {game.result ? (
@@ -518,7 +518,7 @@ const ScheduleScreen = ({
                       </div>
                       <div className="text-center flex-1">
                         <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.home)}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">{homeP ? homeP.name : '先発未定'}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{homeP ? homeP.name : '先発未定'}</div>
                       </div>
                     </div>
                   </div>
@@ -566,8 +566,8 @@ const ScheduleScreen = ({
             onClick={() => setScheduleTab(key)}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
               scheduleTab === key
-                ? 'bg-green-600 text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-gray-300 hover:text-gray-100 hover:bg-gray-700/60'
             }`}
           >
             <span>{icon}</span>
@@ -601,15 +601,15 @@ const ScheduleScreen = ({
               <table className="w-full text-white">
                 <thead>
                   <tr className="border-b border-gray-700">
-                    <th className="text-left py-3 text-lg">順位</th>
-                    <th className="text-left py-3 text-lg">チーム</th>
-                    <th className="text-center py-3 text-lg">試</th>
-                    <th className="text-center py-3 text-lg">勝</th>
-                    <th className="text-center py-3 text-lg">敗</th>
-                    <th className="text-center py-3 text-lg">分</th>
-                    <th className="text-center py-3 text-lg">勝率</th>
-                    <th className="text-center py-3 text-lg">差</th>
-                    <th className="text-center py-3 text-lg">M</th>
+                    <th className="text-left py-2 text-sm font-bold">順位</th>
+                    <th className="text-left py-2 text-sm font-bold">チーム</th>
+                    <th className="text-center py-2 text-sm font-bold">試</th>
+                    <th className="text-center py-2 text-sm font-bold">勝</th>
+                    <th className="text-center py-2 text-sm font-bold">敗</th>
+                    <th className="text-center py-2 text-sm font-bold">分</th>
+                    <th className="text-center py-2 text-sm font-bold">勝率</th>
+                    <th className="text-center py-2 text-sm font-bold">差</th>
+                    <th className="text-center py-2 text-sm font-bold">M</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -645,22 +645,22 @@ const ScheduleScreen = ({
                     const dimClass = isEliminated ? 'text-gray-500' : '';
                     return (
                       <tr key={index} className={`border-b border-gray-700 ${rowBg}`}>
-                        <td className={`py-3 text-lg font-bold ${dimClass}`}>{index + 1}</td>
-                        <td className={`py-3 text-lg font-bold ${
+                        <td className={`py-2 text-sm font-bold ${dimClass}`}>{index + 1}</td>
+                        <td className={`py-2 text-sm font-bold ${
                           index === 0 && lIsChampion ? 'text-yellow-300' : isEliminated ? 'text-gray-500' : index === 0 ? 'text-blue-300' : ''
                         }`}>{team.team}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{played}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.wins}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.losses}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{team.draws}</td>
-                        <td className={`text-center py-3 text-lg ${dimClass}`}>{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
-                        <td className={`text-center py-3 text-lg font-bold ${
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{played}</td>
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{team.wins}</td>
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{team.losses}</td>
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{team.draws}</td>
+                        <td className={`text-center py-2 text-sm ${dimClass}`}>{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
+                        <td className={`text-center py-2 text-sm font-bold ${
                           index === 0 && lIsChampion ? 'text-yellow-400' : isEliminated ? 'text-gray-600' : 'text-gray-300'
                         }`}>
                           {gameBehind}
                           {isEliminated && <span className="text-red-500/70 text-xs ml-1">消</span>}
                         </td>
-                        <td className="text-center py-3 text-lg text-red-400 font-bold">{magic}</td>
+                        <td className="text-center py-2 text-sm text-red-400 font-bold">{magic}</td>
                       </tr>
                     );
                   })}

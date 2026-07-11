@@ -421,7 +421,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                         </span>
                         <button
                           onClick={e => { e.stopPropagation(); setModalPlayer(player); }}
-                          className="px-1 py-0.5 rounded text-[9px] font-bold bg-gray-700 text-gray-300 hover:bg-gray-500 transition"
+                          className="px-1 py-0.5 rounded text-xs font-bold bg-gray-700 text-gray-300 hover:bg-gray-500 transition"
                         >詳</button>
                       </div>
                     </td>

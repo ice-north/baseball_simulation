@@ -66,14 +66,14 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
   const AbilityBar = ({ label, value, compact = false }) => (
     <div className={`flex items-center gap-1.5 ${compact ? 'mb-0.5' : 'mb-1'}`}>
-      <span className={`text-gray-400 ${compact ? 'text-[10px] w-16' : 'text-xs w-20'}`}>{label}</span>
+      <span className={`text-gray-400 ${compact ? 'text-xs w-16' : 'text-xs w-20'}`}>{label}</span>
       <div className="flex-1 bg-gray-700 rounded h-2.5">
         <div
           className={`h-2.5 rounded ${value >= 80 ? 'bg-red-500' : value >= 60 ? 'bg-yellow-500' : value >= 40 ? 'bg-green-500' : 'bg-blue-500'}`}
           style={{ width: `${Math.min(100, value)}%` }}
         />
       </div>
-      <span className={`font-bold w-6 text-right ${compact ? 'text-[10px]' : 'text-xs'} ${getAbilityColor(value)}`}>{value}</span>
+      <span className={`font-bold w-6 text-right ${compact ? 'text-xs' : 'text-xs'} ${getAbilityColor(value)}`}>{value}</span>
     </div>
   );
 
@@ -195,12 +195,12 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     {/* 専門＋得意分野タグ */}
                     <div className="flex gap-1 mt-1.5 flex-wrap">
                       {s.specialtyLabel && (
-                        <span className="text-[10px] bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded font-bold">
+                        <span className="text-xs bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded font-bold">
                           {s.specialtyLabel}
                         </span>
                       )}
                       {(s.strengths || []).map(key => (
-                        <span key={key} className="text-[10px] bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded">
+                        <span key={key} className="text-xs bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded">
                           {STAFF_ABILITIES[key]?.name || key}
                         </span>
                       ))}
@@ -283,12 +283,12 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     <span className="text-gray-600 w-12">{s.personality}</span>
                     <div className="flex gap-1 flex-1 flex-wrap">
                       {s.specialtyLabel && (
-                        <span className="text-[9px] bg-purple-900/30 text-purple-400 px-1 py-0.5 rounded font-bold">
+                        <span className="text-xs bg-purple-900/30 text-purple-400 px-1 py-0.5 rounded font-bold">
                           {s.specialtyLabel}
                         </span>
                       )}
                       {(s.strengths || []).map(key => (
-                        <span key={key} className="text-[9px] bg-blue-900/30 text-blue-400 px-1 py-0.5 rounded">
+                        <span key={key} className="text-xs bg-blue-900/30 text-blue-400 px-1 py-0.5 rounded">
                           {STAFF_ABILITIES[key]?.name || key}
                         </span>
                       ))}
@@ -296,7 +296,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     <span className="text-gray-400 w-16 text-right">{getStaffSalary(s)}万円</span>
                     <button
                       onClick={() => setConfirmHire(s)}
-                      className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded text-[10px] font-bold"
+                      className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded text-xs font-bold"
                     >
                       雇用
                     </button>
@@ -317,13 +317,13 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <AbilityBar label="スカウト眼" value={scoutEye} />
-                <p className="text-[10px] text-gray-500 ml-20">
+                <p className="text-xs text-gray-500 ml-20">
                   候補者数: {6 + Math.floor(scoutEye / 20)}名 / 精度: {Math.max(20, Math.min(95, 40 + Math.floor(scoutEye * 0.5)))}%前後
                 </p>
               </div>
               <div>
                 <AbilityBar label="交渉力" value={negotiation} />
-                <p className="text-[10px] text-gray-500 ml-20">
+                <p className="text-xs text-gray-500 ml-20">
                   交渉ボーナス: {Math.round(negotiation)}%
                 </p>
               </div>
@@ -334,7 +334,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <span className={`text-sm font-bold ${reputation >= 60 ? 'text-yellow-400' : reputation >= 30 ? 'text-green-400' : 'text-gray-400'}`}>
                   {reputation}
                 </span>
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-500 mt-0.5">
                   スカウト補正: x{getReputationScoutBonus(reputation).toFixed(2)} / 候補者質: {getReputationRecruitBonus(reputation) >= 0 ? '+' : ''}{getReputationRecruitBonus(reputation)}
                 </p>
               </div>
@@ -344,7 +344,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           {/* スカウト指示状況 */}
           <div className="bg-gray-800 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">スカウト指示状況</h2>
-            <p className="text-[10px] text-gray-500 mb-3">各スカウトにタスクを割り当てると、中止するまで繰り返し行動します</p>
+            <p className="text-xs text-gray-500 mb-3">各スカウトにタスクを割り当てると、中止するまで繰り返し行動します</p>
 
             {dispatchMessage && (
               <div className={`text-xs p-2 rounded mb-3 ${dispatchMessage.ok ? 'bg-green-900/40 text-green-400 border border-green-700/50' : 'bg-red-900/40 text-red-400 border border-red-700/50'}`}>
@@ -362,11 +362,11 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 return (
                   <div key={key} className="bg-gray-750 rounded p-2 text-center border border-gray-700/50">
                     <div className="text-xs font-bold text-white">{def.label}</div>
-                    <div className="text-[10px] text-gray-500">{def.days}日/回</div>
+                    <div className="text-xs text-gray-500">{def.days}日/回</div>
                     {activeTask ? (
-                      <div className="text-[10px] text-blue-400 mt-0.5">{tasks[activeTask[0]]?.staffName} 巡回中</div>
+                      <div className="text-xs text-blue-400 mt-0.5">{tasks[activeTask[0]]?.staffName} 巡回中</div>
                     ) : (
-                      <div className="text-[10px] text-gray-600 mt-0.5">未配置</div>
+                      <div className="text-xs text-gray-600 mt-0.5">未配置</div>
                     )}
                   </div>
                 );
@@ -388,12 +388,12 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
                       <span className="text-white text-sm font-bold">{s.name}</span>
-                      <span className="text-[10px] text-gray-500">
+                      <span className="text-xs text-gray-500">
                         眼<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.scoutingEye || 0)}`}>{s.abilities?.scoutingEye || 0}</span>
                         {' '}交渉<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.negotiation || 0)}`}>{s.abilities?.negotiation || 0}</span>
                       </span>
                       {favCount > 0 && (
-                        <span className="text-[10px] text-yellow-400 ml-auto">★担当{favCount}/{MAX_FAVORITES_PER_SCOUT}</span>
+                        <span className="text-xs text-yellow-400 ml-auto">★担当{favCount}/{MAX_FAVORITES_PER_SCOUT}</span>
                       )}
                     </div>
 
@@ -406,7 +406,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                               {SCOUT_TARGETS[task.target]?.label || task.target}巡回中
                             </span>
                             {activeMission && (
-                              <span className="text-[10px] text-gray-500">
+                              <span className="text-xs text-gray-500">
                                 帰還: {activeMission.returnDate.month}/{activeMission.returnDate.day}
                               </span>
                             )}
@@ -415,11 +415,11 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           <>
                             <span className="text-cyan-400 text-xs font-bold">自動調査中</span>
                             {activeMission?.type === 'investigation' ? (
-                              <span className="text-[10px] text-gray-500">
+                              <span className="text-xs text-gray-500">
                                 {activeMission.targetPlayerName}を調査中 ({activeMission.returnDate.month}/{activeMission.returnDate.day}完了)
                               </span>
                             ) : (
-                              <span className="text-[10px] text-gray-500">調査対象待ち</span>
+                              <span className="text-xs text-gray-500">調査対象待ち</span>
                             )}
                           </>
                         )}
@@ -430,7 +430,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             setDispatchMessage({ text: `${s.name}のタスクを中止しました`, ok: true });
                             setTimeout(() => setDispatchMessage(null), 3000);
                           }}
-                          className="ml-auto px-2.5 py-1 bg-red-800 hover:bg-red-700 text-red-200 rounded text-[10px] font-bold transition"
+                          className="ml-auto px-2.5 py-1 bg-red-800 hover:bg-red-700 text-red-200 rounded text-xs font-bold transition"
                         >
                           中止
                         </button>
@@ -443,13 +443,13 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             : `${SCOUT_TARGETS[activeMission.target]?.label || '?'}に派遣中`
                           }
                         </span>
-                        <span className="text-[10px] text-gray-500">
+                        <span className="text-xs text-gray-500">
                           {activeMission.returnDate.month}/{activeMission.returnDate.day} 帰還
                         </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        <span className="text-[10px] text-gray-500 mr-1">待機中</span>
+                        <span className="text-xs text-gray-500 mr-1">待機中</span>
                         {Object.entries(SCOUT_TARGETS).map(([key, def]) => {
                           const tasks = cd.scoutTasks || {};
                           const occupied = Object.entries(tasks).find(
@@ -465,7 +465,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                 setTimeout(() => setDispatchMessage(null), 3000);
                               }}
                               disabled={!!occupied}
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                              className={`px-2 py-0.5 rounded text-xs font-bold transition ${
                                 occupied
                                   ? 'bg-gray-700 text-gray-600 cursor-not-allowed'
                                   : 'bg-blue-700 hover:bg-blue-600 text-white'
@@ -484,7 +484,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             setRefreshTick(t => t + 1);
                             setTimeout(() => setDispatchMessage(null), 3000);
                           }}
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-700 hover:bg-cyan-600 text-white transition"
+                          className="px-2 py-0.5 rounded text-xs font-bold bg-cyan-700 hover:bg-cyan-600 text-white transition"
                         >
                           自動調査
                         </button>
@@ -502,7 +502,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <h2 className="text-sm font-bold text-gray-300">自動調査フィルタ</h2>
                 <div className="flex gap-2">
                   {cd.autoInvestFilter && (
-                    <span className="text-[10px] text-green-400 font-bold bg-green-900/30 px-2 py-0.5 rounded">有効</span>
+                    <span className="text-xs text-green-400 font-bold bg-green-900/30 px-2 py-0.5 rounded">有効</span>
                   )}
                   <button
                     onClick={() => setShowFilterPanel(!showFilterPanel)}
@@ -513,7 +513,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 </div>
               </div>
               {cd.autoInvestFilter && !showFilterPanel && (
-                <div className="text-[10px] text-gray-400 flex gap-3 flex-wrap">
+                <div className="text-xs text-gray-400 flex gap-3 flex-wrap">
                   {(cd.autoInvestFilter.ageMin || cd.autoInvestFilter.ageMax) && (
                     <span>年齢: {cd.autoInvestFilter.ageMin || '?'}〜{cd.autoInvestFilter.ageMax || '?'}歳</span>
                   )}
@@ -530,10 +530,10 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               )}
               {showFilterPanel && (
                 <div className="mt-2 bg-gray-900/60 rounded p-3 border border-cyan-500/20 space-y-3">
-                  <p className="text-[10px] text-gray-500">条件に合う未調査の選手をスタッフが空き次第自動で調査します</p>
+                  <p className="text-xs text-gray-500">条件に合う未調査の選手をスタッフが空き次第自動で調査します</p>
                   <div className="flex gap-4 items-end">
                     <div>
-                      <label className="text-[10px] text-gray-400 block mb-0.5">年齢（最小）</label>
+                      <label className="text-xs text-gray-400 block mb-0.5">年齢（最小）</label>
                       <input type="number" min="15" max="40" value={filterDraft.ageMin}
                         onChange={e => setFilterDraft(f => ({ ...f, ageMin: e.target.value ? parseInt(e.target.value) : '' }))}
                         className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white"
@@ -541,7 +541,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     </div>
                     <span className="text-gray-500 text-xs pb-1">〜</span>
                     <div>
-                      <label className="text-[10px] text-gray-400 block mb-0.5">年齢（最大）</label>
+                      <label className="text-xs text-gray-400 block mb-0.5">年齢（最大）</label>
                       <input type="number" min="15" max="40" value={filterDraft.ageMax}
                         onChange={e => setFilterDraft(f => ({ ...f, ageMax: e.target.value ? parseInt(e.target.value) : '' }))}
                         className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white"
@@ -549,7 +549,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-gray-400 block mb-1">ポジション</label>
+                    <label className="text-xs text-gray-400 block mb-1">ポジション</label>
                     <div className="flex gap-1.5 flex-wrap">
                       {['pitcher', 'catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'].map(pos => (
                         <button key={pos}
@@ -559,7 +559,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                               ? f.positions.filter(p => p !== pos)
                               : [...(f.positions || []), pos]
                           }))}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                          className={`px-2 py-0.5 rounded text-xs font-bold transition ${
                             (filterDraft.positions || []).includes(pos)
                               ? 'bg-cyan-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                           }`}
@@ -571,7 +571,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                   </div>
                   {/* 能力値フィルタ */}
                   <div>
-                    <label className="text-[10px] text-gray-400 block mb-1">能力値（見えている値で判定）</label>
+                    <label className="text-xs text-gray-400 block mb-1">能力値（見えている値で判定）</label>
                     <div className="grid grid-cols-4 gap-2">
                       {[
                         { key: 'velocity', label: '球速', max: 165 },
@@ -586,23 +586,23 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                         const ab = (filterDraft.abilities || {})[key] || {};
                         return (
                           <div key={key} className="flex items-center gap-1">
-                            <span className="text-[9px] text-gray-500 w-10 shrink-0">{label}</span>
+                            <span className="text-xs text-gray-500 w-10 shrink-0">{label}</span>
                             <input type="number" min="0" max={max || 99}
                               value={ab.min ?? ''}
                               onChange={e => setFilterDraft(f => ({
                                 ...f,
                                 abilities: { ...(f.abilities || {}), [key]: { ...(f.abilities?.[key] || {}), min: e.target.value ? parseInt(e.target.value) : null } }
                               }))}
-                              className="w-12 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-[10px] text-white"
+                              className="w-12 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs text-white"
                               placeholder="下限" />
-                            <span className="text-gray-600 text-[9px]">〜</span>
+                            <span className="text-gray-600 text-xs">〜</span>
                             <input type="number" min="0" max={max || 99}
                               value={ab.max ?? ''}
                               onChange={e => setFilterDraft(f => ({
                                 ...f,
                                 abilities: { ...(f.abilities || {}), [key]: { ...(f.abilities?.[key] || {}), max: e.target.value ? parseInt(e.target.value) : null } }
                               }))}
-                              className="w-12 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-[10px] text-white"
+                              className="w-12 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs text-white"
                               placeholder="上限" />
                           </div>
                         );
@@ -860,7 +860,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       <div className="mt-2 bg-gray-900/60 rounded p-3 border border-cyan-500/30">
                         <div className="text-xs text-cyan-400 mb-1.5 font-bold">{target.name}を調査するスカウトを選択</div>
                         {availScouts.length === 0 ? (
-                          <p className="text-[10px] text-gray-500">全スタッフが任務中です</p>
+                          <p className="text-xs text-gray-500">全スタッフが任務中です</p>
                         ) : (
                           <div className="flex gap-2 flex-wrap">
                             {availScouts.map(s => (
@@ -872,13 +872,13 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                   setRefreshTick(t => t + 1);
                                   setTimeout(() => setDispatchMessage(null), 3000);
                                 }}
-                                className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-[10px] font-bold rounded transition">
+                                className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold rounded transition">
                                 {s.name} (眼{s.abilities?.scoutingEye || 0})
                               </button>
                             ))}
                           </div>
                         )}
-                        <button onClick={() => setInvestigateTargetId(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-1.5 block">キャンセル</button>
+                        <button onClick={() => setInvestigateTargetId(null)} className="text-xs text-gray-500 hover:text-gray-300 mt-1.5 block">キャンセル</button>
                       </div>
                     );
                   })()}
@@ -924,20 +924,20 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           <div>
             <div className="bg-gray-800 rounded-lg p-4 mb-4">
               <h2 className="text-sm font-bold text-gray-300 mb-1">大学パイプ一覧</h2>
-              <p className="text-[10px] text-gray-500 mb-3">
+              <p className="text-xs text-gray-500 mb-3">
                 チーム内のOB（大学出身選手）を通じた大学との繋がりです。パイプがある大学にはキャンプで選手を派遣できます。
               </p>
               <div className="flex gap-4 mb-3">
                 <div className="bg-gray-750 rounded px-3 py-2 text-center">
-                  <div className="text-[10px] text-gray-400">繋がり大学数</div>
+                  <div className="text-xs text-gray-400">繋がり大学数</div>
                   <div className="text-xl font-bold text-cyan-400">{pipes.length}</div>
                 </div>
                 <div className="bg-gray-750 rounded px-3 py-2 text-center">
-                  <div className="text-[10px] text-gray-400">総派遣枠</div>
+                  <div className="text-xs text-gray-400">総派遣枠</div>
                   <div className="text-xl font-bold text-yellow-400">{pipes.reduce((s, p) => s + Math.min(3, p.pipeStrength), 0)}</div>
                 </div>
                 <div className="bg-gray-750 rounded px-3 py-2 text-center">
-                  <div className="text-[10px] text-gray-400">総OB人数</div>
+                  <div className="text-xs text-gray-400">総OB人数</div>
                   <div className="text-xl font-bold text-white">{pipes.reduce((s, p) => s + p.obCount, 0)}</div>
                 </div>
               </div>
@@ -969,7 +969,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     {pipe.specialties.length > 0 && (
                       <div className="flex gap-1 mb-2">
                         {pipe.specialties.map(sp => (
-                          <span key={sp} className="text-[10px] bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">
+                          <span key={sp} className="text-xs bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">
                             {SPECIALTY_ICONS[sp] || ''} {SPECIALTY_LABELS[sp] || sp}
                           </span>
                         ))}
@@ -978,7 +978,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
                     {/* OB一覧 */}
                     <div className="mt-2 border-t border-gray-700 pt-2">
-                      <div className="text-[10px] text-gray-500 mb-1">OB: {pipe.obCount}名（選手{pipe.obPlayers.length} / スタッフ{(pipe.obStaff || []).length}）</div>
+                      <div className="text-xs text-gray-500 mb-1">OB: {pipe.obCount}名（選手{pipe.obPlayers.length} / スタッフ{(pipe.obStaff || []).length}）</div>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                         {pipe.obPlayers.map(ob => {
                           const player = players.find(p => p.id === ob.id);
@@ -1014,24 +1014,24 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             <h2 className="text-sm font-bold text-gray-300 mb-3">{seasonData?.year || 1}年目 予算</h2>
             <div className="grid grid-cols-5 gap-2 mb-3">
               <div className="bg-gray-750 rounded p-2">
-                <div className="text-[10px] text-gray-400 mb-1">基本予算 <span className="text-gray-600">({cd.rank}ランク)</span></div>
-                <div className="text-sm font-bold text-white">{baseBudget.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
+                <div className="text-xs text-gray-400 mb-1">基本予算 <span className="text-gray-600">({cd.rank}ランク)</span></div>
+                <div className="text-sm font-bold text-white">{baseBudget.toLocaleString()}<span className="text-xs text-gray-400">万</span></div>
               </div>
               <div className="bg-gray-750 rounded p-2">
-                <div className="text-[10px] text-gray-400 mb-1">注目度</div>
-                <div className="text-sm font-bold text-green-400">+{reputationBonus.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
+                <div className="text-xs text-gray-400 mb-1">注目度</div>
+                <div className="text-sm font-bold text-green-400">+{reputationBonus.toLocaleString()}<span className="text-xs text-gray-400">万</span></div>
               </div>
               <div className="bg-gray-750 rounded p-2">
-                <div className="text-[10px] text-gray-400 mb-1">マネージング<span className="text-gray-600">({managingValue})</span></div>
-                <div className="text-sm font-bold text-cyan-400">+{managingBonus.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
+                <div className="text-xs text-gray-400 mb-1">マネージング<span className="text-gray-600">({managingValue})</span></div>
+                <div className="text-sm font-bold text-cyan-400">+{managingBonus.toLocaleString()}<span className="text-xs text-gray-400">万</span></div>
               </div>
               <div className="bg-gray-750 rounded p-2">
-                <div className="text-[10px] text-gray-400 mb-1">大会ボーナス</div>
-                <div className="text-sm font-bold text-yellow-400">+{tournamentBonus.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
+                <div className="text-xs text-gray-400 mb-1">大会ボーナス</div>
+                <div className="text-sm font-bold text-yellow-400">+{tournamentBonus.toLocaleString()}<span className="text-xs text-gray-400">万</span></div>
               </div>
               <div className="bg-gray-750 rounded p-2">
-                <div className="text-[10px] text-gray-400 mb-1">スポンサー</div>
-                <div className="text-sm font-bold text-purple-400">+{sponsorIncome.toLocaleString()}<span className="text-[10px] text-gray-400">万</span></div>
+                <div className="text-xs text-gray-400 mb-1">スポンサー</div>
+                <div className="text-sm font-bold text-purple-400">+{sponsorIncome.toLocaleString()}<span className="text-xs text-gray-400">万</span></div>
               </div>
             </div>
             <div className="flex items-center justify-between bg-gray-750 rounded p-3">
@@ -1046,7 +1046,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 </div>
               </div>
             </div>
-            <div className="text-[10px] text-gray-500 flex gap-3 mt-1">
+            <div className="text-xs text-gray-500 flex gap-3 mt-1">
               <span>ランク別基本予算:</span>
               {Object.entries(BUDGET_BY_RANK).map(([r, b]) => (
                 <span key={r} className={r === cd.rank ? 'text-yellow-400 font-bold' : ''}>{r}: {(b / 10000).toFixed(1)}億</span>
@@ -1078,7 +1078,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 })}
               </div>
             )}
-            <p className="text-[10px] text-gray-500 mt-2">注目度が高いほど上位スポンサーのオファーが来やすくなります</p>
+            <p className="text-xs text-gray-500 mt-2">注目度が高いほど上位スポンサーのオファーが来やすくなります</p>
           </div>
 
           {/* 大会ボーナス条件 */}
@@ -1090,7 +1090,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               <div className="flex justify-between"><span>ベスト4（本戦2勝以上）</span><span className="text-yellow-400">+500万</span></div>
               <div className="flex justify-between"><span>本戦出場（予選突破）</span><span className="text-yellow-400">+300万</span></div>
             </div>
-            <p className="text-[10px] text-gray-500 mt-2">最も良い成績が翌年の予算に反映されます（複数大会の場合は最高額）</p>
+            <p className="text-xs text-gray-500 mt-2">最も良い成績が翌年の予算に反映されます（複数大会の場合は最高額）</p>
           </div>
 
           {/* 人件費内訳 */}
@@ -1219,7 +1219,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <span className="text-yellow-400 text-sm">{roleLabel(confirmHire.role)}</span>
                 <span className="text-white font-medium">{confirmHire.name}</span>
                 {confirmHire.specialtyLabel && (
-                  <span className="text-[10px] bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded font-bold">{confirmHire.specialtyLabel}</span>
+                  <span className="text-xs bg-purple-900/40 text-purple-400 px-1.5 py-0.5 rounded font-bold">{confirmHire.specialtyLabel}</span>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-0">
@@ -1284,7 +1284,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                 <span className="text-yellow-400 font-bold">{target.name}</span>
                 <span className="text-gray-400 ml-2">{target.age}歳 {POSITION_NAMES[target.position] || target.position}</span>
               </p>
-              <p className="text-[10px] text-gray-500 mb-4">担当スカウトが選手と常に連絡を取り、交渉ボーナスが毎週蓄積します。1人のスカウトは最大{MAX_FAVORITES_PER_SCOUT}人まで。</p>
+              <p className="text-xs text-gray-500 mb-4">担当スカウトが選手と常に連絡を取り、交渉ボーナスが毎週蓄積します。1人のスカウトは最大{MAX_FAVORITES_PER_SCOUT}人まで。</p>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {staff.map(s => {
                   const neg = s.abilities?.negotiation || 0;
@@ -1321,12 +1321,12 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           <span className={`text-xs font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
                           <span className={`text-sm font-bold ${isFull ? 'text-gray-500' : 'text-white'}`}>{s.name}</span>
                           {currentFavCount > 0 && (
-                            <span className={`text-[10px] ${isFull ? 'text-red-400' : 'text-yellow-400'}`}>
+                            <span className={`text-xs ${isFull ? 'text-red-400' : 'text-yellow-400'}`}>
                               ★{currentFavCount}/{MAX_FAVORITES_PER_SCOUT}
                             </span>
                           )}
                         </div>
-                        <div className="flex gap-3 mt-0.5 text-[10px]">
+                        <div className="flex gap-3 mt-0.5 text-xs">
                           <span className="text-gray-400">交渉<span className={`font-bold ml-0.5 ${getAbilityColor(neg)}`}>{neg}</span></span>
                           <span className="text-gray-400">眼<span className={`font-bold ml-0.5 ${getAbilityColor(s.abilities?.scoutingEye || 0)}`}>{s.abilities?.scoutingEye || 0}</span></span>
                         </div>

@@ -229,9 +229,9 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   };
 
   const revealLabel = (level) => {
-    if (level >= 2) return <span className="text-green-400 text-[9px]">詳細</span>;
-    if (level >= 1) return <span className="text-yellow-400 text-[9px]">概要</span>;
-    return <span className="text-gray-500 text-[9px]">未知</span>;
+    if (level >= 2) return <span className="text-green-400 text-xs">詳細</span>;
+    if (level >= 1) return <span className="text-yellow-400 text-xs">概要</span>;
+    return <span className="text-gray-500 text-xs">未知</span>;
   };
 
   const getSelVal = (p, key) => {
@@ -298,7 +298,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
 
           {recruited.length > 0 && (
             <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-2 mb-2">
-              <div className="text-[10px] text-blue-400 font-bold mb-1">推薦入部 ({recruited.length}名)</div>
+              <div className="text-xs text-blue-400 font-bold mb-1">推薦入部 ({recruited.length}名)</div>
               <div className="flex flex-wrap gap-2">
                 {recruited.map((p, i) => (
                   <div key={i} className="bg-blue-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
@@ -313,7 +313,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
 
           {selectionPicked.length > 0 && (
             <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-2 mb-2">
-              <div className="text-[10px] text-green-400 font-bold mb-1">セレクション合格 ({selectionPicked.length}名)</div>
+              <div className="text-xs text-green-400 font-bold mb-1">セレクション合格 ({selectionPicked.length}名)</div>
               <div className="flex flex-wrap gap-2">
                 {selectionPicked.map((p, i) => (
                   <div key={i} className="bg-green-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
@@ -372,7 +372,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       return (
                         <tr key={p.id} className={`border-b border-gray-800/50 hover:bg-gray-700/20 transition ${isPicked ? 'bg-green-950/30' : ''}`}>
                           <td className="py-1.5 px-1 whitespace-nowrap">
-                            {isPicked && <span className="text-green-400 text-[10px] mr-1">合格</span>}
+                            {isPicked && <span className="text-green-400 text-xs mr-1">合格</span>}
                             <span className={`font-bold ${isPicked ? 'text-green-300' : 'text-white'}`}>{p.name}</span>
                           </td>
                           <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
@@ -486,7 +486,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
 
         {recruited.length > 0 && (
           <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-2 mb-3">
-            <div className="text-[10px] text-green-400 font-bold mb-1">確保済み選手</div>
+            <div className="text-xs text-green-400 font-bold mb-1">確保済み選手</div>
             <div className="flex flex-wrap gap-2">
               {recruited.map((p, i) => (
                 <div key={i} className="bg-green-900/40 rounded px-2 py-0.5 text-xs flex items-center gap-1">
@@ -515,7 +515,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-gray-700/50 text-[10px]">
+                  <tr className="border-b border-gray-700/50 text-xs">
                     <SortHeader k="rec" label="推" />
                     <SortHeader k="name" label="名前" />
                     <th className="py-1 px-1 text-gray-500">守</th>
@@ -561,7 +561,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                         <td className={`py-1.5 px-1 text-center font-black ${recColor(recGrade)}`}>{recGrade}</td>
                         <td className="py-1.5 px-1 whitespace-nowrap">
                           <div className="flex items-center gap-1">
-                            {p._watching && <span className="text-yellow-400 text-[10px]" title="注目中">★</span>}
+                            {p._watching && <span className="text-yellow-400 text-xs" title="注目中">★</span>}
                             <span className="text-white font-bold">{p.name}</span>
                           </div>
                         </td>
@@ -594,7 +594,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           <span className={`font-bold ${gaugeRate >= 4 ? 'text-green-400' : gaugeRate >= 2.5 ? 'text-yellow-400' : gaugeRate >= 1.5 ? 'text-orange-400' : 'text-red-400'}`}>
                             +{gaugeRate}/日
                           </span>
-                          {p._approaching && <span className="text-gray-500 text-[9px] ml-0.5">({daysLeft}日)</span>}
+                          {p._approaching && <span className="text-gray-500 text-xs ml-0.5">({daysLeft}日)</span>}
                         </td>
                         <td className="py-1.5 px-1" style={{ minWidth: '90px' }}>
                           {p._gaugeComplete ? (
@@ -602,7 +602,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                               <div className="w-14 h-2.5 bg-gray-700 rounded-full overflow-hidden">
                                 <div className="h-full rounded-full bg-green-400 animate-pulse" style={{ width: '100%' }} />
                               </div>
-                              <span className="text-green-400 text-[10px] font-black">FULL!</span>
+                              <span className="text-green-400 text-xs font-black">FULL!</span>
                             </div>
                           ) : p._approaching ? (
                             <div className="flex items-center gap-1">
@@ -610,31 +610,31 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                                 <div className={`h-full rounded-full transition-all ${gauge >= 80 ? 'bg-green-500' : gauge >= 50 ? 'bg-yellow-500' : 'bg-cyan-500'}`}
                                   style={{ width: `${gauge}%` }} />
                               </div>
-                              <span className="text-white text-[10px] font-bold">{Math.floor(gauge)}%</span>
+                              <span className="text-white text-xs font-bold">{Math.floor(gauge)}%</span>
                             </div>
                           ) : gauge > 0 ? (
-                            <span className="text-gray-500 text-[10px]">{Math.floor(gauge)}% (停止中)</span>
+                            <span className="text-gray-500 text-xs">{Math.floor(gauge)}% (停止中)</span>
                           ) : (
-                            <span className="text-gray-600 text-[10px]">—</span>
+                            <span className="text-gray-600 text-xs">—</span>
                           )}
                         </td>
                         <td className="py-1.5 px-1 whitespace-nowrap" style={{ minWidth: '80px' }}>
                           {p._npbDrafted ? (
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-red-400 text-[9px] font-bold">NPB指名済</span>
+                              <span className="text-red-400 text-xs font-bold">NPB指名済</span>
                               <span className="text-red-300 text-[8px]">{p._npbDrafted.team.replace('ジャイアンツ','G').replace('タイガース','T').replace('ベイスターズ','De').replace('カープ','C').replace('ドラゴンズ','D').replace('スワローズ','S').replace('バファローズ','Bs').replace('ホークス','H').replace('ライオンズ','L').replace('ゴールデンイーグルス','E').replace('マリーンズ','M').replace('ファイターズ','F')}</span>
                               <span className="text-red-500 text-[8px]">{p._npbDrafted.round}</span>
                             </div>
                           ) : p._reservedBy ? (
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-pink-400 text-[9px] font-bold">進学決定</span>
-                              <span className="text-pink-300 text-[9px]">{p._reservedBy}</span>
+                              <span className="text-pink-400 text-xs font-bold">進学決定</span>
+                              <span className="text-pink-300 text-xs">{p._reservedBy}</span>
                             </div>
                           ) : rival && rival.count > 0 ? (
                             <div className="flex flex-col gap-0.5">
                               {rival.rivals.map((r, ri) => (
                                 <div key={ri} className="flex items-center gap-1">
-                                  <span className={`text-[9px] font-bold ${r.gauge >= 70 ? 'text-red-400' : r.gauge >= 40 ? 'text-orange-400' : 'text-gray-400'}`}>
+                                  <span className={`text-xs font-bold ${r.gauge >= 70 ? 'text-red-400' : r.gauge >= 40 ? 'text-orange-400' : 'text-gray-400'}`}>
                                     {r.name.length > 4 ? r.name.slice(0, 4) + '..' : r.name}
                                   </span>
                                   <div className="w-8 h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -646,19 +646,19 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-gray-600 text-[10px]">—</span>
+                            <span className="text-gray-600 text-xs">—</span>
                           )}
                         </td>
                         <td className="py-1.5 px-1">
                           {(p._npbDrafted || p._reservedBy) ? (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-800 text-gray-500">
+                            <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-gray-800 text-gray-500">
                               交渉不可
                             </span>
                           ) : p._gaugeComplete ? (
                             <button
                               onClick={() => handleConfirmRecruit(p.id)}
                               disabled={remainingSlots <= 0}
-                              className={`px-2 py-0.5 rounded text-[10px] font-black transition animate-pulse ${
+                              className={`px-2 py-0.5 rounded text-xs font-black transition animate-pulse ${
                                 remainingSlots > 0
                                   ? 'bg-green-600 text-white hover:bg-green-500 shadow-lg shadow-green-900/50'
                                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
@@ -668,37 +668,37 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           ) : (onComplete && !p._npbDrafted && !p._reservedBy && (p._approachGauge || 0) >= 80 && remainingSlots > 0) ? (
                             <button
                               onClick={() => handleConfirmRecruit(p.id, true)}
-                              className="px-2 py-0.5 rounded text-[10px] font-black transition bg-yellow-600 text-white hover:bg-yellow-500 shadow-lg shadow-yellow-900/50">
+                              className="px-2 py-0.5 rounded text-xs font-black transition bg-yellow-600 text-white hover:bg-yellow-500 shadow-lg shadow-yellow-900/50">
                               推薦確定(80%+)
                             </button>
                           ) : (
                           <div className="flex gap-1">
                             <button onClick={() => handleWatch(p.id)}
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                              className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${
                                 p._watching ? 'bg-yellow-700 text-yellow-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
                               title={p._watching ? '注目解除' : '注目'}>
                               {p._watching ? '★注目中' : '☆注目'}
                             </button>
                             {canInvestigate && (
                               <button onClick={() => handleInvestigate(p.id)}
-                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-800 text-cyan-200 hover:bg-cyan-700 transition">
+                                className="px-1.5 py-0.5 rounded text-xs font-bold bg-cyan-800 text-cyan-200 hover:bg-cyan-700 transition">
                                 調査
                               </button>
                             )}
                             {isInvestigating && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-400">
+                              <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-gray-700 text-gray-400">
                                 調査中...
                               </span>
                             )}
                             {!p._approaching && canApproach && (
                               <button onClick={() => handleApproach(p.id)}
-                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-800 text-blue-200 hover:bg-blue-700 transition">
+                                className="px-1.5 py-0.5 rounded text-xs font-bold bg-blue-800 text-blue-200 hover:bg-blue-700 transition">
                                 接近
                               </button>
                             )}
                             {p._approaching && (
                               <button onClick={() => handleStopApproach(p.id)}
-                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-900 text-red-300 hover:bg-red-800 transition">
+                                className="px-1.5 py-0.5 rounded text-xs font-bold bg-red-900 text-red-300 hover:bg-red-800 transition">
                                 中断
                               </button>
                             )}

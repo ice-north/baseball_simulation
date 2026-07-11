@@ -657,14 +657,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       // 能力値バーを表示するコンポーネント（コンパクト版）
       const AbilityBar = ({ label, value }) => (
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-gray-400 w-3">{label}</span>
+          <span className="text-xs text-gray-400 w-3">{label}</span>
           <div className="flex-1 bg-gray-700 rounded-full h-1 overflow-hidden">
             <div
               className={`h-full ${getAbilityColor(value)} transition-all`}
               style={{ width: `${value}%` }}
             />
           </div>
-          <span className="text-[10px] text-gray-300 w-4 text-right font-mono">{value}</span>
+          <span className="text-xs text-gray-300 w-4 text-right font-mono">{value}</span>
         </div>
       );
 
@@ -2641,7 +2641,7 @@ if (newOuts === 3) {
                                 </button>
                                 <span className="font-medium text-base truncate flex-1">
                                   {player.name}
-                                  <span className={`ml-0.5 text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                                  <span className={`ml-0.5 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                                 </span>
                                 <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
 <span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
@@ -2704,7 +2704,7 @@ if (newOuts === 3) {
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
-                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
+                              <div className="flex gap-1.5 text-xs ml-6 text-gray-400">
                                 <span>M{player.batting.meet}</span>
                                 <span>P{player.batting.power}</span>
                                 {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
@@ -2785,10 +2785,10 @@ if (newOuts === 3) {
                             <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(player.position)}`}>{posNames[player.position]}</span>
                           )}
                           <span className="font-bold truncate">{player.name}</span>
-                          <span className={`text-[10px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                          <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap shrink-0">
+                            <span className="flex gap-0.5 text-xs ml-1 flex-wrap shrink-0">
                               {player.gameStats.atBatResults.map((r, i) => (
                                 <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
                                   r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
@@ -2839,7 +2839,7 @@ if (newOuts === 3) {
                               <span>E{player.batting.eye}</span>
                               {isPitcher && <span className={isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
                             </div>
-                            <div className={`text-[10px] ml-6 mt-0.5 ${
+                            <div className={`text-xs ml-6 mt-0.5 ${
                               fitness.grade === 'S' ? 'text-yellow-400' :
                               fitness.grade === 'A' ? 'text-green-400' :
                               fitness.grade === 'B' ? 'text-blue-400' :
@@ -2896,7 +2896,7 @@ if (newOuts === 3) {
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
-                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
+                              <div className="flex gap-1.5 text-xs ml-6 text-gray-400">
                                 <span>M{player.batting.meet}</span>
                                 <span>P{player.batting.power}</span>
                                 {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
@@ -3076,7 +3076,7 @@ if (newOuts === 3) {
                         {autoManagerMode ? 'ON (自動采配)' : 'OFF (手動采配)'}
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-500 mt-2 text-center">
+                    <p className="text-xs text-gray-500 mt-2 text-center">
                       {autoManagerMode
                         ? '投手のスタミナが20%以下になると自動的に交代します'
                         : '選手交代は手動で行います'}
@@ -3249,7 +3249,7 @@ if (newOuts === 3) {
                   
                   {/* 投手名・投球数（固定幅） */}
                   <div className="text-center w-20 flex-shrink-0">
-                    <div className="text-orange-500 text-[10px] truncate">{getCurrentPitcher().name}</div>
+                    <div className="text-orange-500 text-xs truncate">{getCurrentPitcher().name}</div>
                     <div className="text-orange-600 text-xs">投球数</div>
                     <div className="text-orange-400 text-xl font-bold font-mono" style={{textShadow: '0 0 6px #f97316'}}>
                       {String(getCurrentPitcher().stats?.pitching?.pitches || 0).padStart(3, ' ')}
@@ -3281,18 +3281,18 @@ if (newOuts === 3) {
 
               {/* 対戦カード & 操作ボタン */}
               {gameStarted && (
-              <div className="bg-white rounded-lg p-3 shadow-lg">
+              <div className="bg-gray-800 rounded-lg p-3 shadow-lg border border-gray-700/50">
                 <div className="flex items-center justify-between mb-3">
                   {/* 投手情報 */}
                   <div className="text-center flex-1">
-                    <div className="text-xs text-gray-500">投手 ({isTopInning ? homeTeam.name : awayTeam.name})</div>
-                    <div className="font-bold text-xl text-blue-600">{getCurrentPitcher().name}</div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-xs text-gray-400">投手 ({isTopInning ? homeTeam.name : awayTeam.name})</div>
+                    <div className="font-bold text-xl text-blue-300">{getCurrentPitcher().name}</div>
+                    <div className="text-sm text-gray-300">
                       {getCurrentPitcher().physical.throws === 'right' ? '右投' : '左投'} |
                       {getCurrentPitcher().pitching.velocity}km/h |
                       回転<span className="font-bold">{getCurrentPitcher().pitching.spinRate ?? 50}</span>
                     </div>
-                    <div className="text-sm font-bold text-blue-700">
+                    <div className="text-sm font-bold text-blue-300">
                       防御率 {(() => {
                         const p = getCurrentPitcher();
                         const seasonIP = p.seasonStats?.pitching?.inningsPitched || 0;
@@ -3307,24 +3307,24 @@ if (newOuts === 3) {
                     <div className="text-xs text-orange-500 mt-1">
                       スタミナ: {currentStamina}/{getCurrentPitcher().pitching.stamina}
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                      <div 
-                        className="bg-orange-500 h-1.5 rounded-full" 
+                    <div className="w-full bg-gray-700 rounded-full h-1.5 mt-1">
+                      <div
+                        className="bg-orange-500 h-1.5 rounded-full"
                         style={{width: `${(currentStamina / getCurrentPitcher().pitching.stamina) * 100}%`}}
                       />
                     </div>
                   </div>
-                  
+
                   <div className="text-3xl font-bold text-gray-300 px-4">VS</div>
-                  
+
                   {/* 打者情報 */}
                   <div className="text-center flex-1">
-                    <div className="text-xs text-gray-500">{currentBatterOrder}番打者 ({isTopInning ? awayTeam.name : homeTeam.name})</div>
-                    <div className="font-bold text-xl text-red-600">{getCurrentBatter().name}</div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-xs text-gray-400">{currentBatterOrder}番打者 ({isTopInning ? awayTeam.name : homeTeam.name})</div>
+                    <div className="font-bold text-xl text-red-400">{getCurrentBatter().name}</div>
+                    <div className="text-sm text-gray-300">
                       {getCurrentBatter().batting.bats === 'switch' ? '両打' : getCurrentBatter().batting.bats === 'right' ? '右打' : '左打'}
                     </div>
-                    <div className="text-sm font-bold text-red-700">
+                    <div className="text-sm font-bold text-red-300">
                       {(() => {
                         const b = getCurrentBatter();
                         const sAB = b.seasonStats?.batting?.atBats || 0;
@@ -3342,8 +3342,8 @@ if (newOuts === 3) {
                     <div className="text-xs mt-1">
                       <span className={`px-2 py-0.5 rounded ${
                         getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).meetBonus 
-                          ? 'bg-blue-100 text-blue-700' 
-                          : 'bg-red-100 text-red-700'
+                          ? 'bg-blue-900/40 text-blue-300'
+                          : 'bg-red-900/40 text-red-300'
                       }`}>
                         {getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).label}
                       </span>
@@ -3497,7 +3497,7 @@ if (newOuts === 3) {
                                   <span className="text-gray-400 text-xs">{throwH}{batH}</span>
                                   <span className="text-gray-500 text-xs">M{p.batting.meet} P{p.batting.power}</span>
                                   {isPitcher && <span className="text-blue-400 text-xs">{p.pitching.velocity}km</span>}
-                                  <span className={`text-[10px] ${fitness.grade === 'S' ? 'text-yellow-400' : fitness.grade === 'A' ? 'text-green-400' : fitness.grade === 'B' ? 'text-blue-400' : fitness.grade === 'D' ? 'text-red-400' : 'text-gray-500'}`}>{fitness.grade}</span>
+                                  <span className={`text-xs ${fitness.grade === 'S' ? 'text-yellow-400' : fitness.grade === 'A' ? 'text-green-400' : fitness.grade === 'B' ? 'text-blue-400' : fitness.grade === 'D' ? 'text-red-400' : 'text-gray-500'}`}>{fitness.grade}</span>
                                 </div>
                               </div>
                             );
@@ -3539,19 +3539,19 @@ if (newOuts === 3) {
 
               {/* 最新結果 */}
               {gameStarted && lastResult && (
-                <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-2 text-center">
+                <div className="bg-gray-800 border border-yellow-500/60 rounded-lg p-2 text-center">
                   <div className="flex flex-col items-center gap-0.5">
                     <div>
-                      <span className="font-bold text-lg">{lastResult.description}</span>
+                      <span className="font-bold text-lg text-yellow-100">{lastResult.description}</span>
                       {lastResult.pitchType && (
-                        <span className="ml-2 text-gray-600 text-sm">
+                        <span className="ml-2 text-gray-300 text-sm">
                           ({lastResult.pitchType} {lastResult.velocity}km/h)
                         </span>
                       )}
                     </div>
                     {/* 打球物理データ */}
                     {lastResult.exitVelocity && (
-                      <div className="text-[10px] text-gray-500">
+                      <div className="text-xs text-gray-400">
                         EV:{lastResult.exitVelocity} LA:{lastResult.launchAngle}° {lastResult.distance}m 芯:{lastResult.meetQuality}%
                       </div>
                     )}
@@ -3567,26 +3567,26 @@ if (newOuts === 3) {
 
               {/* 試合ログ */}
               {gameStarted && (
-              <div className="bg-white rounded-lg p-2 shadow-lg">
-                <h4 className="font-bold text-sm text-gray-700 mb-1">📝 試合ログ</h4>
+              <div className="bg-gray-800 rounded-lg p-2 shadow-lg border border-gray-700/50">
+                <h4 className="font-bold text-sm text-gray-200 mb-1">試合ログ</h4>
                 <div className="max-h-40 overflow-y-auto text-xs space-y-0.5">
                   {gameLog.slice().reverse().slice(0, 20).map((log, i) => (
-                    <div key={i} className={`p-1 rounded ${i === 0 ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                    <div key={i} className={`p-1 rounded ${i === 0 ? 'bg-blue-900/30' : 'bg-gray-700/40'}`}>
                       {log.isSpecial ? (
-                        <span className="font-bold text-purple-600">{log.description}</span>
+                        <span className="font-bold text-purple-400">{log.description}</span>
                       ) : (
                         <>
-                          <span className="text-gray-500">{log.inning}回{log.isTop ? '表' : '裏'}</span>
+                          <span className="text-gray-400">{log.inning}回{log.isTop ? '表' : '裏'}</span>
                           <span className="mx-1">|</span>
                           <span className="font-mono">{log.count?.balls || 0}-{log.count?.strikes || 0}</span>
                           <span className="mx-1">|</span>
-                          <span className="text-blue-600">{log.pitchType}</span>
-                          <span className="text-gray-500 ml-1">{log.velocity}km</span>
+                          <span className="text-blue-400">{log.pitchType}</span>
+                          <span className="text-gray-400 ml-1">{log.velocity}km</span>
                           <span className="mx-1">→</span>
                           <span className="font-bold">{log.result}</span>
                           {/* 打球物理データ（ヒット/アウト時のみ表示） */}
                           {log.exitVelocity && (
-                            <span className="ml-2 text-gray-400 text-[10px]">
+                            <span className="ml-2 text-gray-400 text-xs">
                               EV:{log.exitVelocity} LA:{log.launchAngle}° {log.distance}m 芯:{log.meetQuality}%
                             </span>
                           )}
@@ -3919,7 +3919,7 @@ if (newOuts === 3) {
                                 </button>
                                 <span className="font-medium text-base truncate flex-1">
                                   {player.name}
-                                  <span className={`ml-0.5 text-[10px] ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                                  <span className={`ml-0.5 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                                 </span>
                                 <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
 <span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
@@ -3982,7 +3982,7 @@ if (newOuts === 3) {
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
-                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
+                              <div className="flex gap-1.5 text-xs ml-6 text-gray-400">
                                 <span>M{player.batting.meet}</span>
                                 <span>P{player.batting.power}</span>
                                 {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
@@ -4063,10 +4063,10 @@ if (newOuts === 3) {
                             <span className={`w-6 shrink-0 text-center rounded text-sm py-0.5 font-bold ${getPosColor(player.position)}`}>{posNames[player.position]}</span>
                           )}
                           <span className="font-bold truncate">{player.name}</span>
-                          <span className={`text-[10px] shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                          <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-[10px] ml-1 flex-wrap shrink-0">
+                            <span className="flex gap-0.5 text-xs ml-1 flex-wrap shrink-0">
                               {player.gameStats.atBatResults.map((r, i) => (
                                 <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
                                   r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
@@ -4117,7 +4117,7 @@ if (newOuts === 3) {
                               <span>E{player.batting.eye}</span>
                               {isPitcher && <span className={isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
                             </div>
-                            <div className={`text-[10px] ml-6 mt-0.5 ${
+                            <div className={`text-xs ml-6 mt-0.5 ${
                               fitness.grade === 'S' ? 'text-yellow-400' :
                               fitness.grade === 'A' ? 'text-green-400' :
                               fitness.grade === 'B' ? 'text-blue-400' :
@@ -4174,7 +4174,7 @@ if (newOuts === 3) {
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
-                              <div className="flex gap-1.5 text-[10px] ml-6 text-gray-400">
+                              <div className="flex gap-1.5 text-xs ml-6 text-gray-400">
                                 <span>M{player.batting.meet}</span>
                                 <span>P{player.batting.power}</span>
                                 {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
@@ -4328,31 +4328,31 @@ if (newOuts === 3) {
           {/* 選手編集モーダル */}
           {editingPlayer && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-gray-800 rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-700">
                 <div className="p-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold">📝 {editingPlayer.name} を編集</h2>
-                    <button onClick={() => setEditingPlayer(null)} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                    <h2 className="text-xl font-bold text-gray-100">{editingPlayer.name} を編集</h2>
+                    <button onClick={() => setEditingPlayer(null)} className="text-gray-300 hover:text-white text-2xl">&times;</button>
                   </div>
-                  
+
                   {/* 基本情報 */}
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">名前</label>
+                    <label className="block text-sm font-medium text-gray-200 mb-1">名前</label>
                     <input
                       type="text"
                       value={editingPlayer.name}
                       onChange={(e) => setEditingPlayer({...editingPlayer, name: e.target.value})}
-                      className="w-full border border-gray-300 rounded px-3 py-2"
+                      className="w-full bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2"
                     />
                   </div>
 
                   {/* 守備位置選択 */}
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">守備位置</label>
+                    <label className="block text-sm font-medium text-gray-200 mb-1">守備位置</label>
                     <select
                       value={editingPlayer.position}
                       onChange={(e) => setEditingPlayer({...editingPlayer, position: e.target.value})}
-                      className="w-full border border-gray-300 rounded px-3 py-2"
+                      className="w-full bg-gray-700 border border-gray-600 text-gray-100 rounded px-3 py-2"
                     >
                       <option value="pitcher">投手</option>
                       <option value="catcher">捕手</option>
@@ -4368,11 +4368,11 @@ if (newOuts === 3) {
                       const fitness = calculateDefensiveFitness(editingPlayer, editingPlayer.position);
                       return (
                         <div className={`mt-1 text-xs ${
-                          fitness.grade === 'S' ? 'text-yellow-600' :
-                          fitness.grade === 'A' ? 'text-green-600' :
-                          fitness.grade === 'B' ? 'text-blue-600' :
-                          fitness.grade === 'D' ? 'text-red-600' :
-                          'text-gray-600'
+                          fitness.grade === 'S' ? 'text-yellow-400' :
+                          fitness.grade === 'A' ? 'text-green-400' :
+                          fitness.grade === 'B' ? 'text-blue-400' :
+                          fitness.grade === 'D' ? 'text-red-400' :
+                          'text-gray-300'
                         }`}>
                           守備適性: [{fitness.grade}] {fitness.comments}
                         </div>
@@ -4382,7 +4382,7 @@ if (newOuts === 3) {
                   
                   {/* 打撃能力 */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-700 mb-2">打撃能力</h3>
+                    <h3 className="font-bold text-sm text-gray-200 mb-2">打撃能力</h3>
                     <div className="space-y-2">
                       {[
                         {key: 'meet', label: 'ミート', color: 'blue'},
@@ -4391,7 +4391,7 @@ if (newOuts === 3) {
                         {key: 'steal', label: '盗塁', color: 'purple'}
                       ].map(({key, label, color}) => (
                         <div key={key}>
-                          <label className="block text-xs text-gray-600">{label}: <span className={`font-bold text-${color}-600`}>{editingPlayer.batting[key]}</span></label>
+                          <label className="block text-xs text-gray-300">{label}: <span className={`font-bold text-${color}-400`}>{editingPlayer.batting[key]}</span></label>
                           <input type="range" min="0" max="100" value={editingPlayer.batting[key]}
                             onChange={(e) => setEditingPlayer({...editingPlayer, batting: {...editingPlayer.batting, [key]: parseInt(e.target.value)}})}
                             className="w-full" />
@@ -4402,35 +4402,35 @@ if (newOuts === 3) {
                   
                   {/* 身体能力 */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-700 mb-2">身体能力</h3>
+                    <h3 className="font-bold text-sm text-gray-200 mb-2">身体能力</h3>
                     <div className="space-y-2">
                       <div>
-                        <label className="block text-xs text-gray-600">走力: <span className="font-bold">{editingPlayer.physical.speed}</span></label>
+                        <label className="block text-xs text-gray-300">走力: <span className="font-bold text-gray-100">{editingPlayer.physical.speed}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.physical.speed}
                           onChange={(e) => setEditingPlayer({...editingPlayer, physical: {...editingPlayer.physical, speed: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600">肩力: <span className="font-bold">{editingPlayer.physical.arm}</span></label>
+                        <label className="block text-xs text-gray-300">肩力: <span className="font-bold text-gray-100">{editingPlayer.physical.arm}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.physical.arm}
                           onChange={(e) => setEditingPlayer({...editingPlayer, physical: {...editingPlayer.physical, arm: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* 守備能力 */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-700 mb-2">守備能力</h3>
+                    <h3 className="font-bold text-sm text-gray-200 mb-2">守備能力</h3>
                     <div className="space-y-2">
                       <div>
-                        <label className="block text-xs text-gray-600">守備力: <span className="font-bold text-yellow-600">{editingPlayer.fielding?.defense || 50}</span></label>
+                        <label className="block text-xs text-gray-300">守備力: <span className="font-bold text-yellow-400">{editingPlayer.fielding?.defense || 50}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.fielding?.defense || 50}
                           onChange={(e) => setEditingPlayer({...editingPlayer, fielding: {...(editingPlayer.fielding || {}), defense: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600">キャッチャーリード: <span className="font-bold text-orange-600">{editingPlayer.catching?.lead || 50}</span></label>
+                        <label className="block text-xs text-gray-300">キャッチャーリード: <span className="font-bold text-orange-400">{editingPlayer.catching?.lead || 50}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.catching?.lead || 50}
                           onChange={(e) => setEditingPlayer({...editingPlayer, catching: {...(editingPlayer.catching || {}), lead: parseInt(e.target.value)}})}
                           className="w-full" />
@@ -4440,22 +4440,22 @@ if (newOuts === 3) {
                   
                   {/* 投手能力 */}
                   <div className="mb-4">
-                    <h3 className="font-bold text-sm text-gray-700 mb-2">投手能力</h3>
+                    <h3 className="font-bold text-sm text-gray-200 mb-2">投手能力</h3>
                     <div className="space-y-2">
                       <div>
-                        <label className="block text-xs text-gray-600">球速: <span className="font-bold">{editingPlayer.pitching.velocity}km/h</span></label>
+                        <label className="block text-xs text-gray-300">球速: <span className="font-bold text-gray-100">{editingPlayer.pitching.velocity}km/h</span></label>
                         <input type="range" min="100" max="170" value={editingPlayer.pitching.velocity}
                           onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, velocity: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600">制球: <span className="font-bold">{editingPlayer.pitching.control}</span></label>
+                        <label className="block text-xs text-gray-300">制球: <span className="font-bold text-gray-100">{editingPlayer.pitching.control}</span></label>
                         <input type="range" min="0" max="100" value={editingPlayer.pitching.control}
                           onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, control: parseInt(e.target.value)}})}
                           className="w-full" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600">スタミナ: <span className="font-bold">{editingPlayer.pitching.stamina}</span></label>
+                        <label className="block text-xs text-gray-300">スタミナ: <span className="font-bold text-gray-100">{editingPlayer.pitching.stamina}</span></label>
                         <input type="range" min="50" max="250" value={editingPlayer.pitching.stamina}
                           onChange={(e) => setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, stamina: parseInt(e.target.value)}})}
                           className="w-full" />
@@ -4464,7 +4464,7 @@ if (newOuts === 3) {
 
                     {/* 持ち球 */}
                     <div className="mt-3">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">持ち球</label>
+                      <label className="block text-xs font-medium text-gray-300 mb-1">持ち球</label>
                       <div className="space-y-1">
                         {editingPlayer.pitching.arsenal.map((ball, index) => (
                           <div key={ball.id} className="flex items-center gap-2 text-sm">
@@ -4475,7 +4475,7 @@ if (newOuts === 3) {
                                 newArsenal[index] = {...newArsenal[index], type: e.target.value};
                                 setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
                               }}
-                              className="border rounded px-2 py-1 text-xs flex-1"
+                              className="bg-gray-700 border border-gray-600 text-gray-100 rounded px-2 py-1 text-xs flex-1"
                             >
                               {Object.keys(ballEffects).filter(type => 
                                 type === ball.type || !editingPlayer.pitching.arsenal.some((b, i) => i !== index && b.type === type)
@@ -4490,7 +4490,7 @@ if (newOuts === 3) {
                                 newArsenal[index] = {...newArsenal[index], level: parseInt(e.target.value) || 0};
                                 setEditingPlayer({...editingPlayer, pitching: {...editingPlayer.pitching, arsenal: newArsenal}});
                               }}
-                              className="border rounded px-2 py-1 w-14 text-xs" />
+                              className="bg-gray-700 border border-gray-600 text-gray-100 rounded px-2 py-1 w-14 text-xs" />
                             {index > 0 && (
                               <button onClick={() => {
                                 const newArsenal = editingPlayer.pitching.arsenal.filter((_, i) => i !== index);
@@ -4518,9 +4518,9 @@ if (newOuts === 3) {
                   {/* 保存ボタン */}
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setEditingPlayer(null)}
-                      className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
+                      className="px-4 py-2 border border-gray-600 text-gray-200 rounded hover:bg-gray-700">キャンセル</button>
                     <button onClick={() => { updatePlayer(editingPlayer.id, editingPlayer); setEditingPlayer(null); }}
-                      className="px-20 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">保存</button>
+                      className="px-20 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">保存</button>
                   </div>
                 </div>
               </div>
@@ -4530,13 +4530,13 @@ if (newOuts === 3) {
           {/* エディット画面 */}
           {showEditScreen && (
             <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg w-full max-w-7xl max-h-[90vh] overflow-y-auto">
+              <div className="bg-gray-900 rounded-lg w-full max-w-7xl max-h-[90vh] overflow-y-auto border border-gray-700">
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-6 sticky top-0 bg-white pb-4 border-b z-10">
-                    <h2 className="text-2xl font-bold">✏️ 選手エディット</h2>
+                  <div className="flex justify-between items-center mb-6 sticky top-0 bg-gray-900 pb-4 border-b border-gray-700 z-10">
+                    <h2 className="text-2xl font-bold text-gray-100">選手エディット</h2>
                     <button
                       onClick={() => setShowEditScreen(false)}
-                      className="text-gray-500 hover:text-gray-700 text-3xl"
+                      className="text-gray-300 hover:text-white text-3xl"
                     >
                       ×
                     </button>
@@ -4549,9 +4549,9 @@ if (newOuts === 3) {
                     <h3 className="text-xl font-bold text-red-500 mb-4">✈️ {awayTeam.name}</h3>
                     <div className="space-y-6">
                       {awayTeam.players.map(player => (
-                        <div key={player.id} className="bg-gray-50 p-3 rounded-lg">
+                        <div key={player.id} className="bg-gray-800 p-3 rounded-lg border border-gray-700/50">
                           <div className="mb-3">
-                            <label className="block text-xs text-gray-600 mb-1">選手名</label>
+                            <label className="block text-xs text-gray-300 mb-1">選手名</label>
                             <input
                               type="text"
                               value={player.name}
@@ -4565,13 +4565,13 @@ if (newOuts === 3) {
                                   )
                                 }));
                               }}
-                              className="w-full px-2 py-1 border rounded text-sm"
+                              className="w-full px-2 py-1 bg-gray-700 border border-gray-600 text-gray-100 rounded text-sm"
                             />
                           </div>
                           <div className="space-y-2">
                             {/* 打撃能力 */}
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">ミート: <span className="font-bold text-blue-600">{player.batting.meet}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">ミート: <span className="font-bold text-blue-400">{player.batting.meet}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4592,7 +4592,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">パワー: <span className="font-bold text-blue-600">{player.batting.power}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">パワー: <span className="font-bold text-blue-400">{player.batting.power}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4613,7 +4613,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">選球眼: <span className="font-bold text-blue-600">{player.batting.eye}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">選球眼: <span className="font-bold text-blue-400">{player.batting.eye}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4634,7 +4634,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">走力: <span className="font-bold text-blue-600">{player.physical.speed}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">走力: <span className="font-bold text-blue-400">{player.physical.speed}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4656,7 +4656,7 @@ if (newOuts === 3) {
                             </div>
                             {/* 守備能力 */}
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">守備: <span className="font-bold text-green-600">{player.fielding.defense}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">守備: <span className="font-bold text-green-400">{player.fielding.defense}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4677,7 +4677,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">肩: <span className="font-bold text-green-600">{player.physical.arm}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">肩: <span className="font-bold text-green-400">{player.physical.arm}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4699,7 +4699,7 @@ if (newOuts === 3) {
                             </div>
                             {/* 投手能力（全選手） */}
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">球速: <span className="font-bold text-red-600">{player.pitching.velocity}km/h</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">球速: <span className="font-bold text-red-400">{player.pitching.velocity}km/h</span></label>
                               <input
                                 type="range"
                                 min="100"
@@ -4720,7 +4720,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">制球: <span className="font-bold text-red-600">{player.pitching.control}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">制球: <span className="font-bold text-red-400">{player.pitching.control}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4742,7 +4742,7 @@ if (newOuts === 3) {
                             </div>
                             {/* 投球フォーム */}
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">投球フォーム: <span className="font-bold text-orange-600">{PITCHING_FORM_EFFECTS[player.pitching.form]?.name || player.pitching.form}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">投球フォーム: <span className="font-bold text-orange-400">{PITCHING_FORM_EFFECTS[player.pitching.form]?.name || player.pitching.form}</span></label>
                               <select
                                 value={player.pitching.form}
                                 onChange={(e) => {
@@ -4757,7 +4757,7 @@ if (newOuts === 3) {
                                     )
                                   }));
                                 }}
-                                className="w-full px-2 py-1 border rounded text-sm"
+                                className="w-full px-2 py-1 bg-gray-700 border border-gray-600 text-gray-100 rounded text-sm"
                               >
                                 <option value="overhand">オーバースロー</option>
                                 <option value="threeQuarter">スリークォーター</option>
@@ -4770,7 +4770,7 @@ if (newOuts === 3) {
                               <label className="block text-sm font-semibold text-gray-700 mb-2">変化球</label>
                               {player.pitching.arsenal.map((ball) => (
                                 <div key={ball.id} className="mb-2">
-                                  <label className="block text-xs text-gray-600 mb-1">
+                                  <label className="block text-xs text-gray-300 mb-1">
                                     {BALL_EFFECTS[ball.type]?.name || ball.type}: <span className="font-bold text-purple-600">{ball.level}</span>
                                   </label>
                                   <input
@@ -4813,9 +4813,9 @@ if (newOuts === 3) {
                     <h3 className="text-xl font-bold text-blue-500 mb-4">🏠 {homeTeam.name}</h3>
                     <div className="space-y-6">
                       {homeTeam.players.map(player => (
-                        <div key={player.id} className="bg-gray-50 p-3 rounded-lg">
+                        <div key={player.id} className="bg-gray-800 p-3 rounded-lg border border-gray-700/50">
                           <div className="mb-3">
-                            <label className="block text-xs text-gray-600 mb-1">選手名</label>
+                            <label className="block text-xs text-gray-300 mb-1">選手名</label>
                             <input
                               type="text"
                               value={player.name}
@@ -4829,13 +4829,13 @@ if (newOuts === 3) {
                                   )
                                 }));
                               }}
-                              className="w-full px-2 py-1 border rounded text-sm"
+                              className="w-full px-2 py-1 bg-gray-700 border border-gray-600 text-gray-100 rounded text-sm"
                             />
                           </div>
                           <div className="space-y-2">
                             {/* 打撃能力 */}
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">ミート: <span className="font-bold text-blue-600">{player.batting.meet}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">ミート: <span className="font-bold text-blue-400">{player.batting.meet}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4856,7 +4856,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">パワー: <span className="font-bold text-blue-600">{player.batting.power}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">パワー: <span className="font-bold text-blue-400">{player.batting.power}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4877,7 +4877,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">選球眼: <span className="font-bold text-blue-600">{player.batting.eye}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">選球眼: <span className="font-bold text-blue-400">{player.batting.eye}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4898,7 +4898,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">走力: <span className="font-bold text-blue-600">{player.physical.speed}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">走力: <span className="font-bold text-blue-400">{player.physical.speed}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4920,7 +4920,7 @@ if (newOuts === 3) {
                             </div>
                             {/* 守備能力 */}
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">守備: <span className="font-bold text-green-600">{player.fielding.defense}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">守備: <span className="font-bold text-green-400">{player.fielding.defense}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4941,7 +4941,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">肩: <span className="font-bold text-green-600">{player.physical.arm}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">肩: <span className="font-bold text-green-400">{player.physical.arm}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -4963,7 +4963,7 @@ if (newOuts === 3) {
                             </div>
                             {/* 投手能力（全選手） */}
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">球速: <span className="font-bold text-red-600">{player.pitching.velocity}km/h</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">球速: <span className="font-bold text-red-400">{player.pitching.velocity}km/h</span></label>
                               <input
                                 type="range"
                                 min="100"
@@ -4984,7 +4984,7 @@ if (newOuts === 3) {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">制球: <span className="font-bold text-red-600">{player.pitching.control}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">制球: <span className="font-bold text-red-400">{player.pitching.control}</span></label>
                               <input
                                 type="range"
                                 min="0"
@@ -5006,7 +5006,7 @@ if (newOuts === 3) {
                             </div>
                             {/* 投球フォーム */}
                             <div>
-                              <label className="block text-sm text-gray-600 mb-1">投球フォーム: <span className="font-bold text-orange-600">{PITCHING_FORM_EFFECTS[player.pitching.form]?.name || player.pitching.form}</span></label>
+                              <label className="block text-sm text-gray-300 mb-1">投球フォーム: <span className="font-bold text-orange-400">{PITCHING_FORM_EFFECTS[player.pitching.form]?.name || player.pitching.form}</span></label>
                               <select
                                 value={player.pitching.form}
                                 onChange={(e) => {
@@ -5021,7 +5021,7 @@ if (newOuts === 3) {
                                     )
                                   }));
                                 }}
-                                className="w-full px-2 py-1 border rounded text-sm"
+                                className="w-full px-2 py-1 bg-gray-700 border border-gray-600 text-gray-100 rounded text-sm"
                               >
                                 <option value="overhand">オーバースロー</option>
                                 <option value="threeQuarter">スリークォーター</option>
@@ -5034,7 +5034,7 @@ if (newOuts === 3) {
                               <label className="block text-sm font-semibold text-gray-700 mb-2">変化球</label>
                               {player.pitching.arsenal.map((ball) => (
                                 <div key={ball.id} className="mb-2">
-                                  <label className="block text-xs text-gray-600 mb-1">
+                                  <label className="block text-xs text-gray-300 mb-1">
                                     {BALL_EFFECTS[ball.type]?.name || ball.type}: <span className="font-bold text-purple-600">{ball.level}</span>
                                   </label>
                                   <input
@@ -5074,7 +5074,7 @@ if (newOuts === 3) {
                   </div>
 
                   {/* 閉じるボタン */}
-                  <div className="flex justify-end sticky bottom-0 bg-white pt-4 border-t">
+                  <div className="flex justify-end sticky bottom-0 bg-gray-900 pt-4 border-t border-gray-700">
                     <button
                       onClick={() => setShowEditScreen(false)}
                       className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg"

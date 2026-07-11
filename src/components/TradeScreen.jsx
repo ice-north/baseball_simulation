@@ -239,9 +239,9 @@ const TradeScreen = ({ userTeamName, onBack }) => {
         <td className="py-1.5 px-2">
           <div className="flex items-center gap-1.5">
             {order ? (
-              <span className="text-[10px] bg-blue-600/50 text-blue-300 w-4 h-4 rounded flex items-center justify-center font-bold shrink-0">{order}</span>
+              <span className="text-xs bg-blue-600/50 text-blue-300 w-4 h-4 rounded flex items-center justify-center font-bold shrink-0">{order}</span>
             ) : (
-              <span className="text-[10px] text-gray-600 w-4 text-center shrink-0">控</span>
+              <span className="text-xs text-gray-600 w-4 text-center shrink-0">控</span>
             )}
             <span className="font-bold text-white text-sm truncate">{player.name}</span>
           </div>
@@ -261,7 +261,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
         <td className="py-1.5 px-0.5 text-xs text-center"><StatVal value={player.pitching?.stamina || 0} /></td>
         {/* 出場 */}
         <td className="py-1.5 px-1 text-xs text-center text-gray-300 border-l border-gray-700/30">{season.games || '-'}</td>
-        <td className="py-1.5 px-1 text-[11px] text-gray-400 truncate max-w-[120px]">{season.line || '-'}</td>
+        <td className="py-1.5 px-1 text-xs text-gray-400 truncate max-w-[120px]">{season.line || '-'}</td>
         {/* 評価 */}
         <td className={`py-1.5 px-1.5 text-xs font-bold text-center border-l border-gray-700/30 ${getValueColor(val)}`}>{Math.round(val)}</td>
       </tr>
@@ -277,7 +277,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
       <div className="overflow-y-auto max-h-[420px]">
         <table className="w-full text-left">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-gray-800 border-b border-gray-700/30 text-[9px] font-medium">
+            <tr className="bg-gray-800 border-b border-gray-700/30 text-xs font-medium">
               <th colSpan={3} className="py-0.5 pl-2 text-gray-500">選手情報</th>
               <th colSpan={2} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">打撃</th>
               <th colSpan={3} className="py-0.5 px-1 text-center text-cyan-400/60 border-l border-gray-700/30">フィジカル</th>
@@ -285,7 +285,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
               <th colSpan={2} className="py-0.5 px-1 text-center text-green-400/60 border-l border-gray-700/30">出場</th>
               <th className="py-0.5 px-1 text-center text-gray-500 border-l border-gray-700/30">総合</th>
             </tr>
-            <tr className="bg-gray-800 border-b border-gray-700/50 text-[10px] text-gray-400">
+            <tr className="bg-gray-800 border-b border-gray-700/50 text-xs text-gray-400">
               <th className="py-1 pl-2 text-left font-medium">名前</th>
               <th className="py-1 px-1 font-medium">守備</th>
               <th className="py-1 px-1 text-center font-medium">齢</th>
@@ -327,7 +327,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
       <div className={`${bgColor} rounded-xl p-4 border border-gray-700/50`}>
         <div className={`text-xs font-medium ${labelColor} mb-2`}>{label}</div>
         <div className="flex items-center gap-2 mb-2">
-          {order && <span className="text-[10px] bg-blue-600/50 text-blue-300 px-1.5 py-0.5 rounded font-bold">{order}番</span>}
+          {order && <span className="text-xs bg-blue-600/50 text-blue-300 px-1.5 py-0.5 rounded font-bold">{order}番</span>}
           <span className="text-white font-bold text-lg">{player.name}</span>
         </div>
         <div className="text-gray-400 text-sm mb-3">{POSITION_NAMES[player.position]} / {player.age}歳</div>
@@ -382,7 +382,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
         >
           受信提案
           {aiProposals.length > 0 && (
-            <span className="bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+            <span className="bg-red-500 text-white text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">
               {aiProposals.length}
             </span>
           )}
@@ -483,7 +483,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
             <div className="overflow-y-auto max-h-[420px]">
               <table className="w-full text-left">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-gray-800 border-b border-gray-700/30 text-[9px] font-medium">
+                  <tr className="bg-gray-800 border-b border-gray-700/30 text-xs font-medium">
                     <th colSpan={3} className="py-0.5 pl-2 text-gray-500">選手情報</th>
                     <th colSpan={2} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">打撃</th>
                     <th colSpan={3} className="py-0.5 px-1 text-center text-cyan-400/60 border-l border-gray-700/30">フィジカル</th>
@@ -491,7 +491,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
                     <th colSpan={2} className="py-0.5 px-1 text-center text-green-400/60 border-l border-gray-700/30">出場</th>
                     <th className="py-0.5 px-1 text-center text-gray-500 border-l border-gray-700/30">総合</th>
                   </tr>
-                  <tr className="bg-gray-800 border-b border-gray-700/50 text-[10px] text-gray-400">
+                  <tr className="bg-gray-800 border-b border-gray-700/50 text-xs text-gray-400">
                     <th className="py-1 pl-2 text-left font-medium">名前</th>
                     <th className="py-1 px-1 font-medium">守備</th>
                     <th className="py-1 px-1 text-center font-medium">齢</th>
@@ -548,7 +548,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
             >
               トレード提案
             </button>
-            <p className="text-[11px] text-gray-600 mt-2">
+            <p className="text-xs text-gray-600 mt-2">
               相手チームがトレードを受け入れるかはAIが判断します
             </p>
           </div>

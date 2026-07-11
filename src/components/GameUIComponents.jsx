@@ -303,7 +303,7 @@ export const Tooltip = ({ text, children, position = 'top' }) => {
     <span className="relative inline-flex" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
       {children}
       {show && text && (
-        <span className={`absolute z-50 px-2 py-1 rounded text-[11px] text-gray-100 bg-gray-900 border border-gray-700 shadow-lg whitespace-nowrap pointer-events-none ${posStyles[position] || posStyles.top}`}>
+        <span className={`absolute z-50 px-2 py-1 rounded text-xs text-gray-100 bg-gray-900 border border-gray-700 shadow-lg whitespace-nowrap pointer-events-none ${posStyles[position] || posStyles.top}`}>
           {text}
         </span>
       )}
@@ -334,7 +334,7 @@ export const StatHeader = ({ label, sortKey, sortActive, sortAsc, onClick, class
 
 // --- AbilityLegend 能力値凡例 ---
 export const AbilityLegend = ({ className = '' }) => (
-  <div className={`flex items-center gap-1.5 text-[10px] ${className}`}>
+  <div className={`flex items-center gap-1.5 text-xs ${className}`}>
     <span className="text-gray-500 font-bold">能力:</span>
     {[
       { min: 90, color: 'text-pink-400', label: '90+' },
@@ -459,8 +459,8 @@ export const Sidebar = ({
     <div className="px-4 py-4 border-b border-gray-700/50 bg-gray-800/30">
       <h2 className={`text-lg font-black tracking-tight ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
       <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
-        {gameMode === 'sandbox' && <span className="text-orange-400/80 bg-orange-400/10 px-1.5 py-0.5 rounded text-[10px] font-bold">箱庭</span>}
-        {gameMode === 'university' && <span className="text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded text-[10px] font-bold">大学</span>}
+        {gameMode === 'sandbox' && <span className="text-orange-400/80 bg-orange-400/10 px-1.5 py-0.5 rounded text-xs font-bold">箱庭</span>}
+        {gameMode === 'university' && <span className="text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded text-xs font-bold">大学</span>}
         <span>{seasonData?.year || 1}年目</span>
         <span className="text-gray-600">|</span>
         <span>{seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}</span>
@@ -468,7 +468,7 @@ export const Sidebar = ({
     </div>
 
     <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">進行</div>
+      <div className="text-xs uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">進行</div>
       <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
@@ -476,7 +476,7 @@ export const Sidebar = ({
       <SidebarButton view="team_ranking" icon="🏅" label="チームランキング" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
-      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">チーム</div>
+      <div className="text-xs uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">チーム</div>
       <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
       {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
@@ -485,7 +485,7 @@ export const Sidebar = ({
       <SidebarButton view="player_search" icon="🔎" label="選手検索" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
-      <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">システム</div>
+      <div className="text-xs uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">システム</div>
       <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <button

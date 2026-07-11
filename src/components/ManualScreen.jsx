@@ -903,7 +903,7 @@ const Entry = ({ title, range, children }) => (
   <div className="bg-gray-700/40 rounded-lg p-3">
     <div className="flex items-baseline gap-2 mb-1">
       <h4 className="text-yellow-300 font-bold text-sm">{title}</h4>
-      {range && <span className="text-[11px] text-gray-400 bg-gray-600/60 px-1.5 py-0.5 rounded">{range}</span>}
+      {range && <span className="text-xs text-gray-400 bg-gray-600/60 px-1.5 py-0.5 rounded">{range}</span>}
     </div>
     <div className="text-gray-300 text-sm leading-relaxed">{children}</div>
   </div>

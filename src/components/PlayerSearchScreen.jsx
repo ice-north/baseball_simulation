@@ -204,7 +204,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             className="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 w-64 focus:outline-none focus:border-blue-500"
           />
           {nameQuery && <button onClick={() => setNameQuery('')} className="text-gray-500 hover:text-white text-sm">✕</button>}
-          <span className="text-gray-600 text-[10px] ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
+          <span className="text-gray-600 text-xs ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
         </div>
 
         {/* Filters */}
@@ -217,14 +217,14 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
               const step = def.step ?? 1;
               return (
                 <div key={def.key} className={`flex flex-col gap-0.5 p-1.5 rounded ${f.enabled ? 'bg-gray-700' : 'bg-gray-800'}`}>
-                  <label className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <label className="flex items-center gap-1 text-xs text-gray-400">
                     <input type="checkbox" checked={f.enabled}
                       onChange={e => updateFilter(def.key, 'enabled', e.target.checked)}
                       className="w-3 h-3" />
                     {def.label}
                   </label>
                   {f.enabled && (
-                    <div className="flex items-center gap-1 text-[10px]">
+                    <div className="flex items-center gap-1 text-xs">
                       <input type="number" value={f.min} min={fMin} max={fMax} step={step}
                         onChange={e => updateFilter(def.key, 'min', def.decimal ? parseFloat(e.target.value) : parseInt(e.target.value))}
                         className="w-14 bg-gray-600 rounded px-1 py-0.5 text-white text-center" />
@@ -243,9 +243,9 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
         {/* Results */}
         <div className="text-xs text-gray-400 mb-1">{filtered.length}件{filtered.length >= 200 ? '（上位200件表示）' : ''}</div>
         <div className="bg-gray-800 rounded-lg overflow-x-auto">
-          <table className="w-full text-[11px]">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-700/80 text-gray-400 text-[10px]">
+              <tr className="bg-gray-700/80 text-gray-400 text-xs">
                 <th className="py-1 px-2 text-left w-20">選手</th>
                 <th className="py-1 px-1 text-center w-6">位</th>
                 <SortTh k="age" w="w-6">齢</SortTh>
@@ -338,18 +338,18 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                     })()}
                   </td>
                   <td className="py-0.5 px-1 text-center text-gray-500">{p.fame || 0}</td>
-                  <td className="py-0.5 px-1 text-center text-gray-400 whitespace-nowrap text-[10px]">
+                  <td className="py-0.5 px-1 text-center text-gray-400 whitespace-nowrap text-xs">
                     {handLabel(p.physical?.throws)}/{handLabel(p.batting?.bats)}
                   </td>
-                  <td className="py-0.5 px-1 text-center text-gray-400 text-[10px]">
+                  <td className="py-0.5 px-1 text-center text-gray-400 text-xs">
                     {p.position === 'pitcher' ? (FORM_SHORT[p.pitching?.form] || '-') : '-'}
                   </td>
                   {isScoutable && (
                     <td className="py-0.5 px-1 text-center" onClick={e => e.stopPropagation()}>
                       {alreadyScouted
-                        ? <span className="text-[10px] text-green-400 font-bold">済</span>
+                        ? <span className="text-xs text-green-400 font-bold">済</span>
                         : <button
-                            className="text-[10px] px-1.5 py-0.5 bg-purple-700 hover:bg-purple-500 text-white rounded font-bold transition"
+                            className="text-xs px-1.5 py-0.5 bg-purple-700 hover:bg-purple-500 text-white rounded font-bold transition"
                             onClick={() => {
                               const teamData = TEAMS_DATA[userTeamName];
                               const uniRank = teamData?.universityData?.rank || 'C';

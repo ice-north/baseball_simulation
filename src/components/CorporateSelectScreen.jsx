@@ -37,7 +37,7 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
             </div>
             <div className="flex flex-wrap gap-1.5 justify-center">
               {['春季・秋季リーグ', '全日本選手権', '明治神宮大会', '推薦スカウト', 'NPBドラフト'].map(tag => (
-                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-100/80">{tag}</span>
+                <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-100/80">{tag}</span>
               ))}
             </div>
           </button>
@@ -52,7 +52,7 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
             </div>
             <div className="flex flex-wrap gap-1.5 justify-center">
               {['都市対抗予選', '都市対抗本戦', '日本選手権', 'スカウト入団', '企業 or クラブ'].map(tag => (
-                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-100/80">{tag}</span>
+                <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-100/80">{tag}</span>
               ))}
             </div>
           </button>
@@ -67,7 +67,7 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
             </div>
             <div className="flex flex-wrap gap-1.5 justify-center">
               {['トライアウト', 'リーグ戦', 'グランドCS', 'NPBドラフト', 'リーグ設計'].map(tag => (
-                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-green-900/60 text-green-100/80">{tag}</span>
+                <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-green-900/60 text-green-100/80">{tag}</span>
               ))}
             </div>
           </button>

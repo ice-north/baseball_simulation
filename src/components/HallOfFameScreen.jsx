@@ -394,7 +394,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             >
                               <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '18px', width: '27px' }} />
                               <span className="text-white font-bold text-xs">{team.short}</span>
-                              <span className="text-gray-500 text-[10px] ml-auto">{picks.length}名</span>
+                              <span className="text-gray-500 text-xs ml-auto">{picks.length}名</span>
                             </div>
                             <div className="bg-gray-800/90 p-2" style={{ minHeight: '60px' }}>
                               {picks.length === 0 ? (
@@ -402,7 +402,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                   指名なし
                                 </div>
                               ) : (
-                                <table className="w-full text-[11px]">
+                                <table className="w-full text-xs">
                                   <tbody>
                                   {picks.map((entry, pi) => {
                                     const srcInfo = SOURCE_LABELS[entry.source];
@@ -420,7 +420,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                     return (
                                       <tr key={pi} className={pi > 0 ? 'border-t border-gray-700/30' : ''}>
                                         <td className="py-1 pr-1" style={{ width: '34px' }}>
-                                          <span className={`text-[10px] font-bold px-1 py-0.5 rounded block text-center whitespace-nowrap ${
+                                          <span className={`text-xs font-bold px-1 py-0.5 rounded block text-center whitespace-nowrap ${
                                             rd === 'ドラフト1位' ? 'bg-red-600/70 text-red-100' :
                                             isIkusei ? 'bg-green-700/70 text-green-200' :
                                             'bg-yellow-700/70 text-yellow-200'
@@ -488,7 +488,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 return (
                                   <tr key={idx} className={`border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer ${player.hallOfFame ? 'bg-yellow-900/20' : ''}`} onClick={() => openModal(player)}>
                                     <td className="py-1.5 px-2">
-                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
                                         player.draftRound === 'ドラフト1位' ? 'bg-red-600/60 text-red-200' :
                                         player.draftRound === 'ドラフト2位' ? 'bg-orange-600/60 text-orange-200' :
                                         player.draftRound === '育成指名' ? 'bg-gray-600/60 text-gray-300' :
@@ -500,13 +500,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                         {player.hallOfFame && '🏛️ '}{player.name}
                                       </span>
                                       {srcInfo && (
-                                        <span className={`ml-1 text-[9px] font-bold px-1 py-0.5 rounded border ${srcInfo.color}`}>
+                                        <span className={`ml-1 text-xs font-bold px-1 py-0.5 rounded border ${srcInfo.color}`}>
                                           {srcInfo.label}
                                         </span>
                                       )}
                                     </td>
                                     <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
-                                    <td className="py-1.5 px-1 text-center text-[10px]">
+                                    <td className="py-1.5 px-1 text-center text-xs">
                                       <span className={player.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>
                                         {player.throws === 'left' ? '左' : '右'}
                                       </span>
@@ -516,9 +516,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                       </span>
                                     </td>
                                     <td className="py-1.5 px-1 text-center text-gray-500">{player.age}</td>
-                                    <td className="py-1.5 px-2 text-gray-400 text-[10px]">{player.teamName}</td>
-                                    <td className="py-1.5 px-2 text-yellow-400 font-bold text-[10px]">{player.npbTeam}</td>
-                                    <td className="py-1.5 px-2 text-right text-gray-300 font-mono text-[10px]">{mainStat}</td>
+                                    <td className="py-1.5 px-2 text-gray-400 text-xs">{player.teamName}</td>
+                                    <td className="py-1.5 px-2 text-yellow-400 font-bold text-xs">{player.npbTeam}</td>
+                                    <td className="py-1.5 px-2 text-right text-gray-300 font-mono text-xs">{mainStat}</td>
                                   </tr>
                                 );
                               })}
@@ -589,20 +589,20 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             <div key={tn} className="rounded-lg overflow-hidden bg-gray-800">
                               <div className="px-2.5 py-1.5 bg-purple-900/40 border-b border-purple-700/30 flex items-center justify-between">
                                 <span className="text-white font-bold text-xs truncate">{tn}</span>
-                                <span className="text-purple-400 text-[10px] font-bold">{picks.length}名</span>
+                                <span className="text-purple-400 text-xs font-bold">{picks.length}名</span>
                               </div>
                               <div className="p-2 space-y-1.5">
                                 {picks.map((p, pi) => (
                                   <div key={pi} className={pi > 0 ? 'pt-1.5 border-t border-gray-700/40' : ''}>
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-purple-400 text-[10px] font-bold w-4 text-right">{p.draftRound}</span>
+                                      <span className="text-purple-400 text-xs font-bold w-4 text-right">{p.draftRound}</span>
                                       <span className={`font-bold text-sm ${p.isPitcher ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
                                     </div>
                                     <div className="flex items-center gap-1.5 ml-5 mt-0.5">
-                                      <span className="text-blue-400 text-[10px]">{getPositionName(p.position)}</span>
-                                      <span className="text-gray-500 text-[10px]">{p.draftAge}歳</span>
+                                      <span className="text-blue-400 text-xs">{getPositionName(p.position)}</span>
+                                      <span className="text-gray-500 text-xs">{p.draftAge}歳</span>
                                       {isCorporate && p.source && (
-                                        <span className="text-cyan-400 text-[9px]">{p.source}</span>
+                                        <span className="text-cyan-400 text-xs">{p.source}</span>
                                       )}
                                     </div>
                                   </div>
@@ -630,12 +630,12 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           <div>
             <div className="bg-gray-800 rounded-lg p-2 mb-2">
               <div className="flex items-center gap-1 mb-1">
-                <span className="text-gray-500 text-[10px] mr-1 w-8">打撃</span>
+                <span className="text-gray-500 text-xs mr-1 w-8">打撃</span>
                 {battingCategories.map(cat => (
                   <button
                     key={cat.key}
                     onClick={() => setStatCategory(cat.key)}
-                    className={`px-2 py-0.5 text-[11px] rounded transition ${
+                    className={`px-2 py-0.5 text-xs rounded transition ${
                       statCategory === cat.key
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
@@ -646,12 +646,12 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 ))}
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-gray-500 text-[10px] mr-1 w-8">投手</span>
+                <span className="text-gray-500 text-xs mr-1 w-8">投手</span>
                 {pitchingCategories.map(cat => (
                   <button
                     key={cat.key}
                     onClick={() => setStatCategory(cat.key)}
-                    className={`px-2 py-0.5 text-[11px] rounded transition ${
+                    className={`px-2 py-0.5 text-xs rounded transition ${
                       statCategory === cat.key
                         ? 'bg-red-600 text-white'
                         : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
@@ -696,7 +696,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                           </td>
                           <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
                           <td className="py-1.5 px-2 text-gray-400">{player.teamName}</td>
-                          <td className={`py-1.5 px-1 text-center text-[10px] font-bold ${statusColor(player.status)}`}>
+                          <td className={`py-1.5 px-1 text-center text-xs font-bold ${statusColor(player.status)}`}>
                             {player.status}
                           </td>
                           <td className="py-1.5 px-2 text-right font-bold text-white text-sm">
@@ -881,7 +881,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                   {record.mvpBatter ? (
                                     <div>
                                       <span className="text-blue-300 font-bold">{record.mvpBatter.name}</span>
-                                      <div className="text-gray-500 text-[10px]">
+                                      <div className="text-gray-500 text-xs">
                                         {record.mvpBatter.avg} {record.mvpBatter.hr}HR {record.mvpBatter.rbi}打点 {record.mvpBatter.hits}安
                                       </div>
                                     </div>
@@ -891,7 +891,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                   {record.mvpPitcher ? (
                                     <div>
                                       <span className="text-red-300 font-bold">{record.mvpPitcher.name}</span>
-                                      <div className="text-gray-500 text-[10px]">
+                                      <div className="text-gray-500 text-xs">
                                         {record.mvpPitcher.wins}勝{record.mvpPitcher.losses}敗 {record.mvpPitcher.saves > 0 ? `${record.mvpPitcher.saves}S ` : ''}防{record.mvpPitcher.era} {record.mvpPitcher.strikeouts}K
                                       </div>
                                     </div>

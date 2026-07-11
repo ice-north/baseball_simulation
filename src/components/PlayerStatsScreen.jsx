@@ -108,7 +108,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
 
   const SortableHeader = ({ label, sortKey, currentKey, currentDir, onClick, align = 'right' }) => (
     <th
-      className={`py-1.5 px-1.5 text-${align} cursor-pointer hover:bg-gray-600/50 transition text-[10px] ${currentKey === sortKey ? 'text-yellow-400' : 'text-gray-500'}`}
+      className={`py-1.5 px-1.5 text-${align} cursor-pointer hover:bg-gray-600/50 transition text-xs ${currentKey === sortKey ? 'text-yellow-400' : 'text-gray-500'}`}
       onClick={() => onClick(sortKey)}
     >
       {label} {currentKey === sortKey && (currentDir === 'asc' ? '▲' : '▼')}
@@ -153,7 +153,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
         </svg>
         <span className="text-xs font-semibold" style={{ color }}>{last}</span>
         {delta !== 0 && (
-          <span className={`text-[10px] ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`text-xs ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
             {delta > 0 ? `+${delta}` : delta}
           </span>
         )}
@@ -227,7 +227,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className="bg-gray-800 border-b border-gray-700/50 text-[10px] text-gray-400">
+                  <tr className="bg-gray-800 border-b border-gray-700/50 text-xs text-gray-400">
                     <th className="py-2 px-3 font-medium">選手</th>
                     <th className="py-2 px-2 font-medium">守備</th>
                     <th className="py-2 px-2 font-medium text-center">齢</th>
@@ -267,13 +267,13 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                             <div className="flex flex-col gap-0.5">
                               {keyStats.map(s => (
                                 <div key={s.key} className="flex items-center gap-1">
-                                  <span className="text-[9px] text-gray-600 w-6">{s.label.slice(0,2)}</span>
+                                  <span className="text-xs text-gray-600 w-6">{s.label.slice(0,2)}</span>
                                   <Sparkline history={hist} statKey={s.key} color={s.color} />
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-gray-700 text-[10px]">2年目以降</span>
+                            <span className="text-gray-700 text-xs">2年目以降</span>
                           )}
                         </td>
                       </tr>
@@ -295,9 +295,9 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
             <table className="w-full text-white text-xs">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">#</th>
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">選手</th>
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">チーム</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-500">#</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-500">選手</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-500">チーム</th>
                   <SortableHeader label="試" sortKey="games" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="打席" sortKey="atBats" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
                   <SortableHeader label="安打" sortKey="hits" currentKey={battingSortKey} currentDir={battingSortDir} onClick={handleBattingSort} />
@@ -322,7 +322,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                       <td className="py-1.5 px-1.5 font-bold">
                         {player.name}
                         {draftCheck.isDraftEligible && (
-                          <span className="ml-1 text-[10px] bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
+                          <span className="ml-1 text-xs bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
                       <td className="py-1.5 px-1.5 text-gray-400">{player.teamName}</td>
@@ -364,9 +364,9 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
             <table className="w-full text-white text-xs">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">#</th>
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">選手</th>
-                  <th className="py-1.5 px-1.5 text-left text-[10px] text-gray-500">チーム</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-500">#</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-500">選手</th>
+                  <th className="py-1.5 px-1.5 text-left text-xs text-gray-500">チーム</th>
                   <SortableHeader label="試" sortKey="games" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="勝" sortKey="wins" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
                   <SortableHeader label="敗" sortKey="losses" currentKey={pitchingSortKey} currentDir={pitchingSortDir} onClick={handlePitchingSort} />
@@ -392,7 +392,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
                       <td className="py-1.5 px-1.5 font-bold">
                         {player.name}
                         {draftCheck.isDraftEligible && (
-                          <span className="ml-1 text-[10px] bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
+                          <span className="ml-1 text-xs bg-purple-600 text-white px-1.5 rounded" title={draftCheck.reasons.join(', ')}>NPB</span>
                         )}
                       </td>
                       <td className="py-1.5 px-1.5 text-gray-400">{player.teamName}</td>

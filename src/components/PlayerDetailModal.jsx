@@ -390,8 +390,8 @@ export default function PlayerDetailModal({ player, onClose }) {
                       const diff = (cur, prev, key) => {
                         if (!prev) return '';
                         const d = cur[key] - prev[key];
-                        if (d > 0) return <span className="text-green-400 text-[10px] ml-0.5">+{d}</span>;
-                        if (d < 0) return <span className="text-red-400 text-[10px] ml-0.5">{d}</span>;
+                        if (d > 0) return <span className="text-green-400 text-xs ml-0.5">+{d}</span>;
+                        if (d < 0) return <span className="text-red-400 text-xs ml-0.5">{d}</span>;
                         return '';
                       };
                       const arsenalStr = (a.arsenal || []).filter(p => p.type !== 'straight').map(p => {
@@ -409,7 +409,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{diff(a, prevA, 'power')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{diff(a, prevA, 'speed')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.defense)}>{a.defense}</span>{diff(a, prevA, 'defense')}</td>
-                          <td className="px-2 py-1 text-left pl-4 text-[10px]">{arsenalStr || '-'}</td>
+                          <td className="px-2 py-1 text-left pl-4 text-xs">{arsenalStr || '-'}</td>
                         </tr>
                       );
                     })}
@@ -423,7 +423,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.power || 0)}>{player.batting?.power || 0}</span></td>
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.physical?.speed || 0)}>{player.physical?.speed || 0}</span></td>
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.fielding?.defense || 0)}>{player.fielding?.defense || 0}</span></td>
-                      <td className="px-2 py-1 text-left pl-4 text-[10px]">{(player.pitching?.arsenal || []).filter(p => p.type !== 'straight').map(p => `${BALL_EFFECTS[p.type]?.name || p.type}${p.level}`).join(', ') || '-'}</td>
+                      <td className="px-2 py-1 text-left pl-4 text-xs">{(player.pitching?.arsenal || []).filter(p => p.type !== 'straight').map(p => `${BALL_EFFECTS[p.type]?.name || p.type}${p.level}`).join(', ') || '-'}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -452,8 +452,8 @@ export default function PlayerDetailModal({ player, onClose }) {
                       const diff = (cur, prev, key) => {
                         if (!prev) return '';
                         const d = cur[key] - prev[key];
-                        if (d > 0) return <span className="text-green-400 text-[10px] ml-0.5">+{d}</span>;
-                        if (d < 0) return <span className="text-red-400 text-[10px] ml-0.5">{d}</span>;
+                        if (d > 0) return <span className="text-green-400 text-xs ml-0.5">+{d}</span>;
+                        if (d < 0) return <span className="text-red-400 text-xs ml-0.5">{d}</span>;
                         return '';
                       };
                       return (

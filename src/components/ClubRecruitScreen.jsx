@@ -158,7 +158,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
                   )}
                 </div>
                 {player.careerHistory?.length > 0 && (
-                  <div className="text-[10px] text-gray-500 mt-1">
+                  <div className="text-xs text-gray-500 mt-1">
                     経歴: {player.careerHistory.map(h => h.label).join(' → ')}
                   </div>
                 )}
