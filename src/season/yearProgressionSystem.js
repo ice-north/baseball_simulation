@@ -1918,9 +1918,16 @@ function applyCorporatePlayerGrowth(allTeams) {
 
     for (const player of team.players) {
       const age = player.age || 25;
-      if (age > 27) continue;
+      if (age > 32) continue;
       const gp = player.growthPotential || 1.0;
       const discipline = player.personality?.discipline ?? 50;
+
+      // 年齢別成長倍率: 26歳がピーク
+      // 18歳は発展途上(40%)、26歳が全盛期(100%)、それ以降は緩やかに衰退
+      // 18→0.40, 20→0.55, 22→0.70, 24→0.85, 26→1.00, 27→0.81, 28→0.62, 29→0.43, 30→0.24, 31→0.05
+      const ageGrowthMult = age <= 26
+        ? 0.4 + (age - 18) * 0.075
+        : Math.max(0.05, 1.0 - (age - 26) * 0.19);
 
       // プロ意識による成長倍率
       // クラブチーム: 自己鍛錬力が成長を大きく左右する
@@ -1958,7 +1965,7 @@ function applyCorporatePlayerGrowth(allTeams) {
       const specMult = (key) => strengthKeys.has(key) ? 1.4 : weakKeys.has(key) ? 0.7 : 1.0;
 
       const grow = (current, base, key, cap = 99, threshold = null, rate = 0.05) => {
-        let amount = base * gp * rankMult * disciplineMult * specMult(key) * (0.6 + Math.random() * 0.6);
+        let amount = base * gp * rankMult * disciplineMult * ageGrowthMult * specMult(key) * (0.6 + Math.random() * 0.6);
         if (threshold != null) amount *= decayMult(current, threshold, rate);
         return Math.min(cap, current + Math.round(amount));
       };
