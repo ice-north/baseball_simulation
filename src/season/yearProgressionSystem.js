@@ -629,7 +629,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       careerStats: player.careerStats ? JSON.parse(JSON.stringify(player.careerStats)) : null,
       yearsPlayed: player.yearsPlayed || (source === 'highschool' || source === 'university' ? 0 : 1),
       awardBonus: candidate.bonus || 0, seasonAwards: candidate.awards || [],
-      source, score,
+      source, score, isClub: candidate.isClub || false,
     };
   };
 
@@ -1061,16 +1061,17 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const draftBySource = {
     highschool: draftedPlayers.filter(d => d.source === 'highschool').length,
     university: draftedPlayers.filter(d => d.source === 'university' || d.source === 'university_team').length,
-    corporate: draftedPlayers.filter(d => d.source === 'corporate').length,
+    corporate: draftedPlayers.filter(d => d.source === 'corporate' && !d.isClub).length,
     independent: draftedPlayers.filter(d => d.source === 'independent').length,
+    club: draftedPlayers.filter(d => d.isClub).length,
     total: draftedPlayers.length,
   };
-  const firstRoundSources = { highschool: 0, university: 0, corporate: 0, independent: 0 };
+  const firstRoundSources = { highschool: 0, university: 0, corporate: 0, independent: 0, club: 0 };
   draftedPlayers.filter(d => d.draftRound === 'ドラフト1位').forEach(d => {
-    const src = (d.source === 'university_team') ? 'university' : d.source;
+    const src = (d.source === 'university_team') ? 'university' : (d.isClub ? 'club' : d.source);
     firstRoundSources[src] = (firstRoundSources[src] || 0) + 1;
   });
-  console.log(`[NPBDraft] 結果: 総数${draftBySource.total} | 高校${draftBySource.highschool} 大学${draftBySource.university} 社会人${draftBySource.corporate} 独立${draftBySource.independent}`);
+  console.log(`[NPBDraft] 結果: 総数${draftBySource.total} | 高校${draftBySource.highschool} 大学${draftBySource.university} 社会人${draftBySource.corporate} 独立${draftBySource.independent} クラブ${draftBySource.club}`);
   console.log(`[NPBDraft] 1位: 高校${firstRoundSources.highschool} 大学${firstRoundSources.university} 社会人${firstRoundSources.corporate} 独立${firstRoundSources.independent}`);
 
   return { draftedPlayers, nearMissPlayers, proBonus, draftBySource, firstRoundData, npbStandings, highSchoolDrafted: draftBySource.highschool };

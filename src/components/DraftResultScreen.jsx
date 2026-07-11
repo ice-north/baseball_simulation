@@ -68,6 +68,7 @@ const SOURCE_LABELS = {
   university: { label: '大学', color: 'text-blue-400 bg-blue-900/40 border-blue-600/40' },
   corporate:  { label: '社会人', color: 'text-orange-400 bg-orange-900/40 border-orange-600/40' },
   independent: { label: '独立', color: 'text-purple-400 bg-purple-900/40 border-purple-600/40' },
+  club: { label: 'クラブ', color: 'text-rose-400 bg-rose-900/40 border-rose-600/40' },
 };
 
 const DRAFT_POSITION_NAMES = {
@@ -958,7 +959,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
 
       {draftBySource && hasDrafted && (
         <div className="flex items-center justify-center gap-3 flex-wrap mb-4">
-          {[['highschool', '高校'], ['university', '大学'], ['corporate', '社会人'], ['independent', '独立']].map(([key, label]) => (
+          {[['highschool', '高校'], ['university', '大学'], ['corporate', '社会人'], ['independent', '独立'], ['club', 'クラブ']].map(([key, label]) => (
             <div key={key} className="bg-gray-800/80 rounded-xl px-4 py-2 border border-gray-700/50 text-center min-w-[80px]">
               <div className="text-xs text-gray-400">{label}</div>
               <div className={`text-lg font-black ${SOURCE_LABELS[key]?.color?.split(' ')[0] || 'text-white'}`}>{draftBySource[key] || 0}名</div>
