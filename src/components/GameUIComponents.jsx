@@ -402,13 +402,15 @@ export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
       className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-700/40 transition text-left"
     >
       <span className="font-semibold text-gray-200">{title}</span>
-      <span className="text-gray-500 text-sm">{isExpanded ? '▼' : '▶'}</span>
+      <span className={`text-gray-400 text-xs transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
     </button>
-    {isExpanded && (
-      <div className="p-4 border-t border-gray-700/50">
-        {children}
+    <div className={`grid transition-all duration-200 ease-in-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+      <div className="overflow-hidden">
+        <div className="p-4 border-t border-gray-700/50">
+          {children}
+        </div>
       </div>
-    )}
+    </div>
   </div>
 );
 

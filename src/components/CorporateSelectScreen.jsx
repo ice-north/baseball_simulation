@@ -75,9 +75,9 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
 
         <button
           onClick={onBack}
-          className="mt-8 text-gray-500 hover:text-gray-300 text-sm"
+          className="mt-8 inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-800 text-sm transition"
         >
-          戻る
+          ← 戻る
         </button>
       </div>
     </div>

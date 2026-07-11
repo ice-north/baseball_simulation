@@ -105,14 +105,14 @@ const GameFlowScreens = ({
                       <div className="text-lg font-bold text-white group-hover:text-blue-400 transition">{leagueDef?.name}</div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-2">
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-300 mt-2">
                     <span>{leagueDef?.teams?.length || 4}チーム</span>
                     <span>{leagueDef?.gamesPerSeason || 60}試合</span>
                     <span>{leagueDef?.leagueFormat === 'two' ? '2リーグ制' : '1リーグ制'}</span>
                   </div>
                   <div className="flex flex-wrap gap-1 mt-2">
                     {leagueDef?.teams?.map(t => (
-                      <span key={t.id} className="text-xs text-gray-400 bg-gray-700/50 px-1.5 py-0.5 rounded">{t.abbreviation}</span>
+                      <span key={t.id} className="text-xs text-gray-300 bg-gray-700/60 px-1.5 py-0.5 rounded">{t.abbreviation}</span>
                     ))}
                   </div>
                 </button>
@@ -132,14 +132,14 @@ const GameFlowScreens = ({
                   <div className="text-xs text-gray-400">チーム数・試合数・ルールを自由に設定</div>
                 </div>
               </div>
-              <div className="flex gap-3 text-xs text-gray-500 mt-2">
+              <div className="flex gap-3 text-xs text-gray-300 mt-2">
                 <span>カスタム設定</span>
                 <span>全5リーグ平行世界あり</span>
               </div>
             </button>
           </div>
           <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_mode_select')} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
+            <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-800 text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
@@ -198,7 +198,7 @@ const GameFlowScreens = ({
             ))}
           </div>
           <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_league_select')} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
+            <button onClick={() => setGameFlowState('newgame_league_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-800 text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
