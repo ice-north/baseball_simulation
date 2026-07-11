@@ -376,6 +376,15 @@ export function executeHandleManagedGameEnd(ctx) {
     const winTeamName = isHomeWin ? htn : atn;
     const loseTeamName = isHomeWin ? atn : htn;
 
+    // 先発IDをローテーションから特定（試合後はインデックス+1済みなので-1で逆算）
+    const getRotStarterId = (teamName) => {
+      const rot = TEAMS_DATA[teamName]?.pitchingRotation;
+      if (!rot?.starters?.length) return null;
+      const idx = ((rot.currentStarterIndex || 0) - 1 + rot.starters.length) % rot.starters.length;
+      return rot.starters[idx];
+    };
+    const winStarterId = getRotStarterId(winTeamName);
+
     // 勝利投手判定: 先発が5回以上→先発、それ以外→最多投球回リリーフ
     const winPitchers = winTeamState.players.filter(p => (p.stats?.pitching?.outs || 0) > 0)
       .sort((a, b) => (b.stats?.pitching?.outs || 0) - (a.stats?.pitching?.outs || 0));
@@ -392,12 +401,16 @@ export function executeHandleManagedGameEnd(ctx) {
       ? loseStarter
       : [...losePitchers].sort((a, b) => (b.stats?.pitching?.runsAllowed || 0) - (a.stats?.pitching?.runsAllowed || 0))[0] || null;
 
-    // セーブ投手判定: 最後に投げた投手で、3点差以内1イニング以上 or 3イニング以上
+    // セーブ投手判定: 勝ち投手・先発を除いた最少アウト（最後に登板）の投手
     const scoreDiff = Math.abs(finalScore.home - finalScore.away);
     let savePitcher = null;
     if (winPitchers.length > 1) {
-      const lastPitcher = winPitchers[winPitchers.length - 1];
-      if (lastPitcher && lastPitcher !== winPitcher) {
+      const saveEligible = winPitchers.filter(p =>
+        p !== winPitcher &&
+        (winStarterId ? p.id !== winStarterId : p !== winStarter)
+      );
+      const lastPitcher = saveEligible.length > 0 ? saveEligible[saveEligible.length - 1] : null;
+      if (lastPitcher) {
         const outs = lastPitcher.stats?.pitching?.outs || 0;
         if ((scoreDiff <= 3 && outs >= 3) || outs >= 9) {
           savePitcher = lastPitcher;
@@ -405,9 +418,10 @@ export function executeHandleManagedGameEnd(ctx) {
       }
     }
 
-    // ホールド: 勝ちチームのリリーフで、勝ち投手でもセーブでもなく、先発でもなく、1アウト以上
+    // ホールド: 勝ちチームのリリーフで、勝ち投手・セーブ・先発でなく1アウト以上
     const holdPitchers = winPitchers.filter(p =>
       p !== winPitcher && p !== savePitcher && p !== winStarter &&
+      (winStarterId ? p.id !== winStarterId : true) &&
       (p.stats?.pitching?.outs || 0) >= 1
     );
 
@@ -434,6 +448,17 @@ export function executeHandleManagedGameEnd(ctx) {
       const oa = TEAMS_DATA[otherGame.away];
       if (!oh || !oa) return;
 
+      // 先発IDをautoSimulateGame実行前のローテーションインデックスから記録
+      const ohStarterId = (() => {
+        const rot = oh.pitchingRotation;
+        if (!rot?.starters?.length) return null;
+        return rot.starters[(rot.currentStarterIndex || 0) % rot.starters.length];
+      })();
+      const oaStarterId = (() => {
+        const rot = oa.pitchingRotation;
+        if (!rot?.starters?.length) return null;
+        return rot.starters[(rot.currentStarterIndex || 0) % rot.starters.length];
+      })();
       const otherResult = autoSimulateGame(otherGame.home, otherGame.away);
       if (otherResult) {
         // 投手勝敗・セーブ・ホールドの記録
@@ -446,6 +471,8 @@ export function executeHandleManagedGameEnd(ctx) {
           if (oWinTeam && oLoseTeam) {
             const oWinPs = oWinTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
             const oLosePs = oLoseTeam.players.filter(p => p.gameStats?.pitching?.outs > 0);
+            // 勝ちチームの先発ID（試合前に取得済み）
+            const oWinStarterId = oIsHomeWin ? ohStarterId : oaStarterId;
             // 勝ち投手（DH制では投手battingOrder=0）
             const oStarter = oWinPs.find(p => p.battingOrder === 9 || (p.position === 'pitcher' && p.battingOrder === 0));
             const oWinP = oStarter && oStarter.gameStats.pitching.outs >= 15
@@ -455,10 +482,13 @@ export function executeHandleManagedGameEnd(ctx) {
             const oLoseP = oLoseStarter && (oLoseStarter.gameStats?.pitching?.runsAllowed || 0) > 0
               ? oLoseStarter
               : [...oLosePs].sort((a, b) => b.gameStats.pitching.runsAllowed - a.gameStats.pitching.runsAllowed)[0];
-            // セーブ
+            // セーブ: 勝ち投手・先発を除いた最少アウト（最後に登板）の投手
             const oScoreDiff = Math.abs(otherResult.homeScore - otherResult.awayScore);
-            const oLastP = oWinPs.length > 1 ? oWinPs[oWinPs.length - 1] : null;
-            const oSaveP = oLastP && oLastP !== oWinP &&
+            const oSaveCandidates = [...oWinPs]
+              .filter(p => p !== oWinP && (oWinStarterId ? p.id !== oWinStarterId : p !== oStarter))
+              .sort((a, b) => (b.gameStats.pitching.outs || 0) - (a.gameStats.pitching.outs || 0));
+            const oLastP = oSaveCandidates.length > 0 ? oSaveCandidates[oSaveCandidates.length - 1] : null;
+            const oSaveP = oLastP &&
               ((oScoreDiff <= 3 && oLastP.gameStats.pitching.outs >= 3) || oLastP.gameStats.pitching.outs >= 9)
               ? oLastP : null;
             const recordOther = (playerState, teamName, stat) => {
@@ -472,9 +502,11 @@ export function executeHandleManagedGameEnd(ctx) {
             if (oWinP) recordOther(oWinP, oWinName, 'wins');
             if (oLoseP) recordOther(oLoseP, oLoseName, 'losses');
             if (oSaveP) recordOther(oSaveP, oWinName, 'saves');
-            // ホールド
+            // ホールド: 勝ち投手・セーブ・先発を除く
             oWinPs.forEach(p => {
-              if (p !== oWinP && p !== oSaveP && p !== oStarter && p.gameStats.pitching.outs >= 1) {
+              if (p !== oWinP && p !== oSaveP && p !== oStarter &&
+                  (oWinStarterId ? p.id !== oWinStarterId : true) &&
+                  p.gameStats.pitching.outs >= 1) {
                 recordOther(p, oWinName, 'holds');
               }
             });
