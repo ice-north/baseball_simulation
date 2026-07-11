@@ -183,10 +183,10 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
   );
 
   const renderVal = (val, isVelocity) => {
-    if (val === '?' || val === undefined) return <span className="text-gray-600">?</span>;
+    if (val === '?' || val === undefined) return <span className="text-gray-500">?</span>;
     const n = typeof val === 'number' ? val : parseInt(val);
-    if (isNaN(n)) return <span className="text-gray-600">?</span>;
-    return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 120) * 2) : n)}`}>{val}</span>;
+    if (isNaN(n)) return <span className="text-gray-500">?</span>;
+    return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 115) * 2.5) : n)}`}>{val}</span>;
   };
 
   if (phase === 'results') {
