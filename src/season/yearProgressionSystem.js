@@ -1922,14 +1922,10 @@ function applyCorporatePlayerGrowth(allTeams) {
       const gp = player.growthPotential || 1.0;
       const discipline = player.personality?.discipline ?? 50;
 
-      // プロ意識による成長倍率
-      // クラブチーム: キャンプも無く環境が劣るため、自己鍛錬力（プロ意識）が成長を大きく左右する
-      //   discipline 40→1.0x, 60→1.9x, 80→2.8x, 100→3.7x
-      // 企業/独立: 環境が整っているためプロ意識の影響は控えめ
-      //   discipline 50→1.0x, 70→1.3x, 90→1.6x
-      const disciplineMult = isClub
-        ? 1.0 + Math.max(0, (discipline - 40) * 0.045)
-        : 1.0 + Math.max(0, (discipline - 50) * 0.015);
+      // プロ意識による成長倍率（社会人・クラブ共通）
+      // 環境差はrankMultで表現。disciplineの影響はクラブ/企業で同等
+      // discipline 40→1.0x, 60→1.5x, 80→2.0x, 100→2.5x
+      const disciplineMult = 1.0 + Math.max(0, (discipline - 40) * 0.025);
 
       // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
       // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
