@@ -1918,16 +1918,18 @@ function applyCorporatePlayerGrowth(allTeams) {
 
     for (const player of team.players) {
       const age = player.age || 25;
-      if (age > 32) continue;
+      if (age > 33) continue;
       const gp = player.growthPotential || 1.0;
       const discipline = player.personality?.discipline ?? 50;
 
-      // 年齢別成長倍率: 26歳がピーク
-      // 18歳は発展途上(40%)、26歳が全盛期(100%)、それ以降は緩やかに衰退
-      // 18→0.40, 20→0.55, 22→0.70, 24→0.85, 26→1.00, 27→0.81, 28→0.62, 29→0.43, 30→0.24, 31→0.05
-      const ageGrowthMult = age <= 26
-        ? 0.4 + (age - 18) * 0.075
-        : Math.max(0.05, 1.0 - (age - 26) * 0.19);
+      // 成長停止年齢: growthPotentialによる個人差（22〜30歳）
+      // gp=0.8→23歳, gp=1.0→26歳, gp=1.2→29歳
+      const stopAge = Math.min(30, Math.max(22, Math.round(26 + (gp - 1.0) * 15)));
+
+      // 年齢別成長倍率: 18歳が最大(1.0)、stopAgeで0に線形減衰。停止後は成長なし
+      const ageGrowthMult = age >= stopAge
+        ? 0
+        : Math.max(0, 1.0 - (age - 18) / (stopAge - 18));
 
       // プロ意識による成長倍率
       // クラブチーム: 自己鍛錬力が成長を大きく左右する
