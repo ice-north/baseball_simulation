@@ -1939,12 +1939,13 @@ function applyCorporatePlayerGrowth(allTeams) {
         : Math.max(0, 1.0 - (age - 18) / (stopAge - 18));
 
       // プロ意識による成長倍率
-      // クラブチーム: 自己鍛錬力が成長を大きく左右する
-      //   discipline 40→1.0x, 60→1.9x, 80→2.8x, 100→3.7x
+      // クラブチーム: 自己鍛錬力が成長を大きく左右する。threshold=60で普通の選手は恩恵なし
+      //   discipline 60→1.0x, 70→1.45x, 80→1.9x, 100→2.8x
+      //   ランクD(×0.80)込み実質: 60→0.80x, 80→1.52x, 100→2.24x
       // 企業/独立: 環境が整っているためプロ意識の影響は控えめ
       //   discipline 50→1.0x, 70→1.3x, 90→1.6x
       const disciplineMult = isClub
-        ? 1.0 + Math.max(0, (discipline - 40) * 0.045)
+        ? 1.0 + Math.max(0, (discipline - 60) * 0.045)
         : 1.0 + Math.max(0, (discipline - 50) * 0.015);
 
       // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
