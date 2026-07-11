@@ -2046,7 +2046,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
     // 大学注目選手（3〜4年生）
     const uniAll = [];
-    const gameYear = seasonData.settings?.year || 1;
+    const gameYear = seasonData.currentDate?.year || seasonData.settings?.year || 1;
     Object.entries(universityPool).forEach(([enrollYear, entries]) => {
       if (!entries) return;
       const yearsInUni = gameYear - parseInt(enrollYear);
