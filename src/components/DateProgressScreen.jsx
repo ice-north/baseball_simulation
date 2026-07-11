@@ -79,19 +79,33 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   const getStartingPitcher = (teamName) => {
     const team = TEAMS_DATA[teamName];
-    if (!team || !team.pitchingRotation?.starters?.length) return null;
+    if (!team) return null;
     const rotation = team.pitchingRotation;
-    const starters = rotation.starters;
-    if (!starters.length) return null;
+    const starters = rotation?.starters || [];
     // autoSimulation と同じロジック: currentStarterIndex で直接引く
-    const index = (rotation.currentStarterIndex || 0) % starters.length;
-    const exact = team.players.find(p => p.id === starters[index] && p.isActive !== false);
-    if (exact) return exact;
-    // ゾンビIDや非アクティブの場合は次の有効な先発を返す
-    for (let i = 1; i < starters.length; i++) {
-      const candidate = team.players.find(p => p.id === starters[(index + i) % starters.length] && p.isActive !== false);
-      if (candidate) return candidate;
+    if (starters.length > 0) {
+      const index = (rotation.currentStarterIndex || 0) % starters.length;
+      const exact = team.players.find(p => p.id === starters[index] && p.isActive !== false);
+      if (exact) return exact;
+      // ゾンビIDや非アクティブの場合は次の有効な先発を返す
+      for (let i = 1; i < starters.length; i++) {
+        const candidate = team.players.find(p => p.id === starters[(index + i) % starters.length] && p.isActive !== false);
+        if (candidate) return candidate;
+      }
     }
+    // フォールバック: pitcherRoles からスターターロールの投手を探す
+    const starterRoles = new Set(['ace', 'complete', 'short', 'quality']);
+    const pitcherRoles = rotation?.pitcherRoles || {};
+    const starterIds = Object.entries(pitcherRoles)
+      .filter(([, role]) => starterRoles.has(role))
+      .map(([id]) => { const n = Number(id); return isNaN(n) ? id : n; });
+    if (starterIds.length > 0) {
+      const found = team.players.filter(p => p.isActive !== false && starterIds.includes(p.id) && p.pitching);
+      if (found.length > 0) return found.sort((a, b) => (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0))[0];
+    }
+    // 最終フォールバック: 投手スタミナ最高の選手
+    const pitchers = team.players.filter(p => p.isActive !== false && p.pitching && p.position === 'pitcher');
+    if (pitchers.length > 0) return pitchers.sort((a, b) => (b.pitching?.stamina || 0) - (a.pitching?.stamina || 0))[0];
     return null;
   };
 
@@ -2412,7 +2426,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           {awayPitcher && !hasResult && (() => {
                             const ps = awayPitcher.seasonStats?.pitching;
                             if (!ps || !ps.games) return null;
-                            return <div className="text-xs text-gray-500">{ps.wins || 0}勝{ps.losses || 0}敗{(ps.saves || 0) > 0 ? ` ${ps.saves}S` : ''}</div>;
+                            const era = (ps.inningsPitched || 0) > 0 ? ((ps.earnedRuns || 0) / ps.inningsPitched * 27).toFixed(2) : '-';
+                            const parts = [`${ps.wins || 0}勝${ps.losses || 0}敗`];
+                            if ((ps.saves || 0) > 0) parts.push(`${ps.saves}S`);
+                            if ((ps.holds || 0) > 0) parts.push(`${ps.holds}H`);
+                            parts.push(`防${era}`);
+                            return <div className="text-xs text-gray-400">{parts.join(' ')}</div>;
                           })()}
                         </div>
                         {hasResult ? (
@@ -2459,7 +2478,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                           {homePitcher && !hasResult && (() => {
                             const ps = homePitcher.seasonStats?.pitching;
                             if (!ps || !ps.games) return null;
-                            return <div className="text-xs text-gray-500">{ps.wins || 0}勝{ps.losses || 0}敗{(ps.saves || 0) > 0 ? ` ${ps.saves}S` : ''}</div>;
+                            const era = (ps.inningsPitched || 0) > 0 ? ((ps.earnedRuns || 0) / ps.inningsPitched * 27).toFixed(2) : '-';
+                            const parts = [`${ps.wins || 0}勝${ps.losses || 0}敗`];
+                            if ((ps.saves || 0) > 0) parts.push(`${ps.saves}S`);
+                            if ((ps.holds || 0) > 0) parts.push(`${ps.holds}H`);
+                            parts.push(`防${era}`);
+                            return <div className="text-xs text-gray-400">{parts.join(' ')}</div>;
                           })()}
                         </div>
                       </div>
