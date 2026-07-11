@@ -1920,28 +1920,31 @@ function applyCorporatePlayerGrowth(allTeams) {
 
     for (const player of team.players) {
       const age = player.age || 25;
-      if (age > 33) continue;
+      if (age > 38) continue;  // 自然衰退に伴い上限を38歳に拡張
       const gp = player.growthPotential || 1.0;
       const discipline = player.personality?.discipline ?? 50;
 
-      // 成長停止年齢: gp(個人差) + 試合活動量 + プロ意識で延長
+      // 成長ゼロ年齢: gp(個人差) + 試合活動量 + プロ意識で延長
       // gp=0.8→23歳, gp=1.0→26歳, gp=1.2→29歳（基準）+ 最大+4歳
       const activity = player.position === 'pitcher'
         ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
         : (player.seasonStats?.batting?.atBats || 0);
       const gameBonus = Math.min(2, activity / 200);                            // 試合活動: 最大+2歳
       const discBonus = Math.min(2, Math.max(0, (discipline - 60) * 0.05));    // プロ意識: 最大+2歳
-      const stopAge = Math.min(32, Math.max(22,
+      const zeroAge = Math.min(32, Math.max(22,
         Math.round(26 + (gp - 1.0) * 15) + Math.floor(gameBonus + discBonus)
       ));
 
-      // 年齢別成長倍率: 18歳が最大(1.0)、stopAgeで0に線形減衰。停止後は成長なし
-      const ageGrowthMult = age >= stopAge
-        ? 0
-        : Math.max(0, 1.0 - (age - 18) / (stopAge - 18));
+      // 年齢因子: 18歳→+1.0、zeroAgeで0に線形減衰、以降マイナス（下限-2.0）
+      const ageFactor = Math.max(-2.0, 1.0 - (age - 18) / Math.max(1, zeroAge - 18));
 
-      // プロ意識による成長倍率（環境ごとに自主性の重要度が異なる）
-      //
+      // 練習による衰え補填: discipline 60以上から衰えをカバー可能
+      // discipline 80→+0.25, 100→+0.50
+      const practiceOffset = Math.max(0, (discipline - 60) * 0.0125);
+
+      // 実効成長因子: 0以上は成長・維持期、マイナスは衰退期
+      const effectiveFactor = ageFactor + practiceOffset;
+
       // プロ意識による成長倍率（環境ごとに自主性の重要度が異なる）
       //
       // クラブ: 自主鍛錬のみ。べき乗曲線でdiscipline 70あたりから実用的な成長
@@ -1987,9 +1990,16 @@ function applyCorporatePlayerGrowth(allTeams) {
       const specMult = (key) => strengthKeys.has(key) ? 1.4 : weakKeys.has(key) ? 0.7 : 1.0;
 
       const grow = (current, base, key, cap = 99, threshold = null, rate = 0.05) => {
-        let amount = base * gp * rankMult * disciplineMult * ageGrowthMult * specMult(key) * (0.6 + Math.random() * 0.6);
-        if (threshold != null) amount *= decayMult(current, threshold, rate);
-        return Math.min(cap, current + Math.round(amount));
+        if (effectiveFactor >= 0) {
+          // 成長・維持期: disciplineMultを乗算
+          let amount = base * gp * rankMult * disciplineMult * effectiveFactor * specMult(key) * (0.6 + Math.random() * 0.6);
+          if (threshold != null) amount *= decayMult(current, threshold, rate);
+          return Math.min(cap, current + Math.round(amount));
+        } else {
+          // 衰退期: 純粋な衰え（disciplineMultは乗算しない）
+          const declineAmount = base * Math.abs(effectiveFactor) * 0.5 * (0.6 + Math.random() * 0.6);
+          return Math.max(1, current - Math.round(declineAmount));
+        }
       };
 
       if (player.position === 'pitcher') {
