@@ -1905,7 +1905,7 @@ function releaseCPUCorporatePlayers(allTeams, currentYear) {
     const releaseSet = new Set(scored.slice(0, maxRelease).map(e => e.player.id));
 
     scored.slice(0, maxRelease).forEach(({ player }) => {
-      if ((player.age || 0) < 38) {  // 38歳以上は引退扱い（プールに戻さない）
+      if ((player.age || 0) < 33) {  // 33歳以上は引退扱い（プールに入れない）
         const p = JSON.parse(JSON.stringify(player));
         p.isStarter = false;
         p.battingOrder = 0;
@@ -2654,21 +2654,27 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 5.9. 社会人AIチームのロスター補充（全モード対象）
   replenishCorporateRosters(teamsAfterRetirement, currentYear);
 
-  // 5.92. リリースプールサイズ上限（大量の大学卒業生が長期蓄積するのを防止）
-  // 全モードで適用: 社会人/独立は上限400、大学モードは300
-  const poolCap = seasonData.settings?.universityMode ? 300 : 400;
-  if (releasedPlayersPool.length > poolCap) {
-    // スコア降順で上位を残す
-    const scored = releasedPlayersPool.map((p, i) => ({
-      p, i,
-      s: p.position === 'pitcher'
-        ? (p.pitching?.velocity || 130) + (p.pitching?.control || 0) * 0.5
-        : (p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) * 0.3,
-    })).sort((a, b) => b.s - a.s).slice(0, poolCap);
-    const keep = new Set(scored.map(e => e.i));
-    const trimmed = releasedPlayersPool.filter((_, i) => keep.has(i));
-    releasedPlayersPool.length = 0;
-    trimmed.forEach(p => releasedPlayersPool.push(p));
+  // 5.92. リリースプール整理: 33歳以上を先に除去してからサイズ上限を適用
+  // 33歳以上はどのチームも採用しないため、プールに留まっても意味がない
+  {
+    const beforeAge = releasedPlayersPool.filter(p => (p.age || 0) < 33);
+    if (beforeAge.length !== releasedPlayersPool.length) {
+      releasedPlayersPool.length = 0;
+      beforeAge.forEach(p => releasedPlayersPool.push(p));
+    }
+    const poolCap = seasonData.settings?.universityMode ? 300 : 400;
+    if (releasedPlayersPool.length > poolCap) {
+      const scored = releasedPlayersPool.map((p, i) => ({
+        p, i,
+        s: p.position === 'pitcher'
+          ? (p.pitching?.velocity || 130) + (p.pitching?.control || 0) * 0.5
+          : (p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) * 0.3,
+      })).sort((a, b) => b.s - a.s).slice(0, poolCap);
+      const keep = new Set(scored.map(e => e.i));
+      const trimmed = releasedPlayersPool.filter((_, i) => keep.has(i));
+      releasedPlayersPool.length = 0;
+      trimmed.forEach(p => releasedPlayersPool.push(p));
+    }
   }
 
   // 5.95. 卒業レポートに nextYearTeam を転記（5.65/5.9 の配属完了後）
