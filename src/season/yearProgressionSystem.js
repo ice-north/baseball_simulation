@@ -1968,17 +1968,21 @@ function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
     return abil * 0.60 + disc * 0.25 + Math.max(0, (gp - 1.0)) * 100 * 0.15;
   };
 
-  // チームに不足している野手ポジションを取得
-  const getMissingPositions = (team) => {
-    const FIELDER_POSITIONS = ['catcher', 'first_base', 'second_base', 'third_base', 'shortstop', 'left_field', 'center_field', 'right_field'];
-    const present = new Set();
+  // ポジション別在籍数マップを取得（0=不在, 1=薄い, 2+=充足）
+  const FIELDER_POSITIONS = ['catcher', 'first_base', 'second_base', 'third_base', 'shortstop', 'left_field', 'center_field', 'right_field'];
+  const getPositionCounts = (team) => {
+    const counts = {};
+    FIELDER_POSITIONS.forEach(pos => { counts[pos] = 0; });
     (team.players || []).forEach(p => {
-      if (p.position !== 'pitcher') present.add(p.subPosition || p.position);
+      if (p.position !== 'pitcher') {
+        const pos = p.subPosition || p.position;
+        if (pos in counts) counts[pos]++;
+      }
     });
-    return new Set(FIELDER_POSITIONS.filter(pos => !present.has(pos)));
+    return counts;
   };
 
-  // ポジション優先度ブースト（投手/野手比率・不在ポジション補正）
+  // ポジション優先度ブースト（投手/野手比率・不在/薄いポジション補正）
   const positionBoost = (player, team) => {
     const total    = (team.players || []).length;
     const pitchers = (team.players || []).filter(p => p.position === 'pitcher').length;
@@ -1991,9 +1995,11 @@ function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
     }
     // 野手
     if (ratio > TARGET + 0.05) return 15;     // 野手不足
-    const missing   = getMissingPositions(team);
+    const counts    = getPositionCounts(team);
     const playerPos = player.subPosition || player.position;
-    if (missing.has(playerPos)) return 25;    // 不在ポジション → 最優先
+    const cnt       = counts[playerPos] ?? 2;
+    if (cnt === 0) return 30;   // 完全不在 → 最優先
+    if (cnt === 1) return 18;   // 1名のみ（薄い）→ 準優先
     return 0;
   };
 
