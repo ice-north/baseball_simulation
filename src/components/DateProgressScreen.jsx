@@ -4445,7 +4445,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'pitcher' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>投手</button>
                 </div>
               </div>
-              <div className="space-y-0.5 text-xs max-h-40 overflow-y-auto">
+              <div className="space-y-0.5 text-xs">
                 {benchFilter === 'fielder' ? (
                   benchFielders.length === 0 ? <div className="text-gray-500 text-center py-1">控え野手なし</div> :
                   benchFielders.map(p => renderBenchPlayer(p))
@@ -4509,7 +4509,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             {/* 相手控え投手 */}
             <div className="bg-gray-900 rounded-lg p-2.5">
               <h3 className="text-xs font-bold text-gray-400 mb-1">相手控え投手</h3>
-              <div className="space-y-0.5 max-h-32 overflow-y-auto">
+              <div className="space-y-0.5">
                 {(() => {
                   const oppStarterIds = new Set(opponentStarters.map(p => p.id));
                   const oppBullpen = (opponentTeam?.players || []).filter(p => isPitcherPlayer(p) && !oppStarterIds.has(p.id));
