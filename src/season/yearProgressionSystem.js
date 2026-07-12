@@ -2067,6 +2067,88 @@ function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
 // ============================================================
 
 // ============================================================
+// 自由契約選手の自主トレ成長
+// チームなし = 実戦なし。クラブ所属と同等の discipline 主導成長のみ
+// growthPotential の加齢減衰も適用（時間は経過するため）
+// ============================================================
+
+function applyFreeAgentGrowth(pool) {
+  const decayMult = (current, threshold, rate) => {
+    if (current < threshold) return 1.0;
+    return Math.max(0.10, 1.0 - (current - threshold) * rate);
+  };
+
+  for (const player of pool) {
+    const age = player.age || 25;
+    if (age > 38) continue;
+
+    const gp = player.growthPotential || 1.0;
+    const discipline = player.personality?.discipline ?? 50;
+
+    // growthPotential の加齢減衰（updateGrowthModifiers と同ロジック）
+    if (age >= 24) {
+      const agePenalty = (age - 23) * 0.05;
+      player.growthPotential = Math.round(((player.growthPotential || 1.0) - agePenalty) * 100) / 100;
+    }
+    player.growthModifier = Math.max(-0.3, Math.round((player.growthModifier || 0) * 0.5 * 100) / 100);
+
+    // 成長ゼロ年齢（クラブと同計算: 試合活動ゼロ扱い）
+    const discBonus = Math.min(2, Math.max(0, (discipline - 60) * 0.05));
+    const zeroAge = Math.min(32, Math.max(22, Math.round(26 + (gp - 1.0) * 15) + Math.floor(discBonus)));
+    const ageFactor = Math.max(-2.0, 1.0 - (age - 18) / Math.max(1, zeroAge - 18));
+    const practiceOffset = Math.max(0, (discipline - 60) * 0.0125);
+    const effectiveFactor = ageFactor + practiceOffset;
+
+    // クラブと同じ discipline 曲線（べき乗）: discipline 90 未満はほぼ成長なし
+    const disciplineMult = Math.max(0.05, Math.pow(Math.max(0, (discipline - 80) / 20), 3.0) * 5.0);
+
+    // ランクなし（チームなし）= D相当の 0.80 を適用
+    const rankMult = 0.80;
+
+    const grow = (current, base, cap, threshold, rate) => {
+      if (effectiveFactor >= 0) {
+        const amount = base * gp * rankMult * disciplineMult * effectiveFactor * (0.6 + Math.random() * 0.6);
+        return Math.min(cap, current + Math.round(amount * decayMult(current, threshold, rate)));
+      } else {
+        return Math.max(1, current - Math.round(base * Math.abs(effectiveFactor) * 0.5 * (0.6 + Math.random() * 0.6)));
+      }
+    };
+
+    if (player.position === 'pitcher') {
+      if (player.pitching) {
+        player.pitching.control  = grow(player.pitching.control,  3.0, 99,  70, 0.05);
+        player.pitching.stamina  = grow(player.pitching.stamina,  2.0, 200, 80, 0.03);
+        const velCap     = getVelocityCap(player.physical?.arm || 50);
+        const velCatchup = getVelocityCatchupMult(player.physical?.arm || 50, player.pitching.velocity);
+        player.pitching.velocity = grow(player.pitching.velocity, 0.5 * velCatchup, velCap, 150, 0.20);
+      }
+      if (player.physical) {
+        player.physical.arm = grow(player.physical.arm, 1.0, 99, 80, 0.03);
+      }
+    } else {
+      if (player.batting) {
+        player.batting.meet    = grow(player.batting.meet,  3.0, 99, 70, 0.05);
+        player.batting.power   = grow(player.batting.power, 1.5, 99, 70, 0.05);
+        player.batting.eye     = grow(player.batting.eye,   2.0, 99, 70, 0.05);
+      }
+      if (player.physical) {
+        player.physical.speed = grow(player.physical.speed, 0.5, 99, 80, 0.03);
+        player.physical.arm   = grow(player.physical.arm,   0.5, 99, 80, 0.03);
+      }
+      if (player.fielding) {
+        player.fielding.defense = grow(player.fielding.defense, 2.5, 99, 70, 0.05);
+      }
+    }
+
+    // 知名度: 自主トレで結果を出しても無名のまま（知名度は試合出場で蓄積）
+    // → 微増のみ（discipline 80+ で +1/年）
+    if (discipline >= 80) {
+      player.fame = Math.min(100, (player.fame || 0) + 1);
+    }
+  }
+}
+
+// ============================================================
 // 社会人/独立チームの若手選手に実戦経験による成長を適用
 // 大学生と同等の成長を社会人選手にも与え、ドラフト候補の質を維持する
 // ============================================================
@@ -2568,6 +2650,8 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 4. 選手の年齢を更新
   updatedTeams = updateAllPlayerAges(updatedTeams);
+  // 自由契約選手も加齢（チームなしだが時間は経過する）
+  releasedPlayersPool.forEach(p => { p.age = (p.age || 20) + 1; });
 
   // 4.5. 年齢カーブによる成長・衰退を適用
   const { updatedTeams: teamsAfterAgeCurve, ageReports } = applyAgeCurveChanges(updatedTeams);
@@ -2575,6 +2659,9 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 4.6. 社会人/独立チームの若手選手に実戦経験による成長を適用
   applyCorporatePlayerGrowth(updatedTeams);
+
+  // 4.7. 自由契約選手の自主トレ成長（クラブ所属と同等: discipline主導・環境なし）
+  applyFreeAgentGrowth(releasedPlayersPool);
 
   // 5. 引退処理
   const { updatedTeams: teamsAfterRetirement, retirements } = processRetirements(updatedTeams);
