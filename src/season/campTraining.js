@@ -54,6 +54,14 @@ export const TRAINING_MENUS = {
     growthMultipliers: { stamina: 0.5 },
     category: 'pitching'
   },
+  velocity: {
+    name: '球速練習',
+    icon: '🔥',
+    description: '球速を強化（肩力上限・フォーム適性あり）、スタミナも微増（投手向け）',
+    targets: ['velocity', 'stamina'],
+    growthMultipliers: { stamina: 0.3 },
+    category: 'pitching'
+  },
   newpitch: {
     name: '新球種習得',
     icon: '✨',
@@ -144,7 +152,7 @@ export const SUB_TRAINING_MENUS = {
   stretch: {
     name: 'ストレッチ',
     icon: '🧘',
-    description: '怪我予防・回復力UP・全能力微増',
+    description: '野手：ミート/パワー/走力/肩/守備からランダム1能力+1。投手：制球/球速/肩/守備/ミートからランダム1能力+1。回復力30%UP',
     targets: ['all_minor', 'recovery_sub'],
   },
   defense_sub: {
@@ -302,8 +310,15 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       break;
     }
     case 'stretch': {
-      // ランダムに1能力を選んで確定+1、回復は30%で+1
-      const stats = [
+      // 投手は制球・球速含む5能力、野手はミート・パワー・走力・肩力・守備からランダム1つ+1
+      const isPitcher = player.position === 'pitcher';
+      const stats = isPitcher ? [
+        { key: 'pitching.control', name: '制球', isTech: true },
+        { key: 'pitching.velocity', name: '球速', isTech: false, isVelocity: true },
+        { key: 'physical.arm', name: '肩力', isTech: false },
+        { key: 'fielding.defense', name: '守備', isTech: true },
+        { key: 'batting.meet', name: 'ミート', isTech: true },
+      ] : [
         { key: 'batting.meet', name: 'ミート', isTech: true },
         { key: 'batting.power', name: 'パワー', isTech: true },
         { key: 'physical.speed', name: '走力', isTech: false },
@@ -313,12 +328,19 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
       const picked = stats[Math.floor(Math.random() * stats.length)];
       const [obj, prop] = picked.key.split('.');
       if (player[obj]) {
-        const old = player[obj][prop] || 50;
-        const gain = picked.isTech ? applyTechStatDecay(old, 1) : 1;
+        const old = player[obj][prop] ?? (picked.isVelocity ? 120 : 50);
+        let gain;
+        if (picked.isVelocity) {
+          const armVal = player.physical?.arm || 50;
+          gain = old < getVelocityCap(armVal) ? 1 : 0;
+        } else {
+          gain = picked.isTech ? applyTechStatDecay(old, 1) : 1;
+        }
         if (gain > 0) {
-          player[obj][prop] = Math.min(100, old + gain);
-          growthReport.push({ statName: picked.name, before: old, after: old + gain, growth: gain });
-          if (picked.key === 'physical.arm' && player.position !== 'pitcher') {
+          const maxVal = picked.isVelocity ? getVelocityCap(player.physical?.arm || 50) : 100;
+          player[obj][prop] = Math.min(maxVal, old + gain);
+          growthReport.push({ statName: picked.name, before: old, after: player[obj][prop], growth: gain });
+          if (picked.key === 'physical.arm' && !isPitcher) {
             const armNow = player.physical?.arm || 50;
             const velChange = Math.round(gain * 0.5 * getVelocityCatchupMult(armNow, player.pitching?.velocity || 120));
             if (velChange > 0 && player.pitching) {
