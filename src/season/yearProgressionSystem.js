@@ -1822,6 +1822,80 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
 
 const CORP_ROSTER_TARGET = { S: 35, A: 32, B: 28, C: 25, D: 18 };
 
+// ============================================================
+// CPU社会人チームの自動戦力外通告（非社会人モード用）
+// 社会人モードでは CorporateDepartureScreen が担当するため、
+// 独立・大学モードでのみ呼び出す
+// ============================================================
+function releaseCPUCorporatePlayers(allTeams, currentYear) {
+  const userTeamName = Object.keys(allTeams)[0];
+
+  for (const [teamName, team] of Object.entries(allTeams)) {
+    if (teamName === userTeamName) continue;
+    if (!team?.corporateData) continue;
+    if (team.corporateData.type === 'club') continue;  // クラブは step 5.65 で管理
+
+    const players = team.players;
+    if (!players || players.length === 0) continue;
+
+    const MIN_KEEP = team.independentLeagueId ? 16 : 18;
+    if (players.length <= MIN_KEEP) continue;
+
+    // 放出スコア: 高いほど放出候補（年齢 + 出場数不足 + 能力低下）
+    const scored = players.map(p => {
+      const age = p.age || 25;
+      const games = (p.seasonStats?.batting?.games || 0)
+        + (p.seasonStats?.pitching?.gamesStarted || 0)
+        + (p.seasonStats?.pitching?.gamesRelieved || 0);
+      let score = 0;
+
+      if (age >= 38) score += 60;
+      else if (age >= 36) score += 40;
+      else if (age >= 34) score += 20;
+      else if (age >= 32) score += 8;
+
+      if (games < 5 && age >= 30) score += 25;
+      else if (games < 10 && age >= 28) score += 10;
+
+      // 能力低下: ランク基準より大幅に低い選手
+      const ability = p.position === 'pitcher'
+        ? (p.pitching?.velocity || 120) * 0.5 + (p.pitching?.control || 0)
+        : (p.batting?.meet || 0) + (p.batting?.power || 0) * 0.5;
+      if (ability < 55 && age >= 28) score += 12;
+
+      return { player: p, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+
+    // スコア20以上を放出候補、最大3名/年（MIN_KEEPを下回らない）
+    const maxRelease = Math.min(
+      scored.filter(e => e.score >= 20).length,
+      Math.max(0, players.length - MIN_KEEP),
+      3
+    );
+    if (maxRelease <= 0) continue;
+
+    const releaseSet = new Set(scored.slice(0, maxRelease).map(e => e.player.id));
+
+    scored.slice(0, maxRelease).forEach(({ player }) => {
+      if ((player.age || 0) < 38) {  // 38歳以上は引退扱い（プールに戻さない）
+        const p = JSON.parse(JSON.stringify(player));
+        p.isStarter = false;
+        p.battingOrder = 0;
+        p.releasedYear = currentYear;
+        p.previousTeam = teamName;
+        p.isReleasedCandidate = true;
+        if (!p.careerHistory) p.careerHistory = [];
+        p.careerHistory.push({ type: 'released', year: currentYear, label: `${teamName}退団` });
+        releasedPlayersPool.push(p);
+      }
+    });
+
+    team.players = players.filter(p => !releaseSet.has(p.id));
+  }
+}
+
 function replenishCorporateRosters(allTeams, currentYear) {
   const userTeamName = Object.keys(allTeams)[0];
 
@@ -1829,6 +1903,7 @@ function replenishCorporateRosters(allTeams, currentYear) {
   for (const [teamName, team] of Object.entries(allTeams)) {
     if (teamName === userTeamName) continue;
     if (!team?.corporateData) continue;
+    if (team.independentLeagueId) continue;  // 独立リーグは replenishIndependentLeagueRosters で処理
     const rank = team.corporateData.rank || 'D';
     const target = CORP_ROSTER_TARGET[rank] || 20;
     const current = team.players?.length || 0;
@@ -1862,7 +1937,7 @@ function replenishCorporateRosters(allTeams, currentYear) {
       if (added >= teamInfo.needed) break;
       if (totalTaken >= maxTake) break;
       if (usedIndices.has(entry.idx)) continue;
-      if (entry.player.age && entry.player.age > 28) continue;
+      if (entry.player.age && entry.player.age > 32) continue;
 
       entry.player._nextYearTeam = teamInfo.teamName; // レポート転記用
       const p = { ...entry.player };
@@ -2053,12 +2128,13 @@ function replenishIndependentLeagueRosters(allTeams, currentYear) {
   const userTeamName = Object.keys(allTeams)[0];
 
   // 補充が必要なAI独立リーグチームを収集（ユーザーのリーグのライバルも含む）
+  // 独立リーグチームは corporateData と independentLeagueId の両方を持つ
   const teamsNeedingPlayers = [];
   for (const [teamName, team] of Object.entries(allTeams)) {
     if (teamName === userTeamName) continue;
     if (!team?.players) continue;
-    // 社会人チーム・大学チームは除外
-    if (team.corporateTeamId || team.corporateData || team.universityData) continue;
+    // 独立リーグID を持つチームのみ対象（社会人・大学は replenishCorporateRosters で処理）
+    if (!team.independentLeagueId) continue;
 
     const needed = Math.max(0, TARGET_ROSTER_SIZE - team.players.length);
     if (needed > 0) {
@@ -2385,33 +2461,36 @@ export function advanceToNextYear(seasonData, allTeams) {
         .map(([name, team]) => ({ name, team, count: team.players?.length || 0 }))
         .sort((a, b) => a.count - b.count);
 
+      const CLUB_ROSTER_CAP = 35;  // クラブチームの最大在籍数
       clubCandidates.forEach(p => {
-        const target = sortedClubs[Math.floor(Math.random() * Math.min(5, sortedClubs.length))];
-        if (target && target.team.players) {
-          p._nextYearTeam = target.name; // レポート転記用
-          const player = { ...p };
-          player.isStarter = false;
-          player.battingOrder = 0;
-          if (!player.careerHistory) player.careerHistory = [];
-          player.careerHistory.push({ type: 'club_join', year: currentYear + 1, label: `${target.name}入部` });
-          target.team.players.push(player);
-          target.count++;
-        }
+        // 全クラブが上限に達したら打ち切り
+        const target = sortedClubs.find(c => c.count < CLUB_ROSTER_CAP);
+        if (!target || !target.team.players) return;
+        p._nextYearTeam = target.name; // レポート転記用
+        const player = { ...p };
+        player.isStarter = false;
+        player.battingOrder = 0;
+        if (!player.careerHistory) player.careerHistory = [];
+        player.careerHistory.push({ type: 'club_join', year: currentYear + 1, label: `${target.name}入部` });
+        target.team.players.push(player);
+        target.count++;
         // sortedClubs を再ソート（少ないチームに優先的に配分）
         sortedClubs.sort((a, b) => a.count - b.count);
       });
     }
   }
 
-  // 5.8. 独立リーグAIチームの補充（リリースプールから獲得＋新人生成）
+  // 5.75. CPU社会人・独立チームの自動戦力外通告（非社会人モードのみ）
+  // 社会人モードは CorporateDepartureScreen の AI 放出処理が担当するため除外
   if (!seasonData.settings?.corporateMode) {
-    replenishIndependentLeagueRosters(teamsAfterRetirement, currentYear);
+    releaseCPUCorporatePlayers(teamsAfterRetirement, currentYear);
   }
 
-  // 5.9. 社会人AIチームのロスター補充（リリースプールから毎年選手を獲得）
-  if (seasonData.settings?.corporateMode || seasonData.settings?.universityMode) {
-    replenishCorporateRosters(teamsAfterRetirement, currentYear);
-  }
+  // 5.8. 独立リーグAIチームの補充（全モード対象）
+  replenishIndependentLeagueRosters(teamsAfterRetirement, currentYear);
+
+  // 5.9. 社会人AIチームのロスター補充（全モード対象）
+  replenishCorporateRosters(teamsAfterRetirement, currentYear);
 
   // 5.92. リリースプールサイズ上限（大量の大学卒業生が長期蓄積するのを防止）
   // 全モードで適用: 社会人/独立は上限400、大学モードは300
