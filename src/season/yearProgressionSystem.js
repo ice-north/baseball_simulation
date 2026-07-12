@@ -1128,68 +1128,98 @@ export function checkRetirement(player) {
   let shouldRetire = false;
   let reason = hofReason;
 
-  // 1. 40歳以上は必ず引退
+  // 40歳以上は強制引退
+  // 29〜39歳の引退は processRetirements() で能力順位ベースに一括判定
   if (age >= 40) {
     shouldRetire = true;
     if (!reason) reason = '年齢による引退';
-  }
-  // 2. 29歳以上: 年齢とともに引退確率が上昇（1年ごとに5%増）
-  // 29歳→5%, 30歳→10%, 31歳→15%, ..., 39歳→55%
-  else if (age >= 29) {
-    const retireRate = (age - 28) * 0.05;
-    if (Math.random() < retireRate) {
-      shouldRetire = true;
-      if (!reason) reason = age >= 35 ? '引退' : '自己都合による引退';
-    }
   }
 
   return { shouldRetire, hallOfFame, reason, draftEligible, draftReasons };
 };
 
+// 引退スコア計算（能力による引退優先度。低いほど先に引退）
+function calcRetirementScore(player) {
+  if (player.position === 'pitcher') {
+    return (player.pitching?.velocity || 120) * 0.5
+         + (player.pitching?.control  || 30)  * 0.3
+         + (player.pitching?.stamina  || 50)  * 0.2;
+  }
+  return (player.batting?.meet      || 30) * 0.35
+       + (player.batting?.power     || 20) * 0.25
+       + (player.batting?.eye       || 20) * 0.15
+       + (player.physical?.speed    || 30) * 0.15
+       + (player.fielding?.defense  || 30) * 0.10;
+}
+
 /**
  * 全チームの引退処理
+ * 40歳以上: 強制引退
+ * 29〜39歳: 各年齢×ポジション別にグローバルで能力下位 (age-28)×5% を引退
+ *   29歳→下位5%, 30歳→下位10%, ..., 39歳→下位55%
  * @param {Object} allTeams - 全チームデータ
  * @returns {Object} - { updatedTeams, retirements }
  */
 export function processRetirements(allTeams) {
+  const retireIds = new Set();
+
+  // Step 1: 年齢×ポジション別にグローバル収集
+  const groups = {};  // `${age}_pitcher` or `${age}_fielder` → player[]
+  for (const team of Object.values(allTeams)) {
+    for (const player of team.players || []) {
+      const age = player.age || 20;
+      if (age >= 40) {
+        retireIds.add(player.id);
+        continue;
+      }
+      if (age < 29) continue;
+      const posKey = player.position === 'pitcher' ? 'pitcher' : 'fielder';
+      const key = `${age}_${posKey}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(player);
+    }
+  }
+
+  // Step 2: 各グループで能力下位 X% を引退マーク
+  for (const [key, players] of Object.entries(groups)) {
+    const age = parseInt(key.split('_')[0]);
+    const retireCount = Math.floor(players.length * (age - 28) * 0.05);
+    if (retireCount <= 0) continue;
+    players
+      .slice()
+      .sort((a, b) => calcRetirementScore(a) - calcRetirementScore(b))
+      .slice(0, retireCount)
+      .forEach(p => retireIds.add(p.id));
+  }
+
+  // Step 3: チームから除去して引退記録を生成
   const updatedTeams = {};
   const retirements = [];
 
-  Object.entries(allTeams).forEach(([teamName, team]) => {
-    const remainingPlayers = [];
-    const retiredIds = [];
+  for (const [teamName, team] of Object.entries(allTeams)) {
+    const retired   = (team.players || []).filter(p => retireIds.has(p.id));
+    const remaining = (team.players || []).filter(p => !retireIds.has(p.id));
 
-    team.players.forEach(player => {
-      const { shouldRetire, hallOfFame, reason } = checkRetirement(player);
-
-      if (shouldRetire) {
-        retiredIds.push(player.id);
-        retirements.push({
-          name: player.name,
-          team: teamName,
-          age: player.age,
-          position: player.position,
-          throws: player.physical?.throws || 'right',
-          bats: player.batting?.bats || 'right',
-          hallOfFame,
-          reason,
-          careerStats: player.careerStats,
-          draftInfo: player.draftInfo || null,
-          yearsPlayed: player.yearsPlayed
-        });
-      } else {
-        remainingPlayers.push(player);
-      }
+    retired.forEach(player => {
+      const { isHallOfFame: hallOfFame, reason: hofReason } = checkHallOfFame(player);
+      retirements.push({
+        name:       player.name,
+        team:       teamName,
+        age:        player.age,
+        position:   player.position,
+        throws:     player.physical?.throws || 'right',
+        bats:       player.batting?.bats   || 'right',
+        hallOfFame,
+        reason:     hofReason || (player.age >= 40 ? '年齢による引退' : '引退'),
+        careerStats: player.careerStats,
+        draftInfo:  player.draftInfo || null,
+        yearsPlayed: player.yearsPlayed,
+      });
+      cleanupPlayerReferences(team, player.id);
     });
 
-    // lineupSettings/pitchingRotationから引退選手の参照を清掃
-    retiredIds.forEach(id => cleanupPlayerReferences(team, id));
-
-    updatedTeams[teamName] = {
-      ...team,
-      players: remainingPlayers
-    };
-  });
+    updatedTeams[teamName] = { ...team, players: remaining };
+  }
 
   return { updatedTeams, retirements };
 };
