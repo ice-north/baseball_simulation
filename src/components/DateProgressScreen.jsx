@@ -67,6 +67,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   const [uniRtRegionTab, setUniRtRegionTab] = useState(null);
   const [showNewspaper, setShowNewspaper] = useState(false);
   const [pendingPhaseEvent, setPendingPhaseEvent] = useState(null);
+  const newspaperFameDateRef = React.useRef(null);
 
   if (!seasonData) return <div className="p-8 text-white">読み込み中...</div>;
 
@@ -2073,7 +2074,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           const card = makeCard(p, 'university', entry.universityTeamName || '大学');
           card.year = yearsInUni + 1;
           card.uniRank = entry.universityRank;
-          uniAll.push({ card, score: draft.totalScore });
+          uniAll.push({ card, score: draft.totalScore, player: p });
         }
       });
     });
@@ -2094,39 +2095,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const draft = checkNPBDraftEligibility(p);
         if (draft.totalScore < 80) return;
         const card = makeCard(p, isCorp ? 'corporate' : 'independent', teamName);
-        if (isCorp) corpAll.push({ card, score: draft.totalScore });
-        else indAll.push({ card, score: draft.totalScore });
+        if (isCorp) corpAll.push({ card, score: draft.totalScore, player: p });
+        else indAll.push({ card, score: draft.totalScore, player: p });
       });
     });
     corpAll.sort((a, b) => b.score - a.score);
     indAll.sort((a, b) => b.score - a.score);
-
-    // リーグ活躍選手
-    const userLeagueTeamSet = new Set(seasonData?.settings?.teamNames || []);
-    const leagueTeams = userLeagueTeamSet.size > 0
-      ? Object.keys(TEAMS_DATA).filter(tn => userLeagueTeamSet.has(tn))
-      : Object.keys(TEAMS_DATA).slice(0, 12);
-    const leagueStars = [];
-    leagueTeams.forEach(tn => {
-      (TEAMS_DATA[tn]?.players || []).forEach(p => {
-        const bs = p.seasonStats?.batting;
-        const ps = p.seasonStats?.pitching;
-        if (!bs && !ps) return;
-        let star = false, note = '';
-        if (bs?.atBats >= 25 && bs.hits / bs.atBats >= 0.300) { star = true; note = `打率${(bs.hits / bs.atBats).toFixed(3)}`; }
-        if (bs?.homeruns >= 6) { star = true; note = `${bs.homeruns}本塁打`; }
-        if (ps?.wins >= 4) { star = true; note = `${ps.wins}勝`; }
-        if (ps?.saves >= 3) { star = true; note = `${ps.saves}S`; }
-        if (ps?.inningsPitched >= 20 && (ps.earnedRuns / (ps.inningsPitched / 3)) * 9 <= 2.5) {
-          star = true; note = `防御率${((ps.earnedRuns / (ps.inningsPitched / 3)) * 9).toFixed(2)}`;
-        }
-        if (star) {
-          const card = makeCard(p, 'league', tn);
-          card.headline = note;
-          leagueStars.push(card);
-        }
-      });
-    });
 
     // 大会情報（社会人モード: seasonData、大学/独立モード: WORLD_DATA）
     const tournamentNews = [];
@@ -2140,7 +2114,34 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const cs = seasonData.clubSenshuken || (WORLD_DATA.initialized ? WORLD_DATA.corporateClubSenshuken : null);
     if (cs?.champion) tournamentNews.push(`クラブ選手権 優勝: ${cs.champion}`);
 
-    return { hsTop, hsOthers, uniTop, uniOthers, corpTop: corpAll[0]?.card || null, corpOthers: corpAll.slice(1, 7).map(x => x.card), indPlayers: indAll.slice(0, 5).map(x => x.card), leagueStars: leagueStars.slice(0, 8), tournamentNews };
+    // 掲載選手への知名度付与（1日1回）
+    const curDate = seasonData.currentDate;
+    const todayKey = `${curDate?.year}-${curDate?.month}-${curDate?.day}`;
+    if (showNewspaper && newspaperFameDateRef.current !== todayKey) {
+      newspaperFameDateRef.current = todayKey;
+      const boost = (player, amt) => { if (player) player.fame = Math.min(100, (player.fame || 0) + amt); };
+      // 高校: No.1 +3、その他 +1
+      if (highSchoolPool.players?.length > 0) {
+        const hsSorted = highSchoolPool.players
+          .map(p => ({ p, s: checkNPBDraftEligibility(p).totalScore }))
+          .filter(x => x.s >= 80).sort((a, b) => b.s - a.s);
+        hsSorted.forEach((x, i) => boost(x.p, i === 0 ? 3 : 1));
+      }
+      // 大学: No.1 +3、その他 +1
+      uniAll.forEach((x, i) => boost(x.player, i === 0 ? 3 : 1));
+      // 社会人: No.1 +3、その他 +1
+      corpAll.forEach((x, i) => boost(x.player, i === 0 ? 3 : 1));
+      // 独立: No.1 +3、その他 +1
+      indAll.forEach((x, i) => boost(x.player, i === 0 ? 3 : 1));
+    }
+
+    return {
+      hsTop, hsOthers,
+      uniTop, uniOthers,
+      corpTop: corpAll[0]?.card || null, corpOthers: corpAll.slice(1, 7).map(x => x.card),
+      indTop: indAll[0]?.card || null, indOthers: indAll.slice(1, 6).map(x => x.card),
+      tournamentNews,
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showNewspaper, seasonData.results?.length, seasonData.currentDate?.day]);
 
@@ -3965,7 +3966,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           );
         };
 
-        const hasContent = d.hsTop || d.uniTop || d.corpTop || d.indPlayers.length > 0 || d.leagueStars.length > 0;
+        const hasContent = d.hsTop || d.uniTop || d.corpTop || d.indTop;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3" onClick={() => setShowNewspaper(false)}>
             <div className="absolute inset-0 bg-black/80" />
@@ -3973,9 +3974,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               {/* Masthead */}
               <div className="bg-gray-950 text-center py-2 px-4 border-b-4 border-double border-amber-900/40 relative shrink-0">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">{curDate.year}年{curDate.month}月{curDate.day}日</div>
-                <div className="text-[8px] text-amber-700 tracking-[0.4em] uppercase">Draft Watch · Sports Report</div>
+                <div className="text-xs text-amber-700 tracking-[0.4em] uppercase">Draft Watch · Sports Report</div>
                 <h2 className="text-2xl font-black text-white tracking-widest" style={{ fontFamily: 'serif' }}>ドラフト戦線</h2>
-                <div className="text-xs text-gray-500">全国高校・大学・社会人 注目選手速報</div>
+                <div className="text-xs text-gray-500">全国高校・大学・社会人・独立リーグ 注目選手速報</div>
                 <button onClick={() => setShowNewspaper(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xl leading-none px-1">✕</button>
               </div>
 
@@ -3991,12 +3992,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     </div>
                   )}
 
-                  {/* Top Feature Cards — 3 columns */}
-                  <div className="grid grid-cols-3 gap-3 mb-3">
+                  {/* Top Feature Cards — 4 columns */}
+                  <div className="grid grid-cols-4 gap-3 mb-3">
                     {d.hsTop && <FeatureCard c={d.hsTop} label="高校 注目No.1" labelColor="bg-green-800 text-green-200" />}
                     {d.uniTop && <FeatureCard c={d.uniTop} label={`大学${d.uniTop.uniRank ? `[${d.uniTop.uniRank}]` : ''} 注目No.1`} labelColor="bg-blue-800 text-blue-200" />}
                     {d.corpTop && <FeatureCard c={d.corpTop} label="社会人 注目No.1" labelColor="bg-amber-800 text-amber-200" />}
-                    {!d.corpTop && d.indPlayers[0] && <FeatureCard c={d.indPlayers[0]} label="独立 注目No.1" labelColor="bg-purple-800 text-purple-200" />}
+                    {d.indTop && <FeatureCard c={d.indTop} label="独立 注目No.1" labelColor="bg-purple-800 text-purple-200" />}
                   </div>
 
                   <div className="h-px bg-gray-700/40 mb-3" />
@@ -4006,59 +4007,44 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     {/* 高校注目 */}
                     <div>
                       <div className="text-xs font-bold text-green-400 border-b border-green-800/50 pb-1 mb-1.5 flex justify-between">
-                        <span>高校注目</span><span className="text-gray-600 font-normal">{d.hsOthers.length}名</span>
+                        <span>高校注目</span><span className="text-gray-300 font-normal">{d.hsOthers.length}名</span>
                       </div>
                       {d.hsOthers.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-green-300" />)}
-                      {d.hsOthers.length === 0 && <div className="text-xs text-gray-600">情報なし</div>}
+                      {d.hsOthers.length === 0 && <div className="text-xs text-gray-500">情報なし</div>}
                     </div>
 
                     {/* 大学注目 */}
                     <div>
                       <div className="text-xs font-bold text-blue-400 border-b border-blue-800/50 pb-1 mb-1.5 flex justify-between">
-                        <span>大学注目</span><span className="text-gray-600 font-normal">{d.uniOthers.length}名</span>
+                        <span>大学注目</span><span className="text-gray-300 font-normal">{d.uniOthers.length}名</span>
                       </div>
                       {d.uniOthers.map((c, i) => (
                         <PlayerRow key={i} c={c} accentColor="text-blue-300" extra={c.year ? `${c.year}年` : ''} />
                       ))}
-                      {d.uniOthers.length === 0 && <div className="text-xs text-gray-600">情報なし</div>}
+                      {d.uniOthers.length === 0 && <div className="text-xs text-gray-500">情報なし</div>}
                     </div>
 
-                    {/* 社会人 + 独立 */}
+                    {/* 社会人 */}
                     <div>
-                      {d.corpOthers.length > 0 && (
-                        <>
-                          <div className="text-xs font-bold text-amber-400 border-b border-amber-800/50 pb-1 mb-1.5 flex justify-between">
-                            <span>社会人</span><span className="text-gray-600 font-normal">{(d.hsTop && d.corpTop ? [d.corpTop, ...d.corpOthers] : d.corpOthers).slice(0, 6).length}名</span>
-                          </div>
-                          {(d.hsTop && d.corpTop ? [d.corpTop, ...d.corpOthers] : d.corpOthers).slice(0, 6).map((c, i) => (
-                            <PlayerRow key={i} c={c} accentColor="text-amber-300" />
-                          ))}
-                        </>
-                      )}
-                      {d.indPlayers.length > (d.uniTop ? 0 : 1) && (
-                        <>
-                          <div className={`text-xs font-bold text-purple-400 border-b border-purple-800/50 pb-1 mb-1.5 flex justify-between ${d.corpOthers.length > 0 ? 'mt-2' : ''}`}>
-                            <span>独立リーグ</span>
-                          </div>
-                          {(d.uniTop ? d.indPlayers : d.indPlayers.slice(1)).map((c, i) => (
-                            <PlayerRow key={i} c={c} accentColor="text-purple-300" />
-                          ))}
-                        </>
-                      )}
-                    </div>
-
-                    {/* リーグ戦線 */}
-                    <div>
-                      <div className="text-xs font-bold text-red-400 border-b border-red-800/50 pb-1 mb-1.5 flex justify-between">
-                        <span>リーグ戦線</span><span className="text-gray-600 font-normal">{d.leagueStars.length}名</span>
+                      <div className="text-xs font-bold text-amber-400 border-b border-amber-800/50 pb-1 mb-1.5 flex justify-between">
+                        <span>社会人注目</span><span className="text-gray-300 font-normal">{d.corpOthers.length}名</span>
                       </div>
-                      {d.leagueStars.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-red-300" />)}
-                      {d.leagueStars.length === 0 && <div className="text-xs text-gray-600">シーズン序盤</div>}
+                      {d.corpOthers.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-amber-300" />)}
+                      {d.corpOthers.length === 0 && <div className="text-xs text-gray-500">情報なし</div>}
+                    </div>
+
+                    {/* 独立リーグ */}
+                    <div>
+                      <div className="text-xs font-bold text-purple-400 border-b border-purple-800/50 pb-1 mb-1.5 flex justify-between">
+                        <span>独立リーグ注目</span><span className="text-gray-300 font-normal">{d.indOthers.length}名</span>
+                      </div>
+                      {d.indOthers.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-purple-300" />)}
+                      {d.indOthers.length === 0 && <div className="text-xs text-gray-500">情報なし</div>}
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-gray-800/50 text-xs text-gray-600 text-center">
-                    ※ドラフト評価スコアは模擬値です。実際の指名は10月に確定します。
+                  <div className="mt-3 pt-2 border-t border-gray-800/50 text-xs text-gray-500 text-center">
+                    ※掲載選手の知名度が上昇します。ドラフト評価スコアは模擬値で、実際の指名は10月に確定します。
                   </div>
                 </div>
               ) : (
