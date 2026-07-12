@@ -848,7 +848,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         </th>
                       );
                       return (<>
-                        <th className="py-1.5 px-2 text-left w-20">氏名</th>
+                        <th className="py-1.5 px-2 text-left w-28">氏名</th>
                         <S k="position" w="w-9">ポジ</S>
                         <S k="age" w="w-9">年齢</S>
                         <S k="build" w="w-9" title="体格">体格</S>
@@ -899,21 +899,21 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
                     return (
                       <tr key={player.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                        <td className="py-1 px-2">
+                        <td className="py-1 px-2 whitespace-nowrap">
                           <span className={`font-bold text-xs ${isPitcher(player) ? 'text-red-400' : 'text-blue-300'}`}>
                             {player.name}
                           </span>
                         </td>
-                        <td className="py-1 px-1 text-center">
+                        <td className="py-1 px-1 text-center whitespace-nowrap">
                           <span className="text-xs text-gray-300">{POSITION_NAMES[player.position] || player.position}</span>
                         </td>
-                        <td className="py-1 px-1 text-center text-gray-300 text-xs">{player.age || 20}</td>
-                        <td className="py-1 px-1 text-center text-xs">
+                        <td className="py-1 px-1 text-center text-gray-300 text-xs whitespace-nowrap">{player.age || 20}</td>
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           <span className={ph.build === 'large' ? 'text-orange-400' : ph.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                             {ph.build === 'large' ? '大柄' : ph.build === 'small' ? '小柄' : '中肉'}
                           </span>
                         </td>
-                        <td className="py-1 px-1 text-center text-xs">
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             const base = player.growthPotential ?? 1.0;
                             const mod = player.growthModifier || 0;
@@ -926,26 +926,26 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             );
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-xs">
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             const d = player.personality?.discipline ?? 50;
                             const c = d >= 80 ? 'text-red-400' : d >= 60 ? 'text-orange-400' : d >= 40 ? 'text-yellow-400' : d >= 20 ? 'text-blue-400' : 'text-gray-400';
                             return <span className={c}>{d}</span>;
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-xs">
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             const m = player.personality?.mental ?? 50;
                             const c = m >= 80 ? 'text-red-400' : m >= 60 ? 'text-orange-400' : m >= 40 ? 'text-yellow-400' : m >= 20 ? 'text-blue-400' : 'text-gray-400';
                             return <span className={c}>{m}</span>;
                           })()}
                         </td>
-                        <td className="py-1 px-1 text-center text-xs">
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-300'}>{ph.throws === 'left' ? '左' : '右'}</span>
                           <span className="text-gray-500">/</span>
                           <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-300'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
                         </td>
-                        <td className="py-1 px-1 text-center text-xs text-gray-400">
+                        <td className="py-1 px-1 text-center text-xs text-gray-400 whitespace-nowrap">
                           {({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-')}
                         </td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
