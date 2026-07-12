@@ -54,14 +54,6 @@ export const TRAINING_MENUS = {
     growthMultipliers: { stamina: 0.5 },
     category: 'pitching'
   },
-  running: {
-    name: '走り込み',
-    icon: '🏃',
-    description: '長距離走でスタミナ基盤を強化（投手向け）・全員の体力も向上',
-    targets: ['stamina', 'bodyStamina'],
-    growthMultipliers: { bodyStamina: 0.7 },
-    category: 'pitching'
-  },
   newpitch: {
     name: '新球種習得',
     icon: '✨',
@@ -254,7 +246,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
         // 体幹+2〜3（確定）
         const oldMuscle = player.physical.muscle ?? 50;
         if (oldMuscle < 100) {
-          const mGrowth = Math.floor(Math.random() * 2) + 2; // 2〜3
+          const mGrowth = Math.floor(Math.random() * 3) + 1; // 1〜3
           player.physical.muscle = Math.min(100, oldMuscle + mGrowth);
           growthReport.push({ statName: '体幹', before: oldMuscle, after: player.physical.muscle, growth: player.physical.muscle - oldMuscle });
         }

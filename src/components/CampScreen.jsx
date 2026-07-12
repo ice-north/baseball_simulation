@@ -50,7 +50,7 @@ function sortedStatKeys(stats, ascending = true) {
   return Object.entries(stats).sort((a,b) => ascending ? a[1]-b[1] : b[1]-a[1]).map(e => e[0]);
 }
 function pitcherStatToMain(statKey) {
-  return statKey === 'velocity' ? 'running' : 'control';
+  return 'control';
 }
 function fielderStatToMain(statKey) {
   if (statKey === 'meet' || statKey === 'power' || statKey === 'eye') return 'batting';
@@ -115,9 +115,9 @@ const CAMP_PRESETS = {
   },
   physical: {
     name: 'フィジカル', icon: '🏃',
-    desc: '投手は走り込み、野手は走力・パワーを重点強化',
+    desc: '野手は走力・パワーを重点強化、投手は制球・スタミナを強化',
     getMain: (p) => {
-      if (p.position === 'pitcher') return 'running';
+      if (p.position === 'pitcher') return 'control';
       const spd = p.physical?.speed||0;
       const pow = p.batting?.power||0;
       return spd <= pow ? 'baserunning' : 'batting';
@@ -176,12 +176,12 @@ const CAMP_PRESETS = {
         if (s < 65) return 'control';
         if (c < 35) return 'control';
         if (breakingCount <= 1) return 'newpitch';
-        if (age <= 23 && v < 148) return 'running';
+        if (age <= 23 && v < 148) return 'control';
         if (age <= 23 && v >= 148 && c < 50) return 'control';
         if (c < 50) return 'control';
         if (avgBreaking < 40 && breakingCount >= 2) return 'control';
         if (age >= 29) return 'control';
-        return v < 145 ? 'running' : 'control';
+        return 'control';
       }
       const meet = p.batting?.meet || 0;
       const power = p.batting?.power || 0;
@@ -466,7 +466,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
       }
 
       const aiAssign = {};
-      const pitcherMenus = ['control', 'running', 'newpitch'];
+      const pitcherMenus = ['control', 'newpitch'];
       const batterMenus = ['batting', 'baserunning', 'fielding'];
       aiTeam.players.forEach(p => {
         if (p.dispatchedThisCamp) return; // 派遣済みはスキップ
@@ -1028,7 +1028,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-2">
                           <div className="flex items-center gap-1">
                             <select
-                              value={subAssignments[player.id] || 'running'}
+                              value={subAssignments[player.id] || 'physique'}
                               onChange={(e) => setSubAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
                               className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
                             >
@@ -1037,7 +1037,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 <option key={key} value={key}>{menu.icon} {menu.name}</option>
                               ))}
                             </select>
-                            {(subAssignments[player.id] || 'running') === 'subposition' && (
+                            {(subAssignments[player.id] || 'physique') === 'subposition' && (
                               <select
                                 value={subPositionSelections[player.id] || ''}
                                 onChange={(e) => setSubPositionSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
@@ -1049,7 +1049,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                   .map(pos => <option key={pos} value={pos}>{POSITION_NAMES[pos]}</option>)}
                               </select>
                             )}
-                            {(subAssignments[player.id] || 'running') === 'form_change' && player.position === 'pitcher' && (
+                            {(subAssignments[player.id] || 'physique') === 'form_change' && player.position === 'pitcher' && (
                               <select
                                 value={formSelections[player.id] || ''}
                                 onChange={(e) => setFormSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
@@ -1061,7 +1061,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                   .map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                               </select>
                             )}
-                            {(subAssignments[player.id] || 'running') === 'switch_hit' && (
+                            {(subAssignments[player.id] || 'physique') === 'switch_hit' && (
                               <select
                                 value={batsSelections[player.id] || ''}
                                 onChange={(e) => setBatsSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
