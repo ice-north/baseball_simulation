@@ -1,5 +1,5 @@
 import { compressData, compressDataAsync, decompressData, decompressDataAsync, getLocalStorageUsage } from '../utils/compression.js';
-import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA, releasedPlayersPool, clearReleasedPlayersPool } from '../teams-data.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
@@ -157,7 +157,8 @@ export const saveGameToSlot = async (slotIndex, gameState, onProgress) => {
       selectedMonth: gameState.selectedMonth,
       hallOfFamePlayers: gameState.hallOfFamePlayers,
       teamHistory: gameState.teamHistory,
-      universityPool: serializeUniversityPool()
+      universityPool: serializeUniversityPool(),
+      releasedPlayersPool: JSON.parse(JSON.stringify(releasedPlayersPool))
     };
 
     progress(55);
@@ -272,6 +273,12 @@ export const loadGameFromSlot = async (slotIndex) => {
     }
     const loadedYear = saveData.seasonData?.year || 1;
     seedInitialUniversityClasses(loadedYear);
+
+    // リリースプール復元
+    clearReleasedPlayersPool();
+    if (saveData.releasedPlayersPool && Array.isArray(saveData.releasedPlayersPool)) {
+      saveData.releasedPlayersPool.forEach(p => releasedPlayersPool.push(p));
+    }
 
     // 旧セーブデータ互換: バント能力値 + 性格パラメータの移行
     Object.values(TEAMS_DATA).forEach(team => {

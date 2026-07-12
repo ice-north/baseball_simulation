@@ -2335,6 +2335,14 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 5.65. クラブチームへの選手供給（大学・企業・独立に入れなかった選手の受け皿）
   const clubTeamEntries = Object.entries(teamsAfterRetirement).filter(([, t]) => t.corporateData?.type === 'club');
+  if (clubTeamEntries.length === 0 && universityGraduationReport?.clubGraduates?.length > 0) {
+    // 大学モード: TEAMS_DATAにクラブチームがないため、club卒業生をリリースプールへ（自由契約として検索可能に）
+    universityGraduationReport.clubGraduates.forEach(p => {
+      p.isStarter = false;
+      p.battingOrder = 0;
+      releasedPlayersPool.push(p);
+    });
+  }
   if (clubTeamEntries.length > 0) {
     // 引退扱いの高校卒・大学卒からクラブチームへ振り分け
     const clubCandidates = [];
@@ -2399,6 +2407,21 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 5.9. 社会人AIチームのロスター補充（リリースプールから毎年選手を獲得）
   if (seasonData.settings?.corporateMode || seasonData.settings?.universityMode) {
     replenishCorporateRosters(teamsAfterRetirement, currentYear);
+  }
+
+  // 5.92. 大学モード: リリースプールサイズ上限（社会人/独立に渡す仕組みがないため自然増加を抑制）
+  if (seasonData.settings?.universityMode && releasedPlayersPool.length > 300) {
+    // スコア降順で上位300名のみ残す
+    const scored = releasedPlayersPool.map((p, i) => ({
+      p, i,
+      s: p.position === 'pitcher'
+        ? (p.pitching?.velocity || 130) + (p.pitching?.control || 0) * 0.5
+        : (p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) * 0.3,
+    })).sort((a, b) => b.s - a.s).slice(0, 300);
+    const keep = new Set(scored.map(e => e.i));
+    const trimmed = releasedPlayersPool.filter((_, i) => keep.has(i));
+    releasedPlayersPool.length = 0;
+    trimmed.forEach(p => releasedPlayersPool.push(p));
   }
 
   // 5.95. 卒業レポートに nextYearTeam を転記（5.65/5.9 の配属完了後）
