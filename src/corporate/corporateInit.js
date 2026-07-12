@@ -272,7 +272,6 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
   const rank = teamDef.rank || 'C';
   const type = teamDef.type || 'corporate';
   const isIndependent = String(teamDef.id || '').startsWith('il_');
-  const isClub = type === 'club';
   const cfg = (isIndependent ? INDEPENDENT_RANK_CONFIG[rank] : null) || RANK_CONFIG[rank] || RANK_CONFIG.C;
   const sizeRange = ROSTER_SIZE[rank]?.[type] || ROSTER_SIZE.C.corporate;
   const rosterSize = sizeOverride ?? randInt(sizeRange[0], sizeRange[1]);
@@ -292,43 +291,19 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
   const IL_CONTROL_CAP = { B: 63, C: 53, D: 43 };
   const IL_ARSENAL_MULT = { B: 0.78, C: 0.62, D: 0.42 };
 
-  // クラブチームは週末練習が中心のため独立リーグ相当の能力値に抑える
-  const CLUB_VEL_CAP = { B: 147, C: 140, D: 133 };
-  const CLUB_VEL_FLOOR = { B: 115, C: 109, D: 103 };
-  const CLUB_VEL_REDUCTION = { B: -4, C: -8, D: -14 };
-  const CLUB_CONTROL_OFFSET = { B: -4, C: -8, D: -16 };
-  const CLUB_CONTROL_CAP = { B: 61, C: 51, D: 41 };
-  const CLUB_ARSENAL_MULT = { B: 0.75, C: 0.58, D: 0.38 };
-
-  const velReduction = isClub
-    ? (CLUB_VEL_REDUCTION[rank] ?? -8)
-    : (isIndependent ? IL_VEL_REDUCTION[rank] : null) ?? (RANK_VELOCITY_REDUCTION[rank] || 0);
-  const velCap = isClub
-    ? (CLUB_VEL_CAP[rank] ?? 140)
-    : (isIndependent ? IL_VEL_CAP[rank] : null) ?? (RANK_VELOCITY_CAP[rank] || 155);
-  const velFloor = isClub
-    ? (CLUB_VEL_FLOOR[rank] ?? 109)
-    : (isIndependent ? IL_VEL_FLOOR[rank] : null) ?? (RANK_VELOCITY_FLOOR[rank] || 120);
-  const controlOffset = isClub
-    ? (CLUB_CONTROL_OFFSET[rank] ?? -8)
-    : (isIndependent ? IL_CONTROL_OFFSET[rank] : null) ?? (RANK_CONTROL_OFFSET[rank] || 0);
-  const controlCap = isClub
-    ? (CLUB_CONTROL_CAP[rank] ?? 51)
-    : (isIndependent ? IL_CONTROL_CAP[rank] : null) ?? (RANK_CONTROL_CAP[rank] || 65);
-  const arsenalMult = isClub
-    ? (CLUB_ARSENAL_MULT[rank] ?? 0.58)
-    : (isIndependent ? IL_ARSENAL_MULT[rank] : null) ?? (RANK_ARSENAL_MULT[rank] || 1.0);
+  const velReduction = (isIndependent ? IL_VEL_REDUCTION[rank] : null) ?? (RANK_VELOCITY_REDUCTION[rank] || 0);
+  const velCap = (isIndependent ? IL_VEL_CAP[rank] : null) ?? (RANK_VELOCITY_CAP[rank] || 155);
+  const velFloor = (isIndependent ? IL_VEL_FLOOR[rank] : null) ?? (RANK_VELOCITY_FLOOR[rank] || 120);
+  const controlOffset = (isIndependent ? IL_CONTROL_OFFSET[rank] : null) ?? (RANK_CONTROL_OFFSET[rank] || 0);
+  const controlCap = (isIndependent ? IL_CONTROL_CAP[rank] : null) ?? (RANK_CONTROL_CAP[rank] || 65);
+  const arsenalMult = (isIndependent ? IL_ARSENAL_MULT[rank] : null) ?? (RANK_ARSENAL_MULT[rank] || 1.0);
 
   // ランク別能力スケーリング（乗算式）
   // キャップ付近に集中しないよう、スケール係数はキャップの60-70%あたりを中央に設定
   // S: 中央45前後(cap72), A: 中央42(cap66), B: 中央37(cap60), C: 中央32(cap52), D: 中央27(cap45)
   const RANK_SCALE = { S: 0.95, A: 0.88, B: 0.80, C: 0.70, D: 0.58 };
   const INDEPENDENT_RANK_SCALE = { B: 0.71, C: 0.61, D: 0.51 };
-  // クラブは社会人同ランクより大幅に低い（企業B≒クラブB-相当 → 実質企業C水準）
-  const CLUB_RANK_SCALE = { B: 0.65, C: 0.54, D: 0.44 };
-  const scale = isClub
-    ? (CLUB_RANK_SCALE[rank] || 0.50)
-    : (isIndependent ? INDEPENDENT_RANK_SCALE[rank] : null) || RANK_SCALE[rank] || 0.70;
+  const scale = (isIndependent ? INDEPENDENT_RANK_SCALE[rank] : null) || RANK_SCALE[rank] || 0.70;
 
   // 三角分布ジッター（2つのrandIntの合算で中央寄り正規分布に近似）
   const scaleAndJitter = (val, jitter = 5) => {

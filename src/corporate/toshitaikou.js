@@ -276,29 +276,6 @@ export function simulateQuickMatch(team1Def, team2Def) {
   const t1Name = team1Def.displayName || team1Def.name;
   const t2Name = team2Def.displayName || team2Def.name;
 
-  // クラブ vs 企業戦: クラブはフルタイム練習環境でない分、ランク強度に0.40係数を掛けて判定
-  // 実際の都市対抗でも本戦出場自体が快挙なため、autoSimulateGame（実能力値）は使わない
-  const t1IsClub = team1Def.type === 'club';
-  const t2IsClub = team2Def.type === 'club';
-  if (t1IsClub !== t2IsClub) {
-    const clubDef = t1IsClub ? team1Def : team2Def;
-    const corpDef = t1IsClub ? team2Def : team1Def;
-    const clubName = t1IsClub ? t1Name : t2Name;
-    const corpName = t1IsClub ? t2Name : t1Name;
-    const clubStr = (RANK_STRENGTH[clubDef.rank] || 43) * 0.40;
-    const corpStr = RANK_STRENGTH[corpDef.rank] || 58;
-    const clubWins = Math.random() < clubStr / (clubStr + corpStr);
-    const winRuns = 2 + Math.floor(Math.random() * 5);
-    const loseRuns = Math.floor(Math.random() * Math.max(1, winRuns));
-    return {
-      winner: clubWins ? clubName : corpName,
-      loser: clubWins ? corpName : clubName,
-      score: clubWins
-        ? (t1IsClub ? [winRuns, loseRuns] : [loseRuns, winRuns])
-        : (t1IsClub ? [loseRuns, winRuns] : [winRuns, loseRuns]),
-    };
-  }
-
   const result = autoSimulateGame(t1Name, t2Name, true);
   if (result && (result.homeScore !== undefined) && (result.homeScore + result.awayScore > 0)) {
     const homeWon = result.homeScore > result.awayScore;
