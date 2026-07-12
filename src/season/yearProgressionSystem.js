@@ -473,6 +473,11 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   // === 全ソースから候補を収集し、統一スコアで評価 ===
   const allCandidates = [];
 
+  // クラブチームは208チーム×15人≈3000人規模のため、スコア上位のみに絞る
+  // 年間ドラフト指名目標：企業→多数、独立→多数、クラブ→少数（年3〜5名）
+  const MAX_CLUB_DRAFT_ELIGIBLE = 6;
+  const clubCandidateList = [];
+
   // 1. チーム選手（社会人 / 独立リーグ / 大学）
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team.players) return;
@@ -506,12 +511,23 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       const awards = awardBonusMap[player.id]?.awards || [];
       const { totalScore } = checkNPBDraftEligibility(player, bonus);
       const isClub = source === 'corporate' && team.corporateData?.type === 'club';
-      allCandidates.push({
+      const entry = {
         player, teamName, score: totalScore, bonus, awards, source, isClub,
         hofResult: checkHallOfFame(player),
-      });
+      };
+      if (isClub) {
+        // クラブは別リストで収集し後でスコア上位MAX_CLUB_DRAFT_ELIGIBLEのみ追加
+        clubCandidateList.push(entry);
+      } else {
+        allCandidates.push(entry);
+      }
     });
   });
+
+  // クラブ候補はスコア上位のみ本候補に加える（指名枠全体での合計上限）
+  clubCandidateList.sort((a, b) => b.score - a.score);
+  clubCandidateList.slice(0, MAX_CLUB_DRAFT_ELIGIBLE).forEach(c => allCandidates.push(c));
+  console.log(`[NPBDraft Year${gameYear}] クラブ候補: 全${clubCandidateList.length}人 → 上位${Math.min(MAX_CLUB_DRAFT_ELIGIBLE, clubCandidateList.length)}人を選考対象に`);
 
   // 2. 高校生プール
   highSchoolPool.players.forEach(player => {
