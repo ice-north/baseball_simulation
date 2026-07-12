@@ -1133,18 +1133,14 @@ export function checkRetirement(player) {
     shouldRetire = true;
     if (!reason) reason = '年齢による引退';
   }
-  // 2. 35歳以上で成績不振
-  else if (age >= 35) {
-    const recentGames = (player.seasonStats?.batting?.games || 0) + (player.seasonStats?.pitching?.games || 0);
-    if (recentGames < 10) {
+  // 2. 29歳以上: 年齢とともに引退確率が上昇（1年ごとに5%増）
+  // 29歳→5%, 30歳→10%, 31歳→15%, ..., 39歳→55%
+  else if (age >= 29) {
+    const retireRate = (age - 28) * 0.05;
+    if (Math.random() < retireRate) {
       shouldRetire = true;
-      if (!reason) reason = '出場機会減少のため引退';
+      if (!reason) reason = age >= 35 ? '引退' : '自己都合による引退';
     }
-  }
-  // 3. ランダム引退（30歳以上で5%）
-  else if (age >= 30 && Math.random() < 0.05) {
-    shouldRetire = true;
-    if (!reason) reason = '自己都合による引退';
   }
 
   return { shouldRetire, hallOfFame, reason, draftEligible, draftReasons };
