@@ -473,11 +473,6 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   // === 全ソースから候補を収集し、統一スコアで評価 ===
   const allCandidates = [];
 
-  // クラブチームは208チーム×15人≈3000人規模のため、スコア上位のみに絞る
-  // 年間ドラフト指名目標：企業→多数、独立→多数、クラブ→少数（年3〜5名）
-  const MAX_CLUB_DRAFT_ELIGIBLE = 6;
-  const clubCandidateList = [];
-
   // 1. チーム選手（社会人 / 独立リーグ / 大学）
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team.players) return;
@@ -511,23 +506,12 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       const awards = awardBonusMap[player.id]?.awards || [];
       const { totalScore } = checkNPBDraftEligibility(player, bonus);
       const isClub = source === 'corporate' && team.corporateData?.type === 'club';
-      const entry = {
+      allCandidates.push({
         player, teamName, score: totalScore, bonus, awards, source, isClub,
         hofResult: checkHallOfFame(player),
-      };
-      if (isClub) {
-        // クラブは別リストで収集し後でスコア上位MAX_CLUB_DRAFT_ELIGIBLEのみ追加
-        clubCandidateList.push(entry);
-      } else {
-        allCandidates.push(entry);
-      }
+      });
     });
   });
-
-  // クラブ候補はスコア上位のみ本候補に加える（指名枠全体での合計上限）
-  clubCandidateList.sort((a, b) => b.score - a.score);
-  clubCandidateList.slice(0, MAX_CLUB_DRAFT_ELIGIBLE).forEach(c => allCandidates.push(c));
-  console.log(`[NPBDraft Year${gameYear}] クラブ候補: 全${clubCandidateList.length}人 → 上位${Math.min(MAX_CLUB_DRAFT_ELIGIBLE, clubCandidateList.length)}人を選考対象に`);
 
   // 2. 高校生プール
   highSchoolPool.players.forEach(player => {
@@ -1973,8 +1957,10 @@ function applyCorporatePlayerGrowth(allTeams) {
       //
       // 企業: 環境が補完。disciplineの影響は控えめ（緩やかな線形）
       //   discipline 50→1.0x, 70→1.3x, 90→1.6x
+      // クラブ: discipline 80未満は成長ほぼなし。90+(上位1%)で初めて有意な成長。95+(上位0.4%)でドラフト候補級
+      //   discipline 80→0.05(下限), 85→0.078, 90→0.625, 95→2.11, 100→5.0
       const disciplineMult = isClub
-        ? Math.max(0.05, Math.pow(Math.max(0, (discipline - 40) / 60), 1.5) * 3.9)
+        ? Math.max(0.05, Math.pow(Math.max(0, (discipline - 80) / 20), 3.0) * 5.0)
         : isIndependent
           ? 1.0 + Math.max(0, (discipline - 50) * 0.020)
           : 1.0 + Math.max(0, (discipline - 50) * 0.015);
