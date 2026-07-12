@@ -1922,15 +1922,20 @@ function releaseCPUCorporatePlayers(allTeams, currentYear) {
   }
 }
 
-function replenishCorporateRosters(allTeams, currentYear) {
+// tierFilter: 処理するランクの配列 (例: ['S','A'] or ['B','C','D'])。省略時は全ランク
+// 優先度: S→A→独立(別関数)→B→C→D の順で処理することで、上位チームが良い選手を先に確保できる
+function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
   const userTeamName = Object.keys(allTeams)[0];
+  const allowedRanks = tierFilter ? new Set(tierFilter) : new Set(['S', 'A', 'B', 'C', 'D']);
 
   const teamsNeedingPlayers = [];
   for (const [teamName, team] of Object.entries(allTeams)) {
     if (teamName === userTeamName) continue;
     if (!team?.corporateData) continue;
-    if (team.independentLeagueId) continue;  // 独立リーグは replenishIndependentLeagueRosters で処理
+    if (team.corporateData.type === 'club') continue;  // クラブは別処理
+    if (team.independentLeagueId) continue;            // 独立は replenishIndependentLeagueRosters で処理
     const rank = team.corporateData.rank || 'D';
+    if (!allowedRanks.has(rank)) continue;
     const target = CORP_ROSTER_TARGET[rank] || 20;
     const current = team.players?.length || 0;
     const needed = Math.max(0, target - current);
@@ -1941,40 +1946,93 @@ function replenishCorporateRosters(allTeams, currentYear) {
 
   if (teamsNeedingPlayers.length === 0 || releasedPlayersPool.length === 0) return;
 
-  const scored = releasedPlayersPool.map((p, idx) => ({
-    player: p, idx,
-    score: p.position === 'pitcher'
-      ? ((p.pitching?.velocity || 130) - 115) * 2 + (p.pitching?.control || 0) + (p.pitching?.stamina || 0) * 0.3
-      : ((p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) + (p.fielding?.defense || 0)) / 4,
-    isCorp: p.origin === 'corporate_candidate' || p.postGradPath === 'corporate',
-  })).sort((a, b) => b.score - a.score);
+  // 能力スコア（S/A/Bランク: 現在能力重視）
+  const calcAbilScore = (p) => {
+    if (p.position === 'pitcher') {
+      return (p.pitching?.velocity || 130) * 0.5
+           + (p.pitching?.control  || 0)   * 0.3
+           + (p.pitching?.stamina  || 0)   * 0.2;
+    }
+    return (p.batting?.meet     || 0) * 0.35
+         + (p.batting?.power    || 0) * 0.25
+         + (p.batting?.eye      || 0) * 0.15
+         + (p.physical?.speed   || 0) * 0.15
+         + (p.fielding?.defense || 0) * 0.10;
+  };
 
-  const rankPriority = { S: 0, A: 1, B: 2, C: 3, D: 4 };
-  teamsNeedingPlayers.sort((a, b) => (rankPriority[a.rank] || 4) - (rankPriority[b.rank] || 4));
+  // 将来性スコア（C/Dランク: 現在能力 + プロ意識 + 成長率も加味）
+  const calcProspectScore = (p) => {
+    const abil = calcAbilScore(p);
+    const disc = p.personality?.discipline ?? 50;
+    const gp   = p.growthPotential || 1.0;
+    return abil * 0.60 + disc * 0.25 + Math.max(0, (gp - 1.0)) * 100 * 0.15;
+  };
+
+  // チームに不足している野手ポジションを取得
+  const getMissingPositions = (team) => {
+    const FIELDER_POSITIONS = ['catcher', 'first_base', 'second_base', 'third_base', 'shortstop', 'left_field', 'center_field', 'right_field'];
+    const present = new Set();
+    (team.players || []).forEach(p => {
+      if (p.position !== 'pitcher') present.add(p.subPosition || p.position);
+    });
+    return new Set(FIELDER_POSITIONS.filter(pos => !present.has(pos)));
+  };
+
+  // ポジション優先度ブースト（投手/野手比率・不在ポジション補正）
+  const positionBoost = (player, team) => {
+    const total    = (team.players || []).length;
+    const pitchers = (team.players || []).filter(p => p.position === 'pitcher').length;
+    const ratio    = total > 0 ? pitchers / total : 0.35;
+    const TARGET   = 0.35;
+    if (player.position === 'pitcher') {
+      if (ratio < TARGET - 0.05) return 20;   // 投手不足 → 優先
+      if (ratio > TARGET + 0.10) return -20;  // 投手過多 → 抑制
+      return 0;
+    }
+    // 野手
+    if (ratio > TARGET + 0.05) return 15;     // 野手不足
+    const missing   = getMissingPositions(team);
+    const playerPos = player.subPosition || player.position;
+    if (missing.has(playerPos)) return 25;    // 不在ポジション → 最優先
+    return 0;
+  };
+
+  // ランク順に処理（S→A→B→C→D）
+  const RANK_ORDER = ['S', 'A', 'B', 'C', 'D'];
+  teamsNeedingPlayers.sort((a, b) => RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank));
 
   const usedIndices = new Set();
-  const maxTake = Math.floor(scored.length * 0.5);
-  let totalTaken = 0;
 
   for (const teamInfo of teamsNeedingPlayers) {
-    if (totalTaken >= maxTake) break;
+    const isCDRank = teamInfo.rank === 'C' || teamInfo.rank === 'D';
     let added = 0;
-    for (const entry of scored) {
-      if (added >= teamInfo.needed) break;
-      if (totalTaken >= maxTake) break;
-      if (usedIndices.has(entry.idx)) continue;
-      if (entry.player.age && entry.player.age > 32) continue;
 
-      entry.player._nextYearTeam = teamInfo.teamName; // レポート転記用
-      const p = { ...entry.player };
-      p.isStarter = false;
-      p.battingOrder = 0;
-      if (!p.careerHistory) p.careerHistory = [];
-      p.careerHistory.push({ type: 'corporate_join', year: currentYear + 1, label: teamInfo.teamName });
-      teamInfo.team.players.push(p);
+    // このチーム向けにスコア付けしてソート
+    const candidates = releasedPlayersPool
+      .map((p, idx) => {
+        if (usedIndices.has(idx)) return null;
+        if (p.age && p.age > 32) return null;
+        const base   = isCDRank ? calcProspectScore(p) : calcAbilScore(p);
+        const posAdj = positionBoost(p, teamInfo.team);
+        return { player: p, idx, score: base + posAdj };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score);
+
+    for (const entry of candidates) {
+      if (added >= teamInfo.needed) break;
+      if (usedIndices.has(entry.idx)) continue;
+
+      const p = entry.player;
+      p._nextYearTeam = teamInfo.teamName;
+      const player = { ...p };
+      player.isStarter  = false;
+      player.battingOrder = 0;
+      if (!player.careerHistory) player.careerHistory = [];
+      player.careerHistory.push({ type: 'corporate_join', year: currentYear + 1, label: teamInfo.teamName });
+      teamInfo.team.players.push(player);
       usedIndices.add(entry.idx);
       added++;
-      totalTaken++;
     }
   }
 
@@ -1985,14 +2043,18 @@ function replenishCorporateRosters(allTeams, currentYear) {
     remaining.forEach(p => releasedPlayersPool.push(p));
   }
 
-  // 未配属の社会人進路卒業生にも行き先チームを付与（卒業レポートの行先表示用）
-  const allCorpNames = Object.keys(allTeams).filter(name => allTeams[name]?.corporateData);
-  if (allCorpNames.length > 0) {
-    releasedPlayersPool.forEach(p => {
-      if (p.postGradPath === 'corporate' && !p._nextYearTeam) {
-        p._nextYearTeam = allCorpNames[Math.floor(Math.random() * allCorpNames.length)];
-      }
-    });
+  // 最終パス（Dランクを含む）のみ: 未配属の社会人進路卒業生に表示用の行き先を付与
+  if (!tierFilter || tierFilter.includes('D')) {
+    const allCorpNames = Object.keys(allTeams).filter(name =>
+      allTeams[name]?.corporateData && !allTeams[name]?.independentLeagueId
+    );
+    if (allCorpNames.length > 0) {
+      releasedPlayersPool.forEach(p => {
+        if (p.postGradPath === 'corporate' && !p._nextYearTeam) {
+          p._nextYearTeam = allCorpNames[Math.floor(Math.random() * allCorpNames.length)];
+        }
+      });
+    }
   }
 }
 
@@ -2575,10 +2637,28 @@ export function advanceToNextYear(seasonData, allTeams) {
     });
   }
 
-  // 5.65. クラブチームへの選手供給（大学・企業・独立に入れなかった選手の受け皿）
+  // 5.75. CPU社会人・独立チームの自動戦力外通告（非社会人モードのみ）
+  // 社会人モードは CorporateDepartureScreen の AI 放出処理が担当するため除外
+  if (!seasonData.settings?.corporateMode) {
+    releaseCPUCorporatePlayers(teamsAfterRetirement, currentYear);
+  }
+
+  // ━━━ 入団優先度: S社会人 → A社会人 → 独立リーグ → B社会人 → C/D社会人 → クラブ ━━━
+
+  // 5.8a. S/Aランク社会人AIチームのロスター補充（最優先: 高品質選手を先に確保）
+  replenishCorporateRosters(teamsAfterRetirement, currentYear, ['S', 'A']);
+
+  // 5.8b. 独立リーグAIチームの補充（S/Aに続いてプールから選択）
+  replenishIndependentLeagueRosters(teamsAfterRetirement, currentYear);
+
+  // 5.9. B/C/DランクAIチームのロスター補充（独立リーグ後の残り選手。C/Dはプロ意識・成長率も考慮）
+  replenishCorporateRosters(teamsAfterRetirement, currentYear, ['B', 'C', 'D']);
+
+  // 5.92. クラブチームへの選手供給（最後の受け皿: 社会人・独立に入れなかった選手）
+  // ※旧 step 5.65 から移動 — クラブが最下位優先度になるよう社会人/独立の後に処理
   const clubTeamEntries = Object.entries(teamsAfterRetirement).filter(([, t]) => t.corporateData?.type === 'club');
   if (clubTeamEntries.length === 0 && universityGraduationReport?.clubGraduates?.length > 0) {
-    // 大学モード: TEAMS_DATAにクラブチームがないため、club卒業生をリリースプールへ（自由契約として検索可能に）
+    // 大学モード: TEAMS_DATAにクラブチームがないため、club卒業生をリリースプールへ
     universityGraduationReport.clubGraduates.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
@@ -2586,76 +2666,87 @@ export function advanceToNextYear(seasonData, allTeams) {
     });
   }
   if (clubTeamEntries.length > 0) {
-    // 引退扱いの高校卒・大学卒からクラブチームへ振り分け
-    const clubCandidates = [];
-    // TEAMS_DATAチームの卒業生でclubパスになった選手（成長力・プロ意識が高い層）
+    // クラブ候補者収集
+    const clubCandidatesRaw = [];
     if (universityGraduationReport?.clubGraduates) {
-      clubCandidates.push(...universityGraduationReport.clubGraduates);
+      clubCandidatesRaw.push(...universityGraduationReport.clubGraduates);
     }
-    // 大学プール卒業生で「引退」判定の一部（成長力・プロ意識に関わらずランダムに拾う）
+    // 大学プール卒業生で「引退」判定の一部
     gradScored.forEach(entry => {
       if (entry.player.postGradPath === 'retired' && Math.random() < 0.3) {
-        clubCandidates.push(entry.player);
+        clubCandidatesRaw.push(entry.player);
       }
     });
     // 高校卒で「引退」判定の選手の一部
     if (hsDistribution.retired) {
       hsDistribution.retired.forEach(p => {
-        if (Math.random() < 0.15) {
-          clubCandidates.push(p);
-        }
+        if (Math.random() < 0.15) clubCandidatesRaw.push(p);
       });
     }
-    // リリースプールからも一部をクラブチームへ（企業・独立からの退団者）
-    const releaseForClub = [];
+    // リリースプールから30歳以下の一部（企業・独立からの退団者）
     for (let i = releasedPlayersPool.length - 1; i >= 0; i--) {
       const p = releasedPlayersPool[i];
       if (p.age && p.age <= 30 && Math.random() < 0.1) {
-        releaseForClub.push(p);
+        clubCandidatesRaw.push(p);
         releasedPlayersPool.splice(i, 1);
       }
     }
-    clubCandidates.push(...releaseForClub);
 
-    // 選手をランダムにクラブチームへ配分（ロスターが少ないチーム優先）
-    if (clubCandidates.length > 0) {
+    if (clubCandidatesRaw.length > 0) {
+      // クラブ向け採点: 能力 + プロ意識 + 成長率（クラブはdisciplineが成長を左右するため）
+      const scoreForClub = (p) => {
+        const abil = p.position === 'pitcher'
+          ? (p.pitching?.velocity || 130) * 0.5 + (p.pitching?.control || 0) * 0.3 + (p.pitching?.stamina || 0) * 0.2
+          : (p.batting?.meet || 0) * 0.35 + (p.batting?.power || 0) * 0.25
+            + (p.batting?.eye || 0) * 0.15 + (p.physical?.speed || 0) * 0.15 + (p.fielding?.defense || 0) * 0.10;
+        const disc = p.personality?.discipline ?? 50;
+        const gp   = p.growthPotential || 1.0;
+        return abil * 0.50 + disc * 0.35 + Math.max(0, (gp - 1.0)) * 100 * 0.15;
+      };
+
+      // プロ意識が一定以上の選手のみクラブへ（あまりにも低い選手は野球から離れる）
+      const clubCandidates = clubCandidatesRaw
+        .filter(p => (p.personality?.discipline ?? 50) >= 35)
+        .sort((a, b) => scoreForClub(b) - scoreForClub(a));
+
       const sortedClubs = clubTeamEntries
         .map(([name, team]) => ({ name, team, count: team.players?.length || 0 }))
         .sort((a, b) => a.count - b.count);
 
-      const CLUB_ROSTER_CAP = 35;  // クラブチームの最大在籍数
-      clubCandidates.forEach(p => {
-        // 全クラブが上限に達したら打ち切り
-        const target = sortedClubs.find(c => c.count < CLUB_ROSTER_CAP);
-        if (!target || !target.team.players) return;
-        p._nextYearTeam = target.name; // レポート転記用
+      const CLUB_ROSTER_CAP = 35;
+      // 投手/野手バランスチェック用
+      const getClubPitcherRatio = (clubInfo) => {
+        const total    = clubInfo.team.players?.length || 0;
+        const pitchers = (clubInfo.team.players || []).filter(p => p.position === 'pitcher').length;
+        return total > 0 ? pitchers / total : 0.35;
+      };
+
+      for (const p of clubCandidates) {
+        // 人数が最も少ないクラブを選択（投手/野手バランスも考慮）
+        const needsPitcher = sortedClubs.some(c => c.count < CLUB_ROSTER_CAP && getClubPitcherRatio(c) < 0.30);
+        const targetClub = sortedClubs.find(c => {
+          if (c.count >= CLUB_ROSTER_CAP) return false;
+          const ratio = getClubPitcherRatio(c);
+          if (p.position === 'pitcher' && ratio > 0.45) return false; // 投手過多クラブへは入れない
+          if (p.position !== 'pitcher' && needsPitcher && ratio < 0.25) return false; // 投手不足クラブには野手より投手を
+          return true;
+        }) || sortedClubs.find(c => c.count < CLUB_ROSTER_CAP);
+
+        if (!targetClub || !targetClub.team.players) continue;
+        p._nextYearTeam = targetClub.name;
         const player = { ...p };
-        player.isStarter = false;
+        player.isStarter   = false;
         player.battingOrder = 0;
         if (!player.careerHistory) player.careerHistory = [];
-        player.careerHistory.push({ type: 'club_join', year: currentYear + 1, label: `${target.name}入部` });
-        target.team.players.push(player);
-        target.count++;
-        // sortedClubs を再ソート（少ないチームに優先的に配分）
+        player.careerHistory.push({ type: 'club_join', year: currentYear + 1, label: `${targetClub.name}入部` });
+        targetClub.team.players.push(player);
+        targetClub.count++;
         sortedClubs.sort((a, b) => a.count - b.count);
-      });
+      }
     }
   }
 
-  // 5.75. CPU社会人・独立チームの自動戦力外通告（非社会人モードのみ）
-  // 社会人モードは CorporateDepartureScreen の AI 放出処理が担当するため除外
-  if (!seasonData.settings?.corporateMode) {
-    releaseCPUCorporatePlayers(teamsAfterRetirement, currentYear);
-  }
-
-  // 5.8. 独立リーグAIチームの補充（全モード対象）
-  replenishIndependentLeagueRosters(teamsAfterRetirement, currentYear);
-
-  // 5.9. 社会人AIチームのロスター補充（全モード対象）
-  replenishCorporateRosters(teamsAfterRetirement, currentYear);
-
-  // 5.92. リリースプール整理: 33歳以上を先に除去してからサイズ上限を適用
-  // 33歳以上はどのチームも採用しないため、プールに留まっても意味がない
+  // 5.95. リリースプール整理: 33歳以上を先に除去してからサイズ上限を適用
   {
     const beforeAge = releasedPlayersPool.filter(p => (p.age || 0) < 33);
     if (beforeAge.length !== releasedPlayersPool.length) {
@@ -2664,20 +2755,20 @@ export function advanceToNextYear(seasonData, allTeams) {
     }
     const poolCap = seasonData.settings?.universityMode ? 300 : 400;
     if (releasedPlayersPool.length > poolCap) {
-      const scored = releasedPlayersPool.map((p, i) => ({
+      const scoredPool = releasedPlayersPool.map((p, i) => ({
         p, i,
         s: p.position === 'pitcher'
           ? (p.pitching?.velocity || 130) + (p.pitching?.control || 0) * 0.5
           : (p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) * 0.3,
       })).sort((a, b) => b.s - a.s).slice(0, poolCap);
-      const keep = new Set(scored.map(e => e.i));
+      const keep = new Set(scoredPool.map(e => e.i));
       const trimmed = releasedPlayersPool.filter((_, i) => keep.has(i));
       releasedPlayersPool.length = 0;
       trimmed.forEach(p => releasedPlayersPool.push(p));
     }
   }
 
-  // 5.95. 卒業レポートに nextYearTeam を転記（5.65/5.9 の配属完了後）
+  // 5.98. 卒業レポートに nextYearTeam を転記（5.9/5.92 の配属完了後）
   // 実際の配属先チームのタイプに合わせて path ラベルも更新する
   if (universityGraduationReport?.graduated) {
     universityGraduationReport.graduated.forEach(entry => {
