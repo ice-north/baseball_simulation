@@ -318,18 +318,16 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             >
               チーム成績
             </button>
-            {seasonData?.settings?.corporateMode && (
-              <button
-                onClick={() => setActiveTab('tournaments')}
-                className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
-                  activeTab === 'tournaments'
-                    ? 'bg-yellow-600 text-white shadow-sm'
-                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                }`}
-              >
-                大会記録
-              </button>
-            )}
+            <button
+              onClick={() => setActiveTab('tournaments')}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'tournaments'
+                  ? 'bg-yellow-600 text-white shadow-sm'
+                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              }`}
+            >
+              大会記録
+            </button>
           </div>
         </div>
 
@@ -910,36 +908,57 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           </div>
         )}
 
-        {/* 大会記録タブ（社会人モード） */}
+        {/* 大会記録タブ（全モード） */}
         {activeTab === 'tournaments' && (() => {
           const history = seasonData?.tournamentHistory || [];
           const currentYear = seasonData?.year;
+          const isCorporate = seasonData?.settings?.corporateMode;
+          const isUniversity = seasonData?.settings?.universityMode;
           const allRecords = [...history];
+
+          // 今シーズンの進行中データを追加
           const rt = seasonData?.regionalTournament;
           const td = seasonData?.toshitaikou;
           const ns = seasonData?.nihonSenshuken;
           const cs = seasonData?.clubSenshuken;
-          const hasCurrent = rt?.generated || td?.generated || ns?.generated || cs?.generated;
-          if (hasCurrent) {
+          const uc = seasonData?.universityChampionship;
+          const mj = seasonData?.meijiJingu;
+          const fa = seasonData?.frozenAwards;
+
+          const hasCorporateCurrent = isCorporate && (rt?.generated || td?.generated || ns?.generated || cs?.generated);
+          const hasUniversityCurrent = isUniversity && (uc?.phase || mj?.phase);
+          const hasIndependentCurrent = !isCorporate && !isUniversity && fa?.champion;
+
+          if (hasCorporateCurrent || hasUniversityCurrent || hasIndependentCurrent) {
             const cur = { year: currentYear, calendarYear: seasonData?.currentDate?.year, isCurrent: true };
-            if (rt?.phase === 'done' && rt.brackets) {
-              cur.regional = {};
-              Object.entries(rt.brackets).forEach(([rid, region]) => {
-                cur.regional[rid] = { regionName: region.regionName, champion: region.champion };
-              });
+            if (hasCorporateCurrent) {
+              if (rt?.phase === 'done' && rt.brackets) {
+                cur.regional = {};
+                Object.entries(rt.brackets).forEach(([rid, region]) => {
+                  cur.regional[rid] = { regionName: region.regionName, champion: region.champion };
+                });
+              }
+              if (td?.generated) cur.toshitaikou = { champion: td.champion, runnerUp: td.runnerUp };
+              if (ns?.generated) cur.senshuken = { champion: ns.champion, runnerUp: ns.runnerUp };
+              if (cs?.generated) cur.club = { champion: cs.champion, runnerUp: cs.runnerUp };
             }
-            if (td?.generated) cur.toshitaikou = { champion: td.champion, runnerUp: td.runnerUp };
-            if (ns?.generated) cur.senshuken = { champion: ns.champion, runnerUp: ns.runnerUp };
-            if (cs?.generated) cur.club = { champion: cs.champion, runnerUp: cs.runnerUp };
+            if (hasUniversityCurrent) {
+              if (uc?.phase) cur.universityChampionship = { champion: uc.champion, runnerUp: uc.runnerUp };
+              if (mj?.phase) cur.meijiJingu = { champion: mj.champion, runnerUp: mj.runnerUp };
+            }
+            if (hasIndependentCurrent) {
+              cur.leagueChampion = fa.champion;
+            }
             allRecords.push(cur);
           }
+
           const sorted = [...allRecords].sort((a, b) => (b.year || 0) - (a.year || 0));
           return (
             <div>
               {sorted.length === 0 ? (
                 <div className="bg-gray-800 rounded-lg p-6 text-center">
-                  <p className="text-gray-400">まだ大会記録がありません</p>
-                  <p className="text-gray-500 text-sm mt-1">シーズン中の大会結果がここに記録されます</p>
+                  <p className="text-gray-300">まだ大会記録がありません</p>
+                  <p className="text-gray-500 text-sm mt-1">シーズン終了後に大会結果がここに記録されます</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -951,7 +970,45 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         {rec.isCurrent && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded font-bold">今季</span>}
                       </div>
                       <div className="p-3 space-y-2">
-                        {/* 都市対抗 */}
+                        {/* 独立リーグ: リーグ優勝 */}
+                        {rec.leagueChampion && (
+                          <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-700/30 rounded-lg px-3 py-2">
+                            <span className="text-blue-400 font-bold text-sm w-28 shrink-0">リーグ優勝</span>
+                            <span className="text-yellow-400 font-bold">{rec.leagueChampion}</span>
+                          </div>
+                        )}
+                        {/* 独立リーグ: プレーオフ優勝 */}
+                        {rec.playoffChampion && (
+                          <div className="flex items-center gap-3 bg-yellow-900/20 border border-yellow-700/30 rounded-lg px-3 py-2">
+                            <span className="text-yellow-300 font-bold text-sm w-28 shrink-0">プレーオフ優勝</span>
+                            <span className="text-yellow-400 font-bold">{rec.playoffChampion}</span>
+                          </div>
+                        )}
+                        {/* 大学: 全日本大学選手権 */}
+                        {rec.universityChampionship && (
+                          <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-700/30 rounded-lg px-3 py-2">
+                            <span className="text-blue-400 font-bold text-sm w-36 shrink-0">全日本大学選手権</span>
+                            {rec.universityChampionship.champion ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-yellow-400 font-bold">優勝: {rec.universityChampionship.champion}</span>
+                                {rec.universityChampionship.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.universityChampionship.runnerUp}</span>}
+                              </div>
+                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                          </div>
+                        )}
+                        {/* 大学: 明治神宮大会 */}
+                        {rec.meijiJingu && (
+                          <div className="flex items-center gap-3 bg-purple-900/20 border border-purple-700/30 rounded-lg px-3 py-2">
+                            <span className="text-purple-400 font-bold text-sm w-36 shrink-0">明治神宮大会</span>
+                            {rec.meijiJingu.champion ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-yellow-400 font-bold">優勝: {rec.meijiJingu.champion}</span>
+                                {rec.meijiJingu.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.meijiJingu.runnerUp}</span>}
+                              </div>
+                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                          </div>
+                        )}
+                        {/* 社会人: 都市対抗 */}
                         {rec.toshitaikou && (
                           <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-700/30 rounded-lg px-3 py-2">
                             <span className="text-blue-400 font-bold text-sm w-24 shrink-0">都市対抗</span>
@@ -963,7 +1020,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             ) : <span className="text-gray-500 text-sm">開催中...</span>}
                           </div>
                         )}
-                        {/* 日本選手権 */}
+                        {/* 社会人: 日本選手権 */}
                         {rec.senshuken && (
                           <div className="flex items-center gap-3 bg-red-900/20 border border-red-700/30 rounded-lg px-3 py-2">
                             <span className="text-red-400 font-bold text-sm w-24 shrink-0">日本選手権</span>
@@ -975,7 +1032,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             ) : <span className="text-gray-500 text-sm">開催中...</span>}
                           </div>
                         )}
-                        {/* クラブ選手権 */}
+                        {/* 社会人: クラブ選手権 */}
                         {rec.club && (
                           <div className="flex items-center gap-3 bg-purple-900/20 border border-purple-700/30 rounded-lg px-3 py-2">
                             <span className="text-purple-400 font-bold text-sm w-24 shrink-0">クラブ選手権</span>
@@ -987,7 +1044,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             ) : <span className="text-gray-500 text-sm">開催中...</span>}
                           </div>
                         )}
-                        {/* 地域トーナメント */}
+                        {/* 社会人: 地域トーナメント */}
                         {rec.regional && (
                           <div className="bg-green-900/20 border border-green-700/30 rounded-lg px-3 py-2">
                             <div className="text-green-400 font-bold text-sm mb-1">地域トーナメント</div>
@@ -1001,7 +1058,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             </div>
                           </div>
                         )}
-                        {/* 都市対抗予選結果 */}
+                        {/* 社会人: 都市対抗予選 */}
                         {rec.toshitaikouQualifiers && (
                           <details className="group">
                             <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200 transition px-1">

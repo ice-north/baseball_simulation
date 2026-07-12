@@ -2486,7 +2486,25 @@ export function advanceToNextYear(seasonData, allTeams) {
       newSeasonData.universityGraduationReport = universityGraduationReport;
     }
   } else {
-    // 独立リーグモード: スケジュールはレギュレーション設定後に生成
+    // 独立リーグモード: リーグ優勝・プレーオフ結果をアーカイブ
+    const prevHistory = seasonData.tournamentHistory || [];
+    const yearRecord = { year: seasonData.year, calendarYear: seasonData.currentDate?.year };
+    if (awards.champion) yearRecord.leagueChampion = awards.champion;
+    // プレーオフ決勝の優勝チームを集計
+    const playoffFinals = (seasonData.schedule || []).filter(g =>
+      g.phase === 'playoffs' && g.playoffRound === 'final' && g.result && !g.result.cancelled
+    );
+    if (playoffFinals.length > 0) {
+      const teamWins = {};
+      playoffFinals.forEach(g => {
+        const winner = g.result.homeScore > g.result.awayScore ? g.home : g.away;
+        teamWins[winner] = (teamWins[winner] || 0) + 1;
+      });
+      const sorted = Object.entries(teamWins).sort((a, b) => b[1] - a[1]);
+      if (sorted.length > 0) yearRecord.playoffChampion = sorted[0][0];
+    }
+    newSeasonData.tournamentHistory = [...prevHistory, yearRecord];
+    // スケジュールはレギュレーション設定後に生成
     const teams = Object.keys(teamsAfterRetirement);
     newSeasonData.schedule = [];
     newSeasonData.standings = initializeStandings(teams);
