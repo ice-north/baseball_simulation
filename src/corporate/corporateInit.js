@@ -32,8 +32,9 @@ import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { initializeStandings } from '../season/seasonManager.js';
 import { initializeUniversityLeagues } from '../university/universityLeagueManager.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
-import { seedInitialUniversityClasses, warmUpPlayerPipeline } from '../season/universityPool.js';
+import { seedInitialUniversityClasses, warmUpPlayerPipeline, universityPool } from '../season/universityPool.js';
 import { assignInitialUniversityBackgrounds } from '../university/universityPipeSystem.js';
+import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 
 // ============================================================
 // ランク別チーム構成
@@ -790,6 +791,93 @@ export const generateRegionalLeague = (userTeamName, userRegion, allTeamDefs) =>
 };
 
 // ============================================================
+// 全234大学チームをTEAMS_DATAに追加（並行世界として全モードで選手追跡・移籍を有効化）
+// warmUpPlayerPipeline() 実行後に呼ぶこと。
+// universityPool のプレイヤーを各大学チームのロスターに移動し、
+// 翌年以降の processUniversityTeamGraduation で正しく卒業処理される。
+// ============================================================
+
+const UNI_VELOCITY_CAP_PW = { S: 150, A: 148, B: 143, C: 136, D: 130 };
+const UNI_CONTROL_CAP_PW  = { S: 72,  A: 66,  B: 58,  C: 48,  D: 38  };
+const UNI_BATTING_CAP_PW  = { S: 68,  A: 62,  B: 55,  C: 47,  D: 40  };
+const UNI_GRADE_SIZE_PW   = { S: 14,  A: 12,  B: 10,  C: 8,   D: 6   };
+
+const generateUniversityRosterPW = (def) => {
+  const rank = def.rank || 'C';
+  const perGrade = UNI_GRADE_SIZE_PW[rank] || 8;
+  const fakeDef = { ...def, type: 'corporate', id: `uni_${def.id}` };
+  const roster = generateCorporateRoster(fakeDef, 1, perGrade * 4);
+  roster.forEach((p, i) => {
+    const grade = (i % 4) + 1;
+    p.age = 18 + grade;
+    p.universityYear = grade;
+    p.universityTeamId = def.id;
+    p.universityTeamName = def.name;
+    if (p.position === 'pitcher') {
+      const velCap = UNI_VELOCITY_CAP_PW[rank] || 140;
+      const ctrlCap = UNI_CONTROL_CAP_PW[rank] || 50;
+      if (p.pitching.velocity > velCap) p.pitching.velocity = velCap + Math.round((p.pitching.velocity - velCap) * 0.3);
+      if (p.pitching.control > ctrlCap) p.pitching.control = ctrlCap + Math.round((p.pitching.control - ctrlCap) * 0.3);
+    }
+    const batCap = UNI_BATTING_CAP_PW[rank] || 50;
+    p.batting.meet  = Math.min(p.batting.meet,  batCap + Math.floor(Math.random() * 6));
+    p.batting.power = Math.min(p.batting.power, batCap + Math.floor(Math.random() * 6));
+    p.batting.eye   = Math.min(p.batting.eye,   batCap + Math.floor(Math.random() * 4));
+    p.careerHistory = [{ type: 'highschool', label: '高校卒' }, { type: 'university', year: 1, label: def.name }];
+  });
+  return roster;
+};
+
+const initializeUniversityTeamsForParallelWorld = () => {
+  // universityPool プレイヤーを大学チーム名でグループ化
+  const teamPlayers = {};
+  for (const [enrollYear, entries] of Object.entries(universityPool || {})) {
+    if (!entries) continue;
+    for (const entry of entries) {
+      const teamName = entry.universityTeamName;
+      if (!teamName) continue;
+      if (!teamPlayers[teamName]) teamPlayers[teamName] = [];
+      // 在学年数（WORLD_DATA.year=1 時点）: enrollYear -2 → 4年生 など
+      const yearsInUni = (WORLD_DATA.year || 1) - entry.enrollYear;
+      entry.player.universityYear = Math.max(1, Math.min(4, yearsInUni + 1));
+      entry.player.universityTeamId = entry.universityTeamId || null;
+      entry.player.universityTeamName = teamName;
+      teamPlayers[teamName].push(entry.player);
+    }
+  }
+
+  // 使用したプレイヤーをプールから除去（TEAMS_DATA で管理するため二重管理を防止）
+  for (const enrollYear of Object.keys(universityPool || {})) {
+    const entries = universityPool[enrollYear] || [];
+    universityPool[enrollYear] = entries.filter(e => !e.universityTeamName || !teamPlayers[e.universityTeamName]);
+    if (!universityPool[enrollYear].length) delete universityPool[enrollYear];
+  }
+
+  // 全234大学チームを TEAMS_DATA に追加
+  for (const def of UNIVERSITY_TEAMS) {
+    if (TEAMS_DATA[def.name]) continue;
+    const poolRoster = teamPlayers[def.name] || [];
+    const roster = poolRoster.length > 0 ? poolRoster : generateUniversityRosterPW(def);
+    TEAMS_DATA[def.name] = {
+      name: def.name,
+      abbreviation: makeAbbreviation(def.name),
+      players: roster,
+      pitchingRotation: null,
+      universityTeamId: def.id,
+      universityData: {
+        rank: def.rank,
+        region: def.region,
+        budget: def.budget || 5000,
+        leagueName: (UNIVERSITY_REGIONS.find(r => r.id === def.region)?.name || ''),
+        reputation: ({ S: 85, A: 65, B: 40, C: 20, D: 5 }[def.rank] || 20),
+        proDraftCount: 0,
+        tournamentWins: 0,
+      },
+    };
+  }
+};
+
+// ============================================================
 // 社会人モードの完全初期化（全チーム＋独立リーグのロスターを生成）
 // ============================================================
 
@@ -863,6 +951,8 @@ export const initializeCorporateGame = (teamDef) => {
   // パイプラインウォームアップ: 4年分の高校→ドラフト→進路→大学成長→卒業→社会人補充を事前シミュレート
   // これによりYear2以降のドラフトでも全ソースからバランスよく候補が出る
   warmUpPlayerPipeline(1);
+  // 全234大学チームをTEAMS_DATAに追加（並行世界として選手追跡・移籍を有効化）
+  initializeUniversityTeamsForParallelWorld();
 
   return {
     userTeamName, allTeamNames, roster: userRoster, staff: userStaff,
@@ -915,6 +1005,8 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
   // 大学リーグ初期化
   initializeUniversityLeagues(2024);
   warmUpPlayerPipeline(1);
+  // 全234大学チームをTEAMS_DATAに追加
+  initializeUniversityTeamsForParallelWorld();
 };
 
 // ============================================================

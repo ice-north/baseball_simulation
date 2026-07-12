@@ -2305,10 +2305,14 @@ export function advanceToNextYear(seasonData, allTeams) {
     }
   });
 
-  // 5.55. 大学モード: 4年生卒業＋ロスター入れ替え
+  // 5.55. 大学チームの4年生卒業＋ロスター入れ替え
+  // universityMode だけでなく社会人/独立モードでもTEAMS_DATA大学チームがある場合に実行
   // ※distributeHighSchoolGraduates より先に実行してプールから一般入部を選出する
   let universityGraduationReport = null;
-  if (seasonData.settings?.universityMode) {
+  const hasPopulatedUniversityTeams = Object.values(teamsAfterRetirement).some(
+    t => t?.universityData && (t.players?.length || 0) > 0
+  );
+  if (hasPopulatedUniversityTeams) {
     universityGraduationReport = processUniversityTeamGraduation(teamsAfterRetirement, seasonData, currentYear);
   }
 
@@ -2409,15 +2413,17 @@ export function advanceToNextYear(seasonData, allTeams) {
     replenishCorporateRosters(teamsAfterRetirement, currentYear);
   }
 
-  // 5.92. 大学モード: リリースプールサイズ上限（社会人/独立に渡す仕組みがないため自然増加を抑制）
-  if (seasonData.settings?.universityMode && releasedPlayersPool.length > 300) {
-    // スコア降順で上位300名のみ残す
+  // 5.92. リリースプールサイズ上限（大量の大学卒業生が長期蓄積するのを防止）
+  // 全モードで適用: 社会人/独立は上限400、大学モードは300
+  const poolCap = seasonData.settings?.universityMode ? 300 : 400;
+  if (releasedPlayersPool.length > poolCap) {
+    // スコア降順で上位を残す
     const scored = releasedPlayersPool.map((p, i) => ({
       p, i,
       s: p.position === 'pitcher'
         ? (p.pitching?.velocity || 130) + (p.pitching?.control || 0) * 0.5
         : (p.batting?.meet || 0) + (p.batting?.power || 0) + (p.physical?.speed || 0) * 0.3,
-    })).sort((a, b) => b.s - a.s).slice(0, 300);
+    })).sort((a, b) => b.s - a.s).slice(0, poolCap);
     const keep = new Set(scored.map(e => e.i));
     const trimmed = releasedPlayersPool.filter((_, i) => keep.has(i));
     releasedPlayersPool.length = 0;

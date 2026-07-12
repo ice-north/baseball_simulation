@@ -257,6 +257,7 @@ const initializeCorporateWorldForUniversity = () => {
   initializeCorporateParallelWorld(Object.keys(TEAMS_DATA));
 };
 
+
 // ユーザーのリーグスケジュールをseasonData.schedule形式で取得
 export const getUniversityLeagueSchedule = (regionId) => {
   const league = WORLD_DATA.universityLeagues?.[regionId];
