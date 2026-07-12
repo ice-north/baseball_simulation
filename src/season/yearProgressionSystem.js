@@ -2276,6 +2276,137 @@ function generateIndependentNewcomer(id, year) {
   };
 }
 
+// ============================================================
+// CPU並行世界チームのシーズン成績を自動生成
+// resetSeasonStats 後に呼び出すことで通算成績に積み上がりつつ、
+// 引退判定・成長計算でも利用できる状態にする
+// ============================================================
+function simulateParallelWorldStats(allTeams) {
+  const userTeamName = Object.keys(allTeams)[0];
+
+  for (const [teamName, team] of Object.entries(allTeams)) {
+    if (teamName === userTeamName) continue;
+    if (!team?.players?.length) continue;
+
+    // チームタイプ別試合数
+    let seasonGames;
+    if (team.universityData) {
+      seasonGames = 26;          // 大学: 春13+秋13
+    } else if (team.independentLeagueId) {
+      seasonGames = 90;          // 独立リーグ
+    } else if (team.corporateData?.type === 'club') {
+      seasonGames = 20;          // クラブ: 地域リーグ
+    } else if (team.corporateData) {
+      seasonGames = 45;          // 社会人企業
+    } else {
+      continue;
+    }
+
+    const pitchers = team.players.filter(p => p.position === 'pitcher');
+    const fielders = team.players.filter(p => p.position !== 'pitcher');
+
+    // チーム総合力 → 勝率推定
+    const teamScore = team.players.reduce((s, p) => {
+      return s + (p.position === 'pitcher'
+        ? Math.max(0, (p.pitching?.velocity || 120) - 110) * 0.5 + (p.pitching?.control || 30) * 0.5
+        : (p.batting?.meet || 30) * 0.4 + (p.batting?.power || 20) * 0.3 + (p.physical?.speed || 30) * 0.15 + (p.fielding?.defense || 30) * 0.15);
+    }, 0) / Math.max(1, team.players.length);
+    const winRate = Math.min(0.75, Math.max(0.25, 0.25 + teamScore / 120));
+
+    // --- 野手: 能力順に出場時間を配分 ---
+    const sortedFielders = [...fielders].sort((a, b) =>
+      (b.batting?.meet || 0) + (b.batting?.power || 0) - ((a.batting?.meet || 0) + (a.batting?.power || 0))
+    );
+    sortedFielders.forEach((p, i) => {
+      const rate = i < 9
+        ? 0.85 - i * 0.025
+        : Math.max(0.12, 0.52 - (i - 9) * 0.07);
+      const gamesPlayed = Math.max(1, Math.round(seasonGames * rate * (0.85 + Math.random() * 0.3)));
+      const atBats = Math.round(gamesPlayed * (3.2 + Math.random() * 0.8));
+      const meetF = (p.batting?.meet || 30) / 100;
+      const hitRate = Math.min(0.38, Math.max(0.14, meetF * 0.4 + (Math.random() - 0.5) * 0.04));
+      const hits = Math.round(atBats * hitRate);
+      const pwrF = (p.batting?.power || 20) / 100;
+      const hr = Math.round(atBats * pwrF * 0.06 * (0.7 + Math.random() * 0.6));
+      const eyeF = (p.batting?.eye || 25) / 80;
+
+      if (!p.seasonStats) p.seasonStats = {};
+      p.seasonStats.batting = {
+        games: gamesPlayed,
+        atBats,
+        hits,
+        homeruns: hr,
+        rbis: Math.round(hr * 2.2 + hits * 0.22 + Math.random() * 4),
+        walks: Math.round(atBats * 0.08 * (0.6 + eyeF)),
+        strikeouts: Math.round(atBats * (0.22 - meetF * 0.08)),
+        doubles: Math.round(hits * 0.18),
+        triples: Math.round(hits * 0.03),
+        stolenBases: Math.round(gamesPlayed * (p.physical?.speed || 30) / 220 * (0.7 + Math.random() * 0.6)),
+        caughtStealing: 0,
+        sacrificeBunts: Math.round(gamesPlayed * 0.05),
+      };
+    });
+
+    // --- 投手: 先発・リリーフで按分 ---
+    const sortedPitchers = [...pitchers].sort((a, b) =>
+      (Math.max(0, (b.pitching?.velocity || 120) - 110) * 0.5 + (b.pitching?.control || 30))
+      - (Math.max(0, (a.pitching?.velocity || 120) - 110) * 0.5 + (a.pitching?.control || 30))
+    );
+    const starterCount = Math.min(5, Math.max(1, Math.round(pitchers.length * 0.35)));
+
+    sortedPitchers.forEach((p, i) => {
+      const ctrlF = (p.pitching?.control || 30) / 80;
+      const velF = Math.max(0, ((p.pitching?.velocity || 120) - 110)) / 45;
+      const era = Math.min(7.5, Math.max(1.5, 5.5 - ctrlF * 2.5 - velF * 1.2 + (Math.random() - 0.5) * 0.8));
+
+      if (!p.seasonStats) p.seasonStats = {};
+
+      if (i < starterCount) {
+        const starts = Math.max(1, Math.round(seasonGames / starterCount * (0.85 + Math.random() * 0.3)));
+        const avgIP = 4.0 + (p.pitching?.stamina || 60) / 60 * 2.5;
+        const ip = Math.round(starts * avgIP);
+        p.seasonStats.pitching = {
+          games: starts,
+          gamesStarted: starts,
+          gamesRelieved: 0,
+          inningsPitched: ip,
+          wins: Math.round(starts * winRate * 0.5 * (0.7 + Math.random() * 0.6)),
+          losses: Math.round(starts * (1 - winRate) * 0.5 * (0.7 + Math.random() * 0.6)),
+          saves: 0,
+          earnedRuns: Math.round(ip * era / 9),
+          strikeouts: Math.round(ip * (1.0 + ctrlF * 0.8) * (0.8 + Math.random() * 0.4)),
+          walks: Math.round(ip * Math.max(0.1, 0.5 - ctrlF * 0.3) * (0.8 + Math.random() * 0.4)),
+          hits: Math.round(ip * (0.9 + (1 - velF) * 0.3)),
+          homeruns: Math.round(ip * 0.06),
+          battersFaced: Math.round(ip * 3.5),
+        };
+      } else {
+        const isCloser = i === starterCount;
+        const numRelievers = Math.max(1, pitchers.length - starterCount);
+        const apps = Math.max(2, Math.round(
+          seasonGames * (isCloser ? 0.35 : 0.22) / numRelievers * (0.8 + Math.random() * 0.4)
+        ));
+        const ip = Math.round(apps * (isCloser ? 1.0 : 1.3));
+        p.seasonStats.pitching = {
+          games: apps,
+          gamesStarted: 0,
+          gamesRelieved: apps,
+          inningsPitched: ip,
+          wins: Math.round(apps * 0.08 * (0.7 + Math.random() * 0.6)),
+          losses: Math.round(apps * 0.06 * (0.7 + Math.random() * 0.6)),
+          saves: isCloser ? Math.round(apps * winRate * 0.55 * (0.8 + Math.random() * 0.4)) : 0,
+          earnedRuns: Math.round(ip * era / 9),
+          strikeouts: Math.round(ip * (1.2 + ctrlF * 0.6) * (0.8 + Math.random() * 0.4)),
+          walks: Math.round(ip * Math.max(0.1, 0.4 - ctrlF * 0.2) * (0.8 + Math.random() * 0.4)),
+          hits: Math.round(ip * (0.85 + (1 - velF) * 0.25)),
+          homeruns: Math.round(ip * 0.05),
+          battersFaced: Math.round(ip * 3.4),
+        };
+      }
+    });
+  }
+}
+
 /**
  * 次年度への完全移行
  * @param {Object} seasonData - 現在のシーズンデータ
@@ -2335,6 +2466,11 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 3. シーズン統計を通算に加算してリセット
   updatedTeams = resetSeasonStats(updatedTeams, seasonData.year);
+
+  // 3.5. CPU並行世界チームにシーズン成績を注入
+  // resetSeasonStats後に入れることで通算成績に正しく積み上がり、
+  // 以降の引退判定(step5)・成長計算(step4.6)でも使われる
+  simulateParallelWorldStats(updatedTeams);
 
   // 4. 選手の年齢を更新
   updatedTeams = updateAllPlayerAges(updatedTeams);
