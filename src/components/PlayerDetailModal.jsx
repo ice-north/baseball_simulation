@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { POSITION_NAMES, BALL_EFFECTS, PITCHING_FORM_EFFECTS, getAbilityColor } from '../utils/constants.js';
 import { formatInnings } from '../utils/physics.js';
+import { buildPlayerStory, fameLabel } from './playerStory.js';
 
 export default function PlayerDetailModal({ player, onClose }) {
   const [detailTab, setDetailTab] = useState('ability');
@@ -96,12 +97,12 @@ export default function PlayerDetailModal({ player, onClose }) {
 
         {/* タブ切り替え */}
         <div className="flex gap-1 mb-4 border-b border-gray-600 flex-shrink-0">
-          {['ability', 'stats', 'abilityHistory'].map(tab => (
+          {['ability', 'story', 'stats', 'abilityHistory'].map(tab => (
             <button key={tab}
               className={`px-4 py-2 text-sm font-bold rounded-t transition ${detailTab === tab ? 'bg-gray-700 text-white' : 'text-gray-300 hover:text-white'}`}
               onClick={() => setDetailTab(tab)}
             >
-              {tab === 'ability' ? '能力' : tab === 'stats' ? '年度別成績' : '年度別能力値'}
+              {tab === 'ability' ? '能力' : tab === 'story' ? '物語' : tab === 'stats' ? '年度別成績' : '年度別能力値'}
             </button>
           ))}
         </div>
@@ -202,6 +203,82 @@ export default function PlayerDetailModal({ player, onClose }) {
               </div>
             </div>
           </>)}
+
+          {/* 物語タブ: キャリアの歩みを時系列で可視化 */}
+          {detailTab === 'story' && (() => {
+            const { events, titles, breakoutYear } = buildPlayerStory(player);
+            const fame = fameLabel(player.fame);
+            const DOT = {
+              gray: 'bg-gray-500', blue: 'bg-blue-500', green: 'bg-green-500',
+              orange: 'bg-orange-500', teal: 'bg-teal-500', red: 'bg-red-500', yellow: 'bg-yellow-400',
+            };
+            const CARD = {
+              gray: 'border-gray-600 bg-gray-700/40', blue: 'border-blue-700/50 bg-blue-900/20',
+              green: 'border-green-700/50 bg-green-900/20', orange: 'border-orange-700/50 bg-orange-900/20',
+              teal: 'border-teal-700/50 bg-teal-900/20', red: 'border-red-700/50 bg-red-900/20',
+              yellow: 'border-yellow-700/50 bg-yellow-900/20',
+            };
+            return (
+              <div className="space-y-4">
+                {/* サマリー: 知名度 + 獲得タイトル */}
+                <div className="bg-gray-700/50 rounded-lg p-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="text-sm">
+                    <span className="text-gray-400">知名度</span>
+                    <span className={`ml-2 font-bold ${fame.color}`}>{fame.text}</span>
+                    <span className="ml-1 text-xs text-gray-500">({player.fame || 0})</span>
+                  </div>
+                  {titles.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-gray-400 text-sm mr-1">タイトル</span>
+                      {titles.map((t, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded text-xs font-bold bg-yellow-900/50 text-yellow-300 border border-yellow-700/40">
+                          🏆 {t.title}{t.count > 1 ? ` ×${t.count}` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">タイトル獲得なし</span>
+                  )}
+                </div>
+
+                {/* タイムライン */}
+                {events.length === 0 ? (
+                  <div className="text-gray-400 text-sm text-center py-8">経歴データがありません</div>
+                ) : (
+                  <div className="relative pl-6">
+                    {/* 縦のレール */}
+                    <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-600" />
+                    <div className="space-y-2">
+                      {events.map((ev, i) => (
+                        <div key={i} className="relative">
+                          {/* ドット */}
+                          <div className={`absolute -left-[22px] top-2.5 w-3.5 h-3.5 rounded-full border-2 border-gray-800 ${DOT[ev.color] || 'bg-gray-500'}`} />
+                          <div className={`rounded-lg border px-3 py-2 ${CARD[ev.color] || CARD.gray}`}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-base leading-none">{ev.icon}</span>
+                              <span className="font-bold text-white text-sm">{ev.title}</span>
+                              {ev.year != null && (
+                                <span className="ml-auto text-xs text-gray-400 tabular-nums">{ev.year}年目</span>
+                              )}
+                            </div>
+                            {ev.detail && (
+                              <div className="text-xs text-gray-300 mt-0.5 ml-6">{ev.detail}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {breakoutYear != null && (
+                  <div className="text-xs text-gray-400 text-center">
+                    🔥 は年度別能力値の伸びから自動検出した「飛躍の年」です
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* 年度別成績タブ */}
           {detailTab === 'stats' && (() => {
