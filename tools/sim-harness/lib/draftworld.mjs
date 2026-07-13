@@ -19,7 +19,7 @@ const { generateHighSchoolClass, enrollInUniversity, processUniversityYear,
         highSchoolPool, universityPool, clearUniversityPool, clearHighSchoolPool } =
   await import(SRC + '/season/universityPool.js');
 const { generateCorporateRoster } = await import(SRC + '/corporate/corporateInit.js');
-const { processNPBDraft } = await import(SRC + '/season/yearProgressionSystem.js');
+const { processNPBDraft } = await import(SRC + '/season/npbDraft.js');
 
 const UNIV_RANKS = ['S', 'A', 'B', 'C', 'C', 'D'];
 const CORP_RANKS = ['A', 'A', 'B', 'B', 'B', 'C', 'C', 'C', 'C', 'D'];

@@ -50,7 +50,8 @@ import { generateCalendarMonth, getGamesForDate, generateTeamCalendar } from './
 import { DEFAULT_REGULATIONS, REGULATION_PRESETS, validateRegulations, getPlayoffFormatDescription, canModifyRegulations, applyPreset } from './season/regulationSettings.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from './season/dateProgression.js';
 import { generateTryoutCandidates, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
-import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining, processNPBDraft } from './season/yearProgressionSystem.js';
+import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
+import { processNPBDraft } from './season/npbDraft.js';
 import { initializeParallelWorldForIndependent } from './corporate/corporateInit.js';
 
 // Component imports

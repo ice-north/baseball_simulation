@@ -26,7 +26,8 @@ const { TEAMS_DATA, initializeTeamsForCount, initializeAllPitchingRotations } =
 const { generateExpansionRoster } = await import(SRC + '/season/tryoutSystem.js');
 const { initializeParallelWorldForIndependent } = await import(SRC + '/corporate/corporateInit.js');
 const { generateAprilHighSchoolClass, processSeasonEnd, snapshotRankings,
-        processNPBDraft, advanceToNextYear } = await import(SRC + '/season/yearProgressionSystem.js');
+        advanceToNextYear } = await import(SRC + '/season/yearProgressionSystem.js');
+const { processNPBDraft } = await import(SRC + '/season/npbDraft.js');
 const { createSeasonData } = await import(SRC + '/season/seasonManager.js');
 
 export { TEAMS_DATA };

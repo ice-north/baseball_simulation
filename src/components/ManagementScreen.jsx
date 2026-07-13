@@ -7,7 +7,8 @@ import { progressDate } from '../season/dateProgression.js';
 import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
-import { processNPBDraft, processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { processSeasonEnd, snapshotRankings, snapshotAbilityHistory } from '../season/yearProgressionSystem.js';
+import { processNPBDraft } from '../season/npbDraft.js';
 import { generateExpansionRoster } from '../season/tryoutSystem.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
 
