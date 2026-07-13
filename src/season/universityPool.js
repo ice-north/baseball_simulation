@@ -10,6 +10,7 @@ import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRa
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
+import { addToReleasedPool, replaceReleasedPool } from '../state/pools.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { syncPositionToFitness } from '../utils/physics.js';
 
@@ -1215,7 +1216,7 @@ export function warmUpPlayerPipeline(gameYear) {
         grad.postGradPath = 'retired';
       }
       if (grad.postGradPath !== 'retired') {
-        releasedPlayersPool.push(grad);
+        addToReleasedPool(grad);
       }
     });
 
@@ -1232,13 +1233,13 @@ export function warmUpPlayerPipeline(gameYear) {
       p.isStarter = false;
       p.battingOrder = 0;
       p.age = Math.max(19, p.age);
-      releasedPlayersPool.push(p);
+      addToReleasedPool(p);
     });
     hsDistribution.independent.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
       p.age = Math.max(19, p.age);
-      releasedPlayersPool.push(p);
+      addToReleasedPool(p);
     });
   }
 
@@ -1327,8 +1328,7 @@ function distributeToCorporateTeams(gameYear) {
 
   // 使用した選手をリリースプールから除去
   const remaining = releasedPlayersPool.filter((_, idx) => !usedIndices.has(idx));
-  releasedPlayersPool.length = 0;
-  remaining.forEach(p => releasedPlayersPool.push(p));
+  replaceReleasedPool(remaining);
 }
 
 /**

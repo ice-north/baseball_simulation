@@ -1,5 +1,6 @@
 import { compressData, compressDataAsync, decompressData, decompressDataAsync, getLocalStorageUsage } from '../utils/compression.js';
 import { TEAMS_DATA, releasedPlayersPool, clearReleasedPlayersPool } from '../teams-data.js';
+import { addManyToReleasedPool } from '../state/pools.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
@@ -277,7 +278,7 @@ export const loadGameFromSlot = async (slotIndex) => {
     // リリースプール復元
     clearReleasedPlayersPool();
     if (saveData.releasedPlayersPool && Array.isArray(saveData.releasedPlayersPool)) {
-      saveData.releasedPlayersPool.forEach(p => releasedPlayersPool.push(p));
+      addManyToReleasedPool(saveData.releasedPlayersPool);
     }
 
     // 旧セーブデータ互換: バント能力値 + 性格パラメータの移行

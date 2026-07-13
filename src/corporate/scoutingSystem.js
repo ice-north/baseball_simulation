@@ -5,6 +5,7 @@
 // ============================================================
 
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
+import { addToReleasedPool, removeFromReleasedPoolById } from '../state/pools.js';
 import { checkRetirement } from '../season/yearProgressionSystem.js';
 import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
@@ -138,7 +139,7 @@ export function executeDepartures(allTeams, retiredIds, releases, currentYear) {
           snapshot.attemptsInPool = 0;
           if (!snapshot.careerHistory) snapshot.careerHistory = [];
           snapshot.careerHistory.push({ type: 'released', year: currentYear, label: `${teamName}退団` });
-          releasedPlayersPool.push(snapshot);
+          addToReleasedPool(snapshot);
         }
       }
     });
@@ -569,8 +570,7 @@ function removeFromPool(player) {
       if (cohort.length === 0) delete universityPool[ref.enrollYear];
     }
   } else if (ref.source === 'released') {
-    const idx = releasedPlayersPool.findIndex(p => p.id === player.id);
-    if (idx >= 0) releasedPlayersPool.splice(idx, 1);
+    removeFromReleasedPoolById(player.id);
   } else if ((ref.source === 'independent' || ref.source === 'corporate_team' || ref.source === 'club_team') && ref.teamName) {
     const srcTeam = TEAMS_DATA[ref.teamName];
     if (srcTeam?.players) {

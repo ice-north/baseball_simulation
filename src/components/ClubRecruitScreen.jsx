@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
+import { removeFromReleasedPoolById } from '../state/pools.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 
 const ClubRecruitScreen = ({ seasonData, onComplete }) => {
@@ -51,8 +52,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
         player.careerHistory.push({ type: 'club_join', year: seasonData?.year || 1, label: `${userTeamName}入部` });
         teamData.players.push(player);
 
-        const idx = releasedPlayersPool.findIndex(p => p.id === player.id);
-        if (idx >= 0) releasedPlayersPool.splice(idx, 1);
+        removeFromReleasedPoolById(player.id);
       }
     }
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
+import { addToReleasedPool } from '../state/pools.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { finalizePlayerSeason } from '../season/yearProgressionSystem.js';
 import { AbilityLegend, Tooltip } from './GameUIComponents.jsx';
@@ -188,7 +189,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           snapshot.attemptsInPool = 0;
           // 解雇後は試合出場しないため、シーズン終了処理を再適用されないようにマーク
           snapshot.seasonFinalizedYear = currentYear;
-          releasedPlayersPool.push(snapshot);
+          addToReleasedPool(snapshot);
         });
         td.players = td.players.filter(p => !playerIds.includes(p.id));
       }

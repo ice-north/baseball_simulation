@@ -15,6 +15,7 @@ import { generatePositionFitness } from './tryoutSystem.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
+import { addToReleasedPool, replaceReleasedPool, removeFromReleasedPoolByIds } from '../state/pools.js';
 import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
@@ -1573,10 +1574,10 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
 
     if (idx < corpCut) {
       grad.postGradPath = 'corporate';
-      releasedPlayersPool.push(grad);
+      addToReleasedPool(grad);
     } else if (idx < indCut) {
       grad.postGradPath = 'independent';
-      releasedPlayersPool.push(grad);
+      addToReleasedPool(grad);
     } else if (gp >= 1.1 && discipline >= 60) {
       grad.postGradPath = 'club';
       report.clubGraduates.push(grad);
@@ -1914,7 +1915,7 @@ function releaseCPUCorporatePlayers(allTeams, currentYear) {
         p.isReleasedCandidate = true;
         if (!p.careerHistory) p.careerHistory = [];
         p.careerHistory.push({ type: 'released', year: currentYear, label: `${teamName}退団` });
-        releasedPlayersPool.push(p);
+        addToReleasedPool(p);
       }
     });
 
@@ -2045,8 +2046,7 @@ function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
   // 使用した選手をリリースプールから除去
   if (usedIndices.size > 0) {
     const remaining = releasedPlayersPool.filter((_, idx) => !usedIndices.has(idx));
-    releasedPlayersPool.length = 0;
-    remaining.forEach(p => releasedPlayersPool.push(p));
+    replaceReleasedPool(remaining);
   }
 
   // 最終パス（Dランクを含む）のみ: 未配属の社会人進路卒業生に表示用の行き先を付与
@@ -2367,11 +2367,7 @@ function replenishIndependentLeagueRosters(allTeams, currentYear) {
   }
 
   // プールから獲得した選手を削除（残りはユーザーのトライアウト候補として残る）
-  for (let i = releasedPlayersPool.length - 1; i >= 0; i--) {
-    if (recruitedIds.has(releasedPlayersPool[i].id)) {
-      releasedPlayersPool.splice(i, 1);
-    }
-  }
+  removeFromReleasedPoolByIds(recruitedIds);
 
   // プールで足りない分は新規選手を生成
   let nextId = (currentYear + 1) * 10000 + 8000;
@@ -2694,7 +2690,7 @@ export function advanceToNextYear(seasonData, allTeams) {
       grad.postGradPath = 'retired';
     }
     if (grad.postGradPath !== 'retired') {
-      releasedPlayersPool.push(grad);
+      addToReleasedPool(grad);
     }
   });
 
@@ -2720,13 +2716,13 @@ export function advanceToNextYear(seasonData, allTeams) {
     hsDistribution.corporate.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
-      releasedPlayersPool.push(p);
+      addToReleasedPool(p);
     });
     // 独立候補もリリースプールへ
     hsDistribution.independent.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
-      releasedPlayersPool.push(p);
+      addToReleasedPool(p);
     });
   }
 
@@ -2755,7 +2751,7 @@ export function advanceToNextYear(seasonData, allTeams) {
     universityGraduationReport.clubGraduates.forEach(p => {
       p.isStarter = false;
       p.battingOrder = 0;
-      releasedPlayersPool.push(p);
+      addToReleasedPool(p);
     });
   }
   if (clubTeamEntries.length > 0) {
@@ -2843,8 +2839,7 @@ export function advanceToNextYear(seasonData, allTeams) {
   {
     const beforeAge = releasedPlayersPool.filter(p => (p.age || 0) < 33);
     if (beforeAge.length !== releasedPlayersPool.length) {
-      releasedPlayersPool.length = 0;
-      beforeAge.forEach(p => releasedPlayersPool.push(p));
+      replaceReleasedPool(beforeAge);
     }
     const poolCap = seasonData.settings?.universityMode ? 300 : 400;
     if (releasedPlayersPool.length > poolCap) {
@@ -2856,8 +2851,7 @@ export function advanceToNextYear(seasonData, allTeams) {
       })).sort((a, b) => b.s - a.s).slice(0, poolCap);
       const keep = new Set(scoredPool.map(e => e.i));
       const trimmed = releasedPlayersPool.filter((_, i) => keep.has(i));
-      releasedPlayersPool.length = 0;
-      trimmed.forEach(p => releasedPlayersPool.push(p));
+      replaceReleasedPool(trimmed);
     }
   }
 

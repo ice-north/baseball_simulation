@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA, initializeAllPitchingRotations, releasedPlayersPool } from '../teams-data.js';
+import { addToReleasedPool } from '../state/pools.js';
 import { SEASON_PHASES } from '../season/seasonManager.js';
 import { generateFullSeasonSchedule } from '../season/scheduleGenerator.js';
 import { progressDate } from '../season/dateProgression.js';
@@ -379,7 +380,7 @@ const ManagementScreen = ({
           const teamData = TEAMS_DATA[teamName];
           if (teamData && teamData.players) {
             teamData.players.forEach(player => {
-              releasedPlayersPool.push({
+              addToReleasedPool({
                 ...JSON.parse(JSON.stringify(player)),
                 formerTeam: teamName,
                 attemptsInPool: 0
@@ -493,7 +494,7 @@ const ManagementScreen = ({
           const teamData = TEAMS_DATA[teamName];
           if (teamData && teamData.players) {
             teamData.players.forEach(player => {
-              releasedPlayersPool.push({
+              addToReleasedPool({
                 ...JSON.parse(JSON.stringify(player)),
                 formerTeam: teamName,
                 attemptsInPool: 0
