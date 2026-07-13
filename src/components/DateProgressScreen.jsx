@@ -97,7 +97,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       }
     }
     // フォールバック: pitcherRoles からスターターロールの投手を探す
-    const starterRoles = new Set(['ace', 'complete', 'short', 'quality']);
+    const starterRoles = new Set(['ace', 'complete', 'short', 'quality', 'opener']);
     const pitcherRoles = rotation?.pitcherRoles || {};
     const starterIds = Object.entries(pitcherRoles)
       .filter(([, role]) => starterRoles.has(role))

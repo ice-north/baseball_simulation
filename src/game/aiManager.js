@@ -52,7 +52,7 @@ export function executeAutoSubstitutePitcher(ctx) {
   const isScoringSituation = bases[1] || bases[2];
 
   // 先発ロール別のイニング上限・スタミナ閾値
-  const isStarter = ['ace', 'complete', 'short', 'quality', 'auto_s'].includes(currentRole);
+  const isStarter = ['ace', 'complete', 'short', 'quality', 'opener', 'auto_s'].includes(currentRole);
   let shouldSubstitute = false;
   let reason = '';
 
@@ -91,6 +91,15 @@ export function executeAutoSubstitutePitcher(ctx) {
       } else if (inning >= 7) {
         shouldSubstitute = true;
         reason = `${currentPitcher.name}が${inning - 1}回を投げ切り交代`;
+      } else if (staminaRate <= 0.30) {
+        shouldSubstitute = true;
+        reason = `スタミナ限界(${Math.round(staminaRate * 100)}%)`;
+      }
+    } else if (currentRole === 'opener') {
+      // オープナー: 2回を投げ切ったら役割完了（3回開始前に継投）
+      if (inning >= 3) {
+        shouldSubstitute = true;
+        reason = `オープナー${currentPitcher.name}が2回を投げ切り、ロングへ`;
       } else if (staminaRate <= 0.30) {
         shouldSubstitute = true;
         reason = `スタミナ限界(${Math.round(staminaRate * 100)}%)`;

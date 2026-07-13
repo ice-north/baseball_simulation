@@ -11,7 +11,7 @@ const PITCHER_REST_FATIGUE_THRESHOLD = 40;
 // ロール別球数制限
 const PITCH_LIMITS = {
   // 先発
-  complete: 120, ace: 110, quality: 100, short: 65, auto_s: 100,
+  complete: 120, ace: 110, quality: 100, short: 65, opener: 40, auto_s: 100,
   // リリーフ
   closer: 40, setup: 35, ace_relief: 40, long: 60,
   onepoint: 15, behind: 50, mopup: 50, auto_r: 35
@@ -1970,7 +1970,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               situation = Math.abs(scoreDiff) <= 2 ? 'hold' : 'middle';
               const roleLabel = {
                 complete: '完投型', ace: 'ゲームメーカー', quality: '勝ち権利型',
-                short: 'ショートスターター', closer: '守護神', setup: 'セットアッパー',
+                short: 'ショートスターター', opener: 'オープナー', closer: '守護神', setup: 'セットアッパー',
                 ace_relief: '中継ぎエース', long: 'ロングリリーフ', onepoint: 'ワンポイント',
                 behind: 'ビハインド', mopup: '敗戦処理'
               }[currentRole] || (isReliever ? 'リリーフ' : '先発');
@@ -1983,6 +1983,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             shouldChange = true;
             situation = 'middle';
             changeReason = `${pitcher.name}のスタミナ限界(${Math.round(staminaRate * 100)}%)`;
+          }
+
+          // --- オープナー: 2イニング（6アウト）投げたら役割完了、ロングへ繋ぐ ---
+          if (!shouldChange && !isReliever && currentRole === 'opener' && defendedThisInning) {
+            const openerOuts = pitcherData.gameStats?.pitching?.outs || 0;
+            if (openerOuts >= 6) {
+              shouldChange = true;
+              situation = 'middle';
+              changeReason = `オープナー${pitcher.name}が役割完了、ロングリリーフへ`;
+            }
           }
 
           // --- 条件3: ダメージポイント制（先発のみ） ---
@@ -2081,8 +2091,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               }
             }
 
-            // ショートスターター後: ロングリリーフ優先
-            if (shouldChange && !reliever && currentRole === 'short') {
+            // ショートスターター・オープナー後: ロングリリーフ優先
+            if (shouldChange && !reliever && (currentRole === 'short' || currentRole === 'opener')) {
               const longRelievers = (rotation?.middleRelievers || [])
                 .filter(id => pitcherRoles[id] === 'long' && isAvailable(id))
                 .map(id => team.players.find(p => p.id === id))

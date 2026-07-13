@@ -283,7 +283,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     if (!rotation.pitcherRoles) rotation.pitcherRoles = {};
 
     const wasStarter = (rotation.starters || []).includes(playerId);
-    const isNewStarter = ['complete', 'short', 'quality', 'ace', 'auto_s'].includes(newRole);
+    const isNewStarter = ['complete', 'short', 'quality', 'ace', 'opener', 'auto_s'].includes(newRole);
 
     // 先発→先発の変更時はstarters配列を触らない（順番維持）
     if (!(wasStarter && isNewStarter)) {
@@ -782,6 +782,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     complete:   { label: '完投型', color: 'bg-blue-700', textColor: 'text-blue-300', group: 'starter' },
     short:      { label: 'ショート', color: 'bg-blue-600', textColor: 'text-blue-300', group: 'starter' },
     quality:    { label: '勝ち権利', color: 'bg-blue-500', textColor: 'text-blue-200', group: 'starter' },
+    opener:     { label: 'オープナー', color: 'bg-teal-700', textColor: 'text-teal-300', group: 'starter' },
     auto_r:     { label: 'おまかせ', color: 'bg-gray-500', textColor: 'text-gray-200', group: 'relief' },
     long:       { label: 'ロング', color: 'bg-green-700', textColor: 'text-green-300', group: 'relief' },
     ace_relief: { label: '中継ぎエース', color: 'bg-green-500', textColor: 'text-green-200', group: 'relief' },
@@ -1467,7 +1468,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         {tab === 'rotation' && (() => {
           // 全選手をロール別にグループ分け（ベンチ外選手=isActive:falseを除外）
           const allPlayers = (team.players || []).filter(p => p.isActive !== false);
-          const starterPitchers = allPlayers.filter(p => ['ace', 'complete', 'short', 'quality', 'auto_s'].includes(getPitcherRole(p.id)));
+          const starterPitchers = allPlayers.filter(p => ['ace', 'complete', 'short', 'quality', 'opener', 'auto_s'].includes(getPitcherRole(p.id)));
           const starterOrder = team.pitchingRotation.starters || [];
           starterPitchers.sort((a, b) => {
             const ia = starterOrder.indexOf(a.id);
@@ -1489,7 +1490,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             setUpdateTrigger(prev => prev + 1);
           };
 
-          const isStarterRole = (r) => ['ace','complete','short','quality','auto_s'].includes(r);
+          const isStarterRole = (r) => ['ace','complete','short','quality','opener','auto_s'].includes(r);
           const isReliefRole = (r) => ['long','onepoint','ace_relief','mopup','behind','auto_r'].includes(r);
 
           // クリックで投手を入れ替える
@@ -1588,7 +1589,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
           // ロールアイコン
           const ROLE_ICON = {
-            ace: '👑', complete: '🏔', short: '⚡', quality: '✓', auto_s: '🤖',
+            ace: '👑', complete: '🏔', short: '⚡', quality: '✓', opener: '🚪', auto_s: '🤖',
             long: '🔄', mopup: '🧹', behind: '🛡', onepoint: '🎯',
             ace_relief: '🔥', setup: '⬆', closer: '🔒', auto_r: '🤖', none: '—',
           };
@@ -2148,38 +2149,42 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <RoleSelectModal player={roleSelectPlayer} onClose={() => setRoleSelectPlayer(null)} />
               )}
 
-              {/* 先発ローテーション: 役割スロット（ドラッグ＆ドロップで配置） */}
-              <div className="mb-2">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-blue-400 text-sm">⚾</span>
-                  <h2 className="text-sm font-bold text-blue-300">先発</h2>
-                  <span className="text-xs text-gray-400">選手カードを枠へドラッグ（タップ→枠タップでも可）</span>
+              {/* 2カラム: 先発（左・縦積み） / リリーフ（右・縦積み） */}
+              <div className="grid grid-cols-2 gap-2 mb-2 items-start">
+                {/* 先発（左） */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-blue-400 text-sm">⚾</span>
+                    <h2 className="text-sm font-bold text-blue-300">先発</h2>
+                    <span className="text-xs text-gray-400">枠へドラッグ</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <RoleSlot roleKey="complete" hint="スタミナ限界まで" />
+                    <RoleSlot roleKey="ace" hint="7-8回を任せる" />
+                    <RoleSlot roleKey="quality" hint="5-6回で交代" />
+                    <RoleSlot roleKey="short" hint="3-4回で継投" />
+                    <RoleSlot roleKey="opener" hint="初回〜2回で継投" />
+                    <RoleSlot roleKey="auto_s" hint="AIが判断" />
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
-                  <RoleSlot roleKey="complete" hint="スタミナ限界まで" />
-                  <RoleSlot roleKey="ace" hint="7-8回を任せる" />
-                  <RoleSlot roleKey="quality" hint="5-6回で交代" />
-                  <RoleSlot roleKey="short" hint="3-4回で継投" />
-                  <RoleSlot roleKey="auto_s" hint="AIが判断" />
-                </div>
-              </div>
 
-              {/* リリーフ: 役割スロット */}
-              <div className="mb-2">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-green-400 text-sm">🔄</span>
-                  <h2 className="text-sm font-bold text-green-300">リリーフ</h2>
-                  <span className="text-xs text-gray-400">後ろのイニングほど左上</span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
-                  <RoleSlot roleKey="closer" hint="9回リード" />
-                  <RoleSlot roleKey="setup" hint="8回僅差" />
-                  <RoleSlot roleKey="ace_relief" hint="接戦の中盤〜" />
-                  <RoleSlot roleKey="long" hint="複数回イニング" />
-                  <RoleSlot roleKey="onepoint" hint="左打者対策" />
-                  <RoleSlot roleKey="behind" hint="ビハインド時" />
-                  <RoleSlot roleKey="mopup" hint="大差の敗戦処理" />
-                  <RoleSlot roleKey="auto_r" hint="AIが判断" />
+                {/* リリーフ（右） */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-green-400 text-sm">🔄</span>
+                    <h2 className="text-sm font-bold text-green-300">リリーフ</h2>
+                    <span className="text-xs text-gray-400">上ほど後ろのイニング</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <RoleSlot roleKey="closer" hint="9回リード" />
+                    <RoleSlot roleKey="setup" hint="8回僅差" />
+                    <RoleSlot roleKey="ace_relief" hint="接戦の中盤〜" />
+                    <RoleSlot roleKey="long" hint="複数回イニング" />
+                    <RoleSlot roleKey="onepoint" hint="左打者対策" />
+                    <RoleSlot roleKey="behind" hint="ビハインド時" />
+                    <RoleSlot roleKey="mopup" hint="大差の敗戦処理" />
+                    <RoleSlot roleKey="auto_r" hint="AIが判断" />
+                  </div>
                 </div>
               </div>
 
