@@ -4,7 +4,6 @@ import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, a
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
-import { Tooltip } from './GameUIComponents.jsx';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
   const [tryoutCandidates, setTryoutCandidates] = useState([]);
@@ -691,14 +690,16 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                       { label: '投', key: 'pitcherOverall', tip: '投手総合力' },
                       { label: 'スカウト評価', key: null, tip: 'スカウトの選手評価' },
                     ].map((col, i) => (
-                      <Tooltip key={i} text={col.tip}>
-                        <th
-                          className={`px-1 py-1.5 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-white' : ''}`}
-                          onClick={col.key ? () => handleSort(col.key) : undefined}
-                        >
-                          {col.label}{col.key ? getSortIndicator(col.key) : ''}
-                        </th>
-                      </Tooltip>
+                      // Tooltipでラップすると<tr>直下が<span>になり列がズレるため、
+                      // <th>を直接の子にしてツールチップは native title で付ける
+                      <th
+                        key={i}
+                        title={col.tip || undefined}
+                        className={`px-1 py-1.5 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-white' : ''}`}
+                        onClick={col.key ? () => handleSort(col.key) : undefined}
+                      >
+                        {col.label}{col.key ? getSortIndicator(col.key) : ''}
+                      </th>
                     ))}
                   </tr>
                 </thead>

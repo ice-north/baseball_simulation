@@ -3,7 +3,7 @@ import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
 import { finalizePlayerSeason } from '../season/yearProgressionSystem.js';
-import { AbilityLegend, Tooltip } from './GameUIComponents.jsx';
+import { AbilityLegend } from './GameUIComponents.jsx';
 
 // AI自動解雇のロスター調整パラメータ
 const AI_MIN_ROSTER = 17;   // この人数を下回らない範囲で解雇
@@ -146,15 +146,15 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     '眼': '選球眼', '盗': '盗塁', '速': '球速', '制': '制球', 'ス': 'スタミナ',
     '試': '試合数', '成績': '今季成績', '齢': '年齢', '成長': '成長率',
   };
+  // ツールチップは native title で（Tooltipで<th>をラップすると列がズレるため）
   const SortHeader = ({ label, sortKeyVal, className = '' }) => (
-    <Tooltip text={SORT_TOOLTIPS[label]}>
-      <th
-        className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
-        onClick={(e) => { e.stopPropagation(); handleSort(sortKeyVal); }}
-      >
-        {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
-      </th>
-    </Tooltip>
+    <th
+      title={SORT_TOOLTIPS[label]}
+      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600 transition select-none ${sortKey === sortKeyVal ? 'bg-gray-600 text-white' : ''} ${className}`}
+      onClick={(e) => { e.stopPropagation(); handleSort(sortKeyVal); }}
+    >
+      {label}{sortKey === sortKeyVal ? (sortAsc ? '↑' : '↓') : ''}
+    </th>
   );
 
   const toggleRelease = (playerId) => {

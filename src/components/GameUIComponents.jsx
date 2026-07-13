@@ -321,15 +321,16 @@ const STAT_TOOLTIPS = {
   '試': '試合出場数', 'HR': '本塁打', '打点': '打点',
 };
 
+// ツールチップは native title で付ける（Tooltipで<th>をラップすると<tr>直下が
+// <span>になり、テーブルの列がデータ行とズレるため）
 export const StatHeader = ({ label, sortKey, sortActive, sortAsc, onClick, className = '' }) => (
-  <Tooltip text={STAT_TOOLTIPS[label]}>
-    <th
-      className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600/40 transition select-none text-center ${sortActive ? 'text-yellow-400' : ''} ${className}`}
-      onClick={onClick}
-    >
-      {label}{sortActive ? (sortAsc ? '↑' : '↓') : ''}
-    </th>
-  </Tooltip>
+  <th
+    title={STAT_TOOLTIPS[label]}
+    className={`py-1 px-1 cursor-pointer hover:text-white hover:bg-gray-600/40 transition select-none text-center ${sortActive ? 'text-yellow-400' : ''} ${className}`}
+    onClick={onClick}
+  >
+    {label}{sortActive ? (sortAsc ? '↑' : '↓') : ''}
+  </th>
 );
 
 // --- AbilityLegend 能力値凡例 ---
