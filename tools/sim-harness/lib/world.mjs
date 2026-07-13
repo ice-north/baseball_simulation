@@ -99,6 +99,7 @@ export function advanceYear(seasonData) {
     retirements: adv.retirements?.length || 0,
     population: countPopulation(),
     ageGroups: ageGroups(),
+    positions: positionShares(),
   };
 }
 
@@ -106,6 +107,28 @@ export function countPopulation() {
   let n = 0;
   for (const name of Object.keys(TEAMS_DATA)) n += (TEAMS_DATA[name].players?.length || 0);
   return n;
+}
+
+// 全チーム選手のポジション別シェア（%）。多年次でのポジション偏り
+// （捕手不足・投手過多）を検出するため。
+export function positionShares() {
+  const c = {};
+  let total = 0;
+  for (const name of Object.keys(TEAMS_DATA)) {
+    for (const p of (TEAMS_DATA[name].players || [])) {
+      c[p.position] = (c[p.position] || 0) + 1;
+      total++;
+    }
+  }
+  if (total === 0) return { pitcher: 0, catcher: 0, infield: 0, outfield: 0 };
+  const inf = (c.first || 0) + (c.second || 0) + (c.third || 0) + (c.short || 0);
+  const outf = (c.left || 0) + (c.center || 0) + (c.right || 0);
+  return {
+    pitcher: (c.pitcher || 0) / total * 100,
+    catcher: (c.catcher || 0) / total * 100,
+    infield: inf / total * 100,
+    outfield: outf / total * 100,
+  };
 }
 
 // 全チーム選手を年齢帯にまとめる（デモグラフィ健全性チェック用）。

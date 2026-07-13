@@ -82,6 +82,12 @@ r.assert('年齢ピラミッドが単調減少',
   g['26-29'] > g['30-33'] && g['30-33'] > g['34+'],
   `18-21:${g['18-21']} 22-25:${g['22-25']} 26-29:${g['26-29']} 30-33:${g['30-33']} 34+:${g['34+']}`);
 r.assert('若年層(18-21)が最大層', g['18-21'] === Math.max(...Object.values(g)), '');
+// ポジションバランス: 全年で投手過多/捕手不足に陥っていないか
+// （初期の健全値: 投手~30% 捕手~8% 内野~32% 外野~30%）
+const posMaxPitcher = Math.max(...history.map(m => m.positions.pitcher));
+const posMinCatcher = Math.min(...history.map(m => m.positions.catcher));
+r.band('投手シェア(最大)', posMaxPitcher, 22, 42, v => v.toFixed(1) + '%');
+r.band('捕手シェア(最小)', posMinCatcher, 5, 12, v => v.toFixed(1) + '%');
 r.print();
 
 // --- 参考: ドラフト比率の推移（初年が最も忠実）---

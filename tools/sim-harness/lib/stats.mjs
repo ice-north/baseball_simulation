@@ -38,6 +38,50 @@ export function aggregateStats(TEAMS_DATA, names) {
   };
 }
 
+// リーグの個人成績リーダー（規定到達者の最高/最多値）を求める。
+// 規定は「チーム試合数」から近似（打者=2.5打席/試合、投手=0.5回/試合）。
+// 破壊された物理/集計は「首位打者.500」「規定防御率0.00」のような外れ値として現れる。
+export function leagueLeaders(TEAMS_DATA, names) {
+  let teamGames = 0;
+  for (const n of names) {
+    for (const p of TEAMS_DATA[n].players) {
+      const g = p.seasonStats?.batting?.games || 0;
+      if (g > teamGames) teamGames = g;
+    }
+  }
+  const minAB = Math.max(50, Math.round(teamGames * 2.5));
+  const minOuts = Math.max(60, Math.round(teamGames * 0.5) * 3);
+
+  let bestAvg = -1, bestAvgName = '-';
+  let maxHR = -1, maxHRName = '-';
+  let bestERA = Infinity, bestERAName = '-';
+  let qHitters = 0, qPitchers = 0;
+
+  for (const n of names) {
+    for (const p of TEAMS_DATA[n].players) {
+      const b = p.seasonStats?.batting;
+      if (b?.atBats >= minAB) {
+        qHitters++;
+        const avg = b.hits / b.atBats;
+        if (avg > bestAvg) { bestAvg = avg; bestAvgName = p.name; }
+        if ((b.homeruns || 0) > maxHR) { maxHR = b.homeruns; maxHRName = p.name; }
+      }
+      const pi = p.seasonStats?.pitching;
+      if (pi?.inningsPitched >= minOuts) {
+        qPitchers++;
+        const era = (pi.earnedRuns || 0) / (pi.inningsPitched / 3) * 9;
+        if (era < bestERA) { bestERA = era; bestERAName = p.name; }
+      }
+    }
+  }
+  return {
+    teamGames, minAB, minInnings: Math.round(minOuts / 3),
+    bestAvg, bestAvgName, maxHR, maxHRName,
+    bestERA: bestERA === Infinity ? null : bestERA, bestERAName,
+    qHitters, qPitchers,
+  };
+}
+
 // 構造的な不変条件をチェックする。壊れたら { ok:false, msg } を返す。
 export function checkInvariants(TEAMS_DATA, names) {
   const problems = [];

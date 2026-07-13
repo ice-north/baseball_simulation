@@ -11,23 +11,31 @@
 
 ## 使い方
 
+`npm run` 経由が手軽（package.json にスクリプト登録済み）:
+
+```bash
+npm run check              # 高速ゲート: season + draft（約7秒）。コミット前/CI向け
+npm run check:full         # 全部: season + draft + progression（約50秒）
+npm run check:season       # 個別
+npm run check:draft
+npm run check:progression
+```
+
+引数付きで直接叩くこともできる:
+
 ```bash
 # シーズン統計バランス検証（デフォルト: 8チーム×120試合×3シード）
-node tools/sim-harness/season-check.mjs
 node tools/sim-harness/season-check.mjs 8 120 3   # チーム数 試合数 シード数
-
 # NPBドラフト比率検証（デフォルト: 3シード）
-node tools/sim-harness/draft-check.mjs
 node tools/sim-harness/draft-check.mjs 5          # シード数
-
 # 多年次プログレッション検証（デフォルト: 5年）
-node tools/sim-harness/progression-check.mjs
 node tools/sim-harness/progression-check.mjs 8    # 年数
 ```
 
-いずれも **全PASSで終了コード0、FAILで1**。CI やコミット前チェックに使える。
+いずれも **全PASSで終了コード0、FAILで1**。`npm run check` は `&&` 連結なので
+どれか1本でも落ちれば失敗扱いになり、コミット前チェックやCIゲートに使える。
 所要時間は season-check ≈5秒、draft-check ≈2秒、progression-check ≈1+8×年数 秒
-（5年で約45秒、8年で約70秒）。progression は重いので随時実行向け。
+（5年で約45秒）。progression は重いので `check` からは外し `check:full` に入れてある。
 
 ## 何を検証するか
 
@@ -39,6 +47,10 @@ BB/9・四球率・三振率・本塁打率が現実的な帯に収まるかを�
 ロスターは `generateExpansionRoster`（トライアウト＝独立リーグ最下層相当）の弱い選手で
 構成されるため、長打率・本塁打は低め・四球はやや多めが「正常」。帯はその戦力レベルの
 実測ベースラインに較正済みで、**NPBとの一致ではなく回帰検出**が目的。
+
+加えて **個人成績リーダーの外れ値検出** も行う（規定到達者の首位打者・本塁打王・防御率王が
+現実的な範囲か）。系統的なオフェンス膨張はリーグ集計の帯が、単一の絶対おかしいライン
+（首位打者.500超・規定防御率0.00等）はこの外れ値検出が捕える二段構え。
 
 ### draft-check.mjs — NPBドラフトの比率
 実物の `processNPBDraft` を、各ソース（高校/大学/社会人/クラブ/独立）の実物ジェネレーター
@@ -52,6 +64,7 @@ BB/9・四球率・三振率・本塁打率が現実的な帯に収まるかを�
 `advanceToNextYear`→翌年高校生生成）をN年回して長期健全性を検証する。捕まえるバグ:
 - **プール漏れ/爆発**（例: 過去にあった「大学卒業生のリリースプール消失」）→ 人口保存で検出
 - **デモグラフィ崩壊**（若年層が痩せる）→ 年齢ピラミッドの単調減少で検出
+- **ポジション偏り**（捕手不足・投手過多）→ 投手/捕手シェアの帯で検出
 - **多年次のクラブ過剰指名** → クラブ指名シェアで検出
 - **年次進行のクラッシュ**（成長/引退/大学/ドラフトのどこか）→ N年完走で検出
 - **ドラフト規模の暴走** → 総指名数の帯で検出
