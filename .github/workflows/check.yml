@@ -1,0 +1,33 @@
+name: check
+
+# ビルドとシミュレーション検証ハーネスを回して、桁レベルの崩壊
+# （疲労スパイラル・クラブ過剰指名・未import参照など）を自動で踏み抜く。
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # season-check（試合バランス・個人成績外れ値・不変条件）+ draft-check（ドラフト比率）
+      - name: Simulation checks (fast)
+        run: npm run check
+
+      # progression-check（多年次の人口保存・年齢ピラミッド・ポジション均衡）。重いので別ステップ。
+      - name: Progression check
+        run: npm run check:progression
