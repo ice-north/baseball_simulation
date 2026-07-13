@@ -508,7 +508,12 @@ export const generatePitchingRotation = (teamName) => {
   }
 
   const team = TEAMS_DATA[teamName];
-  const pitchers = team.players.filter(p => p.position === 'pitcher' || p.pitching?.stamina > 0);
+  // 投手判定は isPitcherPlayer と揃える。野手も pitching.stamina を持つ（40〜93程度）ため
+  // 「stamina > 0」で拾うと全野手が投手集合に混入し、余った野手が敗戦処理ロールに
+  // 割り当てられてしまう（大学モードのロスター再登録で顕在化していた不具合）。
+  const pitchers = team.players.filter(p =>
+    p.position === 'pitcher' || p.pitching?.stamina >= 100 || p.primaryRole === 'pitcher'
+  );
 
   const starterScore = (p) =>
     (p.pitching?.stamina || 0) * 0.45 +
