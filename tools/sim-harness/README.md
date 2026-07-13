@@ -19,10 +19,15 @@ node tools/sim-harness/season-check.mjs 8 120 3   # チーム数 試合数 シ�
 # NPBドラフト比率検証（デフォルト: 3シード）
 node tools/sim-harness/draft-check.mjs
 node tools/sim-harness/draft-check.mjs 5          # シード数
+
+# 多年次プログレッション検証（デフォルト: 5年）
+node tools/sim-harness/progression-check.mjs
+node tools/sim-harness/progression-check.mjs 8    # 年数
 ```
 
 いずれも **全PASSで終了コード0、FAILで1**。CI やコミット前チェックに使える。
-所要時間は season-check ≈5秒、draft-check ≈2秒。
+所要時間は season-check ≈5秒、draft-check ≈2秒、progression-check ≈1+8×年数 秒
+（5年で約45秒、8年で約70秒）。progression は重いので随時実行向け。
 
 ## 何を検証するか
 
@@ -40,6 +45,20 @@ BB/9・四球率・三振率・本塁打率が現実的な帯に収まるかを�
 で用意した合成ワールドに対して回し、指名の内訳を検証する。主眼は **クラブチームの
 過剰指名の回帰検出**。クラブの初期能力スケールが正しければ新規クラブ選手はほぼ指名
 されない（設計目標: クラブ輩出は年約2名）。
+
+### progression-check.mjs — 世界の多年次健全性
+独立リーグモードのフルワールド（ユーザーリーグ + 社会人179 + 他独立 + 大学234校 +
+高校生プール、計約560チーム/約15,000選手）を構築し、実物の年次進行（表彰→ドラフト→
+`advanceToNextYear`→翌年高校生生成）をN年回して長期健全性を検証する。捕まえるバグ:
+- **プール漏れ/爆発**（例: 過去にあった「大学卒業生のリリースプール消失」）→ 人口保存で検出
+- **デモグラフィ崩壊**（若年層が痩せる）→ 年齢ピラミッドの単調減少で検出
+- **多年次のクラブ過剰指名** → クラブ指名シェアで検出
+- **年次進行のクラッシュ**（成長/引退/大学/ドラフトのどこか）→ N年完走で検出
+- **ドラフト規模の暴走** → 総指名数の帯で検出
+
+初年のドラフト比率は 高33/大38/社23/独6 前後で CLAUDE.md 目標（高30/大35/社20/独14）に
+近い。年を追うと高校比率が上がる傾向があるが、これは実試合を消化せず出場由来の成長/
+表彰を過小評価する近似の影響を含むため、比率推移は参考値（合否はクラブ/人口/年齢/完走）。
 
 ## 重要な発見（構築時に判明したこと）
 
@@ -60,29 +79,39 @@ SIM_HARNESS_NO_RECOVERY=1 node tools/sim-harness/season-check.mjs 6 100 1
 
 # クラブ初期能力を故意に膨張 → クラブシェアが跳ね draft-check が必ずFAIL（~17%）
 SIM_HARNESS_BOOST_CLUB=1 node tools/sim-harness/draft-check.mjs 2
+
+# 毎年ロスターから4%漏らす → 人口保存が割れて progression-check が必ずFAIL（~83%）
+SIM_HARNESS_LEAK=1 node tools/sim-harness/progression-check.mjs 4
 ```
+
+> 補足: 高校生供給を止めても壊れない（`processNPBDraft` にプール空時の自動再生成
+> セーフティがあり、パイプラインが自己修復する）ことが構築時に判明した。健全性の証左。
 
 ## 構成
 
 ```
 tools/sim-harness/
-  season-check.mjs      シーズン統計検証（エントリ）
-  draft-check.mjs       ドラフト比率検証（エントリ）
+  season-check.mjs        シーズン統計検証（エントリ）
+  draft-check.mjs         ドラフト比率検証（エントリ）
+  progression-check.mjs   多年次プログレッション検証（エントリ）
   lib/
-    bootstrap.mjs       window/alert/localStorage のNodeスタブ（最初にimport必須）
-    report.mjs          PASS/FAIL整形・帯チェック
-    league.mjs          Nチーム構築 + 日次回復付きシーズン実行
-    stats.mjs           成績集計 + 不変条件チェック
-    draftworld.mjs      ドラフト用合成ワールド構築 + 実物processNPBDraft呼び出し
+    bootstrap.mjs         window/alert/localStorage のNodeスタブ（最初にimport必須）
+    report.mjs            PASS/FAIL整形・帯チェック
+    league.mjs            Nチーム構築 + 日次回復付きシーズン実行
+    stats.mjs             成績集計 + 不変条件チェック
+    draftworld.mjs        ドラフト用合成ワールド構築 + 実物processNPBDraft呼び出し
+    world.mjs             フルワールド構築 + 実物の年次進行シーケンス
 ```
 
 ## 限界と今後
 
-- **draft-check は新規ロスター前提のスナップショット検証**。多年次の discipline 主導
-  成長でクラブ/社会人選手が徐々にドラフト級へ育つダイナミクスは対象外。
-  高/大の指名比率が CLAUDE.md 目標（高30/大35/社20/独14）とズレるのも、合成ワールドの
-  大学成長忠実度の限界によるもの（参考値表示に留め、合否対象にしていない）。
-- **将来のプログレッション・ハーネス**: `advanceToNextYear` をフル世界（WORLD_DATA・
-  大学リーグ・高校生プール）でN年回し、年齢分布・引退・成長・多年次のドラフト比率を
-  検証する。これがあれば「クラブ選手が数年かけて育ってドラフト級になる」動きも含めて
-  検証できる。フル世界のブートストラップが必要なため未実装。
+- **draft-check は新規ロスター前提のスナップショット検証**。単年のクラブ初期能力
+  スケール回帰を直接踏み抜くのが目的。多年次の育成ダイナミクスは progression-check の領分。
+- **progression-check は実試合を消化しない近似**。CPU成績は `simulateParallelWorldStats`
+  が注入し、ドラフト評価は能力ベースで成立するが、出場数由来の `growthModifier` や表彰
+  fame は過小評価気味。そのため多年次のドラフト比率が徐々に高校寄りに漂流する（比率推移は
+  参考値に留め、合否は人口保存・年齢ピラミッド・クラブ・完走・指名規模で判定）。
+- **さらに忠実にするなら**: progression-check にユーザーリーグの実試合消化（season-check の
+  エンジンを流用）を組み込めば、出場由来の成長・表彰まで反映でき、比率推移も合否対象に
+  できる。ただし全560チーム分を回すと重くなるため、ユーザーリーグ + 主要社会人/大学の
+  サンプルだけ実消化する折衷が現実的。
