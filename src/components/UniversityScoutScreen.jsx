@@ -185,7 +185,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     const map = {
       velocity: sa.pitching?.velocity, control: sa.pitching?.control, stamina: sa.pitching?.stamina,
       meet: sa.batting?.meet, power: sa.batting?.power, eye: sa.batting?.eye,
-      speed: sa.physical?.speed, arm: sa.physical?.arm, bodyStamina: sa.physical?.bodyStamina, dexterity: sa.physical?.dexterity, defense: sa.fielding?.defense,
+      speed: sa.physical?.speed, arm: sa.physical?.arm, bodyStamina: sa.physical?.bodyStamina, dexterity: sa.physical?.dexterity, muscle: sa.physical?.muscle, defense: sa.fielding?.defense,
       professionalism: sa.professionalism,
       mental: sa.mental, growth: p.growthPotential,
     };
@@ -247,6 +247,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
       case 'arm': return typeof sa.physical?.arm === 'number' ? sa.physical.arm : -Infinity;
       case 'bodyStamina': return typeof sa.physical?.bodyStamina === 'number' ? sa.physical.bodyStamina : -Infinity;
       case 'dexterity': return typeof sa.physical?.dexterity === 'number' ? sa.physical.dexterity : -Infinity;
+      case 'muscle': return typeof sa.physical?.muscle === 'number' ? sa.physical.muscle : -Infinity;
       case 'defense': return typeof sa.fielding?.defense === 'number' ? sa.fielding.defense : -Infinity;
       case 'mental': return typeof sa.mental === 'number' ? sa.mental : -Infinity;
       case 'professionalism': return typeof sa.professionalism === 'number' ? sa.professionalism : -Infinity;
@@ -347,18 +348,19 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                       <SelTh label="年" sortK="age" title="年齢でソート" />
                       <th className="py-1 px-1 text-gray-500">体</th>
                       <th className="py-1 px-1 text-gray-500">出身校</th>
+                      <SelTh label="ミー" sortK="meet" title="ミートでソート" />
+                      <SelTh label="パワ" sortK="power" title="パワーでソート" />
+                      <SelTh label="走力" sortK="speed" title="走力でソート" />
+                      <SelTh label="肩" sortK="arm" title="肩力でソート" />
+                      <SelTh label="守備" sortK="defense" title="守備でソート" />
+                      <SelTh label="選眼" sortK="eye" title="選球眼でソート" />
                       <SelTh label="球速" sortK="velocity" title="球速でソート" />
                       <SelTh label="制球" sortK="control" title="制球でソート" />
                       <SelTh label="スタ" sortK="stamina" title="スタミナでソート" />
-                      <SelTh label="ミー" sortK="meet" title="ミートでソート" />
-                      <SelTh label="パワ" sortK="power" title="パワーでソート" />
-                      <SelTh label="選眼" sortK="eye" title="選球眼でソート" />
-                      <SelTh label="走力" sortK="speed" title="走力でソート" />
-                      <SelTh label="肩力" sortK="arm" title="肩力でソート" />
-                      <SelTh label="体幹" sortK="bodyStamina" title="体力でソート" />
-                      <SelTh label="器用" sortK="dexterity" title="器用さでソート" />
-                      <SelTh label="守備" sortK="defense" title="守備でソート" />
                       <SelTh label="精神" sortK="mental" title="精神力でソート" />
+                      <SelTh label="器用" sortK="dexterity" title="器用さでソート" />
+                      <SelTh label="体力" sortK="bodyStamina" title="体力でソート" />
+                      <SelTh label="体幹" sortK="muscle" title="体幹でソート" />
                       <SelTh label="プロ" sortK="professionalism" title="プロ意識でソート" />
                       <SelTh label="成長" sortK="growthPotential" title="成長力でソート" />
                       <th className="py-1 px-1 text-gray-500">操作</th>
@@ -385,18 +387,19 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             </span>
                           </td>
                           <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{p.highSchool?.name || '高校'}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.meet)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.power)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.arm)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.meet)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.power)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.arm)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.bodyStamina)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.dexterity)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.fielding?.defense)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.mental)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.dexterity)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.bodyStamina)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.muscle)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.professionalism)}</td>
                           <td className={`py-1.5 px-1 text-center font-bold ${gpColor(p.growthPotential)}`}>{gpLabel(p.growthPotential)}</td>
                           <td className="py-1.5 px-1">
