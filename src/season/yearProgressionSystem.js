@@ -2153,7 +2153,7 @@ function applyFreeAgentGrowth(pool) {
 // 大学生と同等の成長を社会人選手にも与え、ドラフト候補の質を維持する
 // ============================================================
 
-function applyCorporatePlayerGrowth(allTeams) {
+export function applyCorporatePlayerGrowth(allTeams) {
   const decayMult = (current, threshold, rate) => {
     if (current < threshold) return 1.0;
     return Math.max(0.10, 1.0 - (current - threshold) * rate);
