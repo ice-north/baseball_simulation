@@ -3,7 +3,8 @@ import PlayerDetailModal from './PlayerDetailModal.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
-import { POSITION_NAMES, POSITION_ORDER, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_ORDER } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { addHighSchoolPlayerToScoutList } from '../corporate/scoutingSystem.js';
 
@@ -160,11 +161,8 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const FORM_FULL = { overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' };
   const handLabel = (v) => v === 'right' ? '右' : v === 'left' ? '左' : v === 'switch' ? '両' : '?';
 
-  const StatVal = ({ value, isVel, isSta }) => {
-    const rank = getAbilityRank(value, isVel, isSta);
-    const color = getRankColor(rank);
-    return <span className={`${color} font-bold`}>{value}</span>;
-  };
+  // 能力表示は共通の AbilityValue に集約（配色の単一の真実の源）
+  const StatVal = ({ value, isVel, isSta }) => <AbilityValue value={value} isVel={isVel} isSta={isSta} />;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">

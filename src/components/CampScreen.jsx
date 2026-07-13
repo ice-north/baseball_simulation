@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES, getAbilityRank, getRankColor, POSITION_ORDER } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_ORDER } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
 
@@ -354,11 +355,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
   const isPitcher = (player) => player.position === 'pitcher';
 
-  const StatValue = ({ value, label, isVelocity = false, isStamina = false }) => {
-    const rank = getAbilityRank(value, isVelocity, isStamina);
-    const color = getRankColor(rank);
-    return <span className={`${color} font-bold`} title={`${label}: ${value}`}>{value}</span>;
-  };
+  // 能力表示は共通の AbilityValue に集約（配色の単一の真実の源）
+  const StatValue = ({ value, label, isVelocity = false, isStamina = false }) => (
+    <span title={`${label}: ${value}`}><AbilityValue value={value} isVel={isVelocity} isSta={isStamina} /></span>
+  );
 
   const FitnessValue = ({ value }) => {
     if (value === undefined || value === null) return <span className="text-gray-700">-</span>;
