@@ -4,7 +4,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { releasedPlayersPool } from '../teams-data.js';
 import { POSITION_NAMES, POSITION_ORDER } from '../utils/constants.js';
-import { AbilityValue } from './AbilityValue.jsx';
+import { AbilityValue, overallRating } from './AbilityValue.jsx';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { addHighSchoolPlayerToScoutList } from '../corporate/scoutingSystem.js';
 
@@ -123,7 +123,9 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
     }
 
     const getDef = FILTER_DEFS.find(d => d.key === sortKey);
-    const getVal = getDef ? getDef.get : (p => 0);
+    const getVal = sortKey === 'overall'
+      ? (p => overallRating(p) ?? -1)
+      : (getDef ? getDef.get : (p => 0));
     list.sort((a, b) => {
       const diff = getVal(a) - getVal(b);
       return sortAsc ? diff : -diff;
@@ -245,7 +247,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             <thead>
               {/* グループ行 */}
               <tr className="bg-gray-700/60 text-gray-500 text-xs border-b border-gray-600/50">
-                <th colSpan={5} className="py-0.5 px-2 text-left text-gray-400 font-bold">選手</th>
+                <th colSpan={6} className="py-0.5 px-2 text-left text-gray-400 font-bold">選手</th>
                 <th colSpan={8} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-blue-400/70 font-bold">野手</th>
                 <th colSpan={3} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-400 font-bold">フィジカル</th>
                 <th colSpan={4} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-red-400/70 font-bold">投手</th>
@@ -253,6 +255,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
               </tr>
               <tr className="bg-gray-700/80 text-gray-300 text-xs">
                 <th className="py-1 px-2 text-left w-20">選手名</th>
+                <SortTh k="overall" w="w-9">総合</SortTh>
                 <th className="py-1 px-1 text-center w-8">ポジ</th>
                 <SortTh k="age" w="w-7">年齢</SortTh>
                 <th className="py-1 px-1 text-center w-8">体格</th>
@@ -294,6 +297,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   onClick={() => setSelectedPlayer(selectedPlayer?.id === p.id && selectedPlayer?._source === p._source ? null : p)}
                 >
                   <td className="py-0.5 px-2 font-bold text-xs truncate max-w-[80px]">{p.name}</td>
+                  <td className="py-0.5 px-1 text-center"><AbilityValue value={overallRating(p)} showRank /></td>
                   <td className="py-0.5 px-1 text-center text-gray-300">{POSITION_NAMES[p.position] || p.position}</td>
                   <td className="py-0.5 px-1 text-center text-gray-300">{p.age || '?'}</td>
                   <td className="py-0.5 px-1 text-center">

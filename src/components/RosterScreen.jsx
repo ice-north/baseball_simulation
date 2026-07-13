@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import LineupSettingScreen from './LineupSettingScreen.jsx';
-import { AbilityValue } from './AbilityValue.jsx';
+import { AbilityValue, OverallBadge } from './AbilityValue.jsx';
 
 const POS_NAMES = {
   pitcher: '投', catcher: '捕', first: '一', second: '二',
@@ -94,6 +94,9 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
       }`}>
         {POS_NAMES[player.position] || '?'}
       </span>
+
+      {/* 総合ランク */}
+      <OverallBadge player={player} />
 
       {/* 名前 */}
       <span className={`w-20 flex-shrink-0 font-medium truncate ${isStarter ? 'text-yellow-300' : 'text-white'}`}>

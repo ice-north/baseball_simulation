@@ -42,3 +42,41 @@ export function RankBadge({ value, isVel = false, isSta = false, className = '' 
     </span>
   );
 }
+
+// 選手の総合力（0〜99目安）を役割別の加重平均で算出する。
+// 球速・投手スタミナは正規化してから合成するため、ランク配色と整合する。
+// 能力が欠損（スカウトのぼかし '?' 等）なら null を返す。
+export function overallRating(player) {
+  if (!player) return null;
+  const num = (v) => (typeof v === 'number' && !isNaN(v) ? v : null);
+  if (player.position === 'pitcher') {
+    const vel = num(player.pitching?.velocity);
+    const ctrl = num(player.pitching?.control);
+    const sta = num(player.pitching?.stamina);
+    if (vel == null || ctrl == null || sta == null) return null;
+    const velN = Math.max(0, Math.min(99, (vel - 115) * 2.5));
+    const staN = Math.max(0, Math.min(99, sta / 2));
+    const arsenal = player.pitching?.arsenal || [];
+    const bestBreak = arsenal.filter(a => a.type !== 'straight').reduce((m, a) => Math.max(m, a.level || 0), 0);
+    return Math.round(velN * 0.34 + ctrl * 0.34 + staN * 0.16 + bestBreak * 0.16);
+  }
+  const meet = num(player.batting?.meet);
+  const power = num(player.batting?.power);
+  if (meet == null || power == null) return null;
+  const eye = num(player.batting?.eye) ?? 0;
+  const def = num(player.fielding?.defense) ?? 0;
+  const spd = num(player.physical?.speed) ?? 0;
+  const arm = num(player.physical?.arm) ?? 0;
+  return Math.round(meet * 0.30 + power * 0.22 + eye * 0.14 + def * 0.14 + spd * 0.10 + arm * 0.10);
+}
+
+// 選手の総合ランクバッジ。overallRating を S〜F に丸めて表示。算出不能なら「?」。
+export function OverallBadge({ player, className = '' }) {
+  const rating = overallRating(player);
+  if (rating == null) {
+    return (
+      <span className={`inline-flex items-center justify-center w-5 h-5 rounded font-mono font-extrabold text-xs bg-gray-800 border border-gray-700 text-gray-500 ${className}`}>?</span>
+    );
+  }
+  return <RankBadge value={rating} className={className} />;
+}
