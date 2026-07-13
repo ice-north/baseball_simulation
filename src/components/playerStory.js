@@ -42,6 +42,22 @@ function abilityGain(prev, cur) {
   return { score, tops: deltas.slice(0, 3) };
 }
 
+// 年度別の能力系列を取り出す。statsHistory（自チーム選手）を優先し、
+// なければ growthHistory（snapshotAbilityHistory が全チームに記録）を使う。
+// これによりCPU/スカウト対象の選手でも「飛躍の年」を検出できる。
+function getAbilitySeries(player) {
+  const sh = (player.statsHistory || []).filter(e => e.abilities);
+  if (sh.length >= 2) {
+    return sh.map(e => ({ year: e.year, ...e.abilities }));
+  }
+  const gh = player.growthHistory || [];
+  if (gh.length >= 2) {
+    // growthHistory は既にフラット（year + 各能力）。eye/steal は持たないため0扱い。
+    return gh.map(e => ({ ...e }));
+  }
+  return [];
+}
+
 // fame（0-100）を段階ラベルに変換。
 export function fameLabel(fame) {
   const f = fame || 0;
@@ -85,13 +101,13 @@ export function buildPlayerStory(player) {
     });
   }
 
-  // 3. ブレイク（statsHistory の能力急伸）を検出
-  const sh = (player.statsHistory || []).filter(e => e.abilities);
+  // 3. ブレイク（能力の急伸）を検出。statsHistory優先・growthHistoryフォールバック。
+  const sh = getAbilitySeries(player);
   let breakoutYear = null;
   if (sh.length >= 2) {
     let best = { score: 0, idx: -1, tops: [] };
     for (let i = 1; i < sh.length; i++) {
-      const g = abilityGain(sh[i - 1].abilities, sh[i].abilities);
+      const g = abilityGain(sh[i - 1], sh[i]);
       if (g.score > best.score) best = { score: g.score, idx: i, tops: g.tops };
     }
     // 閾値: 重み付き合計12以上を「飛躍」とみなす
