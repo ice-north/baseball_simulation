@@ -5,6 +5,7 @@ import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { generateOptimalLineup, generatePitchingRotation } from '../game/lineupGenerator.js';
 import { TabBar } from './GameUIComponents.jsx';
+import { AbilityValue } from './AbilityValue.jsx';
 
 const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup');
@@ -23,6 +24,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [benchCompact, setBenchCompact] = useState(true); // コンパクト表示
   const [compareIds, setCompareIds] = useState([]); // 選手比較用（最大3人）
   const [roleLegendOpen, setRoleLegendOpen] = useState(false); // ロール解説開閉
+  const [draggedPitcherId, setDraggedPitcherId] = useState(null); // 投手起用D&D: ドラッグ中の選手
+  const [dragOverRole, setDragOverRole] = useState(null); // 投手起用D&D: ドロップ先ハイライト
+  const [tapSelectedPitcherId, setTapSelectedPitcherId] = useState(null); // 投手起用: タップ選択(タッチ用)
 
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
@@ -307,6 +311,18 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       }
     }
     setUpdateTrigger(prev => prev + 1);
+  };
+
+  // 投手起用D&D: 選手を役割スロットにドロップしたときの割り当て
+  const handleDropToRole = (playerId, roleKey) => {
+    const player = team.players.find(p => p.id === playerId);
+    if (!player) return;
+    // 野手を投手枠にドロップしたら投手へコンバートしてから役割付与
+    if (player.position !== 'pitcher') {
+      handleConvertPosition(playerId, 'pitcher');
+    }
+    handleSetPitcherRole(playerId, roleKey);
+    setTapSelectedPitcherId(null);
   };
 
   const handleConvertPosition = (playerId, newPosition) => {
@@ -2018,6 +2034,74 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             );
           };
 
+          // 投手起用D&D: ドラッグ可能な投手カード
+          const DnDPitcherCard = ({ player }) => {
+            const p = player.pitching || {};
+            const isDragging = draggedPitcherId === player.id;
+            const isTapSel = tapSelectedPitcherId === player.id;
+            const isFielder = player.position !== 'pitcher';
+            return (
+              <div
+                draggable
+                onDragStart={(e) => { setDraggedPitcherId(player.id); e.dataTransfer.effectAllowed = 'move'; }}
+                onDragEnd={() => { setDraggedPitcherId(null); setDragOverRole(null); }}
+                onClick={(e) => { e.stopPropagation(); setTapSelectedPitcherId(isTapSel ? null : player.id); }}
+                title="ドラッグで役割へ／タップで選択"
+                className={`flex items-center gap-1 px-1.5 py-1 rounded cursor-grab active:cursor-grabbing border text-xs transition-colors ${
+                  isDragging ? 'opacity-40' : ''} ${
+                  isTapSel ? 'bg-blue-900/60 border-blue-400/60 ring-1 ring-blue-400/40'
+                           : 'bg-gray-800 border-gray-700 hover:bg-gray-700/70'}`}
+              >
+                <span className="text-gray-600 shrink-0 leading-none">⠿</span>
+                <span className={`font-bold truncate ${isFielder ? 'text-cyan-300' : 'text-white'}`} style={{ maxWidth: '4.5rem' }}>{player.name}</span>
+                <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                <span className="ml-auto flex items-center gap-0.5 shrink-0 tabular-nums">
+                  <AbilityValue value={p.velocity || 0} isVel /><span className="text-gray-600">/</span>
+                  <AbilityValue value={p.control || 0} /><span className="text-gray-600">/</span>
+                  <AbilityValue value={p.stamina || 0} isSta />
+                </span>
+                <button onClick={(e) => { e.stopPropagation(); setDetailPlayer(player); }} className="shrink-0 text-gray-600 hover:text-blue-300 leading-none" title="詳細">ⓘ</button>
+              </div>
+            );
+          };
+
+          // 投手起用D&D: 役割スロット（ドロップ先）
+          const RoleSlot = ({ roleKey, hint, wide }) => {
+            const info = PITCHER_ROLES[roleKey];
+            const members = allPlayers.filter(p => getPitcherRole(p.id) === roleKey);
+            const isOver = dragOverRole === roleKey;
+            const canTapAssign = tapSelectedPitcherId !== null;
+            const onDrop = (e) => {
+              e.preventDefault();
+              if (draggedPitcherId != null) handleDropToRole(draggedPitcherId, roleKey);
+              setDraggedPitcherId(null); setDragOverRole(null);
+            };
+            return (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOverRole(roleKey); }}
+                onDragLeave={() => setDragOverRole(prev => (prev === roleKey ? null : prev))}
+                onDrop={onDrop}
+                onClick={() => { if (canTapAssign) handleDropToRole(tapSelectedPitcherId, roleKey); }}
+                className={`rounded-lg border transition-colors ${wide ? 'col-span-2' : ''} ${
+                  isOver ? 'border-blue-400 bg-blue-900/30 ring-1 ring-blue-400/40'
+                         : canTapAssign ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer hover:border-blue-400/50'
+                         : 'border-gray-700/60 bg-gray-800/40'}`}
+              >
+                <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/40">
+                  <span className="text-sm leading-none">{ROLE_ICON[roleKey]}</span>
+                  <span className={`text-xs font-bold ${info.textColor}`}>{info.label}</span>
+                  {members.length > 0 && <span className="text-xs text-gray-500">{members.length}</span>}
+                  {hint && <span className="ml-auto text-xs text-gray-600 hidden md:inline">{hint}</span>}
+                </div>
+                <div className="p-1 space-y-0.5 min-h-[2.25rem]">
+                  {members.length === 0
+                    ? <div className="text-xs text-gray-600 text-center py-2 select-none">{canTapAssign ? 'ここへ配置' : 'ここにドロップ'}</div>
+                    : members.map(pl => <DnDPitcherCard key={pl.id} player={pl} />)}
+                </div>
+              </div>
+            );
+          };
+
           return (
             <div>
               {/* 自動設定バー: 能力に応じてロールを一括割り当て / 全員おまかせ */}
@@ -2064,71 +2148,81 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <RoleSelectModal player={roleSelectPlayer} onClose={() => setRoleSelectPlayer(null)} />
               )}
 
-              {/* 2カラム: 先発（左） / リリーフ（右） */}
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                {/* 先発ローテーション */}
-                <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
-                  <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
-                    <span className="text-blue-400 text-sm">⚾</span>
-                    <h2 className="text-sm font-bold text-blue-400">先発ローテーション</h2>
-                    <span className="text-gray-500 text-xs">{starterPitchers.length}人</span>
-                  </div>
-                  <div className="p-1 space-y-0.5">
-                    {starterPitchers.length === 0 ? (
-                      <p className="text-gray-500 text-xs py-3 text-center">未設定</p>
-                    ) : starterPitchers.map((player, idx) => (
-                      <PitcherRow key={player.id} player={player} index={idx} isStarter totalCount={starterPitchers.length} />
-                    ))}
-                  </div>
+              {/* 先発ローテーション: 役割スロット（ドラッグ＆ドロップで配置） */}
+              <div className="mb-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-blue-400 text-sm">⚾</span>
+                  <h2 className="text-sm font-bold text-blue-300">先発</h2>
+                  <span className="text-xs text-gray-400">選手カードを枠へドラッグ（タップ→枠タップでも可）</span>
                 </div>
-
-                {/* リリーフ陣 */}
-                <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
-                  <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
-                    <span className="text-green-400 text-sm">🔄</span>
-                    <h2 className="text-sm font-bold text-green-400">リリーフ</h2>
-                    <span className="text-gray-500 text-xs">{allReliefPitchers.length}人</span>
-                  </div>
-                  <div className="p-1 space-y-0.5">
-                    {allReliefPitchers.length === 0 ? (
-                      <p className="text-gray-500 text-xs py-3 text-center">未設定</p>
-                    ) : allReliefPitchers.map((player, idx) => (
-                      <PitcherRow key={player.id} player={player} index={idx} />
-                    ))}
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+                  <RoleSlot roleKey="complete" hint="スタミナ限界まで" />
+                  <RoleSlot roleKey="ace" hint="7-8回を任せる" />
+                  <RoleSlot roleKey="quality" hint="5-6回で交代" />
+                  <RoleSlot roleKey="short" hint="3-4回で継投" />
+                  <RoleSlot roleKey="auto_s" hint="AIが判断" />
                 </div>
               </div>
 
-              {/* 未設定＋コンバート（横並び折りたたみ） */}
-              <div className="grid grid-cols-2 gap-2">
-                {unassignedPitchers.length > 0 && (
-                  <div className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
-                    <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5">
-                      <span className="text-gray-400 text-sm">📋</span>
-                      <h2 className="text-sm font-bold text-gray-400">未設定</h2>
-                      <span className="text-gray-500 text-xs">{unassignedPitchers.length}人</span>
-                    </div>
-                    <div className="p-1 space-y-0.5">
-                      {unassignedPitchers.map((player, idx) => (
-                        <PitcherRow key={player.id} player={player} index={idx} />
+              {/* リリーフ: 役割スロット */}
+              <div className="mb-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-green-400 text-sm">🔄</span>
+                  <h2 className="text-sm font-bold text-green-300">リリーフ</h2>
+                  <span className="text-xs text-gray-400">後ろのイニングほど左上</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                  <RoleSlot roleKey="closer" hint="9回リード" />
+                  <RoleSlot roleKey="setup" hint="8回僅差" />
+                  <RoleSlot roleKey="ace_relief" hint="接戦の中盤〜" />
+                  <RoleSlot roleKey="long" hint="複数回イニング" />
+                  <RoleSlot roleKey="onepoint" hint="左打者対策" />
+                  <RoleSlot roleKey="behind" hint="ビハインド時" />
+                  <RoleSlot roleKey="mopup" hint="大差の敗戦処理" />
+                  <RoleSlot roleKey="auto_r" hint="AIが判断" />
+                </div>
+              </div>
+
+              {/* 控え・未設定: ドロップで役割解除 */}
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOverRole('none'); }}
+                onDragLeave={() => setDragOverRole(prev => (prev === 'none' ? null : prev))}
+                onDrop={(e) => { e.preventDefault(); if (draggedPitcherId != null) handleDropToRole(draggedPitcherId, 'none'); setDraggedPitcherId(null); setDragOverRole(null); }}
+                onClick={() => { if (tapSelectedPitcherId != null) handleDropToRole(tapSelectedPitcherId, 'none'); }}
+                className={`rounded-lg border mb-2 transition-colors ${
+                  dragOverRole === 'none' ? 'border-blue-400 bg-blue-900/20'
+                    : tapSelectedPitcherId != null ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer'
+                    : 'border-gray-700/60 bg-gray-800/40'}`}
+              >
+                <div className="flex items-center gap-1.5 px-2 py-1 border-b border-gray-700/40">
+                  <span className="text-gray-300 text-sm">📋</span>
+                  <h2 className="text-xs font-bold text-gray-300">控え・未設定</h2>
+                  <span className="text-xs text-gray-400">{unassignedPitchers.length}人</span>
+                  <span className="ml-auto text-xs text-gray-500 hidden sm:inline">ここへ入れると役割解除</span>
+                </div>
+                <div className="p-1 flex flex-wrap gap-1">
+                  {unassignedPitchers.length === 0
+                    ? <div className="text-xs text-gray-500 py-1.5 px-2">未設定の投手なし</div>
+                    : unassignedPitchers.map(pl => (
+                        <div key={pl.id} className="w-[calc(50%-0.25rem)] sm:w-[calc(33.333%-0.34rem)] md:w-[calc(25%-0.375rem)]"><DnDPitcherCard player={pl} /></div>
                       ))}
-                    </div>
-                  </div>
-                )}
-                <details className="bg-gray-800/60 rounded-lg border border-gray-700/50 overflow-hidden">
-                  <summary className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-1.5 cursor-pointer hover:bg-gray-700/30 list-none">
-                    <span className="text-cyan-400 text-sm">🔀</span>
-                    <h2 className="text-sm font-bold text-cyan-400">野手コンバート</h2>
-                    <span className="text-gray-500 text-xs">{fieldersForConvert.length}人</span>
-                    <span className="text-gray-500 text-xs ml-auto">▶</span>
-                  </summary>
-                  <div className="p-1 space-y-0.5">
-                    {fieldersForConvert.map((player, idx) => (
-                      <PitcherRow key={player.id} player={player} index={idx} />
-                    ))}
-                  </div>
-                </details>
+                </div>
               </div>
+
+              {/* 野手コンバート（折りたたみ）: 役割枠にドラッグで投手化 */}
+              <details className="rounded-lg border border-gray-700/60 bg-gray-800/40">
+                <summary className="flex items-center gap-1.5 px-2 py-1 cursor-pointer list-none hover:bg-gray-700/20">
+                  <span className="text-cyan-400 text-sm">🔀</span>
+                  <h2 className="text-xs font-bold text-cyan-300">野手をコンバート</h2>
+                  <span className="text-xs text-gray-400">{fieldersForConvert.length}人</span>
+                  <span className="ml-auto text-xs text-gray-500">役割枠へドラッグで投手化 ▶</span>
+                </summary>
+                <div className="p-1 flex flex-wrap gap-1">
+                  {fieldersForConvert.map(pl => (
+                    <div key={pl.id} className="w-[calc(50%-0.25rem)] sm:w-[calc(33.333%-0.34rem)] md:w-[calc(25%-0.375rem)]"><DnDPitcherCard player={pl} /></div>
+                  ))}
+                </div>
+              </details>
             </div>
           );
         })()}
