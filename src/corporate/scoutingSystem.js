@@ -6,6 +6,7 @@
 
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool, removeFromReleasedPoolById } from '../state/pools.js';
+import { addToRoster, removeFromRosterById } from '../state/roster.js';
 import { checkRetirement } from '../season/yearProgressionSystem.js';
 import { getTeamStaffBonus, getNegotiationBonus } from './staffData.js';
 import { getReputationScoutBonus, getReputationRecruitBonus } from './corporateInit.js';
@@ -560,8 +561,7 @@ function removeFromPool(player) {
   if (!ref) return;
 
   if (ref.source === 'highschool') {
-    const idx = highSchoolPool.players.findIndex(p => p.id === player.id);
-    if (idx >= 0) highSchoolPool.players.splice(idx, 1);
+    removeFromRosterById(highSchoolPool, player.id);
   } else if (ref.source === 'university') {
     const cohort = universityPool[ref.enrollYear];
     if (cohort) {
@@ -574,8 +574,7 @@ function removeFromPool(player) {
   } else if ((ref.source === 'independent' || ref.source === 'corporate_team' || ref.source === 'club_team') && ref.teamName) {
     const srcTeam = TEAMS_DATA[ref.teamName];
     if (srcTeam?.players) {
-      const idx = srcTeam.players.findIndex(p => p.id === player.id);
-      if (idx >= 0) srcTeam.players.splice(idx, 1);
+      removeFromRosterById(srcTeam, player.id);
     }
   }
 }
@@ -597,7 +596,7 @@ export function recruitPlayer(team, player) {
   recruit.fatigue = 0;
   if (!recruit.careerHistory) recruit.careerHistory = [];
   recruit.careerHistory.push({ type: 'corporate', year: null, label: team.name });
-  team.players.push(recruit);
+  addToRoster(team, recruit);
 }
 
 /**
@@ -1392,7 +1391,7 @@ function recruitPlayerToTeam(team, player) {
   recruit.fatigue = 0;
   if (!recruit.careerHistory) recruit.careerHistory = [];
   recruit.careerHistory.push({ type: 'corporate', year: null, label: team.name });
-  team.players.push(recruit);
+  addToRoster(team, recruit);
 }
 
 /**

@@ -11,6 +11,7 @@ import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool, replaceReleasedPool } from '../state/pools.js';
+import { addToRoster } from '../state/roster.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { syncPositionToFitness } from '../utils/physics.js';
 
@@ -1297,7 +1298,7 @@ function distributeToCorporateTeams(gameYear) {
       p.battingOrder = 0;
       if (!p.careerHistory) p.careerHistory = [];
       p.careerHistory.push({ type: 'corporate_join', year: gameYear, label: teamInfo.name });
-      teamInfo.team.players.push(p);
+      addToRoster(teamInfo.team, p);
       usedIndices.add(entry.idx);
       added++;
     }
@@ -1320,7 +1321,7 @@ function distributeToCorporateTeams(gameYear) {
       p.battingOrder = 0;
       if (!p.careerHistory) p.careerHistory = [];
       p.careerHistory.push({ type: 'club_join', year: gameYear, label: `${teamInfo.name}入部` });
-      teamInfo.team.players.push(p);
+      addToRoster(teamInfo.team, p);
       usedIndices.add(scored[i].idx);
       added++;
     }

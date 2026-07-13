@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { removeFromReleasedPoolById } from '../state/pools.js';
+import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 
 const ClubRecruitScreen = ({ seasonData, onComplete }) => {
@@ -50,7 +51,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
         player.battingOrder = 0;
         if (!player.careerHistory) player.careerHistory = [];
         player.careerHistory.push({ type: 'club_join', year: seasonData?.year || 1, label: `${userTeamName}入部` });
-        teamData.players.push(player);
+        addToRoster(teamData, player);
 
         removeFromReleasedPoolById(player.id);
       }

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
+import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
 
@@ -140,8 +141,8 @@ const TradeScreen = ({ userTeamName, onBack }) => {
     cleanupPlayerReferences(targetTeam, proposal.offeredPlayer.id);
     myTeamData.players.splice(myIdx, 1);
     targetTeam.players.splice(theirIdx, 1);
-    myTeamData.players.push(proposal.offeredPlayer);
-    targetTeam.players.push(proposal.wantedPlayer);
+    addToRoster(myTeamData, proposal.offeredPlayer);
+    addToRoster(targetTeam, proposal.wantedPlayer);
 
     setTradeResult({ success: true, message: `トレード成立！ ${proposal.wantedPlayer.name} ⇄ ${proposal.offeredPlayer.name}（${proposal.fromTeam}）` });
     setTradeTab('propose');
@@ -185,8 +186,8 @@ const TradeScreen = ({ userTeamName, onBack }) => {
 
       myTeam.players.splice(myIdx, 1);
       targetTeam.players.splice(targetIdx, 1);
-      myTeam.players.push(selectedTargetPlayer);
-      targetTeam.players.push(selectedMyPlayer);
+      addToRoster(myTeam, selectedTargetPlayer);
+      addToRoster(targetTeam, selectedMyPlayer);
 
       setTradeResult({
         success: true,

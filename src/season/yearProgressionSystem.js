@@ -16,6 +16,7 @@ import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '.
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool, replaceReleasedPool, removeFromReleasedPoolByIds } from '../state/pools.js';
+import { addToRoster, replaceRoster } from '../state/roster.js';
 import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
@@ -1658,7 +1659,7 @@ function processUniversityTeamGraduation(allTeams, seasonData, currentYear) {
 
     const finalRoster = [...remaining, ...allNewPlayers];
     if (isUserTeam && finalRoster.length > 60) finalRoster.splice(60);
-    teamData.players.splice(0, teamData.players.length, ...finalRoster);
+    replaceRoster(teamData, finalRoster);
   }
 
   return report;
@@ -2037,7 +2038,7 @@ function replenishCorporateRosters(allTeams, currentYear, tierFilter) {
       player.battingOrder = 0;
       if (!player.careerHistory) player.careerHistory = [];
       player.careerHistory.push({ type: 'corporate_join', year: currentYear + 1, label: teamInfo.teamName });
-      teamInfo.team.players.push(player);
+      addToRoster(teamInfo.team, player);
       usedIndices.add(entry.idx);
       added++;
     }
@@ -2357,7 +2358,7 @@ function replenishIndependentLeagueRosters(allTeams, currentYear) {
       p.seasonStats = { batting: {}, pitching: {}, fielding: {} };
       p.careerHistory = p.careerHistory || [];
       p.careerHistory.push({ type: 'independent', label: `${teamInfo.teamName}入団`, year: currentYear + 1 });
-      teamInfo.team.players.push(p);
+      addToRoster(teamInfo.team, p);
       recruitedIds.add(candidate.player.id);
       teamInfo.needed--;
       taken++;
@@ -2375,7 +2376,7 @@ function replenishIndependentLeagueRosters(allTeams, currentYear) {
     while (teamInfo.needed > 0) {
       const newPlayer = generateIndependentNewcomer(nextId++, currentYear + 1);
       newPlayer.careerHistory = [{ type: 'independent', label: `${teamInfo.teamName}入団`, year: currentYear + 1 }];
-      teamInfo.team.players.push(newPlayer);
+      addToRoster(teamInfo.team, newPlayer);
       teamInfo.needed--;
     }
   }
@@ -2828,7 +2829,7 @@ export function advanceToNextYear(seasonData, allTeams) {
         player.battingOrder = 0;
         if (!player.careerHistory) player.careerHistory = [];
         player.careerHistory.push({ type: 'club_join', year: currentYear + 1, label: `${targetClub.name}入部` });
-        targetClub.team.players.push(player);
+        addToRoster(targetClub.team, player);
         targetClub.count++;
         sortedClubs.sort((a, b) => a.count - b.count);
       }

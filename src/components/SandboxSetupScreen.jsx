@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
+import { addToRoster, addManyToRoster, removeFromRosterById } from '../state/roster.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
@@ -106,16 +107,14 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   // 選手追加
   const addPlayer = (position) => {
     const newPlayer = createDefaultPlayer(getNextId(), position);
-    TEAMS_DATA[activeTeam].players.push(newPlayer);
+    addToRoster(TEAMS_DATA[activeTeam], newPlayer);
     forceUpdate();
     startEditPlayer(newPlayer);
   };
 
   // 選手削除
   const removePlayer = (playerId) => {
-    const idx = TEAMS_DATA[activeTeam].players.findIndex(p => p.id === playerId);
-    if (idx !== -1) {
-      TEAMS_DATA[activeTeam].players.splice(idx, 1);
+    if (removeFromRosterById(TEAMS_DATA[activeTeam], playerId)) {
       forceUpdate();
     }
   };
@@ -160,7 +159,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
         nextId += 1;
         return player;
       });
-      TEAMS_DATA[activeTeam].players.push(...converted);
+      addManyToRoster(TEAMS_DATA[activeTeam], converted);
       forceUpdate();
       alert(`${converted.length}名のドラフト指名選手を「${activeTeam}」にインポートしました`);
     });
