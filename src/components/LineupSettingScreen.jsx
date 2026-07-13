@@ -3,7 +3,7 @@ import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
-import { generateOptimalLineup } from '../game/lineupGenerator.js';
+import { generateOptimalLineup, generatePitchingRotation } from '../game/lineupGenerator.js';
 import { TabBar } from './GameUIComponents.jsx';
 
 const LineupSettingScreen = ({ teamName, onBack }) => {
@@ -2020,6 +2020,42 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
           return (
             <div>
+              {/* 自動設定バー: 能力に応じてロールを一括割り当て / 全員おまかせ */}
+              <div className="flex items-center gap-2 mb-2 bg-gray-800/40 rounded-lg border border-gray-700/30 px-3 py-2">
+                <span className="text-xs text-gray-400 shrink-0">投手起用</span>
+                <button
+                  onClick={() => {
+                    generatePitchingRotation(teamName);
+                    setUpdateTrigger(prev => prev + 1);
+                  }}
+                  className="bg-blue-800 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded font-medium transition"
+                  title="能力に応じて先発ローテ・守護神・セット・中継ぎ等を自動で割り当てます"
+                >
+                  自動設定
+                </button>
+                <button
+                  onClick={() => {
+                    const rot = team.pitchingRotation;
+                    if (rot) {
+                      const starterSet = new Set(rot.starters || []);
+                      const roles = {};
+                      (team.players || []).forEach(p => {
+                        if (p.position === 'pitcher' || (p.pitching?.stamina || 0) >= 100) {
+                          roles[p.id] = starterSet.has(p.id) ? 'auto_s' : 'auto_r';
+                        }
+                      });
+                      rot.pitcherRoles = roles;
+                    }
+                    setUpdateTrigger(prev => prev + 1);
+                  }}
+                  className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-3 py-1 rounded font-medium transition"
+                  title="全投手をおまかせにします（AIが登板場面を自動判断）"
+                >
+                  全員おまかせ
+                </button>
+                <span className="text-xs text-gray-500 hidden sm:inline">自動設定=能力で最適配置 / おまかせ=AIが場面判断</span>
+              </div>
+
               <BullpenFlowCompact />
               <RoleLegend />
 
