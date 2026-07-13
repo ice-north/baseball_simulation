@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import {
   initUniversityScoutList,
   getUniversityScoutSlots,
@@ -221,12 +222,8 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     </th>
   );
 
-  const renderVal = (val, isVelocity) => {
-    if (val === '?' || val === undefined) return <span className="text-gray-500">?</span>;
-    const n = typeof val === 'number' ? val : parseInt(val);
-    if (isNaN(n)) return <span className="text-gray-500">?</span>;
-    return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 115) * 2.5) : n)}`}>{val}</span>;
-  };
+  // 能力表示は共通の AbilityValue に統一（球速/スタミナの正規化・S〜F色を一元化）
+  const renderVal = (val, isVel, isSta) => <AbilityValue value={val} isVel={isVel} isSta={isSta} />;
 
   const revealLabel = (level) => {
     if (level >= 2) return <span className="text-green-400 text-xs">詳細</span>;
@@ -395,7 +392,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
-                          <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                          <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina, false, true)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.mental)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.dexterity)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.bodyStamina)}</td>
@@ -581,7 +578,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                         <td className="py-1.5 px-1 text-center">{revealLabel(p._revealLevel || 0)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
-                        <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                        <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.stamina, false, true)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.meet)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.power)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.eye)}</td>

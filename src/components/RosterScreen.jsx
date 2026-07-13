@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import LineupSettingScreen from './LineupSettingScreen.jsx';
+import { AbilityValue } from './AbilityValue.jsx';
 
 const POS_NAMES = {
   pitcher: '投', catcher: '捕', first: '一', second: '二',
@@ -54,15 +55,12 @@ export const autoSelectActive = (players) => {
   pitchers.slice(0, pitcherSlots).forEach(p => { p.isActive = true; });
 };
 
-// 能力値セル（ラベル上・値下の縦2行）
-const Stat = ({ label, value, low, high }) => {
-  const color = value >= high ? 'text-green-400 font-bold'
-    : value >= low ? 'text-yellow-300'
-    : 'text-gray-400';
+// 能力値セル（ラベル上・値下の縦2行）。配色は共通の AbilityValue（S〜Fランク色）に統一。
+const Stat = ({ label, value, isVel, isSta }) => {
   return (
     <span className="flex flex-col items-center w-9 flex-shrink-0">
-      <span className="text-xs text-gray-400 leading-none truncate w-full text-center">{label}</span>
-      <span className={`text-xs leading-none mt-0.5 font-bold ${color}`}>{value}</span>
+      <span className="text-xs text-gray-300 leading-none truncate w-full text-center">{label}</span>
+      <span className="text-xs leading-none mt-0.5"><AbilityValue value={value} isVel={isVel} isSta={isSta} /></span>
     </span>
   );
 };
@@ -112,9 +110,9 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
       <div className="flex items-center flex-1 justify-end">
         {isPitcher ? (
           <>
-            <Stat label="球速" value={player.pitching?.velocity || 0} low={130} high={145} />
-            <Stat label="制球" value={player.pitching?.control || 0} low={40} high={58} />
-            <Stat label="スタ" value={player.pitching?.stamina || 0} low={40} high={60} />
+            <Stat label="球速" value={player.pitching?.velocity || 0} isVel />
+            <Stat label="制球" value={player.pitching?.control || 0} />
+            <Stat label="スタ" value={player.pitching?.stamina || 0} isSta />
             <span className="flex flex-col items-center w-9 flex-shrink-0">
               <span className="text-xs text-gray-400 leading-none">変化</span>
               <span className="text-xs text-gray-300 leading-none mt-0.5 font-bold">{player.pitching?.arsenal?.length || 0}種</span>
@@ -122,11 +120,11 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
           </>
         ) : (
           <>
-            <Stat label="ミト" value={player.batting?.meet || 0} low={35} high={52} />
-            <Stat label="パワ" value={player.batting?.power || 0} low={25} high={42} />
-            <Stat label="走力" value={player.physical?.speed || 0} low={30} high={48} />
-            <Stat label="肩力" value={player.physical?.arm || 0} low={30} high={48} />
-            <Stat label="守備" value={player.fielding?.defense || 0} low={35} high={52} />
+            <Stat label="ミト" value={player.batting?.meet || 0} />
+            <Stat label="パワ" value={player.batting?.power || 0} />
+            <Stat label="走力" value={player.physical?.speed || 0} />
+            <Stat label="肩力" value={player.physical?.arm || 0} />
+            <Stat label="守備" value={player.fielding?.defense || 0} />
           </>
         )}
       </div>

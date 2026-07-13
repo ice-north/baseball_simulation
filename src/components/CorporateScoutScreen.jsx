@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
-import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import {
   getScoutedCandidates,
   generateRivalInterest,
@@ -182,12 +183,8 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     </th>
   );
 
-  const renderVal = (val, isVelocity) => {
-    if (val === '?' || val === undefined) return <span className="text-gray-500">?</span>;
-    const n = typeof val === 'number' ? val : parseInt(val);
-    if (isNaN(n)) return <span className="text-gray-500">?</span>;
-    return <span className={`font-bold ${getAbilityColor(isVelocity ? Math.min(99, (n - 115) * 2.5) : n)}`}>{val}</span>;
-  };
+  // 能力表示は共通の AbilityValue に統一（球速/スタミナの正規化・S〜F色を一元化）
+  const renderVal = (val, isVel, isSta) => <AbilityValue value={val} isVel={isVel} isSta={isSta} />;
 
   if (phase === 'results') {
     const successes = negotiationResults.filter(r => r.success);
@@ -444,7 +441,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.fielding?.defense)}</td>
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.control)}</td>
-                    <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.stamina)}</td>
+                    <td className="px-1.5 py-2 text-center">{renderVal(sa.pitching?.stamina, false, true)}</td>
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.professionalism)}</td>
                     <td className="px-1.5 py-2 text-center">{renderVal(sa.physical?.recovery)}</td>
                     <td className="px-1.5 py-2 text-center whitespace-nowrap">
