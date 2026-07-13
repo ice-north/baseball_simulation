@@ -247,11 +247,11 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             <thead>
               {/* グループ行 */}
               <tr className="bg-gray-700/60 text-gray-500 text-xs border-b border-gray-600/50">
-                <th colSpan={6} className="py-0.5 px-2 text-left text-gray-400 font-bold">選手</th>
-                <th colSpan={8} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-blue-400/70 font-bold">野手</th>
-                <th colSpan={3} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-400 font-bold">フィジカル</th>
-                <th colSpan={4} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-red-400/70 font-bold">投手</th>
-                <th colSpan={gameMode === 'university' ? 6 : 5} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-400 font-bold">属性</th>
+                <th colSpan={6} className="py-0.5 px-2 text-left text-gray-300 font-bold">選手</th>
+                <th colSpan={8} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-blue-300 font-bold">野手</th>
+                <th colSpan={3} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-300 font-bold">フィジカル</th>
+                <th colSpan={4} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-red-300 font-bold">投手</th>
+                <th colSpan={gameMode === 'university' ? 6 : 5} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-300 font-bold">属性</th>
               </tr>
               <tr className="bg-gray-700/80 text-gray-300 text-xs">
                 <th className="py-1 px-2 text-left w-20">選手名</th>

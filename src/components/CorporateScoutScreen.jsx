@@ -426,7 +426,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                       <span className={`font-bold ${recColor(rec)}`}>{rec}</span>
                     </td>
                     <td className="px-1.5 py-2 text-white font-bold whitespace-nowrap">{player.name}</td>
-                    <td className="px-1.5 py-2 text-gray-400 text-center">{player.age}</td>
+                    <td className="px-1.5 py-2 text-gray-300 text-center">{player.age}</td>
                     <td className="px-1.5 py-2 text-center">
                       <span className={player.physical?.build === 'large' ? 'text-orange-400' : player.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                         {player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}

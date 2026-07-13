@@ -374,16 +374,16 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             {isPicked && <span className="text-green-400 text-xs mr-1">合格</span>}
                             <span className={`font-bold ${isPicked ? 'text-green-300' : 'text-white'}`}>{p.name}</span>
                           </td>
-                          <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
-                          <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{throwLabel(p.physical?.throws)}{batLabel(p.batting?.bats)}</td>
-                          <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{formLabel(p.pitching?.form)}</td>
-                          <td className="py-1.5 px-1 text-gray-400 text-center">{p.age}</td>
+                          <td className="py-1.5 px-1 text-gray-300 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
+                          <td className="py-1.5 px-1 text-gray-300 text-center whitespace-nowrap">{throwLabel(p.physical?.throws)}{batLabel(p.batting?.bats)}</td>
+                          <td className="py-1.5 px-1 text-gray-300 text-center whitespace-nowrap">{formLabel(p.pitching?.form)}</td>
+                          <td className="py-1.5 px-1 text-gray-300 text-center">{p.age}</td>
                           <td className="py-1.5 px-1 text-center whitespace-nowrap">
                             <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                               {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
                             </span>
                           </td>
-                          <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{p.highSchool?.name || '高校'}</td>
+                          <td className="py-1.5 px-1 text-gray-300 whitespace-nowrap">{p.highSchool?.name || '高校'}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.meet)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.batting?.power)}</td>
                           <td className="py-1.5 px-1 text-center">{renderVal(sa.physical?.speed)}</td>
@@ -565,16 +565,16 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             <span className="text-white font-bold">{p.name}</span>
                           </div>
                         </td>
-                        <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
-                        <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{throwLabel(p.physical?.throws)}{batLabel(p.batting?.bats)}</td>
-                        <td className="py-1.5 px-1 text-gray-400 text-center whitespace-nowrap">{formLabel(p.pitching?.form)}</td>
-                        <td className="py-1.5 px-1 text-gray-400 text-center">{p.age}</td>
+                        <td className="py-1.5 px-1 text-gray-300 whitespace-nowrap">{POSITION_NAMES[p.position]?.slice(0, 2) || p.position}</td>
+                        <td className="py-1.5 px-1 text-gray-300 text-center whitespace-nowrap">{throwLabel(p.physical?.throws)}{batLabel(p.batting?.bats)}</td>
+                        <td className="py-1.5 px-1 text-gray-300 text-center whitespace-nowrap">{formLabel(p.pitching?.form)}</td>
+                        <td className="py-1.5 px-1 text-gray-300 text-center">{p.age}</td>
                         <td className="py-1.5 px-1 text-center whitespace-nowrap">
                           <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
                             {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
                           </span>
                         </td>
-                        <td className="py-1.5 px-1 text-gray-400 whitespace-nowrap">{p._scoutSource}</td>
+                        <td className="py-1.5 px-1 text-gray-300 whitespace-nowrap">{p._scoutSource}</td>
                         <td className="py-1.5 px-1 text-center">{revealLabel(p._revealLevel || 0)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.velocity, true)}</td>
                         <td className="py-1.5 px-1 text-center">{renderVal(sa.pitching?.control)}</td>
