@@ -11,9 +11,23 @@ import { addHighSchoolPlayerToScoutList } from '../corporate/scoutingSystem.js';
 const SOURCES = [
   { key: 'highschool', label: '高校生' },
   { key: 'university', label: '大学生' },
+  { key: 'corporate', label: '社会人' },
+  { key: 'club', label: 'クラブ' },
+  { key: 'independent', label: '独立' },
   { key: 'released', label: '自由契約' },
-  { key: 'teams', label: 'チーム所属' },
 ];
+
+// TEAMS_DATA のチームを所属種別に振り分ける。ユーザー自チームはマーカーが無いため
+// gameMode から推定する（独立/社会人/大学）。
+function teamSourceOf(t, gameMode) {
+  if (t.universityData || t.universityTeamId) return 'university';
+  if (t.independentLeagueId || t.corporateData?.type === 'independent') return 'independent';
+  if (t.corporateData?.type === 'club') return 'club';
+  if (t.corporateData?.type === 'corporate') return 'corporate';
+  if (gameMode === 'university') return 'university';
+  if (gameMode === 'corporate') return 'corporate';
+  return 'independent';
+}
 
 const FILTER_DEFS = [
   { key: 'age', label: '年齢', get: p => p.age || 18, min: 15, max: 45, step: 1 },
@@ -42,7 +56,7 @@ FILTER_DEFS.forEach(f => {
   DEFAULT_FILTERS[f.key] = { enabled: false, min: f.min || 0, max: f.max || 99 };
 });
 
-function collectAllPlayers() {
+function collectAllPlayers(gameMode) {
   const results = [];
   const seen = new Set();
 
@@ -80,8 +94,9 @@ function collectAllPlayers() {
   }
 
   Object.entries(TEAMS_DATA || {}).forEach(([teamName, teamData]) => {
+    const src = teamSourceOf(teamData, gameMode);
     (teamData.players || []).forEach(p => {
-      push(p, 'teams', teamName);
+      push(p, src, teamName);
     });
   });
 
@@ -90,7 +105,7 @@ function collectAllPlayers() {
 
 const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const [filters, setFilters] = useState(() => JSON.parse(JSON.stringify(DEFAULT_FILTERS)));
-  const [sources, setSources] = useState({ highschool: true, university: true, released: true, teams: true });
+  const [sources, setSources] = useState({ highschool: true, university: true, corporate: true, club: true, independent: true, released: true });
   const [posFilter, setPosFilter] = useState('all');
   const [nameQuery, setNameQuery] = useState('');
   const [sortKey, setSortKey] = useState('meet');
@@ -99,7 +114,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const [scoutAddMsg, setScoutAddMsg] = useState(null);
   const [scoutTick, setScoutTick] = useState(0); // スカウト追加後の再描画トリガー
 
-  const allPlayers = useMemo(() => collectAllPlayers(), []);
+  const allPlayers = useMemo(() => collectAllPlayers(gameMode), [gameMode]);
 
   const filtered = useMemo(() => {
     let list = allPlayers.filter(p => sources[p._source]);
