@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import { processCorporateRetirements, executeDepartures } from '../corporate/scoutingSystem.js';
 import { getPlayerSalary, getStaffSalary, convertPlayerToStaff, STAFF_ABILITIES, MAX_STAFF } from '../corporate/staffData.js';
 import { getReputationBudgetBonus, getManagingBudgetBonus, getTournamentBudgetBonus, getSponsorIncome, generateSponsorOffers, acceptSponsor, SPONSOR_TIERS } from '../corporate/corporateInit.js';
@@ -561,14 +562,14 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                   <td className={`py-0.5 px-1 text-center ${getAbilityColor(player.fielding?.defense)}`}>
                     {player.fielding?.defense || 0}
                   </td>
-                  <td className={`py-0.5 px-1 text-center ${!isPitcher ? 'text-gray-600' : getAbilityColor((player.pitching?.velocity - 120) * 1.5)}`}>
-                    {player.pitching?.velocity || '-'}
+                  <td className="py-0.5 px-1 text-center">
+                    {isPitcher ? <AbilityValue value={player.pitching?.velocity} isVel placeholder="-" /> : <span className="text-gray-600">-</span>}
                   </td>
                   <td className={`py-0.5 px-1 text-center ${!isPitcher ? 'text-gray-600' : getAbilityColor(player.pitching?.control)}`}>
                     {player.pitching?.control || '-'}
                   </td>
-                  <td className={`py-0.5 px-1 text-center ${!isPitcher ? 'text-gray-600' : ''}`}>
-                    {isPitcher ? (player.pitching?.stamina || 0) : '-'}
+                  <td className="py-0.5 px-1 text-center">
+                    {isPitcher ? <AbilityValue value={player.pitching?.stamina} isSta placeholder="-" /> : <span className="text-gray-600">-</span>}
                   </td>
                   <td className="py-0.5 px-1 text-center">{games}</td>
                 </tr>

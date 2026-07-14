@@ -3,6 +3,7 @@ import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
 import { POSITION_NAMES, getAbilityColor, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
 import { finalizePlayerSeason, getPitchTypeName } from '../season/yearProgressionSystem.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import { AbilityLegend } from './GameUIComponents.jsx';
 
 // AI自動解雇のロスター調整パラメータ
@@ -312,9 +313,9 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.fielding?.defense || 0)}`}>{player.fielding?.defense || 0}</td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.eye || 0)}`}>{player.batting?.eye || 0}</td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.steal || 0)}`}>{player.batting?.steal || 0}</td>
-                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.velocity || 0)}`}>{player.pitching?.velocity || 0}</td>
+                      <td className="py-1 px-1 text-xs text-center"><AbilityValue value={player.pitching?.velocity || 0} isVel /></td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
-                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.stamina || 0)}`}>{player.pitching?.stamina || 0}</td>
+                      <td className="py-1 px-1 text-xs text-center"><AbilityValue value={player.pitching?.stamina || 0} isSta /></td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.spinRate ?? 0)}`}>{isPitcher ? (player.pitching?.spinRate ?? '-') : '-'}</td>
                       <td className="py-1 px-1 text-xs text-center whitespace-nowrap">
                         {(() => {

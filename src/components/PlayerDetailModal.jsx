@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { POSITION_NAMES, BALL_EFFECTS, PITCHING_FORM_EFFECTS, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES, BALL_EFFECTS, PITCHING_FORM_EFFECTS, getAbilityColor, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import { formatInnings } from '../utils/physics.js';
 import { buildPlayerStory, fameLabel } from './playerStory.js';
 
@@ -21,16 +22,22 @@ export default function PlayerDetailModal({ player, onClose }) {
   const catcherLead = player.catching?.lead;
   const positionFit = player.positionFitness || {};
 
-  const StatBar = ({ label, value, max = 99 }) => (
-    <div className="flex items-center gap-2 mb-1">
-      <span className="text-xs text-gray-300 w-14">{label}</span>
-      <div className="flex-1 bg-gray-700 rounded h-2.5">
-        <div className={`h-2.5 rounded ${value >= 80 ? 'bg-red-500' : value >= 60 ? 'bg-yellow-500' : value >= 40 ? 'bg-green-500' : 'bg-blue-500'}`}
-          style={{ width: `${Math.min(100, (value / max) * 100)}%` }} />
+  const StatBar = ({ label, value, max = 99, isVel = false, isSta = false }) => {
+    // 球速・スタミナは 0-100 に正規化してからバー長・色を決める（生値だと常に最大色になる）
+    const norm = isVel ? Math.max(0, Math.min(100, (value - 115) * 2.5))
+      : isSta ? Math.max(0, Math.min(100, value / 2))
+      : Math.max(0, Math.min(100, (value / max) * 100));
+    const barColor = norm >= 80 ? 'bg-red-500' : norm >= 60 ? 'bg-yellow-500' : norm >= 40 ? 'bg-green-500' : 'bg-blue-500';
+    return (
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-xs text-gray-300 w-14">{label}</span>
+        <div className="flex-1 bg-gray-700 rounded h-2.5">
+          <div className={`h-2.5 rounded ${barColor}`} style={{ width: `${norm}%` }} />
+        </div>
+        <span className={`text-sm font-bold w-8 text-right ${getRankColor(getAbilityRank(value, isVel, isSta))}`}>{value}</span>
       </div>
-      <span className={`text-sm font-bold w-8 text-right ${getAbilityColor(value)}`}>{value}</span>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
@@ -175,9 +182,9 @@ export default function PlayerDetailModal({ player, onClose }) {
                 {player.pitching && (<>
                   <div className="border-t border-gray-600 mt-3 pt-2">
                     <h3 className="text-sm font-bold text-red-300 mb-2">投球系</h3>
-                    <StatBar label="球速" value={player.pitching?.velocity || 0} max={165} />
+                    <StatBar label="球速" value={player.pitching?.velocity || 0} isVel />
                     <StatBar label="制球" value={player.pitching?.control || 0} />
-                    <StatBar label="スタミナ" value={player.pitching?.stamina || 0} />
+                    <StatBar label="スタミナ" value={player.pitching?.stamina || 0} isSta />
                     <StatBar label="回転" value={player.pitching?.spinRate ?? 50} />
                     <div className="mt-2 text-xs text-gray-400">
                       フォーム: <span className="text-white">{formName}</span>
@@ -495,9 +502,9 @@ export default function PlayerDetailModal({ player, onClose }) {
                         <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
                           <td className="px-2 py-1 text-white font-bold">{i + 1}年目</td>
                           <td className="px-2 py-1 text-center">{a.age}歳</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.velocity)}>{a.velocity}</span>{diff(a, prevA, 'velocity')}</td>
+                          <td className="px-2 py-1 text-center"><AbilityValue value={a.velocity} isVel />{diff(a, prevA, 'velocity')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.control)}>{a.control}</span>{diff(a, prevA, 'control')}</td>
-                          <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.stamina)}>{a.stamina}</span>{diff(a, prevA, 'stamina')}</td>
+                          <td className="px-2 py-1 text-center"><AbilityValue value={a.stamina} isSta />{diff(a, prevA, 'stamina')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.meet)}>{a.meet}</span>{diff(a, prevA, 'meet')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{diff(a, prevA, 'power')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{diff(a, prevA, 'speed')}</td>
@@ -509,9 +516,9 @@ export default function PlayerDetailModal({ player, onClose }) {
                     <tr className="border-t-2 border-gray-500 font-bold">
                       <td className="px-2 py-1 text-cyan-400">現在</td>
                       <td className="px-2 py-1 text-center text-white">{player.age}歳</td>
-                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.pitching?.velocity || 0)}>{player.pitching?.velocity || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><AbilityValue value={player.pitching?.velocity || 0} isVel /></td>
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.pitching?.control || 0)}>{player.pitching?.control || 0}</span></td>
-                      <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.pitching?.stamina || 0)}>{player.pitching?.stamina || 0}</span></td>
+                      <td className="px-2 py-1 text-center"><AbilityValue value={player.pitching?.stamina || 0} isSta /></td>
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.meet || 0)}>{player.batting?.meet || 0}</span></td>
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.power || 0)}>{player.batting?.power || 0}</span></td>
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.physical?.speed || 0)}>{player.physical?.speed || 0}</span></td>

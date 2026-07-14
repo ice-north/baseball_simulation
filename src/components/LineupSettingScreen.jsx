@@ -455,6 +455,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           </div>
 
           <div className="p-4 space-y-3">
+            {/* 全国大会成績（🏆）*/}
+            {(player.careerHistory || []).some(h => h.type === 'achievement') && (
+              <div className="flex flex-wrap gap-1">
+                {(player.careerHistory || []).filter(h => h.type === 'achievement').map((a, i) => (
+                  <span key={i} className={`text-xs rounded px-1.5 py-0.5 ${a.result === '優勝' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-700/50' : 'bg-gray-800 text-gray-300 border border-gray-600/50'}`}>
+                    🏆 {a.grade ? `${a.grade}年時 ` : ''}{a.tournament}{a.result}
+                  </span>
+                ))}
+              </div>
+            )}
             {/* 投手能力 */}
             {isPitcher && (
               <div>

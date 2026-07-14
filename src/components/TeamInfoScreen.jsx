@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 import { formatInnings } from '../utils/physics.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 
@@ -206,9 +207,9 @@ const TeamInfoScreen = ({ gameMode }) => {
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}</td>
                         {isUniversity && <td className="px-2 py-1 text-gray-400 text-center whitespace-nowrap">{player.highSchool?.name || '—'}</td>}
                         {isUniversity && <td className={`px-2 py-1 text-center whitespace-nowrap font-bold ${rt ? rt.cls : 'text-gray-600'}`}>{rt ? rt.label : '—'}</td>}
-                        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.velocity)}`}>{player.pitching?.velocity || '-'}</td>
+                        <td className="px-2 py-1 text-center"><AbilityValue value={player.pitching?.velocity} isVel placeholder="-" /></td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.control)}`}>{player.pitching?.control || '-'}</td>
-                        <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(Math.min(99, Math.floor((player.pitching?.stamina || 0) / 2)))}`}>{player.pitching?.stamina || '-'}</td>
+                        <td className="px-2 py-1 text-center"><AbilityValue value={player.pitching?.stamina} isSta placeholder="-" /></td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.spinRate ?? 50)}`}>{player.pitching?.spinRate ?? 50}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.bodyStamina || 50)}`}>{player.physical?.bodyStamina || 50}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{stats?.games || 0}</td>

@@ -3,6 +3,7 @@ import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { removeFromReleasedPoolById } from '../state/pools.js';
 import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { AbilityValue } from './AbilityValue.jsx';
 
 const ClubRecruitScreen = ({ seasonData, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
@@ -144,9 +145,9 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
                 <div className="grid grid-cols-4 gap-x-3 gap-y-0.5 text-xs">
                   {isPitcher ? (
                     <>
-                      <div>球速: <span className={getAbilityColor(player.pitching?.velocity, true)}>{player.pitching?.velocity}km</span></div>
+                      <div>球速: <AbilityValue value={player.pitching?.velocity} isVel />km</div>
                       <div>制球: <span className={getAbilityColor(player.pitching?.control)}>{player.pitching?.control}</span></div>
-                      <div>スタミナ: <span className={getAbilityColor(player.pitching?.stamina)}>{player.pitching?.stamina}</span></div>
+                      <div>スタミナ: <AbilityValue value={player.pitching?.stamina} isSta /></div>
                       <div>プロ意識: <span className={getAbilityColor(player.personality?.discipline)}>{player.personality?.discipline ?? '?'}</span></div>
                     </>
                   ) : (
