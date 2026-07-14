@@ -5,6 +5,7 @@
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool } from '../teams-data.js';
+import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
 
 /**
  * 利き手を決定（左投・左打の発生率を強化）
@@ -398,38 +399,38 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   // 初回も2年目以降も同じロジック（warmUpPipelineで事前にプール生成済み）
   const candidates = [];
   const existingIds = new Set();
+  const addCandidate = (c) => {
+    if (!c || existingIds.has(c.id)) return;
+    existingIds.add(c.id);
+    if (!c.scoutComment) c.scoutComment = generateScoutComment(c);
+    candidates.push(c);
+  };
 
-  // 1. リリースプール（FA: ドラフト漏れ・大学卒業生・戦力外）から候補を取得
-  //    非初回はFAだけで埋め尽くさないよう上限を設け、新卒枠を確保する
-  //    （新卒＝当年の高校卒業生はオフシーズン処理でしかプールに入らないため、
-  //      トライアウト時点ではFAしか居らず「新卒がいない」状態になっていた）
-  const releasedLimit = isInitial
-    ? Math.min(releasedPlayersPool?.length || 0, 50)
-    : Math.max(teamCount * 6, 12);
-  const releasedCandidates = getReleasedCandidatesFromPool(releasedLimit);
-  releasedCandidates.forEach(rc => {
-    if (!existingIds.has(rc.id)) {
-      existingIds.add(rc.id);
-      if (!rc.scoutComment) rc.scoutComment = generateScoutComment(rc);
-      candidates.push(rc);
+  // === 初回トライアウト: プール未整備のため生成で供給 ===
+  if (isInitial) {
+    const releasedLimit = Math.min(releasedPlayersPool?.length || 0, 50);
+    getReleasedCandidatesFromPool(releasedLimit).forEach(addCandidate);
+    const minCandidates = teamCount * 30;
+    const freshCount = Math.max(0, minCandidates - candidates.length);
+    if (freshCount > 0) {
+      generateRandomFillCandidates(freshCount, year, independentLeagueRank).forEach(addCandidate);
     }
-  });
+    return candidates;
+  }
 
-  // 2. 新卒（フレッシュな新規候補）を供給する。
-  //    毎年一定数の新卒を必ず加え、最低保証にも満たすよう不足分もまとめて生成する。
-  //    （generateRandomFillCandidatesは同一年で複数回呼ぶとID衝突するため1回で生成）
-  const minCandidates = isInitial ? teamCount * 30 : teamCount * 10;
-  const guaranteedFresh = isInitial ? 0 : Math.max(teamCount * 6, 12);
-  const freshCount = Math.max(guaranteedFresh, minCandidates - candidates.length);
-  if (freshCount > 0) {
-    const freshCandidates = generateRandomFillCandidates(freshCount, year, independentLeagueRank);
-    freshCandidates.forEach(fc => {
-      if (!existingIds.has(fc.id)) {
-        existingIds.add(fc.id);
-        if (!fc.scoutComment) fc.scoutComment = generateScoutComment(fc);
-        candidates.push(fc);
-      }
-    });
+  // === 2年目以降: 実在プールから供給（生成しない）===
+  // 選手の一次供給元は高校生プール。大学4年生・FAは補助的に加える。
+  // 1. 高校卒業予定（メインソース）
+  getHighSchoolTryoutCandidates(Math.max(teamCount * 6, 12)).forEach(addCandidate);
+  // 2. 大学4年生（卒業予定・NPB未指名／補助）
+  getUniversitySeniorTryoutCandidates(year, Math.max(teamCount * 2, 4)).forEach(addCandidate);
+  // 3. FA（リリースプール／補助）
+  getReleasedCandidatesFromPool(Math.max(teamCount * 2, 4)).forEach(addCandidate);
+
+  // 4. 安全網: 実在候補が極端に少ない場合のみ生成で補完（通常は発生しない）
+  const minCandidates = teamCount * 4;
+  if (candidates.length < minCandidates) {
+    generateRandomFillCandidates(minCandidates - candidates.length, year, independentLeagueRank).forEach(addCandidate);
   }
 
   return candidates;

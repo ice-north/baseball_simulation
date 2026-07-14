@@ -674,6 +674,87 @@ export function distributeHighSchoolGraduates(enrollYear) {
 }
 
 // ============================================================
+// 独立リーグ トライアウト供給（2年目以降）
+// トライアウトはオフシーズンの振り分け前に行われるため、指名者は
+// removeDraftedFromGraduatePools() でプールから除去して二重計上を防ぐ。
+// 選手の一次供給元は高校生プール。大学4年生・FAは補助的に加える。
+// ============================================================
+
+const _cloneForTryout = (p) => JSON.parse(JSON.stringify(p));
+
+const _shuffleInPlace = (arr) => {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+};
+
+// 高校卒業予定選手を独立適性帯から抽出（クローンを返す）
+export function getHighSchoolTryoutCandidates(count) {
+  const pool = (highSchoolPool.players || []).filter(p => !p._universityReserved);
+  if (pool.length === 0 || count <= 0) return [];
+  const scored = pool.map(p => ({ p, s: evaluatePlayerPotential(p) })).sort((a, b) => b.s - a.s);
+  // エリート層(上位8%: NPB/大学S/A志望)は避け、独立適性の中位帯から抽出
+  const start = Math.floor(scored.length * 0.08);
+  const end = Math.max(start + count, Math.floor(scored.length * 0.60));
+  const band = _shuffleInPlace(scored.slice(start, end));
+  return band.slice(0, count).map(({ p }) => {
+    const c = _cloneForTryout(p);
+    c.age = Math.max(c.age || 18, 19);
+    c.origin = 'independent_candidate';
+    c._tryoutSource = 'highschool';
+    c.isNewcomer = true;
+    return c;
+  });
+}
+
+// 卒業予定の大学4年生（NPB未指名）を抽出（クローンを返す）
+export function getUniversitySeniorTryoutCandidates(currentYear, count) {
+  if (count <= 0) return [];
+  const seniors = [];
+  for (const enrollYear of Object.keys(universityPool)) {
+    const cohort = universityPool[enrollYear];
+    if (!cohort) continue;
+    for (const entry of cohort) {
+      const p = entry.player;
+      const yearsInUni = currentYear - entry.enrollYear;
+      if (yearsInUni >= 3 || (p.age || 18) >= 21) seniors.push(entry);
+    }
+  }
+  if (seniors.length === 0) return [];
+  const scored = seniors.map(e => ({ e, s: evaluatePlayerPotential(e.player) })).sort((a, b) => b.s - a.s);
+  // エリート(社会人/NPB志望)上位は避け中位帯から
+  const start = Math.floor(scored.length * 0.15);
+  const band = _shuffleInPlace(scored.slice(start));
+  return band.slice(0, count).map(({ e }) => {
+    const c = _cloneForTryout(e.player);
+    if (e.universityRank) c.universityRank = e.universityRank;
+    if (e.universityTeamName) { c.universityName = e.universityTeamName; c.universityTeamName = e.universityTeamName; }
+    c.origin = 'university';
+    c._tryoutSource = 'university';
+    c.isNewcomer = true;
+    return c;
+  });
+}
+
+// トライアウトで指名された選手を高校生プール・大学プールから除去する
+export function removeDraftedFromGraduatePools(draftedIds) {
+  if (!draftedIds || draftedIds.length === 0) return;
+  const drafted = new Set(draftedIds);
+  if (highSchoolPool.players?.length) {
+    highSchoolPool.players = highSchoolPool.players.filter(p => !drafted.has(p.id));
+  }
+  for (const enrollYear of Object.keys(universityPool)) {
+    const cohort = universityPool[enrollYear];
+    if (!cohort) continue;
+    const remaining = cohort.filter(entry => !drafted.has(entry.player?.id));
+    if (remaining.length === 0) delete universityPool[enrollYear];
+    else universityPool[enrollYear] = remaining;
+  }
+}
+
+// ============================================================
 // 大学在学中の成長
 // ============================================================
 

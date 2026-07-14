@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, generateScoutComment } from '../season/tryoutSystem.js';
+import { removeDraftedFromGraduatePools } from '../season/universityPool.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
@@ -174,6 +175,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     // 解雇プールを更新（再獲得された選手は削除、不指名は年齢+1・能力減衰）
     if (!isInitialTryout) {
       updateReleasedPoolAfterTryout(allDraftedIds);
+      // 高校生プール・大学プールから指名者を除去（オフシーズン振り分けとの二重計上を防止）
+      removeDraftedFromGraduatePools(allDraftedIds);
     }
     if (initializeAllPitchingRotations) initializeAllPitchingRotations();
     setDraftComplete(true);
@@ -727,13 +730,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                               FA
                             </span>
                           )}
-                          {player.isNewcomer && !player.isReleasedCandidate && (
-                            <span
-                              className="ml-0.5 inline-block px-0.5 text-xs bg-sky-700 text-sky-100 rounded align-middle"
-                              title="新卒（今年の新規候補）"
-                            >
-                              新卒
-                            </span>
+                          {player._tryoutSource === 'highschool' && (
+                            <span className="ml-0.5 inline-block px-0.5 text-xs bg-sky-700 text-sky-100 rounded align-middle" title="高校卒業予定">高卒</span>
+                          )}
+                          {player._tryoutSource === 'university' && (
+                            <span className="ml-0.5 inline-block px-0.5 text-xs bg-emerald-700 text-emerald-100 rounded align-middle" title="大学4年生（卒業予定）">大卒</span>
+                          )}
+                          {player.isNewcomer && !player.isReleasedCandidate && !player._tryoutSource && (
+                            <span className="ml-0.5 inline-block px-0.5 text-xs bg-gray-600 text-gray-100 rounded align-middle" title="新規候補">新人</span>
                           )}
                         </td>
                         <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{player.age}</td>
