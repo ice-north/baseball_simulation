@@ -1,18 +1,127 @@
 import React, { useState, useMemo } from 'react';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { TEAMS_DATA } from '../teams-data.js';
+import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
+import { universityPool } from '../season/universityPool.js';
+import { calcPlayerOverall } from '../season/dispatchSystem.js';
 
 const RANK_COLOR = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-400' };
 const RANK_BG = { S: 'bg-yellow-900/40 border-yellow-700/60', A: 'bg-orange-900/30 border-orange-700/50', B: 'bg-green-900/30 border-green-700/50', C: 'bg-blue-900/20 border-blue-700/40', D: 'bg-gray-900/20 border-gray-700/30' };
 const TYPE_LABEL = { corporate: '社会人', worldUniversity: '大学', university: '大学', independent: '独立' };
 const RANK_BAND_PCT = { S: '上位5%', A: '6-20%', B: '21-45%', C: '46-75%', D: '下位25%' };
 
+// 暫定（1年目・成績なし）ランキング用の初期値
+const INITIAL_RANKING_SCORE = { S: 1200, A: 1050, B: 900, C: 750, D: 600 };
+const INITIAL_REPUTATION = { S: 85, A: 65, B: 40, C: 20, D: 5 };
+
+const rosterAvgOverall = (players) => {
+  if (!players || players.length === 0) return null;
+  let total = 0, count = 0;
+  for (const p of players) { total += calcPlayerOverall(p); count++; }
+  return count ? total / count : null;
+};
+
+// パーセンタイル別ランク割り当て（オフシーズンのランク変動と同じ帯）
+const assignRankByPercentile = (entries) => {
+  const total = entries.length;
+  const bands = [
+    { rank: 'S', end: Math.max(1, Math.round(total * 0.05)) },
+    { rank: 'A', end: Math.max(2, Math.round(total * 0.20)) },
+    { rank: 'B', end: Math.max(3, Math.round(total * 0.45)) },
+    { rank: 'C', end: Math.max(4, Math.round(total * 0.75)) },
+    { rank: 'D', end: total },
+  ];
+  let bandIdx = 0;
+  entries.forEach((e, i) => {
+    while (bandIdx < bands.length - 1 && i >= bands[bandIdx].end) bandIdx++;
+    e.rank = bands[bandIdx].rank;
+  });
+};
+
+// 成績スナップショットが無い1年目に、所属選手の能力から暫定ランキングを算出する。
+// 全チーム（自チーム含む）を対象とし、順位・ランクとも戦力スコア順で決定する。
+const buildProvisionalRanking = (gameMode) => {
+  const seen = new Set();
+  const entries = [];
+  const userType = gameMode === 'corporate' ? 'corporate'
+    : gameMode === 'university' ? 'university' : 'independent';
+
+  // 大学プール（WORLD_DATA大学）の所属選手平均を集計
+  const uniAgg = {};
+  Object.values(universityPool || {}).forEach(cohort => {
+    if (!Array.isArray(cohort)) return;
+    cohort.forEach(e => {
+      const tn = e?.universityTeamName;
+      if (!tn) return;
+      if (!uniAgg[tn]) uniAgg[tn] = { total: 0, count: 0 };
+      uniAgg[tn].total += calcPlayerOverall(e.player);
+      uniAgg[tn].count++;
+    });
+  });
+
+  // rank未設定の自チーム等はB基礎値を起点に、戦力補正で位置づける
+  const collect = (name, type, rank, dataObj, players) => {
+    if (seen.has(name)) return;
+    seen.add(name);
+    let avg = rosterAvgOverall(players);
+    if (avg == null && uniAgg[name]?.count) avg = uniAgg[name].total / uniAgg[name].count;
+    const base = dataObj?.rankingScore ?? (rank ? INITIAL_RANKING_SCORE[rank] : INITIAL_RANKING_SCORE.B);
+    entries.push({
+      name, type,
+      base: base || 900,
+      reputation: Math.round(dataObj?.reputation ?? (rank ? INITIAL_REPUTATION[rank] : INITIAL_REPUTATION.C) ?? 20),
+      rosterAvg: avg != null ? Math.round(avg) : null,
+    });
+  };
+
+  for (const [name, team] of Object.entries(TEAMS_DATA)) {
+    if (team?.corporateData) {
+      const cd = team.corporateData;
+      collect(name, team.independentLeagueId ? 'independent' : 'corporate', cd.rank, cd, team.players);
+    } else if (team?.universityData) {
+      collect(name, 'university', team.universityData.rank, team.universityData, team.players);
+    }
+  }
+  for (const def of UNIVERSITY_TEAMS) {
+    collect(def.name, 'worldUniversity', def.rank, def, null);
+  }
+  // corporateData/universityData を持たない自チーム等（rankなし）も名簿があれば含める
+  for (const [name, team] of Object.entries(TEAMS_DATA)) {
+    if (seen.has(name)) continue;
+    if (!team?.players?.length) continue;
+    collect(name, userType, null, null, team.players);
+  }
+
+  // 戦力補正は「戦力を持つチームの平均」を基準に中心化する。
+  const withRoster = entries.filter(e => e.rosterAvg != null);
+  const meanAvg = withRoster.length
+    ? withRoster.reduce((s, e) => s + e.rosterAvg, 0) / withRoster.length
+    : 45;
+  const K = 8; // ランク間隔150に対し補正は概ね±60程度に収まる
+
+  entries.forEach(e => {
+    const adj = e.rosterAvg != null ? Math.round((e.rosterAvg - meanAvg) * K) : 0;
+    e.score = Math.round(e.base + adj);
+  });
+
+  entries.sort((a, b) => b.score - a.score);
+  entries.forEach((e, i) => { e.position = i + 1; });
+  assignRankByPercentile(entries);
+  return entries;
+};
+
 const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
   const [filterType, setFilterType] = useState('all');
   const [filterRank, setFilterRank] = useState('all');
   const [searchText, setSearchText] = useState('');
 
-  const ranking = WORLD_DATA._teamRanking || [];
+  const storedRanking = WORLD_DATA._teamRanking || [];
+  const isProvisional = storedRanking.length === 0;
+  const provisionalRanking = useMemo(
+    () => (isProvisional ? buildProvisionalRanking(gameMode) : []),
+    [isProvisional, gameMode, Object.keys(TEAMS_DATA).length]
+  );
+  const ranking = isProvisional ? provisionalRanking : storedRanking;
 
   // Determine type for TEAMS_DATA entries (independent check)
   const enriched = useMemo(() => {
@@ -67,8 +176,16 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
       <div className="flex items-center gap-3 mb-4">
         {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
         <h2 className="text-xl font-bold">チームランキング</h2>
+        {isProvisional && (
+          <span className="text-xs font-bold text-amber-200 bg-amber-900/50 border border-amber-600/50 rounded px-2 py-0.5">暫定（戦力評価）</span>
+        )}
         <span className="text-gray-400 text-sm ml-auto">全 {totalTeams} チーム</span>
       </div>
+      {isProvisional && (
+        <div className="mb-4 -mt-1 text-xs text-gray-300 bg-gray-800/60 border border-gray-700/60 rounded px-3 py-2">
+          まだ公式戦の結果がないため、<span className="text-amber-200 font-bold">所属選手の能力</span>から算出した暫定ランキングを表示しています。シーズン終了後は実際の成績（Eloスコア）で更新されます。
+        </div>
+      )}
 
       {/* User team highlight */}
       {userEntry && (
@@ -78,8 +195,11 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
             <div className="font-bold">{userEntry.name}</div>
             <div className={`font-bold text-lg ${RANK_COLOR[userEntry.rank]}`}>{userEntry.rank}ランク</div>
             <div className="text-gray-300 text-sm">#{userEntry.position} / {totalTeams}</div>
+            {isProvisional && userEntry.rosterAvg != null && (
+              <div className="text-sm"><span className="text-gray-400">戦力平均 </span><span className="text-white font-bold">{userEntry.rosterAvg}</span></div>
+            )}
             <div className="ml-auto text-sm">
-              <span className="text-gray-400">Eloスコア </span>
+              <span className="text-gray-400">{isProvisional ? '戦力スコア ' : 'Eloスコア '}</span>
               <span className="text-white font-mono font-bold">{userEntry.score}</span>
             </div>
             <div className="text-sm text-gray-400">注目度 {userEntry.reputation}</div>
@@ -134,7 +254,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
               <th className="text-right pr-2 py-2 w-12">順位</th>
               <th className="text-left py-2 pl-1">チーム名</th>
               <th className="text-center py-2 w-14">ランク</th>
-              <th className="text-center py-2 w-20">Eloスコア</th>
+              <th className="text-center py-2 w-20">{isProvisional ? '戦力スコア' : 'Eloスコア'}</th>
               <th className="text-center py-2 w-14">注目度</th>
               <th className="text-center py-2 w-14">種別</th>
             </tr>
@@ -173,11 +293,17 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
       </div>
 
       {/* Score explanation */}
-      <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-500">
-        <span className="font-bold text-gray-400">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
-        重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
-        初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D
-      </div>
+      {isProvisional ? (
+        <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-400">
+          <span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。
+        </div>
+      ) : (
+        <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-500">
+          <span className="font-bold text-gray-400">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
+          重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
+          初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D
+        </div>
+      )}
     </div>
   );
 };
