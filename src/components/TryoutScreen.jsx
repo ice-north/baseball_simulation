@@ -15,6 +15,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   const [positionTab, setPositionTab] = useState('all');
   const [draftComplete, setDraftComplete] = useState(false);
   const [viewTab, setViewTab] = useState('draft');
+  const [detailCandidate, setDetailCandidate] = useState(null);
   const [sortKey, setSortKey] = useState('overall');
   const [sortDir, setSortDir] = useState('desc');
   const [draftHistory, setDraftHistory] = useState([]);
@@ -739,6 +740,11 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         onClick={() => isUserTurn && handleSelectPlayer(player)}
                       >
                         <td className="px-1 py-1 text-white font-bold whitespace-nowrap">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDetailCandidate(player); }}
+                            className="mr-1 text-gray-400 hover:text-white align-middle"
+                            title="詳細を表示"
+                          >ⓘ</button>
                           {player.name}
                           {player.isReleasedCandidate && (
                             <span
@@ -826,6 +832,121 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           </div>
         )}
       </div>
+
+      {detailCandidate && (() => {
+        const p = detailCandidate;
+        const throwLabel = p.physical?.throws === 'left' ? '左投' : '右投';
+        const batLabel = p.batting?.bats === 'left' ? '左打' : p.batting?.bats === 'switch' ? '両打' : '右打';
+        const srcBadge = p._tryoutSource === 'club' ? { t: 'クラブ', c: 'bg-purple-700 text-purple-100' }
+          : p._tryoutSource === 'university' ? { t: '大卒', c: 'bg-emerald-700 text-emerald-100' }
+          : p._tryoutSource === 'highschool' ? { t: '高卒', c: 'bg-sky-700 text-sky-100' }
+          : p.isReleasedCandidate ? { t: 'FA', c: 'bg-amber-700 text-amber-100' }
+          : { t: '新人', c: 'bg-gray-600 text-gray-100' };
+        const row = (label, value, opts = {}) => {
+          const rank = getAbilityRank(value || 0, !!opts.vel, !!opts.sta);
+          return (
+            <div className="flex items-center justify-between px-2 py-0.5">
+              <span className="text-gray-400 text-xs">{label}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-gray-100 text-sm tabular-nums w-8 text-right">{value ?? '-'}</span>
+                <span className={`text-xs font-bold w-4 text-center ${getRankColor(rank)}`}>{rank}</span>
+              </span>
+            </div>
+          );
+        };
+        const arsenal = (p.pitching?.arsenal || []).filter(a => a.type !== 'straight');
+        const fitness = Object.entries(p.positionFitness || {})
+          .filter(([pos]) => pos !== 'pitcher')
+          .sort((a, b) => b[1] - a[1]).slice(0, 6);
+        const gp = p.growthPotential || 1.0;
+        const gpColor = gp >= 1.3 ? 'text-pink-400' : gp >= 1.2 ? 'text-red-400' : gp >= 1.1 ? 'text-orange-400' : gp >= 1.0 ? 'text-yellow-400' : gp >= 0.9 ? 'text-green-400' : 'text-blue-400';
+        const career = p.careerHistory || [];
+        return (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setDetailCandidate(null)}>
+            <div className="bg-gray-800 rounded-xl border border-gray-600 max-w-2xl w-full max-h-[85vh] overflow-y-auto p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <span className="text-white font-bold text-lg">{p.name}</span>
+                <span className={`text-xs font-bold rounded px-1.5 py-0.5 ${srcBadge.c}`}>{srcBadge.t}</span>
+                <span className="text-sm text-gray-300">{POSITION_NAMES[p.position] || p.position} / {p.age}歳 / {throwLabel}{batLabel}</span>
+                <button onClick={() => setDetailCandidate(null)} className="ml-auto text-gray-400 hover:text-white text-lg">✕</button>
+              </div>
+
+              <div className="text-xs text-gray-300 mb-3">
+                <span className="text-gray-400">所属: </span><span className="text-white font-bold">{getAffiliation(p)}</span>
+                {career.length > 0 && (
+                  <span className="ml-3 text-gray-400">経歴: </span>
+                )}
+                {career.map((c, i) => (
+                  <span key={i} className="text-gray-200">{i > 0 ? ' → ' : ''}{c.label}</span>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div className="bg-gray-900/50 rounded p-2">
+                  <div className="text-xs text-blue-300 font-bold mb-1 border-b border-gray-700 pb-1">打撃・走塁・守備</div>
+                  {row('ミート', p.batting?.meet)}
+                  {row('パワー', p.batting?.power)}
+                  {row('選球眼', p.batting?.eye)}
+                  {row('走力', p.physical?.speed)}
+                  {row('肩力', p.physical?.arm)}
+                  {row('守備', p.fielding?.defense)}
+                  {row('盗塁', p.batting?.steal)}
+                  {p.position === 'catcher' && row('リード', p.catching?.lead)}
+                </div>
+                <div className="bg-gray-900/50 rounded p-2">
+                  <div className="text-xs text-red-300 font-bold mb-1 border-b border-gray-700 pb-1">投球</div>
+                  {row('球速', p.pitching?.velocity, { vel: true })}
+                  {row('制球', p.pitching?.control)}
+                  {row('スタミナ', p.pitching?.stamina, { sta: true })}
+                  {row('回転', p.pitching?.spinRate)}
+                  <div className="mt-1 pt-1 border-t border-gray-700/60">
+                    <div className="text-xs text-gray-400 mb-0.5">変化球</div>
+                    <div className="flex flex-wrap gap-1">
+                      {arsenal.length === 0 ? <span className="text-gray-600 text-xs">なし</span>
+                        : arsenal.map((a, i) => {
+                          const rank = getAbilityRank(a.level || 0);
+                          return <span key={i} className={`text-xs ${getRankColor(rank)}`}>{getPitchTypeName(a.type)}{rank}</span>;
+                        })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-xs mb-3 px-1">
+                <span className="text-gray-400">成長力: <span className={`font-bold ${gpColor}`}>{gp.toFixed(2)}</span></span>
+                <span className="text-gray-400">知名度: <span className="text-gray-100 font-bold">{p.fame || 0}</span></span>
+                {p.isTwoWay && <span className="text-teal-300 font-bold">二刀流</span>}
+              </div>
+
+              {fitness.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs text-gray-400 mb-1">守備適性</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {fitness.map(([pos, val]) => (
+                      <span key={pos} className={`text-xs px-1.5 py-0.5 rounded bg-gray-900/60 ${getRankColor(getAbilityRank(val))}`}>
+                        {POSITION_NAMES[pos] || pos} {val}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(() => {
+                const comment = p.scoutComment || generateScoutComment(p);
+                const sc = typeof comment === 'string' ? { text: comment } : comment;
+                return (
+                  <div className="bg-gray-900/50 rounded p-2 text-xs">
+                    <div className="text-gray-400 mb-0.5">スカウト所見</div>
+                    <span className="text-gray-200">{sc.text}</span>
+                    {sc.talentHint && <span className="ml-1 text-emerald-400">{sc.talentHint}</span>}
+                    {sc.potentialHint && <span className="ml-1 text-orange-400 font-bold">{sc.potentialHint}</span>}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
