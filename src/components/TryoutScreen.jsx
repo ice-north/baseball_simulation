@@ -727,6 +727,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                               FA
                             </span>
                           )}
+                          {player.isNewcomer && !player.isReleasedCandidate && (
+                            <span
+                              className="ml-0.5 inline-block px-0.5 text-xs bg-sky-700 text-sky-100 rounded align-middle"
+                              title="新卒（今年の新規候補）"
+                            >
+                              新卒
+                            </span>
+                          )}
                         </td>
                         <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{player.age}</td>
                         <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{POSITION_NAMES[player.position] || player.position}</td>

@@ -237,6 +237,7 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
       },
       traits: playerTraits,
       scoutComment: null,
+      isNewcomer: true, // 新卒（FAではない新規候補）
       growthPotential: (() => {
         const u1 = Math.random() || 0.001;
         const u2 = Math.random();
@@ -398,9 +399,13 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   const candidates = [];
   const existingIds = new Set();
 
-  // 1. リリースプールから候補を取得（メインソース）
-  // isInitialかつ大量チームの初期化時は上限を設けてシャッフル（重複選手の蔓延を防ぐ）
-  const releasedLimit = isInitial ? Math.min(releasedPlayersPool?.length || 0, 50) : null;
+  // 1. リリースプール（FA: ドラフト漏れ・大学卒業生・戦力外）から候補を取得
+  //    非初回はFAだけで埋め尽くさないよう上限を設け、新卒枠を確保する
+  //    （新卒＝当年の高校卒業生はオフシーズン処理でしかプールに入らないため、
+  //      トライアウト時点ではFAしか居らず「新卒がいない」状態になっていた）
+  const releasedLimit = isInitial
+    ? Math.min(releasedPlayersPool?.length || 0, 50)
+    : Math.max(teamCount * 6, 12);
   const releasedCandidates = getReleasedCandidatesFromPool(releasedLimit);
   releasedCandidates.forEach(rc => {
     if (!existingIds.has(rc.id)) {
@@ -410,14 +415,18 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
     }
   });
 
-  // 2. 不足分をランダム補充（初回は30人/チーム、2年目以降は8人/チーム が最低保証）
-  const minCandidates = isInitial ? teamCount * 30 : teamCount * 8;
-  if (candidates.length < minCandidates) {
-    const fillCount = minCandidates - candidates.length;
-    const fillCandidates = generateRandomFillCandidates(fillCount, year, independentLeagueRank);
-    fillCandidates.forEach(fc => {
+  // 2. 新卒（フレッシュな新規候補）を供給する。
+  //    毎年一定数の新卒を必ず加え、最低保証にも満たすよう不足分もまとめて生成する。
+  //    （generateRandomFillCandidatesは同一年で複数回呼ぶとID衝突するため1回で生成）
+  const minCandidates = isInitial ? teamCount * 30 : teamCount * 10;
+  const guaranteedFresh = isInitial ? 0 : Math.max(teamCount * 6, 12);
+  const freshCount = Math.max(guaranteedFresh, minCandidates - candidates.length);
+  if (freshCount > 0) {
+    const freshCandidates = generateRandomFillCandidates(freshCount, year, independentLeagueRank);
+    freshCandidates.forEach(fc => {
       if (!existingIds.has(fc.id)) {
         existingIds.add(fc.id);
+        if (!fc.scoutComment) fc.scoutComment = generateScoutComment(fc);
         candidates.push(fc);
       }
     });
