@@ -241,24 +241,40 @@ export const autoPlayGrandChampionship = (gc) => {
   for (let r = 0; r < rounds.length; r++) {
     for (let m = 0; m < rounds[r].length; m++) {
       const match = rounds[r][m];
-      if (match.winner || !match.team1 || !match.team2) continue;
+      if (match.winner) continue;              // 既に決着済み
+      if (!match.team1 && !match.team2) continue; // 空カード（対戦相手なし）
 
-      const home = TEAMS_DATA[match.team1];
-      const away = TEAMS_DATA[match.team2];
-      if (home && away) {
-        const result = autoSimulateGame(match.team1, match.team2, true);
-        match.winner = result.winner;
-        match.score = `${result.homeScore}-${result.awayScore}`;
+      let winner;
+      if (match.team1 && match.team2) {
+        const home = TEAMS_DATA[match.team1];
+        const away = TEAMS_DATA[match.team2];
+        if (home && away) {
+          const result = autoSimulateGame(match.team1, match.team2, true);
+          // トーナメントは決着必須。延長引き分け(result.winner=null)は
+          // スコアで判定し、それでも同点なら上位シード(team1)勝ちとする。
+          winner = result.homeScore > result.awayScore ? match.team1
+                 : result.awayScore > result.homeScore ? match.team2
+                 : match.team1;
+          match.score = `${result.homeScore}-${result.awayScore}`;
+        } else {
+          winner = match.team1;
+          match.score = 'W/O';
+        }
       } else {
-        match.winner = match.team1;
-        match.score = 'W/O';
+        // 不戦勝（byeで片方だけ在籍）→ その team が次に進出。
+        // これを処理しないと空きスロットがnullのまま決勝まで伝播し、
+        // champion=null / done=false となりグランドCSが確定しない。
+        winner = match.team1 || match.team2;
+        match.isBye = true;
+        match.score = 'BYE';
       }
 
-      advanceWinner(rounds, r, m, match.winner);
+      match.winner = winner;
+      advanceWinner(rounds, r, m, winner);
 
       if (r === rounds.length - 1) {
-        gc.bracket.champion = match.winner;
-        gc.bracket.runnerUp = match.winner === match.team1 ? match.team2 : match.team1;
+        gc.bracket.champion = winner;
+        gc.bracket.runnerUp = winner === match.team1 ? match.team2 : match.team1;
         gc.done = true;
       }
     }
