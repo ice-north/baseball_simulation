@@ -18,7 +18,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [selectedBenchPlayer, setSelectedBenchPlayer] = useState(null); // 控え選手→スタメン入れ替え用
   const [posConvertPlayer, setPosConvertPlayer] = useState(null); // ポジション変更モーダル対象
   const [detailPlayer, setDetailPlayer] = useState(null); // 選手詳細モーダル対象
-  const [selectedPitcherId, setSelectedPitcherId] = useState(null); // 投手クリック入替用
   const [benchFilter, setBenchFilter] = useState('all'); // ポジション別フィルタ
   const [benchCompact, setBenchCompact] = useState(true); // コンパクト表示
   const [compareIds, setCompareIds] = useState([]); // 選手比較用（最大3人）
@@ -1030,7 +1029,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             { key: 'strategy', label: '作戦指示',     icon: '📋' },
           ]}
           activeKey={tab}
-          onChange={(key) => { setTab(key); setSelectedPitcherId(null); setSwapSource(null); setSelectedBenchPlayer(null); }}
+          onChange={(key) => { setTab(key); setTapSelectedPitcherId(null); setSwapSource(null); setSelectedBenchPlayer(null); }}
           className="mb-4"
         />
 
@@ -1489,87 +1488,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             setUpdateTrigger(prev => prev + 1);
           };
 
-          const isStarterRole = (r) => ['ace','complete','short','quality','opener','auto_s'].includes(r);
-          const isReliefRole = (r) => ['long','onepoint','ace_relief','mopup','behind','auto_r'].includes(r);
-
-          // クリックで投手を入れ替える
-          const handlePitcherClick = (clickedId) => {
-            if (selectedPitcherId === null) {
-              setSelectedPitcherId(clickedId);
-              return;
-            }
-            if (selectedPitcherId === clickedId) {
-              const p = allPlayers.find(pl => pl.id === clickedId);
-              if (p) setDetailPlayer(p);
-              setSelectedPitcherId(null);
-              return;
-            }
-
-            const rotation = team.pitchingRotation;
-            const roleA = getPitcherRole(selectedPitcherId);
-            const roleB = getPitcherRole(clickedId);
-            const bothStarters = isStarterRole(roleA) && isStarterRole(roleB);
-
-            if (bothStarters) {
-              // 先発同士 → ローテーション順番のみ入替（ロールは維持）
-              const starters = rotation.starters || [];
-              const idxA = starters.indexOf(selectedPitcherId);
-              const idxB = starters.indexOf(clickedId);
-              if (idxA !== -1 && idxB !== -1) {
-                starters[idxA] = clickedId;
-                starters[idxB] = selectedPitcherId;
-              }
-            } else {
-              // 異なるグループ間 → ロールごと入替
-              if (!rotation.pitcherRoles) rotation.pitcherRoles = {};
-              if (roleA !== 'none') rotation.pitcherRoles[clickedId] = roleA;
-              else delete rotation.pitcherRoles[clickedId];
-              if (roleB !== 'none') rotation.pitcherRoles[selectedPitcherId] = roleB;
-              else delete rotation.pitcherRoles[selectedPitcherId];
-
-              // レガシー配列内のIDを入替
-              const swapInArray = (arr) => {
-                if (!arr) return;
-                const idxA = arr.indexOf(selectedPitcherId);
-                const idxB = arr.indexOf(clickedId);
-                if (idxA !== -1) arr[idxA] = clickedId;
-                if (idxB !== -1) arr[idxB] = selectedPitcherId;
-              };
-              swapInArray(rotation.starters);
-              swapInArray(rotation.middleRelievers);
-              swapInArray(rotation.setupMen);
-
-              if (rotation.closer === selectedPitcherId) rotation.closer = clickedId;
-              else if (rotation.closer === clickedId) rotation.closer = selectedPitcherId;
-
-              // 配列の整合性を再構築
-              [selectedPitcherId, clickedId].forEach(pid => {
-                const newRole = getPitcherRole(pid);
-                if (isStarterRole(newRole) && !(rotation.starters || []).includes(pid)) {
-                  rotation.starters = rotation.starters || [];
-                  rotation.starters.push(pid);
-                } else if (!isStarterRole(newRole)) {
-                  rotation.starters = (rotation.starters || []).filter(id => id !== pid);
-                }
-                if (isReliefRole(newRole) && !(rotation.middleRelievers || []).includes(pid)) {
-                  rotation.middleRelievers = rotation.middleRelievers || [];
-                  rotation.middleRelievers.push(pid);
-                } else if (!isReliefRole(newRole) && newRole !== 'setup' && newRole !== 'closer') {
-                  rotation.middleRelievers = (rotation.middleRelievers || []).filter(id => id !== pid);
-                }
-                if (newRole === 'setup' && !(rotation.setupMen || []).includes(pid)) {
-                  rotation.setupMen = rotation.setupMen || [];
-                  rotation.setupMen.push(pid);
-                } else if (newRole !== 'setup') {
-                  rotation.setupMen = (rotation.setupMen || []).filter(id => id !== pid);
-                }
-              });
-            }
-
-            setSelectedPitcherId(null);
-            setUpdateTrigger(prev => prev + 1);
-          };
-
           // リリーフをサブグループに分類
           const reliefByRole = {
             long: allPlayers.filter(p => ['long', 'auto_r'].includes(getPitcherRole(p.id))),
@@ -1631,10 +1549,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                       {i < items.length - 1 && <span className="text-gray-700 text-xs">▸</span>}
                     </React.Fragment>
                   ))}
-                  {selectedPitcherId ? (
-                    <span className="text-blue-400 text-xs ml-auto animate-pulse">→ 入替先をクリック（同じ選手で詳細）</span>
+                  {tapSelectedPitcherId ? (
+                    <span className="text-blue-400 text-xs ml-auto animate-pulse">→ 役割枠をクリックで配置（もう一度クリックで詳細）</span>
                   ) : (
-                    <span className="text-gray-500 text-xs ml-auto">タップで入替 / バッジで役割変更</span>
+                    <span className="text-gray-500 text-xs ml-auto">ドラッグで役割変更 / クリックで選択</span>
                   )}
                 </div>
                 {roleWarnings.length > 0 && (
@@ -1714,9 +1632,14 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 draggable
                 onDragStart={(e) => { setDraggedPitcherId(player.id); e.dataTransfer.effectAllowed = 'move'; }}
                 onDragEnd={() => { setDraggedPitcherId(null); setDragOverRole(null); }}
-                onClick={(e) => { e.stopPropagation(); setTapSelectedPitcherId(isTapSel ? null : player.id); }}
-                title="ドラッグで役割へ／タップで選択"
-                className={`flex items-center gap-1 px-1.5 py-1 rounded cursor-grab active:cursor-grabbing border text-xs transition-colors ${
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // 1回目クリック=選択、選択中の再クリック=詳細能力を表示
+                  if (isTapSel) setDetailPlayer(player);
+                  else setTapSelectedPitcherId(player.id);
+                }}
+                title="ドラッグで役割変更／クリックで選択・選択中にもう一度で詳細"
+                className={`flex items-center gap-1 pl-4 pr-1.5 py-1 rounded cursor-grab active:cursor-grabbing border text-xs transition-colors ${
                   isDragging ? 'opacity-40' : ''} ${
                   isTapSel ? 'bg-blue-900/60 border-blue-400/60 ring-1 ring-blue-400/40'
                            : 'bg-gray-800 border-gray-700 hover:bg-gray-700/70'}`}
@@ -1729,7 +1652,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   <AbilityValue value={p.control || 0} /><span className="text-gray-600">/</span>
                   <AbilityValue value={p.stamina || 0} isSta />
                 </span>
-                <button onClick={(e) => { e.stopPropagation(); setDetailPlayer(player); }} className="shrink-0 text-gray-600 hover:text-blue-300 leading-none" title="詳細">ⓘ</button>
               </div>
             );
           };
