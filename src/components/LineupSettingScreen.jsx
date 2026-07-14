@@ -1511,6 +1511,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             ace_relief: '🔥', setup: '⬆', closer: '🔒', auto_r: '🤖', none: '—',
           };
 
+          // 選手カード左端のロール別アクセントカラー（Tailwindがpurgeしないよう静的リテラルで定義）
+          const ROLE_BORDER = {
+            ace: 'border-l-red-500', complete: 'border-l-blue-500', short: 'border-l-blue-400',
+            quality: 'border-l-blue-300', opener: 'border-l-teal-400', auto_s: 'border-l-gray-400',
+            long: 'border-l-green-500', ace_relief: 'border-l-green-400', mopup: 'border-l-gray-500',
+            behind: 'border-l-yellow-500', onepoint: 'border-l-green-400', setup: 'border-l-orange-400',
+            closer: 'border-l-purple-400', auto_r: 'border-l-gray-400', none: 'border-l-gray-600',
+          };
+
           // 投手起用バランス警告
           const roleWarnings = (() => {
             const w = [];
@@ -1627,10 +1636,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             const isDragging = draggedPitcherId === player.id;
             const isTapSel = tapSelectedPitcherId === player.id;
             const isFielder = player.position !== 'pitcher';
+            const role = getPitcherRole(player.id);
+            const accent = ROLE_BORDER[role] || 'border-l-gray-600';
             return (
               <div
                 draggable
-                onDragStart={(e) => { setDraggedPitcherId(player.id); e.dataTransfer.effectAllowed = 'move'; }}
+                onDragStart={(e) => {
+                  setDraggedPitcherId(player.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  // setDataがないとFirefox等でドラッグが開始されない
+                  try { e.dataTransfer.setData('text/plain', String(player.id)); } catch (_) {}
+                }}
                 onDragEnd={() => { setDraggedPitcherId(null); setDragOverRole(null); }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1639,10 +1655,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   else setTapSelectedPitcherId(player.id);
                 }}
                 title="ドラッグで役割変更／クリックで選択・選択中にもう一度で詳細"
-                className={`flex items-center gap-1 pl-4 pr-1.5 py-1 rounded cursor-grab active:cursor-grabbing border text-xs transition-colors ${
+                className={`flex items-center gap-1 pl-3 pr-1.5 py-1 rounded cursor-grab active:cursor-grabbing border border-l-2 text-xs transition-colors select-none ${
                   isDragging ? 'opacity-40' : ''} ${
                   isTapSel ? 'bg-blue-900/60 border-blue-400/60 ring-1 ring-blue-400/40'
-                           : 'bg-gray-800 border-gray-700 hover:bg-gray-700/70'}`}
+                           : `bg-gray-800 border-gray-700 hover:bg-gray-700/70 ${accent}`}`}
               >
                 <span className="text-gray-600 shrink-0 leading-none">⠿</span>
                 <span className={`font-bold truncate ${isFielder ? 'text-cyan-300' : 'text-white'}`} style={{ maxWidth: '4.5rem' }}>{player.name}</span>
