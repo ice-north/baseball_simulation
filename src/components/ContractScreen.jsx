@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TEAMS_DATA, releasedPlayersPool } from '../teams-data.js';
 import { addToReleasedPool } from '../state/pools.js';
-import { POSITION_NAMES, getAbilityColor, getPositionSortIndex } from '../utils/constants.js';
-import { finalizePlayerSeason } from '../season/yearProgressionSystem.js';
+import { POSITION_NAMES, getAbilityColor, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
+import { finalizePlayerSeason, getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { AbilityLegend } from './GameUIComponents.jsx';
 
 // AI自動解雇のロスター調整パラメータ
@@ -63,6 +63,12 @@ const getAIReleaseCandidates = (players) => {
   return scored.slice(0, releaseCount).map(s => s.player.id);
 };
 
+// 野手/投手の総合力（スカウト画面と同じ算出式）
+const fielderOverall = (p) =>
+  Math.round(((p.batting?.meet||0) + (p.batting?.power||0) + (p.physical?.speed||0) + (p.physical?.arm||0) + (p.fielding?.defense||0)) / 5);
+const pitcherOverall = (p) =>
+  Math.round((((p.pitching?.velocity||130) - 115) * 2.5 + (p.pitching?.control || 50) + ((p.pitching?.stamina || 100) / 2)) / 3);
+
 const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
   const teamNames = Object.keys(TEAMS_DATA || {});
   const userTeamName = teamNames[0] || 'チームA';
@@ -112,6 +118,9 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
       case 'velocity': return player.pitching?.velocity || 0;
       case 'control': return player.pitching?.control || 0;
       case 'stamina': return player.pitching?.stamina || 0;
+      case 'spinRate': return player.pitching?.spinRate ?? 0;
+      case 'fielderOverall': return fielderOverall(player);
+      case 'pitcherOverall': return pitcherOverall(player);
       case 'games': return isPitcher ? (player.seasonStats?.pitching?.games || 0) : (player.seasonStats?.batting?.games || 0);
       case 'overall':
         if (isPitcher) {
@@ -144,6 +153,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
   const SORT_TOOLTIPS = {
     'ミ': 'ミート', 'パ': 'パワー', '走': '走力', '肩': '肩力', '守': '守備力',
     '眼': '選球眼', '盗': '盗塁', '速': '球速', '制': '制球', 'ス': 'スタミナ',
+    '回': '球の回転数', '野': '野手総合力', '投': '投手総合力',
     '試': '試合数', '成績': '今季成績', '齢': '年齢', '成長': '成長率',
   };
   // ツールチップは native title で（Tooltipで<th>をラップすると列がズレるため）
@@ -221,7 +231,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
             </span>
           </div>
 
-          <div className="mb-3">
+          <div className="mb-3 overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-gray-800">
                 <tr className="border-b border-gray-600 text-xs text-gray-400">
@@ -230,6 +240,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                   <SortHeader label="齢" sortKeyVal="age" />
                   <SortHeader label="成長" sortKeyVal="growth" className="text-center" />
                   <SortHeader label="位" sortKeyVal="position" />
+                  <th className="py-1 px-1 text-center" title="投球/打席の左右">投打</th>
                   <SortHeader label="ミ" sortKeyVal="meet" className="text-center" />
                   <SortHeader label="パ" sortKeyVal="power" className="text-center" />
                   <SortHeader label="走" sortKeyVal="speed" className="text-center" />
@@ -240,6 +251,10 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                   <SortHeader label="速" sortKeyVal="velocity" className="text-center" />
                   <SortHeader label="制" sortKeyVal="control" className="text-center" />
                   <SortHeader label="ス" sortKeyVal="stamina" className="text-center" />
+                  <SortHeader label="回" sortKeyVal="spinRate" className="text-center" />
+                  <th className="py-1 px-1 text-center" title="習得変化球">変化球</th>
+                  <SortHeader label="野" sortKeyVal="fielderOverall" className="text-center" />
+                  <SortHeader label="投" sortKeyVal="pitcherOverall" className="text-center" />
                   <SortHeader label="試" sortKeyVal="games" className="text-center" />
                   <SortHeader label="成績" sortKeyVal="overall" className="text-center" />
                 </tr>
@@ -287,6 +302,9 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                         })()}
                       </td>
                       <td className="py-1 px-1 text-xs text-gray-300 text-center">{POSITION_NAMES[player.position] || player.position}</td>
+                      <td className="py-1 px-1 text-xs text-center text-gray-400 whitespace-nowrap">
+                        {player.physical?.throws === 'left' ? '左投' : '右投'}{player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打'}
+                      </td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.meet || 0)}`}>{player.batting?.meet || 0}</td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.power || 0)}`}>{player.batting?.power || 0}</td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.physical?.speed || 0)}`}>{player.physical?.speed || 0}</td>
@@ -297,6 +315,19 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.velocity || 0)}`}>{player.pitching?.velocity || 0}</td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.control || 0)}`}>{player.pitching?.control || 0}</td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.stamina || 0)}`}>{player.pitching?.stamina || 0}</td>
+                      <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.spinRate ?? 0)}`}>{isPitcher ? (player.pitching?.spinRate ?? '-') : '-'}</td>
+                      <td className="py-1 px-1 text-xs text-center whitespace-nowrap">
+                        {(() => {
+                          if (!isPitcher) return <span className="text-gray-600">-</span>;
+                          const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
+                          if (arsenal.length === 0) return <span className="text-gray-600">-</span>;
+                          return arsenal.map((a, i) => (
+                            <span key={i} className={getAbilityColor(a.level || 0)}>{i > 0 ? '/' : ''}{getPitchTypeName(a.type)}{a.level || 0}</span>
+                          ));
+                        })()}
+                      </td>
+                      <td className={`py-1 px-1 text-xs text-center font-bold ${getRankColor(getAbilityRank(fielderOverall(player)))}`}>{isPitcher ? '-' : fielderOverall(player)}</td>
+                      <td className={`py-1 px-1 text-xs text-center font-bold ${getRankColor(getAbilityRank(pitcherOverall(player)))}`}>{isPitcher ? pitcherOverall(player) : '-'}</td>
                       <td className="py-1 px-1 text-xs text-center text-gray-300">{games}</td>
                       <td className="py-1 px-1 text-xs text-gray-300 whitespace-nowrap">{statsStr}</td>
                     </tr>
