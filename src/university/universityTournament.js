@@ -110,6 +110,7 @@ export function generateUniversityChampionship(userSeasonData, calendarYear = 20
   teamNames.sort((a, b) => (RANK_ORDER[teamDefsMap[a].rank] || 4) - (RANK_ORDER[teamDefsMap[b].rank] || 4));
 
   const bracket = createBracket(teamNames);
+  if (bracket) { bracket.achievementTournament = '全日本大学選手権'; bracket.achievementGameYear = calendarYear - 2023; }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 6, day: 10 }, 4);
 
   const userRegion = WORLD_DATA.universityLeague?.userRegion;
@@ -140,6 +141,7 @@ export function generateMeijiJinguTournament(userSeasonData, calendarYear = 2024
   teamNames.sort((a, b) => (RANK_ORDER[teamDefsMap[a].rank] || 4) - (RANK_ORDER[teamDefsMap[b].rank] || 4));
 
   const bracket = createBracket(teamNames);
+  if (bracket) { bracket.achievementTournament = '明治神宮大会'; bracket.achievementGameYear = calendarYear - 2023; }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 11, day: 10 }, 4);
 
   const userTeamName = WORLD_DATA.universityLeague?.userTeam;

@@ -9,6 +9,7 @@ import { autoSimulateGame } from '../game/autoSimulation.js';
 import { simulateUniversityLeagueDate, getAllUniversityLeagues, processSpringPromotionRelegation, regenerateFallSchedules } from '../university/universityLeagueManager.js';
 import { generateUniversityChampionship, generateMeijiJinguTournament, autoPlayUniversityTournament } from '../university/universityTournament.js';
 import { INDEPENDENT_LEAGUES } from './independentLeagueData.js';
+import { recordTeamAchievement } from '../season/achievements.js';
 
 const getScheduleByDateForLeague = (schedule, date) => {
   if (!schedule || !date) return [];
@@ -163,7 +164,7 @@ const extractLeagueChampions = (standings, teamOrder, leagueId, leagueDef, fallb
   return results;
 };
 
-export const generateGrandChampionship = (userLeagueId, userStandings, userSettings = null) => {
+export const generateGrandChampionship = (userLeagueId, userStandings, userSettings = null, gameYear = null) => {
   const champions = [];
 
   // ユーザーのリーグ
@@ -223,6 +224,7 @@ export const generateGrandChampionship = (userLeagueId, userStandings, userSetti
     bracket: { size, teamCount: teamNames.length, rounds, champion: null, runnerUp: null },
     generated: true,
     done: false,
+    achievementGameYear: gameYear,
   };
 };
 
@@ -276,6 +278,9 @@ export const autoPlayGrandChampionship = (gc) => {
         gc.bracket.champion = winner;
         gc.bracket.runnerUp = winner === match.team1 ? match.team2 : match.team1;
         gc.done = true;
+        // 独立リーグ日本一を選手経歴に記録
+        recordTeamAchievement(gc.bracket.champion, { tournament: 'グランドチャンピオンシップ', gameYear: gc.achievementGameYear });
+        if (gc.bracket.runnerUp) recordTeamAchievement(gc.bracket.runnerUp, { tournament: 'グランドチャンピオンシップ', gameYear: gc.achievementGameYear, isRunnerUp: true });
       }
     }
   }

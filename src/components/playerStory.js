@@ -77,13 +77,25 @@ export function buildPlayerStory(player) {
   // 1. 経歴（careerHistory）→ 経路ノード
   const history = player.careerHistory || [];
   for (const h of history) {
+    if (h.type === 'achievement') {
+      // 全国大会成績（例: 3年時 明治神宮大会 優勝）
+      events.push({
+        year: h.year ?? null,
+        icon: '🏆',
+        color: h.result === '優勝' ? 'yellow' : 'gray',
+        title: `${h.grade ? `${h.grade}年時 ` : ''}${h.tournament} ${h.result}`.trim(),
+        detail: h.team || null,
+        kind: 'achievement',
+      });
+      continue;
+    }
     const meta = PATH_META[h.type] || { icon: '•', color: 'gray', verb: '' };
     const title = meta.verb ? `${h.label} ${meta.verb}` : h.label;
     events.push({
       year: h.year ?? null,
       icon: meta.icon,
       color: meta.color,
-      title: title.trim(),
+      title: (title || '').trim(),
       detail: null,
       kind: h.type,
     });

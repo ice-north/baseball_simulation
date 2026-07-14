@@ -875,13 +875,26 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               </div>
 
               <div className="text-xs text-gray-300 mb-3">
-                <span className="text-gray-400">所属: </span><span className="text-white font-bold">{getAffiliation(p)}</span>
-                {career.length > 0 && (
-                  <span className="ml-3 text-gray-400">経歴: </span>
+                <div>
+                  <span className="text-gray-400">所属: </span><span className="text-white font-bold">{getAffiliation(p)}</span>
+                  {career.filter(c => c.type !== 'achievement').length > 0 && (
+                    <>
+                      <span className="ml-3 text-gray-400">経歴: </span>
+                      {career.filter(c => c.type !== 'achievement').map((c, i) => (
+                        <span key={i} className="text-gray-200">{i > 0 ? ' → ' : ''}{c.label}</span>
+                      ))}
+                    </>
+                  )}
+                </div>
+                {career.some(c => c.type === 'achievement') && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {career.filter(c => c.type === 'achievement').map((c, i) => (
+                      <span key={i} className={`rounded px-1.5 py-0.5 ${c.result === '優勝' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-700/50' : 'bg-gray-800 text-gray-300 border border-gray-600/50'}`}>
+                        🏆 {c.grade ? `${c.grade}年時 ` : ''}{c.team ? `${c.team} ` : ''}{c.tournament}{c.result}
+                      </span>
+                    ))}
+                  </div>
                 )}
-                {career.map((c, i) => (
-                  <span key={i} className="text-gray-200">{i > 0 ? ' → ' : ''}{c.label}</span>
-                ))}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">

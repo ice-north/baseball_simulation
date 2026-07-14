@@ -514,7 +514,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const gc = generateGrandChampionship(
         WORLD_DATA.userLeagueId,
         newData.standings,
-        newData.settings
+        newData.settings,
+        newData.year
       );
       if (gc) {
         autoPlayGrandChampionship(gc);

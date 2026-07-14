@@ -400,7 +400,7 @@ export const handleProgressToNextPhase = ({ seasonData, setSeasonData, setSelect
   // フェーズスキップ時: グランドチャンピオンシップを生成・消化（独立リーグモード）
   if (!newSeasonData.settings?.corporateMode && !newSeasonData.settings?.universityMode &&
       WORLD_DATA.initialized && newSeasonData.currentDate.month >= 10 && !newSeasonData.grandChampionship?.generated) {
-    const gc = generateGrandChampionship(WORLD_DATA.userLeagueId, newSeasonData.standings, newSeasonData.settings);
+    const gc = generateGrandChampionship(WORLD_DATA.userLeagueId, newSeasonData.standings, newSeasonData.settings, newSeasonData.year);
     if (gc) {
       autoPlayGrandChampionship(gc);
       newSeasonData = { ...newSeasonData, grandChampionship: gc };

@@ -8,6 +8,7 @@
 
 import { getTeamsByRegion, getAllTeamsEffective } from './corporateTeamsData.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
+import { recordBracketAchievements } from '../season/achievements.js';
 
 // ============================================================
 // 定数
@@ -246,6 +247,8 @@ export function recordResult(bracket, roundIdx, matchIdx, winnerName, score) {
     else bracket.rounds[roundIdx + 1][nm].team2 = winnerName;
   } else {
     bracket.champion = winnerName;
+    // 全国大会本戦の決着 → 優勝/準優勝を選手経歴に記録
+    recordBracketAchievements(bracket, winnerName, match.loser);
   }
 
   return bracket;
@@ -535,6 +538,7 @@ export function createMainTournament(qualifiedByRegion, defendingChampionName, c
     seededTop.forEach((t, i) => { appliedSeeds[t.name] = i + 1; });
     bracket.seeds = appliedSeeds;
   }
+  if (bracket) { bracket.achievementTournament = '都市対抗野球'; bracket.achievementGameYear = calendarYear - 2023; }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 7, day: 15 }, 3);
 
   return {
@@ -1153,6 +1157,10 @@ export function createSenshukenMainTournament(qualifiers, calendarYear = 2024, t
     const appliedSeeds = {};
     seededTop.forEach((t, i) => { appliedSeeds[t.name] = i + 1; });
     bracket.seeds = appliedSeeds;
+  }
+  if (bracket) {
+    bracket.achievementTournament = teamType === 'club' ? '社会人クラブ選手権' : '社会人野球日本選手権';
+    bracket.achievementGameYear = calendarYear - 2023;
   }
   assignMainTournamentDates(bracket, { year: calendarYear, month: 10, day: 1 }, 3);
 
