@@ -204,6 +204,17 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
   const getSortIndicator = (key) => sortKey === key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '';
 
+  // 選手の所属（出身・前所属）を返す
+  const getAffiliation = (p) => {
+    if (p._tryoutSource === 'club') return p._previousClub || 'クラブ';
+    if (p._tryoutSource === 'university') return p.universityTeamName || p.universityName || '大学';
+    if (p._tryoutSource === 'highschool') return p.highSchool?.name || '高校';
+    if (p.isReleasedCandidate) return p.previousTeam || '自由契約';
+    if (p.highSchool?.name) return p.highSchool.name;
+    const last = p.careerHistory?.length ? p.careerHistory[p.careerHistory.length - 1].label : null;
+    return last || '—';
+  };
+
   const getFielderOverall = (p) => {
     return Math.round(((p.batting?.meet||0) + (p.batting?.power||0) + (p.physical?.speed||0) + (p.physical?.arm||0) + (p.fielding?.defense||0)) / 5);
   };
@@ -678,6 +689,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                   <tr>
                     {[
                       { label: '名前', key: 'name', tip: null },
+                      { label: '所属', key: null, tip: '出身・前所属チーム' },
                       { label: '齢', key: 'age', tip: '年齢' },
                       { label: '守', key: 'position', tip: 'ポジション' },
                       { label: '投打', key: null, tip: '投球/打席の左右' },
@@ -745,6 +757,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                             <span className="ml-0.5 inline-block px-0.5 text-xs bg-gray-600 text-gray-100 rounded align-middle" title="新規候補">新人</span>
                           )}
                         </td>
+                        <td className="px-1 py-1 text-gray-300 whitespace-nowrap max-w-[8rem] truncate" title={getAffiliation(player)}>{getAffiliation(player)}</td>
                         <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{player.age}</td>
                         <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{POSITION_NAMES[player.position] || player.position}</td>
                         <td className="px-1 py-1 text-gray-400 text-center whitespace-nowrap">{throwLabel}{batLabel}</td>
