@@ -90,6 +90,7 @@ const ManagementScreen = ({
     onProgressToNextGame={handleProgressToNextGame}
     onProgressToNextPhase={handleProgressToNextPhase}
     onStartGame={() => setScreenMode('game')}
+    onGoToDateProgress={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'tryout') return <TryoutScreen
     seasonData={seasonData}

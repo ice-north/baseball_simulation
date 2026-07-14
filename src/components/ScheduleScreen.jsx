@@ -251,6 +251,7 @@ const ScheduleScreen = ({
   onProgressToNextGame,
   onProgressToNextPhase,
   onStartGame,
+  onGoToDateProgress,
 }) => {
   const leagueFormat = seasonData?.settings?.leagueFormat || 'single';
   const isTwoLeague = leagueFormat === 'two';
@@ -370,31 +371,18 @@ const ScheduleScreen = ({
             {currentDate.year}年{currentDate.month}月{currentDate.day}日（{['日','月','火','水','木','金','土'][new Date(currentDate.year, currentDate.month - 1, currentDate.day).getDay()]}）
           </p>
         </div>
-        {/* 日付進行ボタン（階層化） */}
+        {/* 日付進行は完全な「日程進行」画面に一本化（ジャンプ送りでのイベント取りこぼし防止）。
+            この画面は閲覧専用とし、進行は日程進行画面へ誘導する。 */}
         <div className="flex items-center gap-3">
-          {/* メインアクション */}
           {todayGames.some(g => g.home === userTeamName || g.away === userTeamName) ? (
             <button onClick={onStartGame} className="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-green-600/20 border border-green-500/50">
               ⚾ 試合開始
             </button>
           ) : (
-            <button onClick={onProgressToNextGame} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-sm">
-              ⏩ 次の試合日へ
+            <button onClick={onGoToDateProgress} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-sm" title="日程進行画面で1日ずつ安全に進めます">
+              ▶ 日程を進める
             </button>
           )}
-          {/* セカンダリ */}
-          <div className="flex gap-1">
-            <button onClick={() => onProgressDate(1)} className="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-2.5 py-1.5 rounded text-xs font-medium transition">
-              +1日
-            </button>
-            <button onClick={() => onProgressDate(3)} className="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white px-2.5 py-1.5 rounded text-xs font-medium transition">
-              +3日
-            </button>
-          </div>
-          {/* 危険操作 */}
-          <button onClick={onProgressToNextPhase} className="text-gray-500 hover:text-orange-400 text-xs font-medium transition px-2 py-1.5 rounded hover:bg-gray-800" title="次のフェーズまで一気に進めます">
-            次フェーズ »
-          </button>
         </div>
       </div>
 
