@@ -1701,12 +1701,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/40">
                   <span className="text-sm leading-none">{ROLE_ICON[roleKey]}</span>
                   <span className={`text-xs font-bold ${info.textColor}`}>{info.label}</span>
-                  {members.length > 0 && <span className="text-xs text-gray-500">{members.length}</span>}
-                  {hint && <span className="ml-auto text-xs text-gray-600 hidden md:inline">{hint}</span>}
+                  {members.length > 0 && <span className="text-xs text-gray-300 bg-gray-900/60 rounded-full px-1.5 leading-tight">{members.length}</span>}
+                  {hint && <span className="ml-auto text-xs text-gray-200 bg-gray-900/70 border border-gray-600/50 rounded px-1.5 py-0.5 leading-none hidden md:inline">{hint}</span>}
                 </div>
                 <div className="p-1 space-y-0.5 min-h-[2.25rem]">
                   {members.length === 0
-                    ? <div className="text-xs text-gray-600 text-center py-2 select-none">{canTapAssign ? 'ここへ配置' : 'ここにドロップ'}</div>
+                    ? <div className="text-xs text-gray-400 text-center py-2 select-none">{canTapAssign ? 'ここへ配置' : 'ここにドロップ'}</div>
                     : members.map(pl => <DnDPitcherCard key={pl.id} player={pl} />)}
                 </div>
               </div>
@@ -1842,7 +1842,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   <span className="text-gray-300 text-sm">📋</span>
                   <h2 className="text-xs font-bold text-gray-300">控え・未設定</h2>
                   <span className="text-xs text-gray-400">{unassignedPitchers.length}人</span>
-                  <span className="ml-auto text-xs text-gray-500 hidden sm:inline">ここへ入れると役割解除</span>
+                  <span className="ml-auto text-xs text-gray-200 bg-gray-900/70 border border-gray-600/50 rounded px-1.5 py-0.5 leading-none hidden sm:inline">ここへ入れると役割解除</span>
                 </div>
                 <div className="p-1 flex flex-wrap gap-1">
                   {unassignedPitchers.length === 0
