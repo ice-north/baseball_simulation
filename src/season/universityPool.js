@@ -691,13 +691,16 @@ const _shuffleInPlace = (arr) => {
 };
 
 // 高校卒業予定選手を独立適性帯から抽出（クローンを返す）
-export function getHighSchoolTryoutCandidates(count) {
+// qualityBias(0-1): 高いほど上位帯から抽出（注目度の高いリーグは良い選手が集まる）
+export function getHighSchoolTryoutCandidates(count, qualityBias = 0) {
   const pool = (highSchoolPool.players || []).filter(p => !p._universityReserved);
   if (pool.length === 0 || count <= 0) return [];
   const scored = pool.map(p => ({ p, s: evaluatePlayerPotential(p) })).sort((a, b) => b.s - a.s);
   // エリート層(上位8%: NPB/大学S/A志望)は避け、独立適性の中位帯から抽出
-  const start = Math.floor(scored.length * 0.08);
-  const end = Math.max(start + count, Math.floor(scored.length * 0.60));
+  // 注目度が高いほど上位寄り(start↓/end↓)の帯から抽出する
+  const bias = Math.max(0, Math.min(1, qualityBias));
+  const start = Math.floor(scored.length * (0.08 - 0.06 * bias));
+  const end = Math.max(start + count, Math.floor(scored.length * (0.60 - 0.15 * bias)));
   const band = _shuffleInPlace(scored.slice(start, end));
   return band.slice(0, count).map(({ p }) => {
     const c = _cloneForTryout(p);
@@ -710,7 +713,8 @@ export function getHighSchoolTryoutCandidates(count) {
 }
 
 // 卒業予定の大学4年生（NPB未指名）を抽出（クローンを返す）
-export function getUniversitySeniorTryoutCandidates(currentYear, count) {
+// qualityBias(0-1): 高いほど上位帯から抽出
+export function getUniversitySeniorTryoutCandidates(currentYear, count, qualityBias = 0) {
   if (count <= 0) return [];
   const seniors = [];
   for (const enrollYear of Object.keys(universityPool)) {
@@ -724,8 +728,9 @@ export function getUniversitySeniorTryoutCandidates(currentYear, count) {
   }
   if (seniors.length === 0) return [];
   const scored = seniors.map(e => ({ e, s: evaluatePlayerPotential(e.player) })).sort((a, b) => b.s - a.s);
-  // エリート(社会人/NPB志望)上位は避け中位帯から
-  const start = Math.floor(scored.length * 0.15);
+  // エリート(社会人/NPB志望)上位は避け中位帯から（注目度が高いほど上位寄り）
+  const bias = Math.max(0, Math.min(1, qualityBias));
+  const start = Math.floor(scored.length * (0.15 - 0.12 * bias));
   const band = _shuffleInPlace(scored.slice(start));
   return band.slice(0, count).map(({ e }) => {
     const c = _cloneForTryout(e.player);

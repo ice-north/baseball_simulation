@@ -40,7 +40,11 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     const preset = seasonData?.settings?.preset;
     const leagueDef = preset ? INDEPENDENT_LEAGUES[preset] : null;
     const ilRank = leagueDef ? (leagueDef.teams?.[0]?.rank || 'B') : null;
-    let candidates = generateTryoutCandidates(year, teamCount, isInitialTryout, ilRank);
+    // リーグ注目度: 所属チームのdevelopmentReputation平均（プロ輩出で上昇）
+    const leagueTeamNames = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+    const repVals = leagueTeamNames.map(n => TEAMS_DATA[n]?.developmentReputation).filter(v => typeof v === 'number');
+    const leagueReputation = repVals.length ? repVals.reduce((a, b) => a + b, 0) / repVals.length : 0;
+    let candidates = generateTryoutCandidates(year, teamCount, isInitialTryout, ilRank, leagueReputation);
     if (!isInitialTryout) {
       candidates = applyReputationBonus(candidates, allTeams);
     }

@@ -7,9 +7,9 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
 
-// 2年目以降トライアウトの受験者構成比（合計=1.0）と1チームあたり総数
-// 独立トライアウトの現実的な像: 大学卒が最多、次いで高校卒、FA組は少数
-const TRYOUT_RATIO = { university: 0.50, highschool: 0.35, fa: 0.15 };
+// 2年目以降トライアウトの1チームあたり基準受験者数
+// 構成比はリーグ注目度(developmentReputation)で変動する（下記 generateTryoutCandidates 参照）:
+//   低注目度: 素材型の高校生中心 / 高注目度: 大学卒・元プロ(FA)が集まる
 const TRYOUT_TOTAL_PER_TEAM = 10;
 
 /**
@@ -443,7 +443,7 @@ export function updateReleasedPoolAfterTryout(draftedIds) {
  * @param {boolean} isInitial - 初回トライアウトかどうか
  * @returns {Array} トライアウト候補者の配列
  */
-export function generateTryoutCandidates(year, teamCount, isInitial = false, independentLeagueRank = null) {
+export function generateTryoutCandidates(year, teamCount, isInitial = false, independentLeagueRank = null, leagueReputation = 0) {
   // リリースプール（ドラフト漏れ・大学卒業生・戦力外）を主体にする
   // 初回も2年目以降も同じロジック（warmUpPipelineで事前にプール生成済み）
   const candidates = [];
@@ -468,18 +468,24 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   }
 
   // === 2年目以降: 実在プールから供給（生成しない）===
-  // 受験者の構成比（現実的な独立トライアウト像）:
-  //   大学4年生 50% > 高校卒業予定 35% > FA 15%
-  //   （高校生の多くは一度大学・社会人へ進むため、直接受験に来るのは一部。
-  //     大学でプロに届かなかった4年生が最多となる）
-  const total = teamCount * TRYOUT_TOTAL_PER_TEAM;
-  const uniCount = Math.max(Math.round(total * TRYOUT_RATIO.university), 6);
-  const hsCount = Math.max(Math.round(total * TRYOUT_RATIO.highschool), 5);
-  const faCount = Math.max(Math.round(total * TRYOUT_RATIO.fa), 3);
+  // 受験者の構成比・質・人数はリーグ注目度(leagueReputation 0-100)で変動する。
+  //   低注目度: 大学卒40/高卒52/FA8 → 素材型の高校生中心
+  //   高注目度: 大学卒55/高卒25/FA20 → 大学卒・元プロ(FA)が集まり、質も上位帯に
+  // 大学でプロに届かなかった4年生が最多という現実的な像は維持しつつ、
+  // リーグを育てる（プロ輩出でdevelopmentReputationが上がる）動機付けにする。
+  const t = Math.max(0, Math.min(1, (leagueReputation || 0) / 60));
+  const uniShare = 0.40 + 0.15 * t;
+  const faShare = 0.08 + 0.12 * t;
+  const hsShare = Math.max(0.20, 1 - uniShare - faShare);
+  const total = teamCount * (TRYOUT_TOTAL_PER_TEAM + Math.round(2 * t)); // 注目度で受験者数も微増
+  const uniCount = Math.max(Math.round(total * uniShare), 6);
+  const hsCount = Math.max(Math.round(total * hsShare), 5);
+  const faCount = Math.max(Math.round(total * faShare), 3);
+  const qualityBias = t;
   // 1. 高校卒業予定
-  getHighSchoolTryoutCandidates(hsCount).forEach(addCandidate);
-  // 2. 大学4年生（卒業予定・NPB未指名／最多）
-  getUniversitySeniorTryoutCandidates(year, uniCount).forEach(addCandidate);
+  getHighSchoolTryoutCandidates(hsCount, qualityBias).forEach(addCandidate);
+  // 2. 大学4年生（卒業予定・NPB未指名）
+  getUniversitySeniorTryoutCandidates(year, uniCount, qualityBias).forEach(addCandidate);
   // 3. FA組（リリースプール ＋ クラブチーム選手）
   //    FA枠の半分はクラブチームのプロ志向選手から供給する
   const clubCount = Math.max(Math.round(faCount * 0.5), 2);
