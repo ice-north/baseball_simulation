@@ -55,7 +55,10 @@ export default function PlayerDetailModal({ player, onClose }) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-gray-800 rounded-lg p-6 max-w-5xl w-full mx-4 h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-white">{player.name}</h2>
+          <h2 className="text-2xl font-bold text-white">
+            {player.number != null && player.number <= 99 && <span className="text-gray-400 text-lg font-bold mr-1.5 tabular-nums">#{player.number}</span>}
+            {player.name}
+          </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">✕</button>
         </div>
 

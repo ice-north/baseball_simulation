@@ -6,6 +6,7 @@ import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/con
 import { generateOptimalLineup, generatePitchingRotation } from '../game/lineupGenerator.js';
 import { TabBar } from './GameUIComponents.jsx';
 import { AbilityValue } from './AbilityValue.jsx';
+import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 
 const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup');
@@ -30,6 +31,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
+  ensureTeamJerseyNumbers(team); // 背番号を（未設定なら）割り当て
 
   // 体力バーの色を値に応じて変える
   const getStaminaBarColor = (value) => {
@@ -422,6 +424,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           <div className="border-b border-gray-700 px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
+                {player.number != null && player.number <= 99 && <span className="text-gray-400 font-bold tabular-nums">#{player.number}</span>}
                 <span className="text-white font-black text-lg">{player.name}</span>
                 <span className={`text-sm ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
                   {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import LineupSettingScreen from './LineupSettingScreen.jsx';
 import { AbilityValue, OverallBadge } from './AbilityValue.jsx';
+import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 
 const POS_NAMES = {
   pitcher: '投', catcher: '捕', first: '一', second: '二',
@@ -98,6 +99,10 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
       {/* 総合ランク */}
       <OverallBadge player={player} />
 
+      {/* 背番号 */}
+      {player.number != null && (
+        <span className="w-6 flex-shrink-0 text-right tabular-nums text-xs font-bold text-gray-400">{player.number}</span>
+      )}
       {/* 名前 */}
       <span className={`w-20 flex-shrink-0 font-medium truncate ${isStarter ? 'text-yellow-300' : 'text-white'}`}>
         {player.name}
@@ -176,6 +181,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
   }
 
   const isUniversityMode = gameMode === 'university';
+  ensureTeamJerseyNumbers(team); // 背番号を（未設定なら）割り当て
   const players = team.players || [];
   const lineup = team.lineupSettings?.battingOrder || [];
 

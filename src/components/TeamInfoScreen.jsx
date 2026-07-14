@@ -3,6 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import { AbilityRadar, teamRadarAxes } from './AbilityRadar.jsx';
+import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 import { formatInnings } from '../utils/physics.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 
@@ -27,6 +28,7 @@ const TeamInfoScreen = ({ gameMode }) => {
   if (!team || !team.players) {
     return <div className="text-gray-400 text-center p-8">チームデータがありません</div>;
   }
+  ensureTeamJerseyNumbers(team); // 背番号を（未設定なら）割り当て
 
   const handlePitcherSort = (key) => {
     if (pitcherSortKey === key) setPitcherSortDir(pitcherSortDir === 'asc' ? 'desc' : 'asc');
