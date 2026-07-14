@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
@@ -22,9 +22,11 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   const [benchCompact, setBenchCompact] = useState(true); // コンパクト表示
   const [compareIds, setCompareIds] = useState([]); // 選手比較用（最大3人）
   const [roleLegendOpen, setRoleLegendOpen] = useState(false); // ロール解説開閉
-  const [draggedPitcherId, setDraggedPitcherId] = useState(null); // 投手起用D&D: ドラッグ中の選手
-  const [dragOverRole, setDragOverRole] = useState(null); // 投手起用D&D: ドロップ先ハイライト
+  // ドラッグ中の状態はrefで保持する（setStateするとインライン定義のカード/スロットが
+  // 再マウントされ、ネイティブD&Dが中断されてしまうため）。ハイライトはDOM操作で行う。
+  const draggedPitcherIdRef = useRef(null);
   const [tapSelectedPitcherId, setTapSelectedPitcherId] = useState(null); // 投手起用: タップ選択(タッチ用)
+  const SLOT_OVER_CLASSES = ['ring-1', 'ring-blue-400/60', 'border-blue-400', 'bg-blue-900/20'];
 
   const team = TEAMS_DATA[teamName];
   if (!team) return <div className="p-8 text-white">チームが見つかりません</div>;
@@ -1633,7 +1635,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           // 投手起用D&D: ドラッグ可能な投手カード
           const DnDPitcherCard = ({ player }) => {
             const p = player.pitching || {};
-            const isDragging = draggedPitcherId === player.id;
             const isTapSel = tapSelectedPitcherId === player.id;
             const isFielder = player.position !== 'pitcher';
             const role = getPitcherRole(player.id);
@@ -1642,12 +1643,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               <div
                 draggable
                 onDragStart={(e) => {
-                  setDraggedPitcherId(player.id);
+                  draggedPitcherIdRef.current = player.id;
                   e.dataTransfer.effectAllowed = 'move';
                   // setDataがないとFirefox等でドラッグが開始されない
                   try { e.dataTransfer.setData('text/plain', String(player.id)); } catch (_) {}
+                  e.currentTarget.classList.add('opacity-40');
                 }}
-                onDragEnd={() => { setDraggedPitcherId(null); setDragOverRole(null); }}
+                onDragEnd={(e) => {
+                  draggedPitcherIdRef.current = null;
+                  e.currentTarget.classList.remove('opacity-40');
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   // 1回目クリック=選択、選択中の再クリック=詳細能力を表示
@@ -1656,7 +1661,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 }}
                 title="ドラッグで役割変更／クリックで選択・選択中にもう一度で詳細"
                 className={`flex items-center gap-1 pl-3 pr-1.5 py-1 rounded cursor-grab active:cursor-grabbing border border-l-2 text-xs transition-colors select-none ${
-                  isDragging ? 'opacity-40' : ''} ${
                   isTapSel ? 'bg-blue-900/60 border-blue-400/60 ring-1 ring-blue-400/40'
                            : `bg-gray-800 border-gray-700 hover:bg-gray-700/70 ${accent}`}`}
               >
@@ -1676,23 +1680,23 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           const RoleSlot = ({ roleKey, hint, wide }) => {
             const info = PITCHER_ROLES[roleKey];
             const members = allPlayers.filter(p => getPitcherRole(p.id) === roleKey);
-            const isOver = dragOverRole === roleKey;
             const canTapAssign = tapSelectedPitcherId !== null;
             const onDrop = (e) => {
               e.preventDefault();
-              if (draggedPitcherId != null) handleDropToRole(draggedPitcherId, roleKey);
-              setDraggedPitcherId(null); setDragOverRole(null);
+              e.currentTarget.classList.remove(...SLOT_OVER_CLASSES);
+              const id = draggedPitcherIdRef.current;
+              draggedPitcherIdRef.current = null;
+              if (id != null) handleDropToRole(id, roleKey);
             };
             return (
               <div
-                onDragOver={(e) => { e.preventDefault(); setDragOverRole(roleKey); }}
-                onDragLeave={() => setDragOverRole(prev => (prev === roleKey ? null : prev))}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add(...SLOT_OVER_CLASSES); }}
+                onDragLeave={(e) => { e.currentTarget.classList.remove(...SLOT_OVER_CLASSES); }}
                 onDrop={onDrop}
                 onClick={() => { if (canTapAssign) handleDropToRole(tapSelectedPitcherId, roleKey); }}
                 className={`rounded-lg border transition-colors ${wide ? 'col-span-2' : ''} ${
-                  isOver ? 'border-blue-400 bg-blue-900/30 ring-1 ring-blue-400/40'
-                         : canTapAssign ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer hover:border-blue-400/50'
-                         : 'border-gray-700/60 bg-gray-800/40'}`}
+                  canTapAssign ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer hover:border-blue-400/50'
+                               : 'border-gray-700/60 bg-gray-800/40'}`}
               >
                 <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-700/40">
                   <span className="text-sm leading-none">{ROLE_ICON[roleKey]}</span>
@@ -1820,13 +1824,18 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
               {/* 控え・未設定: ドロップで役割解除 */}
               <div
-                onDragOver={(e) => { e.preventDefault(); setDragOverRole('none'); }}
-                onDragLeave={() => setDragOverRole(prev => (prev === 'none' ? null : prev))}
-                onDrop={(e) => { e.preventDefault(); if (draggedPitcherId != null) handleDropToRole(draggedPitcherId, 'none'); setDraggedPitcherId(null); setDragOverRole(null); }}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add(...SLOT_OVER_CLASSES); }}
+                onDragLeave={(e) => { e.currentTarget.classList.remove(...SLOT_OVER_CLASSES); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove(...SLOT_OVER_CLASSES);
+                  const id = draggedPitcherIdRef.current;
+                  draggedPitcherIdRef.current = null;
+                  if (id != null) handleDropToRole(id, 'none');
+                }}
                 onClick={() => { if (tapSelectedPitcherId != null) handleDropToRole(tapSelectedPitcherId, 'none'); }}
                 className={`rounded-lg border mb-2 transition-colors ${
-                  dragOverRole === 'none' ? 'border-blue-400 bg-blue-900/20'
-                    : tapSelectedPitcherId != null ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer'
+                  tapSelectedPitcherId != null ? 'border-blue-500/30 bg-gray-800/40 cursor-pointer'
                     : 'border-gray-700/60 bg-gray-800/40'}`}
               >
                 <div className="flex items-center gap-1.5 px-2 py-1 border-b border-gray-700/40">
