@@ -2,14 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   デザイントークン（配色・サーフェス・チャート）
+   全画面で参照する単一の真実の源。アクセント色はUIクローム／チャートに使う。
+   ランク色（pink/red/orange/yellow/green/blue/gray）とは役割を分離する。
+   ============================================================ */
+:root {
+  --accent: #22d3ee;          /* cyan-400: UIアクセント・チャート主色 */
+  --accent-strong: #06b6d4;   /* cyan-500 */
+  --accent-soft: rgba(34, 211, 238, 0.16);
+  --surface-0: #0b1120;       /* 最深部 */
+  --surface-1: #111827;       /* gray-900 相当 */
+  --surface-2: #1f2937;       /* gray-800 相当 */
+  --chart-grid: rgba(148, 163, 184, 0.22);  /* レーダー等のグリッド（控えめ） */
+  --chart-axis: rgba(148, 163, 184, 0.45);
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  /* 日本語システムフォントを優先し、全画面の文字を一段洗練させる（webフォント不使用） */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'YuGothic',
+    'Noto Sans JP', 'Meiryo', 'Roboto', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* 数字を等幅にして表・スタッツの桁を揃える補助クラス */
+.tnum { font-variant-numeric: tabular-nums; }
 
 #root {
   width: 100%;

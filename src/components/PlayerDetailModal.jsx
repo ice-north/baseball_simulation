@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { POSITION_NAMES, BALL_EFFECTS, PITCHING_FORM_EFFECTS, getAbilityColor, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
+import { AbilityRadar, playerRadarAxes } from './AbilityRadar.jsx';
 import { formatInnings } from '../utils/physics.js';
 import { buildPlayerStory, fameLabel } from './playerStory.js';
 
@@ -134,6 +135,10 @@ export default function PlayerDetailModal({ player, onClose }) {
         <div className="flex-1 overflow-y-auto min-h-0">
 
           {detailTab === 'ability' && (<>
+            {/* 能力レーダー（能力バランスを一目で） */}
+            <div className="flex justify-center mb-3">
+              <AbilityRadar axes={playerRadarAxes(player)} size={220} />
+            </div>
             <div className="grid grid-cols-3 gap-4 mb-4">
               {/* フィジカル系 */}
               <div className="bg-gray-700 rounded p-3">

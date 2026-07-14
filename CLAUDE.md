@@ -23,6 +23,17 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - スクロールが必要な領域は必ず **高さを明示**（`h-64`、`flex-1 min-h-0` 等）してから `overflow-y-auto` を付ける
 - `min-h-0` を忘れると flex子要素が親をはみ出してスクロールバーが出るため、flex内スクロール領域には必ず付ける
 
+### 4. デザイントークン（`src/index.css` の `:root`）
+- **アクセント色**: `var(--accent)`(cyan-400) / `var(--accent-strong)` / `var(--accent-soft)`。UIクローム・チャートに使う。**ランク色（pink/red/orange/yellow/green/blue/gray）とは役割を分離**すること
+- **サーフェス**: `var(--surface-0/1/2)`（最深部→gray-900→gray-800相当）
+- **チャート**: `var(--chart-grid)`（グリッド線・控えめ） / `var(--chart-axis)`（軸線）
+- **日本語フォント**: bodyでHiragino/Yu Gothic/Noto Sans JP等のシステムJPスタックを優先（webフォント不使用）
+- **数字揃え**: 桁を揃えたい表・スタッツには `.tnum`（`font-variant-numeric: tabular-nums`）または Tailwind の `tabular-nums`
+
+### 5. 能力の可視化
+- **配色統一**: 能力値の色は共有 `AbilityValue`（球速=(v-115)×2.5・投手スタミナ=v/2 で正規化）に集約。生の `getAbilityColor(velocity/stamina)` は常に最大色になるので**使わない**
+- **レーダー**: `AbilityRadar`（`playerRadarAxes`/`teamRadarAxes`）で選手・チームの能力バランスを多角形表示。単一系列＝アクセント1色
+
 ## アーキテクチャ要点
 - **TEAMS_DATA** はグローバルミュータブルオブジェクト（React stateではない）
 - 変更後 `setUpdateTrigger(prev => prev + 1)` で再レンダリング

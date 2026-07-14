@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
+import { AbilityRadar, teamRadarAxes } from './AbilityRadar.jsx';
 import { formatInnings } from '../utils/physics.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 
@@ -156,6 +157,12 @@ const TeamInfoScreen = ({ gameMode }) => {
               </>);
             })()}
           </div>
+        </div>
+
+        {/* チーム戦力レーダー */}
+        <div className="bg-gray-800 rounded-lg p-4 mb-6 flex flex-col items-center">
+          <h2 className="text-sm font-bold text-gray-300 mb-1 self-start">チーム戦力</h2>
+          <AbilityRadar axes={teamRadarAxes(team)} size={240} />
         </div>
 
         {/* 投手テーブル */}
