@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES, POSITION_ORDER } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_ORDER, getAbilityColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { SPECIALTY_LABELS, SPECIALTY_ICONS } from '../university/universityTeamsData.js';
@@ -505,8 +505,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
   const getArsenalDisplay = (player) => {
     const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
-    if (arsenal.length === 0) return '-';
-    return arsenal.map(a => `${getPitchTypeName(a.type)}${a.level}`).join(' ');
+    if (arsenal.length === 0) return <span className="text-gray-600">-</span>;
+    // 変化球はレベルで色付け（0-100スケールなのでgetAbilityColorをそのまま使用）
+    return arsenal.map((a, i) => (
+      <span key={i} className={getAbilityColor(a.level || 0)}>
+        {i > 0 ? ' ' : ''}{getPitchTypeName(a.type)}{a.level}
+      </span>
+    ));
   };
 
   const subPosHeaders = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
@@ -964,7 +969,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.bodyStamina||50} label="体力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.muscle??50} label="体幹" /></td>
-                        <td className="py-1 px-2 text-yellow-400 text-xs font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
+                        <td className="py-1 px-2 text-xs font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
                         <td className="py-1 px-2 text-xs font-mono text-gray-400 whitespace-nowrap">
                           {(() => {
                             const prev = player.previousSeasonStats;

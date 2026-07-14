@@ -5,6 +5,17 @@ import { AbilityRadar, playerRadarAxes } from './AbilityRadar.jsx';
 import { formatInnings } from '../utils/physics.js';
 import { buildPlayerStory, fameLabel } from './playerStory.js';
 
+// 変化球をレベル別に色付けして表示（レベルは0-100なのでgetAbilityColorをそのまま使用）
+const renderArsenal = (arsenal) => {
+  const list = (arsenal || []).filter(p => p.type !== 'straight');
+  if (list.length === 0) return '-';
+  return list.map((p, i) => (
+    <span key={i} className={getAbilityColor(p.level || 0)}>
+      {i > 0 ? '/' : ''}{BALL_EFFECTS[p.type]?.name || p.type}{p.level}
+    </span>
+  ));
+};
+
 export default function PlayerDetailModal({ player, onClose }) {
   const [detailTab, setDetailTab] = useState('ability');
 
@@ -201,7 +212,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                           <div key={i} className="flex items-center gap-2 mb-0.5">
                             <span className="text-xs text-white w-20">{BALL_EFFECTS[pitch.type]?.name || pitch.type}</span>
                             <div className="flex-1 bg-gray-600 rounded h-2">
-                              <div className="h-2 rounded bg-purple-500" style={{ width: `${pitch.level}%` }} />
+                              <div className={`h-2 rounded ${pitch.level >= 80 ? 'bg-red-500' : pitch.level >= 60 ? 'bg-yellow-500' : pitch.level >= 40 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${pitch.level}%` }} />
                             </div>
                             <span className={`text-xs font-bold ${getAbilityColor(pitch.level)}`}>{pitch.level}</span>
                           </div>
@@ -499,10 +510,6 @@ export default function PlayerDetailModal({ player, onClose }) {
                         if (d < 0) return <span className="text-red-400 text-xs ml-0.5">{d}</span>;
                         return '';
                       };
-                      const arsenalStr = (a.arsenal || []).filter(p => p.type !== 'straight').map(p => {
-                        const name = BALL_EFFECTS[p.type]?.name || p.type;
-                        return `${name}${p.level}`;
-                      }).join(', ');
                       return (
                         <tr key={i} className="border-b border-gray-700 hover:bg-gray-700">
                           <td className="px-2 py-1 text-white font-bold">{i + 1}年目</td>
@@ -514,7 +521,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.power)}>{a.power}</span>{diff(a, prevA, 'power')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.speed)}>{a.speed}</span>{diff(a, prevA, 'speed')}</td>
                           <td className="px-2 py-1 text-center"><span className={getAbilityColor(a.defense)}>{a.defense}</span>{diff(a, prevA, 'defense')}</td>
-                          <td className="px-2 py-1 text-left pl-4 text-xs">{arsenalStr || '-'}</td>
+                          <td className="px-2 py-1 text-left pl-4 text-xs">{renderArsenal(a.arsenal)}</td>
                         </tr>
                       );
                     })}
@@ -528,7 +535,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.batting?.power || 0)}>{player.batting?.power || 0}</span></td>
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.physical?.speed || 0)}>{player.physical?.speed || 0}</span></td>
                       <td className="px-2 py-1 text-center"><span className={getAbilityColor(player.fielding?.defense || 0)}>{player.fielding?.defense || 0}</span></td>
-                      <td className="px-2 py-1 text-left pl-4 text-xs">{(player.pitching?.arsenal || []).filter(p => p.type !== 'straight').map(p => `${BALL_EFFECTS[p.type]?.name || p.type}${p.level}`).join(', ') || '-'}</td>
+                      <td className="px-2 py-1 text-left pl-4 text-xs">{renderArsenal(player.pitching?.arsenal)}</td>
                     </tr>
                   </tbody>
                 </table>
