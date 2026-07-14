@@ -4,7 +4,7 @@
 // ============================================================
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
-import { releasedPlayersPool } from '../teams-data.js';
+import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
 
 // 2年目以降トライアウトの受験者構成比（合計=1.0）と1チームあたり総数
@@ -366,6 +366,50 @@ function getReleasedCandidatesFromPool(maxPlayers = null) {
 }
 
 /**
+ * クラブチーム（社会人クラブ）の選手からトライアウト受験者を抽出する。
+ * クラブ選手はプロ志向でトライアウトを受けに来る想定。若手中心に抽出しクローンを返す。
+ * @param {number} count - 抽出人数
+ * @returns {Array} クラブ選手候補（_tryoutSource='club'）
+ */
+function getClubTryoutCandidates(count) {
+  if (count <= 0) return [];
+  const pool = [];
+  for (const [teamName, team] of Object.entries(TEAMS_DATA)) {
+    if (team?.corporateData?.type !== 'club') continue;
+    for (const p of team.players || []) {
+      if ((p.age || 25) > 27) continue; // 若手中心（プロ志向）
+      pool.push({ p, teamName });
+    }
+  }
+  if (pool.length === 0) return [];
+  pool.sort(() => Math.random() - 0.5);
+  return pool.slice(0, count).map(({ p, teamName }) => {
+    const c = JSON.parse(JSON.stringify(p));
+    c.origin = 'club';
+    c._tryoutSource = 'club';
+    c._previousClub = teamName;
+    c.isReleasedCandidate = false;
+    c.isNewcomer = false;
+    return c;
+  });
+}
+
+/**
+ * トライアウトで指名されたクラブ選手を、所属クラブのロスターから除去する。
+ * （指名者を残すと同一選手が2チームに存在してしまうため）
+ * @param {Array<number>} draftedIds - 指名された選手のIDリスト
+ */
+export function removeDraftedFromClubTeams(draftedIds) {
+  if (!draftedIds || draftedIds.length === 0) return;
+  const drafted = new Set(draftedIds);
+  for (const team of Object.values(TEAMS_DATA)) {
+    if (team?.corporateData?.type !== 'club') continue;
+    if (!team.players?.length) continue;
+    team.players = team.players.filter(p => !drafted.has(p.id));
+  }
+}
+
+/**
  * トライアウト後に解雇プールを更新
  * - 獲得された選手はプールから削除
  * - 獲得されなかった選手は attemptsInPool++（base snapshotの能力値・年齢は変更しない）
@@ -436,8 +480,12 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   getHighSchoolTryoutCandidates(hsCount).forEach(addCandidate);
   // 2. 大学4年生（卒業予定・NPB未指名／最多）
   getUniversitySeniorTryoutCandidates(year, uniCount).forEach(addCandidate);
-  // 3. FA（リリースプール）
-  getReleasedCandidatesFromPool(faCount).forEach(addCandidate);
+  // 3. FA組（リリースプール ＋ クラブチーム選手）
+  //    FA枠の半分はクラブチームのプロ志向選手から供給する
+  const clubCount = Math.max(Math.round(faCount * 0.5), 2);
+  const releasedCount = Math.max(faCount - clubCount, 2);
+  getReleasedCandidatesFromPool(releasedCount).forEach(addCandidate);
+  getClubTryoutCandidates(clubCount).forEach(addCandidate);
 
   // 4. 安全網: 実在候補が極端に少ない場合のみ生成で補完（通常は発生しない）
   const minCandidates = teamCount * 4;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
-import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, generateScoutComment } from '../season/tryoutSystem.js';
+import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, removeDraftedFromClubTeams, generateScoutComment } from '../season/tryoutSystem.js';
 import { removeDraftedFromGraduatePools } from '../season/universityPool.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
@@ -177,6 +177,8 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       updateReleasedPoolAfterTryout(allDraftedIds);
       // 高校生プール・大学プールから指名者を除去（オフシーズン振り分けとの二重計上を防止）
       removeDraftedFromGraduatePools(allDraftedIds);
+      // クラブチームから指名者を除去（同一選手の二重所属を防止）
+      removeDraftedFromClubTeams(allDraftedIds);
     }
     if (initializeAllPitchingRotations) initializeAllPitchingRotations();
     setDraftComplete(true);
@@ -735,6 +737,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                           )}
                           {player._tryoutSource === 'university' && (
                             <span className="ml-0.5 inline-block px-0.5 text-xs bg-emerald-700 text-emerald-100 rounded align-middle" title="大学4年生（卒業予定）">大卒</span>
+                          )}
+                          {player._tryoutSource === 'club' && (
+                            <span className="ml-0.5 inline-block px-0.5 text-xs bg-purple-700 text-purple-100 rounded align-middle" title={`クラブチーム${player._previousClub ? '（' + player._previousClub + '）' : ''}`}>クラブ</span>
                           )}
                           {player.isNewcomer && !player.isReleasedCandidate && !player._tryoutSource && (
                             <span className="ml-0.5 inline-block px-0.5 text-xs bg-gray-600 text-gray-100 rounded align-middle" title="新規候補">新人</span>
