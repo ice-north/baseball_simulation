@@ -111,7 +111,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           return;
         }
         const currentTeamRoster = teamRosters[currentTeam] || [];
-        const selected = selectPlayerForAI(tryoutCandidates, currentTeamRoster);
+        // チーム状況（前年勝率）: 再建/優勝狙いで指名方針が変わる
+        const standing = seasonData?.standings?.find(s => s.team === currentTeam);
+        const teamContext = { winRate: standing ? (standing.winRate ?? 0.5) : 0.5 };
+        const selected = selectPlayerForAI(tryoutCandidates, currentTeamRoster, teamContext);
         if (selected) {
           setDraftHistory(prev => [...prev, {
             pick: currentPick + 1,

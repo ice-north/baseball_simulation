@@ -1685,7 +1685,7 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
  * @param {Array} currentRoster - 現在のロスター（配列形式）
  * @returns {Object} 選択された選手
  */
-export function selectPlayerForAI(candidates, currentRoster = []) {
+export function selectPlayerForAI(candidates, currentRoster = [], teamContext = null) {
   // ロスター配列をオブジェクトから配列に変換（後方互換性のため）
   let rosterArray = currentRoster;
   if (!Array.isArray(currentRoster)) {
@@ -1737,6 +1737,36 @@ export function selectPlayerForAI(candidates, currentRoster = []) {
       }
     }
   });
+
+  // チーム状況（勝率）に応じた指名方針: 再建中は若手・成長力、優勝狙いは即戦力
+  const contendBias = Math.max(-1, Math.min(1, ((teamContext?.winRate ?? 0.5) - 0.5) * 2));
+  if (contendBias !== 0) {
+    // 年齢補正を含まない「現能力そのもの」（即戦力度の指標）
+    const rawOverall = (p) => {
+      if (p.position === 'pitcher') {
+        const arr = p.pitching?.arsenal || [];
+        const bestArs = arr.length ? Math.max(...arr.map(a => a.level || 0)) : 0;
+        return ((p.pitching?.velocity || 130) - 130) * 2 * 0.3 + (p.pitching?.control || 0) * 0.25 + (p.pitching?.stamina || 0) / 2 * 0.25 + bestArs * 0.2;
+      }
+      return (p.batting?.meet || 0) * 0.3 + (p.batting?.power || 0) * 0.25 + (p.physical?.speed || 0) * 0.2 + (p.fielding?.defense || 0) * 0.15 + (p.physical?.arm || 0) * 0.1;
+    };
+    scoredCandidates.forEach(candidate => {
+      const age = candidate.age || 22;
+      if (contendBias < 0) {
+        // 再建: 若さ＋成長力を重視、伸びしろの無い年長は敬遠
+        const youth = age <= 18 ? 1 : age <= 20 ? 0.7 : age <= 22 ? 0.3 : 0;
+        const growth = Math.max(0, (candidate.growthPotential || 1.0) - 1.0) * 2;
+        candidate.valueScore += (-contendBias) * (youth * 25 + growth * 25);
+        if (age >= 24) candidate.valueScore -= (-contendBias) * 15;
+      } else {
+        // 優勝狙い: 現能力の高さ（即戦力）＋出来上がった年齢を重視、未完成の若手は敬遠
+        const ro = rawOverall(candidate);
+        const ready = (age >= 21 && age <= 27) ? 1 : age >= 20 ? 0.5 : 0;
+        candidate.valueScore += contendBias * ((ro - 40) * 0.9 + ready * 20);
+        if (age <= 18) candidate.valueScore -= contendBias * 20;
+      }
+    });
+  }
 
   // ランダム要素を加えて各チームの個性を出す（±15pt）
   scoredCandidates.forEach(candidate => {
