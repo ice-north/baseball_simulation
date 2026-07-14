@@ -7,6 +7,11 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
 
+// 2年目以降トライアウトの受験者構成比（合計=1.0）と1チームあたり総数
+// 独立トライアウトの現実的な像: 大学卒が最多、次いで高校卒、FA組は少数
+const TRYOUT_RATIO = { university: 0.50, highschool: 0.35, fa: 0.15 };
+const TRYOUT_TOTAL_PER_TEAM = 10;
+
 /**
  * 利き手を決定（左投・左打の発生率を強化）
  * - 右投右打: 40%
@@ -419,13 +424,20 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   }
 
   // === 2年目以降: 実在プールから供給（生成しない）===
-  // 選手の一次供給元は高校生プール。大学4年生・FAは補助的に加える。
-  // 1. 高校卒業予定（メインソース）
-  getHighSchoolTryoutCandidates(Math.max(teamCount * 6, 12)).forEach(addCandidate);
-  // 2. 大学4年生（卒業予定・NPB未指名／補助）
-  getUniversitySeniorTryoutCandidates(year, Math.max(teamCount * 2, 4)).forEach(addCandidate);
-  // 3. FA（リリースプール／補助）
-  getReleasedCandidatesFromPool(Math.max(teamCount * 2, 4)).forEach(addCandidate);
+  // 受験者の構成比（現実的な独立トライアウト像）:
+  //   大学4年生 50% > 高校卒業予定 35% > FA 15%
+  //   （高校生の多くは一度大学・社会人へ進むため、直接受験に来るのは一部。
+  //     大学でプロに届かなかった4年生が最多となる）
+  const total = teamCount * TRYOUT_TOTAL_PER_TEAM;
+  const uniCount = Math.max(Math.round(total * TRYOUT_RATIO.university), 6);
+  const hsCount = Math.max(Math.round(total * TRYOUT_RATIO.highschool), 5);
+  const faCount = Math.max(Math.round(total * TRYOUT_RATIO.fa), 3);
+  // 1. 高校卒業予定
+  getHighSchoolTryoutCandidates(hsCount).forEach(addCandidate);
+  // 2. 大学4年生（卒業予定・NPB未指名／最多）
+  getUniversitySeniorTryoutCandidates(year, uniCount).forEach(addCandidate);
+  // 3. FA（リリースプール）
+  getReleasedCandidatesFromPool(faCount).forEach(addCandidate);
 
   // 4. 安全網: 実在候補が極端に少ない場合のみ生成で補完（通常は発生しない）
   const minCandidates = teamCount * 4;
