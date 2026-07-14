@@ -24,6 +24,7 @@ import OffSeasonScreen from './OffSeasonScreen.jsx';
 import RegulationsScreen from './RegulationsScreen.jsx';
 import SandboxSetupScreen from './SandboxSetupScreen.jsx';
 import CampScreen from './CampScreen.jsx';
+import JerseyNumberScreen from './JerseyNumberScreen.jsx';
 import PlayerStatsScreen from './PlayerStatsScreen.jsx';
 import HallOfFameScreen from './HallOfFameScreen.jsx';
 import SaveLoadScreen from './SaveLoadScreen.jsx';
@@ -580,8 +581,13 @@ const ManagementScreen = ({
         };
       });
       setSelectedMonth(4);
-      setManagementView('dateprogress');
+      setManagementView('jersey'); // シーズン開始直前に背番号設定
     }}
+  />;
+  if (managementView === 'jersey') return <JerseyNumberScreen
+    userTeamName={userTeamName}
+    seasonData={seasonData}
+    onComplete={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'stats') return <PlayerStatsScreen
     seasonData={seasonData}

@@ -176,6 +176,7 @@ const TeamInfoScreen = ({ gameMode }) => {
               <table className="min-w-max w-full text-xs">
                 <thead>
                   <tr className="bg-gray-600 text-gray-200">
+                    <th className="px-2 py-2 text-center" title="背番号">背</th>
                     <SortableHeader label="名前" sortKey="name" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} align="left" />
                     <SortableHeader label="年齢" sortKey="age" currentKey={pitcherSortKey} currentDir={pitcherSortDir} onClick={handlePitcherSort} />
                     <th className="px-2 py-2 text-center">投</th>
@@ -211,6 +212,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                     return (
                       <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-800'}`}
                         onClick={() => setSelectedPlayer(player)}>
+                        <td className="px-2 py-1 text-gray-300 text-center tabular-nums font-bold">{player.number ?? '-'}</td>
                         <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{gradeLabel}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}</td>
@@ -266,6 +268,7 @@ const TeamInfoScreen = ({ gameMode }) => {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-600 text-gray-200">
+                    <th className="px-2 py-2 text-center" title="背番号">背</th>
                     <SortableHeader label="名前" sortKey="name" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} align="left" />
                     <th className="px-2 py-2 text-center">守備</th>
                     <SortableHeader label="年齢" sortKey="age" currentKey={fielderSortKey} currentDir={fielderSortDir} onClick={handleFielderSort} />
@@ -299,6 +302,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                     return (
                       <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-800'}`}
                         onClick={() => setSelectedPlayer(player)}>
+                        <td className="px-2 py-1 text-gray-300 text-center tabular-nums font-bold">{player.number ?? '-'}</td>
                         <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{POSITION_NAMES[player.position]}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{gradeLabel}</td>
