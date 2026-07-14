@@ -55,7 +55,8 @@ export default function PlayerDetailModal({ player, onClose }) {
           const history = player.careerHistory || [];
           const steps = [];
           if (history.length > 0) {
-            history.forEach(h => steps.push({ label: h.label, type: h.type }));
+            // 全国大会成績(achievement)は経路チップではなく物語タブで表示するため除外
+            history.filter(h => h.type !== 'achievement').forEach(h => steps.push({ label: h.label, type: h.type }));
           } else {
             const uniName = player.universityTeamName || player.universityName;
             if (uniName) {
@@ -89,6 +90,21 @@ export default function PlayerDetailModal({ player, onClose }) {
                 <span key={i} className="flex items-center gap-1">
                   {i > 0 && <span className="text-gray-600 mx-0.5">&rarr;</span>}
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeColor[s.type] || 'bg-gray-700 text-gray-200'}`}>{s.label}</span>
+                </span>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* 全国大会成績（🏆）*/}
+        {(() => {
+          const achievements = (player.careerHistory || []).filter(h => h.type === 'achievement');
+          if (achievements.length === 0) return null;
+          return (
+            <div className="flex flex-wrap gap-1 mb-4 flex-shrink-0">
+              {achievements.map((a, i) => (
+                <span key={i} className={`text-xs rounded px-1.5 py-0.5 ${a.result === '優勝' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-700/50' : 'bg-gray-800 text-gray-300 border border-gray-600/50'}`}>
+                  🏆 {a.grade ? `${a.grade}年時 ` : ''}{a.tournament}{a.result}
                 </span>
               ))}
             </div>
