@@ -586,8 +586,18 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     proBonus.push({
       teamName, draftCount: count, reputationGain,
       currentReputation: team.developmentReputation,
+      totalProduced: team.totalProPlayersProduced,
       boostedYoungPlayers: boostedCount
     });
+  });
+
+  // === プロ輩出アラムナイの記録（チーム所属選手のみ、永続保存） ===
+  draftedPlayers.forEach(({ teamName, source, name, position, npbTeam, draftRound }) => {
+    if (source === 'highschool' || source === 'university') return;
+    const team = allTeams[teamName];
+    if (!team) return;
+    if (!team.npbAlumni) team.npbAlumni = [];
+    team.npbAlumni.push({ name, position, npbTeam, draftRound, year: gameYear });
   });
 
   // === 各プールから指名者を除去 ===

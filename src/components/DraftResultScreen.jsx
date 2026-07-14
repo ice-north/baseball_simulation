@@ -1032,6 +1032,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
                 </div>
                 <div className="text-gray-400 text-sm flex gap-4 flex-wrap">
                   <span>プロ輩出 {bonus.draftCount}人</span>
+                  {bonus.totalProduced > 0 && <span className="text-yellow-300 font-semibold">通算輩出 {bonus.totalProduced}人</span>}
                   <span>育成評判 {bonus.currentReputation}pt</span>
                   {bonus.boostedYoungPlayers > 0 && <span className="text-green-300 font-semibold">若手{bonus.boostedYoungPlayers}人が刺激を受けて成長!</span>}
                 </div>

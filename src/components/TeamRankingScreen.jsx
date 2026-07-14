@@ -204,6 +204,22 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
             </div>
             <div className="text-sm text-gray-400">注目度 {userEntry.reputation}</div>
           </div>
+          {(() => {
+            const alumni = TEAMS_DATA[userTeamName]?.npbAlumni || [];
+            const produced = TEAMS_DATA[userTeamName]?.totalProPlayersProduced || alumni.length;
+            if (produced <= 0) return null;
+            const recent = [...alumni].slice(-3).reverse();
+            return (
+              <div className="mt-2 pt-2 border-t border-yellow-700/30 flex items-center gap-2 flex-wrap text-xs">
+                <span className="text-yellow-300 font-bold">⚾ NPB輩出 {produced}名</span>
+                {recent.map((a, i) => (
+                  <span key={i} className="text-gray-300 bg-gray-800/60 rounded px-1.5 py-0.5">
+                    {a.name}（{a.year}年目・{a.npbTeam}{a.draftRound ? '/' + a.draftRound : ''}）
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 
