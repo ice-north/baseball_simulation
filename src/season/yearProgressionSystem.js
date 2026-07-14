@@ -7,7 +7,7 @@
 import { createSeasonData, initializeStandings } from './seasonManager.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
-import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, getUtilityScore } from '../utils/constants.js';
 import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates, HIGH_SCHOOL_CLASS_SIZE } from './universityPool.js';
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
@@ -364,7 +364,9 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     const defW = isYoung ? 0.2 : isMature ? 0.7 : 0.4;
     const armW = isYoung ? 0.6 : isMature ? 0.2 : 0.3;
 
-    const rawAbility = meet * meetW + power * powerW + eye * eyeW + speed * speedW + defense * defW + arm * armW;
+    // ユーティリティ（守備の幅）を小さく加点。複数守れる選手はプロでも重宝される。
+    const utilBonus = getUtilityScore(player) * 0.08; // 最大+8pt
+    const rawAbility = meet * meetW + power * powerW + eye * eyeW + speed * speedW + defense * defW + arm * armW + utilBonus;
     const abilityScore = rawAbility * potentialMult;
 
     const abilityFactor = Math.min(1.0, rawAbility / 130);

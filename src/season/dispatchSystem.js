@@ -4,6 +4,7 @@
 // ============================================================
 
 import { getNestedValue, setNestedValueMut } from './growthUtils.js';
+import { getUtilityScore } from '../utils/constants.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { getPitchTypeName } from './campTraining.js';
 import { getAvailableUniversityDispatches, getRemainingDispatchSlots } from '../university/universityPipeSystem.js';
@@ -63,7 +64,10 @@ export function calcPlayerOverall(player) {
     const power = player.batting?.power || 30;
     const speed = player.physical?.speed || 30;
     const defense = player.fielding?.defense || 30;
-    return Math.round((meet + power + speed + defense) / 4);
+    const base = (meet + power + speed + defense) / 4;
+    // ユーティリティ（守備の幅）を小さく加点（能力差を覆さない上限+4）
+    const utilBonus = Math.round(getUtilityScore(player) * 0.04);
+    return Math.round(base) + utilBonus;
   }
 }
 

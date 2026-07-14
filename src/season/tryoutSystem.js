@@ -6,6 +6,7 @@
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
+import { getUtilityScore } from '../utils/constants.js';
 
 // 2年目以降トライアウトの1チームあたり基準受験者数
 // 構成比はリーグ注目度(developmentReputation)で変動する（下記 generateTryoutCandidates 参照）:
@@ -1040,6 +1041,23 @@ export const generatePositionFitness = (mainPosition) => {
     });
   }
 
+  // ユーティリティ型（約12%）: 複数ポジションを守れる器用な選手を出す。
+  // 内野型は内野中心（+一部外野）、外野型は外野中心（+一部内野）に広げる。
+  if (mainPosition !== 'pitcher' && Math.random() < 0.12) {
+    const infield = ['catcher', 'first', 'second', 'third', 'short'];
+    const outfield = ['left', 'center', 'right'];
+    const isOF = outfield.includes(mainPosition);
+    let pool = isOF
+      ? [...outfield, ...(Math.random() < 0.4 ? ['second', 'third', 'first'] : [])]
+      : [...infield, ...(Math.random() < 0.4 ? outfield : [])];
+    pool = pool.filter(p => p !== mainPosition).sort(() => Math.random() - 0.5);
+    const extra = randRange(2, 4);
+    for (let i = 0; i < Math.min(extra, pool.length); i++) {
+      const pos = pool[i];
+      fitness[pos] = Math.max(fitness[pos] || 0, Math.floor(Math.random() * 20) + 68); // 68-88
+    }
+  }
+
   return fitness;
 }
 
@@ -1661,6 +1679,8 @@ export function calculatePlayerValueScore(player, rosterAnalysis) {
     if (offense >= 55 && player.physical.speed >= 60 && player.fielding.defense >= 60) {
       bonusScore += 15;
     }
+    // ユーティリティ（守備の幅）ボーナス。控え・守備固め要員として価値が上がる。
+    bonusScore += Math.round(getUtilityScore(player) * 0.15); // 最大+15
   }
 
   // 年齢による指名優先度補正（素材型 vs 即戦力）

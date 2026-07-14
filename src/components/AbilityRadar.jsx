@@ -6,6 +6,8 @@
 // 数値は各頂点に併記し「リアルなデータ」を残したまま形で直感的に掴めるようにする。
 // ============================================================
 
+import { getUtilityScore } from '../utils/constants.js';
+
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
 // 選手 → レーダー軸（値は0-100正規化 / raw は実数表示用）
@@ -23,12 +25,14 @@ export function playerRadarAxes(player) {
     ];
   }
   const b = player.batting || {}, ph = player.physical || {}, f = player.fielding || {};
+  const util = getUtilityScore(player);
   return [
     { label: 'ミート', value: clamp(b.meet || 0), raw: b.meet || 0 },
     { label: 'パワー', value: clamp(b.power || 0), raw: b.power || 0 },
     { label: '走力', value: clamp(ph.speed || 0), raw: ph.speed || 0 },
     { label: '肩', value: clamp(ph.arm || 0), raw: ph.arm || 0 },
     { label: '守備', value: clamp(f.defense || 0), raw: f.defense || 0 },
+    { label: '守備幅', value: clamp(util), raw: util },
     { label: '選球眼', value: clamp(b.eye || 0), raw: b.eye || 0 },
   ];
 }
@@ -56,7 +60,7 @@ export function teamRadarAxes(team) {
 export function AbilityRadar({ axes = [], size = 190, showValues = true, accent = 'var(--accent)' }) {
   const n = axes.length;
   if (n < 3) return null;
-  const pad = 34;                 // ラベル用の外周余白（下頂点の数値まで収める）
+  const pad = 38;                 // ラベル用の外周余白（多軸・長ラベルも収める）
   const cx = size / 2, cy = size / 2;
   const maxR = size / 2 - pad;
   const angle = (i) => (-90 + (360 / n) * i) * (Math.PI / 180);

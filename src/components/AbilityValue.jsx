@@ -9,7 +9,7 @@
 // getAbilityColor（正規化なし）や low/high 閾値で色付けするのをこれに置き換える。
 // ============================================================
 
-import { getAbilityRank, getRankColor } from '../utils/constants.js';
+import { getAbilityRank, getRankColor, getUtilityScore } from '../utils/constants.js';
 
 // 能力値1つを色付きで表示する。
 //   value       : 能力値（数値）。null / '?' / NaN は placeholder 表示。
@@ -67,7 +67,9 @@ export function overallRating(player) {
   const def = num(player.fielding?.defense) ?? 0;
   const spd = num(player.physical?.speed) ?? 0;
   const arm = num(player.physical?.arm) ?? 0;
-  return Math.round(meet * 0.30 + power * 0.22 + eye * 0.14 + def * 0.14 + spd * 0.10 + arm * 0.10);
+  // ユーティリティ（守備の幅）を小さく加点（上限+4）
+  const utilBonus = getUtilityScore(player) * 0.04;
+  return Math.round(meet * 0.30 + power * 0.22 + eye * 0.14 + def * 0.14 + spd * 0.10 + arm * 0.10 + utilBonus);
 }
 
 // 選手の総合ランクバッジ。overallRating を S〜F に丸めて表示。算出不能なら「?」。

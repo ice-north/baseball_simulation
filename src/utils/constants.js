@@ -264,3 +264,24 @@ export const getAbilityColor = (value) => {
   if (value >= 40) return 'text-blue-400';
   return 'text-gray-400';
 };
+
+const FIELD_POSITIONS_FOR_UTILITY = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
+
+/**
+ * ユーティリティ度（守備の幅）: メイン以外に守れるポジションの数と質を 0-100 で返す。
+ * 守備適性60以上のサブポジについて (適性-50) を加算。
+ * 例) 75の適性を3ポジ → 75 / 65を2ポジ → 30 / 単能力なら 0。
+ * 投手は 0。
+ */
+export const getUtilityScore = (player) => {
+  if (!player || player.position === 'pitcher') return 0;
+  const pf = player.positionFitness || {};
+  const main = player.position;
+  let score = 0;
+  for (const pos of FIELD_POSITIONS_FOR_UTILITY) {
+    if (pos === main) continue;
+    const f = pf[pos] || 0;
+    if (f >= 60) score += (f - 50);
+  }
+  return Math.max(0, Math.min(100, score));
+};
