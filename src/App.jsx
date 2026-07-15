@@ -284,6 +284,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const [bases, setBases] = useState([false, false, false]);
       const [outs, setOuts] = useState(0);
       const [remainingPitches, setRemainingPitches] = useState(0);  // 残り投球数（自動投球用）
+      // 采配: 自チーム打者の打撃方針（take=待て/normal/aggressive=積極）と盗塁指示
+      const [battingApproach, setBattingApproach] = useState('normal');
+      const battingApproachRef = useRef('normal');
+      const forceStealRef = useRef(false);
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
       const outOccurredRef = React.useRef(false); // アウト発生フラグ
       
@@ -1196,6 +1200,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           }
         }
         swingProb *= adjustment.swingRate;
+        // 采配: 自チームが攻撃中のとき打撃方針を反映（待て=見送り増/積極=打ちにいく）
+        if ((isTopInning ? awayTeam.name : homeTeam.name) === userTeamName) {
+          const _bam = battingApproachRef.current === 'take' ? 0.55
+            : battingApproachRef.current === 'aggressive' ? 1.3 : 1.0;
+          swingProb *= _bam;
+        }
 
         const doesSwing = Math.random() < swingProb;
 
@@ -1873,6 +1883,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
               stealAttempt *= stealMultiplier;
             }
+
+            // 采配: 盗塁指示があれば強制的に試行（成否は走力・肩で決まる）
+            if (forceStealRef.current) { stealAttempt = 1; forceStealRef.current = false; }
 
             if (Math.random() < stealAttempt) {
               // 成功率システム
@@ -3352,6 +3365,31 @@ if (newOuts === 3) {
                   </div>
                 </div>
                 
+                {/* 采配: 打撃方針＋盗塁指示（自チーム攻撃時） */}
+                {(() => {
+                  const battingTeamName = isTopInning ? awayTeam.name : homeTeam.name;
+                  const isUserBatting = battingTeamName === userTeamName;
+                  const setApproach = (v) => { setBattingApproach(v); battingApproachRef.current = v; };
+                  return (
+                    <div className="flex items-center justify-center gap-2 flex-wrap mb-2">
+                      <span className={`text-xs ${isUserBatting ? 'text-gray-300' : 'text-gray-600'}`}>打撃方針</span>
+                      {[['take', '待て'], ['normal', 'おまかせ'], ['aggressive', '積極']].map(([v, label]) => (
+                        <button key={v} onClick={() => setApproach(v)} disabled={!isUserBatting || gameOver}
+                          className={`px-2 py-1 rounded text-xs font-bold transition ${
+                            battingApproach === v ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${!isUserBatting ? 'opacity-40' : ''}`}>
+                          {label}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => { forceStealRef.current = true; throwPitch(); }}
+                        disabled={!isUserBatting || !bases[0] || isAutoSimulating || gameOver}
+                        title={bases[0] ? '一塁走者が次球で盗塁を試みる' : '一塁に走者がいません'}
+                        className="ml-2 px-2.5 py-1 rounded text-xs font-bold bg-emerald-700 text-emerald-100 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                        🏃 盗塁
+                      </button>
+                    </div>
+                  );
+                })()}
                 {/* 操作ボタン */}
                 <div className="flex justify-center gap-2 flex-wrap">
                   <button onClick={throwPitch} disabled={isAutoSimulating || gameOver}
@@ -3539,32 +3577,57 @@ if (newOuts === 3) {
               })()}
 
               {/* 最新結果 */}
-              {gameStarted && lastResult && (
-                <div className="bg-gray-800 border border-yellow-500/60 rounded-lg p-2 text-center">
-                  <div className="flex flex-col items-center gap-0.5">
-                    <div>
-                      <span className="font-bold text-lg text-yellow-100">{lastResult.description}</span>
-                      {lastResult.pitchType && (
-                        <span className="ml-2 text-gray-300 text-sm">
-                          ({lastResult.pitchType} {lastResult.velocity}km/h)
-                        </span>
+              {gameStarted && lastResult && (() => {
+                // 結果種別で色分け（安打=緑/長打=金/三振=赤/四死球=青/アウト=灰）
+                const d = lastResult.description || '';
+                const cat = /本塁打|ホームラン|三塁打|３塁打|二塁打|２塁打/.test(d) ? 'xbh'
+                  : /ヒット|安打|出塁/.test(d) ? 'hit'
+                  : /三振/.test(d) ? 'k'
+                  : /四球|死球|フォアボール/.test(d) ? 'bb'
+                  : /アウト|ゴロ|フライ|併殺|邪飛|ライナー|失敗/.test(d) ? 'out'
+                  : 'neutral';
+                const S = {
+                  xbh: { box: 'border-amber-400 bg-amber-900/30', text: 'text-amber-200', icon: '💥' },
+                  hit: { box: 'border-green-500 bg-green-900/25', text: 'text-green-200', icon: '🟢' },
+                  k: { box: 'border-red-500 bg-red-900/25', text: 'text-red-200', icon: '❌' },
+                  bb: { box: 'border-blue-500 bg-blue-900/25', text: 'text-blue-200', icon: '🎫' },
+                  out: { box: 'border-gray-600 bg-gray-800', text: 'text-gray-200', icon: '' },
+                  neutral: { box: 'border-yellow-500/60 bg-gray-800', text: 'text-yellow-100', icon: '' },
+                }[cat];
+                // 打球の飛距離バー（0-140m目安）
+                const distPct = lastResult.distance ? Math.max(4, Math.min(100, (lastResult.distance / 140) * 100)) : 0;
+                return (
+                  <div className={`rounded-lg p-2 text-center border ${S.box}`}>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div>
+                        {S.icon && <span className="mr-1">{S.icon}</span>}
+                        <span className={`font-bold text-lg ${S.text}`}>{d}</span>
+                        {lastResult.pitchType && (
+                          <span className="ml-2 text-gray-300 text-sm">
+                            ({lastResult.pitchType} {lastResult.velocity}km/h)
+                          </span>
+                        )}
+                      </div>
+                      {/* 打球物理データ + 飛距離バー */}
+                      {lastResult.exitVelocity && (
+                        <div className="w-full max-w-[280px] mt-0.5">
+                          <div className="text-xs text-gray-400 tabular-nums">
+                            EV {lastResult.exitVelocity} / 角度 {lastResult.launchAngle}° / {lastResult.distance}m / 芯 {lastResult.meetQuality}%
+                          </div>
+                          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mt-0.5">
+                            <div className={`h-full rounded-full ${cat === 'xbh' ? 'bg-amber-400' : cat === 'hit' ? 'bg-green-500' : 'bg-gray-500'}`} style={{ width: `${distPct}%` }} />
+                          </div>
+                        </div>
                       )}
                     </div>
-                    {/* 打球物理データ */}
-                    {lastResult.exitVelocity && (
-                      <div className="text-xs text-gray-400">
-                        EV:{lastResult.exitVelocity} LA:{lastResult.launchAngle}° {lastResult.distance}m 芯:{lastResult.meetQuality}%
+                    {lastResult.timingWindow && !lastResult.exitVelocity && (
+                      <div className="text-xs text-red-500 mt-1">
+                        窓: {lastResult.timingWindow}ms | 誤差: {lastResult.timingError}ms
                       </div>
                     )}
                   </div>
-                  {/* タイミングデータ（空振り時など） */}
-                  {lastResult.timingWindow && !lastResult.exitVelocity && (
-                    <div className="text-xs text-red-500 mt-1">
-                      窓: {lastResult.timingWindow}ms | 誤差: {lastResult.timingError}ms
-                    </div>
-                  )}
-                </div>
-              )}
+                );
+              })()}
 
               {/* 試合ログ */}
               {gameStarted && (
