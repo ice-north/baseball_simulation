@@ -704,7 +704,8 @@ export function getHighSchoolTryoutCandidates(count, qualityBias = 0) {
   const band = _shuffleInPlace(scored.slice(start, end));
   return band.slice(0, count).map(({ p }) => {
     const c = _cloneForTryout(p);
-    c.age = Math.max(c.age || 18, 19);
+    // 年末トライアウト時点では高校3年生=18歳。入団後の年次進行で翌キャンプに19歳になる。
+    c.age = c.age || 18;
     c.origin = 'independent_candidate';
     c._tryoutSource = 'highschool';
     c.isNewcomer = true;
@@ -733,6 +734,14 @@ export function getUniversitySeniorTryoutCandidates(currentYear, count, qualityB
   const start = Math.floor(scored.length * (0.15 - 0.12 * bias));
   const band = _shuffleInPlace(scored.slice(start));
   return band.slice(0, count).map(({ e }) => {
+    // 既存プールで所属大学が未設定（旧不具合で配属されなかった）の場合はランク相当の大学を補填
+    if (!e.universityTeamName) {
+      const rank = e.universityRank || 'C';
+      const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
+      const pool = UNIVERSITY_TEAMS.filter(t => t.rank === rank && t.name !== userUniTeam);
+      const team = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+      if (team) { e.universityTeamName = team.name; e.universityTeamId = team.id; }
+    }
     const c = _cloneForTryout(e.player);
     if (e.universityRank) c.universityRank = e.universityRank;
     if (e.universityTeamName) { c.universityName = e.universityTeamName; c.universityTeamName = e.universityTeamName; }
@@ -1029,9 +1038,12 @@ export function enrollInUniversity(players, enrollYear) {
   }
 
   const teamCounts = {};
+  // ユーザーが操作している大学（大学モード）のみNPC配属から除外する。
+  // 独立/社会人モードでは234大学がすべてTEAMS_DATAに載るため、TEAMS_DATA全体で
+  // 除外すると配属先が無くなり所属が「大学」表記になってしまう不具合を防ぐ。
+  const userUniTeam = WORLD_DATA.universityLeague?.userTeam || null;
   const assignTeam = (rank) => {
-    // TEAMS_DATAに存在するチーム（ユーザーの実プレイ大学）はNPC配属から除外
-    const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank && !TEAMS_DATA[t.name]);
+    const teams = UNIVERSITY_TEAMS.filter(t => t.rank === rank && t.name !== userUniTeam);
     if (teams.length === 0) return null;
     let minCount = Infinity;
     let candidates = [];
