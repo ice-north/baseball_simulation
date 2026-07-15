@@ -288,6 +288,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const [battingApproach, setBattingApproach] = useState('normal');
       const battingApproachRef = useRef('normal');
       const forceStealRef = useRef(false);
+      const forceSwingRef = useRef(false);   // エンドラン: 打者を強制的に打ちにいかせる
+      const [defenseShift, setDefenseShift] = useState('normal'); // 守備シフト: normal/pull/oppo
+      const defenseShiftRef = useRef('normal');
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
       const outOccurredRef = React.useRef(false); // アウト発生フラグ
       
@@ -1091,6 +1094,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 打球データを結果に付加（統計ログ用）
         return {
           ...result,
+          ballDirection,
           exitVelocity: battedBall.exitVelocity,
           launchAngle: battedBall.launchAngle,
           distance: battedBall.distance,
@@ -1206,6 +1210,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             : battingApproachRef.current === 'aggressive' ? 1.3 : 1.0;
           swingProb *= _bam;
         }
+        // 采配: エンドランは打者を必ず打ちにいかせる（走者を守るため空振りしにくく）
+        if (doForceSwing) swingProb = Math.max(swingProb, 0.92);
 
         const doesSwing = Math.random() < swingProb;
 
@@ -1363,6 +1369,11 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           return;
         }
 
+        // 采配フラグを1球分だけ消費（次球に持ち越さない）
+        const doForceSteal = forceStealRef.current; forceStealRef.current = false;
+        const doForceSwing = forceSwingRef.current; forceSwingRef.current = false;
+        const doIntentionalWalk = intentionalWalkRef.current; intentionalWalkRef.current = false;
+
         // 打席の最初（カウント0-0）で代打チェック
         if (count.balls === 0 && count.strikes === 0) {
           autoSubstitutePinchHitter();
@@ -1423,8 +1434,22 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         
         let result = simulatePitch();
         // 采配: 敬遠指示があればこの1球で四球にする（ボール扱い）
-        if (intentionalWalkRef.current) {
+        if (doIntentionalWalk) {
           result = { type: 'ball', description: '敬遠', pitchType: '—', velocity: 0 };
+        }
+        // 采配: 守備シフト（自チーム守備時）。打球方向がシフト方向なら併殺/アウトに、逆なら安打になりやすい
+        if (defenseShiftRef.current !== 'normal' && result.ballDirection &&
+            (isTopInning ? homeTeam.name : awayTeam.name) === userTeamName) {
+          const bats = getCurrentBatter().batting?.bats;
+          const pullLeft = bats !== 'left';            // 右/両打→左が引っ張り, 左打→右が引っ張り
+          const shiftLeft = defenseShiftRef.current === 'pull' ? pullLeft : !pullLeft;
+          const toLeft = result.ballDirection === 'left' || result.ballDirection === 'leftCenter';
+          const toRight = result.ballDirection === 'right' || result.ballDirection === 'rightCenter';
+          if (result.type === 'single' && ((shiftLeft && toLeft) || (!shiftLeft && toRight))) {
+            if (Math.random() < 0.35) result = { ...result, type: 'out', hit: false, description: 'シフト正面でアウト' };
+          } else if (result.type === 'out' && !result.isOutfieldFly && ((shiftLeft && toRight) || (!shiftLeft && toLeft))) {
+            if (Math.random() < 0.30) result = { ...result, type: 'single', hit: true, description: 'シフトの逆を突く安打' };
+          }
         }
 
         // 球速履歴を更新（最新2球分のみ保持）
@@ -1479,7 +1504,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           case 'ball':
             newCount.balls++;
             // 敬遠: この1球で四球成立させる
-            if (intentionalWalkRef.current) { newCount.balls = 4; intentionalWalkRef.current = false; }
+            if (doIntentionalWalk) { newCount.balls = 4; }
             if (newCount.balls === 4) {
               // 打者成績: 四球
               setBatterStats(prev => ({
@@ -1890,8 +1915,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               stealAttempt *= stealMultiplier;
             }
 
-            // 采配: 盗塁指示があれば強制的に試行（成否は走力・肩で決まる）
-            if (forceStealRef.current) { stealAttempt = 1; forceStealRef.current = false; }
+            // 采配: 盗塁指示/エンドランがあれば強制的に試行（成否は走力・肩で決まる）
+            if (doForceSteal) { stealAttempt = 1; }
 
             if (Math.random() < stealAttempt) {
               // 成功率システム
@@ -3371,14 +3396,17 @@ if (newOuts === 3) {
                   </div>
                 </div>
                 
-                {/* 采配: 打撃方針＋盗塁指示（自チーム攻撃時） */}
+                {/* 采配コントロール（攻撃時＝打撃方針/盗塁/エンドラン/スクイズ、守備時＝敬遠/守備シフト） */}
                 {(() => {
-                  const battingTeamName = isTopInning ? awayTeam.name : homeTeam.name;
-                  const isUserBatting = battingTeamName === userTeamName;
+                  const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
+                  const busy = isAutoSimulating || gameOver;
                   const setApproach = (v) => { setBattingApproach(v); battingApproachRef.current = v; };
+                  const setShift = (v) => { setDefenseShift(v); defenseShiftRef.current = v; };
+                  const offBtn = 'px-2.5 py-1 rounded text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed';
                   return (
-                    <div className="flex items-center justify-center gap-2 flex-wrap mb-2">
-                      <span className={`text-xs ${isUserBatting ? 'text-gray-300' : 'text-gray-600'}`}>打撃方針</span>
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap mb-2">
+                      {/* 攻撃 */}
+                      <span className={`text-xs ${isUserBatting ? 'text-cyan-300' : 'text-gray-600'}`}>攻撃</span>
                       {[['take', '待て'], ['normal', 'おまかせ'], ['aggressive', '積極']].map(([v, label]) => (
                         <button key={v} onClick={() => setApproach(v)} disabled={!isUserBatting || gameOver}
                           className={`px-2 py-1 rounded text-xs font-bold transition ${
@@ -3386,22 +3414,28 @@ if (newOuts === 3) {
                           {label}
                         </button>
                       ))}
-                      <button
-                        onClick={() => { forceStealRef.current = true; throwPitch(); }}
-                        disabled={!isUserBatting || !bases[0] || isAutoSimulating || gameOver}
-                        title={bases[0] ? '一塁走者が次球で盗塁を試みる' : '一塁に走者がいません'}
-                        className="ml-2 px-2.5 py-1 rounded text-xs font-bold bg-emerald-700 text-emerald-100 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed">
-                        🏃 盗塁
-                      </button>
-                      {/* 守備時の采配: 敬遠 */}
-                      <span className="ml-2 text-xs text-gray-600">|</span>
-                      <button
-                        onClick={() => { intentionalWalkRef.current = true; throwPitch(); }}
-                        disabled={isUserBatting || isAutoSimulating || gameOver}
-                        title="現在の打者を敬遠（歩かせる）"
-                        className="px-2.5 py-1 rounded text-xs font-bold bg-indigo-700 text-indigo-100 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed">
-                        敬遠
-                      </button>
+                      <button onClick={() => { forceStealRef.current = true; throwPitch(); }}
+                        disabled={!isUserBatting || !bases[0] || busy} title="一塁走者が次球で盗塁"
+                        className={`${offBtn} bg-emerald-700 text-emerald-100 hover:bg-emerald-600`}>🏃 盗塁</button>
+                      <button onClick={() => { forceStealRef.current = true; forceSwingRef.current = true; throwPitch(); }}
+                        disabled={!isUserBatting || !bases[0] || outs >= 2 || busy} title="走者を走らせ打者は必ず打ちにいく"
+                        className={`${offBtn} bg-emerald-800 text-emerald-100 hover:bg-emerald-700`}>エンドラン</button>
+                      <button onClick={() => handleBunt()}
+                        disabled={!isUserBatting || !bases[2] || outs > 1 || busy} title="三塁走者を還すスクイズバント"
+                        className={`${offBtn} bg-yellow-700 text-yellow-100 hover:bg-yellow-600`}>スクイズ</button>
+                      <span className="text-xs text-gray-600">｜</span>
+                      {/* 守備 */}
+                      <span className={`text-xs ${!isUserBatting ? 'text-indigo-300' : 'text-gray-600'}`}>守備</span>
+                      <button onClick={() => { intentionalWalkRef.current = true; throwPitch(); }}
+                        disabled={isUserBatting || busy} title="現在の打者を敬遠"
+                        className={`${offBtn} bg-indigo-700 text-indigo-100 hover:bg-indigo-600`}>敬遠</button>
+                      {[['normal', '通常'], ['pull', '引っ張り'], ['oppo', '流し']].map(([v, label]) => (
+                        <button key={v} onClick={() => setShift(v)} disabled={isUserBatting || gameOver}
+                          title="守備シフト" className={`px-2 py-1 rounded text-xs font-bold transition ${
+                            defenseShift === v ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${isUserBatting ? 'opacity-40' : ''}`}>
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   );
                 })()}
