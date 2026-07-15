@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { TEAMS_DATA } from '../../teams-data.js';
 import { getScheduleByDate } from '../../season/scheduleGenerator.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../../game/condition.js';
-import { POSITION_NAMES } from '../../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor } from '../../utils/constants.js';
+import { getPitchTypeName } from '../../season/yearProgressionSystem.js';
+import { AbilityRadar, teamRadarAxes } from '../AbilityRadar.jsx';
+import { overallRating } from '../AbilityValue.jsx';
 
 const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher, handleGameChoice, setShowGameChoiceModal, tournamentInfo }) => {
   const [swapTarget, setSwapTarget] = useState(null);
@@ -362,6 +365,43 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
 
           {/* === 右カラム: 相手チーム === */}
           <div className="space-y-2">
+            {/* スカウトレポート: 相手戦力レーダー＋成績＋警戒打者 */}
+            {opponentTeam && (() => {
+              const st = (seasonData.standings || []).find(s => s.team === opponentName);
+              const w = st?.wins ?? 0, l = st?.losses ?? 0, dr = st?.draws ?? 0;
+              const wr = st ? (st.winRate ?? (w + l > 0 ? w / (w + l) : 0)) : null;
+              // 最警戒打者: スタメンから総合力最大
+              let keyHitter = null, keyRating = -1;
+              for (const p of opponentStarters) {
+                if (p.position === 'pitcher') continue;
+                const r = overallRating(p) ?? 0;
+                if (r > keyRating) { keyRating = r; keyHitter = p; }
+              }
+              return (
+                <div className="bg-gray-900 rounded-lg p-2.5 border border-cyan-800/40">
+                  <h3 className="text-xs font-bold text-cyan-300 mb-1">スカウトレポート — {opponentName}</h3>
+                  <div className="flex items-center gap-3">
+                    <AbilityRadar axes={teamRadarAxes(opponentTeam)} size={150} />
+                    <div className="text-xs text-gray-300 space-y-1.5 flex-1">
+                      {st && (
+                        <div>
+                          <span className="text-gray-400">今季成績 </span>
+                          <span className="text-white font-bold tabular-nums">{w}勝{l}敗{dr > 0 ? `${dr}分` : ''}</span>
+                          {wr != null && <span className="text-gray-400 ml-1">（{wr.toFixed(3)}）</span>}
+                        </div>
+                      )}
+                      {keyHitter && (
+                        <div>
+                          <span className="text-gray-400">警戒打者 </span>
+                          <span className="text-red-300 font-bold">{keyHitter.name}</span>
+                          <span className="text-gray-400 ml-1 tabular-nums">ミ{keyHitter.batting?.meet || 0}/パ{keyHitter.batting?.power || 0}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             {/* 相手先発投手 */}
             <div className="bg-gray-900 rounded-lg p-2.5 border border-gray-700">
               <h3 className="text-xs font-bold text-gray-400 mb-1.5">相手先発投手</h3>
@@ -391,7 +431,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                   {opponentStarter.pitching?.arsenal && (
                     <div className="flex gap-1 mt-1 flex-wrap">
                       {opponentStarter.pitching.arsenal.filter(a => a.type !== 'straight').map((a, i) => (
-                        <span key={i} className="text-xs px-1 py-0.5 rounded bg-gray-700 text-yellow-400">{a.type} Lv{a.level}</span>
+                        <span key={i} className={`text-xs px-1 py-0.5 rounded bg-gray-700 ${getAbilityColor(a.level || 0)}`}>{getPitchTypeName(a.type)}{a.level}</span>
                       ))}
                     </div>
                   )}
