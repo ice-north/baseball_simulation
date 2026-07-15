@@ -262,7 +262,7 @@ const GameFlowScreens = ({
             newSeasonData.regionalTournament = { ...rt, generated: true };
             setSeasonData(newSeasonData);
             setSelectedMonth(4);
-            setManagementView('dateprogress');
+            setManagementView('jersey');
             setScreenMode('management');
             setGameFlowState('season');
           } else {
@@ -322,7 +322,7 @@ const GameFlowScreens = ({
           regionalTournament: { ...rt, generated: true },
         }));
         setSelectedMonth(4);
-        setManagementView('dateprogress');
+        setManagementView('jersey');
         setScreenMode('management');
         setGameFlowState('season');
       }}
@@ -412,7 +412,7 @@ const GameFlowScreens = ({
           phase: SEASON_PHASES.REGULAR_SEASON,
         }));
         setSelectedMonth(4);
-        setManagementView('dateprogress');
+        setManagementView('jersey');
         setScreenMode('management');
         setGameFlowState('season');
       }}
@@ -507,7 +507,7 @@ const GameFlowScreens = ({
           phase: SEASON_PHASES.REGULAR_SEASON
         }));
         setSelectedMonth(4);
-        setManagementView('dateprogress');
+        setManagementView('jersey');
         setScreenMode('management');
         setGameFlowState('season');
       }}
@@ -554,7 +554,7 @@ const GameFlowScreens = ({
           phase: SEASON_PHASES.REGULAR_SEASON
         }));
         setSelectedMonth(4);
-        setManagementView('dateprogress');
+        setManagementView('jersey');
         setScreenMode('management');
         setGameFlowState('season');
       }}
