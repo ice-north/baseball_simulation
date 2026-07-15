@@ -1421,8 +1421,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           };
         });
         
-        const result = simulatePitch();
-        
+        let result = simulatePitch();
+        // 采配: 敬遠指示があればこの1球で四球にする（ボール扱い）
+        if (intentionalWalkRef.current) {
+          result = { type: 'ball', description: '敬遠', pitchType: '—', velocity: 0 };
+        }
+
         // 球速履歴を更新（最新2球分のみ保持）
         setRecentVelocities(prev => {
           const updated = [...prev, result.velocity];
@@ -1474,6 +1478,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         switch (result.type) {
           case 'ball':
             newCount.balls++;
+            // 敬遠: この1球で四球成立させる
+            if (intentionalWalkRef.current) { newCount.balls = 4; intentionalWalkRef.current = false; }
             if (newCount.balls === 4) {
               // 打者成績: 四球
               setBatterStats(prev => ({
@@ -3387,6 +3393,15 @@ if (newOuts === 3) {
                         className="ml-2 px-2.5 py-1 rounded text-xs font-bold bg-emerald-700 text-emerald-100 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed">
                         🏃 盗塁
                       </button>
+                      {/* 守備時の采配: 敬遠 */}
+                      <span className="ml-2 text-xs text-gray-600">|</span>
+                      <button
+                        onClick={() => { intentionalWalkRef.current = true; throwPitch(); }}
+                        disabled={isUserBatting || isAutoSimulating || gameOver}
+                        title="現在の打者を敬遠（歩かせる）"
+                        className="px-2.5 py-1 rounded text-xs font-bold bg-indigo-700 text-indigo-100 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                        敬遠
+                      </button>
                     </div>
                   );
                 })()}
@@ -3583,7 +3598,7 @@ if (newOuts === 3) {
                 const cat = /本塁打|ホームラン|三塁打|３塁打|二塁打|２塁打/.test(d) ? 'xbh'
                   : /ヒット|安打|出塁/.test(d) ? 'hit'
                   : /三振/.test(d) ? 'k'
-                  : /四球|死球|フォアボール/.test(d) ? 'bb'
+                  : /四球|死球|フォアボール|敬遠/.test(d) ? 'bb'
                   : /アウト|ゴロ|フライ|併殺|邪飛|ライナー|失敗/.test(d) ? 'out'
                   : 'neutral';
                 const S = {
