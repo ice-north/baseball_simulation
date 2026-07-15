@@ -98,18 +98,22 @@ export function buildPlayerStory(player) {
       title: (title || '').trim(),
       detail: null,
       kind: h.type,
+      order: 1, // 入団などの経路は同年内では指名(order 0)の後に並べる
     });
   }
 
-  // 2. ドラフト指名（draftInfo）
+  // 2. トライアウト指名（draftInfo）。独立リーグのトライアウトで選択された巡目。
+  //    ※NPBドラフトではない。指名→入団の順になるよう order を早めに設定。
   if (player.draftInfo) {
+    const round = player.draftInfo.round;
     events.push({
       year: player.draftInfo.year ?? null,
-      icon: '🎉',
+      icon: '🎯',
       color: 'yellow',
-      title: `NPBドラフト ${player.draftInfo.round || ''}巡目指名`,
+      title: round ? `トライアウト ${round}巡目指名` : 'トライアウト指名',
       detail: player.draftInfo.team || null,
       kind: 'draft',
+      order: 0, // 同年内では入団より先に表示
     });
   }
 
@@ -145,7 +149,8 @@ export function buildPlayerStory(player) {
     if (a.year == null && b.year == null) return 0;
     if (a.year == null) return -1;
     if (b.year == null) return 1;
-    return a.year - b.year;
+    if (a.year !== b.year) return a.year - b.year;
+    return (a.order ?? 1) - (b.order ?? 1); // 同年内は指名→入団の順
   });
 
   // 5. タイトル（achievements）はまとめて別枠で返す（yearが0のため時系列に載せない）
