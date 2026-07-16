@@ -353,11 +353,25 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         {viewTab === 'draft' && userRoster.length > 0 && (
           <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-white font-bold">現在の編成 ({userRoster.length}/24人)</h3>
+              {(() => {
+                const _tn = (Array.isArray(allTeams) ? allTeams : Object.keys(allTeams))[0];
+                const _existing = TEAMS_DATA[_tn]?.players?.length || 0;
+                const _total = _existing + userRoster.length;
+                return (
+                  <h3 className="text-white font-bold">
+                    現在の編成 ({_total}/24人)
+                    {_existing > 0 && <span className="text-gray-400 text-xs font-normal ml-1">（現有{_existing}＋指名{userRoster.length}）</span>}
+                  </h3>
+                );
+              })()}
             </div>
             {(() => {
+              // 編成不足の判定は「現有戦力＋今回指名した選手」の合計で行う
+              const teamsArrayLocal = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
+              const userTeamNameLocal = teamsArrayLocal[0];
+              const existingPlayersLocal = TEAMS_DATA[userTeamNameLocal]?.players || [];
               const positionCounts = { pitcher: 0, catcher: 0, infielder: 0, outfielder: 0 };
-              userRoster.forEach(player => {
+              [...existingPlayersLocal, ...userRoster].forEach(player => {
                 const category = getPositionCategory(player.position);
                 if (category in positionCounts) positionCounts[category]++;
               });
