@@ -1212,7 +1212,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           swingProb *= _bam;
         }
         // 采配: エンドランは打者を必ず打ちにいかせる（走者を守るため空振りしにくく）
-        if (doForceSwing) swingProb = Math.max(swingProb, 0.92);
+        // ※ throwPitch のローカル変数ではなく ref を直接参照する（simulateSinglePitch は
+        //   throwPitch と別関数のためローカル変数は参照できない）。
+        if (forceSwingRef.current) swingProb = Math.max(swingProb, 0.92);
 
         const doesSwing = Math.random() < swingProb;
 
@@ -1370,10 +1372,13 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           return;
         }
 
-        // 采配フラグを1球分だけ消費（次球に持ち越さない）
-        const doForceSteal = forceStealRef.current; forceStealRef.current = false;
-        const doForceSwing = forceSwingRef.current; forceSwingRef.current = false;
-        const doIntentionalWalk = intentionalWalkRef.current; intentionalWalkRef.current = false;
+        // 采配フラグを1球分だけ有効。値は先にスナップショット、消費（=falseに戻す）は
+        // simulatePitch() 呼び出し後に行う（simulateSinglePitch が forceSwingRef.current を
+        // 直接参照するため、呼び出し時点ではまだ true でなければならない）。
+        const doForceSteal = forceStealRef.current;
+        const doIntentionalWalk = intentionalWalkRef.current;
+        // ※ forceSwing は simulateSinglePitch が forceSwingRef.current を直接参照するので
+        //   ここではローカルにスナップショットしない。
 
         // 打席の最初（カウント0-0）で代打チェック
         if (count.balls === 0 && count.strikes === 0) {
@@ -1434,6 +1439,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         });
         
         let result = simulatePitch();
+        // simulateSinglePitch が読み終わったので采配フラグを消費（次球に持ち越さない）
+        forceStealRef.current = false;
+        forceSwingRef.current = false;
+        intentionalWalkRef.current = false;
         // 采配: 敬遠指示があればこの1球で四球にする（ボール扱い）
         if (doIntentionalWalk) {
           result = { type: 'ball', description: '敬遠', pitchType: '—', velocity: 0 };
