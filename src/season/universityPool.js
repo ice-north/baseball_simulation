@@ -724,7 +724,9 @@ export function getUniversitySeniorTryoutCandidates(currentYear, count, qualityB
     for (const entry of cohort) {
       const p = entry.player;
       const yearsInUni = currentYear - entry.enrollYear;
-      if (yearsInUni >= 3 || (p.age || 18) >= 21) seniors.push(entry);
+      // 卒業予定の4年生のみ。3年生(21歳/在学2年)は対象外。
+      // 4年生は在学3年目 or 22歳（高卒18→入学19→…→4年22）。
+      if (yearsInUni >= 3 || (p.age || 18) >= 22) seniors.push(entry);
     }
   }
   if (seniors.length === 0) return [];
