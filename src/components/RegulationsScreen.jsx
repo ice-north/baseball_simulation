@@ -1,5 +1,6 @@
 import React from 'react';
 import { validateRegulations, getPlayoffFormatDescription, canModifyRegulations } from '../season/regulationSettings.js';
+import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { PHASE_INFO } from '../season/seasonManager.js';
 
 const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
@@ -136,6 +137,18 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
             >
               {(() => {
                 const tc = tempSettings.teamsCount || 4;
+                const isTwoLeague = tempSettings.leagueFormat === 'two' && tc >= 4;
+                if (isTwoLeague) {
+                  const validCounts = getValidTwoLeagueGameCounts(tc, 150);
+                  if (validCounts.length === 0) {
+                    return <option value={tempSettings.gamesPerSeason}>{tempSettings.gamesPerSeason}試合</option>;
+                  }
+                  return validCounts.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.value}試合（リーグ内各{opt.intra}戦・交流各{opt.inter}戦）
+                    </option>
+                  ));
+                }
                 const d = Math.max(1, tc - 1);
                 const options = [];
                 for (let i = 1; d * i <= 150; i++) options.push(d * i);
