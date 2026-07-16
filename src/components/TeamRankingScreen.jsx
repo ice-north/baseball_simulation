@@ -167,6 +167,22 @@ const buildProvisionalRanking = (gameMode) => {
   return entries;
 };
 
+// universityPool から「大学名 → 現在の在籍人数」のマップを作る。
+// TEAMS_DATA に選手が実体化されていない大学（他ゲームモードの並行世界大学など）でも、
+// プールに所属している在籍者数を表示できるようにするためのフォールバック。
+const buildUniversityPoolCountMap = () => {
+  const map = {};
+  Object.values(universityPool || {}).forEach(cohort => {
+    if (!Array.isArray(cohort)) return;
+    cohort.forEach(e => {
+      const tn = e?.universityTeamName;
+      if (!tn) return;
+      map[tn] = (map[tn] || 0) + 1;
+    });
+  });
+  return map;
+};
+
 // 詳細行に並べる小ブロック（タイトル＋行）。
 const StatBlock = ({ title, rows }) => (
   <div className="bg-gray-900/60 border border-gray-700/60 rounded px-3 py-2">
@@ -200,6 +216,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
 
   // 標記データ（人数・成績）で全チームを1度だけ集計
   const standingsMap = useMemo(() => buildStandingsMap(seasonData), [seasonData, ranking.length]);
+  const uniPoolCountMap = useMemo(() => buildUniversityPoolCountMap(), [ranking.length]);
 
   // Determine type for TEAMS_DATA entries (independent check), plus stats
   const enriched = useMemo(() => {
@@ -209,14 +226,20 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       if (type === 'corporate' && td?.independentLeagueId) type = 'independent';
       const rec = standingsMap[entry.name] || null;
       const stats = computeTeamStats(td);
-      const roster = td?.players?.length ?? null;
+      // 人数: 実体化されたTEAMS_DATA選手 > universityPool由来の在籍数 の順で採用
+      let roster = td?.players?.length ?? null;
+      let rosterSource = 'team';
+      if (roster == null || roster === 0) {
+        const pool = uniPoolCountMap[entry.name];
+        if (pool > 0) { roster = pool; rosterSource = 'pool'; }
+      }
       const winRate = rec && (rec.wins + rec.losses) > 0 ? rec.wins / (rec.wins + rec.losses) : null;
       return {
         ...entry, displayType: type,
-        record: rec, stats, roster, winRate,
+        record: rec, stats, roster, rosterSource, winRate,
       };
     });
-  }, [ranking, standingsMap]);
+  }, [ranking, standingsMap, uniPoolCountMap]);
 
   const filtered = useMemo(() => {
     const list = enriched.filter(e => {
@@ -472,7 +495,14 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
                       <span className="text-gray-300 text-xs w-6 text-right">{entry.reputation}</span>
                     </div>
                   </td>
-                  <td className="text-center py-1.5 text-gray-200">{entry.roster != null ? entry.roster : '—'}</td>
+                  <td className="text-center py-1.5 text-gray-200" title={entry.rosterSource === 'pool' ? '大学プール由来の在籍者数' : ''}>
+                    {entry.roster != null ? (
+                      <>
+                        {entry.roster}
+                        {entry.rosterSource === 'pool' && <span className="text-gray-500 text-xs ml-0.5">†</span>}
+                      </>
+                    ) : '—'}
+                  </td>
                   <td className="text-center py-1.5">
                     {rec ? (
                       <span className="font-mono">
@@ -544,14 +574,14 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       {isProvisional ? (
         <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。</div>
-          <div className="text-gray-400">行をクリックすると、試合成績・打撃・投手・編成の詳細を展開できます。ヘッダーをクリックでソート可（人数・勝敗・勝率・打率・防御率）。</div>
+          <div className="text-gray-400">行をクリックすると、試合成績・打撃・投手・編成の詳細を展開できます。ヘッダーをクリックでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（並行世界の実体化されていない大学）。</div>
         </div>
       ) : (
         <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-gray-100">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
           重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
           初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D。</div>
-          <div className="text-gray-400">成績・打率・防御率は各リーグ順位表と選手個人成績から集計。行をクリックで詳細展開、ヘッダーでソート可。</div>
+          <div className="text-gray-400">成績・打率・防御率は各リーグ順位表と選手個人成績から集計。行をクリックで詳細展開、ヘッダーでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（選手が個別に実体化されていない並行世界チーム）を示します。</div>
         </div>
       )}
     </div>
