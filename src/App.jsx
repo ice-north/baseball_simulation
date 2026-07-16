@@ -289,6 +289,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const battingApproachRef = useRef('normal');
       const forceStealRef = useRef(false);
       const forceSwingRef = useRef(false);   // エンドラン: 打者を強制的に打ちにいかせる
+      const intentionalWalkRef = useRef(false); // 敬遠: 次の投球を強制的にボール4扱いにする
       const [defenseShift, setDefenseShift] = useState('normal'); // 守備シフト: normal/pull/oppo
       const defenseShiftRef = useRef('normal');
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
