@@ -598,6 +598,7 @@ const ManagementScreen = ({
   if (managementView === 'team_ranking') return <TeamRankingScreen
     userTeamName={userTeamName}
     gameMode={gameMode}
+    seasonData={seasonData}
     onBack={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'halloffame') return <HallOfFameScreen

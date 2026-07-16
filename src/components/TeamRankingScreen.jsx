@@ -10,6 +10,63 @@ const RANK_BG = { S: 'bg-yellow-900/40 border-yellow-700/60', A: 'bg-orange-900/
 const TYPE_LABEL = { corporate: '社会人', worldUniversity: '大学', university: '大学', independent: '独立' };
 const RANK_BAND_PCT = { S: '上位5%', A: '6-20%', B: '21-45%', C: '46-75%', D: '下位25%' };
 
+// 全ての「順位表」ソースを走査し、チーム名→通算成績のマップを作る。
+// 同じチームが複数箇所（レギュラーシーズン＋春秋リーグ等）にあれば全て合算。
+// TEAMS_DATA上の team.wins 直接カウントもあれば拾う（トーナメント勝ち星等）。
+const buildStandingsMap = (seasonData) => {
+  const map = {};
+  const add = (s) => {
+    if (!s?.team) return;
+    const w = s.wins || 0, l = s.losses || 0, d = s.draws || 0, gp = s.gamesPlayed || (w + l + d);
+    if (w + l + d + gp === 0) return;
+    if (!map[s.team]) map[s.team] = { wins: 0, losses: 0, draws: 0, gamesPlayed: 0 };
+    map[s.team].wins += w;
+    map[s.team].losses += l;
+    map[s.team].draws += d;
+    map[s.team].gamesPlayed += gp;
+  };
+  (seasonData?.standings || []).forEach(add);
+  const seenLeagueIds = new Set();
+  Object.entries(WORLD_DATA.independentLeagues || {}).forEach(([id, ld]) => {
+    // seasonData と同じユーザーリーグを二重に足さないため、ゲーム数が seasonData と一致するものはスキップ
+    // シンプルに: seasonData に含まれるチーム集合と全一致する独立リーグは重複としてスキップ
+    const seasonTeams = new Set((seasonData?.standings || []).map(s => s.team));
+    const leagueTeams = new Set((ld?.standings || []).map(s => s.team));
+    const isSameAsUser = seasonTeams.size > 0 && seasonTeams.size === leagueTeams.size &&
+      [...leagueTeams].every(t => seasonTeams.has(t));
+    if (isSameAsUser) { seenLeagueIds.add(id); return; }
+    (ld?.standings || []).forEach(add);
+  });
+  Object.values(WORLD_DATA.universityLeagues || {}).forEach(ld => {
+    ['spring', 'fall'].forEach(season => {
+      const sd = ld?.[season];
+      if (!sd) return;
+      (sd.standings || []).forEach(add);
+      (sd.standingsA || []).forEach(add);
+      (sd.standingsB || []).forEach(add);
+    });
+  });
+  return map;
+};
+
+// team.players[].seasonStats から通算打率・防御率を計算。
+const computeTeamStats = (team) => {
+  if (!team?.players) return { avg: null, era: null, hits: 0, atBats: 0, homeruns: 0, earnedRuns: 0, inningsPitched: 0, strikeouts: 0 };
+  let hits = 0, atBats = 0, homeruns = 0, er = 0, outs = 0, k = 0;
+  team.players.forEach(p => {
+    const b = p.seasonStats?.batting;
+    if (b) { hits += b.hits || 0; atBats += b.atBats || 0; homeruns += b.homeruns || 0; }
+    const pi = p.seasonStats?.pitching;
+    if (pi) { er += pi.earnedRuns || 0; outs += pi.inningsPitched || 0; k += pi.strikeouts || 0; }
+  });
+  const ip = outs / 3;
+  return {
+    avg: atBats > 0 ? hits / atBats : null,
+    era: ip > 0 ? (er / ip) * 9 : null,
+    hits, atBats, homeruns, earnedRuns: er, inningsPitched: ip, strikeouts: k,
+  };
+};
+
 // 暫定（1年目・成績なし）ランキング用の初期値
 const INITIAL_RANKING_SCORE = { S: 1200, A: 1050, B: 900, C: 750, D: 600 };
 const INITIAL_REPUTATION = { S: 85, A: 65, B: 40, C: 20, D: 5 };
@@ -110,10 +167,28 @@ const buildProvisionalRanking = (gameMode) => {
   return entries;
 };
 
-const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
+// 詳細行に並べる小ブロック（タイトル＋行）。
+const StatBlock = ({ title, rows }) => (
+  <div className="bg-gray-900/60 border border-gray-700/60 rounded px-3 py-2">
+    <div className="text-xs font-bold text-cyan-300 mb-1.5 border-b border-gray-700/60 pb-1">{title}</div>
+    <div className="space-y-0.5">
+      {rows.map(([k, v], i) => (
+        <div key={i} className="flex items-center justify-between text-xs">
+          <span className="text-gray-300">{k}</span>
+          <span className="text-white font-mono font-semibold tabular-nums">{v}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
   const [filterType, setFilterType] = useState('all');
   const [filterRank, setFilterRank] = useState('all');
   const [searchText, setSearchText] = useState('');
+  const [expandedTeam, setExpandedTeam] = useState(null); // 詳細を開いているチーム名
+  const [sortKey, setSortKey] = useState('position'); // 'position'|'score'|'reputation'|'roster'|'wins'|'winRate'|'avg'|'era'
+  const [sortAsc, setSortAsc] = useState(true); // position=昇順, その他=降順
 
   const storedRanking = WORLD_DATA._teamRanking || [];
   const isProvisional = storedRanking.length === 0;
@@ -123,20 +198,28 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
   );
   const ranking = isProvisional ? provisionalRanking : storedRanking;
 
-  // Determine type for TEAMS_DATA entries (independent check)
+  // 標記データ（人数・成績）で全チームを1度だけ集計
+  const standingsMap = useMemo(() => buildStandingsMap(seasonData), [seasonData, ranking.length]);
+
+  // Determine type for TEAMS_DATA entries (independent check), plus stats
   const enriched = useMemo(() => {
     return ranking.map(entry => {
       let type = entry.type;
-      if (type === 'corporate') {
-        const td = TEAMS_DATA[entry.name];
-        if (td?.independentLeagueId) type = 'independent';
-      }
-      return { ...entry, displayType: type };
+      const td = TEAMS_DATA[entry.name];
+      if (type === 'corporate' && td?.independentLeagueId) type = 'independent';
+      const rec = standingsMap[entry.name] || null;
+      const stats = computeTeamStats(td);
+      const roster = td?.players?.length ?? null;
+      const winRate = rec && (rec.wins + rec.losses) > 0 ? rec.wins / (rec.wins + rec.losses) : null;
+      return {
+        ...entry, displayType: type,
+        record: rec, stats, roster, winRate,
+      };
     });
-  }, [ranking]);
+  }, [ranking, standingsMap]);
 
   const filtered = useMemo(() => {
-    return enriched.filter(e => {
+    const list = enriched.filter(e => {
       if (filterType !== 'all') {
         if (filterType === 'university') {
           if (e.displayType !== 'university' && e.displayType !== 'worldUniversity') return false;
@@ -146,7 +229,35 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
       if (searchText && !e.name.includes(searchText)) return false;
       return true;
     });
-  }, [enriched, filterType, filterRank, searchText]);
+    const getVal = (e) => {
+      switch (sortKey) {
+        case 'score': return e.score ?? 0;
+        case 'reputation': return e.reputation ?? 0;
+        case 'roster': return e.roster ?? -1;
+        case 'wins': return e.record?.wins ?? -1;
+        case 'winRate': return e.winRate ?? -1;
+        case 'avg': return e.stats?.avg ?? -1;
+        case 'era': return e.stats?.era ?? 999; // ERAは小さい方が良いので"未算出"は最下位に
+        default: return e.position ?? 9999;
+      }
+    };
+    const sorted = [...list].sort((a, b) => {
+      const va = getVal(a), vb = getVal(b);
+      // ERA: 小さい方が「良い」順。sortAsc=true(昇順)がデフォルト良い順、falseで逆転。
+      const eraFlip = sortKey === 'era' ? -1 : 1;
+      return sortAsc ? (va - vb) * eraFlip : (vb - va) * eraFlip;
+    });
+    return sorted;
+  }, [enriched, filterType, filterRank, searchText, sortKey, sortAsc]);
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else {
+      setSortKey(key);
+      // 順位・防御率は昇順（1位から / 低い順）、それ以外は降順（大きい順）が初期値
+      setSortAsc(key === 'position' || key === 'era');
+    }
+  };
 
   const userEntry = enriched.find(e => e.name === userTeamName);
 
@@ -196,14 +307,47 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
             <div className={`font-bold text-lg ${RANK_COLOR[userEntry.rank]}`}>{userEntry.rank}ランク</div>
             <div className="text-gray-300 text-sm">#{userEntry.position} / {totalTeams}</div>
             {isProvisional && userEntry.rosterAvg != null && (
-              <div className="text-sm"><span className="text-gray-400">戦力平均 </span><span className="text-white font-bold">{userEntry.rosterAvg}</span></div>
+              <div className="text-sm"><span className="text-gray-300">戦力平均 </span><span className="text-white font-bold">{userEntry.rosterAvg}</span></div>
             )}
             <div className="ml-auto text-sm">
-              <span className="text-gray-400">{isProvisional ? '戦力スコア ' : 'Eloスコア '}</span>
+              <span className="text-gray-300">{isProvisional ? '戦力スコア ' : 'Eloスコア '}</span>
               <span className="text-white font-mono font-bold">{userEntry.score}</span>
             </div>
-            <div className="text-sm text-gray-400">注目度 {userEntry.reputation}</div>
+            <div className="text-sm text-gray-300">注目度 {userEntry.reputation}</div>
           </div>
+          {(userEntry.record || userEntry.stats?.atBats > 0 || userEntry.stats?.inningsPitched > 0 || userEntry.roster != null) && (
+            <div className="mt-2 pt-2 border-t border-yellow-700/30 flex items-center gap-4 flex-wrap text-xs">
+              {userEntry.roster != null && (
+                <span><span className="text-gray-300">所属人数 </span><span className="text-white font-bold">{userEntry.roster}</span></span>
+              )}
+              {userEntry.record && (
+                <span>
+                  <span className="text-gray-300">成績 </span>
+                  <span className="font-mono font-bold">
+                    <span className="text-green-300">{userEntry.record.wins}</span>
+                    <span className="text-gray-500">−</span>
+                    <span className="text-red-300">{userEntry.record.losses}</span>
+                    <span className="text-gray-500">−</span>
+                    <span className="text-gray-200">{userEntry.record.draws}</span>
+                  </span>
+                  {userEntry.winRate != null && (
+                    <span className="ml-1 text-gray-300">
+                      （勝率<span className="text-white font-bold ml-0.5">{userEntry.winRate.toFixed(3).replace(/^0/, '')}</span>）
+                    </span>
+                  )}
+                </span>
+              )}
+              {userEntry.stats?.avg != null && (
+                <span><span className="text-gray-300">打率 </span><span className="text-blue-300 font-bold font-mono">{userEntry.stats.avg.toFixed(3).replace(/^0/, '')}</span></span>
+              )}
+              {userEntry.stats?.era != null && (
+                <span><span className="text-gray-300">防御率 </span><span className="text-orange-300 font-bold font-mono">{userEntry.stats.era.toFixed(2)}</span></span>
+              )}
+              {userEntry.stats?.homeruns > 0 && (
+                <span><span className="text-gray-300">本塁打 </span><span className="text-white font-bold">{userEntry.stats.homeruns}</span></span>
+              )}
+            </div>
+          )}
           {(() => {
             const alumni = TEAMS_DATA[userTeamName]?.npbAlumni || [];
             const produced = TEAMS_DATA[userTeamName]?.totalProPlayersProduced || alumni.length;
@@ -264,44 +408,132 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
 
       {/* Ranking table */}
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 340px)' }}>
-        <table className="w-full text-xs border-collapse">
+        <table className="w-full text-xs border-collapse tabular-nums">
           <thead className="sticky top-0 bg-gray-900 z-10">
-            <tr className="text-gray-400 border-b border-gray-700">
-              <th className="text-right pr-2 py-2 w-12">順位</th>
-              <th className="text-left py-2 pl-1">チーム名</th>
-              <th className="text-center py-2 w-14">ランク</th>
-              <th className="text-center py-2 w-20">{isProvisional ? '戦力スコア' : 'Eloスコア'}</th>
-              <th className="text-center py-2 w-14">注目度</th>
-              <th className="text-center py-2 w-14">種別</th>
+            <tr className="text-gray-300 border-b border-gray-700">
+              {(() => {
+                const cols = [
+                  { key: 'position', label: '順位', className: 'text-right pr-2 py-2 w-14' },
+                  { key: null,       label: 'チーム名', className: 'text-left py-2 pl-1' },
+                  { key: null,       label: 'ランク', className: 'text-center py-2 w-12' },
+                  { key: 'score',    label: isProvisional ? '戦力' : 'Elo', className: 'text-center py-2 w-16' },
+                  { key: 'reputation', label: '注目', className: 'text-center py-2 w-16' },
+                  { key: 'roster',   label: '人数', className: 'text-center py-2 w-12' },
+                  { key: 'wins',     label: '勝−敗−分', className: 'text-center py-2 w-24' },
+                  { key: 'winRate',  label: '勝率', className: 'text-center py-2 w-14' },
+                  { key: 'avg',      label: '打率', className: 'text-center py-2 w-14' },
+                  { key: 'era',      label: '防御率', className: 'text-center py-2 w-14' },
+                  { key: null,       label: '種別', className: 'text-center py-2 w-12' },
+                ];
+                return cols.map((c, i) => {
+                  const active = c.key && sortKey === c.key;
+                  return (
+                    <th key={i} className={`${c.className} ${c.key ? 'cursor-pointer select-none hover:text-white' : ''} ${active ? 'text-cyan-300' : ''}`}
+                      onClick={c.key ? () => toggleSort(c.key) : undefined}>
+                      {c.label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}
+                    </th>
+                  );
+                });
+              })()}
             </tr>
           </thead>
           <tbody>
             {filtered.map(entry => {
               const isUser = entry.name === userTeamName;
+              const isExpanded = expandedTeam === entry.name;
+              const rec = entry.record;
+              const gp = rec ? (rec.wins + rec.losses + rec.draws) : 0;
+              const wrText = entry.winRate != null ? entry.winRate.toFixed(3).replace(/^0/, '') : '—';
+              const avgText = entry.stats?.avg != null ? entry.stats.avg.toFixed(3).replace(/^0/, '') : '—';
+              const eraText = entry.stats?.era != null ? entry.stats.era.toFixed(2) : '—';
               return (
-                <tr key={entry.name}
-                  className={`border-b border-gray-800/50 ${isUser ? 'bg-yellow-900/20' : 'hover:bg-gray-800/30'}`}>
-                  <td className={`text-right pr-2 py-1.5 font-mono ${entry.position <= 10 ? 'text-yellow-400 font-bold' : 'text-gray-400'}`}>
+                <React.Fragment key={entry.name}>
+                <tr
+                  className={`border-b border-gray-800/50 cursor-pointer ${isUser ? 'bg-yellow-900/20' : isExpanded ? 'bg-gray-800/50' : 'hover:bg-gray-800/30'}`}
+                  onClick={() => setExpandedTeam(isExpanded ? null : entry.name)}
+                >
+                  <td className={`text-right pr-2 py-1.5 font-mono ${entry.position <= 10 ? 'text-yellow-400 font-bold' : 'text-gray-300'}`}>
                     #{entry.position}
                   </td>
                   <td className={`pl-1 py-1.5 ${isUser ? 'font-bold text-yellow-300' : 'text-white'}`}>
+                    <span className="text-gray-500 mr-1">{isExpanded ? '▾' : '▸'}</span>
                     {entry.name}
                     {isUser && <span className="ml-1 text-yellow-500 text-xs">★</span>}
                   </td>
                   <td className="text-center py-1.5">
                     <span className={`font-bold text-sm ${RANK_COLOR[entry.rank]}`}>{entry.rank}</span>
                   </td>
-                  <td className="text-center py-1.5 text-gray-200 font-mono font-bold">{entry.score}</td>
+                  <td className="text-center py-1.5 text-gray-100 font-mono font-bold">{entry.score}</td>
                   <td className="text-center py-1.5">
                     <div className="flex items-center justify-center gap-1">
-                      <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${entry.reputation}%` }} />
+                      <div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${entry.reputation}%` }} />
                       </div>
-                      <span className="text-gray-400 text-xs w-6 text-right">{entry.reputation}</span>
+                      <span className="text-gray-300 text-xs w-6 text-right">{entry.reputation}</span>
                     </div>
                   </td>
-                  <td className="text-center py-1.5 text-gray-500 text-xs">{TYPE_LABEL[entry.displayType] || '—'}</td>
+                  <td className="text-center py-1.5 text-gray-200">{entry.roster != null ? entry.roster : '—'}</td>
+                  <td className="text-center py-1.5">
+                    {rec ? (
+                      <span className="font-mono">
+                        <span className="text-green-400 font-bold">{rec.wins}</span>
+                        <span className="text-gray-500">−</span>
+                        <span className="text-red-400 font-bold">{rec.losses}</span>
+                        <span className="text-gray-500">−</span>
+                        <span className="text-gray-300">{rec.draws}</span>
+                      </span>
+                    ) : <span className="text-gray-600">—</span>}
+                  </td>
+                  <td className={`text-center py-1.5 font-mono ${entry.winRate != null && entry.winRate >= 0.5 ? 'text-green-300' : 'text-gray-300'}`}>
+                    {wrText}
+                  </td>
+                  <td className={`text-center py-1.5 font-mono ${entry.stats?.avg != null && entry.stats.avg >= 0.28 ? 'text-blue-300' : 'text-gray-300'}`}>
+                    {avgText}
+                  </td>
+                  <td className={`text-center py-1.5 font-mono ${entry.stats?.era != null && entry.stats.era <= 3.5 ? 'text-orange-300' : 'text-gray-300'}`}>
+                    {eraText}
+                  </td>
+                  <td className="text-center py-1.5 text-gray-400 text-xs">{TYPE_LABEL[entry.displayType] || '—'}</td>
                 </tr>
+                {isExpanded && (
+                  <tr className="bg-gray-800/40 border-b border-gray-700/70">
+                    <td colSpan={11} className="px-4 py-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3">
+                        <StatBlock title="試合成績" rows={rec ? [
+                          ['試合数', gp],
+                          ['勝利', rec.wins],
+                          ['敗戦', rec.losses],
+                          ['引分', rec.draws],
+                          ['勝率', wrText],
+                        ] : [['試合数', '—'], ['備考', '順位表なし']]}
+                        />
+                        <StatBlock title="チーム打撃" rows={entry.stats.atBats > 0 ? [
+                          ['打率', avgText],
+                          ['安打', entry.stats.hits],
+                          ['打数', entry.stats.atBats],
+                          ['本塁打', entry.stats.homeruns],
+                        ] : [['備考', '打撃記録なし']]}
+                        />
+                        <StatBlock title="チーム投手" rows={entry.stats.inningsPitched > 0 ? [
+                          ['防御率', eraText],
+                          ['投球回', entry.stats.inningsPitched.toFixed(1)],
+                          ['自責点', entry.stats.earnedRuns],
+                          ['奪三振', entry.stats.strikeouts],
+                        ] : [['備考', '投手記録なし']]}
+                        />
+                        <StatBlock title="編成・評価" rows={[
+                          ['所属人数', entry.roster != null ? `${entry.roster}名` : '—'],
+                          [isProvisional ? '戦力スコア' : 'Eloスコア', entry.score],
+                          ['注目度', entry.reputation],
+                          ['ランク', entry.rank],
+                          entry.rosterAvg != null ? ['戦力平均', entry.rosterAvg] : null,
+                        ].filter(Boolean)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -310,14 +542,16 @@ const TeamRankingScreen = ({ userTeamName, gameMode, onBack }) => {
 
       {/* Score explanation */}
       {isProvisional ? (
-        <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-400">
-          <span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。
+        <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
+          <div><span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。</div>
+          <div className="text-gray-400">行をクリックすると、試合成績・打撃・投手・編成の詳細を展開できます。ヘッダーをクリックでソート可（人数・勝敗・勝率・打率・防御率）。</div>
         </div>
       ) : (
-        <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-500">
-          <span className="font-bold text-gray-400">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
+        <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
+          <div><span className="font-bold text-gray-100">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
           重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
-          初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D
+          初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D。</div>
+          <div className="text-gray-400">成績・打率・防御率は各リーグ順位表と選手個人成績から集計。行をクリックで詳細展開、ヘッダーでソート可。</div>
         </div>
       )}
     </div>
