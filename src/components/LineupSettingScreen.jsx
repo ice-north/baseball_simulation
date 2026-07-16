@@ -26,6 +26,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
   // ドラッグ中の状態はrefで保持する（setStateするとインライン定義のカード/スロットが
   // 再マウントされ、ネイティブD&Dが中断されてしまうため）。ハイライトはDOM操作で行う。
   const draggedPitcherIdRef = useRef(null);
+  // スタメンD&D: ドラッグ中の情報を保持（setStateするとインラインのスロット/行が
+  // 再マウントされネイティブD&Dが中断されるため ref で保持）。{ kind:'bench'|'slot', playerId, order }
+  const draggedLineupRef = useRef(null);
   const [tapSelectedPitcherId, setTapSelectedPitcherId] = useState(null); // 投手起用: タップ選択(タッチ用)
   const SLOT_OVER_CLASSES = ['ring-1', 'ring-blue-400/60', 'border-blue-400', 'bg-blue-900/20'];
 
@@ -214,6 +217,63 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       lineup.sort((a, b) => a.battingOrder - b.battingOrder);
       setUpdateTrigger(prev => prev + 1);
     }
+  };
+
+  // ---- スタメン設定 ドラッグ&ドロップ ----
+  // 控え選手を指定打順の枠へ配置（既存選手は控えへ戻る）。クリック操作と同じ挙動。
+  const assignBenchToSlot = (benchPlayerId, order) => {
+    if (order < 1 || order > maxFielderSlots) return;
+    const bp = team.players.find(p => p.id === benchPlayerId);
+    if (!bp) return;
+    // 既に他枠にいる選手なら一旦除去（重複防止）
+    const dupIdx = lineup.findIndex(e => e.playerId === benchPlayerId);
+    if (dupIdx !== -1) lineup.splice(dupIdx, 1);
+    const entry = lineup.find(e => e.battingOrder === order);
+    if (entry) {
+      if (entry.position === 'pitcher') return; // 投手枠には野手を入れない
+      entry.playerId = benchPlayerId;
+    } else {
+      const pos = bp.position === 'pitcher' ? 'first' : (bp.position || 'first');
+      lineup.push({ playerId: benchPlayerId, position: pos, battingOrder: order });
+      lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+    }
+    setSelectedBenchPlayer(null);
+    setSwapSource(null);
+    setSelectedBattingOrder(null);
+    setUpdateTrigger(prev => prev + 1);
+  };
+
+  // 打順枠どうしのドラッグ: 相手がいれば入れ替え、空きならその打順へ移動。
+  const moveSlotToOrder = (sourceOrder, targetOrder) => {
+    if (sourceOrder === targetOrder) return;
+    const src = lineup.find(e => e.battingOrder === sourceOrder);
+    if (!src) return;
+    const tgt = lineup.find(e => e.battingOrder === targetOrder);
+    if (tgt) {
+      src.battingOrder = targetOrder;
+      tgt.battingOrder = sourceOrder;
+    } else {
+      if (targetOrder < 1 || targetOrder > maxFielderSlots) return;
+      src.battingOrder = targetOrder;
+    }
+    lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+    setUpdateTrigger(prev => prev + 1);
+  };
+
+  // 打順枠へのドロップ処理（控えから配置 / 枠どうしの入れ替え）
+  const handleDropToSlot = (order) => {
+    const d = draggedLineupRef.current;
+    draggedLineupRef.current = null;
+    if (!d) return;
+    if (d.kind === 'bench') assignBenchToSlot(d.playerId, order);
+    else if (d.kind === 'slot') moveSlotToOrder(d.order, order);
+  };
+
+  // 控えエリアへのドロップ処理（スタメンから外す）
+  const handleDropToBench = () => {
+    const d = draggedLineupRef.current;
+    draggedLineupRef.current = null;
+    if (d && d.kind === 'slot' && d.playerId) handleRemoveFromLineup(d.playerId);
   };
 
   const handleRemoveFromLineup = (playerId) => {
@@ -910,8 +970,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           isComparing ? 'bg-purple-900/20 ring-1 ring-purple-400/30' :
           selectedBenchPlayer === player.id ? 'bg-blue-900/40 ring-1 ring-blue-400/30' :
           swapSource !== null || selectedBenchPlayer !== null ? 'hover:bg-blue-900/30' :
-          'hover:bg-gray-700/40'
+          'hover:bg-gray-700/40 hover:cursor-grab'
         }`}
+        draggable={!isInLineup}
+        onDragStart={(e) => {
+          if (isInLineup) return;
+          draggedLineupRef.current = { kind: 'bench', playerId: player.id };
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', String(player.id)); } catch (_) {}
+          e.currentTarget.classList.add('opacity-50');
+        }}
+        onDragEnd={(e) => { draggedLineupRef.current = null; e.currentTarget.classList.remove('opacity-50'); }}
         onClick={handleRowClick}
         onDoubleClick={(e) => { e.stopPropagation(); if (!isInLineup) setDetailPlayer(player); }}
       >
@@ -1063,8 +1132,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                     {lineup.filter(e => e.position !== 'pitcher').length}/{maxFielderSlots}
                   </span>
                   {useDH && <span className="text-xs text-purple-400 font-medium">DH制</span>}
-                  {(swapSource !== null || selectedBenchPlayer !== null) && (
+                  {(swapSource !== null || selectedBenchPlayer !== null) ? (
                     <span className="text-blue-400 text-xs ml-auto">→ 入替先を選択</span>
+                  ) : (
+                    <span className="text-gray-500 text-xs ml-auto hidden md:inline">ドラッグで配置・入替 / クリックでも操作可</span>
                   )}
                 </div>
                 <div className="flex gap-1 mt-2">
@@ -1139,7 +1210,25 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   };
 
                   return (
-                    <div key={order} onClick={handleSlotClick} className={`rounded-lg cursor-pointer transition-all border ${
+                    <div
+                      key={order}
+                      onClick={handleSlotClick}
+                      draggable={!!player}
+                      onDragStart={(e) => {
+                        if (!player) return;
+                        draggedLineupRef.current = { kind: 'slot', order, playerId: entry?.playerId };
+                        e.dataTransfer.effectAllowed = 'move';
+                        try { e.dataTransfer.setData('text/plain', String(order)); } catch (_) {}
+                        e.currentTarget.classList.add('opacity-40');
+                      }}
+                      onDragEnd={(e) => {
+                        draggedLineupRef.current = null;
+                        e.currentTarget.classList.remove('opacity-40');
+                      }}
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add(...SLOT_OVER_CLASSES); }}
+                      onDragLeave={(e) => { e.currentTarget.classList.remove(...SLOT_OVER_CLASSES); }}
+                      onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove(...SLOT_OVER_CLASSES); handleDropToSlot(order); }}
+                      className={`rounded-lg cursor-pointer transition-all border ${player ? 'cursor-grab active:cursor-grabbing' : ''} ${
                       isSwapSource ? 'bg-blue-900/50 border-blue-500/70 ring-1 ring-blue-400/30' :
                       isSwapTarget ? 'bg-gray-800 border-blue-400/30 hover:border-blue-400/60 hover:bg-blue-900/20' :
                       isBenchTarget ? 'bg-gray-800 border-blue-400/30 hover:border-blue-400/60 hover:bg-blue-900/20' :
@@ -1418,7 +1507,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   ))}
                 </div>
               </div>
-              <div className="overflow-y-auto max-h-[700px]">
+              <div
+                className="overflow-y-auto max-h-[700px]"
+                onDragOver={(e) => { if (draggedLineupRef.current?.kind === 'slot') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('ring-1', 'ring-red-400/50', 'bg-red-950/10'); } }}
+                onDragLeave={(e) => { e.currentTarget.classList.remove('ring-1', 'ring-red-400/50', 'bg-red-950/10'); }}
+                onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('ring-1', 'ring-red-400/50', 'bg-red-950/10'); handleDropToBench(); }}
+              >
                 <table className="w-full text-left">
                   <thead className="sticky top-0 z-10">
                     {benchCompact ? (<>
