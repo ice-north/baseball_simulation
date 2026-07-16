@@ -28,6 +28,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 // Game logic imports
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
+import { useGameStrategy } from './game/useGameStrategy.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
@@ -284,14 +285,16 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const [bases, setBases] = useState([false, false, false]);
       const [outs, setOuts] = useState(0);
       const [remainingPitches, setRemainingPitches] = useState(0);  // 残り投球数（自動投球用）
-      // 采配: 自チーム打者の打撃方針（take=待て/normal/aggressive=積極）と盗塁指示
-      const [battingApproach, setBattingApproach] = useState('normal');
-      const battingApproachRef = useRef('normal');
-      const forceStealRef = useRef(false);
-      const forceSwingRef = useRef(false);   // エンドラン: 打者を強制的に打ちにいかせる
-      const intentionalWalkRef = useRef(false); // 敬遠: 次の投球を強制的にボール4扱いにする
-      const [defenseShift, setDefenseShift] = useState('normal'); // 守備シフト: normal/pull/oppo
-      const defenseShiftRef = useRef('normal');
+      // 采配 state（打撃方針/守備シフト/盗塁/エンドラン/敬遠）を1箇所に集約。
+      // 詳細は src/game/useGameStrategy.js 参照。
+      const strategy = useGameStrategy();
+      const {
+        battingApproach, defenseShift,
+        setBattingApproach, setDefenseShift,
+        triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
+        battingApproachRef, defenseShiftRef,
+        forceStealRef, forceSwingRef, intentionalWalkRef,
+      } = strategy;
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
       const outOccurredRef = React.useRef(false); // アウト発生フラグ
       
@@ -1372,13 +1375,13 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           return;
         }
 
-        // 采配フラグを1球分だけ有効。値は先にスナップショット、消費（=falseに戻す）は
-        // simulatePitch() 呼び出し後に行う（simulateSinglePitch が forceSwingRef.current を
-        // 直接参照するため、呼び出し時点ではまだ true でなければならない）。
-        const doForceSteal = forceStealRef.current;
-        const doIntentionalWalk = intentionalWalkRef.current;
-        // ※ forceSwing は simulateSinglePitch が forceSwingRef.current を直接参照するので
-        //   ここではローカルにスナップショットしない。
+        // 采配フラグを 1 球分だけ有効。値は先にスナップショット、消費（= false に戻す）は
+        // simulatePitch() 呼び出し後 (strategy.consumeOneShot()) に行う。
+        // 理由: simulateSinglePitch は forceSwingRef.current を直接参照するので、
+        //       呼び出し時点ではまだ true のまま残っていないといけない。
+        const strat = strategy.snapshot();
+        const doForceSteal = strat.forceSteal;
+        const doIntentionalWalk = strat.intentionalWalk;
 
         // 打席の最初（カウント0-0）で代打チェック
         if (count.balls === 0 && count.strikes === 0) {
@@ -1439,10 +1442,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         });
         
         let result = simulatePitch();
-        // simulateSinglePitch が読み終わったので采配フラグを消費（次球に持ち越さない）
-        forceStealRef.current = false;
-        forceSwingRef.current = false;
-        intentionalWalkRef.current = false;
+        // simulateSinglePitch が読み終わったので采配のワンショットフラグを消費
+        strategy.consumeOneShot();
         // 采配: 敬遠指示があればこの1球で四球にする（ボール扱い）
         if (doIntentionalWalk) {
           result = { type: 'ball', description: '敬遠', pitchType: '—', velocity: 0 };
@@ -3410,24 +3411,22 @@ if (newOuts === 3) {
                 {(() => {
                   const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
                   const busy = isAutoSimulating || gameOver;
-                  const setApproach = (v) => { setBattingApproach(v); battingApproachRef.current = v; };
-                  const setShift = (v) => { setDefenseShift(v); defenseShiftRef.current = v; };
                   const offBtn = 'px-2.5 py-1 rounded text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed';
                   return (
                     <div className="flex items-center justify-center gap-1.5 flex-wrap mb-2">
                       {/* 攻撃 */}
                       <span className={`text-xs ${isUserBatting ? 'text-cyan-300' : 'text-gray-600'}`}>攻撃</span>
                       {[['take', '待て'], ['normal', 'おまかせ'], ['aggressive', '積極']].map(([v, label]) => (
-                        <button key={v} onClick={() => setApproach(v)} disabled={!isUserBatting || gameOver}
+                        <button key={v} onClick={() => setBattingApproach(v)} disabled={!isUserBatting || gameOver}
                           className={`px-2 py-1 rounded text-xs font-bold transition ${
                             battingApproach === v ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${!isUserBatting ? 'opacity-40' : ''}`}>
                           {label}
                         </button>
                       ))}
-                      <button onClick={() => { forceStealRef.current = true; throwPitch(); }}
+                      <button onClick={() => triggerSteal(throwPitch)}
                         disabled={!isUserBatting || !bases[0] || busy} title="一塁走者が次球で盗塁"
                         className={`${offBtn} bg-emerald-700 text-emerald-100 hover:bg-emerald-600`}>🏃 盗塁</button>
-                      <button onClick={() => { forceStealRef.current = true; forceSwingRef.current = true; throwPitch(); }}
+                      <button onClick={() => triggerHitAndRun(throwPitch)}
                         disabled={!isUserBatting || !bases[0] || outs >= 2 || busy} title="走者を走らせ打者は必ず打ちにいく"
                         className={`${offBtn} bg-emerald-800 text-emerald-100 hover:bg-emerald-700`}>エンドラン</button>
                       <button onClick={() => handleBunt()}
@@ -3436,11 +3435,11 @@ if (newOuts === 3) {
                       <span className="text-xs text-gray-600">｜</span>
                       {/* 守備 */}
                       <span className={`text-xs ${!isUserBatting ? 'text-indigo-300' : 'text-gray-600'}`}>守備</span>
-                      <button onClick={() => { intentionalWalkRef.current = true; throwPitch(); }}
+                      <button onClick={() => triggerIntentionalWalk(throwPitch)}
                         disabled={isUserBatting || busy} title="現在の打者を敬遠"
                         className={`${offBtn} bg-indigo-700 text-indigo-100 hover:bg-indigo-600`}>敬遠</button>
                       {[['normal', '通常'], ['pull', '引っ張り'], ['oppo', '流し']].map(([v, label]) => (
-                        <button key={v} onClick={() => setShift(v)} disabled={isUserBatting || gameOver}
+                        <button key={v} onClick={() => setDefenseShift(v)} disabled={isUserBatting || gameOver}
                           title="守備シフト" className={`px-2 py-1 rounded text-xs font-bold transition ${
                             defenseShift === v ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${isUserBatting ? 'opacity-40' : ''}`}>
                           {label}
