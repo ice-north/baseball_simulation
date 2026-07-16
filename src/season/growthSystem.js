@@ -7,7 +7,7 @@
 // ヘルパーのみに依存し、他の年間進行ロジックには依存しない（循環参照なし）。
 // ============================================================
 
-import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
+import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, pickGrowthType } from './growthUtils.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 
@@ -285,12 +285,16 @@ export function applyAgeCurveChanges(allTeams) {
         let updatedPlayer = JSON.parse(JSON.stringify(player));
         const changes = [];
 
+        // 成長タイプが未設定の選手（旧セーブ等）はここで確定して永続化
+        if (!updatedPlayer.growthType) updatedPlayer.growthType = pickGrowthType();
+        const growthType = updatedPlayer.growthType;
+
         // 全能力について年齢カーブを適用
         const allStats = [...PHYSICAL_STATS, ...TECHNICAL_STATS];
 
         allStats.forEach(stat => {
           const isPhysical = PHYSICAL_STATS.includes(stat);
-          const base = getAgeGrowthBase(age, isPhysical);
+          const base = getAgeGrowthBase(age, isPhysical, growthType);
 
           // 個人差: 標準偏差2.0のランダム偏差（大きな個人差を出す）
           // Box-Muller変換で正規分布を生成

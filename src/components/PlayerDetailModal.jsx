@@ -4,6 +4,7 @@ import { AbilityValue } from './AbilityValue.jsx';
 import { AbilityRadar, playerRadarAxes } from './AbilityRadar.jsx';
 import { formatInnings } from '../utils/physics.js';
 import { buildPlayerStory, fameLabel } from './playerStory.js';
+import { getGrowthTypeMeta } from '../season/growthUtils.js';
 
 // 変化球をレベル別に色付けして表示（レベルは0-100なのでgetAbilityColorをそのまま使用）
 const renderArsenal = (arsenal) => {
@@ -171,7 +172,12 @@ export default function PlayerDetailModal({ player, onClose }) {
                   <div>体格: <span className="text-white">{player.physical?.build === 'large' ? '大柄' : player.physical?.build === 'small' ? '小柄' : '中肉'}</span></div>
                   <div>成長: <span className={`font-bold ${(player.growthPotential ?? 1.0) >= 1.1 ? 'text-orange-400' : 'text-white'}`}>
                     {Math.max(0.3, Math.min(1.8, (player.growthPotential ?? 1.0) + (player.growthModifier || 0))).toFixed(2)}
-                  </span></div>
+                  </span>
+                  {player.growthType && (
+                    <span className={`ml-2 font-bold ${getGrowthTypeMeta(player.growthType).color}`} title="成長タイプ（年齢曲線）">
+                      {getGrowthTypeMeta(player.growthType).label}
+                    </span>
+                  )}</div>
                 </div>
               </div>
 

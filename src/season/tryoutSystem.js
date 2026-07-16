@@ -7,6 +7,7 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
 import { getUtilityScore } from '../utils/constants.js';
+import { pickGrowthType } from './growthUtils.js';
 
 // 2年目以降トライアウトの1チームあたり基準受験者数
 // 構成比はリーグ注目度(developmentReputation)で変動する（下記 generateTryoutCandidates 参照）:
@@ -254,6 +255,7 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
         if (age <= 19) base += 0.08;
         return Math.max(0.5, Math.min(1.5, base));
       })(),
+      growthType: pickGrowthType(),
       positionFitness: isTwoWay ? generateTwoWayPositionFitness(position, twoWaySubPosition, throws) : generatePositionFitness(position),
       professionalCareer: {
         isDrafted: false,
