@@ -6,27 +6,27 @@ export const PHYSICAL_STATS = ['speed', 'arm', 'stamina', 'velocity', 'bodyStami
 export const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 'steal', 'bunt'];
 
 // ============================================================
-// 成長アーキタイプ（年齢曲線のタイプ）
+// 成長の弧（年齢曲線）— 「使い方の結果」として創発する設計
 //
-// 各選手に固有のキャリアの弧を持たせる。ageShift は年齢曲線上の「体感年齢」を
-// ずらす: 早熟は曲線を先取り（早くピークに達し早く衰える）、大器晩成は遅らせる
-// （晩年まで伸び、衰えも遅い）。declineMult は衰退方向の傾きを微調整する。
-//   early   早熟型   : 若くしてピーク、衰えも早い
-//   standard標準型   : 従来カーブ
-//   late    大器晩成 : 20代後半まで伸び、ピークが遅い
-//   sustain 長持ち型 : ピークは標準的だが衰えが非常に緩やか（息の長い選手）
+// 早熟/晩成は生まれつきの宿命ではなく、キャリアの使われ方から結果的にそうなる。
+//   ・酷使（頑丈さを超える出場）  → 摩耗(careerWear)が溜まり、体感年齢が上がって
+//                                  早くピークアウトする（＝結果的に早熟）
+//   ・温存＋プロ意識で大事に育成  → 摩耗が溜まらず体感年齢が若く保たれ、晩年まで
+//                                  伸び続ける（＝結果的に大器晩成・長持ち）
+// player.growthType は「わずかな生まれつきの傾き」(±1歳)だけを与える隠しシード
+// （＝"結果そうなった"程度の誤差）。UIには出さない。ageShift の主役は careerWear。
 // ============================================================
 export const GROWTH_TYPES = {
-  early:    { label: '早熟型',   short: '早熟', ageShift: +3, declineMult: 1.35, color: 'text-orange-300' },
-  standard: { label: '標準型',   short: '標準', ageShift:  0, declineMult: 1.00, color: 'text-gray-300' },
-  late:     { label: '大器晩成', short: '晩成', ageShift: -4, declineMult: 0.95, color: 'text-cyan-300' },
-  sustain:  { label: '長持ち型', short: '長持', ageShift: -1, declineMult: 0.55, color: 'text-green-300' },
+  early:    { label: '早熟寄り', lean: +1 },
+  standard: { label: '標準',     lean:  0 },
+  late:     { label: '晩成寄り', lean: -1 },
+  sustain:  { label: '息長寄り', lean: -1 },
 };
 
-// 生成時の出現比率（合計100）。標準が過半、早熟と大器晩成が両翼、長持ちは希少。
+// 生成時の隠しシード比率（合計100）。ほぼ標準、両翼はわずかな誤差。
 const GROWTH_TYPE_WEIGHTS = { early: 22, standard: 50, late: 22, sustain: 6 };
 
-// 重み付きランダムで成長タイプを1つ選ぶ。
+// 重み付きランダムで隠しシードを1つ選ぶ。
 export function pickGrowthType() {
   const total = Object.values(GROWTH_TYPE_WEIGHTS).reduce((s, w) => s + w, 0);
   let r = Math.random() * total;
@@ -37,37 +37,60 @@ export function pickGrowthType() {
   return 'standard';
 }
 
-export function getGrowthTypeMeta(growthType) {
-  return GROWTH_TYPES[growthType] || GROWTH_TYPES.standard;
+// 生まれつきのわずかな傾き（±1歳）。表示しない隠し値。
+export function getInnateArcLean(player) {
+  return GROWTH_TYPES[player?.growthType]?.lean ?? 0;
 }
 
-// 年齢カーブの基礎成長量。growthType により体感年齢をずらし、キャリアの弧を変える。
-export function getAgeGrowthBase(age, isPhysical, growthType = 'standard') {
-  const meta = GROWTH_TYPES[growthType] || GROWTH_TYPES.standard;
-  // 体感年齢: 早熟(+3)は曲線を先取り、大器晩成(-4)は遅らせる
-  const a = age + meta.ageShift;
-  let base;
-  if (isPhysical) {
-    if (a <= 20) base = 0.8;
-    else if (a <= 22) base = 0.6;
-    else if (a <= 24) base = 0.3;
-    else if (a <= 25) base = 0.0;
-    else if (a <= 28) base = -0.5;
-    else if (a <= 31) base = -1.2;
-    else if (a <= 34) base = -2.5;
-    else base = -4.0;
+// キャリアの摩耗(careerWear)＋隠しシードから、年齢カーブの体感年齢シフトを求める。
+// 正 = 早くピークアウト（酷使の結果）、負 = 若さを保ち伸び続ける（温存の結果）。
+export function computeCareerAgeShift(player) {
+  const shift = getInnateArcLean(player) + (player?.careerWear || 0);
+  return Math.max(-4, Math.min(5, shift));
+}
+
+// その年の使用負荷(usageRatio: チーム最多出場を1とした相対値)から摩耗の増減を求める。
+// 頑丈さ(bodyStamina/recovery)の許容を超えて使うほど摩耗が増え、
+// プロ意識(discipline)が高いと自己管理で摩耗を抑える。軽負荷なら微回復。
+export function careerWearDelta(player, usageRatio) {
+  const bodyStamina = player.physical?.bodyStamina ?? 50;
+  const recovery = player.physical?.recovery ?? 50;
+  const durability = (bodyStamina + recovery) / 2;            // 0-100
+  const discipline = player.personality?.discipline ?? 50;
+  // 許容使用率: 頑丈なほど酷使に耐える（0.55〜0.85）
+  const tolerance = 0.55 + (durability / 100) * 0.30;
+  let delta = (usageRatio - tolerance) * 1.1;
+  if (delta > 0) {
+    // 酷使: プロ意識で摩耗を軽減（discipline100で-45%）
+    delta *= 1 - (discipline / 100) * 0.45;
   } else {
-    if (a <= 21) base = 0.3;
-    else if (a <= 24) base = 0.9;
-    else if (a <= 25) base = 0.0;
-    else if (a <= 28) base = -0.4;
-    else if (a <= 31) base = -0.8;
-    else if (a <= 34) base = -1.8;
-    else base = -3.0;
+    // 軽負荷: 温存による若さ維持は控えめ
+    delta *= 0.5;
   }
-  // 衰退方向のみタイプ別に傾きを調整（長持ちは緩やか、早熟は急）
-  if (base < 0) base *= meta.declineMult;
-  return base;
+  return Math.max(-0.35, Math.min(0.6, delta));
+}
+
+// 年齢カーブの基礎成長量。ageShift（体感年齢のずれ）でキャリアの弧を変える。
+export function getAgeGrowthBase(age, isPhysical, ageShift = 0) {
+  const a = age + ageShift;
+  if (isPhysical) {
+    if (a <= 20) return 0.8;
+    if (a <= 22) return 0.6;
+    if (a <= 24) return 0.3;
+    if (a <= 25) return 0.0;
+    if (a <= 28) return -0.5;
+    if (a <= 31) return -1.2;
+    if (a <= 34) return -2.5;
+    return -4.0;
+  } else {
+    if (a <= 21) return 0.3;
+    if (a <= 24) return 0.9;
+    if (a <= 25) return 0.0;
+    if (a <= 28) return -0.4;
+    if (a <= 31) return -0.8;
+    if (a <= 34) return -1.8;
+    return -3.0;
+  }
 }
 
 export function getStatPath(statKey) {
