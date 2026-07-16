@@ -101,7 +101,32 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
             winRate: s.winRate, mvpBatter, mvpPitcher
           };
         });
-        onRecordTeamHistory({ year: seasonData.year, standings: teamRecords });
+        // 年鑑（歴代タイトル/記録）用に、その年のタイトルホルダーを軽量化して保存。
+        // frozenAwards はプレーオフ確定時に seasonData に凍結済み。
+        const fa = seasonData.frozenAwards;
+        const slimAward = (a, statKeys) => {
+          if (!a) return null;
+          const out = { name: a.name, team: a.team };
+          statKeys.forEach(k => { if (a[k] !== undefined) out[k] = a[k]; });
+          return out;
+        };
+        const awardsArchive = fa ? {
+          battingChampion: slimAward(fa.battingChampion, ['avg']),
+          homeRunKing:     slimAward(fa.homeRunKing, ['homeruns']),
+          rbiKing:         slimAward(fa.rbiKing, ['rbis']),
+          stolenBaseKing:  slimAward(fa.stolenBaseKing, ['stolenBases']),
+          eraChampion:     slimAward(fa.eraChampion, ['era']),
+          winsLeader:      slimAward(fa.winsLeader, ['wins']),
+          savesLeader:     slimAward(fa.savesLeader, ['saves']),
+          strikeoutKing:   slimAward(fa.strikeoutKing, ['strikeouts']),
+        } : null;
+        onRecordTeamHistory({
+          year: seasonData.year,
+          standings: teamRecords,
+          awards: awardsArchive,
+          leagueChampion: fa?.champion || sortedStandings[0]?.team || null,
+          playoffChampion: seasonData.playoffChampion || null,
+        });
       }
 
       const result = gameMode === 'sandbox'

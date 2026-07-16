@@ -203,6 +203,55 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
     [draftHistoryByYear]
   );
 
+  // ===== 年鑑（歴代タイトル・記録）データ =====
+  // teamHistory[].awards（OffSeasonScreenで各年に凍結）から集計する。
+  const TITLE_DEFS = [
+    { key: 'battingChampion', label: '首位打者', stat: 'avg',        color: 'text-blue-300',   higher: true,  fmt: v => v },
+    { key: 'homeRunKing',     label: '本塁打王', stat: 'homeruns',    color: 'text-red-300',    higher: true,  fmt: v => `${v}本` },
+    { key: 'rbiKing',         label: '打点王',   stat: 'rbis',        color: 'text-orange-300', higher: true,  fmt: v => `${v}点` },
+    { key: 'stolenBaseKing',  label: '盗塁王',   stat: 'stolenBases', color: 'text-emerald-300',higher: true,  fmt: v => `${v}個` },
+    { key: 'winsLeader',      label: '最多勝',   stat: 'wins',        color: 'text-green-300',  higher: true,  fmt: v => `${v}勝` },
+    { key: 'eraChampion',     label: '最優秀防御率', stat: 'era',     color: 'text-cyan-300',   higher: false, fmt: v => v },
+    { key: 'savesLeader',     label: '最多セーブ', stat: 'saves',     color: 'text-purple-300', higher: true,  fmt: v => `${v}S` },
+    { key: 'strikeoutKing',   label: '最多奪三振', stat: 'strikeouts',color: 'text-indigo-300', higher: true,  fmt: v => `${v}K` },
+  ];
+
+  const almanac = useMemo(() => {
+    const withAwards = (teamHistory || []).filter(h => h.awards).sort((a, b) => b.year - a.year);
+    // 通算タイトル数（選手別）
+    const titleCounts = {}; // name -> { name, team, total, byKey: {key: n} }
+    // 歴代シーズン記録（各タイトルの最高値）
+    const bestSeason = {}; // key -> { name, team, year, value }
+    // 球団別リーグ優勝回数
+    const champCounts = {}; // team -> n
+
+    withAwards.forEach(h => {
+      TITLE_DEFS.forEach(def => {
+        const a = h.awards[def.key];
+        if (!a || !a.name) return;
+        const rawVal = a[def.stat];
+        const num = parseFloat(rawVal);
+        // タイトル数
+        if (!titleCounts[a.name]) titleCounts[a.name] = { name: a.name, team: a.team, total: 0, byKey: {} };
+        titleCounts[a.name].total++;
+        titleCounts[a.name].byKey[def.key] = (titleCounts[a.name].byKey[def.key] || 0) + 1;
+        titleCounts[a.name].team = a.team; // 最新の所属
+        // シーズン記録（防御率は小さいほど良い）
+        if (!isNaN(num)) {
+          const cur = bestSeason[def.key];
+          const better = !cur || (def.higher ? num > cur.value : num < cur.value);
+          if (better) bestSeason[def.key] = { name: a.name, team: a.team, year: h.year, value: num, display: def.fmt(rawVal) };
+        }
+      });
+      const champ = h.leagueChampion || h.standings?.[0]?.team;
+      if (champ) champCounts[champ] = (champCounts[champ] || 0) + 1;
+    });
+
+    const titleRanking = Object.values(titleCounts).sort((a, b) => b.total - a.total).slice(0, 20);
+    const champRanking = Object.entries(champCounts).map(([team, n]) => ({ team, n })).sort((a, b) => b.n - a.n);
+    return { years: withAwards, titleRanking, bestSeason, champRanking };
+  }, [teamHistory]);
+
   const battingCategories = [
     { key: 'avg', label: '打率', getValue: (s) => { const ab = s.batting?.atBats || 0; return ab >= 30 ? (s.batting?.hits || 0) / ab : 0; }, format: (v) => v > 0 ? v.toFixed(3) : '.000', minAB: 30 },
     { key: 'hits', label: '安打', getValue: (s) => s.batting?.hits || 0, format: (v) => v },
@@ -317,6 +366,16 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               }`}
             >
               チーム成績
+            </button>
+            <button
+              onClick={() => setActiveTab('almanac')}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'almanac'
+                  ? 'bg-amber-500 text-white shadow-sm'
+                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              }`}
+            >
+              年鑑
             </button>
             <button
               onClick={() => setActiveTab('tournaments')}
@@ -1082,6 +1141,139 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             </div>
           );
         })()}
+
+        {activeTab === 'almanac' && (
+          almanac.years.length === 0 ? (
+            <div className="bg-gray-800 rounded-lg p-6 text-center">
+              <p className="text-gray-400">まだ年鑑データがありません</p>
+              <p className="text-gray-500 text-sm mt-1">シーズンを終えるごとに、その年のタイトルホルダーが記録されていきます</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* 歴代シーズン記録（各タイトルの最高値） */}
+              <div>
+                <h2 className="text-sm font-bold text-amber-300 mb-2">歴代シーズン記録</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {TITLE_DEFS.map(def => {
+                    const b = almanac.bestSeason[def.key];
+                    return (
+                      <div key={def.key} className="bg-gray-800 border border-gray-700/60 rounded-lg p-2.5">
+                        <div className={`text-xs font-bold ${def.color} mb-1`}>{def.label}</div>
+                        {b ? (
+                          <>
+                            <div className="text-lg font-bold text-white tabular-nums leading-tight">{b.display}</div>
+                            <div className="text-xs text-gray-300 truncate">{b.name}</div>
+                            <div className="text-xs text-gray-500">{b.team}・{b.year}年目</div>
+                          </>
+                        ) : <div className="text-gray-600 text-sm">-</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 通算タイトル数ランキング */}
+              <div>
+                <h2 className="text-sm font-bold text-amber-300 mb-2">通算タイトル数</h2>
+                {almanac.titleRanking.length === 0 ? (
+                  <div className="bg-gray-800 rounded-lg p-4 text-center text-gray-500 text-sm">記録なし</div>
+                ) : (
+                  <div className="bg-gray-800 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-gray-400 text-xs border-b border-gray-700">
+                          <th className="py-1.5 px-2 text-center w-8">#</th>
+                          <th className="py-1.5 px-2 text-left">選手</th>
+                          <th className="py-1.5 px-2 text-center w-16">タイトル</th>
+                          <th className="py-1.5 px-2 text-left">内訳</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {almanac.titleRanking.map((p, i) => (
+                          <tr key={p.name + i} className="border-b border-gray-700/40">
+                            <td className="py-1.5 px-2 text-center font-bold text-gray-400">{i + 1}</td>
+                            <td className="py-1.5 px-2 font-bold text-white whitespace-nowrap">
+                              {p.name}<span className="text-gray-500 font-normal text-xs ml-1">{p.team}</span>
+                            </td>
+                            <td className="py-1.5 px-2 text-center">
+                              <span className="text-amber-300 font-bold text-base tabular-nums">{p.total}</span>
+                              <span className="text-gray-500 text-xs">冠</span>
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <div className="flex flex-wrap gap-1">
+                                {TITLE_DEFS.filter(d => p.byKey[d.key]).map(d => (
+                                  <span key={d.key} className={`text-xs ${d.color}`}>
+                                    {d.label}{p.byKey[d.key] > 1 ? `×${p.byKey[d.key]}` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* 球団別リーグ優勝回数 */}
+              {almanac.champRanking.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-bold text-amber-300 mb-2">球団別リーグ優勝回数</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {almanac.champRanking.map(c => (
+                      <div key={c.team} className="bg-gray-800 border border-gray-700/60 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                        <span className="text-yellow-400">🏆</span>
+                        <span className="text-white font-bold text-sm">{c.team}</span>
+                        <span className="text-yellow-300 font-bold tabular-nums">{c.n}</span>
+                        <span className="text-gray-500 text-xs">回</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 歴代タイトルホルダー（年度別） */}
+              <div>
+                <h2 className="text-sm font-bold text-amber-300 mb-2">歴代タイトルホルダー</h2>
+                <div className="bg-gray-800 rounded-lg overflow-x-auto">
+                  <table className="w-full text-xs whitespace-nowrap">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-gray-700">
+                        <th className="py-2 px-2 text-center sticky left-0 bg-gray-800">年</th>
+                        <th className="py-2 px-2 text-left">優勝</th>
+                        {TITLE_DEFS.map(d => <th key={d.key} className="py-2 px-2 text-left">{d.label}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {almanac.years.map(h => (
+                        <tr key={h.year} className="border-b border-gray-700/40">
+                          <td className="py-1.5 px-2 text-center font-bold text-white sticky left-0 bg-gray-800">{h.year}</td>
+                          <td className="py-1.5 px-2 text-yellow-300 font-bold">
+                            {h.leagueChampion || h.standings?.[0]?.team || '-'}
+                          </td>
+                          {TITLE_DEFS.map(d => {
+                            const a = h.awards?.[d.key];
+                            return (
+                              <td key={d.key} className="py-1.5 px-2">
+                                {a && a.name ? (
+                                  <>
+                                    <span className="text-white">{a.name}</span>
+                                    <span className={`ml-1 ${d.color}`}>{d.fmt(a[d.stat])}</span>
+                                  </>
+                                ) : <span className="text-gray-600">-</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )
+        )}
 
         {onClose && (
           <div className="text-center mt-4">
