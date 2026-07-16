@@ -17,6 +17,7 @@ const PATH_META = {
   club_join:  { icon: '🧢', color: 'teal', verb: '入部' },
   released:   { icon: '📋', color: 'red', verb: '自由契約' },
   draft:      { icon: '🎉', color: 'yellow', verb: '' },
+  second_career: { icon: '👔', color: 'teal', verb: '' },
 };
 
 // 技術系ステータスの日本語名（ブレイク要因の表示用）。

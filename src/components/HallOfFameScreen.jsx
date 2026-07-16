@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { exportDraftedPlayers } from '../game/saveSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
+import { SECOND_CAREER_META } from '../season/secondCareer.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
 
 const NPB_TEAMS_CE = [
@@ -249,8 +250,20 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
 
     const titleRanking = Object.values(titleCounts).sort((a, b) => b.total - a.total).slice(0, 20);
     const champRanking = Object.entries(champCounts).map(([team, n]) => ({ team, n })).sort((a, b) => b.n - a.n);
-    return { years: withAwards, titleRanking, bestSeason, champRanking };
-  }, [teamHistory]);
+
+    // 引退者のセカンドキャリア（監督/コーチ/スカウト）を新しい順に
+    const roleOrder = { manager: 0, coach: 1, scout: 2 };
+    const secondCareers = (hallOfFamePlayers || [])
+      .filter(p => p.secondCareer)
+      .map(p => ({
+        name: p.name, team: p.secondCareer.team || p.teamName || p.team,
+        role: p.secondCareer.role, title: p.secondCareer.title,
+        year: p.secondCareer.year ?? p.year ?? 0, position: p.position,
+      }))
+      .sort((a, b) => (b.year - a.year) || (roleOrder[a.role] - roleOrder[b.role]));
+
+    return { years: withAwards, titleRanking, bestSeason, champRanking, secondCareers };
+  }, [teamHistory, hallOfFamePlayers]);
 
   const battingCategories = [
     { key: 'avg', label: '打率', getValue: (s) => { const ab = s.batting?.atBats || 0; return ab >= 30 ? (s.batting?.hits || 0) / ab : 0; }, format: (v) => v > 0 ? v.toFixed(3) : '.000', minAB: 30 },
@@ -1143,7 +1156,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         })()}
 
         {activeTab === 'almanac' && (
-          almanac.years.length === 0 ? (
+          (almanac.years.length === 0 && almanac.secondCareers.length === 0) ? (
             <div className="bg-gray-800 rounded-lg p-6 text-center">
               <p className="text-gray-400">まだ年鑑データがありません</p>
               <p className="text-gray-500 text-sm mt-1">シーズンを終えるごとに、その年のタイトルホルダーが記録されていきます</p>
@@ -1229,6 +1242,26 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         <span className="text-gray-500 text-xs">回</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 引退者のセカンドキャリア（監督・コーチ・スカウト） */}
+              {almanac.secondCareers.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-bold text-amber-300 mb-2">セカンドキャリア（引退後の指導者）</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {almanac.secondCareers.map((sc, i) => {
+                      const meta = SECOND_CAREER_META[sc.role] || SECOND_CAREER_META.coach;
+                      return (
+                        <div key={sc.name + i} className="bg-gray-800 border border-gray-700/60 rounded-lg px-3 py-2 flex items-center gap-2">
+                          <span className="text-lg">{meta.icon}</span>
+                          <span className="text-white font-bold text-sm">{sc.name}</span>
+                          <span className={`text-xs font-bold ${meta.color}`}>{sc.title}</span>
+                          <span className="text-gray-500 text-xs ml-auto whitespace-nowrap">{sc.team}・{sc.year}年目〜</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

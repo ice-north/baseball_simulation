@@ -12,6 +12,7 @@ import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, process
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 import { generatePositionFitness } from './tryoutSystem.js';
+import { assignSecondCareer } from './secondCareer.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
@@ -530,7 +531,7 @@ function calcRetirementScore(player) {
  * @param {Object} allTeams - 全チームデータ
  * @returns {Object} - { updatedTeams, retirements }
  */
-export function processRetirements(allTeams) {
+export function processRetirements(allTeams, retirementYear = null) {
   const retireIds = new Set();
 
   // Step 1: 年齢×ポジション別にグローバル収集
@@ -572,6 +573,20 @@ export function processRetirements(allTeams) {
 
     retired.forEach(player => {
       const { isHallOfFame: hallOfFame, reason: hofReason } = checkHallOfFame(player);
+      // セカンドキャリア（引退後の監督/コーチ/スカウト就任）を判定し、
+      // 選手のストーリーに刻む。該当しなければ null（完全引退）。
+      const secondCareer = assignSecondCareer(player, retirementYear, teamName);
+      if (secondCareer) {
+        if (!Array.isArray(player.careerHistory)) player.careerHistory = [];
+        player.careerHistory.push({
+          type: 'second_career',
+          year: secondCareer.year,
+          team: teamName,
+          role: secondCareer.role,
+          label: `${teamName} ${secondCareer.title}就任`,
+        });
+        player.secondCareer = secondCareer;
+      }
       retirements.push({
         name:       player.name,
         team:       teamName,
@@ -582,6 +597,8 @@ export function processRetirements(allTeams) {
         hallOfFame,
         reason:     hofReason || (player.age >= 40 ? '年齢による引退' : '引退'),
         careerStats: player.careerStats,
+        careerHistory: player.careerHistory || null,
+        secondCareer: secondCareer || null,
         draftInfo:  player.draftInfo || null,
         yearsPlayed: player.yearsPlayed,
       });
@@ -1038,7 +1055,7 @@ export function advanceToNextYear(seasonData, allTeams) {
   applyFreeAgentGrowth(releasedPlayersPool);
 
   // 5. 引退処理
-  const { updatedTeams: teamsAfterRetirement, retirements } = processRetirements(updatedTeams);
+  const { updatedTeams: teamsAfterRetirement, retirements } = processRetirements(updatedTeams, seasonData.year);
 
   // 5.5. 大学プール処理: 在学生の成長 + 卒業生を排出
   const currentYear = seasonData.year;
