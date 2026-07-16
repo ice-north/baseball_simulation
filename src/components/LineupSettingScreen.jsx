@@ -866,12 +866,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     closer:     { label: '守護神', color: 'bg-purple-600', textColor: 'text-purple-300', group: 'relief' },
   };
 
+  // 控え選手のポジションソート順（捕一二三遊左中右投）。投手は最後。
+  const BENCH_POSITION_ORDER = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right', 'pitcher'];
+
   // 控え選手のソート用値を取得
   const getBenchSortValue = (player, key) => {
     switch (key) {
       case 'name': return player.name;
       case 'age': return player.age || 0;
-      case 'position': return POSITION_NAMES[player.position] || '';
+      case 'position': { const i = BENCH_POSITION_ORDER.indexOf(player.position); return i >= 0 ? i : 99; }
       case 'meet': return player.batting?.meet || 0;
       case 'power': return player.batting?.power || 0;
       case 'speed': return player.physical?.speed || 0;
@@ -892,7 +895,8 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
       setBenchSortAsc(!benchSortAsc);
     } else {
       setBenchSortKey(key);
-      setBenchSortAsc(false);
+      // 守備は昇順（捕→投）から、それ以外は降順から始める
+      setBenchSortAsc(key === 'position');
     }
   };
 
