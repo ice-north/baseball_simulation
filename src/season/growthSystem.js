@@ -153,7 +153,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
 
     for (const player of team.players) {
       const age = player.age || 25;
-      if (age > 38) continue;  // 自然衰退に伴い上限を38歳に拡張
+      if (age > 38) continue;  // これ以降の衰退は applyAgeCurveChanges が単独で担う
       const gp = player.growthPotential || 1.0;
       const discipline = player.personality?.discipline ?? 50;
 
@@ -226,8 +226,12 @@ export function applyCorporatePlayerGrowth(allTeams) {
 
       const grow = (current, base, key, cap = 99, threshold = null, rate = 0.05) => {
         if (effectiveFactor >= 0) {
-          // 成長・維持期: disciplineMultを乗算
-          let amount = base * gp * rankMult * disciplineMult * effectiveFactor * specMult(key) * (0.6 + Math.random() * 0.6);
+          // 成長・維持期: disciplineMultを乗算。
+          // gpは加齢で大きくマイナスになりうるが、成長方向では下限0.15で扱う
+          // （負のgpで"成長"が衰退に反転する二重衰退を防ぐ）。プロ意識で維持期に
+          // 入ったベテランは、加齢カーブ(applyAgeCurveChanges)のみが衰退を担う。
+          const gpGrow = Math.max(0.15, gp);
+          let amount = base * gpGrow * rankMult * disciplineMult * effectiveFactor * specMult(key) * (0.6 + Math.random() * 0.6);
           if (threshold != null) amount *= decayMult(current, threshold, rate);
           return Math.min(cap, current + Math.round(amount));
         } else {
@@ -317,11 +321,18 @@ export function applyAgeCurveChanges(allTeams) {
 
           const effectiveRaw = (player.growthPotential ?? 1.0) + (player.growthModifier || 0);
           const growthPotential = Math.max(0, Math.min(1.8, effectiveRaw));
-          const decayMult = effectiveRaw < 0 ? 1 + Math.abs(effectiveRaw) * 0.5 : 1.0;
+          // 衰退の加速は頭打ちにする（growthPotentialが加齢で大きくマイナスへ暴走しても
+          // 際限なく急落させない）。上限1.9、係数0.27。
+          const decayMult = Math.min(1.9, effectiveRaw < 0 ? 1 + Math.abs(effectiveRaw) * 0.27 : 1.0);
 
-          // プロ意識: 衰退を緩和（プロ意識100=60%, 50=80%, 0=100%の衰退速度）
+          // 衰退の緩和/促進: プロ意識(discipline)＋大事な起用(growthModifier)。
+          //   プロ意識が高いほど練習で衰えを抑え、疲労状態での酷使(modifierマイナス)は
+          //   衰えを促進する。プロ意識100＋大事に使われた選手が45歳前後まで一線を張れる
+          //   バランス（DISC=0.44, CARE=2.0）。decayDiscMult は衰退量への乗数。
           const discipline = player.personality?.discipline ?? 50;
-          const decayDiscMult = 1.0 - (discipline / 100) * 0.4;
+          const care = player.growthModifier || 0; // 正=大事に, 負=酷使
+          const declineMitig = (discipline / 100) * 0.58 + care * 2.0;
+          const decayDiscMult = Math.max(0.25, Math.min(1.5, 1.0 - declineMitig));
 
           // 最終変動値（四捨五入、±0の場合もある）
           let rawChange = base + variance;

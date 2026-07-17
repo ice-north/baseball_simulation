@@ -499,9 +499,9 @@ export function checkRetirement(player) {
   let shouldRetire = false;
   let reason = hofReason;
 
-  // 40歳以上は強制引退
-  // 29〜39歳の引退は processRetirements() で能力順位ベースに一括判定
-  if (age >= 40) {
+  // 48歳以上は強制引退（プロ意識100＋大事に使われた稀な選手が45歳前後まで現役）
+  // 29〜47歳の引退は processRetirements() で能力順位ベースに一括判定
+  if (age >= 48) {
     shouldRetire = true;
     if (!reason) reason = '年齢による引退';
   }
@@ -539,7 +539,7 @@ export function processRetirements(allTeams, retirementYear = null) {
   for (const team of Object.values(allTeams)) {
     for (const player of team.players || []) {
       const age = player.age || 20;
-      if (age >= 40) {
+      if (age >= 48) {
         retireIds.add(player.id);
         continue;
       }
