@@ -18,7 +18,7 @@ const renderArsenal = (arsenal) => {
   ));
 };
 
-export default function PlayerDetailModal({ player, onClose }) {
+export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }) {
   const [detailTab, setDetailTab] = useState('ability');
 
   if (!player) return null;
@@ -153,7 +153,7 @@ export default function PlayerDetailModal({ player, onClose }) {
           {detailTab === 'ability' && (<>
             {/* 将来性（ポテンシャル）評価 */}
             <div className="mb-3">
-              <PotentialBadge player={player} />
+              <PotentialBadge player={player} scoutAccuracy={scoutAccuracy} />
             </div>
             {/* 能力レーダー（能力バランスを一目で） */}
             <div className="flex justify-center mb-3">

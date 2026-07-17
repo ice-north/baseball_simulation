@@ -9,6 +9,7 @@ import React, { useState, useMemo } from 'react';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { projectPeak } from '../season/potential.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
+import { getScoutAccuracy, formatRange, MAX_SCOUT_LEVEL } from '../season/scouting.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import PotentialBadge from './PotentialBadge.jsx';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
@@ -28,6 +29,13 @@ export default function ProspectBoardScreen({ onBack }) {
   const [posFilter, setPosFilter] = useState('all');
   const [sortKey, setSortKey] = useState('potential'); // potential | current | age
   const [detailPlayer, setDetailPlayer] = useState(null);
+  const [scoutTick, setScoutTick] = useState(0); // 調査で再描画
+
+  // 個別調査: _scoutLevel を上げて精度を高める
+  const investigate = (player) => {
+    player._scoutLevel = Math.min(MAX_SCOUT_LEVEL, (player._scoutLevel || 0) + 1);
+    setScoutTick(t => t + 1);
+  };
 
   // アマチュア候補を収集し、将来性で評価（重い処理なので一度だけ）
   const prospects = useMemo(() => {
@@ -146,13 +154,17 @@ export default function ProspectBoardScreen({ onBack }) {
               <th className="text-left py-2">所属</th>
               <th className="text-center py-2 w-12">守備</th>
               <th className="text-center py-2 w-10">齢</th>
-              <th className="text-center py-2 w-14">現総合</th>
-              <th className="text-left py-2 w-40 pl-2">将来性</th>
+              <th className="text-center py-2 w-16">現総合</th>
+              <th className="text-left py-2 w-44 pl-2">将来性</th>
+              <th className="text-center py-2 w-16">調査</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((x, i) => {
               const sb = SOURCE_BADGE[x.source];
+              const acc = getScoutAccuracy(x.player);
+              const lvl = x.player._scoutLevel || 0;
+              const maxed = lvl >= MAX_SCOUT_LEVEL;
               return (
                 <tr key={x.player.id} className="border-b border-gray-800/50 hover:bg-gray-800/40 cursor-pointer"
                   onClick={() => setDetailPlayer(x.player)}>
@@ -162,19 +174,30 @@ export default function ProspectBoardScreen({ onBack }) {
                   <td className="py-1.5 text-gray-300 text-xs truncate max-w-[10rem]">{x.affiliation}</td>
                   <td className="text-center py-1.5 text-gray-300 text-xs">{POSITION_NAMES[x.player.position] || '-'}</td>
                   <td className="text-center py-1.5 text-gray-300 tabular-nums">{x.player.age}</td>
-                  <td className="text-center py-1.5 text-gray-200 font-mono">{x.current}</td>
-                  <td className="pl-2 py-1.5"><PotentialBadge player={x.player} compact /></td>
+                  <td className="text-center py-1.5 text-gray-200 font-mono tabular-nums text-xs">{formatRange(x.current, acc)}</td>
+                  <td className="pl-2 py-1.5"><PotentialBadge player={x.player} compact scoutAccuracy={acc} /></td>
+                  <td className="text-center py-1.5" onClick={(e) => e.stopPropagation()}>
+                    {maxed ? (
+                      <span className="text-xs text-cyan-300 font-bold">確定</span>
+                    ) : (
+                      <button onClick={() => investigate(x.player)}
+                        className="text-xs px-2 py-0.5 rounded bg-cyan-800/70 hover:bg-cyan-700 text-cyan-100 border border-cyan-600/50 font-bold"
+                        title="調査するとスカウト精度が上がる">
+                        調査<span className="opacity-60 ml-0.5">{lvl}/{MAX_SCOUT_LEVEL}</span>
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} className="py-8 text-center text-gray-500">該当する選手がいません</td></tr>
+              <tr><td colSpan={9} className="py-8 text-center text-gray-500">該当する選手がいません</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {detailPlayer && <PlayerDetailModal player={detailPlayer} onClose={() => setDetailPlayer(null)} />}
+      {detailPlayer && <PlayerDetailModal player={detailPlayer} scoutAccuracy={getScoutAccuracy(detailPlayer)} onClose={() => setDetailPlayer(null)} />}
     </div>
   );
 }
