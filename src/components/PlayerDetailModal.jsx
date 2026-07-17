@@ -4,6 +4,7 @@ import { AbilityValue } from './AbilityValue.jsx';
 import { AbilityRadar, playerRadarAxes } from './AbilityRadar.jsx';
 import { formatInnings } from '../utils/physics.js';
 import { buildPlayerStory, fameLabel } from './playerStory.js';
+import AbilityHistoryChart from './AbilityHistoryChart.jsx';
 
 // 変化球をレベル別に色付けして表示（レベルは0-100なのでgetAbilityColorをそのまま使用）
 const renderArsenal = (arsenal) => {
@@ -485,7 +486,12 @@ export default function PlayerDetailModal({ player, onClose }) {
               return <div className="text-gray-400 text-sm text-center py-8">まだ能力値の履歴がありません（Year2以降に記録されます）</div>;
             }
             const entriesWithAbilities = history.filter(h => h.abilities);
-            return isPitcher ? (
+            return (<>
+            <div className="mb-3 bg-gray-900/40 rounded-lg p-2 border border-gray-700/50">
+              <div className="text-xs font-bold text-cyan-300 mb-1 px-1">能力推移</div>
+              <AbilityHistoryChart player={player} isPitcher={isPitcher} />
+            </div>
+            {isPitcher ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-gray-300">
                   <thead>
@@ -601,7 +607,8 @@ export default function PlayerDetailModal({ player, onClose }) {
                   </tbody>
                 </table>
               </div>
-            );
+            )}
+            </>);
           })()}
 
         </div>{/* end タブコンテンツ */}
