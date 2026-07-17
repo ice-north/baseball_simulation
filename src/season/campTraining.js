@@ -3,7 +3,7 @@
 // メイン練習・サブ練習・チーム一括実行
 // ============================================================
 
-import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, computeCareerAgeShift } from './growthUtils.js';
+import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 
@@ -484,7 +484,7 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
 
         if (nonStraight.length > 0) {
           const age = player.age || 20;
-          const ageBase = getAgeGrowthBase(age, false, computeCareerAgeShift(player));
+          const ageBase = getAgeGrowthBase(age, false);
           const ageMult = Math.max(0.6, 1.0 + ageBase * 0.12); // 0.6〜1.1
           const dext = player.physical?.dexterity ?? 50;
           const dextMult = 0.85 + (dext / 100) * 0.30; // 0.85〜1.15
@@ -978,7 +978,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   // 通常の能力練習（成長量抑制: プロ級へ到達しにくくする）
   menu.targets.forEach((targetStat, targetIdx) => {
     const isPhysical = PHYSICAL_STATS.includes(targetStat);
-    const ageBase = getAgeGrowthBase(age, isPhysical, computeCareerAgeShift(player));
+    const ageBase = getAgeGrowthBase(age, isPhysical);
     const ageMultiplier = Math.max(0.3, 1.0 + ageBase * 0.10);
     const posBonus = getPositionGrowthBonus(player, targetStat);
     const boBonus = getBattingOrderGrowthBonus(player, targetStat);

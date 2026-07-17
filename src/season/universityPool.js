@@ -14,7 +14,6 @@ import { addToReleasedPool, replaceReleasedPool } from '../state/pools.js';
 import { addToRoster } from '../state/roster.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { syncPositionToFitness } from '../utils/physics.js';
-import { pickGrowthType } from './growthUtils.js';
 
 export const HIGH_SCHOOL_CLASS_SIZE = 5000;
 
@@ -401,7 +400,6 @@ function generateHighSchoolPlayer(id) {
     twoWaySubPosition,
     growthPotential,
     growthModifier: 0,
-    growthType: pickGrowthType(),
     personality: {
       discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),
       mental: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),

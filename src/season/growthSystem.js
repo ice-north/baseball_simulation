@@ -7,7 +7,7 @@
 // ヘルパーのみに依存し、他の年間進行ロジックには依存しない（循環参照なし）。
 // ============================================================
 
-import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, pickGrowthType, computeCareerAgeShift, careerWearDelta } from './growthUtils.js';
+import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 
@@ -278,14 +278,6 @@ export function applyAgeCurveChanges(allTeams) {
   const ageReports = [];
 
   Object.entries(allTeams).forEach(([teamName, team]) => {
-    // チーム内の最多出場を基準に、各選手の相対使用率(usageRatio)を測る。
-    // 日程長に依存しないため、全モード・全リーグで一貫して「酷使度」を判定できる。
-    let teamMaxGames = 1, teamMaxInnings = 1;
-    (team.players || []).forEach(p => {
-      teamMaxGames = Math.max(teamMaxGames, p.seasonStats?.batting?.games || 0);
-      teamMaxInnings = Math.max(teamMaxInnings, p.seasonStats?.pitching?.inningsPitched || 0);
-    });
-
     updatedTeams[teamName] = {
       ...team,
       players: team.players.map(player => {
@@ -293,27 +285,12 @@ export function applyAgeCurveChanges(allTeams) {
         let updatedPlayer = JSON.parse(JSON.stringify(player));
         const changes = [];
 
-        // 隠しシード（生まれつきのわずかな傾き）が未設定なら確定して永続化
-        if (!updatedPlayer.growthType) updatedPlayer.growthType = pickGrowthType();
-
-        // その年の使用負荷から摩耗(careerWear)を更新。酷使は摩耗を溜め、
-        // 温存＋プロ意識は摩耗を溜めない → 体感年齢シフトとして弧に反映される。
-        const isPitcher = player.position === 'pitcher';
-        const usageRatio = isPitcher
-          ? (player.seasonStats?.pitching?.inningsPitched || 0) / teamMaxInnings
-          : (player.seasonStats?.batting?.games || 0) / teamMaxGames;
-        const wearDelta = careerWearDelta(updatedPlayer, usageRatio);
-        updatedPlayer.careerWear = Math.max(-3, Math.min(5, (updatedPlayer.careerWear || 0) + wearDelta));
-
-        // 体感年齢シフト（摩耗＋隠しシード）を年齢カーブに適用
-        const ageShift = computeCareerAgeShift(updatedPlayer);
-
         // 全能力について年齢カーブを適用
         const allStats = [...PHYSICAL_STATS, ...TECHNICAL_STATS];
 
         allStats.forEach(stat => {
           const isPhysical = PHYSICAL_STATS.includes(stat);
-          const base = getAgeGrowthBase(age, isPhysical, ageShift);
+          const base = getAgeGrowthBase(age, isPhysical);
 
           // 個人差: 標準偏差2.0のランダム偏差（大きな個人差を出す）
           // Box-Muller変換で正規分布を生成
