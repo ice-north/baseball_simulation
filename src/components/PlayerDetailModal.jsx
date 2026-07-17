@@ -5,6 +5,7 @@ import { AbilityRadar, playerRadarAxes } from './AbilityRadar.jsx';
 import { formatInnings } from '../utils/physics.js';
 import { buildPlayerStory, fameLabel } from './playerStory.js';
 import AbilityHistoryChart from './AbilityHistoryChart.jsx';
+import PotentialBadge from './PotentialBadge.jsx';
 
 // 変化球をレベル別に色付けして表示（レベルは0-100なのでgetAbilityColorをそのまま使用）
 const renderArsenal = (arsenal) => {
@@ -150,6 +151,10 @@ export default function PlayerDetailModal({ player, onClose }) {
         <div className="flex-1 overflow-y-auto min-h-0">
 
           {detailTab === 'ability' && (<>
+            {/* 将来性（ポテンシャル）評価 */}
+            <div className="mb-3">
+              <PotentialBadge player={player} />
+            </div>
             {/* 能力レーダー（能力バランスを一目で） */}
             <div className="flex justify-center mb-3">
               <AbilityRadar axes={playerRadarAxes(player)} size={220} />
