@@ -4,7 +4,7 @@
 // ========================================================================
 
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { autoSimulateGame, generateAILineup, POSITION_PLAYER_RECOVERY_BASE } from './autoSimulation.js';
+import { autoSimulateGame, generateAILineup } from './autoSimulation.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { adjustGrowthModifier } from '../utils/constants.js';
 import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
@@ -312,8 +312,8 @@ export function executeHandleManagedGameEnd(ctx) {
           const bodyStamina = playerData.physical?.bodyStamina || 50;
           const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
           const recoveryAbility = playerData.physical?.recovery || 50;
-          const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
-          const recovCancelled = Math.round(POSITION_PLAYER_RECOVERY_BASE * recoveryMult);
+          // 出場日はその日の日次回復を相殺（差引=baseFatigueのみ）。新回復式に一致させる。
+          const recovCancelled = Math.round(bodyStamina * (0.25 + (recoveryAbility / 100) * 0.60));
           playerData.fatigue = (playerData.fatigue || 0) + baseFatigue + recovCancelled;
         }
       }

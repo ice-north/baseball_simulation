@@ -281,10 +281,17 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
     team.players.forEach(player => {
       if (player.fatigue && player.fatigue > 0) {
         const recoveryAbility = player.physical?.recovery || 50;
-        // 回復量 = ベース回復 × (0.7〜1.3)（回復能力50で1.0倍）× 身体ケア補正
-        const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
-        const baseRecov = player.position === 'pitcher' ? recoveryAmount : POSITION_PLAYER_RECOVERY_BASE;
-        const actualRecovery = Math.round(baseRecov * recoveryMult * bodyCareMult);
+        let actualRecovery;
+        if (player.position === 'pitcher') {
+          // 投手: ベース回復25 ×(0.7〜1.3)（ローテ維持のため従来式）
+          const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
+          actualRecovery = Math.round(recoveryAmount * recoveryMult * bodyCareMult);
+        } else {
+          // 野手: 1日回復 = 体力 ×(0.25 + 回復力/100×0.60)（回復0→25%,50→55%,100→85%）
+          const body = player.physical?.bodyStamina ?? 50;
+          const pct = 0.25 + (recoveryAbility / 100) * 0.60;
+          actualRecovery = Math.round(body * pct * bodyCareMult);
+        }
         player.fatigue = Math.max(0, player.fatigue - actualRecovery);
       }
     });
@@ -2331,10 +2338,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           // 基礎疲労 7〜15（体力100→7, 体力1→15）
           const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
           // 試合日は回復を相殺（progressDateで先に回復が適用されているため）
-          // これにより試合出場日は回復せず、休養日のみ回復する
+          // これにより試合出場日は回復せず、休養日のみ回復する。新回復式に一致させる。
           const recoveryAbility = playerData.physical?.recovery || 50;
-          const recoveryMult = 0.7 + (recoveryAbility / 100) * 0.6;
-          const recovCancelled = Math.round(POSITION_PLAYER_RECOVERY_BASE * recoveryMult);
+          const recovCancelled = Math.round(bodyStamina * (0.25 + (recoveryAbility / 100) * 0.60));
           playerData.fatigue = (playerData.fatigue || 0) + baseFatigue + recovCancelled;
         }
 
