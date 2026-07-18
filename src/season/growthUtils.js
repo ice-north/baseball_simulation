@@ -26,6 +26,18 @@ export function getAgeGrowthBase(age, isPhysical) {
   }
 }
 
+// 回復力(recovery)専用の年齢カーブ。若い頃がピークで、年々ゆるやかに低下する
+// （成長方向なし）。加齢で回復が鈍る → 疲労が抜けにくい → 摩耗しやすい、という
+// 疲労・摩耗システムと噛み合うフィードバックを生む。戻り値は常に ≤ 0。
+export function getRecoveryAgeBase(age) {
+  if (age <= 22) return 0;      // 22歳までは若さのピークを維持
+  if (age <= 26) return -0.5;
+  if (age <= 29) return -0.9;
+  if (age <= 32) return -1.4;
+  if (age <= 35) return -2.0;
+  return -2.6;
+}
+
 export function getStatPath(statKey) {
   const pathMap = {
     meet: 'batting.meet',

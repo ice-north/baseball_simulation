@@ -7,7 +7,7 @@
 // ヘルパーのみに依存し、他の年間進行ロジックには依存しない（循環参照なし）。
 // ============================================================
 
-import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
+import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getRecoveryAgeBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 
@@ -336,6 +336,11 @@ export function applyAgeCurveChanges(allTeams) {
 
           // 最終変動値（四捨五入、±0の場合もある）
           let rawChange = base + variance;
+          // 回復力は加齢で年々低下する（成長方向なし）。専用カーブで衰退のみ。
+          if (stat === 'recovery') {
+            rawChange = getRecoveryAgeBase(age) + variance * 0.5;
+            if (rawChange > 0) rawChange = 0; // 上振れでも回復力は成長させない
+          }
           // 成長方向: ポテンシャル + 体幹/器用さ補正（プロ意識は練習に集中）
           // 衰退方向: マイナスポテンシャルで加速 + プロ意識で緩和
           let change = rawChange > 0
