@@ -38,17 +38,32 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
 
   const StatBar = ({ label, value, max = 99, isVel = false, isSta = false }) => {
     // 球速・スタミナは 0-100 に正規化してからバー長・色を決める（生値だと常に最大色になる）
-    const norm = isVel ? Math.max(0, Math.min(100, (value - 115) * 2.5))
-      : isSta ? Math.max(0, Math.min(100, value / 2))
-      : Math.max(0, Math.min(100, (value / max) * 100));
+    const normOf = (v) => isVel ? Math.max(0, Math.min(100, (v - 115) * 2.5))
+      : isSta ? Math.max(0, Math.min(100, v / 2))
+      : Math.max(0, Math.min(100, (v / max) * 100));
+    const norm = normOf(value);
     const barColor = norm >= 80 ? 'bg-red-500' : norm >= 60 ? 'bg-yellow-500' : norm >= 40 ? 'bg-green-500' : 'bg-blue-500';
+    // スカウト精度が低いと能力は「幅」でしか見えない（情報の霧）
+    const fogged = scoutAccuracy < 0.95;
+    const margin = Math.round((1 - scoutAccuracy) * (isVel ? 16 : isSta ? 24 : 16));
+    const lo = Math.max(isVel ? 100 : 0, value - margin);
+    const hi = value + margin;
     return (
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xs text-gray-300 w-14">{label}</span>
-        <div className="flex-1 bg-gray-700 rounded h-2.5">
-          <div className={`h-2.5 rounded ${barColor}`} style={{ width: `${norm}%` }} />
+        <div className="flex-1 bg-gray-700 rounded h-2.5 relative overflow-hidden">
+          {fogged ? (
+            <div className={`absolute top-0 h-2.5 ${barColor} opacity-40`}
+              style={{ left: `${normOf(lo)}%`, width: `${Math.max(3, normOf(hi) - normOf(lo))}%` }} />
+          ) : (
+            <div className={`h-2.5 rounded ${barColor}`} style={{ width: `${norm}%` }} />
+          )}
         </div>
-        <span className={`text-sm font-bold w-8 text-right ${getRankColor(getAbilityRank(value, isVel, isSta))}`}>{value}</span>
+        {fogged ? (
+          <span className="text-xs font-bold w-16 text-right text-gray-300 tabular-nums">{lo}〜{hi}</span>
+        ) : (
+          <span className={`text-sm font-bold w-8 text-right ${getRankColor(getAbilityRank(value, isVel, isSta))}`}>{value}</span>
+        )}
       </div>
     );
   };
