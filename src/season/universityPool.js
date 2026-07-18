@@ -201,7 +201,7 @@ function generateHighSchoolPlayer(id) {
         arm: twoWayArm,
         defense: g(42, 10, 0.5, 5),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
-        recovery: g(44, 10, 0, 15),
+        recovery: g(62, 9, 0, 42),
         velocity: Math.max(110, Math.min(twoWayVelCap, velocity)),
         control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
         stamina: Math.max(60, Math.round(nrm(70, 12) + off * 1.5))
@@ -219,7 +219,7 @@ function generateHighSchoolPlayer(id) {
         arm: twoWayArm,
         defense: Math.max(1, Math.round(nrm(42, 10) + off * 0.6 + buildMod.defense)),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
-        recovery: g(44, 10, 0, 15),
+        recovery: g(62, 9, 0, 42),
         velocity: Math.max(100, Math.min(velCap, Math.round(nrm(110 + twoWayArm * 0.3, 5)))),
         control: Math.max(5, Math.round(nrm(26, 8) + off + controlAdjust)),
         stamina: Math.max(50, Math.round(nrm(62, 10) + off))
@@ -274,7 +274,7 @@ function generateHighSchoolPlayer(id) {
       arm: armValue,
       defense: g(40, 10, 0.5, 5),
       bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
-      recovery: g(44, 10, 0, 15),
+      recovery: g(62, 9, 0, 42),
       velocity: Math.max(110, Math.min(velCap, velocity)),
       control: Math.max(5, control),
       stamina: Math.max(60, stamina)
@@ -288,7 +288,7 @@ function generateHighSchoolPlayer(id) {
       arm: armValue,
       defense: g(36, 10, 0.4, 1),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
-      recovery: g(43, 10, 0, 15),
+      recovery: g(62, 9, 0, 42),
       velocity: Math.max(110, Math.min(velCap, velocity)),
       control: Math.max(5, control),
       stamina: Math.max(60, stamina)
@@ -342,7 +342,7 @@ function generateHighSchoolPlayer(id) {
       speed: Math.max(1, baseSpeed), arm: Math.max(1, baseArm),
       defense: Math.max(1, defense),
       bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
-      recovery: g(43, 10, 0, 15),
+      recovery: g(62, 9, 0, 42),
       velocity: Math.max(90, Math.round(nrm(85 + baseArm * 0.6, 5))),
       control: g(20, 7, 0.3, 5),
       stamina: g(42, 8, 0.3, 20)
