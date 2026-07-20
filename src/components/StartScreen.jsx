@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave } from '../game/saveSystem.js';
+import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getAutosaveInfo, isAutosaveEnabled, setAutosaveEnabled } from '../game/saveSystem.js';
 import { isTutorialEnabled, setTutorialEnabled, resetTutorialProgress } from '../game/tutorial.js';
 
 const PHASE_NAMES = {
@@ -11,14 +11,25 @@ const PHASE_NAMES = {
   tryout: 'トライアウト',
 };
 
-const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporateNames, onManual, hasSaveData, saveSlots = [] }) => {
+const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporateNames, onManual, onContinueAutosave, hasSaveData, saveSlots = [] }) => {
   const [showSlotSelect, setShowSlotSelect] = useState(false);
   const [showEditSlotSelect, setShowEditSlotSelect] = useState(false);
   const [emergencyInfo, setEmergencyInfo] = useState(null);
+  const [autosaveInfo, setAutosaveInfo] = useState(null);
   const [tutorialOn, setTutorialOn] = useState(isTutorialEnabled());
+  const [autosaveOn, setAutosaveOn] = useState(isAutosaveEnabled());
 
-  // 前回クラッシュ時の緊急バックアップの有無をチェック
-  useEffect(() => { setEmergencyInfo(getEmergencyInfo()); }, []);
+  // 前回クラッシュ時の緊急バックアップ／オートセーブの有無をチェック
+  useEffect(() => {
+    setEmergencyInfo(getEmergencyInfo());
+    getAutosaveInfo().then(setAutosaveInfo);
+  }, []);
+
+  const fmtDate = (ts) => {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
 
   const handleRestoreEmergency = async (slotIndex) => {
     if (!window.confirm(`緊急バックアップをスロット${slotIndex + 1}へ復元してプレイします。よろしいですか？`)) return;
@@ -177,6 +188,19 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               CONTINUE
             </button>
 
+            {/* オートセーブから続ける */}
+            {autosaveInfo && onContinueAutosave && (
+              <button
+                onClick={onContinueAutosave}
+                className="w-80 px-8 py-2.5 rounded-xl font-semibold text-sm bg-cyan-800/50 hover:bg-cyan-700/60 border border-cyan-600/40 text-cyan-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                💾 オートセーブから続ける
+                <span className="text-cyan-400/70 text-xs font-normal">
+                  {autosaveInfo.year ? `${autosaveInfo.year}年目` : ''}{autosaveInfo.date ? ` ${autosaveInfo.date.month}月` : ''}{fmtDate(autosaveInfo.timestamp) ? `・${fmtDate(autosaveInfo.timestamp)}` : ''}
+                </span>
+              </button>
+            )}
+
             {/* 区切り */}
             <div className="w-80 border-t border-gray-700/60 my-1"></div>
 
@@ -211,6 +235,18 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               <span>💡 チュートリアル（操作ヒント）</span>
               <span className={`font-bold px-2 py-0.5 rounded ${tutorialOn ? 'bg-cyan-700/60 text-cyan-200' : 'bg-gray-700 text-gray-400'}`}>
                 {tutorialOn ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            {/* オートセーブのON/OFF */}
+            <button
+              onClick={() => { const next = !autosaveOn; setAutosaveEnabled(next); setAutosaveOn(next); }}
+              className="w-80 text-xs text-gray-500 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
+              title="月替わり・年替わりの節目で自動保存します"
+            >
+              <span>💾 オートセーブ</span>
+              <span className={`font-bold px-2 py-0.5 rounded ${autosaveOn ? 'bg-cyan-700/60 text-cyan-200' : 'bg-gray-700 text-gray-400'}`}>
+                {autosaveOn ? 'ON' : 'OFF'}
               </span>
             </button>
           </div>

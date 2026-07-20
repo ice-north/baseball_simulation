@@ -66,6 +66,7 @@ const ManagementScreen = ({
   saveSlots,
   saveGame,
   loadGame,
+  loadAutosave,
   deleteSave,
   refreshSaveSlots,
   setupManagedGame,
@@ -615,6 +616,7 @@ const ManagementScreen = ({
   if (managementView === 'save') return <SaveLoadScreen
     onSave={saveGame}
     onLoad={loadGame}
+    onLoadAutosave={loadAutosave}
     onDelete={deleteSave}
     saveSlots={saveSlots}
     seasonData={seasonData}

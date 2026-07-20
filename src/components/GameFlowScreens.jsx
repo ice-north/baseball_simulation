@@ -34,6 +34,7 @@ const GameFlowScreens = ({
   hasSaveData,
   saveSlots,
   loadGame,
+  loadAutosave,
   initializeNewGame,
   setScreenMode,
   setManagementView,
@@ -59,6 +60,10 @@ const GameFlowScreens = ({
       }}
       onEditCorporateNames={() => setGameFlowState('edit_corporate_names')}
       onManual={() => setGameFlowState('manual')}
+      onContinueAutosave={async () => {
+        const result = await loadAutosave();
+        if (!result?.success) alert(result?.error || 'オートセーブのロードに失敗しました');
+      }}
       hasSaveData={hasSaveData}
       saveSlots={saveSlots}
     />;

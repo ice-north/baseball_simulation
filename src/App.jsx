@@ -34,7 +34,7 @@ import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
-import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, exportTeam, importTeam } from './game/saveSystem.js';
+import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, exportTeam, importTeam, autoSave, isAutosaveEnabled, AUTOSAVE_KEY } from './game/saveSystem.js';
 
 // Game controls imports
 import { executeResetGame, executeMultiPitch, executeStartSimMode } from './game/gameControls.js';
@@ -191,6 +191,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         LEAGUE_SETTINGS.useDH = seasonData?.settings?.useDH || false;
       }, [seasonData?.settings?.useDH]);
 
+      const [autoSaveFlash, setAutoSaveFlash] = useState(false); // オートセーブ完了の一時表示
+
       const saveGame = async (slotIndex = 0, onProgress) => {
         const result = await saveGameToSlot(slotIndex, {
           seasonData, leagueConfig, screenMode, managementView,
@@ -208,10 +210,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }));
       }, [seasonData, leagueConfig, screenMode, managementView, gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory]);
 
-      const loadGame = async (slotIndex = 0) => {
-        const result = await loadGameFromSlot(slotIndex);
+      // ロード結果(saveData)を各stateへ適用する共通処理（通常ロード/オートセーブロード共用）
+      const applyLoadedGame = (result) => {
         if (!result.success) return result;
-
         const saveData = result.data;
         if (saveData.seasonData) setSeasonData(saveData.seasonData);
         if (saveData.leagueConfig) setLeagueConfig(saveData.leagueConfig);
@@ -233,6 +234,33 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         setGameFlowState('season');
         return result;
       };
+
+      const loadGame = async (slotIndex = 0) => {
+        const result = await loadGameFromSlot(slotIndex);
+        return applyLoadedGame(result);
+      };
+
+      // オートセーブ枠からロード
+      const loadAutosave = async () => {
+        const result = await loadGameFromSlot(0, AUTOSAVE_KEY);
+        return applyLoadedGame(result);
+      };
+
+      // オートセーブ: 月替わり・年替わりの節目で自動保存（手動3スロットとは別枠）
+      const _autoSaveKey = seasonData ? `${seasonData.year}-${seasonData.currentDate?.month}` : null;
+      const _prevAutoSaveKey = React.useRef(null);
+      React.useEffect(() => {
+        if (!_autoSaveKey || gameFlowState !== 'season') return;
+        // 初回（ロード直後等）はスキップし、以降の節目変化でのみ保存
+        if (_prevAutoSaveKey.current === null) { _prevAutoSaveKey.current = _autoSaveKey; return; }
+        if (_prevAutoSaveKey.current === _autoSaveKey) return;
+        _prevAutoSaveKey.current = _autoSaveKey;
+        if (!isAutosaveEnabled()) return;
+        autoSave({
+          seasonData, leagueConfig, screenMode, managementView,
+          gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory,
+        }).then(r => { if (r.success) { setAutoSaveFlash(true); setTimeout(() => setAutoSaveFlash(false), 2000); } });
+      }, [_autoSaveKey, gameFlowState]);
 
       const deleteSave = async (slotIndex = 0) => {
         const result = await deleteSaveSlot(slotIndex);
@@ -2571,6 +2599,7 @@ if (newOuts === 3) {
           hasSaveData={hasSaveData}
           saveSlots={saveSlots}
           loadGame={loadGame}
+          loadAutosave={loadAutosave}
           initializeNewGame={initializeNewGame}
           setScreenMode={setScreenMode}
           setManagementView={setManagementView}
@@ -2593,6 +2622,12 @@ if (newOuts === 3) {
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
+          {/* オートセーブ完了トースト */}
+          {autoSaveFlash && (
+            <div className="fixed top-3 right-3 z-[60] bg-gray-900/90 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none animate-pulse">
+              💾 オートセーブしました
+            </div>
+          )}
           {screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) && <Sidebar
             gameMode={gameMode}
             userTeamName={userTeamName}
@@ -5249,6 +5284,7 @@ if (newOuts === 3) {
                 saveSlots={saveSlots}
                 saveGame={saveGame}
                 loadGame={loadGame}
+                loadAutosave={loadAutosave}
                 deleteSave={deleteSave}
                 refreshSaveSlots={refreshSaveSlots}
                 setupManagedGame={setupManagedGame}

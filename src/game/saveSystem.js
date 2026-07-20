@@ -122,6 +122,53 @@ export const clearEmergencySave = () => {
   try { localStorage.removeItem(EMERGENCY_KEY); } catch { /* ignore */ }
 };
 
+// ============================================================
+// オートセーブ（節目で自動保存する専用スロット。手動3スロットとは別枠）
+// ============================================================
+export const AUTOSAVE_KEY = 'baseballSim_autosave';
+const AUTOSAVE_ENABLED_KEY = 'baseballSim_autosave_enabled';
+
+export const isAutosaveEnabled = () => {
+  try {
+    const v = localStorage.getItem(AUTOSAVE_ENABLED_KEY);
+    return v === null ? true : v === '1'; // 既定ON
+  } catch { return true; }
+};
+export const setAutosaveEnabled = (on) => {
+  try { localStorage.setItem(AUTOSAVE_ENABLED_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+};
+
+// 現在の状態をオートセーブ枠へ保存（非同期・圧縮）。
+export const autoSave = async (gameState) => {
+  try {
+    const saveData = buildSaveData(gameState, gameState?.slotIndex ?? 0);
+    saveData._autosave = true;
+    const compressed = await compressDataAsync(saveData);
+    await storageSetItem(AUTOSAVE_KEY, compressed);
+    return { success: true };
+  } catch (e) {
+    console.warn('オートセーブ失敗:', e);
+    return { success: false, error: e.message };
+  }
+};
+
+// オートセーブのメタ情報（存在チェック・表示用）。
+export const getAutosaveInfo = async () => {
+  try {
+    const raw = await storageGetItem(AUTOSAVE_KEY);
+    if (!raw) return null;
+    const data = await decompressDataAsync(raw);
+    if (!data) return null;
+    return {
+      timestamp: data.timestamp || null,
+      year: data.seasonData?.year ?? null,
+      date: data.seasonData?.currentDate || null,
+      phase: data.seasonData?.phase || null,
+      gameMode: data.gameMode || null,
+    };
+  } catch { return null; }
+};
+
 // 緊急保存をスロットへ書き込んで通常ロード可能にする
 export const promoteEmergencyToSlot = async (slotIndex) => {
   try {
@@ -276,10 +323,10 @@ const validateSaveData = (data) => {
   return null;
 };
 
-// ゲームデータを読み込み（async版）
-export const loadGameFromSlot = async (slotIndex) => {
+// ゲームデータを読み込み（async版）。keyOverride指定時はそのキーから読む（オートセーブ等）。
+export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
   try {
-    const savedData = await storageGetItem(SAVE_SLOT_KEYS[slotIndex]);
+    const savedData = await storageGetItem(keyOverride || SAVE_SLOT_KEYS[slotIndex]);
     if (!savedData) {
       return { success: false, error: 'セーブデータがありません' };
     }

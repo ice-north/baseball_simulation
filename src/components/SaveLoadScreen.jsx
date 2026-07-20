@@ -1,23 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getBackupInfo, restoreBackup } from '../game/saveSystem.js';
+import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getBackupInfo, restoreBackup, getAutosaveInfo } from '../game/saveSystem.js';
 
 // セーブ＆ロード画面（3スロット対応）
-const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onReturnToTitle }) => {
+const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, seasonData, onReturnToTitle }) => {
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveProgress, setSaveProgress] = useState(0);
   const [emergencyInfo, setEmergencyInfo] = useState(null);
   const [backupInfos, setBackupInfos] = useState([null, null, null]);
+  const [autosaveInfo, setAutosaveInfo] = useState(null);
 
-  // 緊急バックアップ・各スロットの世代バックアップの有無を取得
+  // 緊急バックアップ・各スロットの世代バックアップ・オートセーブの有無を取得
   useEffect(() => {
     let alive = true;
     (async () => {
       setEmergencyInfo(getEmergencyInfo());
+      setAutosaveInfo(await getAutosaveInfo());
       const infos = await Promise.all([0, 1, 2].map(i => getBackupInfo(i)));
       if (alive) setBackupInfos(infos);
     })();
     return () => { alive = false; };
   }, [saveSlots]);
+
+  const handleLoadAutosave = async () => {
+    if (!onLoadAutosave) return;
+    if (!window.confirm('オートセーブをロードします。現在の進行データは失われます。よろしいですか？')) return;
+    setSaveStatus({ type: 'loading' });
+    const result = await onLoadAutosave();
+    setSaveStatus(result?.success ? { type: 'loaded' } : { type: 'error', message: result?.error || 'ロードに失敗しました' });
+    setTimeout(() => setSaveStatus(null), 4000);
+  };
 
   const handleSave = async (slotIndex) => {
     setSaveProgress(0);
@@ -174,6 +185,25 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
           <p className="text-gray-500">ゲームが開始されていません</p>
         )}
       </div>
+
+      {/* オートセーブ枠 */}
+      {autosaveInfo && (
+        <div className="bg-gray-800 rounded-lg p-4 mb-4 border border-cyan-800/40">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-cyan-200 font-bold text-sm">💾 オートセーブ</div>
+              <div className="text-xs text-gray-400 mt-0.5">
+                {autosaveInfo.year ? `${autosaveInfo.year}年目` : ''}{autosaveInfo.date ? ` | ${autosaveInfo.date.month}月${autosaveInfo.date.day}日` : ''} | 保存日時: {formatTimestamp(autosaveInfo.timestamp)}
+              </div>
+            </div>
+            <button onClick={handleLoadAutosave} disabled={!onLoadAutosave}
+              className="px-4 py-2 rounded font-bold text-sm bg-cyan-700 hover:bg-cyan-600 text-white disabled:bg-gray-600 disabled:text-gray-400">
+              オートセーブをロード
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">※月替わり・年替わりの節目で自動保存されます（タイトル画面でON/OFF切り替え可）。</p>
+        </div>
+      )}
 
       {/* 3つのセーブスロット */}
       <div className="bg-gray-800 rounded-lg p-6 mb-6">
