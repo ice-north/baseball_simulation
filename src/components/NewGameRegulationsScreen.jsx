@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import TutorialHint from './TutorialHint.jsx';
 import { REGULATION_PRESETS, getPlayoffFormatDescription } from '../season/regulationSettings.js';
 import { getValidTwoLeagueGameCounts } from '../season/scheduleGenerator.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
@@ -144,6 +145,10 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
         {selectedLeague && (
           <p className="text-gray-400 text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
         )}
+
+        <TutorialHint id="regulations-intro" title="リーグのルールを決める">
+          DH制・年間試合数・プレーオフ形式などを設定します。<b className="text-cyan-200">2リーグ制</b>ではリーグ内対戦＋交流戦の試合数が選べます。迷ったらそのまま確定でOK——設定は毎年オフに変更できます。
+        </TutorialHint>
 
         {/* 詳細設定 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">

@@ -29,6 +29,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
+import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
@@ -3417,6 +3418,9 @@ if (newOuts === 3) {
                 </div>
                 
                 {/* 采配コントロール（攻撃時＝打撃方針/盗塁/エンドラン/スクイズ、守備時＝敬遠/守備シフト） */}
+                <TutorialHint id="ingame-tactics" title="試合の采配">
+                  攻撃中は<b className="text-cyan-200">打撃方針（待て/おまかせ/積極）・盗塁・エンドラン・スクイズ</b>、守備中は<b className="text-cyan-200">敬遠・守備シフト</b>を指示できます。投球を進めながら状況に応じて使い分けましょう。おまかせにすれば監督AIが自動で采配します。
+                </TutorialHint>
                 {(() => {
                   const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
                   const busy = isAutoSimulating || gameOver;

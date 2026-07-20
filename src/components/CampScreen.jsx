@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import TutorialHint from './TutorialHint.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityColor } from '../utils/constants.js';
@@ -652,6 +653,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             <span className="text-gray-500 text-xs ml-1">{currentRound}/{MAX_CAMP_ROUNDS}</span>
           </div>
         </div>
+
+        <TutorialHint id="camp-intro" title="キャンプで選手を育てる">
+          各クールごとに選手へ<b className="text-cyan-200">メイン練習＋サブ練習</b>を割り当てて能力を伸ばします。若い選手ほど伸びやすく、<b className="text-cyan-200">プロ意識</b>が高いほど成長します。体力を鍛えると疲労に強く選手寿命が延びます。Year2以降は有望株を<b className="text-cyan-200">派遣</b>に出して大きく伸ばすこともできます。
+        </TutorialHint>
 
         {/* ランク変動通知 */}
         {currentRound === 1 && seasonData?.rankChanges?.length > 0 && (() => {

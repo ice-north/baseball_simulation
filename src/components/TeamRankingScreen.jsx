@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import TutorialHint from './TutorialHint.jsx';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { TEAMS_DATA } from '../teams-data.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
@@ -315,6 +316,9 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
         )}
         <span className="text-gray-400 text-sm ml-auto">全 {totalTeams} チーム</span>
       </div>
+      <TutorialHint id="teamranking-intro" title="全チームの序列">
+        全国の社会人・大学・独立チームをS〜Dランクで序列化しています。<b className="text-cyan-200">行をクリック</b>すると成績・打撃・投手・編成の詳細が開きます。ヘッダーで並び替え可。1年目は成績が無いため所属選手の戦力から算出した暫定順位です。
+      </TutorialHint>
       {isProvisional && (
         <div className="mb-4 -mt-1 text-xs text-gray-300 bg-gray-800/60 border border-gray-700/60 rounded px-3 py-2">
           まだ公式戦の結果がないため、<span className="text-amber-200 font-bold">所属選手の能力</span>から算出した暫定ランキングを表示しています。シーズン終了後は実際の成績（Eloスコア）で更新されます。

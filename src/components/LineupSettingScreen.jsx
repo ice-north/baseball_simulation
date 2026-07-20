@@ -1832,6 +1832,9 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
           return (
             <div>
+              <TutorialHint id="rotation-dnd" title="投手の役割を決める">
+                投手カードを<b className="text-cyan-200">ドラッグ＆ドロップ</b>で「先発・守護神・セットアッパー・中継ぎ」等の役割枠へ配置します。先発は5〜6人、守護神・セットアッパーは各1人が目安（不足は警告表示）。「自動」で能力に応じて一括割り当ても可能です。
+              </TutorialHint>
               {/* 自動設定バー: 能力に応じてロールを一括割り当て / 全員おまかせ */}
               <div className="flex items-center gap-2 mb-2 bg-gray-800/40 rounded-lg border border-gray-700/30 px-3 py-2">
                 <span className="text-xs text-gray-400 shrink-0">投手起用</span>

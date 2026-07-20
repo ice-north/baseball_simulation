@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import TutorialHint from './TutorialHint.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, removeDraftedFromClubTeams, generateScoutComment } from '../season/tryoutSystem.js';
 import { removeDraftedFromGraduatePools } from '../season/universityPool.js';
@@ -280,6 +281,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       <div className="max-w-7xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-1">トライアウト</h1>
         <p className="text-gray-500 text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>
+
+        <TutorialHint id="tryout-intro" title="選手を指名してチームを作る">
+          自分の番になったら候補から1人ずつ指名します。<b className="text-cyan-200">投手・捕手・内野・外野をバランス良く</b>集めましょう（不足があれば警告が出ます）。若くて<b className="text-cyan-200">将来性（伸びしろ）</b>の高い選手を獲ると、育成で化ける可能性があります。候補の ⓘ で詳細能力を確認できます。
+        </TutorialHint>
 
         <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
           <div className="grid grid-cols-3 gap-4 text-white">
