@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave } from '../game/saveSystem.js';
+import { isTutorialEnabled, setTutorialEnabled, resetTutorialProgress } from '../game/tutorial.js';
 
 const PHASE_NAMES = {
   regular_season: 'レギュラーシーズン',
@@ -14,6 +15,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
   const [showSlotSelect, setShowSlotSelect] = useState(false);
   const [showEditSlotSelect, setShowEditSlotSelect] = useState(false);
   const [emergencyInfo, setEmergencyInfo] = useState(null);
+  const [tutorialOn, setTutorialOn] = useState(isTutorialEnabled());
 
   // 前回クラッシュ時の緊急バックアップの有無をチェック
   useEffect(() => { setEmergencyInfo(getEmergencyInfo()); }, []);
@@ -198,6 +200,18 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               className="w-80 text-gray-500 hover:text-gray-300 px-8 py-2 rounded-xl text-sm transition-all"
             >
               MANUAL
+            </button>
+
+            {/* チュートリアル(ヒント)表示のON/OFF */}
+            <button
+              onClick={() => { const next = !tutorialOn; setTutorialEnabled(next); setTutorialOn(next); if (next) resetTutorialProgress(); }}
+              className="w-80 text-xs text-gray-500 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
+              title="ゲーム中に操作ヒントを表示するかどうか"
+            >
+              <span>💡 チュートリアル（操作ヒント）</span>
+              <span className={`font-bold px-2 py-0.5 rounded ${tutorialOn ? 'bg-cyan-700/60 text-cyan-200' : 'bg-gray-700 text-gray-400'}`}>
+                {tutorialOn ? 'ON' : 'OFF'}
+              </span>
             </button>
           </div>
         )}

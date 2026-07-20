@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import TutorialHint from './TutorialHint.jsx';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
 import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
@@ -1999,6 +2000,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
   return (
     <div className="p-3 min-h-screen">
+      <TutorialHint id="dateprogress-intro" title="シーズンの進め方">
+        ここが基本画面です。<b className="text-cyan-200">日付を進める</b>と試合が自動で消化され、順位表・成績が更新されます。自分の試合は采配してプレイすることもできます。左サイドバーからロスター管理・注目選手などへ移動できます。
+      </TutorialHint>
       {/* 2カラムレイアウト: 左にカレンダー+本日の試合、右に順位表 */}
       <div className="flex gap-3">
         {/* 左カラム: カレンダー＋本日の試合 */}

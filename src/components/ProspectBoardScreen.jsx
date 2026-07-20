@@ -13,6 +13,7 @@ import { getScoutAccuracy, formatRange, MAX_SCOUT_LEVEL } from '../season/scouti
 import { POSITION_NAMES } from '../utils/constants.js';
 import PotentialBadge from './PotentialBadge.jsx';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
+import TutorialHint from './TutorialHint.jsx';
 
 const SOURCE_BADGE = {
   highschool: { label: '高校', cls: 'text-green-300 bg-green-900/40 border-green-700/40' },
@@ -109,6 +110,10 @@ export default function ProspectBoardScreen({ onBack }) {
       <p className="text-xs text-gray-400 mb-3">
         高校生プール＋大学3-4年生を<span className="text-cyan-300 font-bold">将来性（予測ピーク総合力）</span>で評価。今年の目玉を見つけましょう。※将来性はスカウト推定値で、実際の到達点は起用・育成で変動します。
       </p>
+
+      <TutorialHint id="prospects-intro" title="注目選手ボードの見方">
+        自チーム以外の選手は能力が「幅（レンジ）」で表示されます。<b className="text-cyan-200">「調査」</b>を重ねるほど精度が上がり、確定値に近づきます。無名でも将来性の高い原石を見つけるのが狙いです。
+      </TutorialHint>
 
       {/* グレード分布 */}
       <div className="flex gap-2 mb-3">

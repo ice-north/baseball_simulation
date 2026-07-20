@@ -6,6 +6,7 @@ import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/con
 import { generateOptimalLineup, generatePitchingRotation } from '../game/lineupGenerator.js';
 import { TabBar } from './GameUIComponents.jsx';
 import { AbilityValue } from './AbilityValue.jsx';
+import TutorialHint from './TutorialHint.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 
 const LineupSettingScreen = ({ teamName, onBack }) => {
@@ -1122,6 +1123,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
         />
 
         {tab === 'lineup' && (
+          <>
+          <TutorialHint id="lineup-dnd" title="スタメンの組み方">
+            右の控え選手を<b className="text-cyan-200">ドラッグ＆ドロップ</b>で打順枠へ入れられます。枠どうしをドラッグすれば打順の入れ替え、控えへ戻せば外せます（クリック操作も可）。「自動」ボタンで最適オーダーを組むこともできます。
+          </TutorialHint>
           <div className="grid grid-cols-12 gap-4">
             {/* 左側: スタメン (4/12) */}
             <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden">
@@ -1574,6 +1579,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               </div>
             </div>
           </div>
+          </>
         )}
 
         {tab === 'rotation' && (() => {
