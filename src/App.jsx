@@ -31,6 +31,7 @@ import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
+import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
@@ -201,6 +202,31 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (result.success) await refreshSaveSlots();
         return result;
       };
+
+      // 画面スケール（ズーム）: 'auto'はビューポート幅に合わせて自動縮小し、
+      // 情報量・レイアウトを保ったまま1画面に収める（横はみ出し・スクロールバー抑制）。
+      React.useEffect(() => {
+        const applyFit = () => {
+          const root = document.getElementById('root');
+          if (!root) return;
+          const scale = getUiScale();
+          if (scale !== 'auto') { root.style.zoom = scale; return; }
+          root.style.zoom = '1'; // 一旦等倍で自然幅を測る
+          const natural = root.scrollWidth;
+          const vw = document.documentElement.clientWidth;
+          root.style.zoom = natural > vw ? String(Math.max(0.5, vw / natural)) : '1';
+        };
+        const schedule = () => requestAnimationFrame(applyFit);
+        schedule();
+        window.addEventListener('resize', schedule);
+        window.addEventListener(UISCALE_EVENT, schedule);
+        return () => {
+          window.removeEventListener('resize', schedule);
+          window.removeEventListener(UISCALE_EVENT, schedule);
+        };
+        // gameStarted はここより後で宣言されるため依存に入れない（TDZ回避）。
+        // 画面遷移(screenMode等)とresize/uiscalechangeで再フィットは十分カバーされる。
+      }, [screenMode, managementView, gameFlowState]);
 
       // クラッシュ時の緊急保存用に、現在のゲーム状態を返すスナップショットを登録
       React.useEffect(() => {

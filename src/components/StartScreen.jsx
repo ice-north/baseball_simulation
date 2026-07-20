@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getAutosaveInfo, isAutosaveEnabled, setAutosaveEnabled } from '../game/saveSystem.js';
 import { isTutorialEnabled, setTutorialEnabled, resetTutorialProgress } from '../game/tutorial.js';
+import { getUiScale, cycleUiScale, UI_SCALE_LABEL } from '../game/uiSettings.js';
 
 const PHASE_NAMES = {
   regular_season: 'レギュラーシーズン',
@@ -18,6 +19,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
   const [autosaveInfo, setAutosaveInfo] = useState(null);
   const [tutorialOn, setTutorialOn] = useState(isTutorialEnabled());
   const [autosaveOn, setAutosaveOn] = useState(isAutosaveEnabled());
+  const [uiScale, setUiScaleState] = useState(getUiScale());
 
   // 前回クラッシュ時の緊急バックアップ／オートセーブの有無をチェック
   useEffect(() => {
@@ -247,6 +249,18 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               <span>💾 オートセーブ</span>
               <span className={`font-bold px-2 py-0.5 rounded ${autosaveOn ? 'bg-cyan-700/60 text-cyan-200' : 'bg-gray-700 text-gray-400'}`}>
                 {autosaveOn ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            {/* 画面スケール（小さい画面で1画面に収める） */}
+            <button
+              onClick={() => setUiScaleState(cycleUiScale())}
+              className="w-80 text-xs text-gray-500 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
+              title="画面が横にはみ出す場合は「自動」または縮小を選ぶと1画面に収まります"
+            >
+              <span>🖥 画面スケール</span>
+              <span className="font-bold px-2 py-0.5 rounded bg-cyan-700/60 text-cyan-200">
+                {UI_SCALE_LABEL[uiScale] || uiScale}
               </span>
             </button>
           </div>
