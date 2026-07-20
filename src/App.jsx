@@ -29,6 +29,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
+import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
@@ -197,6 +198,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (result.success) await refreshSaveSlots();
         return result;
       };
+
+      // クラッシュ時の緊急保存用に、現在のゲーム状態を返すスナップショットを登録
+      React.useEffect(() => {
+        setGameSnapshotProvider(() => ({
+          seasonData, leagueConfig, screenMode, managementView,
+          gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory,
+        }));
+      }, [seasonData, leagueConfig, screenMode, managementView, gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory]);
 
       const loadGame = async (slotIndex = 0) => {
         const result = await loadGameFromSlot(slotIndex);

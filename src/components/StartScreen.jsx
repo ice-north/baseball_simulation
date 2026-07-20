@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave } from '../game/saveSystem.js';
 
 const PHASE_NAMES = {
   regular_season: 'レギュラーシーズン',
@@ -12,6 +13,20 @@ const PHASE_NAMES = {
 const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporateNames, onManual, hasSaveData, saveSlots = [] }) => {
   const [showSlotSelect, setShowSlotSelect] = useState(false);
   const [showEditSlotSelect, setShowEditSlotSelect] = useState(false);
+  const [emergencyInfo, setEmergencyInfo] = useState(null);
+
+  // 前回クラッシュ時の緊急バックアップの有無をチェック
+  useEffect(() => { setEmergencyInfo(getEmergencyInfo()); }, []);
+
+  const handleRestoreEmergency = async (slotIndex) => {
+    if (!window.confirm(`緊急バックアップをスロット${slotIndex + 1}へ復元してプレイします。よろしいですか？`)) return;
+    const r = await promoteEmergencyToSlot(slotIndex);
+    if (r.success) {
+      clearEmergencySave();
+      setEmergencyInfo(null);
+      onContinue(slotIndex);
+    }
+  };
 
   const handleContinue = () => {
     const filledSlots = saveSlots.map((s, i) => s ? i : -1).filter(i => i >= 0);
@@ -33,6 +48,26 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
           <h1 className="text-6xl font-bold text-white tracking-tight">NEXT STAGE</h1>
           <p className="text-gray-500 text-sm mt-2 tracking-widest uppercase">Baseball Simulation</p>
         </div>
+
+        {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
+        {emergencyInfo && !showSlotSelect && !showEditSlotSelect && (
+          <div className="mb-8 mx-auto max-w-md p-4 rounded-lg border-2 border-amber-500/60 bg-amber-900/20 text-left">
+            <div className="text-amber-300 font-bold mb-1">🛟 緊急バックアップが見つかりました</div>
+            <p className="text-sm text-gray-300 mb-3">
+              前回アプリが予期せず終了した際の進行データ（{emergencyInfo.year ? `${emergencyInfo.year}年目・` : ''}{emergencyInfo.gameMode || ''}）です。復元先スロットを選んでください。
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {[0, 1, 2].map(i => (
+                <button key={i} onClick={() => handleRestoreEmergency(i)}
+                  className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold">
+                  スロット{i + 1}へ復元
+                </button>
+              ))}
+              <button onClick={() => { clearEmergencySave(); setEmergencyInfo(null); }}
+                className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm">破棄</button>
+            </div>
+          </div>
+        )}
 
         {showSlotSelect ? (
           <div className="flex flex-col items-center space-y-3">

@@ -55,6 +55,85 @@ async function storageRemoveItem(key) {
   try { localStorage.removeItem(key); } catch { /* ignore */ }
 }
 
+// ============================================================
+// バックアップ & 緊急保存
+// ============================================================
+const backupKey = (slotIndex) => `${SAVE_SLOT_KEYS[slotIndex]}_bak`;
+export const EMERGENCY_KEY = 'baseballSim_emergency';
+
+// スロット上書き前に既存データを1世代バックアップ（破損・誤上書きからの復旧用）
+async function backupExistingSlot(slotIndex) {
+  try {
+    const existing = await storageGetItem(SAVE_SLOT_KEYS[slotIndex]);
+    if (existing) await storageSetItem(backupKey(slotIndex), existing);
+  } catch (e) { /* バックアップ失敗はセーブ本体を止めない */ }
+}
+
+// バックアップの有無・メタ情報を取得
+export const getBackupInfo = async (slotIndex) => {
+  try {
+    const raw = await storageGetItem(backupKey(slotIndex));
+    if (!raw) return null;
+    const data = await decompressDataAsync(raw);
+    if (!data) return null;
+    return { timestamp: data.timestamp || null, year: data.seasonData?.year ?? null, gameMode: data.gameMode || null };
+  } catch { return null; }
+};
+
+// バックアップをスロットへ復元
+export const restoreBackup = async (slotIndex) => {
+  try {
+    const raw = await storageGetItem(backupKey(slotIndex));
+    if (!raw) return { success: false, error: 'バックアップがありません' };
+    await storageSetItem(SAVE_SLOT_KEYS[slotIndex], raw);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: '復元に失敗しました: ' + e.message };
+  }
+};
+
+// 緊急保存: クラッシュ時に同期的（localStorage）へ現在状態を書き出す。
+// IndexedDBは非同期のためクラッシュ中は不確実 → 確実に残る localStorage を使う。
+export const saveEmergency = (gameState) => {
+  try {
+    const saveData = buildSaveData(gameState, gameState?.slotIndex ?? 0);
+    saveData._emergency = true;
+    const compressed = compressData(saveData);
+    localStorage.setItem(EMERGENCY_KEY, compressed);
+    return true;
+  } catch (e) {
+    console.error('緊急保存失敗:', e);
+    return false;
+  }
+};
+
+// 緊急保存の有無・メタ情報
+export const getEmergencyInfo = () => {
+  try {
+    const raw = localStorage.getItem(EMERGENCY_KEY);
+    if (!raw) return null;
+    const data = decompressData(raw);
+    if (!data) return null;
+    return { timestamp: data.timestamp || null, year: data.seasonData?.year ?? null, gameMode: data.gameMode || null };
+  } catch { return null; }
+};
+
+export const clearEmergencySave = () => {
+  try { localStorage.removeItem(EMERGENCY_KEY); } catch { /* ignore */ }
+};
+
+// 緊急保存をスロットへ書き込んで通常ロード可能にする
+export const promoteEmergencyToSlot = async (slotIndex) => {
+  try {
+    const raw = localStorage.getItem(EMERGENCY_KEY);
+    if (!raw) return { success: false, error: '緊急保存がありません' };
+    await storageSetItem(SAVE_SLOT_KEYS[slotIndex], raw);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: '復元に失敗しました: ' + e.message };
+  }
+};
+
 // セーブスロット情報を読み取り（async版）
 export const readSaveSlots = async () => {
   await ensureMigration();
@@ -95,74 +174,80 @@ export const migrateOldSaveData = () => {
 };
 
 // ゲームデータを保存（async版）
+// セーブ用データオブジェクトを構築（saveGameToSlot / 緊急バックアップで共用）
+export const buildSaveData = (gameState, slotIndex = 0) => {
+  const worldDataSnapshot = WORLD_DATA.initialized ? {
+    initialized: WORLD_DATA.initialized,
+    mode: WORLD_DATA.mode,
+    userLeagueId: WORLD_DATA.userLeagueId,
+    year: WORLD_DATA.year,
+    independentLeagues: JSON.parse(JSON.stringify(WORLD_DATA.independentLeagues)),
+    universityLeagues: WORLD_DATA.universityLeagues ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeagues)) : {},
+    corporateLeague: { teams: Object.keys(WORLD_DATA.corporateLeague?.teams || {}), userTeam: WORLD_DATA.corporateLeague?.userTeam },
+    draft: JSON.parse(JSON.stringify(WORLD_DATA.draft)),
+    corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
+      generated: WORLD_DATA.corporateToshitaikou.generated,
+      qualifiersDone: WORLD_DATA.corporateToshitaikou.qualifiersDone,
+      mainDone: WORLD_DATA.corporateToshitaikou.mainDone,
+      champion: WORLD_DATA.corporateToshitaikou.champion,
+      runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
+    } : null,
+    corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken ? {
+      generated: WORLD_DATA.corporateNihonSenshuken.generated,
+      done: WORLD_DATA.corporateNihonSenshuken.done,
+      champion: WORLD_DATA.corporateNihonSenshuken.champion,
+      runnerUp: WORLD_DATA.corporateNihonSenshuken.runnerUp,
+    } : null,
+    corporateClubSenshuken: WORLD_DATA.corporateClubSenshuken ? {
+      generated: WORLD_DATA.corporateClubSenshuken.generated,
+      done: WORLD_DATA.corporateClubSenshuken.done,
+      champion: WORLD_DATA.corporateClubSenshuken.champion,
+      runnerUp: WORLD_DATA.corporateClubSenshuken.runnerUp,
+    } : null,
+    corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? {
+      generated: WORLD_DATA.corporateRegionalTournament.generated,
+      done: WORLD_DATA.corporateRegionalTournament.phase === 'done' || !!WORLD_DATA.corporateRegionalTournament.done,
+    } : null,
+    universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
+    _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
+    _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
+    _uniTeamRepData: UNIVERSITY_TEAMS.reduce((acc, t) => {
+      if (t.reputation !== undefined || t.reputationHistory || t.rankPosition !== undefined || t.rankingScore !== undefined) {
+        acc[t.name] = { rank: t.rank, reputation: t.reputation, reputationHistory: t.reputationHistory, rankPosition: t.rankPosition, rankingScore: t.rankingScore };
+      }
+      return acc;
+    }, {}),
+  } : null;
+
+  return {
+    version: '2.14.0',
+    timestamp: new Date().toISOString(),
+    slotIndex,
+    seasonData: gameState.seasonData,
+    leagueConfig: gameState.leagueConfig,
+    teamsData: JSON.parse(JSON.stringify(TEAMS_DATA)),
+    worldData: worldDataSnapshot,
+    screenMode: gameState.screenMode,
+    managementView: gameState.managementView,
+    gameFlowState: gameState.gameFlowState,
+    gameMode: gameState.gameMode,
+    selectedMonth: gameState.selectedMonth,
+    hallOfFamePlayers: gameState.hallOfFamePlayers,
+    teamHistory: gameState.teamHistory,
+    universityPool: serializeUniversityPool(),
+    releasedPlayersPool: JSON.parse(JSON.stringify(releasedPlayersPool)),
+  };
+};
+
 export const saveGameToSlot = async (slotIndex, gameState, onProgress) => {
   const progress = (pct) => { if (onProgress) onProgress(pct); };
   try {
     progress(10);
-    const worldDataSnapshot = WORLD_DATA.initialized ? {
-      initialized: WORLD_DATA.initialized,
-      mode: WORLD_DATA.mode,
-      userLeagueId: WORLD_DATA.userLeagueId,
-      year: WORLD_DATA.year,
-      independentLeagues: JSON.parse(JSON.stringify(WORLD_DATA.independentLeagues)),
-      universityLeagues: WORLD_DATA.universityLeagues ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeagues)) : {},
-      corporateLeague: { teams: Object.keys(WORLD_DATA.corporateLeague?.teams || {}), userTeam: WORLD_DATA.corporateLeague?.userTeam },
-      draft: JSON.parse(JSON.stringify(WORLD_DATA.draft)),
-      corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
-        generated: WORLD_DATA.corporateToshitaikou.generated,
-        qualifiersDone: WORLD_DATA.corporateToshitaikou.qualifiersDone,
-        mainDone: WORLD_DATA.corporateToshitaikou.mainDone,
-        champion: WORLD_DATA.corporateToshitaikou.champion,
-        runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
-      } : null,
-      corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken ? {
-        generated: WORLD_DATA.corporateNihonSenshuken.generated,
-        done: WORLD_DATA.corporateNihonSenshuken.done,
-        champion: WORLD_DATA.corporateNihonSenshuken.champion,
-        runnerUp: WORLD_DATA.corporateNihonSenshuken.runnerUp,
-      } : null,
-      corporateClubSenshuken: WORLD_DATA.corporateClubSenshuken ? {
-        generated: WORLD_DATA.corporateClubSenshuken.generated,
-        done: WORLD_DATA.corporateClubSenshuken.done,
-        champion: WORLD_DATA.corporateClubSenshuken.champion,
-        runnerUp: WORLD_DATA.corporateClubSenshuken.runnerUp,
-      } : null,
-      corporateRegionalTournament: WORLD_DATA.corporateRegionalTournament ? {
-        generated: WORLD_DATA.corporateRegionalTournament.generated,
-        done: WORLD_DATA.corporateRegionalTournament.phase === 'done' || !!WORLD_DATA.corporateRegionalTournament.done,
-      } : null,
-      universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
-      _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
-      _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
-      _uniTeamRepData: UNIVERSITY_TEAMS.reduce((acc, t) => {
-        if (t.reputation !== undefined || t.reputationHistory || t.rankPosition !== undefined || t.rankingScore !== undefined) {
-          acc[t.name] = { rank: t.rank, reputation: t.reputation, reputationHistory: t.reputationHistory, rankPosition: t.rankPosition, rankingScore: t.rankingScore };
-        }
-        return acc;
-      }, {}),
-    } : null;
-
+    const saveData = buildSaveData(gameState, slotIndex);
     progress(30);
-    const saveData = {
-      version: '2.14.0',
-      timestamp: new Date().toISOString(),
-      slotIndex,
-      seasonData: gameState.seasonData,
-      leagueConfig: gameState.leagueConfig,
-      teamsData: JSON.parse(JSON.stringify(TEAMS_DATA)),
-      worldData: worldDataSnapshot,
-      screenMode: gameState.screenMode,
-      managementView: gameState.managementView,
-      gameFlowState: gameState.gameFlowState,
-      gameMode: gameState.gameMode,
-      selectedMonth: gameState.selectedMonth,
-      hallOfFamePlayers: gameState.hallOfFamePlayers,
-      teamHistory: gameState.teamHistory,
-      universityPool: serializeUniversityPool(),
-      releasedPlayersPool: JSON.parse(JSON.stringify(releasedPlayersPool))
-    };
-
-    progress(55);
+    // 上書き前に既存セーブをバックアップ（新セーブ破損時に復旧できるよう1世代保持）
+    await backupExistingSlot(slotIndex);
+    progress(45);
     const compressed = await compressDataAsync(saveData);
     progress(85);
     await storageSetItem(SAVE_SLOT_KEYS[slotIndex], compressed);

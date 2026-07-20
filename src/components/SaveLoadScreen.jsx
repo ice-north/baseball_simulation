@@ -1,9 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getEmergencyInfo, promoteEmergencyToSlot, clearEmergencySave, getBackupInfo, restoreBackup } from '../game/saveSystem.js';
 
 // セーブ＆ロード画面（3スロット対応）
 const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onReturnToTitle }) => {
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveProgress, setSaveProgress] = useState(0);
+  const [emergencyInfo, setEmergencyInfo] = useState(null);
+  const [backupInfos, setBackupInfos] = useState([null, null, null]);
+
+  // 緊急バックアップ・各スロットの世代バックアップの有無を取得
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setEmergencyInfo(getEmergencyInfo());
+      const infos = await Promise.all([0, 1, 2].map(i => getBackupInfo(i)));
+      if (alive) setBackupInfos(infos);
+    })();
+    return () => { alive = false; };
+  }, [saveSlots]);
 
   const handleSave = async (slotIndex) => {
     setSaveProgress(0);
@@ -17,8 +31,8 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
     setTimeout(() => setSaveStatus(null), 4000);
   };
 
-  const handleLoad = async (slotIndex) => {
-    if (window.confirm('現在の進行データは失われます。ロードしますか？')) {
+  const handleLoad = async (slotIndex, skipConfirm = false) => {
+    if (skipConfirm || window.confirm('現在の進行データは失われます。ロードしますか？')) {
       setSaveStatus({ type: 'loading' });
       const result = await onLoad(slotIndex);
       if (result?.success) {
@@ -26,6 +40,32 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
       } else {
         setSaveStatus({ type: 'error', message: result?.error || 'ロードに失敗しました' });
       }
+      setTimeout(() => setSaveStatus(null), 4000);
+    }
+  };
+
+  // 緊急バックアップを指定スロットへ復元してロード
+  const handleRestoreEmergency = async (slotIndex) => {
+    if (!window.confirm(`緊急バックアップをスロット${slotIndex + 1}へ復元してプレイします。よろしいですか？`)) return;
+    const r = await promoteEmergencyToSlot(slotIndex);
+    if (r.success) {
+      clearEmergencySave();
+      setEmergencyInfo(null);
+      await handleLoad(slotIndex, true);
+    } else {
+      setSaveStatus({ type: 'error', message: r.error || '復元に失敗しました' });
+      setTimeout(() => setSaveStatus(null), 4000);
+    }
+  };
+
+  // 1世代前のバックアップへ戻してロード
+  const handleRestoreBackup = async (slotIndex) => {
+    if (!window.confirm(`スロット${slotIndex + 1}を1つ前のバックアップに戻してプレイします。現在のスロット内容は上書きされます。よろしいですか？`)) return;
+    const r = await restoreBackup(slotIndex);
+    if (r.success) {
+      await handleLoad(slotIndex, true);
+    } else {
+      setSaveStatus({ type: 'error', message: r.error || '復元に失敗しました' });
       setTimeout(() => setSaveStatus(null), 4000);
     }
   };
@@ -97,6 +137,30 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
         </div>
       )}
 
+      {/* 緊急バックアップ復旧バナー（前回クラッシュ時に自動保存されたデータ） */}
+      {emergencyInfo && (
+        <div className="mb-6 p-4 rounded-lg border-2 border-amber-500/60 bg-amber-900/20">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-amber-300 font-bold">🛟 緊急バックアップが見つかりました</span>
+          </div>
+          <p className="text-sm text-gray-300 mb-3">
+            前回アプリが予期せず終了した際の進行データです（{emergencyInfo.year ? `${emergencyInfo.year}年目・` : ''}{emergencyInfo.gameMode || ''}／{formatTimestamp(emergencyInfo.timestamp)}）。復元先のスロットを選んでください。
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {[0, 1, 2].map(i => (
+              <button key={i} onClick={() => handleRestoreEmergency(i)}
+                className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold">
+                スロット{i + 1}へ復元
+              </button>
+            ))}
+            <button onClick={() => { clearEmergencySave(); setEmergencyInfo(null); }}
+              className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm">
+              破棄
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 現在の進行状況 */}
       <div className="bg-gray-800 rounded-lg p-6 mb-6">
         <h2 className="text-xl font-bold text-white mb-4">📍 現在の進行状況</h2>
@@ -161,6 +225,13 @@ const SaveLoadScreen = ({ onSave, onLoad, onDelete, saveSlots, seasonData, onRet
                     🗑️
                   </button>
                 </div>
+                {/* 1世代前のバックアップ（上書き前の自動保存）から復元 */}
+                {backupInfos[idx] && (
+                  <button onClick={() => handleRestoreBackup(idx)}
+                    className="mt-2 text-xs text-amber-300 hover:text-amber-200 hover:underline">
+                    ↩ 1つ前のセーブに戻す（{formatTimestamp(backupInfos[idx].timestamp)} 時点）
+                  </button>
+                )}
               </div>
             );
           })}
