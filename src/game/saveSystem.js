@@ -6,6 +6,7 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
 import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage } from '../utils/indexedDBStorage.js';
+import { migrateSaveData, CURRENT_SAVE_VERSION } from './saveMigration.js';
 
 export const SAVE_SLOT_KEYS = ['baseballSim_save_1', 'baseballSim_save_2', 'baseballSim_save_3'];
 
@@ -267,7 +268,7 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
   } : null;
 
   return {
-    version: '2.14.0',
+    version: CURRENT_SAVE_VERSION,
     timestamp: new Date().toISOString(),
     slotIndex,
     seasonData: gameState.seasonData,
@@ -331,10 +332,15 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       return { success: false, error: 'セーブデータがありません' };
     }
 
-    const saveData = await decompressDataAsync(savedData);
-    if (!saveData) {
+    const rawData = await decompressDataAsync(savedData);
+    if (!rawData) {
       return { success: false, error: 'セーブデータの解凍に失敗しました。データが破損している可能性があります。' };
     }
+
+    // バージョン移行＋正規化（旧セーブの欠損フィールドをここでバックフィル）
+    const { data: saveData, fromVersion, applied, warnings } = migrateSaveData(rawData);
+    if (warnings.length) console.warn('セーブ移行の注意:', warnings.join(' / '));
+    if (applied.length) console.log(`セーブを ${fromVersion} → ${CURRENT_SAVE_VERSION} に移行しました`);
 
     const validationError = validateSaveData(saveData);
     if (validationError) {
@@ -413,27 +419,8 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       addManyToReleasedPool(saveData.releasedPlayersPool);
     }
 
-    // 旧セーブデータ互換: バント能力値 + 性格パラメータの移行
-    Object.values(TEAMS_DATA).forEach(team => {
-      if (team?.players) {
-        team.players.forEach(p => {
-          if (p.batting && p.batting.bunt === undefined) {
-            p.batting.bunt = Math.min(99, Math.max(1, Math.round(
-              (p.batting.meet || 50) * 0.4 + (p.physical?.speed || 50) * 0.3 + Math.random() * 20
-            )));
-          }
-          if (!p.personality) {
-            const norm = () => Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18)));
-            p.personality = { discipline: norm(), mental: norm() };
-          }
-          if (p.position === 'dh') {
-            const fitness = p.positionFitness || {};
-            const bestPos = Object.entries(fitness).sort((a, b) => b[1] - a[1])[0];
-            p.position = bestPos ? bestPos[0] : 'first';
-          }
-        });
-      }
-    });
+    // ※旧セーブの選手フィールド補完（バント/性格/DH等）は migrateSaveData で
+    //   復元前に済ませているため、ここでの追加処理は不要。
 
     return { success: true, data: saveData };
   } catch (error) {
