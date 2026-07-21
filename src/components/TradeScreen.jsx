@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { addToRoster } from '../state/roster.js';
-import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_ORDER, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 
@@ -112,73 +112,96 @@ const TradeScreen = ({ userTeamName, onBack }) => {
 
   const canTrade = () => selectedMyPlayer && selectedTargetPlayer && selectedTargetTeam;
 
-  // チームのカテゴリ別プロファイル（余剰・不足）を返す
-  const getTeamProfile = (players) => {
-    const pitchers = players.filter(p => p.position === 'pitcher');
-    const fielders = players.filter(p => p.position !== 'pitcher');
-    const pitcherAvg = pitchers.length
-      ? pitchers.reduce((s, p) => s + getPlayerValue(p), 0) / pitchers.length : 0;
-    const fielderAvg = fielders.length
-      ? fielders.reduce((s, p) => s + getPlayerValue(p), 0) / fielders.length : 0;
-    // 平均値が高いほうが「余剰」、低いほうが「不足」
-    return {
-      surplus: pitcherAvg >= fielderAvg ? 'pitcher' : 'fielder',
-      need:    pitcherAvg <  fielderAvg ? 'pitcher' : 'fielder',
-      pitcherAvg, fielderAvg, pitchers, fielders,
-    };
+  // ポジション単位でチームの厚み（余剰）・薄さ（不足）を分析する。
+  //  - surplus: そのポジションに控えがいて、控え1人を放出しても先発が残るポジション
+  //             → Map(pos -> 放出候補の控え選手)
+  //  - need   : 先発が不在、またはチーム内で相対的に弱い（中央値未満）ポジション
+  //             → Map(pos -> 現先発の評価。不在は -Infinity)
+  const analyzeRoster = (players) => {
+    // ポジション別に価値降順で整理
+    const byPos = {};
+    POSITION_ORDER.forEach(pos => { byPos[pos] = []; });
+    players.forEach(p => { if (byPos[p.position]) byPos[p.position].push(p); });
+    POSITION_ORDER.forEach(pos => byPos[pos].sort((a, b) => getPlayerValue(b) - getPlayerValue(a)));
+
+    // 各ポジションの先発（最良）評価
+    const starterVal = {};
+    POSITION_ORDER.forEach(pos => {
+      starterVal[pos] = byPos[pos].length ? getPlayerValue(byPos[pos][0]) : -Infinity;
+    });
+    // 先発が存在するポジションの中央値（相対的な弱点判定の基準）
+    const filled = POSITION_ORDER.map(p => starterVal[p]).filter(v => v > -Infinity).sort((a, b) => a - b);
+    const median = filled.length ? filled[Math.floor(filled.length / 2)] : 0;
+
+    const needs = new Map();   // pos -> 現先発評価
+    const surplus = new Map(); // pos -> 放出候補（控え）
+    POSITION_ORDER.forEach(pos => {
+      const arr = byPos[pos];
+      const isPitcher = pos === 'pitcher';
+      // 不足：先発不在、または中央値を明確に下回る（野手は-5マージン）
+      if (arr.length === 0 || starterVal[pos] < median - (isPitcher ? 0 : 5)) {
+        needs.set(pos, starterVal[pos]);
+      }
+      // 余剰：控えを放出しても先発が残る（投手は枚数が要るため深さ5以上、3番手を放出）
+      const minDepth = isPitcher ? 5 : 2;
+      if (arr.length >= minDepth && starterVal[pos] >= median) {
+        surplus.set(pos, isPitcher ? arr[2] : arr[1]);
+      }
+    });
+    return { byPos, needs, surplus, starterVal, median };
   };
 
-  // AI チームからのトレード提案を生成（win-win のみ）
+  // AI チームからのトレード提案を生成（ポジション単位の相互 win-win のみ）。
+  // 「AI が厚く・ユーザーが薄いポジション」の選手を放出し、
+  // 「ユーザーが厚く・AI が薄いポジション」の選手を要求する。
+  // どちらの受け取り手にとっても、現先発を上回る補強になる場合だけ提案する。
   const aiProposals = useMemo(() => {
     const proposals = [];
     const myPlayers = myTeam?.players || [];
     if (!myPlayers.length) return proposals;
 
-    const userProfile = getTeamProfile(myPlayers);
+    const user = analyzeRoster(myPlayers);
 
     Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
       if (teamName === userTeamName || !team.players?.length) return;
       if (!isTradeablePartner(team)) return; // 独立リーグのチームのみ
 
-      const aiProfile = getTeamProfile(team.players);
+      const ai = analyzeRoster(team.players);
 
-      // win-win 条件：互いの余剰と不足が補完し合う場合のみ提案
-      // AI余剰 = ユーザー不足 かつ AI不足 = ユーザー余剰
-      if (aiProfile.surplus !== userProfile.need) return;
+      let picked = null;
+      // 放出候補：AI 余剰 ∩ ユーザー不足（＝ユーザーの補強になるポジション）
+      for (const [posOffer, offeredPlayer] of ai.surplus) {
+        if (!user.needs.has(posOffer)) continue;
+        const offeredVal = getPlayerValue(offeredPlayer);
+        // ユーザーの現先発を上回らなければ補強にならない
+        const userStarter = user.starterVal[posOffer];
+        if (userStarter > -Infinity && offeredVal <= userStarter) continue;
 
-      // AI が提示できる選手（AIの余剰カテゴリの中で上位、ただし最良1人は除く）
-      const aiSurplusPool = (aiProfile.surplus === 'pitcher' ? aiProfile.pitchers : aiProfile.fielders)
-        .sort((a, b) => getPlayerValue(b) - getPlayerValue(a));
-      if (aiSurplusPool.length < 2) return;
-      // 最良は手放さない → 2番手以降から最も価値の高い選手を提示
-      const offeredPlayer = aiSurplusPool[1];
-      const offeredVal = getPlayerValue(offeredPlayer);
+        // 要求候補：ユーザー余剰 ∩ AI 不足（＝AI の補強になるポジション）
+        for (const [posWant, wantedPlayer] of user.surplus) {
+          if (!ai.needs.has(posWant)) continue;
+          const wantedVal = getPlayerValue(wantedPlayer);
+          const aiStarter = ai.starterVal[posWant];
+          if (aiStarter > -Infinity && wantedVal <= aiStarter) continue; // AIの補強にならない
 
-      // ユーザーが出せる選手（ユーザーの余剰カテゴリ）
-      // 平均値を超える選手の中でAIの提示選手に価値が近い選手を要求
-      const userSurplusPool = (userProfile.surplus === 'pitcher'
-        ? myPlayers.filter(p => p.position === 'pitcher')
-        : myPlayers.filter(p => p.position !== 'pitcher')
-      ).sort((a, b) => Math.abs(getPlayerValue(a) - offeredVal) - Math.abs(getPlayerValue(b) - offeredVal));
-      if (!userSurplusPool.length) return;
-      const wantedPlayer = userSurplusPool[0];
-      const wantedVal = getPlayerValue(wantedPlayer);
+          // 価値差が大きすぎる提案は出さない（±30%以内）
+          const ratio = offeredVal / (wantedVal || 1);
+          if (ratio < 0.70 || ratio > 1.43) continue;
 
-      // 価値差が大きすぎる提案は出さない（±30%以内）
-      const ratio = offeredVal / (wantedVal || 1);
-      if (ratio < 0.70 || ratio > 1.43) return;
-
-      // ユーザー側の純益を確認（受け取る選手がそのカテゴリの現平均より高いか）
-      const userCatAvg = userProfile.need === 'pitcher' ? userProfile.pitcherAvg : userProfile.fielderAvg;
-      if (offeredVal < userCatAvg * 0.85) return; // 補強にならない選手は除外
+          picked = { posOffer, offeredPlayer, offeredVal, posWant, wantedPlayer, wantedVal };
+          break;
+        }
+        if (picked) break;
+      }
+      if (!picked) return;
 
       proposals.push({
         fromTeam: teamName,
-        offeredPlayer,
-        wantedPlayer,
-        offeredVal: Math.round(offeredVal),
-        wantedVal:  Math.round(wantedVal),
-        reason: `${teamName}は${aiProfile.need === 'pitcher' ? '投手' : '野手'}補強、あなたは${userProfile.need === 'pitcher' ? '投手' : '野手'}補強`,
+        offeredPlayer: picked.offeredPlayer,
+        wantedPlayer: picked.wantedPlayer,
+        offeredVal: Math.round(picked.offeredVal),
+        wantedVal:  Math.round(picked.wantedVal),
+        reason: `${teamName}は${POSITION_NAMES[picked.posWant] || picked.posWant}を補強、あなたは${POSITION_NAMES[picked.posOffer] || picked.posOffer}を補強`,
       });
     });
 
@@ -476,6 +499,9 @@ const TradeScreen = ({ userTeamName, onBack }) => {
                       {proposal.fromTeam}
                     </span>
                     <span className="text-xs text-gray-500">からの提案</span>
+                    {proposal.reason && (
+                      <span className="text-xs text-gray-300 ml-1">・{proposal.reason}</span>
+                    )}
                   </div>
                   <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center mb-4">
                     {/* 放出 (ユーザー側) */}
