@@ -1,8 +1,45 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES, getPositionSortIndex } from '../utils/constants.js';
-import { OverallBadge } from './AbilityValue.jsx';
+import { OverallBadge, AbilityValue } from './AbilityValue.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
+
+// 選手の主要能力を「ラベル+値」の配列で返す（投手/野手で項目が変わる）。
+// 値の配色は共有 AbilityValue に委譲し、球速・投手スタミナは正規化される。
+function getKeyAbilities(p) {
+  if (p.position === 'pitcher') {
+    const arsenal = p.pitching?.arsenal || [];
+    const bestBreak = arsenal.filter(a => a.type !== 'straight').reduce((m, a) => Math.max(m, a.level || 0), 0);
+    return [
+      { label: '速', value: p.pitching?.velocity, isVel: true },
+      { label: '制', value: p.pitching?.control },
+      { label: 'スタ', value: p.pitching?.stamina, isSta: true },
+      { label: '変', value: bestBreak },
+    ];
+  }
+  return [
+    { label: 'ミ', value: p.batting?.meet },
+    { label: 'パ', value: p.batting?.power },
+    { label: '選', value: p.batting?.eye },
+    { label: '走', value: p.physical?.speed },
+    { label: '守', value: p.fielding?.defense },
+    { label: '肩', value: p.physical?.arm },
+  ];
+}
+
+// 主要能力を横並びで表示する小コンポーネント。
+function AbilityStrip({ player }) {
+  return (
+    <div className="flex items-center gap-2 tabular-nums">
+      {getKeyAbilities(player).map(a => (
+        <span key={a.label} className="inline-flex items-baseline gap-0.5">
+          <span className="text-xs text-gray-400">{a.label}</span>
+          <AbilityValue value={a.value} isVel={a.isVel} isSta={a.isSta} className="text-sm" />
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // シーズン開始直前に、自チームの背番号をドラッグ＆ドロップで設定する画面。
 // 「空き番号トレイ」から選手へ番号チップをドラッグして配置する。
@@ -21,6 +58,13 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
 
   // 編集用ローカルステート（id -> number|null）
   const [nums, setNums] = useState(() => {
+    const m = {};
+    (team?.players || []).forEach(p => { m[p.id] = (p.number ?? null); });
+    return m;
+  });
+
+  // この画面に入った時点の背番号（＝現在の番号）。編集しても変わらない基準値。
+  const [originalNums] = useState(() => {
     const m = {};
     (team?.players || []).forEach(p => { m[p.id] = (p.number ?? null); });
     return m;
@@ -147,16 +191,28 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
       <div className="flex-1 min-h-0 flex gap-4">
         {/* 選手リスト */}
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+          {/* 列見出し */}
+          <div className="flex items-center gap-2 px-1 pb-1 mb-1 border-b border-gray-700 text-xs text-gray-400 flex-shrink-0">
+            <span className="w-8">守備</span>
+            <span className="w-5 text-center">総</span>
+            <span className="flex-1">選手</span>
+            <span className="hidden md:inline">主要能力</span>
+            <span className="w-10 text-center ml-2">現在</span>
+            <span className="w-3"></span>
+            <span className="w-12 text-center">新番号</span>
+          </div>
+          <div className="grid grid-cols-1 gap-y-1">
             {groups.map(g => {
               const gp = players.filter(g.test);
               if (gp.length === 0) return null;
               return (
                 <div key={g.label} className="mb-2">
-                  <div className={`text-xs font-bold ${g.color} border-b border-gray-700 pb-1 mb-1`}>{g.label}（{gp.length}人）</div>
+                  <div className={`text-xs font-bold ${g.color} border-b border-gray-700/60 pb-1 mb-1`}>{g.label}（{gp.length}人）</div>
                   {gp.map(p => {
                     const val = nums[p.id];
                     const empty = val == null;
+                    const orig = originalNums[p.id];
+                    const changed = val != null && val !== orig;
                     return (
                       <div
                         key={p.id}
@@ -168,7 +224,18 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
                       >
                         <span className="text-xs text-gray-400 w-8">{POSITION_NAMES[p.position] || ''}</span>
                         <OverallBadge player={p} />
-                        <span className="text-sm text-white flex-1 truncate">{p.name}</span>
+                        <span className="text-sm text-white flex-1 truncate min-w-[5rem]">{p.name}</span>
+                        {/* 主要能力 */}
+                        <div className="hidden md:flex flex-shrink-0">
+                          <AbilityStrip player={p} />
+                        </div>
+                        {/* 現在の番号 */}
+                        <span className="w-10 text-center text-sm tabular-nums text-gray-300 ml-2">
+                          {orig != null ? orig : <span className="text-gray-600">―</span>}
+                        </span>
+                        {/* 変化インジケーター */}
+                        <span className={`text-xs w-3 text-center ${changed ? 'text-cyan-400' : 'text-transparent'}`}>→</span>
+                        {/* 新番号 */}
                         {empty ? (
                           <span className="w-12 h-7 flex items-center justify-center rounded border border-dashed border-gray-600 text-gray-500 text-xs">
                             ―
@@ -180,7 +247,10 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
                             onDragEnd={onChipDragEnd}
                             onClick={() => unassign(p.id)}
                             title="ドラッグで移動 / クリックで解放"
-                            className="w-12 h-7 flex items-center justify-center rounded bg-cyan-900/60 border border-cyan-600 text-cyan-100 text-sm font-bold tabular-nums cursor-grab active:cursor-grabbing hover:bg-cyan-800/70"
+                            className={`w-12 h-7 flex items-center justify-center rounded text-sm font-bold tabular-nums cursor-grab active:cursor-grabbing ${
+                              changed
+                                ? 'bg-cyan-800/80 border border-cyan-400 text-white hover:bg-cyan-700/80'
+                                : 'bg-cyan-900/60 border border-cyan-600 text-cyan-100 hover:bg-cyan-800/70'}`}
                           >
                             {val}
                           </span>
