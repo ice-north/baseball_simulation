@@ -41,10 +41,12 @@ export default function ProspectBoardScreen({ onBack }) {
   // アマチュア候補を収集し、将来性で評価（重い処理なので一度だけ）
   const prospects = useMemo(() => {
     const list = [];
-    // 高校生（全員）
+    // 高校生（全員）。highSchool は文字列またはオブジェクト{name,rank,pref}のことがある
     (highSchoolPool.players || []).forEach(p => {
+      const hs = p.highSchool;
+      const affiliation = p.highSchoolName || (typeof hs === 'string' ? hs : hs?.name) || '高校';
       const proj = projectPeak(p);
-      list.push({ player: p, source: 'highschool', affiliation: p.highSchoolName || p.highSchool || '高校', proj, current: calcPlayerOverall(p) });
+      list.push({ player: p, source: 'highschool', affiliation, proj, current: calcPlayerOverall(p) });
     });
     // 大学3-4年生（在学2年目以降 or 20歳以上）
     Object.values(universityPool || {}).forEach(cohort => {
