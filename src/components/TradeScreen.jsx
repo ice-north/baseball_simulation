@@ -19,6 +19,39 @@ const StatVal = ({ value, isPitcherVelocity }) => {
   return <span className={`font-semibold ${getRankColor(rank)}`}>{value}</span>;
 };
 
+// 選手の主要能力を「ラベル+値」の配列で返す（投手/野手で項目が変わる）。
+const keyAbilities = (player) => {
+  if (player.position === 'pitcher') {
+    const arsenal = player.pitching?.arsenal || [];
+    const best = arsenal.filter(a => a.type !== 'straight').reduce((m, a) => Math.max(m, a.level || 0), 0);
+    return [
+      { label: '球速', value: player.pitching?.velocity || 0, isVel: true },
+      { label: '制球', value: player.pitching?.control || 0 },
+      { label: 'スタ', value: player.pitching?.stamina || 0 },
+      { label: '変', value: best },
+    ];
+  }
+  return [
+    { label: 'ミ', value: player.batting?.meet || 0 },
+    { label: 'パ', value: player.batting?.power || 0 },
+    { label: '選', value: player.batting?.eye || 0 },
+    { label: '走', value: player.physical?.speed || 0 },
+    { label: '守', value: player.fielding?.defense || 0 },
+    { label: '肩', value: player.physical?.arm || 0 },
+  ];
+};
+
+// 主要能力を横並びで色付き表示する小コンポーネント。
+const AbilityLine = ({ player }) => (
+  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs mt-2 tabular-nums">
+    {keyAbilities(player).map(a => (
+      <span key={a.label} className="text-gray-400">
+        {a.label} <StatVal value={a.value} isPitcherVelocity={a.isVel} />
+      </span>
+    ))}
+  </div>
+);
+
 const TradeScreen = ({ userTeamName, onBack }) => {
   const [selectedMyPlayer, setSelectedMyPlayer] = useState(null);
   const [selectedTargetTeam, setSelectedTargetTeam] = useState('');
@@ -450,7 +483,8 @@ const TradeScreen = ({ userTeamName, onBack }) => {
                       <div className="text-xs text-red-400 font-medium mb-1">放出（あなたの選手）</div>
                       <div className="font-bold text-white">{proposal.wantedPlayer.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{POSITION_NAMES[proposal.wantedPlayer.position]} / {proposal.wantedPlayer.age}歳</div>
-                      <div className={`text-xs font-bold mt-1 ${getValueColor(proposal.wantedVal)}`}>評価 {proposal.wantedVal}pt</div>
+                      <AbilityLine player={proposal.wantedPlayer} />
+                      <div className={`text-xs font-bold mt-2 ${getValueColor(proposal.wantedVal)}`}>評価 {proposal.wantedVal}pt</div>
                     </div>
                     <div className="text-xl text-yellow-400/70 font-bold text-center">⇄</div>
                     {/* 獲得 (AI側) */}
@@ -458,7 +492,8 @@ const TradeScreen = ({ userTeamName, onBack }) => {
                       <div className="text-xs text-blue-400 font-medium mb-1">獲得（相手の選手）</div>
                       <div className="font-bold text-white">{proposal.offeredPlayer.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{POSITION_NAMES[proposal.offeredPlayer.position]} / {proposal.offeredPlayer.age}歳</div>
-                      <div className={`text-xs font-bold mt-1 ${getValueColor(proposal.offeredVal)}`}>評価 {proposal.offeredVal}pt</div>
+                      <AbilityLine player={proposal.offeredPlayer} />
+                      <div className={`text-xs font-bold mt-2 ${getValueColor(proposal.offeredVal)}`}>評価 {proposal.offeredVal}pt</div>
                     </div>
                   </div>
                   <div className="flex gap-2">
