@@ -3,6 +3,16 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
+import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+
+// トレード相手にできるチーム = 独立リーグのチーム（自リーグ＋他の独立リーグ）。
+// 大学・社会人（企業/クラブ）は競技区分が異なるため対象外。
+const isTradeablePartner = (team) => {
+  if (!team) return false;
+  if (team.universityData || team.universityTeamId) return false;
+  if (team.corporateData && team.corporateData.type !== 'independent') return false;
+  return true;
+};
 
 const StatVal = ({ value, isPitcherVelocity }) => {
   const rank = getAbilityRank(value, isPitcherVelocity);
@@ -18,7 +28,22 @@ const TradeScreen = ({ userTeamName, onBack }) => {
   const [tradeTab, setTradeTab] = useState('propose');
 
   const myTeam = TEAMS_DATA[userTeamName];
-  const otherTeams = Object.keys(TEAMS_DATA).filter(t => t !== userTeamName);
+
+  // トレード相手を独立リーグ単位でグループ化（自リーグを先頭、他の独立リーグを続けて表示）
+  const tradeGroups = useMemo(() => {
+    const groups = new Map(); // ラベル -> [チーム名]
+    Object.entries(TEAMS_DATA).forEach(([name, team]) => {
+      if (name === userTeamName || !isTradeablePartner(team)) return;
+      const label = team.independentLeagueId
+        ? (INDEPENDENT_LEAGUES[team.independentLeagueId]?.name || '独立リーグ')
+        : '所属リーグ';
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(name);
+    });
+    // 自リーグ（所属リーグ）を先頭に
+    return [...groups.entries()].sort((a, b) => (a[0] === '所属リーグ' ? -1 : 0) - (b[0] === '所属リーグ' ? -1 : 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userTeamName, updateTrigger]);
 
   if (!myTeam) return <div className="p-8 text-white">チームが見つかりません</div>;
 
@@ -80,6 +105,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
 
     Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
       if (teamName === userTeamName || !team.players?.length) return;
+      if (!isTradeablePartner(team)) return; // 独立リーグのチームのみ
 
       const aiProfile = getTeamProfile(team.players);
 
@@ -475,8 +501,10 @@ const TradeScreen = ({ userTeamName, onBack }) => {
               className="bg-gray-700/80 border border-gray-600/50 text-white text-sm px-2.5 py-1 rounded-lg"
             >
               <option value="">-- 選択 --</option>
-              {otherTeams.map(t => (
-                <option key={t} value={t}>{t}</option>
+              {tradeGroups.map(([label, teams]) => (
+                <optgroup key={label} label={label}>
+                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                </optgroup>
               ))}
             </select>
           </div>
