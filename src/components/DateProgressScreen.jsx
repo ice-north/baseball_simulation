@@ -1655,7 +1655,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       const ha = (a.text.length * 17 + seed) % 97;
       const hb = (b.text.length * 17 + seed) % 97;
       return ha - hb;
-    }).slice(0, 5);
+    }).slice(0, 12);
 
     return shuffled;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1811,9 +1811,40 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       reports.push({ icon: '💤', text: `${names}の疲労が蓄積しつつある。もうすぐ成長率低下ラインに達する。`, color: 'text-yellow-400' });
     }
 
-    return reports.slice(0, 5);
+    return reports;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seasonData.results?.length, seasonData.standings, seasonData.currentDate?.month, seasonData.currentDate?.day]);
+
+  // チーム状況レポート＋スカウト通知＋リーグトピックを統合し、重要度順に上位6件を返す。
+  // 自チームに関わる/行動を促す情報を高く、話題性のみの情報を低く重み付けする。
+  const NEWS_LIMIT = 6;
+  const newsFeed = useMemo(() => {
+    const items = [];
+    // 自チームレポート（監督視点・行動可能）— アイコンで重要度を判定
+    const REPORT_PRI = {
+      '🚨': 96, '⚠️': 82, '🚒': 74, '📉': 73, '😓': 72, '🦗': 71, '❄️': 70,
+      '👑': 68, '⚡': 66, '🏳️': 64, '🎯': 62, '🔥': 61, '📊': 60, '💣': 58,
+      '📈': 56, '💨': 52, '💤': 50, '💧': 48,
+    };
+    teamReport.forEach(r => items.push({ ...r, src: 'report', pri: REPORT_PRI[r.icon] ?? 60 }));
+    // スカウト帰還・調査完了（自チーム関連）
+    scoutReportNotifications.slice(0, 3).forEach(m => items.push({
+      src: 'scout', pri: 63, icon: '🔍', color: 'text-cyan-300',
+      text: m.type === 'investigation'
+        ? `${m.targetPlayerName}の${(m._revealedAbilities || []).join('・') || '能力'}を調査完了（${m.staffName}）`
+        : `${m.staffName}が${SCOUT_TARGETS[m.target]?.label || m.target}から帰還 — ${m.results?.length || 0}名の候補選手を発見`,
+    }));
+    // リーグの話題（自チーム順位が最優先、次いでマイルストーン、試合トピック）
+    const TOPIC_PRI = {
+      standings: 59, bat_hr: 42, pitch_wins: 42, pitch_k: 40, young: 40, bat_avg: 38,
+      game_walkoff: 34, team_wr: 32, game_shutout: 32, game_blowout: 30,
+    };
+    cachedTopics.forEach(t => items.push({ ...t, src: 'topic', pri: TOPIC_PRI[t.cat] ?? 30 }));
+    // 重要度降順（同点は report > scout > topic の順で自チーム寄りを優先）
+    const srcRank = { report: 0, scout: 1, topic: 2 };
+    items.sort((a, b) => (b.pri - a.pri) || (srcRank[a.src] - srcRank[b.src]));
+    return items.slice(0, NEWS_LIMIT);
+  }, [teamReport, scoutReportNotifications, cachedTopics]);
 
   // スポーツ新聞モーダル用のデータ生成
   const newspaperData = useMemo(() => {
@@ -3127,25 +3158,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             );
           })()}
 
-          {/* チーム状況レポート（自チーム専用、独立リーグのみ） */}
-          {teamReport.length > 0 && (
-            <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-blue-700/30 mt-3">
-              <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-                <span className="text-blue-400">📋</span> チーム状況レポート
-              </h2>
-              <div className="space-y-1">
-                {teamReport.map((r, i) => (
-                  <div key={i} className="flex items-start gap-1.5 bg-blue-950/30 rounded-lg px-2.5 py-1.5 border border-blue-800/20">
-                    <span className="text-sm shrink-0">{r.icon}</span>
-                    <span className={`text-xs ${r.color}`}>{r.text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* スポーツ新聞ボタン（トピックが無い時のフォールバック） */}
-          {cachedTopics.length === 0 && scoutReportNotifications.length === 0 && (seasonData.results?.length || 0) > 0 && (
+          {/* スポーツ新聞ボタン（ニュースが無い時のフォールバック） */}
+          {newsFeed.length === 0 && (seasonData.results?.length || 0) > 0 && (
             <div className="mt-3 text-center">
               <button onClick={() => setShowNewspaper(true)} className="text-xs font-bold text-yellow-400 bg-yellow-900/30 hover:bg-yellow-900/50 px-4 py-1.5 rounded-lg border border-yellow-700/30 transition-colors">
                 📰 スポーツ新聞を読む
@@ -3153,31 +3167,24 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             </div>
           )}
 
-          {/* 主なトピック（試合のある日のみ更新、休日は前日のトピックを表示） */}
-          {(cachedTopics.length > 0 || scoutReportNotifications.length > 0) && (
+          {/* ニュース＆状況（チーム状況レポート＋スカウト＋リーグトピックを重要度順に統合） */}
+          {newsFeed.length > 0 && (
             <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
               <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
-                <span className="text-yellow-400">📰</span> {todaysGames.length === 0 ? '直近のトピック' : '主なトピック'}
+                <span className="text-yellow-400">📰</span> ニュース＆状況
                 <button onClick={() => setShowNewspaper(true)} className="ml-auto text-xs font-bold text-yellow-400 bg-yellow-900/40 hover:bg-yellow-900/60 px-2 py-0.5 rounded-lg border border-yellow-700/40 transition-colors">
                   スポーツ新聞
                 </button>
               </h2>
               <div className="space-y-1">
-                {scoutReportNotifications.slice(0, 2).map((mission, i) => (
-                  <div key={`scout-${i}`} className="flex items-start gap-1.5 bg-cyan-900/30 rounded-lg px-2.5 py-1.5 border border-cyan-700/30">
-                    <span className="text-sm shrink-0">🔍</span>
-                    <span className="text-xs text-cyan-300">
-                      {mission.type === 'investigation'
-                        ? `${mission.targetPlayerName}の${(mission._revealedAbilities || []).join('・') || '能力'}を調査完了（${mission.staffName}）`
-                        : `${mission.staffName}が${SCOUT_TARGETS[mission.target]?.label || mission.target}から帰還 — ${mission.results?.length || 0}名の候補選手を発見`
-                      }
-                    </span>
-                  </div>
-                ))}
-                {cachedTopics.slice(0, Math.max(0, 5 - Math.min(2, scoutReportNotifications.length))).map((t, i) => (
-                  <div key={i} className="flex items-start gap-1.5 bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                    <span className="text-sm shrink-0">{t.icon}</span>
-                    <span className={`text-xs ${t.color}`}>{t.text}</span>
+                {newsFeed.map((n, i) => (
+                  <div key={i} className={`flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 border ${
+                    n.src === 'report' ? 'bg-blue-950/30 border-blue-800/20'
+                      : n.src === 'scout' ? 'bg-cyan-900/30 border-cyan-700/30'
+                      : 'bg-gray-800/60 border-transparent'
+                  }`}>
+                    <span className="text-sm shrink-0">{n.icon}</span>
+                    <span className={`text-xs ${n.color}`}>{n.text}</span>
                   </div>
                 ))}
               </div>
