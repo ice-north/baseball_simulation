@@ -1115,7 +1115,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             { key: 'lineup',   label: 'スタメン設定', icon: '👥' },
             { key: 'rotation', label: '投手起用',     icon: '⚾' },
             { key: 'defense',  label: '守備分析',     icon: '🛡' },
-            { key: 'strategy', label: '作戦指示',     icon: '📋' },
           ]}
           activeKey={tab}
           onChange={(key) => { setTab(key); setTapSelectedPitcherId(null); setSwapSource(null); setSelectedBenchPlayer(null); }}
@@ -2510,97 +2509,6 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   })}
                 </div>
                 <p className="text-xs text-gray-500 mt-2">適正30%以上の控え候補を適正順に表示。<span className="text-yellow-400">*</span>はスタメン出場中の選手。</p>
-              </div>
-            </div>
-          );
-        })()}
-        {tab === 'strategy' && (() => {
-          // チームの作戦設定
-          if (!team.strategy) {
-            team.strategy = {
-              batting: 'balanced',     // 打撃方針: aggressive/balanced/patient
-              pitching: 'balanced',    // 投球方針: strikeout/balanced/contact
-              baseRunning: 'normal',   // 走塁方針: aggressive/normal/conservative
-              defense: 'normal'        // 守備方針: shift/normal/infield_in
-            };
-          }
-          const strat = team.strategy;
-
-          const STRATEGY_OPTIONS = {
-            batting: [
-              { value: 'aggressive', label: '強振重視', desc: 'パワー+15%, ミート-10%, 三振率↑', color: 'text-red-400' },
-              { value: 'balanced', label: 'バランス', desc: '全体的にバランス良く打つ', color: 'text-green-400' },
-              { value: 'patient', label: '待ち球', desc: '四球率+20%, パワー-10%, 出塁率↑', color: 'text-blue-400' }
-            ],
-            pitching: [
-              { value: 'strikeout', label: '奪三振重視', desc: '奪三振+20%, スタミナ消費↑, 球数↑', color: 'text-red-400' },
-              { value: 'balanced', label: 'バランス', desc: '状況に応じた投球', color: 'text-green-400' },
-              { value: 'contact', label: '打たせて取る', desc: '球数-20%, 被安打率やや↑, スタミナ温存', color: 'text-blue-400' }
-            ],
-            baseRunning: [
-              { value: 'aggressive', label: '積極走塁', desc: '盗塁+30%, 走塁アウト↑', color: 'text-red-400' },
-              { value: 'normal', label: '通常', desc: '状況に応じた走塁', color: 'text-green-400' },
-              { value: 'conservative', label: '慎重走塁', desc: '盗塁-50%, 走塁アウト↓', color: 'text-blue-400' }
-            ],
-            defense: [
-              { value: 'shift', label: 'シフト守備', desc: 'プルヒッター対策○, 流し打ち×', color: 'text-red-400' },
-              { value: 'normal', label: '定位置', desc: '標準的な守備陣形', color: 'text-green-400' },
-              { value: 'infield_in', label: '前進守備', desc: 'バント/ゴロ処理○, 長打×', color: 'text-blue-400' }
-            ]
-          };
-
-          const STRATEGY_LABELS = {
-            batting: '打撃方針',
-            pitching: '投球方針',
-            baseRunning: '走塁方針',
-            defense: '守備方針'
-          };
-
-          const handleStrategyChange = (category, value) => {
-            team.strategy[category] = value;
-            setUpdateTrigger(prev => prev + 1);
-          };
-
-          return (
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold text-white mb-4">作戦指示</h2>
-              {Object.entries(STRATEGY_OPTIONS).map(([category, options]) => (
-                <div key={category} className="bg-gray-800 rounded-lg p-4">
-                  <h3 className="text-lg font-bold text-white mb-3">{STRATEGY_LABELS[category]}</h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {options.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => handleStrategyChange(category, opt.value)}
-                        className={`p-4 rounded-lg text-left transition border-2 ${
-                          strat[category] === opt.value
-                            ? 'border-blue-500 bg-blue-900/50'
-                            : 'border-gray-600 bg-gray-700 hover:bg-gray-600'
-                        }`}
-                      >
-                        <div className={`font-bold text-lg ${opt.color}`}>{opt.label}</div>
-                        <div className="text-sm text-gray-400 mt-1">{opt.desc}</div>
-                        {strat[category] === opt.value && (
-                          <div className="text-xs text-blue-400 mt-2 font-bold">現在の設定</div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h3 className="text-lg font-bold text-white mb-2">現在の作戦</h3>
-                <div className="grid grid-cols-4 gap-4">
-                  {Object.entries(STRATEGY_OPTIONS).map(([category, options]) => {
-                    const current = options.find(o => o.value === strat[category]);
-                    return (
-                      <div key={category} className="text-center">
-                        <div className="text-sm text-gray-400">{STRATEGY_LABELS[category]}</div>
-                        <div className={`font-bold ${current?.color || 'text-white'}`}>{current?.label || '-'}</div>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             </div>
           );
