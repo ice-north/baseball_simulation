@@ -197,6 +197,9 @@ export const readSaveSlots = async () => {
         year: data.seasonData?.year || 1,
         date: data.seasonData?.currentDate || { month: 4, day: 1 },
         phase: data.seasonData?.phase || 'regular_season',
+        teamName: data.seasonData?.settings?.teamNames?.[0]
+          || (data.leagueConfig?.leagues || []).flatMap(l => l.teams || [])[0]
+          || null,
         version: data.version || 'unknown'
       });
     } catch { results.push(null); }

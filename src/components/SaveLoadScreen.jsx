@@ -218,7 +218,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                     <div className="text-white font-bold text-lg">{name}</div>
                     {info ? (
                       <div className="text-sm text-gray-400 mt-1">
-                        <p>{info.year}年目 | {info.date?.month}月{info.date?.day}日 | {getPhaseLabel(info.phase)}</p>
+                        <p>{info.year}年目 | {info.date?.month}月{info.date?.day}日{info.teamName ? ` | ${info.teamName}` : ''}</p>
                         <p>保存日時: {formatTimestamp(info.timestamp)}</p>
                       </div>
                     ) : (

@@ -102,7 +102,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                   <div>
                     <div>スロット {index + 1}</div>
                     <div className="text-sm font-normal text-blue-200">
-                      Year {slot.year} - {slot.date.month}月{slot.date.day}日 ({PHASE_NAMES[slot.phase] || slot.phase})
+                      Year {slot.year} - {slot.date.month}月{slot.date.day}日{slot.teamName ? ` / ${slot.teamName}` : ''}
                     </div>
                     <div className="text-xs font-normal text-gray-300">
                       {slot.timestamp ? new Date(slot.timestamp).toLocaleString('ja-JP') : ''}
@@ -138,7 +138,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                   <div>
                     <div>スロット {index + 1}</div>
                     <div className="text-sm font-normal text-purple-200">
-                      Year {slot.year} - {slot.date.month}月{slot.date.day}日 ({PHASE_NAMES[slot.phase] || slot.phase})
+                      Year {slot.year} - {slot.date.month}月{slot.date.day}日{slot.teamName ? ` / ${slot.teamName}` : ''}
                     </div>
                     <div className="text-xs font-normal text-gray-300">
                       {slot.timestamp ? new Date(slot.timestamp).toLocaleString('ja-JP') : ''}
