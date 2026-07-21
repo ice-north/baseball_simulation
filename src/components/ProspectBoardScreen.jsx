@@ -25,7 +25,7 @@ const POS_GROUP = {
   left: 'outfield', center: 'outfield', right: 'outfield',
 };
 
-export default function ProspectBoardScreen({ onBack }) {
+export default function ProspectBoardScreen({ onBack, embedded = false }) {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [posFilter, setPosFilter] = useState('all');
   const [sortKey, setSortKey] = useState('potential'); // potential | current | age
@@ -102,13 +102,15 @@ export default function ProspectBoardScreen({ onBack }) {
   }
 
   return (
-    <div className="p-4 text-white">
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
-        <h2 className="text-xl font-bold">注目選手ボード</h2>
-        <span className="text-xs font-bold text-amber-200 bg-amber-900/50 border border-amber-600/50 rounded px-2 py-0.5">アマチュア将来性ランキング</span>
-        <span className="ml-auto text-gray-400 text-sm">上位 {prospects.length} 名</span>
-      </div>
+    <div className={embedded ? 'text-white' : 'p-4 text-white'}>
+      {!embedded && (
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
+          <h2 className="text-xl font-bold">注目選手ボード</h2>
+          <span className="text-xs font-bold text-amber-200 bg-amber-900/50 border border-amber-600/50 rounded px-2 py-0.5">アマチュア将来性ランキング</span>
+          <span className="ml-auto text-gray-400 text-sm">上位 {prospects.length} 名</span>
+        </div>
+      )}
       <p className="text-xs text-gray-400 mb-3">
         高校生プール＋大学3-4年生を<span className="text-cyan-300 font-bold">将来性（予測ピーク総合力）</span>で評価。今年の目玉を見つけましょう。※将来性はスカウト推定値で、実際の到達点は起用・育成で変動します。
       </p>

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import ProspectBoardScreen from './ProspectBoardScreen.jsx';
 import { TEAMS_DATA, getTeamAbbreviation } from '../teams-data.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
 import { POSITION_NAMES } from '../utils/constants.js';
@@ -476,6 +477,7 @@ const AbilityRankingScreen = () => {
           { key: 'player', label: '選手ランキング' },
           { key: 'team', label: 'チームランキング' },
           { key: 'highschool', label: `高校3年生${hsPlayers.length > 0 ? ` (${hsPlayers.length})` : ''}` },
+          { key: 'prospects', label: '注目選手（将来性）' },
         ].map(t => (
           <button key={t.key}
             onClick={() => { setMode(t.key); setCategory('all'); setSortKey(t.key === 'highschool' ? 'draft' : 'overall'); }}
@@ -485,6 +487,8 @@ const AbilityRankingScreen = () => {
           >{t.label}</button>
         ))}
       </div>
+
+      {mode === 'prospects' && <ProspectBoardScreen embedded />}
 
       {(mode === 'player' || mode === 'highschool') && (
         <>
