@@ -282,10 +282,22 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (_prevAutoSaveKey.current === _autoSaveKey) return;
         _prevAutoSaveKey.current = _autoSaveKey;
         if (!isAutosaveEnabled()) return;
-        autoSave({
-          seasonData, leagueConfig, screenMode, managementView,
-          gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory,
-        }).then(r => { if (r.success) { setAutoSaveFlash(true); setTimeout(() => setAutoSaveFlash(false), 2000); } });
+        // オートセーブは全世界(数百チーム)のシリアライズで数百ms〜メインスレッドを占有する。
+        // 月替わりの日程進行をブロックしないよう、アイドル時間へ逃がして実行する
+        // （画面の切り替わりを先に描画し、保存は空き時間に行う）。
+        const runAutoSave = () => {
+          autoSave({
+            seasonData, leagueConfig, screenMode, managementView,
+            gameFlowState, gameMode, selectedMonth, hallOfFamePlayers, teamHistory,
+          }).then(r => { if (r.success) { setAutoSaveFlash(true); setTimeout(() => setAutoSaveFlash(false), 2000); } });
+        };
+        const ric = typeof window !== 'undefined' && window.requestIdleCallback;
+        if (ric) {
+          const id = window.requestIdleCallback(runAutoSave, { timeout: 4000 });
+          return () => window.cancelIdleCallback?.(id);
+        }
+        const t = setTimeout(runAutoSave, 300);
+        return () => clearTimeout(t);
       }, [_autoSaveKey, gameFlowState]);
 
       const deleteSave = async (slotIndex = 0) => {
