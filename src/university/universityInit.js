@@ -5,7 +5,7 @@
 
 import { TEAMS_DATA, clearReleasedPlayersPool, initializeAllPitchingRotations } from '../teams-data.js';
 import { WORLD_DATA, initializeWorld } from '../corporate/worldData.js';
-import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS } from './universityTeamsData.js';
+import { UNIVERSITY_TEAMS, UNIVERSITY_REGIONS, generateLeagueAbbreviations } from './universityTeamsData.js';
 import { initializeUniversityLeagues } from './universityLeagueManager.js';
 import { generateCorporateRoster, initializeCorporateParallelWorld } from '../corporate/corporateInit.js';
 import { seedInitialUniversityClasses, warmUpPlayerPipeline, clearUniversityPool, clearHighSchoolPool } from '../season/universityPool.js';
@@ -56,6 +56,15 @@ const initializeActiveRoster = (players) => {
 const makeAbbreviation = (name) => {
   if (name.length <= 3) return name;
   return name.slice(0, 3);
+};
+
+// TEAMS_DATA 内の大学チーム（同一リーグ）の略称を一意化して再設定する。
+// 新規初期化・セーブロード後の両方から呼べるようにエクスポートする。
+export const refreshUniversityAbbreviations = () => {
+  const uniNames = Object.keys(TEAMS_DATA).filter(n => TEAMS_DATA[n]?.universityTeamId);
+  if (uniNames.length === 0) return;
+  const abbrs = generateLeagueAbbreviations(uniNames);
+  uniNames.forEach(n => { TEAMS_DATA[n].abbreviation = abbrs[n]; });
 };
 
 // 大学生の年齢分布（19-22歳、1-4年生）
@@ -204,6 +213,9 @@ export const initializeUniversityGame = (teamDef) => {
     if (TEAMS_DATA[def.name]) continue;
     createTeamEntry(def);
   }
+
+  // リーグ内で一意な略称に再設定（同地名大学の3文字重複を解消）
+  refreshUniversityAbbreviations();
 
   // 部制の場合、ユーザーの部のチーム名のみをallTeamNamesに
   if (numDivisions >= 2) {

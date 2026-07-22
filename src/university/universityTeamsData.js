@@ -451,3 +451,57 @@ export function getSpecialtyRankBoost(rank) {
 export function getSpecialtyLabel(key) {
   return SPECIALTY_LABELS[key] || key;
 }
+
+/**
+ * 同一リーグ内で一意な大学略称を生成する（A案: 共通の地名を落とし、識別部分＋「大」）。
+ *   例）札幌大学=札幌大 / 札幌国際大学=国際大 / 北海道大学=北海道大 / 北海道文教大学=文教大
+ * @param {string[]} names 同一リーグ（region）の全チーム名
+ * @returns {Object} { 正式名: 略称 } のマップ
+ */
+export function generateLeagueAbbreviations(names) {
+  const commonPrefixLen = (a, b) => {
+    let n = 0;
+    while (n < a.length && n < b.length && a[n] === b[n]) n++;
+    return n;
+  };
+  // 大学名から「大学」「末尾の大」を除いた語幹（＝地名＋識別部分）
+  const stemOf = (name) => {
+    const s = name.replace(/大学/g, '').replace(/大$/, '');
+    return s.length >= 1 ? s : name;
+  };
+  const stems = {};
+  names.forEach(n => { stems[n] = stemOf(n); });
+
+  const coreOf = (name) => {
+    const s = stems[name];
+    // 他チームと共有する最長の接頭辞（＝地名）の長さ
+    let shared = 0;
+    names.forEach(o => { if (o !== name) shared = Math.max(shared, commonPrefixLen(s, stems[o])); });
+    // 語幹が他校の接頭辞に完全包含される基幹校（例: 北海道大）→ 地名をそのまま残す
+    if (shared >= s.length) return s;
+    // 識別部分（地名を落とした残り）
+    let tail = s.slice(shared);
+    // 語幹中に現れる「大」以降を落として二重「大」を防ぐ（例: 教育大岩見沢→教育。先頭の大＝大谷等は残す）
+    const daIdx = tail.indexOf('大', 1);
+    if (daIdx > 0) tail = tail.slice(0, daIdx);
+    if (tail.length > 3) tail = tail.slice(0, 3);
+    return tail || s;
+  };
+
+  const result = {};
+  names.forEach(n => { result[n] = coreOf(n) + '大'; });
+
+  // 一意化: 衝突したら語幹を多めに使ってフォールバック、最後は元名先頭4文字
+  const collisions = () => {
+    const counts = {};
+    names.forEach(n => { counts[result[n]] = (counts[result[n]] || 0) + 1; });
+    return names.filter(n => counts[result[n]] > 1);
+  };
+  collisions().forEach(n => {
+    const full = stems[n];
+    result[n] = (full.length > 4 ? full.slice(0, 4) : full) + '大';
+  });
+  collisions().forEach(n => { result[n] = n.slice(0, 4); });
+
+  return result;
+}

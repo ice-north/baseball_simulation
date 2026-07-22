@@ -4,7 +4,7 @@ import { addManyToReleasedPool } from '../state/pools.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { serializeUniversityPool, deserializeUniversityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
-import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
+import { UNIVERSITY_TEAMS, generateLeagueAbbreviations } from '../university/universityTeamsData.js';
 import { isIndexedDBAvailable, idbGetItem, idbSetItem, idbRemoveItem, migrateLocalStorageToIDB, getIDBUsage } from '../utils/indexedDBStorage.js';
 import { migrateSaveData, CURRENT_SAVE_VERSION } from './saveMigration.js';
 
@@ -361,6 +361,13 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       Object.keys(TEAMS_DATA).forEach(k => delete TEAMS_DATA[k]);
       Object.keys(backup).forEach(k => { TEAMS_DATA[k] = backup[k]; });
       return { success: false, error: 'データの復元中にエラーが発生しました。元の状態に戻しました。' };
+    }
+
+    // 大学チームの略称をリーグ内で一意化（旧セーブの3文字重複を解消）
+    const uniNames = Object.keys(TEAMS_DATA).filter(n => TEAMS_DATA[n]?.universityTeamId);
+    if (uniNames.length > 0) {
+      const abbrs = generateLeagueAbbreviations(uniNames);
+      uniNames.forEach(n => { TEAMS_DATA[n].abbreviation = abbrs[n]; });
     }
 
     // WORLD_DATA復元
