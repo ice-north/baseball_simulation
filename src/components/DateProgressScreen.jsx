@@ -23,11 +23,18 @@ import { UNIVERSITY_REGIONS } from '../university/universityTeamsData.js';
 import PreGameModal from './dateProgress/PreGameModal.jsx';
 import { renderBracketWithLines as renderBracketWithLinesImpl } from './dateProgress/bracketRenderer.jsx';
 
-const Collapse = ({ open, children, className = '' }) => (
-  <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-    <div className={`overflow-hidden ${className}`}>{children}</div>
-  </div>
-);
+// 折りたたみ領域。閉じている間は children を描画しない（初回展開まで遅延）。
+// 27大学リーグ順位表やトーナメント等の重いDOMを、日程進行のたびに再構築するのを防ぐ。
+// 一度開いたら以降はマウントを維持するため、開閉アニメーションは通常どおり働く。
+const Collapse = ({ open, children, className = '' }) => {
+  const [everOpen, setEverOpen] = useState(open);
+  useEffect(() => { if (open && !everOpen) setEverOpen(true); }, [open, everOpen]);
+  return (
+    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+      <div className={`overflow-hidden ${className}`}>{everOpen ? children : null}</div>
+    </div>
+  );
+};
 
 const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupManagedGame, onRegisterAdvance }) => {
   const [selectedMonth, setSelectedMonth] = useState(seasonData?.currentDate?.month || 4);
