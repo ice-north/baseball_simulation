@@ -454,9 +454,7 @@ export const Sidebar = ({
   managementView,
   setScreenMode,
   setManagementView,
-  advanceDayRef,
-  exportTeam,
-  importTeam
+  advanceDayRef
 }) => (
   <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-700/50">
     <div className="px-4 py-4 border-b border-gray-700/50 bg-gray-800/30">
@@ -491,18 +489,6 @@ export const Sidebar = ({
       <div className="text-xs uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">システム</div>
       <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <button
-        onClick={() => exportTeam(userTeamName)}
-        className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all flex items-center gap-2.5 border-l-[3px] border-transparent"
-      >
-        <span className="text-base w-5 text-center shrink-0">📤</span><span>エクスポート</span>
-      </button>
-      <button
-        onClick={() => importTeam(userTeamName)}
-        className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all flex items-center gap-2.5 border-l-[3px] border-transparent"
-      >
-        <span className="text-base w-5 text-center shrink-0">📥</span><span>インポート</span>
-      </button>
     </nav>
   </div>
 );

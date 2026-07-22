@@ -451,61 +451,6 @@ export async function getStorageUsage() {
   return getLocalStorageUsage();
 }
 
-// チームエクスポート（JSON形式でダウンロード）
-export const exportTeam = (teamName) => {
-  const team = TEAMS_DATA[teamName];
-  if (!team) return;
-  const exportData = {
-    version: '2.0',
-    exportDate: new Date().toISOString(),
-    teamName: teamName,
-    team: JSON.parse(JSON.stringify(team))
-  };
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `team_${teamName.replace(/[^a-zA-Z0-9぀-鿿]/g, '_')}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-// チームインポート（JSONファイルから読み込み）
-export const importTeam = (targetTeamName, onComplete) => {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (!data.team || !data.team.players) {
-          alert('無効なチームデータです');
-          return;
-        }
-        const maxId = Object.values(TEAMS_DATA).flatMap(t => t.players || []).reduce((max, p) => Math.max(max, p.id || 0), 0);
-        data.team.players.forEach((p, i) => { p.id = maxId + i + 1; });
-        TEAMS_DATA[targetTeamName] = {
-          ...TEAMS_DATA[targetTeamName],
-          players: data.team.players,
-          lineupSettings: data.team.lineupSettings || null,
-          pitchingRotation: data.team.pitchingRotation || { starters: [], middleRelievers: [], setupMen: [], closer: null, currentStarterIndex: 0, pitcherRoles: {} },
-          strategy: data.team.strategy || null
-        };
-        if (onComplete) onComplete();
-        alert(`${data.teamName || 'チーム'}のデータを${targetTeamName}にインポートしました（選手${data.team.players.length}名）`);
-      } catch (err) {
-        alert('ファイルの読み込みに失敗しました: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
-};
-
 // ============================================================
 // ドラフト指名選手のエクスポート/インポート
 // （資料室 → 箱庭モードの選手設定 にデータを引き渡すための機能）

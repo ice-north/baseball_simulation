@@ -35,7 +35,7 @@ import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
 import { CONDITION_LEVELS, CONDITION_COLORS, CONDITION_ICONS, CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, updateAllPlayersCondition, initializeAllPlayersCondition } from './game/condition.js';
 
 // Save system imports
-import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, exportTeam, importTeam, autoSave, isAutosaveEnabled, AUTOSAVE_KEY } from './game/saveSystem.js';
+import { readSaveSlots, readSaveSlotsSync, setCachedSlots, ensureMigration, migrateOldSaveData, saveGameToSlot, loadGameFromSlot, deleteSaveSlot, autoSave, isAutosaveEnabled, AUTOSAVE_KEY } from './game/saveSystem.js';
 
 // Game controls imports
 import { executeResetGame, executeMultiPitch, executeStartSimMode } from './game/gameControls.js';
@@ -2664,8 +2664,6 @@ if (newOuts === 3) {
             setScreenMode={setScreenMode}
             setManagementView={setManagementView}
             advanceDayRef={advanceDayRef}
-            exportTeam={exportTeam}
-            importTeam={(name) => importTeam(name)}
           />}
 
           <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'ml-56' : ''}>
