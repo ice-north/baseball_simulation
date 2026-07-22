@@ -9,6 +9,11 @@ import { AbilityValue } from './AbilityValue.jsx';
 import TutorialHint from './TutorialHint.jsx';
 import { ensureTeamJerseyNumbers } from '../utils/jerseyNumbers.js';
 
+// 投球フォームの短縮ラベル（カードの省スペース表示用）
+const FORM_SHORT = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
+const throwsLabel = (player) => (player.physical?.throws === 'left' ? '左投' : '右投');
+const formLabel = (player) => FORM_SHORT[player.pitching?.form] || '';
+
 const LineupSettingScreen = ({ teamName, onBack }) => {
   const [tab, setTab] = useState('lineup');
   const [updateTrigger, setUpdateTrigger] = useState(0);
@@ -1783,10 +1788,15 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 <span className="text-gray-600 shrink-0 leading-none">⠿</span>
                 <span className={`font-bold truncate ${isFielder ? 'text-cyan-300' : 'text-white'}`} style={{ maxWidth: '4.5rem' }}>{player.name}</span>
                 <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
-                <span className="ml-auto flex items-center gap-0.5 shrink-0 tabular-nums">
-                  <AbilityValue value={p.velocity || 0} isVel /><span className="text-gray-600">/</span>
-                  <AbilityValue value={p.control || 0} /><span className="text-gray-600">/</span>
-                  <AbilityValue value={p.stamina || 0} isSta />
+                {/* 投げ手・フォーム */}
+                <span className="shrink-0 text-xs text-gray-300 bg-gray-900/50 border border-gray-700/60 rounded px-1 leading-tight hidden lg:inline">
+                  {throwsLabel(player)}{formLabel(player) ? `・${formLabel(player)}` : ''}
+                </span>
+                {/* 能力（ラベル付き）: 速=球速 / 制=制球 / スタ=スタミナ */}
+                <span className="ml-auto flex items-center gap-1.5 shrink-0 tabular-nums">
+                  <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">速</span><AbilityValue value={p.velocity || 0} isVel /></span>
+                  <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">制</span><AbilityValue value={p.control || 0} /></span>
+                  <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">スタ</span><AbilityValue value={p.stamina || 0} isSta /></span>
                 </span>
               </div>
             );
