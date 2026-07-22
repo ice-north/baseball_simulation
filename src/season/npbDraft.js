@@ -114,6 +114,18 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     });
   });
 
+  // === ソース別の指名到達性補正 ===
+  // 独立リーグ選手は年齢的に将来性倍率(potentialMult)や年齢ボーナスが乗らず、
+  // 素材が良くてもスコアが低く出るため、掲載上位でも指名までほとんど届かなかった
+  // （掲載選手の指名率: 独立19% ⇔ 高校/社会人ほぼ100%）。
+  // ソース内順位は保ったまま一律で底上げし、「注目選手の約8割がいずれ指名される／
+  // 漏れた選手は次カテゴリで飛躍して再挑戦」という設計に近づける。
+  const SOURCE_DRAFT_BONUS = { independent: 35 };
+  allCandidates.forEach(c => {
+    const b = SOURCE_DRAFT_BONUS[c.source];
+    if (b) c.score += b;
+  });
+
   // === 候補数の診断ログ ===
   const sourceCounts = { highschool: 0, university: 0, university_team: 0, corporate: 0, independent: 0 };
   allCandidates.forEach(c => { sourceCounts[c.source] = (sourceCounts[c.source] || 0) + 1; });
