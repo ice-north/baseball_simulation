@@ -170,6 +170,86 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
     { label: '内野手', test: (p) => ['first', 'second', 'third', 'short'].includes(p.position), color: 'text-yellow-300' },
     { label: '外野手', test: (p) => ['left', 'center', 'right'].includes(p.position), color: 'text-green-300' },
   ];
+  // 左カラム=投手、右カラム=野手（捕・内・外）で高さを均す
+  const pitcherGroups = groups.filter(g => g.label === '投手');
+  const fielderGroups = groups.filter(g => g.label !== '投手');
+
+  // 列見出し（各カラム上部。行と同じ固定幅で揃える）
+  const ColumnHeader = () => (
+    <div className="flex items-center gap-2 px-1 pb-1 mb-1 border-b border-gray-700 text-xs text-gray-400">
+      <span className="w-6">守</span>
+      <span className="w-5 text-center">総</span>
+      <span className="w-28">選手</span>
+      <span className="w-64 hidden md:block">主要能力</span>
+      <span className="w-7 text-right">現</span>
+      <span className="w-3"></span>
+      <span className="w-11 text-center">新</span>
+    </div>
+  );
+
+  // 選手1行（固定幅・左詰め）
+  const renderPlayerRow = (p) => {
+    const val = nums[p.id];
+    const empty = val == null;
+    const orig = originalNums[p.id];
+    const changed = val != null && val !== orig;
+    return (
+      <div
+        key={p.id}
+        onDragOver={allowDrop}
+        onDragEnter={addHi}
+        onDragLeave={rmHi}
+        onDrop={(e) => onDropPlayer(e, p.id)}
+        className="flex items-center gap-2 py-0.5 rounded px-1"
+      >
+        <span className="text-xs text-gray-400 w-6">{POSITION_NAMES[p.position] || ''}</span>
+        <div className="w-5 flex-shrink-0"><OverallBadge player={p} /></div>
+        <span className="text-sm text-white w-28 truncate">{p.name}</span>
+        {/* 主要能力 */}
+        <div className="w-64 hidden md:flex flex-shrink-0 overflow-hidden">
+          <AbilityStrip player={p} />
+        </div>
+        {/* 現在の番号 */}
+        <span className="w-7 text-right text-sm tabular-nums text-gray-300">
+          {orig != null ? orig : <span className="text-gray-600">―</span>}
+        </span>
+        {/* 変化インジケーター */}
+        <span className={`text-xs w-3 text-center ${changed ? 'text-cyan-400' : 'text-transparent'}`}>→</span>
+        {/* 新番号 */}
+        {empty ? (
+          <span className="w-11 h-7 flex items-center justify-center rounded border border-dashed border-gray-600 text-gray-500 text-xs">
+            ―
+          </span>
+        ) : (
+          <span
+            draggable
+            onDragStart={(e) => onChipDragStart(e, val, p.id)}
+            onDragEnd={onChipDragEnd}
+            onClick={() => unassign(p.id)}
+            title="ドラッグで移動 / クリックで解放"
+            className={`w-11 h-7 flex items-center justify-center rounded text-sm font-bold tabular-nums cursor-grab active:cursor-grabbing ${
+              changed
+                ? 'bg-cyan-800/80 border border-cyan-400 text-white hover:bg-cyan-700/80'
+                : 'bg-cyan-900/60 border border-cyan-600 text-cyan-100 hover:bg-cyan-800/70'}`}
+          >
+            {val}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  // グループ（見出し＋所属選手）
+  const renderGroupBlock = (g) => {
+    const gp = players.filter(g.test);
+    if (gp.length === 0) return null;
+    return (
+      <div key={g.label} className="mb-2">
+        <div className={`text-xs font-bold ${g.color} border-b border-gray-700/60 pb-1 mb-1`}>{g.label}（{gp.length}人）</div>
+        {gp.map(renderPlayerRow)}
+      </div>
+    );
+  };
 
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white p-4">
@@ -189,78 +269,19 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
       </p>
 
       <div className="flex-1 min-h-0 flex gap-4">
-        {/* 選手リスト */}
+        {/* 選手リスト（投手／野手の2カラム・固定幅で横幅を圧縮） */}
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          {/* 列見出し */}
-          <div className="flex items-center gap-2 px-1 pb-1 mb-1 border-b border-gray-700 text-xs text-gray-400 flex-shrink-0">
-            <span className="w-8">守備</span>
-            <span className="w-5 text-center">総</span>
-            <span className="flex-1">選手</span>
-            <span className="hidden md:inline">主要能力</span>
-            <span className="w-10 text-center ml-2">現在</span>
-            <span className="w-3"></span>
-            <span className="w-12 text-center">新番号</span>
-          </div>
-          <div className="grid grid-cols-1 gap-y-1">
-            {groups.map(g => {
-              const gp = players.filter(g.test);
-              if (gp.length === 0) return null;
-              return (
-                <div key={g.label} className="mb-2">
-                  <div className={`text-xs font-bold ${g.color} border-b border-gray-700/60 pb-1 mb-1`}>{g.label}（{gp.length}人）</div>
-                  {gp.map(p => {
-                    const val = nums[p.id];
-                    const empty = val == null;
-                    const orig = originalNums[p.id];
-                    const changed = val != null && val !== orig;
-                    return (
-                      <div
-                        key={p.id}
-                        onDragOver={allowDrop}
-                        onDragEnter={addHi}
-                        onDragLeave={rmHi}
-                        onDrop={(e) => onDropPlayer(e, p.id)}
-                        className="flex items-center gap-2 py-0.5 rounded pr-1"
-                      >
-                        <span className="text-xs text-gray-400 w-8">{POSITION_NAMES[p.position] || ''}</span>
-                        <OverallBadge player={p} />
-                        <span className="text-sm text-white flex-1 truncate min-w-[5rem]">{p.name}</span>
-                        {/* 主要能力 */}
-                        <div className="hidden md:flex flex-shrink-0">
-                          <AbilityStrip player={p} />
-                        </div>
-                        {/* 現在の番号 */}
-                        <span className="w-10 text-center text-sm tabular-nums text-gray-300 ml-2">
-                          {orig != null ? orig : <span className="text-gray-600">―</span>}
-                        </span>
-                        {/* 変化インジケーター */}
-                        <span className={`text-xs w-3 text-center ${changed ? 'text-cyan-400' : 'text-transparent'}`}>→</span>
-                        {/* 新番号 */}
-                        {empty ? (
-                          <span className="w-12 h-7 flex items-center justify-center rounded border border-dashed border-gray-600 text-gray-500 text-xs">
-                            ―
-                          </span>
-                        ) : (
-                          <span
-                            draggable
-                            onDragStart={(e) => onChipDragStart(e, val, p.id)}
-                            onDragEnd={onChipDragEnd}
-                            onClick={() => unassign(p.id)}
-                            title="ドラッグで移動 / クリックで解放"
-                            className={`w-12 h-7 flex items-center justify-center rounded text-sm font-bold tabular-nums cursor-grab active:cursor-grabbing ${
-                              changed
-                                ? 'bg-cyan-800/80 border border-cyan-400 text-white hover:bg-cyan-700/80'
-                                : 'bg-cyan-900/60 border border-cyan-600 text-cyan-100 hover:bg-cyan-800/70'}`}
-                          >
-                            {val}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+          <div className="flex gap-8 max-w-[1180px]">
+            {/* 左：投手 */}
+            <div className="flex-shrink-0">
+              <ColumnHeader />
+              {pitcherGroups.map(renderGroupBlock)}
+            </div>
+            {/* 右：野手（捕・内・外） */}
+            <div className="flex-shrink-0">
+              <ColumnHeader />
+              {fielderGroups.map(renderGroupBlock)}
+            </div>
           </div>
         </div>
 
