@@ -3763,132 +3763,138 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
         const gpBadge = (gp) => gp >= 1.5 ? '成長◎◎' : gp >= 1.3 ? '成長◎' : gp >= 1.1 ? '成長○' : null;
 
-        const FeatureCard = ({ c, label, labelColor }) => {
+        // 新聞紙面カラーパレット（クリーム紙×黒インク＝明朝体で本物の紙面感・高コントラスト）
+        const PAPER = '#f4efe2';
+        const PAPER2 = '#faf6ec';
+        const INK = '#1b1710';
+        const MUTED = '#5a5342';
+        const FAINT = '#7d735b';
+        const RULE = 'rgba(90,70,30,0.30)';
+        const serif = { fontFamily: '"Hiragino Mincho ProN","Yu Mincho",serif' };
+        // カテゴリ別のインク色（クリーム上で十分濃い色）
+        const CAT = {
+          hs:   { head: 'text-green-800',  bar: 'bg-green-800',  chip: 'bg-green-800 text-green-50' },
+          uni:  { head: 'text-blue-800',   bar: 'bg-blue-800',   chip: 'bg-blue-800 text-blue-50' },
+          corp: { head: 'text-amber-800',  bar: 'bg-amber-800',  chip: 'bg-amber-800 text-amber-50' },
+          ind:  { head: 'text-purple-800', bar: 'bg-purple-800', chip: 'bg-purple-800 text-purple-50' },
+        };
+
+        const FeatureCard = ({ c, label, cat }) => {
           if (!c) return null;
           const stats = c.isPitcher
             ? [c.velocity && `${c.velocity}km`, c.control && `制球${c.control}`, c.stamina && `スタ${c.stamina}`, c.arsenalCount && `${c.arsenalCount}球種`].filter(Boolean)
-            : [c.meet && `ミ${c.meet}`, c.power && `パ${c.power}`, c.speed && `走${c.speed}`, c.defense && `守${c.defense}`, c.eye && `眼${c.eye}`].filter(Boolean);
+            : [c.meet && `ミート${c.meet}`, c.power && `パワー${c.power}`, c.speed && `走力${c.speed}`, c.defense && `守備${c.defense}`, c.eye && `選球${c.eye}`].filter(Boolean);
           const gp = gpBadge(c.growthPotential || 1.0);
           return (
-            <div className="border border-gray-700/50 rounded-lg p-3 bg-gray-800/60 flex flex-col gap-1">
+            <div className="rounded-sm p-3 flex flex-col gap-1.5" style={{ background: PAPER2, border: `1px solid ${RULE}` }}>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${labelColor}`}>{label}</span>
-                <span className="text-xs text-gray-400">{c.position} {c.throws}投{c.bats}打 {c.age}歳</span>
-                {gp && <span className="ml-auto text-xs font-bold text-yellow-400 shrink-0">{gp}</span>}
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-sm ${cat.chip}`}>{label}</span>
+                {gp && <span className="ml-auto text-xs font-black shrink-0" style={{ color: '#b45309' }}>{gp}</span>}
               </div>
-              <div className="text-lg font-black text-white leading-tight">{c.name}</div>
-              <div className="text-xs text-gray-500 truncate">{c.orgName}</div>
-              <div className={`text-xs font-bold ${c.isPitcher ? 'text-red-300' : 'text-cyan-300'}`}>{c.headline}</div>
-              <div className="text-xs text-gray-400">{stats.join(' · ')}</div>
-              {c.fame > 10 && <div className="text-xs text-yellow-700 mt-0.5">注目度{c.fame} · Dスコア{c.score}</div>}
+              <div className="text-2xl font-black leading-tight" style={{ ...serif, color: INK }}>{c.name}</div>
+              <div className="text-xs font-medium" style={{ color: MUTED }}>{c.position}・{c.throws}投{c.bats}打・{c.age}歳 <span style={{ color: FAINT }}>／ {c.orgName}</span></div>
+              <div className={`text-base font-bold leading-snug ${c.isPitcher ? 'text-red-800' : 'text-sky-800'}`} style={serif}>{c.headline}</div>
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {stats.map((s, i) => (
+                  <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#e9e0cb', color: INK }}>{s}</span>
+                ))}
+              </div>
+              {c.fame > 10 && <div className="text-xs font-bold mt-0.5" style={{ color: '#92400e' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
             </div>
           );
         };
 
-        const PlayerRow = ({ c, accentColor = 'text-gray-300', extra = '' }) => {
+        const PlayerRow = ({ c, headColor, extra = '' }) => {
           const statStr = c.isPitcher
             ? `${c.velocity || '-'}km 制${c.control || '-'} ${c.arsenalCount || 0}球種`
             : `ミ${c.meet || '-'} パ${c.power || '-'} 走${c.speed || '-'}`;
           return (
-            <div className="py-1 border-b border-gray-800/40 last:border-0">
-              <div className="flex items-baseline gap-1 leading-tight">
-                <span className="text-xs text-gray-500 w-3.5 shrink-0">{c.position}</span>
-                <span className="text-xs font-bold text-white truncate">{c.name}</span>
-                <span className="text-xs text-gray-500 shrink-0">{c.age}歳</span>
-                {extra && <span className="text-[8px] text-blue-400 shrink-0">{extra}</span>}
+            <div className="py-1.5" style={{ borderBottom: `1px solid ${RULE}` }}>
+              <div className="flex items-baseline gap-1.5 leading-tight">
+                <span className="text-xs font-bold shrink-0 text-center" style={{ color: MUTED, width: '1.2rem' }}>{c.position}</span>
+                <span className="text-sm font-bold truncate" style={{ ...serif, color: INK }}>{c.name}</span>
+                <span className="text-xs shrink-0" style={{ color: MUTED }}>{c.age}歳</span>
+                {extra && <span className="text-xs font-bold shrink-0 text-blue-700">{extra}</span>}
               </div>
-              <div className="flex items-center pl-4 gap-1">
-                <span className={`text-xs ${accentColor} truncate`}>{c.headline}</span>
-                <span className="ml-auto text-xs text-gray-500 shrink-0 font-mono">{statStr}</span>
+              <div className="flex items-center gap-1" style={{ paddingLeft: '1.2rem' }}>
+                <span className={`text-xs font-semibold truncate ${headColor}`}>{c.headline}</span>
+                <span className="ml-auto text-xs shrink-0 font-mono font-semibold" style={{ color: MUTED }}>{statStr}</span>
               </div>
-              <div className="text-[8px] text-gray-600 pl-4 truncate">{c.orgName}</div>
+              <div className="text-xs truncate" style={{ paddingLeft: '1.2rem', color: FAINT }}>{c.orgName}</div>
             </div>
           );
         };
+
+        const SubColumn = ({ title, count, cat, children, borderLeft }) => (
+          <div style={borderLeft ? { borderLeft: `1px solid ${RULE}`, paddingLeft: '0.75rem' } : undefined}>
+            <div className={`text-sm font-black pb-1 mb-2 flex justify-between items-baseline ${cat.head}`} style={{ ...serif, borderBottom: `2px solid ${INK}` }}>
+              <span>{title}</span><span className="text-xs font-bold" style={{ color: MUTED }}>{count}名</span>
+            </div>
+            {children}
+            {count === 0 && <div className="text-xs font-medium" style={{ color: FAINT }}>情報なし</div>}
+          </div>
+        );
 
         const hasContent = d.hsTop || d.uniTop || d.corpTop || d.indTop;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3" onClick={() => setShowNewspaper(false)}>
             <div className="absolute inset-0 bg-black/80" />
-            <div className="relative w-full max-w-5xl bg-gray-900 rounded-xl shadow-2xl border-2 border-amber-900/30 flex flex-col" onClick={e => e.stopPropagation()} style={{ maxHeight: '95vh' }}>
-              {/* Masthead */}
-              <div className="bg-gray-950 text-center py-2 px-4 border-b-4 border-double border-amber-900/40 relative shrink-0">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">{curDate.year}年{curDate.month}月{curDate.day}日</div>
-                <div className="text-xs text-amber-700 tracking-[0.4em] uppercase">Draft Watch · Sports Report</div>
-                <h2 className="text-2xl font-black text-white tracking-widest" style={{ fontFamily: 'serif' }}>ドラフト戦線</h2>
-                <div className="text-xs text-gray-500">全国高校・大学・社会人・独立リーグ 注目選手速報</div>
-                <button onClick={() => setShowNewspaper(false)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xl leading-none px-1">✕</button>
+            <div className="relative w-full max-w-5xl rounded-lg shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()} style={{ background: PAPER, maxHeight: '95vh', border: `1px solid ${INK}` }}>
+              {/* 題字（マストヘッド） */}
+              <div className="text-center pt-2.5 pb-2 px-5 shrink-0" style={{ background: PAPER, borderBottom: `4px double ${INK}` }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold" style={{ color: MUTED }}>{curDate.year}年{curDate.month}月{curDate.day}日</span>
+                  <span className="text-xs tracking-[0.35em] uppercase font-bold" style={{ color: FAINT }}>Draft Watch</span>
+                  <button onClick={() => setShowNewspaper(false)} className="text-xl leading-none px-1 font-bold hover:opacity-60" style={{ color: INK }}>✕</button>
+                </div>
+                <h2 className="text-4xl font-black tracking-[0.15em] mt-1" style={{ ...serif, color: INK }}>ドラフト戦線</h2>
+                <div className="text-xs font-bold mt-1" style={{ color: MUTED }}>全国 高校・大学・社会人・独立リーグ　注目選手 速報</div>
               </div>
 
               {hasContent ? (
-                <div className="overflow-y-auto flex-1 p-3">
-                  {/* Tournament ticker */}
+                <div className="overflow-y-auto flex-1 p-4" style={{ background: PAPER }}>
+                  {/* 速報ティッカー */}
                   {d.tournamentNews.length > 0 && (
-                    <div className="bg-yellow-900/40 border border-yellow-700/30 rounded px-3 py-1.5 mb-3 flex gap-4 items-center">
-                      <span className="text-xs font-bold text-yellow-500 shrink-0">速報</span>
+                    <div className="rounded-sm px-3 py-2 mb-3 flex gap-3 items-center flex-wrap" style={{ background: '#7f1d1d' }}>
+                      <span className="text-xs font-black text-white px-1.5 py-0.5 rounded-sm shrink-0" style={{ background: '#dc2626' }}>速報</span>
                       {d.tournamentNews.map((t, i) => (
-                        <span key={i} className="text-xs text-yellow-300">{t}</span>
+                        <span key={i} className="text-sm font-bold text-white">{t}</span>
                       ))}
                     </div>
                   )}
 
-                  {/* Top Feature Cards — 4 columns */}
-                  <div className="grid grid-cols-4 gap-3 mb-3">
-                    {d.hsTop && <FeatureCard c={d.hsTop} label="高校 注目No.1" labelColor="bg-green-800 text-green-200" />}
-                    {d.uniTop && <FeatureCard c={d.uniTop} label={`大学${d.uniTop.uniRank ? `[${d.uniTop.uniRank}]` : ''} 注目No.1`} labelColor="bg-blue-800 text-blue-200" />}
-                    {d.corpTop && <FeatureCard c={d.corpTop} label="社会人 注目No.1" labelColor="bg-amber-800 text-amber-200" />}
-                    {d.indTop && <FeatureCard c={d.indTop} label="独立 注目No.1" labelColor="bg-purple-800 text-purple-200" />}
+                  {/* トップ特集カード（各カテゴリNo.1） */}
+                  <div className="grid grid-cols-4 gap-3 mb-4">
+                    {d.hsTop && <FeatureCard c={d.hsTop} cat={CAT.hs} label="高校 注目No.1" />}
+                    {d.uniTop && <FeatureCard c={d.uniTop} cat={CAT.uni} label={`大学${d.uniTop.uniRank ? `[${d.uniTop.uniRank}]` : ''} 注目No.1`} />}
+                    {d.corpTop && <FeatureCard c={d.corpTop} cat={CAT.corp} label="社会人 注目No.1" />}
+                    {d.indTop && <FeatureCard c={d.indTop} cat={CAT.ind} label="独立 注目No.1" />}
                   </div>
 
-                  <div className="h-px bg-gray-700/40 mb-3" />
+                  <div className="mb-3" style={{ height: '3px', borderTop: `1px solid ${INK}`, borderBottom: `1px solid ${INK}` }} />
 
-                  {/* Sub lists — 4 columns */}
+                  {/* カテゴリ別 注目株一覧（4段組み・段間罫線） */}
                   <div className="grid grid-cols-4 gap-3">
-                    {/* 高校注目 */}
-                    <div>
-                      <div className="text-xs font-bold text-green-400 border-b border-green-800/50 pb-1 mb-1.5 flex justify-between">
-                        <span>高校注目</span><span className="text-gray-300 font-normal">{d.hsOthers.length}名</span>
-                      </div>
-                      {d.hsOthers.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-green-300" />)}
-                      {d.hsOthers.length === 0 && <div className="text-xs text-gray-500">情報なし</div>}
-                    </div>
-
-                    {/* 大学注目 */}
-                    <div>
-                      <div className="text-xs font-bold text-blue-400 border-b border-blue-800/50 pb-1 mb-1.5 flex justify-between">
-                        <span>大学注目</span><span className="text-gray-300 font-normal">{d.uniOthers.length}名</span>
-                      </div>
-                      {d.uniOthers.map((c, i) => (
-                        <PlayerRow key={i} c={c} accentColor="text-blue-300" extra={c.year ? `${c.year}年` : ''} />
-                      ))}
-                      {d.uniOthers.length === 0 && <div className="text-xs text-gray-500">情報なし</div>}
-                    </div>
-
-                    {/* 社会人 */}
-                    <div>
-                      <div className="text-xs font-bold text-amber-400 border-b border-amber-800/50 pb-1 mb-1.5 flex justify-between">
-                        <span>社会人注目</span><span className="text-gray-300 font-normal">{d.corpOthers.length}名</span>
-                      </div>
-                      {d.corpOthers.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-amber-300" />)}
-                      {d.corpOthers.length === 0 && <div className="text-xs text-gray-500">情報なし</div>}
-                    </div>
-
-                    {/* 独立リーグ */}
-                    <div>
-                      <div className="text-xs font-bold text-purple-400 border-b border-purple-800/50 pb-1 mb-1.5 flex justify-between">
-                        <span>独立リーグ注目</span><span className="text-gray-300 font-normal">{d.indOthers.length}名</span>
-                      </div>
-                      {d.indOthers.map((c, i) => <PlayerRow key={i} c={c} accentColor="text-purple-300" />)}
-                      {d.indOthers.length === 0 && <div className="text-xs text-gray-500">情報なし</div>}
-                    </div>
+                    <SubColumn title="高校 注目株" count={d.hsOthers.length} cat={CAT.hs}>
+                      {d.hsOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-green-800" />)}
+                    </SubColumn>
+                    <SubColumn title="大学 注目株" count={d.uniOthers.length} cat={CAT.uni} borderLeft>
+                      {d.uniOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-blue-800" extra={c.year ? `${c.year}年` : ''} />)}
+                    </SubColumn>
+                    <SubColumn title="社会人 注目株" count={d.corpOthers.length} cat={CAT.corp} borderLeft>
+                      {d.corpOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-amber-800" />)}
+                    </SubColumn>
+                    <SubColumn title="独立リーグ 注目株" count={d.indOthers.length} cat={CAT.ind} borderLeft>
+                      {d.indOthers.map((c, i) => <PlayerRow key={i} c={c} headColor="text-purple-800" />)}
+                    </SubColumn>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-gray-800/50 text-xs text-gray-500 text-center">
+                  <div className="mt-4 pt-2 text-xs font-medium text-center" style={{ borderTop: `1px solid ${RULE}`, color: MUTED }}>
                     ※掲載選手の知名度が上昇します。ドラフト評価スコアは模擬値で、実際の指名は10月に確定します。
                   </div>
                 </div>
               ) : (
-                <div className="p-8 text-center text-gray-500 text-sm">まだ注目選手の情報がありません</div>
+                <div className="p-8 text-center text-sm font-bold" style={{ color: MUTED, background: PAPER }}>まだ注目選手の情報がありません</div>
               )}
             </div>
           </div>
