@@ -43,9 +43,13 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
     }
   };
 
+  const hasAutosave = !!(autosaveInfo && onContinueAutosave);
+  const canContinue = hasSaveData || hasAutosave;
+
   const handleContinue = () => {
     const filledSlots = saveSlots.map((s, i) => s ? i : -1).filter(i => i >= 0);
-    if (filledSlots.length === 1) {
+    // オートセーブ選択肢が無く、スロットが1つだけなら直接その1件を続行
+    if (filledSlots.length === 1 && !hasAutosave) {
       onContinue(filledSlots[0]);
       return;
     }
@@ -113,6 +117,23 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                 )}
               </button>
             ))}
+
+            {/* オートセーブから続ける（コンティニュー内に配置） */}
+            {autosaveInfo && onContinueAutosave && (
+              <>
+                <div className="w-80 border-t border-gray-700/60 my-1"></div>
+                <button
+                  onClick={onContinueAutosave}
+                  className="w-80 px-6 py-3 rounded-lg font-semibold text-sm bg-cyan-800/50 hover:bg-cyan-700/60 border border-cyan-600/40 text-cyan-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  💾 オートセーブから続ける
+                  <span className="text-cyan-400/70 text-xs font-normal">
+                    {autosaveInfo.year ? `${autosaveInfo.year}年目` : ''}{autosaveInfo.date ? ` ${autosaveInfo.date.month}月` : ''}{fmtDate(autosaveInfo.timestamp) ? `・${fmtDate(autosaveInfo.timestamp)}` : ''}
+                  </span>
+                </button>
+              </>
+            )}
+
             <button
               onClick={() => setShowSlotSelect(false)}
               className="mt-4 text-gray-400 hover:text-gray-200 text-sm transition flex items-center gap-1"
@@ -180,28 +201,15 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
             <button
               onClick={handleContinue}
-              disabled={!hasSaveData}
+              disabled={!canContinue}
               className={`w-80 px-8 py-4 rounded-xl font-bold text-xl transition-all shadow-lg active:scale-[0.98] ${
-                hasSaveData
+                canContinue
                   ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/30'
                   : 'bg-gray-700/40 text-gray-500 cursor-not-allowed shadow-none'
               }`}
             >
               CONTINUE
             </button>
-
-            {/* オートセーブから続ける */}
-            {autosaveInfo && onContinueAutosave && (
-              <button
-                onClick={onContinueAutosave}
-                className="w-80 px-8 py-2.5 rounded-xl font-semibold text-sm bg-cyan-800/50 hover:bg-cyan-700/60 border border-cyan-600/40 text-cyan-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                💾 オートセーブから続ける
-                <span className="text-cyan-400/70 text-xs font-normal">
-                  {autosaveInfo.year ? `${autosaveInfo.year}年目` : ''}{autosaveInfo.date ? ` ${autosaveInfo.date.month}月` : ''}{fmtDate(autosaveInfo.timestamp) ? `・${fmtDate(autosaveInfo.timestamp)}` : ''}
-                </span>
-              </button>
-            )}
 
             {/* 区切り */}
             <div className="w-80 border-t border-gray-700/60 my-1"></div>
