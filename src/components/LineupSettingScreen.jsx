@@ -1759,6 +1759,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
             const isTapSel = tapSelectedPitcherId === player.id;
             const isFielder = player.position !== 'pitcher';
             const role = getPitcherRole(player.id);
+            // 今年の投手成績（登板・防御率・勝敗・H・S）。inningsPitchedはアウト数
+            const s = player.seasonStats?.pitching || {};
+            const outs = s.inningsPitched || 0;
+            const era = outs > 0 ? ((s.earnedRuns || 0) * 27 / outs).toFixed(2) : '-.--';
             const accent = ROLE_BORDER[role] || 'border-l-gray-600';
             return (
               <div
@@ -1781,23 +1785,36 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                   else setTapSelectedPitcherId(player.id);
                 }}
                 title="ドラッグで役割変更／クリックで選択・選択中にもう一度で詳細"
-                className={`flex items-center gap-1 pl-3 pr-1.5 py-1 rounded cursor-grab active:cursor-grabbing border border-l-2 text-xs transition-colors select-none ${
+                className={`flex flex-col gap-0.5 pl-3 pr-1.5 py-1 rounded cursor-grab active:cursor-grabbing border border-l-2 text-xs transition-colors select-none ${
                   isTapSel ? 'bg-blue-900/60 border-blue-400/60 ring-1 ring-blue-400/40'
                            : `bg-gray-800 border-gray-700 hover:bg-gray-700/70 ${accent}`}`}
               >
-                <span className="text-gray-600 shrink-0 leading-none">⠿</span>
-                <span className={`font-bold truncate ${isFielder ? 'text-cyan-300' : 'text-white'}`} style={{ maxWidth: '4.5rem' }}>{player.name}</span>
-                <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
-                {/* 投げ手・フォーム */}
-                <span className="shrink-0 text-xs text-gray-300 bg-gray-900/50 border border-gray-700/60 rounded px-1 leading-tight hidden lg:inline">
-                  {throwsLabel(player)}{formLabel(player) ? `・${formLabel(player)}` : ''}
-                </span>
-                {/* 能力（ラベル付き）: 速=球速 / 制=制球 / スタ=スタミナ */}
-                <span className="ml-auto flex items-center gap-1.5 shrink-0 tabular-nums">
-                  <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">速</span><AbilityValue value={p.velocity || 0} isVel /></span>
-                  <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">制</span><AbilityValue value={p.control || 0} /></span>
-                  <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">スタ</span><AbilityValue value={p.stamina || 0} isSta /></span>
-                </span>
+                {/* 1行目: 名前・調子・投げ手/フォーム・能力 */}
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-600 shrink-0 leading-none">⠿</span>
+                  <span className={`font-bold truncate ${isFielder ? 'text-cyan-300' : 'text-white'}`} style={{ maxWidth: '4.5rem' }}>{player.name}</span>
+                  <span className={`shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
+                  {/* 投げ手・フォーム */}
+                  <span className="shrink-0 text-xs text-gray-300 bg-gray-900/50 border border-gray-700/60 rounded px-1 leading-tight hidden lg:inline">
+                    {throwsLabel(player)}{formLabel(player) ? `・${formLabel(player)}` : ''}
+                  </span>
+                  {/* 能力（ラベル付き）: 速=球速 / 制=制球 / スタ=スタミナ */}
+                  <span className="ml-auto flex items-center gap-1.5 shrink-0 tabular-nums">
+                    <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">速</span><AbilityValue value={p.velocity || 0} isVel /></span>
+                    <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">制</span><AbilityValue value={p.control || 0} /></span>
+                    <span className="inline-flex items-baseline gap-0.5"><span className="text-gray-400 text-xs">スタ</span><AbilityValue value={p.stamina || 0} isSta /></span>
+                  </span>
+                </div>
+                {/* 2行目: 今年の成績（登板・防御率・勝敗・ホールド・セーブ） */}
+                {!isFielder && (
+                  <div className="flex items-center gap-2 pl-4 text-xs tabular-nums leading-tight">
+                    <span className="text-gray-500">登板<span className="text-gray-200 ml-0.5">{s.games || 0}</span></span>
+                    <span className="text-gray-500">防<span className="text-yellow-300 ml-0.5">{era}</span></span>
+                    <span className="text-gray-500"><span className="text-gray-200">{s.wins || 0}</span>勝<span className="text-gray-200">{s.losses || 0}</span>敗</span>
+                    <span className="text-gray-500">H<span className="text-gray-200 ml-0.5">{s.holds || 0}</span></span>
+                    <span className="text-gray-500">S<span className="text-gray-200 ml-0.5">{s.saves || 0}</span></span>
+                  </div>
+                )}
               </div>
             );
           };
