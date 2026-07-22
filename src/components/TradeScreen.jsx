@@ -14,6 +14,27 @@ const isTradeablePartner = (team) => {
   return true;
 };
 
+// 全チーム横断で未使用の選手IDを返す。
+const nextGlobalPlayerId = () => {
+  let max = 0;
+  for (const t of Object.values(TEAMS_DATA)) {
+    for (const p of (t.players || [])) { if (typeof p.id === 'number' && p.id > max) max = p.id; }
+  }
+  return max + 1;
+};
+
+// 選手を受け入れ先チームへ移籍させる。
+// 他の独立リーグとのトレードでは選手IDがリーグ間で衝突しうる（別系列で採番されるため）。
+// 受け入れ先に同一IDが既に存在すると addToRoster が重複防止で弾き、相手選手だけ入らない不具合になる。
+// そのため衝突時は全チーム横断の一意IDへ振り直してから追加する。
+const givePlayerToTeam = (destTeam, player) => {
+  if (!destTeam || !player) return false;
+  if (destTeam.players?.some(p => p.id === player.id)) {
+    player.id = nextGlobalPlayerId();
+  }
+  return addToRoster(destTeam, player);
+};
+
 const StatVal = ({ value, isPitcherVelocity }) => {
   const rank = getAbilityRank(value, isPitcherVelocity);
   return <span className={`font-semibold ${getRankColor(rank)}`}>{value}</span>;
@@ -223,8 +244,8 @@ const TradeScreen = ({ userTeamName, onBack }) => {
     cleanupPlayerReferences(targetTeam, proposal.offeredPlayer.id);
     myTeamData.players.splice(myIdx, 1);
     targetTeam.players.splice(theirIdx, 1);
-    addToRoster(myTeamData, proposal.offeredPlayer);
-    addToRoster(targetTeam, proposal.wantedPlayer);
+    givePlayerToTeam(myTeamData, proposal.offeredPlayer);
+    givePlayerToTeam(targetTeam, proposal.wantedPlayer);
 
     setTradeResult({ success: true, message: `トレード成立！ ${proposal.wantedPlayer.name} ⇄ ${proposal.offeredPlayer.name}（${proposal.fromTeam}）` });
     setTradeTab('propose');
@@ -268,8 +289,8 @@ const TradeScreen = ({ userTeamName, onBack }) => {
 
       myTeam.players.splice(myIdx, 1);
       targetTeam.players.splice(targetIdx, 1);
-      addToRoster(myTeam, selectedTargetPlayer);
-      addToRoster(targetTeam, selectedMyPlayer);
+      givePlayerToTeam(myTeam, selectedTargetPlayer);
+      givePlayerToTeam(targetTeam, selectedMyPlayer);
 
       setTradeResult({
         success: true,
