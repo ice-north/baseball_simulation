@@ -1033,6 +1033,72 @@ export const ensureUserIndependentLeagueTagged = (teamNames, preset) => {
   }
 };
 
+// 欠落した並行世界チーム（他の独立リーグ・社会人・大学）を静的定義から復旧する。
+// 旧バージョンの年度移行バグで並行世界が削除されたセーブを、WORLD_DATAを壊さずに
+// 修復するための関数。既存チームはスキップし、欠けているチームだけ再生成する。
+// ロスターは新規生成（元の選手は復元不可）だが、背景世界として機能を回復させる。
+export const recoverMissingParallelTeams = (userLeagueId) => {
+  // 既存の選手IDと衝突しないよう採番基点を最大ID超に設定
+  // （TEAMS_DATA＋大学プール＝大学チーム復元時に取り込まれる選手も含める）
+  let maxId = 20000;
+  const bump = (p) => { if (p && typeof p.id === 'number' && p.id > maxId) maxId = p.id; };
+  for (const t of Object.values(TEAMS_DATA)) { for (const p of (t.players || [])) bump(p); }
+  for (const cohort of Object.values(universityPool || {})) {
+    if (Array.isArray(cohort)) for (const e of cohort) bump(e?.player);
+  }
+  corporatePlayerIdBase = maxId + 1;
+  const year = WORLD_DATA.year || 1;
+  let recovered = 0;
+
+  // 社会人（企業/クラブ）
+  for (const def of getAllTeamsEffective()) {
+    const name = def.displayName || def.name;
+    if (TEAMS_DATA[name]) continue;
+    const rank = def.rank;
+    TEAMS_DATA[name] = {
+      name, abbreviation: makeAbbreviation(name),
+      players: generateCorporateRoster(def, year),
+      pitchingRotation: null, corporateTeamId: def.id,
+      corporateData: {
+        rank, region: def.region, city: def.city, type: def.type,
+        budget: BUDGET_BY_RANK[rank] || 12000, staff: generateInitialStaff(rank),
+        reputation: RANK_INITIAL_REPUTATION[rank] || 5, rankingScore: INITIAL_RANKING_SCORE[rank] || 900,
+        proDraftCount: 0, tournamentWins: 0, yearlyBudgetBonus: 0, tournamentBudgetBonus: 0, sponsors: [],
+      },
+    };
+    recovered++;
+  }
+
+  // 他の独立リーグ（自リーグは除く）
+  for (const lid of ALL_INDEPENDENT_LEAGUE_IDS) {
+    if (lid === userLeagueId) continue;
+    const leagueDef = INDEPENDENT_LEAGUES[lid];
+    for (const teamDef of (leagueDef?.teams || [])) {
+      if (TEAMS_DATA[teamDef.name]) continue;
+      const rank = teamDef.rank || 'C';
+      TEAMS_DATA[teamDef.name] = {
+        name: teamDef.name, abbreviation: teamDef.abbreviation || makeAbbreviation(teamDef.name),
+        players: generateCorporateRoster(teamDef, year), pitchingRotation: null,
+        independentLeagueId: lid,
+        corporateData: {
+          rank, type: 'independent',
+          reputation: RANK_INITIAL_REPUTATION[rank] || 20, rankingScore: INITIAL_RANKING_SCORE[rank] || 900,
+          proDraftCount: 0, tournamentWins: 0,
+        },
+      };
+      recovered++;
+    }
+  }
+
+  // 大学（欠落分のみ再生成）
+  if (UNIVERSITY_TEAMS.some(d => !TEAMS_DATA[d.name])) {
+    initializeUniversityTeamsForParallelWorld();
+    recovered++;
+  }
+
+  return recovered;
+};
+
 // ============================================================
 // 社会人＋独立リーグの並行世界生成（大学モード等から呼ばれる）
 // ============================================================

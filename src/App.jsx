@@ -56,7 +56,8 @@ import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffPro
 import { generateTryoutCandidates, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
 import { processNPBDraft } from './season/npbDraft.js';
-import { initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged } from './corporate/corporateInit.js';
+import { initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged, recoverMissingParallelTeams } from './corporate/corporateInit.js';
+import { WORLD_DATA } from './corporate/worldData.js';
 
 // Component imports
 import ManagementScreen from './components/ManagementScreen.jsx';
@@ -255,6 +256,13 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             saveData.seasonData?.settings?.teamNames || [],
             saveData.seasonData?.settings?.preset || null
           );
+          // 旧バージョンの年度移行バグで並行世界（他の独立リーグ・社会人・大学）が
+          // 削除されたセーブを復旧する。社会人/大学チームが1つも無ければ欠落と判断。
+          const hasParallel = Object.values(TEAMS_DATA).some(t => t.corporateTeamId || t.universityTeamId);
+          if (!hasParallel) {
+            const userLeague = WORLD_DATA.userLeagueId || saveData.seasonData?.settings?.preset || null;
+            recoverMissingParallelTeams(userLeague);
+          }
         }
 
         initializeAllPlayersCondition();

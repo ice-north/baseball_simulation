@@ -376,9 +376,10 @@ const ManagementScreen = ({
         });
       }
 
-      // 解散チーム処理
+      // 解散チーム処理（前年の自リーグ所属のみ対象。並行世界は削除しない）
       const configuredSet = new Set(configuredTeams);
-      const dissolvedTeamNames = Object.keys(TEAMS_DATA).filter(t => configuredTeams.length > 0 && !configuredSet.has(t));
+      const prevLeagueTeams = seasonData.settings?.teamNames || [];
+      const dissolvedTeamNames = prevLeagueTeams.filter(t => configuredTeams.length > 0 && !configuredSet.has(t) && TEAMS_DATA[t]);
       let dissolvedPlayerCount = 0;
       if (dissolvedTeamNames.length > 0) {
         dissolvedTeamNames.forEach(teamName => {
@@ -489,9 +490,12 @@ const ManagementScreen = ({
         });
       }
 
-      // 解散チーム検出: TEAMS_DATAにあるがsettings.teamNamesに存在しないチーム
+      // 解散チーム検出: 「前年の自リーグ所属」だが今年の設定に居ないチームのみ。
+      // ※ TEAMS_DATA全体を対象にすると、並行世界（他の独立リーグ・社会人・大学）まで
+      //   まとめて削除してしまい、翌年トレード相手やランキングから消える不具合になる。
       const configuredSet = new Set(configuredTeams);
-      const dissolvedTeamNames = Object.keys(TEAMS_DATA).filter(t => configuredTeams.length > 0 && !configuredSet.has(t));
+      const prevLeagueTeams = seasonData.settings?.teamNames || [];
+      const dissolvedTeamNames = prevLeagueTeams.filter(t => configuredTeams.length > 0 && !configuredSet.has(t) && TEAMS_DATA[t]);
       let dissolvedPlayerCount = 0;
 
       if (dissolvedTeamNames.length > 0) {
