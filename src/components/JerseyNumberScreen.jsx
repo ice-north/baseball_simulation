@@ -47,8 +47,9 @@ function AbilityStrip({ player }) {
 export default function JerseyNumberScreen({ userTeamName, seasonData, onComplete }) {
   const team = TEAMS_DATA[userTeamName];
 
-  // 初回に未設定の背番号を自動割り当て
-  useState(() => { ensureTeamJerseyNumbers(team); return true; });
+  // 新入団選手は背番号を空欄のままにする（自動割り当てしない）。
+  // 継続選手は前年の背番号を保持し、新加入はユーザーがドラッグで付与する。
+  // （一括で埋めたい場合は「空きを自動で埋める」「全て自動割り当て」を使用）
 
   const players = useMemo(() => {
     const list = [...(team?.players || [])];
@@ -179,7 +180,8 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
     <div className="flex items-center gap-2 px-1 pb-1 mb-1 border-b border-gray-700 text-xs text-gray-400">
       <span className="w-6">守</span>
       <span className="w-5 text-center">総</span>
-      <span className="w-28">選手</span>
+      <span className="w-24">選手</span>
+      <span className="w-9 text-right">年齢</span>
       <span className="w-64 hidden md:block">主要能力</span>
       <span className="w-7 text-right">現</span>
       <span className="w-3"></span>
@@ -204,7 +206,8 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
       >
         <span className="text-xs text-gray-400 w-6">{POSITION_NAMES[p.position] || ''}</span>
         <div className="w-5 flex-shrink-0"><OverallBadge player={p} /></div>
-        <span className="text-sm text-white w-28 truncate">{p.name}</span>
+        <span className="text-sm text-white w-24 truncate">{p.name}</span>
+        <span className="text-xs text-gray-300 w-9 text-right tabular-nums flex-shrink-0">{p.age}歳</span>
         {/* 主要能力 */}
         <div className="w-64 hidden md:flex flex-shrink-0 overflow-hidden">
           <AbilityStrip player={p} />
