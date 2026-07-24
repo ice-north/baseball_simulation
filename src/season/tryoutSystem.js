@@ -114,6 +114,39 @@ function getPlayerTraits(isPitcher) {
 
 
 /**
+ * リーグの格に応じて選手の能力を上限・スケールする（トライアウト受験者を「そのリーグ相応」にする）。
+ * 初回・年次いずれの候補にも共通適用。プールから来た候補はクローンに適用するため元選手は不変。
+ * ランクは現在の自リーグ格（優勝で昇格すると上限も上がる＝良い選手が受けに来る）。
+ */
+function applyLeagueRankScaling(player, rank) {
+  if (!rank || !player) return;
+  const IL_VEL_CAP = { S: 152, A: 146, B: 140, C: 133, D: 126 };
+  const IL_CTRL_CAP = { S: 72, A: 65, B: 58, C: 48, D: 38 };
+  const IL_BAT_CAP = { S: 68, A: 60, B: 52, C: 44, D: 36 };
+  const IL_SCALE = { S: 0.98, A: 0.90, B: 0.80, C: 0.70, D: 0.58 };
+  const vc = IL_VEL_CAP[rank] ?? 145;
+  const cc = IL_CTRL_CAP[rank] ?? 55;
+  const bc = IL_BAT_CAP[rank] ?? 50;
+  const sc = IL_SCALE[rank] ?? 0.85;
+  const jitter = (n) => n + Math.floor(Math.random() * 4);
+  if (player.position === 'pitcher' && player.pitching) {
+    player.pitching.velocity = Math.min(player.pitching.velocity || 0, jitter(vc));
+    player.pitching.control = Math.min(player.pitching.control || 0, jitter(cc));
+  }
+  if (player.batting) {
+    player.batting.meet = Math.min(player.batting.meet || 0, jitter(bc));
+    player.batting.power = Math.min(player.batting.power || 0, jitter(bc));
+    player.batting.eye = Math.min(player.batting.eye || 0, bc + Math.floor(Math.random() * 3));
+  }
+  if (player.fielding && typeof player.fielding.defense === 'number') {
+    player.fielding.defense = Math.round(player.fielding.defense * sc);
+  }
+  if (player.physical && typeof player.physical.speed === 'number') {
+    player.physical.speed = Math.round(player.physical.speed * sc);
+  }
+}
+
+/**
  * 不足分補充用のランダム候補生成（2年目以降用）
  * generateTryoutCandidatesと同じロジックだが少数のみ生成
  */
@@ -279,26 +312,7 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
       }
     };
 
-    if (independentLeagueRank) {
-      const ilr = independentLeagueRank;
-      const IL_VEL_CAP = { B: 140, C: 133, D: 126 };
-      const IL_CTRL_CAP = { B: 58, C: 48, D: 38 };
-      const IL_BAT_CAP = { B: 52, C: 44, D: 36 };
-      const IL_SCALE = { B: 0.80, C: 0.70, D: 0.58 };
-      const vc = IL_VEL_CAP[ilr] || 145;
-      const cc = IL_CTRL_CAP[ilr] || 55;
-      const bc = IL_BAT_CAP[ilr] || 50;
-      const sc = IL_SCALE[ilr] || 0.85;
-      if (isPitcher) {
-        player.pitching.velocity = Math.min(player.pitching.velocity, vc + Math.floor(Math.random() * 4));
-        player.pitching.control = Math.min(player.pitching.control, cc + Math.floor(Math.random() * 4));
-      }
-      player.batting.meet = Math.min(player.batting.meet, bc + Math.floor(Math.random() * 4));
-      player.batting.power = Math.min(player.batting.power, bc + Math.floor(Math.random() * 4));
-      player.batting.eye = Math.min(player.batting.eye, bc + Math.floor(Math.random() * 3));
-      player.fielding.defense = Math.round(player.fielding.defense * sc);
-      player.physical.speed = Math.round(player.physical.speed * sc);
-    }
+    applyLeagueRankScaling(player, independentLeagueRank);
 
     player.scoutComment = generateScoutComment(player);
     candidates.push(player);
@@ -483,16 +497,23 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   const hsCount = Math.max(Math.round(total * hsShare), 5);
   const faCount = Math.max(Math.round(total * faShare), 3);
   const qualityBias = t;
+  // 受験者はすべてクローンなので、リーグの格に合わせて能力をスケールしてから登録する。
+  // （全国プールから来た中位級を、そのリーグ相応に抑える。Dリーグには中位級は来ない）
+  // ※初回生成候補は generateRandomFillCandidates 内で既にスケール済みのため二重適用しない。
+  const scaleToLeague = (arr) => {
+    if (independentLeagueRank) arr.forEach(c => applyLeagueRankScaling(c, independentLeagueRank));
+    return arr;
+  };
   // 1. 高校卒業予定
-  getHighSchoolTryoutCandidates(hsCount, qualityBias).forEach(addCandidate);
+  scaleToLeague(getHighSchoolTryoutCandidates(hsCount, qualityBias)).forEach(addCandidate);
   // 2. 大学4年生（卒業予定・NPB未指名）
-  getUniversitySeniorTryoutCandidates(year, uniCount, qualityBias).forEach(addCandidate);
+  scaleToLeague(getUniversitySeniorTryoutCandidates(year, uniCount, qualityBias)).forEach(addCandidate);
   // 3. FA組（リリースプール ＋ クラブチーム選手）
   //    FA枠の半分はクラブチームのプロ志向選手から供給する
   const clubCount = Math.max(Math.round(faCount * 0.5), 2);
   const releasedCount = Math.max(faCount - clubCount, 2);
-  getReleasedCandidatesFromPool(releasedCount).forEach(addCandidate);
-  getClubTryoutCandidates(clubCount).forEach(addCandidate);
+  scaleToLeague(getReleasedCandidatesFromPool(releasedCount)).forEach(addCandidate);
+  scaleToLeague(getClubTryoutCandidates(clubCount)).forEach(addCandidate);
 
   // 4. 安全網: 実在候補が極端に少ない場合のみ生成で補完（通常は発生しない）
   const minCandidates = teamCount * 4;
@@ -1788,9 +1809,10 @@ export function selectPlayerForAI(candidates, currentRoster = [], teamContext = 
     });
   }
 
-  // ランダム要素を加えて各チームの個性を出す（±15pt）
+  // ランダム要素を加えて各チームの個性を出す（±8pt。CPUが好素材を取り逃しにくくし、
+  // ユーザーの人力ドラフトとの戦力差を縮める）
   scoredCandidates.forEach(candidate => {
-    candidate.valueScore += (Math.random() - 0.5) * 30;
+    candidate.valueScore += (Math.random() - 0.5) * 16;
   });
 
   // スコアが高い順にソート
