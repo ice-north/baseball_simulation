@@ -3,7 +3,6 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
 import { generatePitchingRotation } from '../game/lineupGenerator.js';
-import { getUniversityPoolSummary } from '../season/universityPool.js';
 
 const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots, gameMode }) => {
   const [processing, setProcessing] = useState(false);
@@ -188,9 +187,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               }`}
             >
               <div className="font-bold text-sm">{name}</div>
-              <div className="text-xs opacity-70 mt-0.5">
-                {info ? `${info.year}年目 ${info.date?.month}/${info.date?.day}` : '空き'}
-              </div>
+              {info ? (
+                <div className="mt-0.5">
+                  <div className="text-xs opacity-80">{info.year}年目 {info.date?.month}/{info.date?.day}</div>
+                  {info.teamName && <div className="text-xs font-bold truncate opacity-90">{info.teamName}</div>}
+                </div>
+              ) : (
+                <div className="text-xs opacity-70 mt-0.5">空き</div>
+              )}
             </button>
           );
         })}
@@ -511,26 +515,6 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         <SaveSlotSelector />
 
         {/* 大学モード: 卒業レポートは年度進行後に専用画面で表示 */}
-
-        {(() => {
-          const uniSummary = getUniversityPoolSummary();
-          if (uniSummary.totalStudents > 0) {
-            return (
-              <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700/40 rounded-xl">
-                <h3 className="text-sm font-bold text-blue-400 mb-1">大学野球プール</h3>
-                <p className="text-xs text-gray-400">
-                  在学中: {uniSummary.totalStudents}名
-                  {Object.entries(uniSummary.byYear).map(([yr, info]) => (
-                    <span key={yr} className="ml-2 text-gray-500">
-                      ({yr}年入学: {info.count}名)
-                    </span>
-                  ))}
-                </p>
-              </div>
-            );
-          }
-          return null;
-        })()}
 
         <div className="text-center">
           <button
