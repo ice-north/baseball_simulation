@@ -4,14 +4,29 @@ import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
+
+// チームが所属する独立リーグIDを返す（無ければ null）。
+// マーカー(independentLeagueId/corporateData)が欠落していても、WORLD_DATAの
+// 独立リーグ所属名簿から補完して判定する（年度移行等でマーカーが失われても他リーグが消えない）。
+const independentLeagueOf = (name, team) => {
+  if (team?.independentLeagueId) return team.independentLeagueId;
+  const leagues = WORLD_DATA.independentLeagues || {};
+  for (const [lid, ld] of Object.entries(leagues)) {
+    if (ld?.teams?.includes(name)) return lid;
+  }
+  if (team?.corporateData?.type === 'independent') return '__indep__';
+  return null;
+};
 
 // トレード相手にできるチーム = 独立リーグのチーム（自リーグ＋他の独立リーグ）。
 // 大学・社会人（企業/クラブ）は競技区分が異なるため対象外。
-const isTradeablePartner = (team) => {
+const isTradeablePartner = (name, team) => {
   if (!team) return false;
   if (team.universityData || team.universityTeamId) return false;
+  if (independentLeagueOf(name, team)) return true; // 独立リーグ所属は無条件でトレード可
   if (team.corporateData && team.corporateData.type !== 'independent') return false;
-  return true;
+  return true; // マーカー未設定の自リーグ等
 };
 
 // 全チーム横断で未使用の選手IDを返す。
@@ -87,17 +102,18 @@ const TradeScreen = ({ userTeamName, onBack }) => {
   const tradeGroups = useMemo(() => {
     const groups = new Map(); // ラベル -> [チーム名]
     Object.entries(TEAMS_DATA).forEach(([name, team]) => {
-      if (name === userTeamName || !isTradeablePartner(team)) return;
-      const label = team.independentLeagueId
-        ? (INDEPENDENT_LEAGUES[team.independentLeagueId]?.name || '独立リーグ')
-        : '所属リーグ';
+      if (name === userTeamName || !isTradeablePartner(name, team)) return;
+      const lid = independentLeagueOf(name, team);
+      const label = (lid && lid !== '__indep__')
+        ? (INDEPENDENT_LEAGUES[lid]?.name || '独立リーグ')
+        : (lid === '__indep__' ? '独立リーグ' : '所属リーグ');
       if (!groups.has(label)) groups.set(label, []);
       groups.get(label).push(name);
     });
     // 自リーグ（所属リーグ）を先頭に
     return [...groups.entries()].sort((a, b) => (a[0] === '所属リーグ' ? -1 : 0) - (b[0] === '所属リーグ' ? -1 : 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userTeamName, updateTrigger]);
+  }, [userTeamName, updateTrigger, Object.keys(TEAMS_DATA).length]);
 
   if (!myTeam) return <div className="p-8 text-white">チームが見つかりません</div>;
 
@@ -185,7 +201,7 @@ const TradeScreen = ({ userTeamName, onBack }) => {
 
     Object.entries(TEAMS_DATA).forEach(([teamName, team]) => {
       if (teamName === userTeamName || !team.players?.length) return;
-      if (!isTradeablePartner(team)) return; // 独立リーグのチームのみ
+      if (!isTradeablePartner(teamName, team)) return; // 独立リーグのチームのみ
 
       const ai = analyzeRoster(team.players);
 
