@@ -8,6 +8,8 @@ import { autoSimulateGame, generateAILineup } from './autoSimulation.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
 import { adjustGrowthModifier } from '../utils/constants.js';
 import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
+import { WORLD_DATA } from '../corporate/worldData.js';
+import { generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
 
 /**
  * setupManagedGame - 采配モードの試合セットアップ
@@ -766,6 +768,18 @@ export function executeHandleManagedGameEnd(ctx) {
   const newPhase = updatedSeasonData.phase;
   if (oldPhase !== newPhase) {
     updatedSeasonData = handlePhaseTransition(updatedSeasonData, newPhase);
+  }
+
+  // 独立リーグモード: グランドチャンピオンシップ生成（10月〜）。
+  // 采配で試合を消化する経路では checkAndTriggerEvents が走らないため、
+  // ここでも生成しないと「試合を続けているとグランドCSが始まらない」不具合になる。
+  if (!updatedSeasonData.settings?.corporateMode && !updatedSeasonData.settings?.universityMode &&
+      WORLD_DATA.initialized && updatedSeasonData.currentDate.month >= 10 && !updatedSeasonData.grandChampionship?.generated) {
+    const gc = generateGrandChampionship(WORLD_DATA.userLeagueId, updatedSeasonData.standings, updatedSeasonData.settings, updatedSeasonData.year);
+    if (gc) {
+      autoPlayGrandChampionship(gc);
+      updatedSeasonData = { ...updatedSeasonData, grandChampionship: gc };
+    }
   }
 
   // カレンダー月を追従
