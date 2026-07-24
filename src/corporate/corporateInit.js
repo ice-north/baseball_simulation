@@ -191,6 +191,22 @@ const ELO_I = {
   uniNational: 35,  // 大学全国大会（1試合あたり基礎値）
 };
 
+// リーグ最終順位ボーナス（優勝を明確に評価し、勝ち続ければ数年で昇格できるようにする）。
+// 期待勝率ベースのElo変動(±10前後/年)だけでは、弱小リーグで優勝しても昇格が遅すぎるため加算する。
+const finishBonus = (pos) => pos === 1 ? 30 : pos === 2 ? 15 : pos === 3 ? 6 : 0;
+// 順位ボーナスを標準的な順位表配列(team/winRate/wins)に適用する
+const applyFinishBonus = (rows, addDelta, scoreMap) => {
+  if (!Array.isArray(rows) || rows.length < 2) return;
+  const sorted = [...rows].sort((a, b) => (b.winRate || 0) - (a.winRate || 0) || (b.wins || 0) - (a.wins || 0));
+  sorted.forEach((st, i) => {
+    if (scoreMap[st.team] === undefined) return;
+    const games = (st.wins || 0) + (st.losses || 0) + (st.draws || 0);
+    if (games === 0) return;
+    const b = finishBonus(i + 1);
+    if (b) addDelta(st.team, b);
+  });
+};
+
 // 期待勝率 We
 const getExpectedWinRate = (selfScore, oppScore) =>
   1 / (Math.pow(10, -(selfScore - oppScore) / ELO_DIVISOR) + 1);
@@ -1702,6 +1718,7 @@ export const updateAllRanks = (seasonData) => {
       const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
       addDelta(st.team, ELO_I.regular * (W - getExpectedWinRate(selfScore, avgScore)));
     }
+    applyFinishBonus(corpSt, addDelta, scoreMap);
   }
 
   // 3b. 独立リーグ（全独立チームをひとまとめに）
@@ -1716,6 +1733,7 @@ export const updateAllRanks = (seasonData) => {
       const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
       addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
     }
+    applyFinishBonus(indSt, addDelta, scoreMap);
   }
 
   // 3c. TEAMS_DATA大学チームのリーグElo
@@ -1730,6 +1748,7 @@ export const updateAllRanks = (seasonData) => {
       const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
       addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
     }
+    applyFinishBonus(uniMgSt, addDelta, scoreMap);
   }
 
   // 3d. WORLD_DATA大学リーグ（春・秋、部別に適用）
@@ -1752,6 +1771,7 @@ export const updateAllRanks = (seasonData) => {
             const W = ((st.wins || 0) + (st.draws || 0) * 0.5) / games;
             addDelta(st.team, ELO_I.league * (W - getExpectedWinRate(selfScore, avgScore)));
           }
+          applyFinishBonus(divSt, addDelta, scoreMap);
         }
       }
     }
