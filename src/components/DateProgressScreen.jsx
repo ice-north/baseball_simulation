@@ -1859,10 +1859,42 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const POS_SHORT = { pitcher: '投', catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
     const FORM_SHORT = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイドスロー', submarine: 'アンダースロー' };
 
-    // ドラフト指名確度(★)算出用: 全候補の指名スコアを集計し、順位で確率を出す。
-    // npbDraft.js の SOURCE_DRAFT_BONUS.independent(+35) と対応させ、実ドラフトと整合。
-    const IND_DRAFT_BONUS = 35;
-    const allDraftScores = [];
+    // 指名確度(★)はカテゴリ内順位で算出する。
+    // 実ドラフトは各カテゴリの上位から順に指名される（高63/大18/社16/独13%程度）ため、
+    // カテゴリ内順位が指名到達性を最もよく表す。全候補横断の順位だと将来性倍率の乗る
+    // 若い高校生に埋もれ、社会人/独立のNo.1すら★1になってしまう（実態と乖離）。
+    const CAT_DEPTH = { highschool: 55, university: 16, corporate: 14, independent: 12 };
+    const outlookByRank = (rank, source) => {
+      const d = CAT_DEPTH[source] || 15;
+      if (rank <= d * 0.35) return { stars: 5, prob: 95, label: '指名確実' };
+      if (rank <= d * 0.6)  return { stars: 4, prob: 82, label: '指名有力' };
+      if (rank <= d * 0.9)  return { stars: 3, prob: 60, label: '指名圏内' };
+      if (rank <= d * 1.3)  return { stars: 2, prob: 32, label: '当落線上' };
+      return { stars: 1, prob: 12, label: '来季に期待' };
+    };
+    const scoutComment = (c, o) => {
+      const trait = c.isPitcher
+        ? (c.velocity >= 150 ? '球速は即戦力級。'
+          : c.control >= 60 ? '制球に円熟味あり。'
+          : c.arsenalCount >= 4 ? '多彩な変化球が武器。'
+          : c.stamina >= 110 ? 'スタミナ豊富な先発型。'
+          : '線は細いが伸びしろ十分。')
+        : (c.power >= 60 ? '長打力は一級品。'
+          : c.speed >= 65 ? '走力で試合を変える。'
+          : c.meet >= 60 ? '安定した打撃技術。'
+          : c.defense >= 60 ? '守備に定評あり。'
+          : '総合力でアピール。');
+      const tail = ['来季の飛躍に期待。', '評価が割れる当落線上。', '中位〜下位で指名圏内。', '上位指名も十分だ。', 'ドラフトの目玉、1位候補。'][o.stars - 1];
+      return trait + tail;
+    };
+    // カード + カテゴリ内順位 → ★・確率・寸評を付与
+    const enrich = (card, rank, source) => {
+      if (!card) return card;
+      const o = outlookByRank(rank, source);
+      card.stars = o.stars; card.prob = o.prob; card.outlook = o.label;
+      card.comment = scoutComment(card, o);
+      return card;
+    };
 
     const makeCard = (p, source, orgName) => {
       const isPitcher = p.position === 'pitcher';
@@ -1904,7 +1936,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         name: p.name, age: p.age, position: POS_SHORT[p.position] || p.position,
         throws, bats, source, orgName, headline, subline,
         isPitcher, fame: p.fame || 0, score: draft.totalScore,
-        draftScore: draft.totalScore + (source === 'independent' ? IND_DRAFT_BONUS : 0),
         velocity: p.pitching?.velocity, control: p.pitching?.control,
         stamina: p.pitching?.stamina || 0,
         arsenalCount: (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length,
@@ -1918,13 +1949,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     // 高校生注目選手
     let hsTop = null, hsOthers = [];
     if (highSchoolPool.players?.length > 0) {
-      const scoredHs = highSchoolPool.players.map(p => ({ player: p, draft: checkNPBDraftEligibility(p) }));
-      scoredHs.forEach(x => allDraftScores.push(x.draft.totalScore));
-      const sorted = scoredHs
+      const sorted = highSchoolPool.players
+        .map(p => ({ player: p, draft: checkNPBDraftEligibility(p) }))
         .filter(x => x.draft.totalScore >= 80)
         .sort((a, b) => b.draft.totalScore - a.draft.totalScore);
-      if (sorted.length > 0) hsTop = makeCard(sorted[0].player, 'highschool', sorted[0].player.highSchool?.name || '高校');
-      hsOthers = sorted.slice(1, 9).map(x => makeCard(x.player, 'highschool', x.player.highSchool?.name || '高校'));
+      if (sorted.length > 0) hsTop = enrich(makeCard(sorted[0].player, 'highschool', sorted[0].player.highSchool?.name || '高校'), 1, 'highschool');
+      hsOthers = sorted.slice(1, 10).map((x, i) => enrich(makeCard(x.player, 'highschool', x.player.highSchool?.name || '高校'), i + 2, 'highschool'));
     }
 
     // 大学注目選手（3〜4年生）
@@ -1938,7 +1968,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const p = entry.player;
         if (!p) return;
         const draft = checkNPBDraftEligibility(p);
-        allDraftScores.push(draft.totalScore);
         if (draft.totalScore >= 80) {
           const card = makeCard(p, 'university', entry.universityTeamName || '大学');
           card.year = yearsInUni + 1;
@@ -1948,8 +1977,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       });
     });
     uniAll.sort((a, b) => b.score - a.score);
+    uniAll.forEach((x, i) => enrich(x.card, i + 1, 'university'));
     const uniTop = uniAll.length > 0 ? uniAll[0].card : null;
-    const uniOthers = uniAll.slice(1, 9).map(x => x.card);
+    const uniOthers = uniAll.slice(1, 10).map(x => x.card);
 
     // 社会人・独立
     const corpAll = [];
@@ -1962,7 +1992,6 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       team.players.forEach(p => {
         if (p.age >= 30) return;
         const draft = checkNPBDraftEligibility(p);
-        allDraftScores.push(draft.totalScore + (isInd ? IND_DRAFT_BONUS : 0));
         if (draft.totalScore < 80) return;
         const card = makeCard(p, isCorp ? 'corporate' : 'independent', teamName);
         if (isCorp) corpAll.push({ card, score: draft.totalScore, player: p });
@@ -1971,6 +2000,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     });
     corpAll.sort((a, b) => b.score - a.score);
     indAll.sort((a, b) => b.score - a.score);
+    corpAll.forEach((x, i) => enrich(x.card, i + 1, 'corporate'));
+    indAll.forEach((x, i) => enrich(x.card, i + 1, 'independent'));
 
     // 大会情報（社会人モード: seasonData、大学/独立モード: WORLD_DATA）
     const tournamentNews = [];
@@ -2005,55 +2036,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       indAll.forEach((x, i) => boost(x.player, i === 0 ? 3 : 1));
     }
 
-    // === ドラフト指名確度（★）と一言コメントを各掲載選手に付与 ===
-    // 全候補スコアを降順ソートし、掲載選手の順位 → 指名確率帯に写像。
-    // 実ドラフトは全ソース横断の上位~90名前後を指名するため、順位でよく近似できる。
-    allDraftScores.sort((a, b) => b - a);
-    const totalCand = allDraftScores.length;
-    const rankOf = (s) => { // 自分より高いスコアの数（=0基点の順位）
-      let lo = 0, hi = totalCand;
-      while (lo < hi) { const m = (lo + hi) >> 1; if (allDraftScores[m] > s) lo = m + 1; else hi = m; }
-      return lo;
-    };
-    const outlookOf = (s) => {
-      const r = rankOf(s);
-      if (r < 25) return { stars: 5, prob: 95, label: '指名確実' };
-      if (r < 55) return { stars: 4, prob: 82, label: '指名有力' };
-      if (r < 90) return { stars: 3, prob: 58, label: '指名圏内' };
-      if (r < 130) return { stars: 2, prob: 30, label: '当落線上' };
-      return { stars: 1, prob: 12, label: '来季に期待' };
-    };
-    const scoutComment = (c, o) => {
-      const trait = c.isPitcher
-        ? (c.velocity >= 150 ? '球速は即戦力級。'
-          : c.control >= 60 ? '制球に円熟味あり。'
-          : c.arsenalCount >= 4 ? '多彩な変化球が武器。'
-          : c.stamina >= 110 ? 'スタミナ豊富な先発型。'
-          : '線は細いが伸びしろ十分。')
-        : (c.power >= 60 ? '長打力は一級品。'
-          : c.speed >= 65 ? '走力で試合を変える。'
-          : c.meet >= 60 ? '安定した打撃技術。'
-          : c.defense >= 60 ? '守備に定評あり。'
-          : '総合力でアピール。');
-      const tail = ['来季の飛躍に期待。', '評価が割れる当落線上。', '中位〜下位で指名圏内。', '上位指名も十分だ。', 'ドラフトの目玉、1位候補。'][o.stars - 1];
-      return trait + tail;
-    };
-    const featuredCards = [
-      hsTop, ...hsOthers, uniTop, ...uniOthers,
-      corpAll[0]?.card, ...corpAll.slice(1, 7).map(x => x.card),
-      indAll[0]?.card, ...indAll.slice(1, 6).map(x => x.card),
-    ].filter(Boolean);
-    featuredCards.forEach(card => {
-      const o = outlookOf(card.draftScore);
-      card.stars = o.stars; card.prob = o.prob; card.outlook = o.label;
-      card.comment = scoutComment(card, o);
-    });
-
     return {
       hsTop, hsOthers,
       uniTop, uniOthers,
-      corpTop: corpAll[0]?.card || null, corpOthers: corpAll.slice(1, 7).map(x => x.card),
-      indTop: indAll[0]?.card || null, indOthers: indAll.slice(1, 6).map(x => x.card),
+      corpTop: corpAll[0]?.card || null, corpOthers: corpAll.slice(1, 10).map(x => x.card),
+      indTop: indAll[0]?.card || null, indOthers: indAll.slice(1, 10).map(x => x.card),
       tournamentNews,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3891,8 +3878,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <span className={`text-xs font-semibold truncate ${headColor}`}>{c.headline}</span>
                 <span className="ml-auto text-xs shrink-0 font-mono font-semibold" style={{ color: MUTED }}>{statStr}</span>
               </div>
-              {/* 所属＋スカウト寸評 */}
-              <div className="text-xs truncate" style={{ paddingLeft: '1.2rem' }}>
+              {/* 所属＋スカウト寸評（枠内で折り返し、途切れないように） */}
+              <div className="text-xs leading-snug" style={{ paddingLeft: '1.2rem' }}>
                 <span style={{ color: FAINT }}>{c.orgName}</span>
                 <span style={{ color: FAINT }}> ／ </span>
                 <span style={{ color: INK }}>{c.comment}</span>
@@ -3915,7 +3902,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3" onClick={() => setShowNewspaper(false)}>
             <div className="absolute inset-0 bg-black/80" />
-            <div className="relative w-full max-w-5xl rounded-lg shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()} style={{ background: PAPER, maxHeight: '95vh', border: `1px solid ${INK}` }}>
+            <div className="relative w-full max-w-7xl rounded-lg shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()} style={{ background: PAPER, maxHeight: '95vh', border: `1px solid ${INK}` }}>
               {/* 題字（マストヘッド） */}
               <div className="text-center pt-2.5 pb-2 px-5 shrink-0" style={{ background: PAPER, borderBottom: `4px double ${INK}` }}>
                 <div className="flex items-center justify-between">
