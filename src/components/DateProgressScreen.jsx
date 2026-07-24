@@ -1859,6 +1859,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     const POS_SHORT = { pitcher: '投', catcher: '捕', first: '一', second: '二', third: '三', short: '遊', left: '左', center: '中', right: '右' };
     const FORM_SHORT = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイドスロー', submarine: 'アンダースロー' };
 
+    // ドラフト指名確度(★)算出用: 全候補の指名スコアを集計し、順位で確率を出す。
+    // npbDraft.js の SOURCE_DRAFT_BONUS.independent(+35) と対応させ、実ドラフトと整合。
+    const IND_DRAFT_BONUS = 35;
+    const allDraftScores = [];
+
     const makeCard = (p, source, orgName) => {
       const isPitcher = p.position === 'pitcher';
       const throws = p.physical?.throws === 'left' ? '左' : '右';
@@ -1899,6 +1904,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         name: p.name, age: p.age, position: POS_SHORT[p.position] || p.position,
         throws, bats, source, orgName, headline, subline,
         isPitcher, fame: p.fame || 0, score: draft.totalScore,
+        draftScore: draft.totalScore + (source === 'independent' ? IND_DRAFT_BONUS : 0),
         velocity: p.pitching?.velocity, control: p.pitching?.control,
         stamina: p.pitching?.stamina || 0,
         arsenalCount: (p.pitching?.arsenal || []).filter(a => a.type !== 'straight').length,
@@ -1912,8 +1918,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
     // 高校生注目選手
     let hsTop = null, hsOthers = [];
     if (highSchoolPool.players?.length > 0) {
-      const sorted = highSchoolPool.players
-        .map(p => ({ player: p, draft: checkNPBDraftEligibility(p) }))
+      const scoredHs = highSchoolPool.players.map(p => ({ player: p, draft: checkNPBDraftEligibility(p) }));
+      scoredHs.forEach(x => allDraftScores.push(x.draft.totalScore));
+      const sorted = scoredHs
         .filter(x => x.draft.totalScore >= 80)
         .sort((a, b) => b.draft.totalScore - a.draft.totalScore);
       if (sorted.length > 0) hsTop = makeCard(sorted[0].player, 'highschool', sorted[0].player.highSchool?.name || '高校');
@@ -1931,6 +1938,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         const p = entry.player;
         if (!p) return;
         const draft = checkNPBDraftEligibility(p);
+        allDraftScores.push(draft.totalScore);
         if (draft.totalScore >= 80) {
           const card = makeCard(p, 'university', entry.universityTeamName || '大学');
           card.year = yearsInUni + 1;
@@ -1954,6 +1962,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       team.players.forEach(p => {
         if (p.age >= 30) return;
         const draft = checkNPBDraftEligibility(p);
+        allDraftScores.push(draft.totalScore + (isInd ? IND_DRAFT_BONUS : 0));
         if (draft.totalScore < 80) return;
         const card = makeCard(p, isCorp ? 'corporate' : 'independent', teamName);
         if (isCorp) corpAll.push({ card, score: draft.totalScore, player: p });
@@ -1995,6 +2004,50 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       // 独立: No.1 +3、その他 +1
       indAll.forEach((x, i) => boost(x.player, i === 0 ? 3 : 1));
     }
+
+    // === ドラフト指名確度（★）と一言コメントを各掲載選手に付与 ===
+    // 全候補スコアを降順ソートし、掲載選手の順位 → 指名確率帯に写像。
+    // 実ドラフトは全ソース横断の上位~90名前後を指名するため、順位でよく近似できる。
+    allDraftScores.sort((a, b) => b - a);
+    const totalCand = allDraftScores.length;
+    const rankOf = (s) => { // 自分より高いスコアの数（=0基点の順位）
+      let lo = 0, hi = totalCand;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (allDraftScores[m] > s) lo = m + 1; else hi = m; }
+      return lo;
+    };
+    const outlookOf = (s) => {
+      const r = rankOf(s);
+      if (r < 25) return { stars: 5, prob: 95, label: '指名確実' };
+      if (r < 55) return { stars: 4, prob: 82, label: '指名有力' };
+      if (r < 90) return { stars: 3, prob: 58, label: '指名圏内' };
+      if (r < 130) return { stars: 2, prob: 30, label: '当落線上' };
+      return { stars: 1, prob: 12, label: '来季に期待' };
+    };
+    const scoutComment = (c, o) => {
+      const trait = c.isPitcher
+        ? (c.velocity >= 150 ? '球速は即戦力級。'
+          : c.control >= 60 ? '制球に円熟味あり。'
+          : c.arsenalCount >= 4 ? '多彩な変化球が武器。'
+          : c.stamina >= 110 ? 'スタミナ豊富な先発型。'
+          : '線は細いが伸びしろ十分。')
+        : (c.power >= 60 ? '長打力は一級品。'
+          : c.speed >= 65 ? '走力で試合を変える。'
+          : c.meet >= 60 ? '安定した打撃技術。'
+          : c.defense >= 60 ? '守備に定評あり。'
+          : '総合力でアピール。');
+      const tail = ['来季の飛躍に期待。', '評価が割れる当落線上。', '中位〜下位で指名圏内。', '上位指名も十分だ。', 'ドラフトの目玉、1位候補。'][o.stars - 1];
+      return trait + tail;
+    };
+    const featuredCards = [
+      hsTop, ...hsOthers, uniTop, ...uniOthers,
+      corpAll[0]?.card, ...corpAll.slice(1, 7).map(x => x.card),
+      indAll[0]?.card, ...indAll.slice(1, 6).map(x => x.card),
+    ].filter(Boolean);
+    featuredCards.forEach(card => {
+      const o = outlookOf(card.draftScore);
+      card.stars = o.stars; card.prob = o.prob; card.outlook = o.label;
+      card.comment = scoutComment(card, o);
+    });
 
     return {
       hsTop, hsOthers,
@@ -3779,6 +3832,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           ind:  { head: 'text-purple-800', bar: 'bg-purple-800', chip: 'bg-purple-800 text-purple-50' },
         };
 
+        // 指名確度スター（クリーム紙で映える濃オレンジ）
+        const STAR_ON = '#c2410c';
+        const STAR_OFF = '#d9cdb0';
+        const Stars = ({ n = 0, size = 'text-base' }) => (
+          <span className={`${size} leading-none tracking-tighter`}>
+            <span style={{ color: STAR_ON }}>{'★'.repeat(n)}</span><span style={{ color: STAR_OFF }}>{'☆'.repeat(5 - n)}</span>
+          </span>
+        );
+
         const FeatureCard = ({ c, label, cat }) => {
           if (!c) return null;
           const stats = c.isPitcher
@@ -3793,13 +3855,21 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               </div>
               <div className="text-2xl font-black leading-tight" style={{ ...serif, color: INK }}>{c.name}</div>
               <div className="text-xs font-medium" style={{ color: MUTED }}>{c.position}・{c.throws}投{c.bats}打・{c.age}歳 <span style={{ color: FAINT }}>／ {c.orgName}</span></div>
+              {/* 指名確度: ★＋ラベル＋確率 */}
+              <div className="flex items-center gap-2">
+                <Stars n={c.stars || 0} />
+                <span className="text-xs font-black" style={{ color: STAR_ON }}>{c.outlook}</span>
+                <span className="text-xs font-bold ml-auto" style={{ color: MUTED }}>指名確度 {c.prob}%</span>
+              </div>
               <div className={`text-base font-bold leading-snug ${c.isPitcher ? 'text-red-800' : 'text-sky-800'}`} style={serif}>{c.headline}</div>
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {stats.map((s, i) => (
                   <span key={i} className="text-xs font-bold px-1.5 py-0.5 rounded-sm" style={{ background: '#e9e0cb', color: INK }}>{s}</span>
                 ))}
               </div>
-              {c.fame > 10 && <div className="text-xs font-bold mt-0.5" style={{ color: '#92400e' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
+              {/* スカウト寸評 */}
+              {c.comment && <div className="text-xs font-medium leading-snug mt-0.5" style={{ ...serif, color: INK }}>「{c.comment}」</div>}
+              {c.fame > 10 && <div className="text-xs font-bold" style={{ color: '#92400e' }}>注目度 {c.fame} ・ ドラフト評価 {c.score}</div>}
             </div>
           );
         };
@@ -3815,12 +3885,18 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                 <span className="text-sm font-bold truncate" style={{ ...serif, color: INK }}>{c.name}</span>
                 <span className="text-xs shrink-0" style={{ color: MUTED }}>{c.age}歳</span>
                 {extra && <span className="text-xs font-bold shrink-0 text-blue-700">{extra}</span>}
+                <Stars n={c.stars || 0} size="text-xs" />
               </div>
               <div className="flex items-center gap-1" style={{ paddingLeft: '1.2rem' }}>
                 <span className={`text-xs font-semibold truncate ${headColor}`}>{c.headline}</span>
                 <span className="ml-auto text-xs shrink-0 font-mono font-semibold" style={{ color: MUTED }}>{statStr}</span>
               </div>
-              <div className="text-xs truncate" style={{ paddingLeft: '1.2rem', color: FAINT }}>{c.orgName}</div>
+              {/* 所属＋スカウト寸評 */}
+              <div className="text-xs truncate" style={{ paddingLeft: '1.2rem' }}>
+                <span style={{ color: FAINT }}>{c.orgName}</span>
+                <span style={{ color: FAINT }}> ／ </span>
+                <span style={{ color: INK }}>{c.comment}</span>
+              </div>
             </div>
           );
         };
