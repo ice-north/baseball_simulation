@@ -1009,6 +1009,30 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
   initializeUniversityTeamsForParallelWorld();
 };
 
+// 独立リーグモードの「自リーグ」チームに独立リーグ用のマーカーを付与する。
+// 自リーグは initializeNewGame(=通常のチーム生成) で作られ corporateData を持たないため、
+// チームランキング(Elo)・注目度・トレードなど独立リーグ系システムから漏れていた。
+// 名前一致でリーグ定義のランクを引き、無ければ 'C' を既定とする。新規/ロード両対応。
+export const ensureUserIndependentLeagueTagged = (teamNames, preset) => {
+  if (!Array.isArray(teamNames)) return;
+  const leagueDef = preset ? INDEPENDENT_LEAGUES[preset] : null;
+  for (const name of teamNames) {
+    const team = TEAMS_DATA[name];
+    if (!team || team.corporateData || team.universityData) continue;
+    const def = leagueDef?.teams?.find(t => t.name === name);
+    const rank = def?.rank || 'C';
+    team.independentLeagueId = preset || '__custom__';
+    team.corporateData = {
+      rank,
+      type: 'independent',
+      reputation: RANK_INITIAL_REPUTATION[rank] ?? 20,
+      rankingScore: INITIAL_RANKING_SCORE[rank] ?? 900,
+      proDraftCount: 0,
+      tournamentWins: 0,
+    };
+  }
+};
+
 // ============================================================
 // 社会人＋独立リーグの並行世界生成（大学モード等から呼ばれる）
 // ============================================================

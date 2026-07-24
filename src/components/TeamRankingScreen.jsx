@@ -213,7 +213,32 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
     () => (isProvisional ? buildProvisionalRanking(gameMode) : []),
     [isProvisional, gameMode, Object.keys(TEAMS_DATA).length]
   );
-  const ranking = isProvisional ? provisionalRanking : storedRanking;
+  // Eloランキング(storedRanking)は corporateData/universityData を持つチームのみ収録される。
+  // 自リーグ（独立モードでマーカー未設定のユーザーリーグ等）が漏れて消えるのを防ぐため、
+  // 実体化済みで未収録のチームを補完し、スコア順で再ソート・再採番する。
+  const ranking = useMemo(() => {
+    if (isProvisional) return provisionalRanking;
+    const seen = new Set(storedRanking.map(e => e.name));
+    const extra = [];
+    for (const [name, team] of Object.entries(TEAMS_DATA)) {
+      if (seen.has(name) || !team?.players?.length) continue;
+      const cd = team.corporateData, ud = team.universityData;
+      const type = team.independentLeagueId ? 'independent'
+        : cd ? (cd.type === 'independent' ? 'independent' : 'corporate')
+        : ud ? 'university'
+        : (gameMode === 'corporate' ? 'corporate' : gameMode === 'university' ? 'university' : 'independent');
+      const rank = cd?.rank || ud?.rank || 'C';
+      extra.push({
+        name, type, rank,
+        score: Math.round(cd?.rankingScore ?? ud?.rankingScore ?? INITIAL_RANKING_SCORE[rank] ?? 900),
+        reputation: Math.round(cd?.reputation ?? ud?.reputation ?? INITIAL_REPUTATION[rank] ?? 20),
+      });
+    }
+    if (extra.length === 0) return storedRanking;
+    const merged = [...storedRanking.map(e => ({ ...e })), ...extra].sort((a, b) => (b.score || 0) - (a.score || 0));
+    merged.forEach((e, i) => { e.position = i + 1; });
+    return merged;
+  }, [isProvisional, provisionalRanking, storedRanking, gameMode]);
 
   // 標記データ（人数・成績）で全チームを1度だけ集計
   const standingsMap = useMemo(() => buildStandingsMap(seasonData), [seasonData, ranking.length]);

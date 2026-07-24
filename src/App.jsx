@@ -56,7 +56,7 @@ import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffPro
 import { generateTryoutCandidates, selectPlayerForAI, generateSnakeDraftOrder } from './season/tryoutSystem.js';
 import { processSeasonEnd, advanceToNextYear, advanceToNextYearSandbox, processRetirements, updateAllPlayerAges, releasePlayer, TRAINING_MENUS, updateAllPlayersExperience, executeCampTraining, executeTeamCampTraining } from './season/yearProgressionSystem.js';
 import { processNPBDraft } from './season/npbDraft.js';
-import { initializeParallelWorldForIndependent } from './corporate/corporateInit.js';
+import { initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged } from './corporate/corporateInit.js';
 
 // Component imports
 import ManagementScreen from './components/ManagementScreen.jsx';
@@ -245,7 +245,17 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (saveData.selectedMonth) setSelectedMonth(saveData.selectedMonth);
         if (saveData.hallOfFamePlayers) setHallOfFamePlayers(saveData.hallOfFamePlayers);
         if (saveData.teamHistory) setTeamHistory(saveData.teamHistory);
-        setGameMode(saveData.gameMode || 'normal');
+        const loadedMode = saveData.gameMode || 'normal';
+        setGameMode(loadedMode);
+
+        // 独立モードの旧セーブ: 自リーグのチームに独立リーグ用マーカーが無いと
+        // チームランキング/トレードから漏れるため、ロード時に補完する
+        if (loadedMode === 'normal') {
+          ensureUserIndependentLeagueTagged(
+            saveData.seasonData?.settings?.teamNames || [],
+            saveData.seasonData?.settings?.preset || null
+          );
+        }
 
         initializeAllPlayersCondition();
 

@@ -6,7 +6,7 @@ import { initializeAllPlayersCondition } from '../game/condition.js';
 import { generateAILineup, setRecommendedLineup } from '../game/autoSimulation.js';
 import { generateOptimalLineup, generatePitchingRotation, generateAllTeamsLineup } from '../game/lineupGenerator.js';
 import { generateRegionalTournament } from '../corporate/toshitaikou.js';
-import { initializeCorporateGame, initializeParallelWorldForIndependent } from '../corporate/corporateInit.js';
+import { initializeCorporateGame, initializeParallelWorldForIndependent, ensureUserIndependentLeagueTagged } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { initializeUniversityGame, getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
 
@@ -187,6 +187,8 @@ const GameFlowScreens = ({
                       return t && !t.corporateTeamId && !t.independentLeagueId;
                     });
                     initializeParallelWorldForIndependent(selectedIndependentLeague, teamNames);
+                    // 自リーグを独立リーグの一員としてタグ付け（ランキング/トレード/注目度に含める）
+                    ensureUserIndependentLeagueTagged(regulations.teamNames, selectedIndependentLeague);
                     setGameFlowState('newgame_tryout');
                   }, 50);
                 }}
@@ -449,6 +451,7 @@ const GameFlowScreens = ({
             return team && !team.corporateTeamId && !team.independentLeagueId;
           });
           initializeParallelWorldForIndependent(presetKey || '__custom__', teamNames);
+          ensureUserIndependentLeagueTagged(regulations.teamNames, presetKey || '__custom__');
           setGameFlowState('newgame_tryout');
         }, 50);
       }}
