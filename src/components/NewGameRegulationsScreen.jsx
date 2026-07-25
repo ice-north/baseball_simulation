@@ -103,9 +103,11 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
     kansai: ['tokai', 'chugoku', 'shikoku'], chugoku: ['kansai', 'shikoku', 'kyushu'],
     shikoku: ['chugoku', 'kansai', 'kyushu'], kyushu: ['chugoku', 'okinawa'], okinawa: ['kyushu'],
   };
+  // 実在の収録リーグ（四国アイランドリーグplus / 北海道フロンティアリーグ）と
+  // 名称が被らないものだけを使う
   const LEAGUE_SUFFIXES = [
-    'ベースボールリーグ', 'フロンティアリーグ', '独立リーグ', 'チャレンジリーグ',
-    'ドリームリーグ', 'ユナイテッドリーグ', 'アイランドリーグ', 'プロ野球リーグ',
+    'ベースボールリーグ', '独立リーグ', 'チャレンジリーグ', 'ドリームリーグ',
+    'ユナイテッドリーグ', 'ネクストリーグ', 'サマーリーグ', 'パートナーズリーグ',
   ];
   const TEAM_SUFFIXES = [
     'ファイターズ', 'ドラゴンズ', 'タイガース', 'イーグルス', 'ホークス',
