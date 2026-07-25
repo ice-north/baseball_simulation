@@ -57,6 +57,8 @@ const ManagementScreen = ({
   userTeamName,
   allTeams,
   gameMode,
+  setGameMode,
+  setLeagueConfig,
   hallOfFamePlayers,
   setHallOfFamePlayers,
   teamHistory,
@@ -301,6 +303,10 @@ const ManagementScreen = ({
     seasonData={seasonData}
     setSeasonData={setSeasonData}
     gameMode={gameMode}
+    setGameMode={setGameMode}
+    setLeagueConfig={setLeagueConfig}
+    setSelectedMonth={setSelectedMonth}
+    userTeamName={userTeamName}
     onSave={async (slotIndex) => { await saveGame(slotIndex); }}
     saveSlots={saveSlots}
     onStartNextSeason={() => {

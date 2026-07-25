@@ -3,12 +3,44 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { advanceToNextYear, advanceToNextYearSandbox } from '../season/yearProgressionSystem.js';
 import { generatePitchingRotation } from '../game/lineupGenerator.js';
+import { getTransferCandidates, transferManagerTo, CATEGORY_LABEL, getTeamCategory } from '../game/managerTransfer.js';
 
-const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots, gameMode }) => {
+const RANK_TEXT = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
+
+const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason, onAddHallOfFamePlayers, onRecordTeamHistory, saveSlots, gameMode, setGameMode, setLeagueConfig, setSelectedMonth, userTeamName }) => {
   const [processing, setProcessing] = useState(false);
   const [selectedSaveSlot, setSelectedSaveSlot] = useState(0);
   const [saveStatus, setSaveStatus] = useState(null);
   const [graduationReport, setGraduationReport] = useState(null);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferCat, setTransferCat] = useState(null);
+  const [transferSearch, setTransferSearch] = useState('');
+  const [transferResult, setTransferResult] = useState(null);
+
+  const myTeamName = userTeamName || seasonData?.settings?.teamNames?.[0] || null;
+  const transferCandidates = useMemo(
+    () => (showTransfer ? getTransferCandidates(myTeamName) : null),
+    [showTransfer, myTeamName]
+  );
+
+  const handleTransfer = (teamName) => {
+    const label = CATEGORY_LABEL[getTeamCategory(teamName)] || '';
+    if (!window.confirm(
+      `「${teamName}」（${label}）の監督に就任します。\n\n`
+      + `・${myTeamName || '現チーム'} の指揮官を退任します\n`
+      + `・翌シーズンから新チームで開始します\n`
+      + `・選手や世界はそのまま引き継がれます\n\nよろしいですか？`
+    )) return;
+    const r = transferManagerTo(teamName, {
+      seasonData, setSeasonData, setLeagueConfig, setGameMode, setSelectedMonth,
+    });
+    if (r.success) {
+      setTransferResult({ ok: true, msg: `${teamName} の監督に就任しました（${label}）。「${(seasonData?.year || 1) + 1}年目へ進む」で新チームのシーズンが始まります。` });
+      setShowTransfer(false);
+    } else {
+      setTransferResult({ ok: false, msg: r.error || '移籍に失敗しました' });
+    }
+  };
 
   const handleSaveToSlot = async () => {
     if (onSave) {
@@ -513,6 +545,95 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
         })()}
 
         <SaveSlotSelector />
+
+        {/* 監督移籍（年度末のみ・カテゴリを跨いで就任できる） */}
+        {gameMode !== 'sandbox' && (
+          <div className="bg-gray-700/40 rounded-xl border border-gray-600/40 p-4 mb-5">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <span>🧳</span> 監督移籍
+              </h3>
+              <span className="text-xs text-gray-300">
+                現職: <span className="font-bold text-white">{myTeamName || '—'}</span>
+              </span>
+              <button
+                onClick={() => { setShowTransfer(v => !v); setTransferResult(null); }}
+                className="ml-auto px-4 py-1.5 rounded-lg text-sm font-bold bg-amber-600 hover:bg-amber-500 text-white transition"
+              >
+                {showTransfer ? '閉じる' : '他チームの監督に就任する'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-300 mt-2">
+              大学・社会人・独立リーグを跨いで監督キャリアを歩めます。選手と世界はそのまま引き継がれ、教え子と再会することもあります。
+            </p>
+            {transferResult && (
+              <div className={`mt-3 text-sm font-bold ${transferResult.ok ? 'text-green-300' : 'text-red-300'}`}>
+                {transferResult.ok ? '✓ ' : '✕ '}{transferResult.msg}
+              </div>
+            )}
+
+            {showTransfer && transferCandidates && (
+              <div className="mt-3">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  {['independent', 'corporate', 'club', 'university'].map(cat => {
+                    const n = transferCandidates[cat]?.length || 0;
+                    if (n === 0) return null;
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setTransferCat(transferCat === cat ? null : cat)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                          transferCat === cat ? 'bg-amber-600 text-white' : 'bg-gray-600/60 text-gray-200 hover:bg-gray-500/60'
+                        }`}
+                      >
+                        {CATEGORY_LABEL[cat]} <span className="opacity-80">{n}</span>
+                      </button>
+                    );
+                  })}
+                  <input
+                    type="text"
+                    value={transferSearch}
+                    onChange={(e) => setTransferSearch(e.target.value)}
+                    placeholder="チーム名で検索…"
+                    className="ml-auto bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600 w-48"
+                  />
+                </div>
+
+                {!transferCat && !transferSearch ? (
+                  <div className="text-xs text-gray-300 py-3 text-center">
+                    カテゴリを選ぶか、チーム名で検索してください。
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto space-y-1 pr-1">
+                    {(transferSearch
+                      ? ['independent', 'corporate', 'club', 'university'].flatMap(c =>
+                          (transferCandidates[c] || []).map(t => ({ ...t, cat: c })))
+                      : (transferCandidates[transferCat] || []).map(t => ({ ...t, cat: transferCat }))
+                    )
+                      .filter(t => !transferSearch || t.name.includes(transferSearch) || (t.leagueName || '').includes(transferSearch))
+                      .slice(0, 120)
+                      .map(t => (
+                        <div key={t.name} className="flex items-center gap-2 bg-gray-800/60 rounded px-2 py-1.5 text-xs">
+                          <span className={`font-black w-4 text-center ${RANK_TEXT[t.rank] || 'text-gray-300'}`}>{t.rank}</span>
+                          <span className="text-white font-bold truncate w-40">{t.name}</span>
+                          <span className="text-gray-300 truncate w-40 hidden md:block">{t.leagueName}</span>
+                          <span className="text-gray-300 hidden lg:block">注目{t.reputation}</span>
+                          <span className="text-gray-300 hidden lg:block">{t.rosterSize}人</span>
+                          <span className="text-amber-300 ml-auto hidden sm:block">{CATEGORY_LABEL[t.cat]}</span>
+                          <button
+                            onClick={() => handleTransfer(t.name)}
+                            className="bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold flex-shrink-0"
+                          >
+                            就任
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 大学モード: 卒業レポートは年度進行後に専用画面で表示 */}
 

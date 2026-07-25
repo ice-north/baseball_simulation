@@ -262,6 +262,7 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
     universityLeague: WORLD_DATA.universityLeague ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeague)) : null,
     _universityScout: WORLD_DATA._universityScout ? JSON.parse(JSON.stringify(WORLD_DATA._universityScout)) : null,
     _teamRanking: WORLD_DATA._teamRanking ? JSON.parse(JSON.stringify(WORLD_DATA._teamRanking)) : null,
+    managerCareer: Array.isArray(WORLD_DATA.managerCareer) ? JSON.parse(JSON.stringify(WORLD_DATA.managerCareer)) : [],
     _uniTeamRepData: UNIVERSITY_TEAMS.reduce((acc, t) => {
       if (t.reputation !== undefined || t.reputationHistory || t.rankPosition !== undefined || t.rankingScore !== undefined) {
         acc[t.name] = { rank: t.rank, reputation: t.reputation, reputationHistory: t.reputationHistory, rankPosition: t.rankPosition, rankingScore: t.rankingScore };
@@ -401,6 +402,7 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
       WORLD_DATA.universityLeague = wd.universityLeague || null;
       WORLD_DATA._universityScout = wd._universityScout || null;
       WORLD_DATA._teamRanking = wd._teamRanking || null;
+      WORLD_DATA.managerCareer = Array.isArray(wd.managerCareer) ? wd.managerCareer : [];
       // UNIVERSITY_TEAMSの注目度データを復元
       if (wd._uniTeamRepData) {
         for (const teamDef of UNIVERSITY_TEAMS) {

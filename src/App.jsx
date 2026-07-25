@@ -5329,6 +5329,8 @@ if (newOuts === 3) {
                 userTeamName={userTeamName}
                 allTeams={allTeams}
                 gameMode={gameMode}
+                setGameMode={setGameMode}
+                setLeagueConfig={setLeagueConfig}
                 hallOfFamePlayers={hallOfFamePlayers}
                 setHallOfFamePlayers={setHallOfFamePlayers}
                 teamHistory={teamHistory}

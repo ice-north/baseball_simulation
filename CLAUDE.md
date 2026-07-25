@@ -40,6 +40,22 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - lineup配列は **splice()で直接変更**すること（filter()で新配列を作るとスタメン増殖バグが再発する）
 - 守備位置適正: `fitnessMult = 0.5 + (fitness / 100) * 0.5`（適正100=100%, 適正0=50%）
 
+## 監督移籍システム (`src/game/managerTransfer.js`)
+- **前提**: どのモードで開始しても TEAMS_DATA には全カテゴリ（独立26・社会人300・大学234）が生成され、
+  選手プール（高校生/大学/リリース）も共有された「1つの日本球界」になっている。
+  モードの違いは実質「どのチームを操作し、どのカレンダーで進行するか」だけ
+- **移籍＝以下4点の差し替え**（新しいシミュレーション基盤は不要）
+  1. `leagueConfig`（App.jsx が `userTeamName = allTeams[0]` として参照）
+  2. `seasonData.settings`（カテゴリ別のカレンダー・対戦相手・試合数）
+  3. `WORLD_DATA.mode` / `userLeagueId`（独立リーグは並行世界の入替も実施）
+  4. `gameMode`（画面ルーティング）
+- **独立リーグの入替**: 旧・自リーグを `WORLD_DATA.independentLeagues` へ戻して背景シミュ対象にし、
+  新・自リーグを除外する（自分で試合を消化するため）
+- **完了シーズンのデータは消さない**: standings/results/大会結果はオフシーズン画面の表示と年鑑記録に必要。
+  翌年のスケジュール・順位表は `advanceToNextYear`／レギュレーション確認画面が `settings` から再生成する
+- **UI**: オフシーズン画面の「🧳 監督移籍」。カテゴリ別タブ＋チーム名検索から就任先を選ぶ
+- **キャリア履歴**: `WORLD_DATA.managerCareer`（year/from/to/category）に記録・セーブされる
+
 ## 主要ファイル
 - `src/App.jsx` (~5130行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
 - `src/game/autoSimulation.js` (~2430行) - 自動シミュレーション・buildDefense
