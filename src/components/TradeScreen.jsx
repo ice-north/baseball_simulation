@@ -88,7 +88,7 @@ const AbilityLine = ({ player }) => (
   </div>
 );
 
-const TradeScreen = ({ userTeamName, onBack }) => {
+const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
   const [selectedMyPlayer, setSelectedMyPlayer] = useState(null);
   const [selectedTargetTeam, setSelectedTargetTeam] = useState('');
   const [selectedTargetPlayer, setSelectedTargetPlayer] = useState(null);
@@ -98,22 +98,27 @@ const TradeScreen = ({ userTeamName, onBack }) => {
 
   const myTeam = TEAMS_DATA[userTeamName];
 
+  // 自リーグの表示名（プリセットは定義名、カスタムは設定で決めたリーグ名）
+  const myLeagueLabel = INDEPENDENT_LEAGUES[seasonData?.settings?.preset]?.name
+    || seasonData?.settings?.leagueName || '所属リーグ';
+
   // トレード相手を独立リーグ単位でグループ化（自リーグを先頭、他の独立リーグを続けて表示）
   const tradeGroups = useMemo(() => {
     const groups = new Map(); // ラベル -> [チーム名]
     Object.entries(TEAMS_DATA).forEach(([name, team]) => {
       if (name === userTeamName || !isTradeablePartner(name, team)) return;
       const lid = independentLeagueOf(name, team);
-      const label = (lid && lid !== '__indep__')
-        ? (INDEPENDENT_LEAGUES[lid]?.name || '独立リーグ')
-        : (lid === '__indep__' ? '独立リーグ' : '所属リーグ');
+      // 自リーグ（プリセット定義が無いカスタムリーグ含む）は設定のリーグ名を使う
+      const label = (lid && lid !== '__indep__' && lid !== '__custom__' && INDEPENDENT_LEAGUES[lid])
+        ? INDEPENDENT_LEAGUES[lid].name
+        : myLeagueLabel;
       if (!groups.has(label)) groups.set(label, []);
       groups.get(label).push(name);
     });
-    // 自リーグ（所属リーグ）を先頭に
-    return [...groups.entries()].sort((a, b) => (a[0] === '所属リーグ' ? -1 : 0) - (b[0] === '所属リーグ' ? -1 : 0));
+    // 自リーグを先頭に
+    return [...groups.entries()].sort((a, b) => (a[0] === myLeagueLabel ? -1 : 0) - (b[0] === myLeagueLabel ? -1 : 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userTeamName, updateTrigger, Object.keys(TEAMS_DATA).length]);
+  }, [userTeamName, updateTrigger, myLeagueLabel, Object.keys(TEAMS_DATA).length]);
 
   if (!myTeam) return <div className="p-8 text-white">チームが見つかりません</div>;
 

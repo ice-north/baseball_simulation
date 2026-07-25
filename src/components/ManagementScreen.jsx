@@ -210,6 +210,7 @@ const ManagementScreen = ({
   if (managementView === 'teaminfo') return <TeamInfoScreen gameMode={gameMode} />;
   if (managementView === 'trade') return <TradeScreen
     userTeamName={userTeamName}
+    seasonData={seasonData}
     onBack={() => setManagementView('dateprogress')}
   />;
   if (managementView === 'dateprogress') return <DateProgressScreen

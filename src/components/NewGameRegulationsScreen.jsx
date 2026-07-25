@@ -23,6 +23,8 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
   }
 
   const [tempSettings, setTempSettings] = useState({
+    // 独立リーグ名（カスタムリーグ用。プリセット選択時は定義名を使う）
+    leagueName: leagueDef?.name || '新規独立リーグ',
     useDH: initialRegs.useDH || false,
     gamesPerSeason: initialRegs.gamesPerSeason || 75,
     teamsCount: initialCount,
@@ -79,15 +81,31 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
     });
   };
 
-  const PLACE_NAMES = [
-    '札幌', '函館', '旭川', '仙台', '秋田', '盛岡', '山形', '福島', '新潟', '長野',
-    '富山', '金沢', '東京', '横浜', '千葉', '埼玉', '水戸', '宇都宮', '前橋', '甲府',
-    '静岡', '浜松', '名古屋', '岐阜', '三重', '大阪', '神戸', '京都', '奈良', '和歌山',
-    '広島', '岡山', '松山', '高松', '高知', '徳島', '福岡', '北九州', '熊本', '大分',
-    '長崎', '鹿児島', '那覇', '青森', '松本', '堺', '姫路', '下関', '佐賀', '宮崎',
-    '釧路', '帯広', '小樽', '弘前', '八戸', '石巻', '郡山', '柏', '湘南', '浦和',
-    '川崎', '相模原', '豊田', '四日市', '滋賀', '尼崎', '倉敷', '福山', '鳥取', '松江',
-    '久留米', '佐世保', '別府', '宮古島', '沖縄', '富士', '信州', '越後', '能登', '琉球',
+  // 地域ごとの都市。ランダム生成では1つの地域からまとめて選び、
+  // 実在の独立リーグのように地理的にまとまったリーグを作れるようにする。
+  const REGIONS = [
+    { key: 'hokkaido', label: '北海道', cities: ['札幌', '函館', '旭川', '釧路', '帯広', '小樽', '北見', '室蘭', '苫小牧', '岩見沢'] },
+    { key: 'tohoku', label: '東北', cities: ['仙台', '青森', '弘前', '八戸', '盛岡', '秋田', '山形', '福島', '郡山', '石巻'] },
+    { key: 'kanto_n', label: '北関東', cities: ['水戸', '宇都宮', '前橋', '高崎', 'つくば', '日立', '太田', '足利', '熊谷', '川越'] },
+    { key: 'kanto_s', label: '南関東', cities: ['東京', '横浜', '川崎', '千葉', '相模原', '柏', '船橋', '浦和', '湘南', '八王子'] },
+    { key: 'hokushinetsu', label: '北信越', cities: ['新潟', '長野', '松本', '富山', '金沢', '福井', '上越', '長岡', '諏訪', '能登'] },
+    { key: 'tokai', label: '東海', cities: ['名古屋', '静岡', '浜松', '岐阜', '豊田', '四日市', '沼津', '富士', '岡崎', '津'] },
+    { key: 'kansai', label: '関西', cities: ['大阪', '神戸', '京都', '堺', '姫路', '奈良', '和歌山', '尼崎', '滋賀', '東大阪'] },
+    { key: 'chugoku', label: '中国', cities: ['広島', '岡山', '倉敷', '福山', '下関', '山口', '鳥取', '松江', '出雲', '呉'] },
+    { key: 'shikoku', label: '四国', cities: ['松山', '高松', '高知', '徳島', '今治', '丸亀', '新居浜', '鳴門', '四万十', '宇和島'] },
+    { key: 'kyushu', label: '九州', cities: ['福岡', '北九州', '熊本', '大分', '長崎', '佐賀', '宮崎', '鹿児島', '久留米', '佐世保'] },
+    { key: 'okinawa', label: '沖縄', cities: ['那覇', '沖縄', '宜野湾', '浦添', 'うるま', '名護', '糸満', '宮古島', '石垣', '豊見城'] },
+  ];
+  // 隣接地域（1地域で人数が足りない場合の拡張先）
+  const ADJACENT = {
+    hokkaido: ['tohoku'], tohoku: ['hokkaido', 'kanto_n'], kanto_n: ['kanto_s', 'tohoku', 'hokushinetsu'],
+    kanto_s: ['kanto_n', 'tokai'], hokushinetsu: ['kanto_n', 'tokai'], tokai: ['kansai', 'kanto_s', 'hokushinetsu'],
+    kansai: ['tokai', 'chugoku', 'shikoku'], chugoku: ['kansai', 'shikoku', 'kyushu'],
+    shikoku: ['chugoku', 'kansai', 'kyushu'], kyushu: ['chugoku', 'okinawa'], okinawa: ['kyushu'],
+  };
+  const LEAGUE_SUFFIXES = [
+    'ベースボールリーグ', 'フロンティアリーグ', '独立リーグ', 'チャレンジリーグ',
+    'ドリームリーグ', 'ユナイテッドリーグ', 'アイランドリーグ', 'プロ野球リーグ',
   ];
   const TEAM_SUFFIXES = [
     'ファイターズ', 'ドラゴンズ', 'タイガース', 'イーグルス', 'ホークス',
@@ -99,23 +117,62 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
     'タイタンズ', 'セイバーズ', 'ヴィクトリー', 'クレインズ', 'マーベリックス',
   ];
 
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const shuffled = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  };
+
+  // 1つの地域を基点に、必要数だけ近隣都市を集める（足りなければ隣接地域へ拡張）
+  const collectNearbyCities = (count) => {
+    const base = pick(REGIONS);
+    let cities = shuffled(base.cities);
+    const usedRegions = [base];
+    for (const nextKey of (ADJACENT[base.key] || [])) {
+      if (cities.length >= count) break;
+      const r = REGIONS.find(x => x.key === nextKey);
+      if (!r) continue;
+      cities = cities.concat(shuffled(r.cities));
+      usedRegions.push(r);
+    }
+    // それでも足りなければ全国から補う
+    if (cities.length < count) {
+      cities = cities.concat(shuffled(REGIONS.flatMap(r => r.cities)));
+    }
+    return { cities: cities.slice(0, count), base, usedRegions };
+  };
+
+  // リーグ名を生成（地域名＋接尾辞。地域が複数にまたがる場合は基点の地域名を使う）
+  const makeLeagueName = (regionLabel) => `${regionLabel}${pick(LEAGUE_SUFFIXES)}`;
+
+  const generateRandomLeagueName = () => {
+    const label = pick(REGIONS).label;
+    setTempSettings(prev => ({ ...prev, leagueName: makeLeagueName(label) }));
+  };
+
   const generateRandomTeamNames = () => {
     const count = tempSettings.teamsCount;
-    const usedPlaces = new Set();
+    const { cities, base } = collectNearbyCities(count);
     const usedSuffixes = new Set();
     const newNames = [];
     const newAbbrs = [];
     for (let i = 0; i < count; i++) {
-      let place, suffix;
-      do { place = PLACE_NAMES[Math.floor(Math.random() * PLACE_NAMES.length)]; } while (usedPlaces.has(place));
-      usedPlaces.add(place);
-      do { suffix = TEAM_SUFFIXES[Math.floor(Math.random() * TEAM_SUFFIXES.length)]; } while (usedSuffixes.has(suffix));
+      const place = cities[i];
+      let suffix;
+      do { suffix = pick(TEAM_SUFFIXES); } while (usedSuffixes.has(suffix));
       usedSuffixes.add(suffix);
       newNames.push(`${place}${suffix}`);
       const abbrChars = [...place].slice(0, 3);
       newAbbrs.push(abbrChars.length >= 3 ? abbrChars.join('') : toFullWidth(place).slice(0, 3));
     }
-    setTempSettings(prev => ({ ...prev, teamNames: newNames, teamAbbreviations: newAbbrs }));
+    // チーム名と同時にリーグ名も地域に合わせて生成する
+    setTempSettings(prev => ({
+      ...prev,
+      teamNames: newNames,
+      teamAbbreviations: newAbbrs,
+      leagueName: makeLeagueName(base.label),
+    }));
   };
 
   const handleTeamNameChange = (index, newName) => {
@@ -238,6 +295,29 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
           </div>
         </div>
 
+        {/* リーグ名設定（カスタムリーグのみ編集可） */}
+        {!selectedLeague && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <div className="flex items-center gap-3 mb-3">
+              <h2 className="text-xl font-bold text-white">🏆 リーグ名</h2>
+              <button
+                onClick={generateRandomLeagueName}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm font-bold transition"
+              >🎲 ランダム生成</button>
+            </div>
+            <input
+              type="text"
+              value={tempSettings.leagueName || ''}
+              onChange={(e) => setTempSettings({ ...tempSettings, leagueName: e.target.value })}
+              placeholder="例: 北海道フロンティアリーグ"
+              className="w-full bg-gray-700 text-white rounded px-3 py-2 text-lg"
+            />
+            <p className="text-xs text-gray-400 mt-2">
+              あなたが立ち上げる独立リーグの名称です。日程画面やトレードのリーグ表示に使われます。
+            </p>
+          </div>
+        )}
+
         {/* チーム名設定 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
@@ -245,7 +325,9 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
             <button
               onClick={generateRandomTeamNames}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm font-bold transition"
+              title="1つの地域から近い都市を選び、リーグ名も地域に合わせて生成します"
             >🎲 ランダム生成</button>
+            <span className="text-xs text-gray-400">近隣都市でまとめて生成されます</span>
           </div>
           {tempSettings.leagueFormat === 'two' ? (
             <>

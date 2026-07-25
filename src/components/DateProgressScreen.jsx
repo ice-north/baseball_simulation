@@ -3275,7 +3275,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     const myTeams = seasonData?.settings?.teamNames || [];
                     if (myTeams.length === 0) return null;
                     const myRank = getLeagueRankFromTeams(myTeams);
-                    const myLeagueName = INDEPENDENT_LEAGUES[seasonData?.settings?.preset]?.name || '所属リーグ';
+                    const myLeagueName = INDEPENDENT_LEAGUES[seasonData?.settings?.preset]?.name
+                      || seasonData?.settings?.leagueName || '所属リーグ';
                     return (
                       <span className="flex items-center gap-1 ml-1 font-normal">
                         <span className="text-xs text-gray-400">所属:</span>
