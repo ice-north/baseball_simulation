@@ -1028,7 +1028,8 @@ export const initializeParallelWorldForIndependent = (userLeagueId, userTeamName
 // 独立リーグモードの「自リーグ」チームに独立リーグ用のマーカーを付与する。
 // 自リーグは initializeNewGame(=通常のチーム生成) で作られ corporateData を持たないため、
 // チームランキング(Elo)・注目度・トレードなど独立リーグ系システムから漏れていた。
-// 名前一致でリーグ定義のランクを引き、無ければ 'C' を既定とする。新規/ロード両対応。
+// 名前一致でリーグ定義のランクを引く。定義が無い新規カスタム独立リーグは 'D' スタート
+// （弱小から勝ち上がって昇格を目指す設計）。既存プリセットは定義のランクを使う。新規/ロード両対応。
 export const ensureUserIndependentLeagueTagged = (teamNames, preset) => {
   if (!Array.isArray(teamNames)) return;
   const leagueDef = preset ? INDEPENDENT_LEAGUES[preset] : null;
@@ -1036,7 +1037,7 @@ export const ensureUserIndependentLeagueTagged = (teamNames, preset) => {
     const team = TEAMS_DATA[name];
     if (!team || team.corporateData || team.universityData) continue;
     const def = leagueDef?.teams?.find(t => t.name === name);
-    const rank = def?.rank || 'C';
+    const rank = def?.rank || 'D';
     team.independentLeagueId = preset || '__custom__';
     team.corporateData = {
       rank,
