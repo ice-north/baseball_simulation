@@ -280,7 +280,13 @@ export const recoverAllPitcherFatigue = (recoveryAmount = 25) => {
     const bodyCareMult = 1.0 + (bodyCare / 100) * 0.2;
 
     // 選手個人の疲労回復（回復能力が高いほど多く回復）
+    // 出場した選手はその日は回復しない（代打・代走・守備固め・ワンポイントも含む）。
+    // 試合処理で _playedToday が立つ → ここで消費してスキップする。
     team.players.forEach(player => {
+      if (player._playedToday) {
+        delete player._playedToday;
+        return;
+      }
       if (player.fatigue && player.fatigue > 0) {
         const recoveryAbility = player.physical?.recovery || 50;
         let actualRecovery;
@@ -2301,6 +2307,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
       if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};
 
+      // 出場した選手はその日の疲労回復を行わない（recoverAllPitcherFatigueでスキップ）。
+      // 打席・登板が無くても、打順を持っていれば途中出場（代走・守備固め）とみなす。
+      {
+        const gb = player.gameStats.batting || {};
+        const gp = player.gameStats.pitching || {};
+        const appeared = (gb.atBats || 0) > 0 || (gb.walks || 0) > 0
+          || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
+          || (player.battingOrder || 0) > 0;
+        if (appeared) playerData._playedToday = true;
+      }
+
       // 打撃成績の集計
       if (player.gameStats.batting.atBats > 0) {
         const b = player.gameStats.batting;
@@ -2334,16 +2351,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         }
 
         // 野手疲労蓄積: スタメン出場(3打席以上)のみ疲労が溜まる
-        // 代打(1-2打席)や守備固めは疲労なし
+        // 代打(1-2打席)や守備固めは疲労の蓄積なし（ただし回復もしない）
         if (b.atBats >= 3) {
           const bodyStamina = playerData.physical?.bodyStamina || 50;
           // 基礎疲労 7〜15（体力100→7, 体力1→15）
           const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
-          // 試合日は回復を相殺（progressDateで先に回復が適用されているため）
-          // これにより試合出場日は回復せず、休養日のみ回復する。新回復式に一致させる。
-          const recoveryAbility = playerData.physical?.recovery || 50;
-          const recovCancelled = Math.round(bodyStamina * (0.25 + (recoveryAbility / 100) * 0.60));
-          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue + recovCancelled;
+          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
         }
 
         // 成長率変動: 10試合出場ごとに+0.01

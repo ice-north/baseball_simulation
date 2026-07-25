@@ -293,6 +293,17 @@ export function executeHandleManagedGameEnd(ctx) {
       if (!playerData) return;
 
       const gs = p.gameStats || {};
+
+      // 出場した選手はその日の疲労回復を行わない（recoverAllPitcherFatigueでスキップ）。
+      // 打席・登板が無くても、打順を持っていれば途中出場（代走・守備固め）とみなす。
+      {
+        const gp = gs.pitching || {};
+        const appeared = (gs.atBats || 0) > 0 || (gs.walks || 0) > 0
+          || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
+          || (p.battingOrder || 0) > 0;
+        if (appeared) playerData._playedToday = true;
+      }
+
       if (gs.atBats > 0 || gs.walks > 0) {
         if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
         if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
@@ -311,14 +322,11 @@ export function executeHandleManagedGameEnd(ctx) {
         applyFatigueGrowthPenalty(playerData, isStarterAppearance);
         if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
 
-        // 野手疲労蓄積: スタメン出場(3打席以上)のみ
+        // 野手疲労蓄積: スタメン出場(3打席以上)のみ（代打等は蓄積なし・回復もなし）
         if (isStarterAppearance) {
           const bodyStamina = playerData.physical?.bodyStamina || 50;
           const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
-          const recoveryAbility = playerData.physical?.recovery || 50;
-          // 出場日はその日の日次回復を相殺（差引=baseFatigueのみ）。新回復式に一致させる。
-          const recovCancelled = Math.round(bodyStamina * (0.25 + (recoveryAbility / 100) * 0.60));
-          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue + recovCancelled;
+          playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
         }
       }
 
