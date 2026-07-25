@@ -187,8 +187,11 @@ const ELO_CLAMP_MAX = 2000;
 const ELO_I = {
   regular: 50,      // 社会人レギュラーシーズン（シーズン全体を1単位として計算）
   league: 40,       // 大学・独立リーグ（春・秋それぞれ）
-  tournament: 40,   // 社会人全国大会（1試合あたり基礎値、後半戦ほど上昇）
+  tournament: 40,   // 社会人全国大会・独立GC（1試合あたり基礎値、後半戦ほど上昇）
   uniNational: 35,  // 大学全国大会（1試合あたり基礎値）
+  gcChampion: 40,   // 独立グランドCS優勝（全国王座の栄誉）
+  gcRunnerUp: 18,   // 独立グランドCS準優勝
+  proDrafted: 15,   // プロ輩出1名あたり（育成実績はチームの格を直接押し上げる）
 };
 
 // リーグ最終順位ボーナス（優勝を明確に評価し、勝ち続ければ数年で昇格できるようにする）。
@@ -1405,6 +1408,8 @@ export const applyReputationDecay = (teamData) => {
   cd.currentSeasonGain = 0;
   cd.yearlyBudgetBonus = getReputationBudgetBonus(cd.reputation);
   cd.proDraftCount = cd.proDraftCount || 0;
+  // ※ proDraftCountSeason は updateAllRanks が読むため、ここではリセットしない
+  //   （減衰はランク判定より先に走る）。リセットは updateAllRanks の末尾で行う。
 };
 
 // 注目度からランクを再判定（昇格/降格）
@@ -1529,7 +1534,8 @@ export const updateAllTeamReputations = (seasonData) => {
       const leaguePosition = sorted.findIndex(st => st.team === teamName) + 1;
       const seasonResults = {
         leaguePosition: leaguePosition || 0,
-        proDraftedCount: 0,
+        // プロ輩出を注目度に反映（ドラフトで記録した今季分）
+        proDraftedCount: teamData.corporateData.proDraftCountSeason || 0,
       };
       updateUniversityReputation(teamData, seasonResults);
       continue;
@@ -1541,7 +1547,8 @@ export const updateAllTeamReputations = (seasonData) => {
       wins: s?.wins || 0,
       isChampion: teamName === champion,
       tournamentMainWins: mainTournamentWinsMap[teamName] || 0,
-      proDraftedCount: 0,
+      // プロ輩出を注目度に反映（ドラフトで記録した今季分）
+      proDraftedCount: teamData.corporateData.proDraftCountSeason || 0,
     };
 
     updateReputation(teamData, seasonResults);
@@ -1593,6 +1600,7 @@ export const applyUniversityReputationDecay = (teamData) => {
   if (ud.reputationHistory.length > 2) ud.reputationHistory.shift();
   ud.reputation = clamp((ud.reputation || 0) - UNI_REPUTATION_DECAY, 0, 100);
   ud.currentSeasonGain = 0;
+  // ※ proDraftCountSeason は updateAllRanks が読むため、ここではリセットしない
 };
 
 export const updateUniversityRankFromReputation = (teamData) => {
@@ -1641,7 +1649,8 @@ export const updateAllRanks = (seasonData) => {
     updateUniversityReputation(teamData, {
       leaguePosition,
       tournamentChampion: teamName === ucChampion || teamName === mjChampion,
-      proDraftedCount: 0,
+      // プロ輩出を注目度に反映（ドラフトで記録した今季分）
+      proDraftedCount: teamData.universityData.proDraftCountSeason || 0,
     });
   }
 
@@ -1813,6 +1822,18 @@ export const updateAllRanks = (seasonData) => {
   // 大学全国大会
   applyBracketElo(ucSource?.bracket, ELO_I.uniNational);
   applyBracketElo(mjSource?.bracket, ELO_I.uniNational);
+  // 独立リーグ グランドチャンピオンシップ（各リーグ王者による全国王座決定戦）
+  const gcSource = seasonData.grandChampionship || WORLD_DATA.grandChampionship;
+  applyBracketElo(gcSource?.bracket, ELO_I.tournament);
+  // 王者・準優勝には追加の栄誉ボーナス
+  if (gcSource?.bracket?.champion) addDelta(gcSource.bracket.champion, ELO_I.gcChampion);
+  if (gcSource?.bracket?.runnerUp) addDelta(gcSource.bracket.runnerUp, ELO_I.gcRunnerUp);
+
+  // 3f. プロ輩出Elo（NPBに選手を送り出した実績はチームの格を直接押し上げる）
+  for (const e of allEntries) {
+    const produced = e.dataObj?.proDraftCountSeason || 0;
+    if (produced > 0) addDelta(e.name, produced * ELO_I.proDrafted);
+  }
 
   // === Step 4: デルタをrankingScoreに一括適用 ===
   for (const e of allEntries) {
@@ -1856,6 +1877,12 @@ export const updateAllRanks = (seasonData) => {
         rankChanges.push({ team: e.name, from: oldRank, to: newRank, score: e.dataObj.rankingScore, type: 'university' });
       }
     }
+  }
+
+  // 今季のプロ輩出数をリセット（注目度・Eloへの反映が済んだのでここで消費する。
+  // 通算 proDraftCount は保持）
+  for (const e of allEntries) {
+    if (e.dataObj) e.dataObj.proDraftCountSeason = 0;
   }
 
   // === Step 6: ランキングスナップショット保存（TeamRankingScreenで参照）===

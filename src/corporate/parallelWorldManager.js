@@ -272,6 +272,10 @@ export const autoPlayGrandChampionship = (gc) => {
       }
 
       match.winner = winner;
+      // 敗者も記録する（年度末のランク計算がブラケットからElo変動を算出するため）
+      if (!match.isBye && match.team1 && match.team2) {
+        match.loser = winner === match.team1 ? match.team2 : match.team1;
+      }
       advanceWinner(rounds, r, m, winner);
 
       if (r === rounds.length - 1) {

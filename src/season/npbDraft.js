@@ -614,6 +614,14 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     if (!team.developmentReputation) team.developmentReputation = 0;
     if (!team.totalProPlayersProduced) team.totalProPlayersProduced = 0;
     team.totalProPlayersProduced += count;
+
+    // 注目度・ランク計算で参照できるようプロ輩出数を記録する。
+    // proDraftCount=通算 / proDraftCountSeason=今季分（年度末にリセット）
+    const holder = team.corporateData || team.universityData;
+    if (holder) {
+      holder.proDraftCount = (holder.proDraftCount || 0) + count;
+      holder.proDraftCountSeason = (holder.proDraftCountSeason || 0) + count;
+    }
     const reputationGain = count * 3;
     team.developmentReputation = Math.min(100, team.developmentReputation + reputationGain);
 
