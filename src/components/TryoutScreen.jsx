@@ -6,6 +6,7 @@ import { removeDraftedFromGraduatePools } from '../season/universityPool.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
+import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 
 const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplete, initializeAllPitchingRotations }) => {
   const [tryoutCandidates, setTryoutCandidates] = useState([]);
@@ -42,15 +43,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     const preset = seasonData?.settings?.preset;
     const leagueDef = preset ? INDEPENDENT_LEAGUES[preset] : null;
     // 現在の自リーグ格＝所属チームの現ランクの最頻値（優勝で昇格すると受験者の質も上がる）。
-    // 未設定時はリーグ定義の代表ランクにフォールバック。
+    // 日程画面の「独立リーグ状況」に出るランク表示と同じ算出を共有する。
     const leagueTeamNamesForRank = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
-    const rankCounts = {};
-    leagueTeamNamesForRank.forEach(n => {
-      const r = TEAMS_DATA[n]?.corporateData?.rank;
-      if (r) rankCounts[r] = (rankCounts[r] || 0) + 1;
-    });
-    const modalRank = Object.keys(rankCounts).sort((a, b) => rankCounts[b] - rankCounts[a])[0];
-    const ilRank = modalRank || (leagueDef ? (leagueDef.teams?.[0]?.rank || 'B') : null);
+    const ilRank = getLeagueRankFromTeams(leagueTeamNamesForRank)
+      || (leagueDef ? (leagueDef.teams?.[0]?.rank || 'B') : null);
     // リーグ注目度: 所属チームのdevelopmentReputation平均（プロ輩出で上昇）
     const leagueTeamNames = Array.isArray(allTeams) ? allTeams : Object.keys(allTeams);
     const repVals = leagueTeamNames.map(n => TEAMS_DATA[n]?.developmentReputation).filter(v => typeof v === 'number');

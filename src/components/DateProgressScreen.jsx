@@ -11,7 +11,7 @@ import { getUserFallSchedule } from '../university/universityInit.js';
 import { generateAprilHighSchoolClass, checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import { highSchoolPool, universityPool } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
-import { updateAllTeamReputations, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
+import { updateAllTeamReputations, resetIndependentLeagueSchedules, getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { CONDITION_LEVELS, CONDITION_LABELS, CONDITION_COLORS, CONDITION_ICONS } from '../game/condition.js';
 import { POSITION_NAMES } from '../utils/constants.js';
@@ -26,6 +26,27 @@ import { renderBracketWithLines as renderBracketWithLinesImpl } from './dateProg
 // 折りたたみ領域。閉じている間は children を描画しない（初回展開まで遅延）。
 // 27大学リーグ順位表やトーナメント等の重いDOMを、日程進行のたびに再構築するのを防ぐ。
 // 一度開いたら以降はマウントを維持するため、開閉アニメーションは通常どおり働く。
+// リーグの格（S〜D）を示す小バッジ。所属チームの現ランク最頻値で、
+// トライアウト受験者の質もこの値でスケールされる。
+const LEAGUE_RANK_STYLE = {
+  S: 'bg-yellow-900/50 text-yellow-300 border-yellow-600/50',
+  A: 'bg-orange-900/50 text-orange-300 border-orange-600/50',
+  B: 'bg-green-900/50 text-green-300 border-green-600/50',
+  C: 'bg-blue-900/50 text-blue-300 border-blue-600/50',
+  D: 'bg-gray-700/60 text-gray-200 border-gray-500/50',
+};
+const LeagueRankBadge = ({ rank, className = '' }) => {
+  if (!rank) return null;
+  return (
+    <span
+      className={`px-1.5 py-0.5 rounded border text-xs font-bold leading-none ${LEAGUE_RANK_STYLE[rank] || LEAGUE_RANK_STYLE.D} ${className}`}
+      title="リーグの格（所属チームのランクから算出。トライアウト受験者の質に影響）"
+    >
+      {rank}
+    </span>
+  );
+};
+
 const Collapse = ({ open, children, className = '' }) => {
   const [everOpen, setEverOpen] = useState(open);
   useEffect(() => { if (open && !everOpen) setEverOpen(true); }, [open, everOpen]);
@@ -3245,10 +3266,24 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             return (
               <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-emerald-700/30 mt-3">
                 <h2
-                  className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-1.5 cursor-pointer select-none"
+                  className="text-sm font-bold text-emerald-400 mb-2 flex items-center gap-1.5 cursor-pointer select-none flex-wrap"
                   onClick={() => setShowOtherLeagues(prev => !prev)}
                 >
                   <span>🌐</span> 独立リーグ状況
+                  {/* 自リーグ（並行世界リストには含まれないためヘッダーに表示） */}
+                  {(() => {
+                    const myTeams = seasonData?.settings?.teamNames || [];
+                    if (myTeams.length === 0) return null;
+                    const myRank = getLeagueRankFromTeams(myTeams);
+                    const myLeagueName = INDEPENDENT_LEAGUES[seasonData?.settings?.preset]?.name || '所属リーグ';
+                    return (
+                      <span className="flex items-center gap-1 ml-1 font-normal">
+                        <span className="text-xs text-gray-400">所属:</span>
+                        <span className="text-xs text-gray-200 font-bold">{myLeagueName}</span>
+                        <LeagueRankBadge rank={myRank} />
+                      </span>
+                    );
+                  })()}
                   <span className="text-xs text-gray-500 ml-auto">{showOtherLeagues ? '▲' : '▼'}</span>
                 </h2>
                 <Collapse open={showOtherLeagues}><div className="space-y-2">
@@ -3259,9 +3294,12 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     const halfCount = isTwoLeague ? Math.floor(league.standings.length / 2) : 0;
                     return (
                     <div key={league.id} className="bg-gray-800/50 rounded-lg p-2 border border-gray-700/30">
-                      <div className="text-xs font-bold text-gray-300 mb-1 flex items-center justify-between">
-                        <span>{leagueDef?.name || league.name}</span>
-                        <span className="text-xs text-gray-500">{leagueDef?.gamesPerSeason || '?'}試合中{Math.round(league.gamesPlayed)}試合消化</span>
+                      <div className="text-xs font-bold text-gray-300 mb-1 flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate">{leagueDef?.name || league.name}</span>
+                          <LeagueRankBadge rank={getLeagueRankFromTeams(league.teams)} />
+                        </span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">{leagueDef?.gamesPerSeason || '?'}試合中{Math.round(league.gamesPlayed)}試合消化</span>
                       </div>
                       {isTwoLeague && halfCount > 0 ? (
                         <div className="space-y-1.5">
