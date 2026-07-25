@@ -5,6 +5,7 @@ import { POSITION_NAMES } from '../utils/constants.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { createSeasonStats, createCareerStats } from '../players.js';
 import { importDraftedPlayers, convertDraftedPlayerToSandboxPlayer } from '../game/saveSystem.js';
+import { getObRegistry, convertObToPlayer } from '../game/obRegistry.js';
 
 /**
  * 箱庭モード用のデフォルト選手を作成
@@ -90,6 +91,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [editFormData, setEditFormData] = useState(null);
   const [, setUpdateTrigger] = useState(0);
+  const [showObPicker, setShowObPicker] = useState(false);
 
   const forceUpdate = () => setUpdateTrigger(prev => prev + 1);
 
@@ -163,6 +165,14 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
       forceUpdate();
       alert(`${converted.length}名のドラフト指名選手を「${activeTeam}」にインポートしました`);
     });
+  };
+
+  // OB名鑑（歴代の教え子）から現在のチームに追加
+  const handleAddOb = (ob) => {
+    if (!TEAMS_DATA[activeTeam]) return;
+    const player = convertObToPlayer(ob, getNextId());
+    addToRoster(TEAMS_DATA[activeTeam], player);
+    forceUpdate();
   };
 
   // 全チームの選手数チェック
@@ -254,6 +264,13 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                 title="資料室からエクスポートしたドラフト指名選手JSONを読み込み"
               >
                 📤 ドラフト指名選手をインポート
+              </button>
+              <button
+                onClick={() => setShowObPicker(true)}
+                className="bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                title="これまでプロへ送り出した歴代の教え子を呼び出す"
+              >
+                🎓 OB名鑑から追加
               </button>
             </div>
           </div>
@@ -553,6 +570,59 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
           </div>
         </div>
       )}
+
+      {/* OB名鑑ピッカー: 歴代の教え子を選んでチームに追加 */}
+      {showObPicker && (() => {
+        const obs = getObRegistry();
+        return (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowObPicker(false)}>
+            <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-3xl flex flex-col" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2 flex-shrink-0">
+                <h3 className="text-white font-bold">🎓 OB名鑑</h3>
+                <span className="text-xs text-gray-300">プロへ送り出した歴代の教え子 {obs.length}名</span>
+                <span className="text-xs text-gray-400 ml-1">→「{activeTeam}」に追加</span>
+                <button onClick={() => setShowObPicker(false)} className="ml-auto text-gray-400 hover:text-white text-xl leading-none px-1">✕</button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                {obs.length === 0 ? (
+                  <div className="text-center py-10 text-gray-300 text-sm">
+                    まだOBがいません。<br />
+                    <span className="text-gray-400">通常モードでドラフト指名された所属選手がここに蓄積されます。</span>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {obs.map((ob, i) => {
+                      const isP = ob.position === 'pitcher';
+                      const abil = isP
+                        ? `速${ob.pitching?.velocity ?? '-'} 制${ob.pitching?.control ?? '-'} スタ${ob.pitching?.stamina ?? '-'}`
+                        : `ミ${ob.batting?.meet ?? '-'} パ${ob.batting?.power ?? '-'} 走${ob.physical?.speed ?? '-'} 守${ob.fielding?.defense ?? '-'}`;
+                      return (
+                        <div key={`${ob.playerId}-${ob.draftYear}-${i}`} className="flex items-center gap-2 bg-gray-700/40 rounded px-2 py-1.5 text-xs">
+                          <span className="text-gray-300 w-6 text-center">{POSITION_NAMES[ob.position] || '-'}</span>
+                          <span className="text-white font-bold w-24 truncate">{ob.name}</span>
+                          <span className="text-gray-300 w-8 text-right tabular-nums">{ob.age}歳</span>
+                          <span className="text-gray-300 truncate w-32 hidden md:block">{ob.fromTeam || '—'}</span>
+                          <span className="text-amber-300 truncate w-32 hidden lg:block">{ob.npbTeam}</span>
+                          <span className="text-gray-200 font-mono tabular-nums flex-1 truncate">{abil}</span>
+                          <button
+                            onClick={() => handleAddOb(ob)}
+                            className="bg-cyan-600 hover:bg-cyan-500 text-white px-2 py-1 rounded font-bold flex-shrink-0"
+                          >
+                            追加
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="px-4 py-2 border-t border-gray-700 text-xs text-gray-400 flex-shrink-0">
+                指名時点の能力で復元されます。同じ選手を複数回追加することもできます。
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

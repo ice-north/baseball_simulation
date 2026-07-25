@@ -47,6 +47,29 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [modalPlayer, setModalPlayer] = useState(null);
 
+  // OB名鑑: プロへ送り出した教え子（team.npbAlumni）を年度降順で集約
+  const alumniByYear = useMemo(() => {
+    const rows = [];
+    Object.entries(allTeams || {}).forEach(([teamName, team]) => {
+      (team?.npbAlumni || []).forEach(a => rows.push({ ...a, fromTeam: teamName }));
+    });
+    const byYear = {};
+    rows.forEach(a => {
+      const y = a.draftYear || 0;
+      if (!byYear[y]) byYear[y] = [];
+      byYear[y].push(a);
+    });
+    Object.values(byYear).forEach(list => list.sort((x, y) => (y.draftScore || 0) - (x.draftScore || 0)));
+    return Object.keys(byYear)
+      .map(Number)
+      .sort((a, b) => b - a)
+      .map(year => ({ year, players: byYear[year] }));
+  }, [allTeams]);
+  const alumniTotal = useMemo(
+    () => alumniByYear.reduce((s, g) => s + g.players.length, 0),
+    [alumniByYear]
+  );
+
   const openModal = (entry) => {
     // draftStats にドラフト時点の能力値スナップショットが入っている
     const ds = entry.draftStats || {};
@@ -399,6 +422,16 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               }`}
             >
               大会記録
+            </button>
+            <button
+              onClick={() => setActiveTab('alumni')}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'alumni'
+                  ? 'bg-cyan-600 text-white shadow-sm'
+                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              }`}
+            >
+              OB名鑑
             </button>
           </div>
         </div>
@@ -1306,6 +1339,74 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               </div>
             </div>
           )
+        )}
+
+        {/* OB名鑑: プロへ送り出した教え子を能力込みで保存・閲覧 */}
+        {activeTab === 'alumni' && (
+          <div>
+            {alumniTotal === 0 ? (
+              <div className="text-center py-12 text-gray-300 text-sm">
+                まだプロへ送り出した選手はいません。<br />
+                <span className="text-gray-400">ドラフトで指名された所属選手がここに記録されます。</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-sm text-gray-300">
+                  プロへ送り出した教え子 <span className="text-cyan-300 font-bold tabular-nums">{alumniTotal}</span> 名
+                  <span className="text-gray-400 ml-2">（指名時の能力を保存。サンドボックスモードで再登場させられます）</span>
+                </div>
+                {alumniByYear.map(({ year, players }) => (
+                  <div key={year} className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-hidden">
+                    <div className="px-3 py-2 bg-gray-900/60 border-b border-gray-700/50 flex items-center gap-2">
+                      <span className="text-cyan-300 font-bold text-sm">{year}年目ドラフト</span>
+                      <span className="text-xs text-gray-400">{players.length}名</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs whitespace-nowrap">
+                        <thead>
+                          <tr className="text-gray-400 border-b border-gray-700/50">
+                            <th className="text-left py-1.5 px-2 font-medium">選手</th>
+                            <th className="text-center py-1.5 px-1 font-medium">守備</th>
+                            <th className="text-center py-1.5 px-1 font-medium">齢</th>
+                            <th className="text-left py-1.5 px-2 font-medium">在籍</th>
+                            <th className="text-left py-1.5 px-2 font-medium">指名球団</th>
+                            <th className="text-left py-1.5 px-2 font-medium">順位</th>
+                            <th className="text-left py-1.5 px-2 font-medium">指名時の能力</th>
+                            <th className="text-center py-1.5 px-2 font-medium">評価</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {players.map((a, i) => {
+                            const isP = a.position === 'pitcher';
+                            const abil = isP
+                              ? `速${a.pitching?.velocity ?? '-'} 制${a.pitching?.control ?? '-'} スタ${a.pitching?.stamina ?? '-'}`
+                              : `ミ${a.batting?.meet ?? '-'} パ${a.batting?.power ?? '-'} 走${a.physical?.speed ?? '-'} 守${a.fielding?.defense ?? '-'}`;
+                            return (
+                              <tr
+                                key={`${a.playerId}-${i}`}
+                                className="border-b border-gray-700/30 hover:bg-gray-700/30 cursor-pointer"
+                                onClick={() => setModalPlayer(a)}
+                                title="クリックで詳細能力を表示"
+                              >
+                                <td className="py-1.5 px-2 text-white font-bold">{a.name}</td>
+                                <td className="py-1.5 px-1 text-center text-gray-300">{POSITION_NAMES[a.position] || '-'}</td>
+                                <td className="py-1.5 px-1 text-center text-gray-300 tabular-nums">{a.age}</td>
+                                <td className="py-1.5 px-2 text-gray-300">{a.fromTeam}</td>
+                                <td className="py-1.5 px-2 text-amber-300">{a.npbTeam}</td>
+                                <td className="py-1.5 px-2 text-gray-300">{a.draftRound}</td>
+                                <td className="py-1.5 px-2 text-gray-200 font-mono tabular-nums">{abil}</td>
+                                <td className="py-1.5 px-2 text-center text-cyan-300 font-bold tabular-nums">{a.draftScore}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {onClose && (

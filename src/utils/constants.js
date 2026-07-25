@@ -253,6 +253,29 @@ export const adjustGrowthModifier = (player, delta) => {
 };
 
 /**
+ * 疲労度に応じた成長率ペナルティ（摩耗）を返す。
+ *   〜40: なし / 41〜60: -0.01 / 61〜80: -0.02 / 81〜: -0.03
+ * 適用条件は呼び出し側で判定する:
+ *   野手 = スタメン出場した試合のみ（代打・代走・守備固めは対象外）
+ *   投手 = 10球以上投げた登板のみ（10球以下のワンポイントは対象外）
+ */
+export const getFatigueGrowthPenalty = (fatigue) => {
+  const f = fatigue || 0;
+  if (f <= 40) return 0;
+  if (f <= 60) return -0.01;
+  if (f <= 80) return -0.02;
+  return -0.03;
+};
+
+/** 疲労ペナルティを条件付きで適用する（applied=false なら何もしない） */
+export const applyFatigueGrowthPenalty = (player, applied) => {
+  if (!applied) return 0;
+  const penalty = getFatigueGrowthPenalty(player?.fatigue);
+  if (penalty !== 0) adjustGrowthModifier(player, penalty);
+  return penalty;
+};
+
+/**
  * 能力値 → 色クラス（数値表示用）
  */
 export const getAbilityColor = (value) => {

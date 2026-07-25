@@ -10,6 +10,7 @@
 import { generateHighSchoolClass, universityPool, highSchoolPool, HIGH_SCHOOL_CLASS_SIZE } from './universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { checkNPBDraftEligibility, checkHallOfFame, cleanupPlayerReferences, computeSeasonAwardBonuses } from './yearProgressionSystem.js';
+import { addToObRegistry } from '../game/obRegistry.js';
 
 /**
  * NPBドラフト処理（統一評価・グローバルTop-N方式）
@@ -564,6 +565,46 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     if (source === 'highschool' || source === 'university') return;
     teamDraftCounts[teamName] = (teamDraftCounts[teamName] || 0) + 1;
   });
+
+  // === OB名鑑への記録（プロへ送り出した教え子を能力込みで永久保存） ===
+  // 資料室のOB名鑑で閲覧し、サンドボックスモードで再登場させて遊べるようにする。
+  // セーブ肥大を避けるため、成績ログは持たず能力・素質のみを保持する。
+  const newAlumniForRegistry = [];
+  draftedPlayers.forEach((entry) => {
+    if (entry.source === 'highschool' || entry.source === 'university') return;
+    const team = allTeams[entry.teamName];
+    const p = entry.player;
+    if (!team || !p) return;
+    if (!Array.isArray(team.npbAlumni)) team.npbAlumni = [];
+    if (team.npbAlumni.some(a => a.playerId === p.id && a.draftYear === gameYear)) return;
+    const clone = (o) => (o ? JSON.parse(JSON.stringify(o)) : null);
+    const record = {
+      playerId: p.id,
+      name: p.name,
+      age: p.age,
+      position: p.position,
+      draftYear: gameYear,
+      npbTeam: entry.npbTeam,
+      draftRound: entry.draftRound,
+      draftScore: Math.round(entry.score ?? 0),
+      fame: p.fame || 0,
+      // 能力一式（サンドボックス再現用）
+      batting: clone(p.batting),
+      pitching: clone(p.pitching),
+      physical: clone(p.physical),
+      fielding: clone(p.fielding),
+      catching: clone(p.catching),
+      positionFitness: clone(p.positionFitness),
+      growthPotential: p.growthPotential,
+      personality: clone(p.personality),
+      traits: clone(p.traits),
+      careerHistory: clone(p.careerHistory),
+    };
+    team.npbAlumni.push(record);
+    newAlumniForRegistry.push({ ...record, fromTeam: entry.teamName });
+  });
+  // セーブ横断のグローバル名鑑にもミラー（サンドボックスから呼び出せるように）
+  if (newAlumniForRegistry.length > 0) addToObRegistry(newAlumniForRegistry);
 
   const proBonus = [];
   Object.entries(teamDraftCounts).forEach(([teamName, count]) => {

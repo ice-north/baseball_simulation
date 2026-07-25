@@ -1,6 +1,6 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect } from '../simulation-logic.js';
-import { PITCHING_FORM_EFFECTS, adjustGrowthModifier } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty } from '../utils/constants.js';
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
@@ -139,9 +139,11 @@ export const generateAILineup = (teamData, teamName) => {
       const bEff = getEffectiveBatting(b);
       const aBat = aEff.meet + aEff.power;
       const bBat = bEff.meet + bEff.power;
-      // 疲労50超(fatiguePenalty>=2)から成長ペナルティが発生するため、休養を促す強めのマイナス補正
-      const aFatigueMalus = aEff.fatiguePenalty >= 6 ? -50 : aEff.fatiguePenalty >= 4 ? -25 : aEff.fatiguePenalty >= 2 ? -8 : 0;
-      const bFatigueMalus = bEff.fatiguePenalty >= 6 ? -50 : bEff.fatiguePenalty >= 4 ? -25 : bEff.fatiguePenalty >= 2 ? -8 : 0;
+      // 疲労41以上から段階的に成長ペナルティ(-0.01/-0.02/-0.03)が発生するため休養を促す。
+      // fatiguePenalty = 疲労²/1200 なので 疲労41→1, 61→3, 81→5 に対応する
+      const fatigueMalus = (fp) => (fp >= 5 ? -50 : fp >= 3 ? -25 : fp >= 1 ? -8 : 0);
+      const aFatigueMalus = fatigueMalus(aEff.fatiguePenalty);
+      const bFatigueMalus = fatigueMalus(bEff.fatiguePenalty);
       return (bFit * 0.6 + bBat * 0.4 + bFatigueMalus) - (aFit * 0.6 + aBat * 0.4 + aFatigueMalus);
     });
 
@@ -2344,8 +2346,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           playerData.fatigue = (playerData.fatigue || 0) + baseFatigue + recovCancelled;
         }
 
-        // 成長率変動: 10試合出場ごとに+0.01、疲労50超で出場なら-0.01
-        if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
+        // 成長率変動: 10試合出場ごとに+0.01
+        // 摩耗ペナルティはスタメン出場(3打席以上)時のみ、疲労度に応じて段階的に適用
+        // （代打・代走・守備固めではペナルティ無し）
+        applyFatigueGrowthPenalty(playerData, b.atBats >= 3);
         if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
       }
 
@@ -2364,8 +2368,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         season.walks = (season.walks || 0) + p.walks;
         season.pitches = (season.pitches || 0) + p.pitches;
 
-        // 成長率変動: 疲労50超で登板なら-0.01
-        if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
+        // 成長率変動: 摩耗ペナルティは10球以上投げた登板のみ、疲労度に応じて段階的に適用
+        // （10球以下のワンポイント起用ではペナルティ無し）
+        applyFatigueGrowthPenalty(playerData, (p.pitches || 0) >= 10);
 
         // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
         // 先発かどうかはリリーフリストに含まれないかで判定（投球回数ではなく登板種別）

@@ -6,7 +6,7 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { autoSimulateGame, generateAILineup } from './autoSimulation.js';
 import { progressDate, handlePhaseTransition, recordGameResult, updatePlayoffProgress } from '../season/dateProgression.js';
-import { adjustGrowthModifier } from '../utils/constants.js';
+import { adjustGrowthModifier, applyFatigueGrowthPenalty } from '../utils/constants.js';
 import { advanceQualifierWithResult, autoPlayBracket, isBracketComplete, getBracketRankings, buildLosersBracket, recordResult } from '../corporate/toshitaikou.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { generateGrandChampionship, autoPlayGrandChampionship } from '../corporate/parallelWorldManager.js';
@@ -305,12 +305,14 @@ export function executeHandleManagedGameEnd(ctx) {
         season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
         season.walks = (season.walks || 0) + (gs.walks || 0);
 
-        // 成長率変動: 疲労50超で出場なら-0.01、10試合ごとに+0.01
-        if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
+        // 成長率変動: 摩耗ペナルティはスタメン出場(3打席以上)時のみ、疲労度に応じて段階的に適用
+        // （代打・代走・守備固めではペナルティ無し）
+        const isStarterAppearance = (gs.atBats || 0) >= 3;
+        applyFatigueGrowthPenalty(playerData, isStarterAppearance);
         if (season.games % 10 === 0) adjustGrowthModifier(playerData, 0.01);
 
         // 野手疲労蓄積: スタメン出場(3打席以上)のみ
-        if ((gs.atBats || 0) >= 3) {
+        if (isStarterAppearance) {
           const bodyStamina = playerData.physical?.bodyStamina || 50;
           const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
           const recoveryAbility = playerData.physical?.recovery || 50;
@@ -335,8 +337,9 @@ export function executeHandleManagedGameEnd(ctx) {
         sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
         sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
 
-        // 成長率変動: 疲労50超で登板なら-0.01
-        if ((playerData.fatigue || 0) > 50) adjustGrowthModifier(playerData, -0.01);
+        // 成長率変動: 摩耗ペナルティは10球以上投げた登板のみ、疲労度に応じて段階的に適用
+        // （10球以下のワンポイント起用ではペナルティ無し）
+        applyFatigueGrowthPenalty(playerData, (ps.pitches || 0) >= 10);
 
         // 投手疲労蓄積: bodyStaminaが高いほど疲労が溜まりにくい
         const bodyStamina = playerData.physical?.bodyStamina || 50;
