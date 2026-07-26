@@ -517,7 +517,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         currentStamina: startStamina,
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0 },
+          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0, wildPitches: 0 },
           fielding: { chances: 0, errors: 0, assists: 0 }
         }
       };})
@@ -534,7 +534,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         currentStamina: startStamina,
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0 },
+          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0, wildPitches: 0 },
           fielding: { chances: 0, errors: 0, assists: 0 }
         }
       };})
@@ -729,7 +729,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // ストライク/ボールの判定（変化球は制球が落ちる）
     const strikeChance = 35 + effectiveControl * 0.25 + pitchStrikeBonus;
     const breakingControlPenalty = selectedPitch.type !== 'straight' ? (100 - (selectedPitch.level || 50)) * 0.05 : 0;
-    const adjustedStrikeChance = strikeChance - breakingControlPenalty;
+    // フレーミング: 守備の上手い捕手は際どい球をストライクにしてもらえる。
+    // 基準はリーグの平均的な捕手(=50)。ここを絶対基準(60等)にすると平均以下の捕手が
+    // 大半になり、リーグ全体の四球・防御率を押し上げてしまうため相対評価にする。
+    // 効果は控えめ（守備100で+3.0pt、守備20で-1.8pt）
+    const framing = ((catcherPlayer?.fielding?.defense ?? 50) - 50) * 0.06;
+    const adjustedStrikeChance = strikeChance - breakingControlPenalty + framing;
 
     if (rand < adjustedStrikeChance) {
       // ストライクゾーン
@@ -1715,6 +1720,35 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         }
       }
 
+      // 暴投・捕逸（走者がいる時のみ）: 投手の制球と捕手の守備で決まる。
+      // 守備の良い捕手はワンバウンドを確実に止め、走者の進塁を防ぐ。
+      if (gameState.bases.some(Boolean)) {
+        const pControl = pitcher.pitching?.control ?? pitcher.control ?? 50;
+        const cDef = catcher?.fielding?.defense ?? 50;
+        // 制球50・捕手守備60 で1球あたり約0.8%。捕手守備が低いほど後逸が増える
+        const wpRate = Math.max(0.001,
+          0.010 * (1 - pControl / 200) * (1 - (cDef - 30) / 140));
+        if (Math.random() < wpRate) {
+          const pd = defenseTeam.players.find(p => p.id === pitcher.id);
+          if (pd?.gameStats?.pitching) pd.gameStats.pitching.wildPitches = (pd.gameStats.pitching.wildPitches || 0) + 1;
+          // 全走者が1つ進塁（三塁走者は生還）
+          for (let b = 2; b >= 0; b--) {
+            if (!gameState.bases[b]) continue;
+            const r = gameState.bases[b];
+            gameState.bases[b] = false;
+            if (b === 2) {
+              if (gameState.isTopInning) gameState.score.away++;
+              else gameState.score.home++;
+              const pp = getCurrentPitcher(defenseTeam);
+              if (pp?.gameStats?.pitching) pp.gameStats.pitching.runsAllowed++;
+              creditRuns(pp, 1, (r && r._reachedOnError) ? 1 : 0);
+            } else {
+              gameState.bases[b + 1] = r;
+            }
+          }
+        }
+      }
+
       // 投手のスタミナを取得
       const pitcherData = defenseTeam.players.find(p => p.id === pitcher.id);
       const pitcherStamina = pitcherData.currentStamina;
@@ -2505,6 +2539,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         season.strikeouts = (season.strikeouts || 0) + p.strikeouts;
         season.walks = (season.walks || 0) + p.walks;
         season.pitches = (season.pitches || 0) + p.pitches;
+        season.wildPitches = (season.wildPitches || 0) + (p.wildPitches || 0);
 
         // 成長率変動: 摩耗ペナルティは10球以上投げた登板のみ、疲労度に応じて段階的に適用
         // （10球以下のワンポイント起用ではペナルティ無し）

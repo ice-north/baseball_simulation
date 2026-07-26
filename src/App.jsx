@@ -1313,7 +1313,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
 
         // ストライクゾーン確率を実効制球で計算
-        const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65;
+        // フレーミング: 守備の上手い捕手は際どい球をストライクにしてもらえる。
+        // 基準はリーグ平均の捕手(=50)。絶対基準にするとリーグ全体の四球率が動くため相対評価。
+        const framing = ((catcher.defense ?? 50) - 50) / 100 * 0.05;
+        const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65 + framing;
         const isInStrikeZone = Math.random() < (strikeZoneProb * adjustment.strikeZone);
 
         const catcherLeadEffect = (catcher.lead / 100) * 0.10;
@@ -1428,6 +1431,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           name: currentCatcher.name,
           lead: currentCatcher.catching.lead,
           arm: currentCatcher.physical.arm,
+          defense: currentCatcher.fielding?.defense ?? 50,
           throws: currentCatcher.physical.throws
         };
         
@@ -1553,6 +1557,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           name: currentCatcher.name,
           lead: currentCatcher.catching.lead,
           arm: currentCatcher.physical.arm,
+          defense: currentCatcher.fielding?.defense ?? 50,
           throws: currentCatcher.physical.throws
         };
         
