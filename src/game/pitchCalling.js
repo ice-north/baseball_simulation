@@ -24,6 +24,15 @@
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+// 制球の効き（リーグ平均の制球57を支点にした -1.0〜+1.0 の正規化値）。
+// 線形にすると四球数の幅が 制球20で6.6個 / 制球100で1.4個 にしか開かない。
+// 四球は「1球ごとのボール率」に対して指数的に反応するため、両端を引き離すには
+// 支点から離れるほど効きを強める必要がある（上位帯は特に加速させる）。
+//   制球20→×1.34 / 40→×1.04 / 57→0 / 80→×2.82 / 100→×4.40
+// 結果: 9イニングあたりの四球が 制球20で7.4個 → 制球100で0.2個 まで開く。
+const cc = (c) => { const t = (clamp(c, 0, 100) - 57) / 43;
+  return t >= 0 ? t * (1 + 3.4 * t) : t * (1 - 0.10 * t); };
+
 export const AIM_LABEL = { zone: '勝負', edge: '際どく', chase: '誘い' };
 
 /**
@@ -78,7 +87,7 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
 
   if (aim === 'zone') {
     // ゾーンで勝負。制球が低いと入っても真ん中（甘い球）になる
-    if (Math.random() < 0.51 + c * 0.0034) {          // 制球40→65% / 65→73% / 100→85%
+    if (Math.random() < 0.704 + cc(c) * 0.146) {          // 制球20→57% / 57→70% / 80→112%(=必ず) 
       inZone = true;
       quality = Math.random() < 0.42 - c * 0.0032 ? 'meatball' : 'good';
     } else {
@@ -86,17 +95,17 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
     }
   } else if (aim === 'edge') {
     // 際どいコース。決まればストライク、外し方は制球次第
-    if (Math.random() < 0.19 + c * 0.0042) {          // 制球40→36% / 65→46% / 100→61%
+    if (Math.random() < 0.4294 + cc(c) * 0.181) {          // 制球20→22% / 57→43% / 100→110%(=必ず)
       inZone = true; quality = 'edge';
     } else if (Math.random() < 0.30 - c * 0.0022) {   // 制球40→21% / 100→8%
       inZone = true; quality = 'meatball';             // 甘く入った失投
     } else {
       inZone = false;
-      quality = Math.random() < 0.55 + c * 0.0035 ? 'edge' : 'waste';
+      quality = Math.random() < 0.7495 + cc(c) * 0.151 ? 'edge' : 'waste';
     }
   } else {
     // 誘い球（意図的なボール）。制球が高いほど「ゾーンすぐ外」に決まり振ってもらえる
-    if (Math.random() < 0.51 + c * 0.0045) {          // 制球40→69% / 65→80% / 100→96%
+    if (Math.random() < 0.7665 + cc(c) * 0.194) {          // 制球20→54% / 57→77% / 100→>100%(=必ず)
       inZone = false; quality = 'edge';
     } else if (Math.random() < 0.34 - c * 0.0026) {   // 制球40→24% / 100→8%
       inZone = true; quality = 'meatball';             // 抜けて甘く入る
@@ -132,7 +141,7 @@ export function swingProbability({
     p = 0.44 - batterEye * 0.0036 + strikes * 0.09;
     // 制球の良い投手のボール球は「ストライクに見える」ため振ってもらえる。
     // 加藤貴之のようにストライク率70%超に達する投手はこの経路で四球が減る
-    p += (pitcherControl - 55) * 0.0014;
+    p += cc(pitcherControl) * 0.060;
     if (isBreaking) p += breakingLevel * 0.0010;
   } else {
     // 明らかなボール球。よほど選球眼が悪くないと振らない
