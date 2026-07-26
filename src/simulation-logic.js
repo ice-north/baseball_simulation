@@ -361,35 +361,30 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   // スタジアム形状: ポール際99m, センター122m, 方向で補間
   // direction 0°=センター→122m, ±45°=ポール際→99m をcos²で補間
   const absDir = Math.abs(direction || 0);
-  const fenceDistBase = 99 + 23 * Math.pow(Math.cos(absDir * Math.PI / 90), 2);
+  // スタジアム形状: ポール際96m / 中間112m / センター119m（NPBの平均的な球場規模）。
+  // 以前は cos² 補間で 99m/110m/122m としていたが、中間(パワーアレイ)が浅すぎて
+  // 引っ張った打球が実際より容易にスタンドインし、逆に中堅方向は遠すぎた。
+  const fenceDistBase = 96 + 23 * Math.cos(absDir * Math.PI / 90);
 
-  // Type 1: バレルゾーン強打HR（フェンスを8m以上クリア）
-  if (distance > fenceDistBase + 8 && launchAngle >= 23 && launchAngle <= 37 && exitVelocity >= 153) {
-    // EV153: 42%, EV163: 80%, EV173: 95%
-    const hr1Prob = Math.min(0.95, 0.42 + (exitVelocity - 153) / 27);
-    if (Math.random() < hr1Prob) {
-      return { result: 'homerun', bases: 4, description: 'ホームラン！' };
+  // ===== 本塁打判定 =====
+  // 【重要】飛距離がフェンスを越えていて打出し角度がHR帯なら、原則そのまま本塁打。
+  // 旧実装は「越えていても球速とパワーで20〜40%しかHRにしない」確率判定だったため、
+  // フェンス超えの打球の6割以上が外野フライに落とされていた（実測: 塀を越える打球は
+  // 打球全体の2.69% = 0.72本/試合ありながら、HRは0.24本/試合しか出ていなかった）。
+  // 飛距離側（carryBase × 角度補正 × パワー補正）で既に能力差は表現されている。
+  if (distance > fenceDistBase && launchAngle >= 20 && launchAngle <= 45) {
+    // 塀際の好捕・向かい風でごく稀に阻まれる。余裕が小さいほど阻まれやすい
+    const margin = distance - fenceDistBase;
+    const robbedRate = Math.min(0.22, 0.04 + Math.max(0, 5 - margin) / 5 * 0.16);
+    if (Math.random() >= robbedRate) {
+      return { result: 'homerun', bases: 4, description: margin > 10 ? 'ホームラン！' : 'ホームラン！（フェンス越え）' };
     }
   }
 
-  // Type 2: フェンス越えHR（方向別壁距離を基準に判定）
-  if (distance > fenceDistBase && launchAngle >= 22 && launchAngle <= 38 && exitVelocity >= 130) {
-    const velocityFactor = Math.max(0, (exitVelocity - 130) / 20);
-    const powerFactor = Math.max(0, ((batter.power || 50) - 30) / 65);
-    // 余裕が大きいほど確率上昇（15m以上余裕があれば×1.5倍）
-    const clearanceFactor = Math.min(1.5, 1 + Math.max(0, distance - fenceDistBase) / 15);
-    const hrProb = (velocityFactor * 0.15 + powerFactor * 0.07) * clearanceFactor;
-    if (Math.random() < hrProb) {
-      return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス越え）' };
-    }
-  }
-
-  // Type 3: ギリギリHR（風・打球の伸び, フェンス8m手前から発動）
-  if (distance > fenceDistBase - 8 && launchAngle >= 24 && launchAngle <= 36 && exitVelocity >= 110) {
-    const evFactor = Math.max(0, (exitVelocity - 110) / 35);
-    const distFactor = Math.max(0, (distance - (fenceDistBase - 8)) / 15);
-    const hrProb = evFactor * distFactor * 0.13;
-    if (Math.random() < hrProb) {
+  // ギリギリ届かない打球（フェンス6m手前から）は打球の伸び・追い風で越えることがある
+  if (distance > fenceDistBase - 6 && launchAngle >= 22 && launchAngle <= 40) {
+    const carryProb = (distance - (fenceDistBase - 6)) / 6 * 0.20;
+    if (Math.random() < carryProb) {
       return { result: 'homerun', bases: 4, description: 'ホームラン！（フェンス直撃）' };
     }
   }
@@ -649,19 +644,24 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   const batterSpeed = batter.speed || 60;
   const isCorner = Math.abs(direction) > 26;
 
-  // 三塁打: コーナー寄り + 速い打球 + 足の速い走者 のみ
-  if (isCorner && distance > 95 && exitVelocity >= 144 && batterSpeed >= 65) {
-    const tripleProb = 0.20 + (batterSpeed - 65) / 100 * 0.3;
+  // 三塁打: コーナー寄り（＝外野手が追う距離が長い）+ 深い打球 + 足のある走者
+  if (isCorner && distance > 88 && batterSpeed >= 55) {
+    const tripleProb = 0.28 + (batterSpeed - 55) / 100 * 1.4;
     if (Math.random() < tripleProb) {
       return { result: 'triple', bases: 3, description: '三塁打！', fieldingPosition: position };
     }
   }
 
-  // 二塁打: 深いフライ(95m+)かつ速い打球(EV 142+) または非常に速い打球(EV 148+)
-  // 打球が本当に強くないと二塁打にはならない
-  if (launchAngle >= 15 && launchAngle <= 40) {
-    if ((distance > 95 && exitVelocity >= 142) || exitVelocity >= 148) {
-      return { result: 'double', bases: 2, description: '二塁打！' };
+  // 二塁打: 野手から遠く落ちるほど、打球が強いほど、走者が速いほど二塁を狙える。
+  // 旧実装は「95m超かつEV142+」の階段状の閾値で、外野の間を抜ける当たりの大半が
+  // 単打になっていた（二塁打が安打の12%。実際は18%前後）。
+  if (launchAngle >= 12 && launchAngle <= 42) {
+    let doubleProb = 0;
+    if (distance > 78) doubleProb += (distance - 78) / 25 * 1.10;   // 78m→0 / 103m→+1.10
+    if (exitVelocity > 130) doubleProb += (exitVelocity - 130) / 20 * 0.55; // 150km→+0.55
+    doubleProb += (batterSpeed - 60) / 100 * 0.30;
+    if (Math.random() < Math.min(0.85, doubleProb)) {
+      return { result: 'double', bases: 2, description: '二塁打！', fieldingPosition: position };
     }
   }
 

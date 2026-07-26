@@ -63,15 +63,24 @@ const r = new Report(`■ リーグ集計（${SEEDS}シード平均）`);
 // 暴投/捕逸の追加により、走者と失点が意図的に増えた。実測は 防御 2.72-3.64 /
 // BB/9 6.5-7.7 に上振れしたため、防御率の上限のみ 3.20→4.00 に広げてある
 // （BB/9は既存バンド内）。野球として妥当な水準で、桁崩壊の検出という目的は維持。
+//
+// 【再較正2: 長打の物理修正後】「フェンスを越える飛距離の打球が2〜4割しか本塁打に
+// ならない」不具合と、階段状で厳しすぎた二塁打/三塁打の閾値を修正した。
+// 結果、NPB相当の戦力(ミート58/パワー55/制球60)で 安打8.2 二塁打1.3 三塁打0.15
+// 本塁打0.71（実NPB 8.3/1.50/0.15/0.70）と実データに一致するようになった一方、
+// この弱小リーグでも長打が増えたため以下を広げた。実測レンジ(6回×3シード平均):
+//   打率 .242-.250 / 出塁 .362-.391 / 長打 .296-.313 / 防御 3.34-4.44
+//   K/9 7.9-8.4 / BB/9 6.9-8.3 / 四球率 15.9-18.7% / 三振率 18.2-20.2%
+//   本塁打/試合 0.33-0.42 / 首位打者 .393-.456 / 最多本塁打 24-44本
 r.band('リーグ打率',     acc.avg,  0.210, 0.270, v => v.toFixed(3));
-r.band('リーグ出塁率',   acc.obp,  0.330, 0.385, v => v.toFixed(3));
-r.band('リーグ長打率',   acc.slg,  0.230, 0.300, v => v.toFixed(3));
-r.band('リーグ防御率',   acc.era,  1.90,  4.00,  v => v.toFixed(2));
+r.band('リーグ出塁率',   acc.obp,  0.330, 0.400, v => v.toFixed(3));
+r.band('リーグ長打率',   acc.slg,  0.230, 0.330, v => v.toFixed(3));
+r.band('リーグ防御率',   acc.era,  1.90,  4.80,  v => v.toFixed(2));
 r.band('K/9',            acc.k9,   6.5,   10.0,  v => v.toFixed(2));
-r.band('BB/9',           acc.bb9,  5.0,   7.8,   v => v.toFixed(2));
-r.band('四球率(対打席)', acc.bbRate, 0.125, 0.180, v => (v * 100).toFixed(1) + '%');
+r.band('BB/9',           acc.bb9,  5.0,   8.6,   v => v.toFixed(2));
+r.band('四球率(対打席)', acc.bbRate, 0.125, 0.195, v => (v * 100).toFixed(1) + '%');
 r.band('三振率(対打席)', acc.kRate,  0.160, 0.250, v => (v * 100).toFixed(1) + '%');
-r.band('本塁打/試合',    hrPerTeamGame, 0.05, 0.60, v => v.toFixed(2));
+r.band('本塁打/試合',    hrPerTeamGame, 0.05, 0.70, v => v.toFixed(2));
 r.info('総打数',         acc.AB.toFixed(0));
 r.info('総投球回',       acc.IP.toFixed(0));
 r.info('実行試合数(1シード)', gamesPerTeamPerSeed.toFixed(0) + '試合/チーム');
@@ -84,7 +93,7 @@ r.print();
 // （系統的なオフェンス膨張はリーグ集計側の帯が別途捕える）。
 const ld = new Report('■ 個人成績リーダー（外れ値検出）');
 ld.band('首位打者(規定)',   ext.bestAvg, 0.290, 0.490, v => v.toFixed(3));
-ld.band('最多本塁打',       ext.maxHR,   3, 40, v => v.toFixed(0) + '本');
+ld.band('最多本塁打',       ext.maxHR,   3, 50, v => v.toFixed(0) + '本');
 ld.band('最優秀防御率(規定)', ext.bestERA === Infinity ? 0 : ext.bestERA, 0.30, 3.50, v => v.toFixed(2));
 ld.info('首位打者',   `${ext.bestAvg.toFixed(3)} (${ext.bestAvgName})`);
 ld.info('本塁打王',   `${ext.maxHR}本 (${ext.maxHRName})`);
