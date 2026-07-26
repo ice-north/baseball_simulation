@@ -410,11 +410,11 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     } else if (distance < 29 && Math.abs(direction) < 14) {
       // 投手正面の弱い打球（マウンドは本塁から18.4m。中央方向の緩い当たりは投手が処理）
       position = 'pitcher';
-    } else if (direction < -24) {
+    } else if (direction < -28) {
       // 三塁側 - 遊撃手の足で範囲拡張
       const ssSpeed = safeDefense.short?.speed || 60;
       const ssExpand = (ssSpeed - 60) / 100 * 8; // 足90→+2.4度拡張（走力強化）
-      if (direction >= -24 - ssExpand) {
+      if (direction >= -28 - ssExpand) {
         position = 'short'; // 遊撃手がカバー
       } else {
         position = 'third';

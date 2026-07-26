@@ -12,6 +12,7 @@
 import { highSchoolPool } from './universityPool.js';
 import { generatePositionFitness } from './tryoutSystem.js';
 import { syncPositionToFitness } from '../utils/physics.js';
+import { generateHandedness, generateBats } from '../utils/handedness.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool, replaceReleasedPool, removeFromReleasedPoolByIds } from '../state/pools.js';
 import { addToRoster, replaceRoster } from '../state/roster.js';
@@ -272,14 +273,8 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
   const isPitcher = Math.random() < 0.35;
   const position = isPitcher ? 'pitcher' : ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'][Math.floor(Math.random() * 8)];
 
-  const handRoll = Math.random() * 100;
-  let throws, bats;
-  if (handRoll < 42) { throws = 'right'; bats = 'right'; }
-  else if (handRoll < 72) { throws = 'right'; bats = 'left'; }
-  else if (handRoll < 82) { throws = 'right'; bats = 'switch'; }
-  else if (handRoll < 94) { throws = 'left'; bats = 'left'; }
-  else if (handRoll < 97) { throws = 'left'; bats = 'switch'; }
-  else { throws = 'left'; bats = 'right'; }
+  // 左右比率は src/utils/handedness.js に一元化（右打56% / 左打41% / 両打3%）
+  const { throws, bats } = generateHandedness();
 
   // 推薦入学は能力が高い、一般入部は低め
   const rankBase = { S: 40, A: 35, B: 30, C: 25, D: 20 };
@@ -679,13 +674,15 @@ function generateIndependentNewcomer(id, year) {
   const lowAbility = () => 10 + Math.floor(Math.random() * 25);
 
   if (isPitcher) {
+    // 投手は左投げが多め(30%)、野手は少なめ(15%)。打席は投げ手で条件付けして決める
+    const pitcherThrows = Math.random() < 0.3 ? 'left' : 'right';
     return {
       id,
       name: nameObj.last + nameObj.first,
       age,
       position: 'pitcher',
-      throws: Math.random() < 0.3 ? 'left' : 'right',
-      bats: Math.random() < 0.4 ? 'left' : 'right',
+      throws: pitcherThrows,
+      bats: generateBats(pitcherThrows),
       pitching: {
         velocity: 125 + Math.floor(Math.random() * 15),
         control: baseAbility(),
@@ -713,14 +710,15 @@ function generateIndependentNewcomer(id, year) {
 
   const fieldPositions = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];
   const position = fieldPositions[Math.floor(Math.random() * fieldPositions.length)];
+  const fielderThrows = Math.random() < 0.15 ? 'left' : 'right';
 
   return {
     id,
     name: nameObj.last + nameObj.first,
     age,
     position,
-    throws: Math.random() < 0.15 ? 'left' : 'right',
-    bats: Math.random() < 0.35 ? 'left' : (Math.random() < 0.1 ? 'switch' : 'right'),
+    throws: fielderThrows,
+    bats: generateBats(fielderThrows),
     pitching: { velocity: 110 + Math.floor(Math.random() * 15), control: lowAbility(), stamina: 30 + Math.floor(Math.random() * 20), breakingBalls: [] },
     batting: { meet: baseAbility(), power: baseAbility(), eye: baseAbility() },
     physical: { speed: baseAbility(), arm: baseAbility(), stamina: 50 + Math.floor(Math.random() * 30), bodyStamina: 40 + Math.floor(Math.random() * 30), recovery: 40 + Math.floor(Math.random() * 30) },

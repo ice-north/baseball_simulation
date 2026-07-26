@@ -9,6 +9,7 @@ import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionF
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
+import { generateHandedness } from '../utils/handedness.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { addToReleasedPool, replaceReleasedPool } from '../state/pools.js';
 import { addToRoster } from '../state/roster.js';
@@ -75,13 +76,8 @@ function weightedPick(weights) {
 function generateHighSchoolPlayer(id) {
   const name = generateRandomPlayerName();
 
-  const handRoll = Math.random() * 100;
-  let throws, bats;
-  if (handRoll < 42) { throws = 'right'; bats = 'right'; }
-  else if (handRoll < 70) { throws = 'right'; bats = 'left'; }
-  else if (handRoll < 93) { throws = 'left'; bats = 'left'; }
-  else if (handRoll < 98) { throws = 'right'; bats = 'switch'; }
-  else { throws = 'left'; bats = 'right'; }
+  // 左右比率は src/utils/handedness.js に一元化（右打56% / 左打41% / 両打3%）
+  const { throws, bats } = generateHandedness();
 
   // === 体格 ===
   const buildRoll = Math.random();

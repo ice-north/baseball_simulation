@@ -7,6 +7,7 @@ import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
 import { getUtilityScore } from '../utils/constants.js';
+import { generateHandedness } from '../utils/handedness.js';
 
 // 2年目以降トライアウトの1チームあたり基準受験者数
 // 構成比はリーグ注目度(developmentReputation)で変動する（下記 generateTryoutCandidates 参照）:
@@ -15,25 +16,11 @@ const TRYOUT_TOTAL_PER_TEAM = 10;
 
 /**
  * 利き手を決定（左投・左打の発生率を強化）
- * - 右投右打: 40%
- * - 右投左打: 30%
- * - 左投左打: 25%
- * - 右投両打: 4%
- * - 左投右打: 1%（レア）
+ * 比率は src/utils/handedness.js に一元化されている
+ * （右打56% / 左打41% / 両打3%、投げ手は右75% / 左25%）。
  */
 function determineHandedness() {
-  const rand = Math.random() * 100;
-  if (rand < 40) {
-    return { throws: 'right', bats: 'right' };
-  } else if (rand < 70) {
-    return { throws: 'right', bats: 'left' };
-  } else if (rand < 95) {
-    return { throws: 'left', bats: 'left' };
-  } else if (rand < 99) {
-    return { throws: 'right', bats: 'switch' };
-  } else {
-    return { throws: 'left', bats: 'right' }; // レアな左投右打
-  }
+  return generateHandedness();
 }
 
 /**
