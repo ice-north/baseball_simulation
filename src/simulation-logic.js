@@ -402,7 +402,11 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   // 足が速い野手は守備範囲が広がる（隣接ゾーンの打球もカバー）
   let fielder, position, isOutfield;
 
-  if (distance < 40) {
+  // ゴロは飛距離に関わらず内野手がまず処理する（抜けて初めて外野への安打になる）。
+  // 以前は distance>=40 のゴロが外野手の担当になり、内野の打球が全体の1割しか
+  // 発生しないという不自然な分布になっていた。
+  const isGrounder = launchAngle < 10;
+  if (distance < 40 || isGrounder) {
     // 内野 - 遊撃手の守備範囲を広く設定
     isOutfield = false;
     if (distance < 15) {
@@ -436,8 +440,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     isOutfield = true;
     const cfSpeed = safeDefense.center?.speed || 65;
     const cfExpand = (cfSpeed - 65) / 100 * 12; // 足90→+3度拡張（走力強化）
-    const cfLeft = -15 - cfExpand;  // 中堅の左端（基準-15）
-    const cfRight = 15 + cfExpand;  // 中堅の右端（基準+15）
+    // 中堅は左右両翼より広い範囲を守る（実際の守備隊形に合わせ基準±21度）
+    const cfLeft = -21 - cfExpand;  // 中堅の左端
+    const cfRight = 21 + cfExpand;  // 中堅の右端
 
     if (direction < cfLeft) {
       // 左翼側 - 左翼手の足でもカバー拡張
@@ -481,8 +486,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   };
 
   // ===== ゴロの場合 =====
+  // ゴロは常に内野手が最初に処理を試みる。抜けたら外野への安打になる。
   if (launchAngle < 10) {
-    if (distance < 40) {
+    {
       // 内野ゴロ - 打球方向と野手定位置の角度差で正面/横を判定
       const pw = posStatWeights[position] || { defense: 1.0, speed: 1.0, arm: 1.0 };
       const homeAngle = fielderHomeAngles[position] || 0;
@@ -494,19 +500,21 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       let catchProb;
       if (offset <= frontZone) {
         // 正面: ルーティンプレー（守備力で微調整）
-        catchProb = 0.97 + (fielder.defense - 50) / 100 * 0.02;
+        catchProb = 0.83 + (fielder.defense - 50) / 100 * 0.02;
         catchProb -= (batter.speed - 60) / 100 * 0.04;
       } else {
         // 横の打球: 距離に応じて難易度が上がり、守備力が重要になる
         const difficulty = Math.min(1.0, (offset - frontZone) / 14);
-        catchProb = 0.88 - difficulty * 0.30;
+        catchProb = 0.60 - difficulty * 0.30;
         catchProb += (fielder.defense - 50) / 100 * 0.20 * pw.defense * (1 + difficulty * 0.5);
         catchProb += (fielder.speed - 50) / 100 * 0.06 * pw.speed;
         catchProb += ((fielder.arm || 60) - 50) / 100 * 0.05 * pw.arm;
         catchProb -= (batter.speed - 60) / 100 * 0.12;
         catchProb -= Math.max(0, (batter.meet || 50) - 30) / 100 * 0.10;
       }
-      catchProb = Math.min(0.995, Math.max(0.40, catchProb));
+      // 強い打球ほど反応が難しく、内野を抜けやすい（初速130km/hから効き始める）
+      catchProb -= Math.max(0, (exitVelocity - 130)) / 100 * 1.2;
+      catchProb = Math.min(0.995, Math.max(0.10, catchProb));
 
       if (Math.random() < catchProb) {
         // 横っ飛びなど難しい打球ほど失策率が上がる
@@ -529,14 +537,14 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
         }
         return { result: 'out', bases: 0, description: `${position === 'pitcher' ? '投' : position === 'first' ? '一' : position === 'second' ? '二' : position === 'short' ? '遊' : '三'}ゴロ`, isOutfieldFly: false, fieldingPosition: position };
       }
-      return { result: 'single', bases: 1, description: '内野安打', fieldingPosition: position };
-    } else {
-      // 外野への速いゴロ - 足と守備で大きく変動
-      const catchProb = 0.25 + (fielder.speed / 100) * 0.25 * weight + (fielder.defense / 100) * 0.15 * weight;
-      if (Math.random() < catchProb) {
-        return { result: 'out', bases: 0, description: '外野ゴロアウト', isOutfieldFly: false, fieldingPosition: position };
+      // 内野を処理できず → 内野安打 or 外野へ抜ける安打（強い打球は外野を転がり二塁打も）
+      if (distance >= 40) {
+        if (exitVelocity >= 150 && Math.abs(direction) > 28 && Math.random() < 0.25) {
+          return { result: 'double', bases: 2, description: '左右を破る二塁打！' };
+        }
+        return { result: 'single', bases: 1, description: '外野への安打' };
       }
-      return { result: 'single', bases: 1, description: '外野への安打' };
+      return { result: 'single', bases: 1, description: '内野安打', fieldingPosition: position };
     }
   }
 
