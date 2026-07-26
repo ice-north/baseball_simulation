@@ -30,8 +30,14 @@ export function useGameStrategy() {
   // 継続する設定（画面にも状態を反映するので state ＋ ref のペア）
   const [battingApproach, _setBattingApproach] = useState('normal'); // 'take' | 'normal' | 'aggressive'
   const [defenseShift,   _setDefenseShift]     = useState('normal'); // 'normal' | 'pull' | 'oppo'
+  // 配球: 投球の狙い。'auto' は捕手AIに任せる（従来動作）
+  const [pitchAim,       _setPitchAim]         = useState('auto');    // 'auto' | 'zone' | 'edge' | 'chase'
+  // 球種指定: 'auto' は捕手のリードに任せる（従来動作）。それ以外は arsenal の index
+  const [pitchTypeIndex, _setPitchTypeIndex]   = useState('auto');
   const battingApproachRef = useRef('normal');
   const defenseShiftRef    = useRef('normal');
+  const pitchAimRef        = useRef('auto');
+  const pitchTypeIndexRef  = useRef('auto');
 
   // ワンショット指示（次の1球で消費）— stateにする必要はなく ref のみ
   const forceStealRef      = useRef(false); // 盗塁指示
@@ -46,6 +52,14 @@ export function useGameStrategy() {
   const setDefenseShift = useCallback((v) => {
     _setDefenseShift(v);
     defenseShiftRef.current = v;
+  }, []);
+  const setPitchAim = useCallback((v) => {
+    _setPitchAim(v);
+    pitchAimRef.current = v;
+  }, []);
+  const setPitchTypeIndex = useCallback((v) => {
+    _setPitchTypeIndex(v);
+    pitchTypeIndexRef.current = v;
   }, []);
 
   // 攻撃側ワンショット指示: 呼び出し側から throwPitch を渡してもらい、
@@ -69,6 +83,8 @@ export function useGameStrategy() {
   const snapshot = useCallback(() => ({
     battingApproach: battingApproachRef.current,
     defenseShift:    defenseShiftRef.current,
+    pitchAim:        pitchAimRef.current,
+    pitchTypeIndex:  pitchTypeIndexRef.current,
     forceSteal:      forceStealRef.current,
     forceSwing:      forceSwingRef.current,
     intentionalWalk: intentionalWalkRef.current,
@@ -85,17 +101,19 @@ export function useGameStrategy() {
   const resetPersistent = useCallback(() => {
     setBattingApproach('normal');
     setDefenseShift('normal');
-  }, [setBattingApproach, setDefenseShift]);
+    setPitchAim('auto');
+    setPitchTypeIndex('auto');
+  }, [setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex]);
 
   return {
     // UI 表示用の state
-    battingApproach, defenseShift,
+    battingApproach, defenseShift, pitchAim, pitchTypeIndex,
     // UI からの設定変更
-    setBattingApproach, setDefenseShift,
+    setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex,
     // ワンショット指示（ボタンから呼ぶ）
     triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
     // 投球ロジック用の ref（simulateSinglePitch などが直接参照）
-    battingApproachRef, defenseShiftRef,
+    battingApproachRef, defenseShiftRef, pitchAimRef, pitchTypeIndexRef,
     forceStealRef, forceSwingRef, intentionalWalkRef,
     // 1球ライフサイクル
     snapshot, consumeOneShot,

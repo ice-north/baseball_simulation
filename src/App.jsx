@@ -29,6 +29,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL } from './game/pitchCalling.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
@@ -383,10 +384,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       // 詳細は src/game/useGameStrategy.js 参照。
       const strategy = useGameStrategy();
       const {
-        battingApproach, defenseShift,
-        setBattingApproach, setDefenseShift,
+        battingApproach, defenseShift, pitchAim, pitchTypeIndex,
+        setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex,
         triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
-        battingApproachRef, defenseShiftRef,
+        battingApproachRef, defenseShiftRef, pitchAimRef, pitchTypeIndexRef,
         forceStealRef, forceSwingRef, intentionalWalkRef,
       } = strategy;
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
@@ -1303,6 +1304,11 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           pitchChoice = Math.floor(Math.random() * totalPitchTypes);
         }
 
+        // プレイヤーが球種を指定していればそれを使う（'auto' は捕手のリードに任せる）
+        const aimedTypeIndex = pitchTypeIndexRef.current;
+        if (aimedTypeIndex !== 'auto' && pitcher.pitches[aimedTypeIndex]) {
+          pitchChoice = Number(aimedTypeIndex);
+        }
         selectedBall = pitcher.pitches[pitchChoice];
 
         // 球種レベルによる制球ペナルティ + スタミナペナルティ
@@ -1312,32 +1318,28 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           effectiveControl = Math.max(0, effectiveControl - ballControlPenalty);
         }
 
-        // ストライクゾーン確率を実効制球で計算
-        // フレーミング: 守備の上手い捕手は際どい球をストライクにしてもらえる。
-        // 基準はリーグ平均の捕手(=50)。絶対基準にするとリーグ全体の四球率が動くため相対評価。
-        const framing = ((catcher.defense ?? 50) - 50) / 100 * 0.05;
-        const strikeZoneProb = 0.25 + (effectiveControl / 100) * 0.65 + framing;
-        const isInStrikeZone = Math.random() < (strikeZoneProb * adjustment.strikeZone);
-
-        const catcherLeadEffect = (catcher.lead / 100) * 0.10;
-
-        let swingProb;
-        if (isInStrikeZone) {
-          if (safeCount.strikes === 2) {
-            swingProb = 0.90 + ((100 - batter.eye) / 100) * 0.08;
-          } else if (safeCount.balls >= 2) {
-            swingProb = 0.60 + ((100 - batter.eye) / 100) * 0.30;
-          } else {
-            swingProb = 0.75 + ((100 - batter.eye) / 100) * 0.20;
-          }
-          swingProb = swingProb * (1 - catcherLeadEffect);
-        } else {
-          if (safeCount.strikes === 2) {
-            swingProb = 0.20 + ((100 - batter.eye) / 100) * 0.30;
-          } else {
-            swingProb = 0.15 + ((100 - batter.eye) / 100) * 0.30;
-          }
-        }
+        // ===== 配球 → 投球位置 → スイング判定 =====
+        // 自動シミュレーションと同じ共有モデル（src/game/pitchCalling.js）を使う。
+        // 以前は采配モードだけ「ゾーン率=0.25+制球*0.65（制球60で64%）」という
+        // 独自式で、自動モードの48%と全く違う世界になっていた。
+        const isBreakingPitch = selectedBall.type !== 'straight';
+        // プレイヤーが狙いを指定していればそれを使う（'auto' は捕手AIに任せる）
+        const aimChoice = pitchAimRef.current;
+        const aim = (aimChoice && aimChoice !== 'auto') ? aimChoice : callPitchTarget({
+          balls: safeCount.balls, strikes: safeCount.strikes, batterEye: batter.eye,
+          catcherLead: catcher.lead ?? 50,
+        });
+        const loc = resolvePitchLocation({
+          aim, control: effectiveControl, catcherDefense: catcher.defense ?? 50,
+        });
+        const isInStrikeZone = loc.inZone;
+        let swingProb = swingProbability({
+          inZone: loc.inZone, quality: loc.quality, strikes: safeCount.strikes,
+          batterEye: batter.eye, pitcherControl: effectiveControl,
+          isBreaking: isBreakingPitch, breakingLevel: selectedBall.level || 50,
+        });
+        // 捕手のリードは打者の狙いを外す（スイング判断を鈍らせる）
+        swingProb *= 1 - (catcher.lead / 100) * 0.08;
         swingProb *= adjustment.swingRate;
         // 采配: 自チームが攻撃中のとき打撃方針を反映（待て=見送り増/積極=打ちにいく）
         if ((isTopInning ? awayTeam.name : homeTeam.name) === userTeamName) {
@@ -1368,12 +1370,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
 
         if (!isInStrikeZone) {
-          // ボール球でもバットに当たることがある（引っ掛けゴロ、泳いでフライ等）
-          // 選球眼が低い打者ほどボール球に手を出しやすく、当てやすい
-          const ballContactRate = 0.25 + ((100 - batter.eye) / 100) * 0.15;
-          if (Math.random() < ballContactRate) {
+          // ボール球でもバットに当たる（引っ掛けゴロ、泳いでフライ等）。
+          // 品質を落として物理エンジンに通すので、ほとんどが凡打になる。
+          if (Math.random() < ballZoneContactChance(batter.eye)) {
             const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
-            const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher, lastPitch);
+            const weakBatter = { ...batter,
+              meet: Math.max(1, batter.meet + BALL_ZONE_PENALTY.meet),
+              power: Math.max(1, batter.power + BALL_ZONE_PENALTY.power) };
+            const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch);
             return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true }, newStamina };
           }
           return {
@@ -1385,8 +1389,13 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 左右の相性効果を取得
         const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
 
-        // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる
-        const result = determineContactResultPhysics(selectedBall, predictionCorrect, 0, handEffect, actualVelocity, batter, pitcher, defense, catcher, lastPitch);
+        // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる。
+        // 甘く入った失投(meatball)は長打され、際どいコース(edge)は打ち損じる。
+        const q = getPitchQualityEffect(loc.quality);
+        const zoneBatter = { ...batter,
+          meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
+          power: Math.max(1, Math.min(100, batter.power + q.power)) };
+        const result = determineContactResultPhysics(selectedBall, predictionCorrect, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch);
         return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity) }, newStamina };
       };
 
@@ -3602,6 +3611,39 @@ if (newOuts === 3) {
                             defenseShift === v ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${isUserBatting ? 'opacity-40' : ''}`}>
                           {label}
                         </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+                {/* 配球（守備時）: 球種と狙いを指定する。おまかせなら捕手AIが決める */}
+                {(() => {
+                  const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
+                  const arsenal = getCurrentPitcher()?.pitches || [];
+                  const dim = isUserBatting ? 'opacity-40' : '';
+                  const btn = (active, color) => `px-2 py-1 rounded text-xs font-bold transition ${
+                    active ? `${color} text-white` : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${dim}`;
+                  return (
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap mb-2">
+                      <span className={`text-xs ${!isUserBatting ? 'text-amber-300' : 'text-gray-600'}`}>配球</span>
+                      <button onClick={() => setPitchTypeIndex('auto')} disabled={isUserBatting || gameOver}
+                        title="球種は捕手のリードに任せる" className={btn(pitchTypeIndex === 'auto', 'bg-amber-700')}>おまかせ</button>
+                      {arsenal.map((b, i) => (
+                        <button key={i} onClick={() => setPitchTypeIndex(i)} disabled={isUserBatting || gameOver}
+                          title={`${ballEffects[b.type]?.name || b.type} Lv${b.level}`}
+                          className={btn(pitchTypeIndex === i, 'bg-amber-700')}>
+                          {ballEffects[b.type]?.name || b.type}
+                        </button>
+                      ))}
+                      <span className="text-xs text-gray-600">｜</span>
+                      <span className={`text-xs ${!isUserBatting ? 'text-amber-300' : 'text-gray-600'}`}>狙い</span>
+                      <button onClick={() => setPitchAim('auto')} disabled={isUserBatting || gameOver}
+                        title="狙いも捕手のリードに任せる" className={btn(pitchAim === 'auto', 'bg-rose-700')}>おまかせ</button>
+                      {['zone', 'edge', 'chase'].map(v => (
+                        <button key={v} onClick={() => setPitchAim(v)} disabled={isUserBatting || gameOver}
+                          title={v === 'zone' ? 'ゾーンで勝負。ストライクは取れるが打たれやすい'
+                            : v === 'edge' ? '際どいコース。打ち損じを誘うが四球のリスク'
+                            : '誘い球（ボール球）。振らせれば凡打、見逃されれば四球に近づく'}
+                          className={btn(pitchAim === v, 'bg-rose-700')}>{AIM_LABEL[v]}</button>
                       ))}
                     </div>
                   );

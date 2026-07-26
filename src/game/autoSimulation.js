@@ -4,6 +4,7 @@ import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty 
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
+import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY } from './pitchCalling.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
 const PITCHER_REST_FATIGUE_THRESHOLD = 40;
@@ -720,122 +721,125 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       speedDiffPenalty = speedDiffRatio * 22;
     }
 
-    // 投球結果を決定
-    const rand = Math.random() * 100;
+    // ===== 配球 → 投球位置 → スイング判定 =====
+    // 制球は「ストライク率」ではなく「狙った所へ投げられる再現性」として効く。
+    // 詳細は pitchCalling.js 参照。采配モード(App.jsx)と同じモデルを共有している。
+    const isBreaking = selectedPitch.type !== 'straight';
+    // 変化球は制球が落ちる（レベルが高いほど操れる）
+    const breakingControlPenalty = isBreaking ? (100 - (selectedPitch.level || 50)) * 0.20 : 0;
+    // 投球方針: contact=ゾーンで勝負しやすく / strikeout=誘い球を増やす（callPitchTarget側）
+    const strategyControlBonus = pitchingStrat === 'contact' ? 4 : 0;
 
-    // 投球方針の効果
-    const pitchStrikeBonus = pitchingStrat === 'contact' ? 5 : pitchingStrat === 'strikeout' ? -3 : 0;
+    const aim = callPitchTarget({
+      balls: count.balls, strikes: count.strikes, batterEye: batter.eye,
+      catcherLead: catcherPlayer?.catching?.lead ?? 50, strategy: pitchingStrat,
+    });
+    const loc = resolvePitchLocation({
+      aim,
+      control: effectiveControl - breakingControlPenalty + strategyControlBonus,
+      catcherDefense: catcherPlayer?.fielding?.defense ?? 50,
+    });
+    const swung = decideSwing({
+      inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,
+      pitcherControl: effectiveControl, isBreaking, breakingLevel: selectedPitch.level || 50,
+    });
 
-    // ストライク/ボールの判定（変化球は制球が落ちる）
-    const strikeChance = 35 + effectiveControl * 0.25 + pitchStrikeBonus;
-    const breakingControlPenalty = selectedPitch.type !== 'straight' ? (100 - (selectedPitch.level || 50)) * 0.05 : 0;
-    // フレーミング: 守備の上手い捕手は際どい球をストライクにしてもらえる。
-    // 基準はリーグの平均的な捕手(=50)。ここを絶対基準(60等)にすると平均以下の捕手が
-    // 大半になり、リーグ全体の四球・防御率を押し上げてしまうため相対評価にする。
-    // 効果は控えめ（守備100で+3.0pt、守備20で-1.8pt）
-    const framing = ((catcherPlayer?.fielding?.defense ?? 50) - 50) * 0.06;
-    const adjustedStrikeChance = strikeChance - breakingControlPenalty + framing;
+    // 打球の解決。投球位置の質（甘い球=meatball / 際どい球=edge / ボール球）で
+    // 打者の実効ミート・パワーを補正してから物理エンジンに渡す。
+    const resolveContact = (mod) => {
+      const effBatter = {
+        ...batter,
+        meet: Math.max(1, Math.min(100, batter.meet + (mod?.meet || 0))),
+        power: Math.max(1, Math.min(100, batter.power + (mod?.power || 0))),
+      };
+      const pitchData = {
+        type: selectedPitch.type,
+        velocity: pitchVelocityFinal,
+        level: selectedPitch.level || 50
+      };
+      const handEffect = {
+        powerBonus: sameHand ? -3 : 3,
+        meetBonus: sameHand ? -3 : 3
+      };
+      const tunnelingEffect = lastPitch ? getTunnelingEffect(lastPitch, pitchData, catcherPlayer?.catching?.lead || 50) : 0;
 
-    if (rand < adjustedStrikeChance) {
-      // ストライクゾーン
-      const swingRand = Math.random() * 100;
-      const swingChance = 60 + (2 - count.strikes) * 10;
+      // 物理コンタクト計算
+      const physicsResult = calculatePhysicsContact(
+        { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50 },
+        effBatter,
+        Math.random() < (selectedPitch.type === 'straight' ? 0.3 : 0.2),
+        pitchData,
+        tunnelingEffect,
+        handEffect
+      );
 
-      if (swingRand < swingChance) {
-        // スイング - 変化球のコンタクトペナルティ
-        const contactRand = Math.random() * 100;
-        const breakingPenalty = selectedPitch.type !== 'straight' ? (selectedPitch.level || 50) * 0.12 : 0;
-        const contactChance = 45 + batter.meet * 0.45 + handBonus - breakingPenalty - speedDiffPenalty;
-
-        if (contactRand < contactChance) {
-          // コンタクト成功 - 物理エンジンで打球・守備を判定
-          const pitchData = {
-            type: selectedPitch.type,
-            velocity: pitchVelocityFinal,
-            level: selectedPitch.level || 50
-          };
-          const handEffect = {
-            powerBonus: sameHand ? -3 : 3,
-            meetBonus: sameHand ? -3 : 3
-          };
-          const tunnelingEffect = lastPitch ? getTunnelingEffect(lastPitch, pitchData, catcherPlayer?.catching?.lead || 50) : 0;
-
-          // 物理コンタクト計算
-          const physicsResult = calculatePhysicsContact(
-            { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50 },
-            batter,
-            Math.random() < (selectedPitch.type === 'straight' ? 0.3 : 0.2),
-            pitchData,
-            tunnelingEffect,
-            handEffect
-          );
-
-          if (!physicsResult.isContact) {
-            return { type: 'swinging_strike' };
-          }
-
-          // 打球物理パラメータ計算
-          const battedBall = calculateBattedBallPhysics(batter, pitcher, pitchData, physicsResult);
-
-          // 守備判定
-          const fieldResult = judgeFielderReach(battedBall, defense, batter);
-
-          if (fieldResult.result === 'homerun') {
-            return { type: 'homerun' };
-          } else if (fieldResult.result === 'out') {
-            if (bases[0] && battedBall.launchAngle < 10 && battedBall.distance < 40) {
-              const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
-              const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
-              const dpBase = 15 + (ifAvg - 50) * 0.35;
-              if (Math.random() * 100 < dpBase) {
-                return { type: 'double_play' };
-              }
-            }
-            return {
-              type: 'out',
-              isOutfieldFly: fieldResult.isOutfieldFly || false,
-              tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0,
-              fieldingPosition: fieldResult.fieldingPosition
-            };
-          } else if (fieldResult.result === 'triple') {
-            return { type: 'triple', fieldingPosition: fieldResult.fieldingPosition };
-          } else if (fieldResult.result === 'double') {
-            return { type: 'double', fieldingPosition: fieldResult.fieldingPosition };
-          } else {
-            return {
-              type: 'single',
-              isError: fieldResult.isError || false,
-              errorPosition: fieldResult.errorPosition,
-              fieldingPosition: fieldResult.fieldingPosition,
-              // 悪送球・中継ミスは走者が余分に1つ進む
-              extraAdvance: !!fieldResult.extraAdvance || !!fieldResult.isThrowingError,
-            };
-          }
-        } else {
-          // 空振り
-          return { type: 'swinging_strike' };
-        }
-      } else {
-        // 見逃しストライク
-        return { type: 'called_strike' };
-      }
-    } else {
-      // ボールゾーン
-      const swingRand = Math.random() * 100;
-      // 変化球のボール球は追いかけやすい
-      const breakingChaseBonus = selectedPitch.type !== 'straight' ? (selectedPitch.level || 50) * 0.05 : 0;
-      const chaseChance = 12 + (3 - batter.eye * 0.12) + count.strikes * 4 + breakingChaseBonus;
-
-      if (swingRand < chaseChance) {
-        const contactRand = Math.random() * 100;
-        if (contactRand < 20) {
-          return { type: 'foul' };
-        }
+      if (!physicsResult.isContact) {
         return { type: 'swinging_strike' };
-      } else {
-        return { type: 'ball' };
       }
+
+      // ファウル: タイミングを外した打球は左右のファウルゾーンへ切れる。
+      // 実データでは全投球の約17%（＝コンタクトの4割弱）がファウルで、打席が長引く。
+      // これが無いとコンタクトが即座に打席を終わらせてしまい、四球が構造的に出ない。
+      const foulProb = 0.72 - physicsResult.meetQuality * 0.40;
+      if (Math.random() < foulProb) {
+        return { type: 'foul' };
+      }
+
+      // 打球物理パラメータ計算
+      const battedBall = calculateBattedBallPhysics(effBatter, pitcher, pitchData, physicsResult);
+
+      // 守備判定
+      const fieldResult = judgeFielderReach(battedBall, defense, effBatter);
+
+      if (fieldResult.result === 'homerun') {
+        return { type: 'homerun' };
+      } else if (fieldResult.result === 'out') {
+        if (bases[0] && battedBall.launchAngle < 10 && battedBall.distance < 40) {
+          const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
+          const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
+          const dpBase = 15 + (ifAvg - 50) * 0.35;
+          if (Math.random() * 100 < dpBase) {
+            return { type: 'double_play' };
+          }
+        }
+        return {
+          type: 'out',
+          isOutfieldFly: fieldResult.isOutfieldFly || false,
+          tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0,
+          fieldingPosition: fieldResult.fieldingPosition
+        };
+      } else if (fieldResult.result === 'triple') {
+        return { type: 'triple', fieldingPosition: fieldResult.fieldingPosition };
+      } else if (fieldResult.result === 'double') {
+        return { type: 'double', fieldingPosition: fieldResult.fieldingPosition };
+      } else {
+        return {
+          type: 'single',
+          isError: fieldResult.isError || false,
+          errorPosition: fieldResult.errorPosition,
+          fieldingPosition: fieldResult.fieldingPosition,
+          // 悪送球・中継ミスは走者が余分に1つ進む
+          extraAdvance: !!fieldResult.extraAdvance || !!fieldResult.isThrowingError,
+        };
+      }
+    };
+
+    if (loc.inZone) {
+      if (!swung) return { type: 'called_strike' };
+      const q = getPitchQualityEffect(loc.quality);
+      const breakingPenalty = isBreaking ? (selectedPitch.level || 50) * 0.12 : 0;
+      const contactChance = 82 + (batter.meet + q.meet) * 0.45 + handBonus - breakingPenalty - speedDiffPenalty;
+      if (Math.random() * 100 >= contactChance) return { type: 'swinging_strike' };
+      return resolveContact(q);
     }
+
+    // ボールゾーン。振ってしまった場合は半分以上バットに当たり、凡打になる。
+    // 以前は「20%ファウル / 80%空振り」で打球が一切発生せず、chase率を上げると
+    // 三振だけが増えてしまう構造だった。
+    if (!swung) return { type: 'ball' };
+    if (Math.random() >= ballZoneContactChance(batter.eye)) return { type: 'swinging_strike' };
+    if (Math.random() < 0.56) return { type: 'foul' };
+    return resolveContact(BALL_ZONE_PENALTY);
   };
 
   // 走者進塁処理（外野手の肩で進塁を抑制）
@@ -1770,6 +1774,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       pitcherData.gameStats.pitching.pitches++;
 
       // 結果処理
+  
       switch (result.type) {
         case 'ball':
           gameState.count.balls++;
