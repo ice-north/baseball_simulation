@@ -240,6 +240,13 @@ export const transferManagerTo = (targetTeamName, ctx) => {
       WORLD_DATA.independentLeagues[prevLeagueId] = {
         name: prevDef?.name || seasonData?.settings?.leagueName || '独立リーグ',
         teams: [...prevTeams],
+        // プリセット定義が無いカスタムリーグでも翌年以降スケジュールを再生成できるよう、
+        // レギュレーションを控えておく（resetIndependentLeagueSchedules が参照する）
+        regulation: {
+          gamesPerSeason: seasonData?.settings?.gamesPerSeason || 60,
+          leagueFormat: seasonData?.settings?.leagueFormat || 'single',
+          leagueNames: seasonData?.settings?.leagueNames || null,
+        },
         schedule: generateFullSeasonSchedule({
           teams: prevTeams,
           gamesPerSeason: seasonData?.settings?.gamesPerSeason || 60,

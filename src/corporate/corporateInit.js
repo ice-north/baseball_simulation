@@ -707,14 +707,16 @@ export const initializeIndependentLeagues = (excludeLeagueId = null, existingTea
 export const resetIndependentLeagueSchedules = (calendarYear) => {
   for (const [leagueId, leagueData] of Object.entries(WORLD_DATA.independentLeagues)) {
     if (!leagueData) continue;
-    const leagueDef = INDEPENDENT_LEAGUES[leagueId];
+    // プリセット定義が無いリーグ（監督移籍で背景へ回ったカスタムリーグ等）は、
+    // 登録時に控えたレギュレーションを使う。ここで弾くと翌年以降シミュが止まる。
+    const leagueDef = INDEPENDENT_LEAGUES[leagueId] || leagueData.regulation;
     if (!leagueDef) continue;
     const teams = leagueData.teams;
     if (!teams || teams.length === 0) continue;
 
     const schedule = generateFullSeasonSchedule({
       teams,
-      gamesPerSeason: leagueDef.gamesPerSeason,
+      gamesPerSeason: leagueDef.gamesPerSeason || 60,
       startDate: { year: calendarYear, month: 4, day: 1 },
       endDate: { year: calendarYear, month: 9, day: 30 },
       leagueFormat: leagueDef.leagueFormat || 'single',
