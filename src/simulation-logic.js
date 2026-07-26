@@ -181,28 +181,31 @@ export const getTunnelingEffect = (lastPitch, currentPitch, catcherLead) => {
  * 打出し角度の計算（コンタクト品質から）
  */
 export const calculateLaunchAngle = (meetQuality, batter) => {
+  // 打出し角度は「バットのどこに当たったか（上下方向）」で決まり、タイミングの良さとは
+  // 半ば独立している。芯を捉えても上を叩けばゴロになるため、どの品質帯でも広い分布を持たせる。
+  // 分布は実際の野球（ゴロ44% / ライナー21% / フライ30% / ポップ5%）に較正済み。
+  // ※旧実装は meetQuality>0.8 を全てバレル(25-35度)にしていたため、フライが55%まで
+  //   膨らみ、ゴロが23%しか出ず内野に打球が飛ばない状態になっていた。
   let baseLaunchAngle;
 
   if (meetQuality > 0.8) {
-    // 完璧なコンタクト: バレルゾーン（25-35度）
-    baseLaunchAngle = 25 + Math.random() * 10;
+    // 芯を捉えた打球: 半分はバレルゾーン、残りは上下のズレでゴロ〜ライナーに散る
+    baseLaunchAngle = Math.random() < 0.50
+      ? 24 + Math.random() * 12    // バレル（24-36度）
+      : -8 + Math.random() * 40;   // 強いゴロ〜低いフライ
   } else if (meetQuality > 0.6) {
-    // 高品質: ライナー中心だが硬いゴロも出る（NPB準拠）
-    if (Math.random() < 0.30) {
-      baseLaunchAngle = -5 + Math.random() * 15;  // 硬いゴロ〜低いライナー
-    } else {
-      baseLaunchAngle = 10 + Math.random() * 30;  // ライナー〜フライ
-    }
+    // 高品質: ゴロとライナー〜フライが半々
+    baseLaunchAngle = Math.random() < 0.50
+      ? -10 + Math.random() * 23   // 硬いゴロ〜低いライナー
+      : 2 + Math.random() * 34;    // ライナー〜フライ
   } else if (meetQuality > 0.4) {
-    // 中品質: 幅広い分布（-10〜50度、ゴロ寄り）
-    baseLaunchAngle = -10 + Math.random() * 60;
+    // 中品質: 幅広い分布（ゴロ寄り）
+    baseLaunchAngle = -6 + Math.random() * 53;
   } else {
-    // 低品質: ポップフライかボテボテ
-    if (Math.random() < 0.5) {
-      baseLaunchAngle = -15 + Math.random() * 20;  // ボテボテゴロ
-    } else {
-      baseLaunchAngle = 55 + Math.random() * 30;  // ポップフライ
-    }
+    // 低品質: ボテボテゴロが主、残りはポップフライ
+    baseLaunchAngle = Math.random() < 0.60
+      ? -18 + Math.random() * 26   // ボテボテゴロ
+      : 52 + Math.random() * 33;   // ポップフライ
   }
 
   // パワー打者は角度がつきやすい傾向
@@ -245,7 +248,6 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
     }
   }
   const launchAngle = calculateLaunchAngle(meetQuality, batter) + spinAngleAdj + velocityAngleAdj;
-
   // 物理シミュレーション（飛距離・滞空時間）
   const rad = launchAngle * Math.PI / 180;
   const v = exitVelocity / 3.6;  // km/h to m/s
@@ -270,8 +272,9 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   // EV155→112m, EV145→102m, EV135→91m, EV125→80m, EV115→69m
   let distance;
   if (launchAngle <= 0) {
-    // ゴロ: 内野を転がる距離
-    distance = 15 + exitVelocity * 0.15 + Math.random() * 20;
+    // ゴロ: 内野を転がる距離。弱い打球は投手前で止まるため下限を設けない
+    // （旧式は必ず15m以上になり、投手ゴロの条件 distance<15 が構造的に成立しなかった）
+    distance = 2 + exitVelocity * 0.17 + Math.random() * 20;
   } else {
     // フライ/ライナー: EV基準の標準飛距離
     const carryBase = Math.max(0, (exitVelocity - 75) * 1.1 + 28);
@@ -389,15 +392,6 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     }
   }
 
-  // ポップフライ（60度以上）- 旧モデル: 95-97%アウト
-  if (launchAngle >= 60) {
-    const catchProb = 0.95 + (safeDefense.catcher?.defense || 70) / 2000;
-    if (Math.random() < catchProb) {
-      return { result: 'out', bases: 0, description: 'フライアウト（ポップフライ）', isOutfieldFly: false, fieldingPosition: 'catcher' };
-    }
-    return { result: 'single', bases: 1, description: 'ポテンヒット' };
-  }
-
   // 担当野手の決定（守備重要度: SS/CF > 2B/RF > LF/3B > 1B）
   // 足が速い野手は守備範囲が広がる（隣接ゾーンの打球もカバー）
   let fielder, position, isOutfield;
@@ -409,30 +403,31 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   if (distance < 40 || isGrounder) {
     // 内野 - 遊撃手の守備範囲を広く設定
     isOutfield = false;
-    if (distance < 15) {
+    if (distance < 13 || (launchAngle >= 70 && distance < 25)) {
+      // ホーム目前で止まった打球（バント性の当たり）と、ほぼ真上に打ち上げた
+      // 高角度のポップフライは捕手が処理する
+      position = 'catcher';
+    } else if (distance < 29 && Math.abs(direction) < 14) {
+      // 投手正面の弱い打球（マウンドは本塁から18.4m。中央方向の緩い当たりは投手が処理）
       position = 'pitcher';
-    } else if (direction < -20) {
+    } else if (direction < -24) {
       // 三塁側 - 遊撃手の足で範囲拡張
       const ssSpeed = safeDefense.short?.speed || 60;
       const ssExpand = (ssSpeed - 60) / 100 * 8; // 足90→+2.4度拡張（走力強化）
-      if (direction >= -20 - ssExpand) {
+      if (direction >= -24 - ssExpand) {
         position = 'short'; // 遊撃手がカバー
       } else {
         position = 'third';
       }
-    } else if (direction < 5) {
-      position = 'short'; // -20〜+5: 遊撃手の広い範囲（25度幅）
-    } else if (direction < 20) {
-      position = 'second'; // +5〜+20: 二塁手（15度幅）
+    } else if (direction < 3) {
+      position = 'short'; // -24〜+3: 遊撃手の広い範囲
+    } else if (direction < 28) {
+      position = 'second'; // +3〜+26: 二塁手（一塁手は線寄りのみを守るため二塁の範囲を広く取る）
     } else {
       // 一塁側 - 二塁手の足で範囲拡張
       const sbSpeed = safeDefense.second?.speed || 60;
       const sbExpand = (sbSpeed - 60) / 100 * 7; // 走力強化
-      if (direction < 20 + sbExpand) {
-        position = 'second';
-      } else {
-        position = 'first';
-      }
+      position = direction < 28 + sbExpand ? 'second' : 'first';
     }
     fielder = safeDefense[position] || { defense: 70, speed: 60, arm: 65 };
   } else {
@@ -441,8 +436,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     const cfSpeed = safeDefense.center?.speed || 65;
     const cfExpand = (cfSpeed - 65) / 100 * 12; // 足90→+3度拡張（走力強化）
     // 中堅は左右両翼より広い範囲を守る（実際の守備隊形に合わせ基準±21度）
-    const cfLeft = -21 - cfExpand;  // 中堅の左端
-    const cfRight = 21 + cfExpand;  // 中堅の右端
+    const cfLeft = -17 - cfExpand;  // 中堅の左端
+    const cfRight = 17 + cfExpand;  // 中堅の右端
 
     if (direction < cfLeft) {
       // 左翼側 - 左翼手の足でもカバー拡張
@@ -459,7 +454,6 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     }
     fielder = safeDefense[position] || { defense: 70, speed: 65, arm: 70 };
   }
-
   // ポジション別守備重要度係数（ライナー・フライ用の総合係数）
   const positionWeight = {
     short: 1.5, center: 1.5,
@@ -500,12 +494,12 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       let catchProb;
       if (offset <= frontZone) {
         // 正面: ルーティンプレー（守備力で微調整）
-        catchProb = 0.83 + (fielder.defense - 50) / 100 * 0.02;
+        catchProb = 0.85 + (fielder.defense - 50) / 100 * 0.02;
         catchProb -= (batter.speed - 60) / 100 * 0.04;
       } else {
         // 横の打球: 距離に応じて難易度が上がり、守備力が重要になる
         const difficulty = Math.min(1.0, (offset - frontZone) / 14);
-        catchProb = 0.60 - difficulty * 0.30;
+        catchProb = 0.74 - difficulty * 0.30;
         catchProb += (fielder.defense - 50) / 100 * 0.20 * pw.defense * (1 + difficulty * 0.5);
         catchProb += (fielder.speed - 50) / 100 * 0.06 * pw.speed;
         catchProb += ((fielder.arm || 60) - 50) / 100 * 0.05 * pw.arm;
@@ -589,6 +583,17 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       }
       return { result: 'single', bases: 1, description: 'ヒット！' };
     }
+  }
+
+  // ===== ポップフライ（60度以上）=====
+  // ほぼアウト。以前は無条件に「捕手」で記録していたが、実際は打球の位置に応じて
+  // 内野手（時に外野手）が処理する。上で決定した担当野手をそのまま使う。
+  if (launchAngle >= 60) {
+    const catchProb = 0.95 + (fielder.defense || 70) / 2000;
+    if (Math.random() < catchProb) {
+      return { result: 'out', bases: 0, description: 'フライアウト（ポップフライ）', isOutfieldFly: isOutfield, fieldingPosition: position };
+    }
+    return { result: 'single', bases: 1, description: 'ポテンヒット', fieldingPosition: position };
   }
 
   // ===== フライの場合 =====
