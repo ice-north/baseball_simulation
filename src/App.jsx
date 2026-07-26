@@ -1765,13 +1765,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             
             // 打者成績: ヒット
             const bases_earned = result.type === 'single' ? 1 : result.type === 'double' ? 2 : result.type === 'triple' ? 3 : 4;
+            // 失策での出塁は「安打」ではない（打数のみ加算）
+            const reachedOnError = !!result.isError;
             setBatterStats(prev => ({
               ...prev,
               plateAppearances: prev.plateAppearances + 1,
               atBats: prev.atBats + 1,
-              hits: prev.hits + 1,
-              homeruns: prev.homeruns + (result.type === 'homerun' ? 1 : 0),
-              totalBases: prev.totalBases + bases_earned
+              hits: prev.hits + (reachedOnError ? 0 : 1),
+              homeruns: prev.homeruns + (!reachedOnError && result.type === 'homerun' ? 1 : 0),
+              totalBases: prev.totalBases + (reachedOnError ? 0 : bases_earned)
             }));
             
             // 選手個別成績を更新
@@ -1783,9 +1785,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               
               updateBatterStats(currentBatterPlayer.id, offenseTeamType, {
                 atBats: (currentBatterPlayer.stats?.batting?.atBats || 0) + 1,
-                hits: (currentBatterPlayer.stats?.batting?.hits || 0) + 1,
-                homeruns: (currentBatterPlayer.stats?.batting?.homeruns || 0) + (result.type === 'homerun' ? 1 : 0),
-                rbis: (currentBatterPlayer.stats?.batting?.rbis || 0) + runs
+                hits: (currentBatterPlayer.stats?.batting?.hits || 0) + (reachedOnError ? 0 : 1),
+                homeruns: (currentBatterPlayer.stats?.batting?.homeruns || 0) + (!reachedOnError && result.type === 'homerun' ? 1 : 0),
+                // 失策による得点には打点が付かない
+                rbis: (currentBatterPlayer.stats?.batting?.rbis || 0) + (reachedOnError ? 0 : runs)
               });
               
               // 失策での出塁は非自責走者として計上（失策が無ければアウトだったので想定アウトも+1）

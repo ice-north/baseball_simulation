@@ -518,7 +518,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
           pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0 },
-          fielding: { chances: 0, errors: 0 }
+          fielding: { chances: 0, errors: 0, assists: 0 }
         }
       };})
     },
@@ -535,7 +535,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
           pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0 },
-          fielding: { chances: 0, errors: 0 }
+          fielding: { chances: 0, errors: 0, assists: 0 }
         }
       };})
     },
@@ -793,14 +793,15 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               fieldingPosition: fieldResult.fieldingPosition
             };
           } else if (fieldResult.result === 'triple') {
-            return { type: 'triple' };
+            return { type: 'triple', fieldingPosition: fieldResult.fieldingPosition };
           } else if (fieldResult.result === 'double') {
-            return { type: 'double' };
+            return { type: 'double', fieldingPosition: fieldResult.fieldingPosition };
           } else {
             return {
               type: 'single',
               isError: fieldResult.isError || false,
               errorPosition: fieldResult.errorPosition,
+              fieldingPosition: fieldResult.fieldingPosition,
               // 悪送球・中継ミスは走者が余分に1つ進む
               extraAdvance: !!fieldResult.extraAdvance || !!fieldResult.isThrowingError,
             };
@@ -838,17 +839,21 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   // 自責点判定のため、失策で出塁した走者には _reachedOnError を立てておき（塁の移動に追随する）、
   // 生還した非自責走者の数を unearnedRunsScored として返す。
   // extraAdvance: 悪送球・中継ミスで既存の走者が余分に1つ進むケース
-  const advanceRunners = (hitType, bases, defense, batter, extraAdvance = false) => {
+  // fieldingPosition: 打球を処理した野手（捕殺の記録先）
+  // 戻り値の outsMade / assistBy は呼び出し側でアウト加算・捕殺記録に使う
+  const advanceRunners = (hitType, bases, defense, batter, extraAdvance = false, fieldingPosition = null, currentOuts = 0) => {
     const newBases = [false, false, false];
     let runsScored = 0;
     let unearnedRunsScored = 0;
+    let outsMade = 0;
+    let assistBy = null;
     const isUnearnedRunner = (r) => !!(r && r._reachedOnError);
 
     if (hitType === 'homerun') {
       runsScored = 1 + bases.filter(b => b).length;
       unearnedRunsScored = bases.reduce((n, b) => n + (isUnearnedRunner(b) ? 1 : 0), 0)
         + (isUnearnedRunner(batter) ? 1 : 0);
-      return { bases: [false, false, false], runsScored, unearnedRunsScored };
+      return { bases: [false, false, false], runsScored, unearnedRunsScored, outsMade: 0, assistBy: null };
     }
 
     const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
@@ -863,10 +868,32 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
         // 肩による進塁抑制: シングルで1塁走者が3塁を狙う、2塁走者がホームを狙う等
         // 強肩の場合、余分な進塁（1塁→3塁、2塁→本塁on single）をブロック
-        if (hitType === 'single' && newBase >= 2) {
-          const holdChance = (avgArm - 50) / 100 * 0.4; // 肩90→16%の確率で進塁を阻止
-          if (Math.random() < holdChance) {
-            newBase = Math.max(i + 1, newBase - 1); // 1つ手前で止める
+        // 積極進塁（単打で1塁→3塁 / 2塁→本塁）の駆け引き。
+        // 足が速い走者ほど狙い、外野の肩が強いほど自重する。狙って失敗すれば捕殺で刺される。
+        const runner = bases[i];
+        const runnerSpeed = (runner && typeof runner === 'object' && runner.physical?.speed) || 55;
+        const canTryExtra = hitType === 'single' && i <= 1 && !extraAdvance
+          && outsMade === 0 && currentOuts < 2;
+        if (canTryExtra) {
+          // 実際の野球の傾向に合わせ、二塁走者の生還狙いは頻繁・一塁走者の三塁狙いは慎重。
+          // 走力が高いほど積極的、外野の肩が強いほど自重する。
+          const baseTry = i === 1 ? 0.55 : 0.22; // 2塁→本塁 / 1塁→3塁
+          const tryChance = Math.max(0, Math.min(0.85,
+            baseTry + (runnerSpeed - 55) / 100 * 0.6 - (avgArm - 55) / 100 * 0.4));
+          if (Math.random() < tryChance) {
+            const thrower = fieldingPosition ? (defense?.[fieldingPosition] || null) : null;
+            const throwerArm = thrower?.arm ?? avgArm;
+            const cutoff = defense?.short || defense?.second || { defense: 60 };
+            // 捕殺成功率: 肩60・カット60・走力55 で約22%。肩が強く走者が遅いほど刺せる
+            let throwOut = 0.22 + (throwerArm - 60) / 100 * 0.45 + ((cutoff.defense || 60) - 60) / 100 * 0.20
+              - (runnerSpeed - 55) / 100 * 0.45;
+            throwOut = Math.max(0.02, Math.min(0.45, throwOut));
+            if (Math.random() < throwOut) {
+              outsMade++;
+              assistBy = fieldingPosition || null;
+              continue; // 刺された → 進塁も得点もしない
+            }
+            newBase++; // 賭けに勝って余分に進塁
           }
         }
         // 悪送球・中継ミス: 送球が乱れているので走者が余分に1つ進む
@@ -889,7 +916,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       if (isUnearnedRunner(batter)) unearnedRunsScored++;
     }
 
-    return { bases: newBases, runsScored, unearnedRunsScored };
+    return { bases: newBases, runsScored, unearnedRunsScored, outsMade, assistBy };
   };
 
   // 得点を投手の自責点に計上する（失点は呼び出し側で別途加算済み）。
@@ -1824,21 +1851,28 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             batter._reachedOnError = true;   // 失策出塁の走者＝この走者の生還は非自責
             gameState.inningErrorOuts++;     // 失策が無ければアウトだった＝想定アウトを1つ加算
           }
-          const { bases: newBases, runsScored, unearnedRunsScored } =
-            advanceRunners(result.type, gameState.bases, defense, batter, !!result.extraAdvance);
+          const { bases: newBases, runsScored, unearnedRunsScored, outsMade, assistBy } =
+            advanceRunners(result.type, gameState.bases, defense, batter, !!result.extraAdvance,
+              result.fieldingPosition || null, gameState.outs);
           batter.gameStats.batting.atBats++;
-          batter.gameStats.batting.hits++;
-          batter.gameStats.batting.rbis += runsScored;
-          if (result.type === 'double') batter.gameStats.batting.doubles = (batter.gameStats.batting.doubles || 0) + 1;
-          if (result.type === 'triple') batter.gameStats.batting.triples = (batter.gameStats.batting.triples || 0) + 1;
-          if (result.type === 'homerun') batter.gameStats.batting.homeruns++;
+          // 失策での出塁は「安打」ではない（打数のみ加算し、打点も付かない）。
+          // ここを安打扱いにすると失策が増えるほどリーグ打率が上振れする。
+          if (!result.isError) {
+            batter.gameStats.batting.hits++;
+            batter.gameStats.batting.rbis += runsScored;
+            if (result.type === 'double') batter.gameStats.batting.doubles = (batter.gameStats.batting.doubles || 0) + 1;
+            if (result.type === 'triple') batter.gameStats.batting.triples = (batter.gameStats.batting.triples || 0) + 1;
+            if (result.type === 'homerun') batter.gameStats.batting.homeruns++;
+          }
           // ダメージポイント: 単打=4, 長打(二塁打/三塁打/本塁打)=6, 失点=10×得点数
           atBatDamagePoints += (result.type === 'single') ? 4 : 6;
           atBatDamagePoints += runsScored * 10;
 
-          // 投手の被安打・被本塁打を記録
-          pitcher.gameStats.pitching.hits = (pitcher.gameStats.pitching.hits || 0) + 1;
-          if (result.type === 'homerun') pitcher.gameStats.pitching.homeruns = (pitcher.gameStats.pitching.homeruns || 0) + 1;
+          // 投手の被安打・被本塁打を記録（失策出塁は被安打にしない）
+          if (!result.isError) {
+            pitcher.gameStats.pitching.hits = (pitcher.gameStats.pitching.hits || 0) + 1;
+            if (result.type === 'homerun') pitcher.gameStats.pitching.homeruns = (pitcher.gameStats.pitching.homeruns || 0) + 1;
+          }
 
           // エラー記録（守備側の該当野手）
           if (result.isError && result.errorPosition) {
@@ -1856,6 +1890,18 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           // 自責点: 失策で出塁した走者の生還は除外。さらに失策が無ければ既に3アウトだった場合、
           // そのイニングの以降の得点は全て非自責（公式のイニング再構成ルール）。
           creditRuns(pitcher, runsScored, unearnedRunsScored);
+          // 捕殺（走者を本塁/塁上で刺した）→ アウトを加算し、送球した野手に記録
+          if (outsMade > 0) {
+            gameState.outs += outsMade;
+            pitcher.gameStats.pitching.outs = (pitcher.gameStats.pitching.outs || 0) + outsMade;
+            if (assistBy) {
+              const assistFielder = defenseTeam.players.find(p => p.position === assistBy && p.battingOrder >= 1);
+              if (assistFielder?.gameStats?.fielding) {
+                assistFielder.gameStats.fielding.assists = (assistFielder.gameStats.fielding.assists || 0) + 1;
+                assistFielder.gameStats.fielding.chances++;
+              }
+            }
+          }
           gameState.bases = newBases;
           atBatOver = true;
           break;
@@ -2522,10 +2568,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       // 守備成績の集計
       if (player.gameStats.fielding) {
         const f = player.gameStats.fielding;
-        if (f.chances > 0 || f.errors > 0) {
+        if (f.chances > 0 || f.errors > 0 || f.assists > 0) {
           const season = playerData.seasonStats.batting;
           season.fieldingChances = (season.fieldingChances || 0) + f.chances;
           season.errors = (season.errors || 0) + f.errors;
+          season.assists = (season.assists || 0) + (f.assists || 0); // 捕殺
         }
       }
     });

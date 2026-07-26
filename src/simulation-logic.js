@@ -577,7 +577,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       }
       // 長打判定
       if (distance > 70 && exitVelocity >= 140) {
-        return { result: 'double', bases: 2, description: '二塁打！' };
+        return { result: 'double', bases: 2, description: '二塁打！', fieldingPosition: position };
       }
       return { result: 'single', bases: 1, description: 'ヒット！' };
     }
@@ -638,7 +638,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   if (isCorner && distance > 95 && exitVelocity >= 144 && batterSpeed >= 65) {
     const tripleProb = 0.20 + (batterSpeed - 65) / 100 * 0.3;
     if (Math.random() < tripleProb) {
-      return { result: 'triple', bases: 3, description: '三塁打！' };
+      return { result: 'triple', bases: 3, description: '三塁打！', fieldingPosition: position };
     }
   }
 
@@ -660,7 +660,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       isError: true, errorPosition: position, isThrowingError: true, extraAdvance: true,
     };
   }
-  return { result: 'single', bases: 1, description: 'ヒット！' };
+  return { result: 'single', bases: 1, description: 'ヒット！', fieldingPosition: position };
 };
 
 /**
