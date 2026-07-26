@@ -309,6 +309,28 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
  * 野手が打球地点に物理的に到達できるかで判定
  * アウト率は旧モデル基準に調整
  */
+/**
+ * 守備力に応じた失策率を返す（1守備機会あたり）。
+ * 守備力の水準イメージ:
+ *   20=小学生 / 30=中学生 / 40=高校生 / 50=大学生 / 60=プロの及第点
+ * 60を基準に、下回るほど急激に、上回るほど緩やかに失策率が変わる。
+ *   守備20→約10.6% / 30→8.4% / 40→6.2% / 50→4.0% / 60→1.8% / 70→1.2% / 80→0.8%
+ * @param {number} defense 守備力
+ * @param {number} arm 肩力（送球ミスの寄与。省略時は守備力に準ずる）
+ * @param {number} difficulty 打球の難易度 0〜1（横っ飛び等ほど高い）
+ */
+export const getErrorRate = (defense, arm = null, difficulty = 0) => {
+  const d = typeof defense === 'number' ? defense : 50;
+  const a = typeof arm === 'number' ? arm : d;
+  const base = d >= 60
+    ? Math.max(0.004, 0.018 - (d - 60) * 0.0006)
+    : 0.018 + (60 - d) * 0.0022;
+  // 肩が弱いと送球エラーが増える（守備力ほどではない）
+  const armPenalty = Math.max(0, (60 - a)) * 0.0004;
+  // 難しい打球ほど失敗しやすい（最大2倍）
+  return (base + armPenalty) * (1 + difficulty);
+};
+
 export const judgeFielderReach = (battedBall, defense, batter) => {
   // 防御的チェック: defenseがnullまたはundefinedの場合はデフォルト値を使用
   const safeDefense = defense || {};
@@ -470,8 +492,9 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       catchProb = Math.min(0.995, Math.max(0.40, catchProb));
 
       if (Math.random() < catchProb) {
-        const errorRate = 0.002 + (100 - fielder.defense) / 1500 + (100 - (fielder.arm || 60)) / 3000;
-        if (Math.random() < errorRate) {
+        // 横っ飛びなど難しい打球ほど失策率が上がる
+        const errDifficulty = offset <= frontZone ? 0 : Math.min(1.0, (offset - frontZone) / 14);
+        if (Math.random() < getErrorRate(fielder.defense, fielder.arm, errDifficulty)) {
           return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
         }
         return { result: 'out', bases: 0, description: `${position === 'pitcher' ? '投' : position === 'first' ? '一' : position === 'second' ? '二' : position === 'short' ? '遊' : '三'}ゴロ`, isOutfieldFly: false, fieldingPosition: position };
@@ -499,6 +522,10 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const catchProb = Math.min(0.96, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
 
       if (Math.random() < catchProb) {
+        // 内野ライナーは捕球が難しく、弾くことがある
+        if (Math.random() < getErrorRate(fielder.defense, fielder.arm, 0.5)) {
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
+        }
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: false, fieldingPosition: position };
       }
       return { result: 'single', bases: 1, description: 'ヒット！' };
@@ -512,6 +539,10 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       const catchProb = Math.min(0.94, baseOutRate + defenseBonus + speedBonus - meetPlacementBonus);
 
       if (Math.random() < catchProb) {
+        // 外野ライナーの目測・捕球ミス
+        if (Math.random() < getErrorRate(fielder.defense, fielder.arm, 0.5)) {
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
+        }
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: true, tagupThrowbackChance: (fielder.arm / 100) * 0.5, fieldingPosition: position };
       }
       // 長打判定
@@ -555,6 +586,10 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
 
   if (Math.random() < catchProb) {
     const isDeepFly = distance > 70;
+    // 落球（深い打球ほど難しい）。守備力の低い外野手は目測を誤る
+    if (Math.random() < getErrorRate(fielder.defense, fielder.arm, isDeepFly ? 0.5 : 0.2)) {
+      return { result: 'single', bases: 1, description: 'エラー（落球）', isError: true, errorPosition: position };
+    }
     return {
       result: 'out',
       bases: 0,
