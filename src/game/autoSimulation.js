@@ -500,6 +500,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     isTopInning: true,
     outs: 0,
     bases: [false, false, false],
+    // 自責点判定用: そのイニングで失策により免れたアウト数（本来なら発生していたアウト）
+    inningErrorOuts: 0,
     score: { home: 0, away: 0 },
     count: { balls: 0, strikes: 0 },
     homeTeam: {
@@ -515,7 +517,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         currentStamina: startStamina,
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-          pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 },
+          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0 },
           fielding: { chances: 0, errors: 0 }
         }
       };})
@@ -532,7 +534,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         currentStamina: startStamina,
         gameStats: {
           batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-          pitching: { outs: 0, runsAllowed: 0, strikeouts: 0, walks: 0, pitches: 0 },
+          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0 },
           fielding: { chances: 0, errors: 0 }
         }
       };})
@@ -826,13 +828,20 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
   // 走者進塁処理（外野手の肩で進塁を抑制）
   // bases配列にはプレイヤーオブジェクト or false が格納される
+  // hitType に応じて走者を進める。
+  // 自責点判定のため、失策で出塁した走者には _reachedOnError を立てておき（塁の移動に追随する）、
+  // 生還した非自責走者の数を unearnedRunsScored として返す。
   const advanceRunners = (hitType, bases, defense, batter) => {
     const newBases = [false, false, false];
     let runsScored = 0;
+    let unearnedRunsScored = 0;
+    const isUnearnedRunner = (r) => !!(r && r._reachedOnError);
 
     if (hitType === 'homerun') {
       runsScored = 1 + bases.filter(b => b).length;
-      return { bases: [false, false, false], runsScored };
+      unearnedRunsScored = bases.reduce((n, b) => n + (isUnearnedRunner(b) ? 1 : 0), 0)
+        + (isUnearnedRunner(batter) ? 1 : 0);
+      return { bases: [false, false, false], runsScored, unearnedRunsScored };
     }
 
     const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
@@ -856,8 +865,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
         if (newBase >= 3) {
           runsScored++;
+          if (isUnearnedRunner(bases[i])) unearnedRunsScored++;
         } else {
-          newBases[newBase] = bases[i]; // プレイヤー参照を維持
+          newBases[newBase] = bases[i]; // プレイヤー参照を維持（_reachedOnError も追随）
         }
       }
     }
@@ -867,9 +877,22 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       newBases[advancement - 1] = batter || true;
     } else {
       runsScored++;
+      if (isUnearnedRunner(batter)) unearnedRunsScored++;
     }
 
-    return { bases: newBases, runsScored };
+    return { bases: newBases, runsScored, unearnedRunsScored };
+  };
+
+  // 得点を投手の自責点に計上する（失点は呼び出し側で別途加算済み）。
+  //   非自責となるのは
+  //     (a) 失策で出塁した走者が生還した分
+  //     (b) 失策が無ければ既に3アウトだった後の得点（そのイニングは以降すべて非自責）
+  const creditRuns = (pitcher, runsScored, unearnedRunsScored = 0) => {
+    if (!pitcher || runsScored <= 0) return;
+    const ps = pitcher.gameStats.pitching;
+    const inningOver = (gameState.outs + (gameState.inningErrorOuts || 0)) >= 3;
+    const earned = inningOver ? 0 : Math.max(0, runsScored - (unearnedRunsScored || 0));
+    ps.earnedRuns = (ps.earnedRuns || 0) + earned;
   };
 
   // 盗塁判定（AI監督）- 走者の実際の走力を使用
@@ -1551,6 +1574,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             else gameState.score.home++;
             batter.gameStats.batting.rbis++;
             pitcher.gameStats.pitching.runsAllowed++;
+            creditRuns(pitcher, 1, gameState.bases[2]?._reachedOnError ? 1 : 0);
             atBatDamagePoints += 10;
             gameState.bases[2] = false;
           } else if (!buntResult.squeezeRunnerSafe && gameState.bases[2]) {
@@ -1664,6 +1688,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               if (gameState.isTopInning) gameState.score.away++;
               else gameState.score.home++;
               pitcher.gameStats.pitching.runsAllowed++;
+              creditRuns(pitcher, 1, gameState.bases[2]?._reachedOnError ? 1 : 0);
               atBatDamagePoints += 10; // 失点=10ダメージ
               gameState.bases[2] = gameState.bases[1];
               gameState.bases[1] = gameState.bases[0];
@@ -1719,11 +1744,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               const throwbackChance = result.tagupThrowbackChance || 0;
               if (Math.random() >= throwbackChance) {
                 // 送球間に合わず得点
+                const sfUnearned = gameState.bases[2]?._reachedOnError ? 1 : 0;
                 gameState.bases[2] = false;
                 if (gameState.isTopInning) gameState.score.away++;
                 else gameState.score.home++;
                 batter.gameStats.batting.rbis++;
                 pitcher.gameStats.pitching.runsAllowed++;
+                creditRuns(pitcher, 1, sfUnearned);
                 atBatDamagePoints += 10; // 失点=10ダメージ
               } else {
                 gameState.bases[2] = false;
@@ -1757,7 +1784,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         case 'double':
         case 'triple':
         case 'homerun':
-          const { bases: newBases, runsScored } = advanceRunners(result.type, gameState.bases, defense, batter);
+          // 失策による出塁は「ヒット扱い」で単打として処理されるが、自責点上は非自責走者。
+          // また失策が無ければアウトだったので、そのイニングの想定アウト数を1つ増やす。
+          if (result.isError) {
+            batter._reachedOnError = true;   // 失策出塁の走者＝この走者の生還は非自責
+            gameState.inningErrorOuts++;     // 失策が無ければアウトだった＝想定アウトを1つ加算
+          }
+          const { bases: newBases, runsScored, unearnedRunsScored } =
+            advanceRunners(result.type, gameState.bases, defense, batter);
           batter.gameStats.batting.atBats++;
           batter.gameStats.batting.hits++;
           batter.gameStats.batting.rbis += runsScored;
@@ -1785,6 +1819,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           else gameState.score.home += runsScored;
 
           pitcher.gameStats.pitching.runsAllowed += runsScored;
+          // 自責点: 失策で出塁した走者の生還は除外。さらに失策が無ければ既に3アウトだった場合、
+          // そのイニングの以降の得点は全て非自責（公式のイニング再構成ルール）。
+          creditRuns(pitcher, runsScored, unearnedRunsScored);
           gameState.bases = newBases;
           atBatOver = true;
           break;
@@ -1815,6 +1852,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   const simulateInning = () => {
     gameState.outs = 0;
     gameState.bases = [false, false, false];
+    // 自責点判定はイニング単位でリセットする。
+    // 塁が空になるこのタイミングで、失策出塁フラグも全選手からクリアしておく
+    // （次のイニング以降に持ち越さないため）。
+    gameState.inningErrorOuts = 0;
+    gameState.homeTeam.players.forEach(p => { if (p._reachedOnError) delete p._reachedOnError; });
+    gameState.awayTeam.players.forEach(p => { if (p._reachedOnError) delete p._reachedOnError; });
 
     const inningLabel = `${gameState.inning}回${gameState.isTopInning ? '表' : '裏'}`;
     const offenseTeam = gameState.isTopInning ? gameState.awayTeam.name : gameState.homeTeam.name;
@@ -2374,7 +2417,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         season.games = (season.games || 0) + 1;
         season.inningsPitched = (season.inningsPitched || 0) + p.outs;
         season.runsAllowed = (season.runsAllowed || 0) + p.runsAllowed;
-        season.earnedRuns = (season.earnedRuns || 0) + p.runsAllowed; // 簡易版：全て自責点とする
+        // 自責点は試合中に失策を考慮して積算済み（p.earnedRuns）。
+        // 万一未設定なら失点で代替する（旧セーブ・想定外経路の保険）。
+        season.earnedRuns = (season.earnedRuns || 0) + (p.earnedRuns ?? p.runsAllowed);
         season.hits = (season.hits || 0) + (p.hits || 0);
         season.homeruns = (season.homeruns || 0) + (p.homeruns || 0);
         season.strikeouts = (season.strikeouts || 0) + p.strikeouts;
@@ -2425,7 +2470,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         if (wasStarter) {
           season.gamesStarted = (season.gamesStarted || 0) + 1;
           const innings = p.outs; // アウト数（18アウト = 6回）
-          const earnedRuns = p.runsAllowed; // 簡易版：全て自責点
+          const earnedRuns = p.earnedRuns ?? p.runsAllowed; // QS/HQSは自責点で判定
           // QS: 6回以上 && 自責点3以下
           if (innings >= 18 && earnedRuns <= 3) {
             season.qualityStarts = (season.qualityStarts || 0) + 1;

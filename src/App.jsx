@@ -391,6 +391,40 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       } = strategy;
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
       const outOccurredRef = React.useRef(false); // アウト発生フラグ
+
+      // --- 自責点（防御率）判定用 ---
+      // 采配モードの bases は boolean 配列で走者を識別できないため、
+      // 「失策で免れたアウト数」と「失策で出塁した走者の在塁数」をイニング単位で数える。
+      // 得点時に (a) 失策出塁の走者ぶん (b) 失策が無ければ既に3アウトだった後の得点 を非自責とする。
+      const inningErrorOutsRef = React.useRef(0);
+      const errorRunnersOnBaseRef = React.useRef(0);
+      // イニング開始時に呼ぶ（両カウンタをリセット）
+      const resetEarnedRunTracking = () => {
+        inningErrorOutsRef.current = 0;
+        errorRunnersOnBaseRef.current = 0;
+      };
+      // 失点のうち自責点となる数を返し、消費した非自責走者を減算する
+      const takeEarnedRuns = (runs, currentOuts) => {
+        if (runs <= 0) return 0;
+        if ((currentOuts + inningErrorOutsRef.current) >= 3) return 0; // (b) 想定3アウト後は全て非自責
+        const unearned = Math.min(runs, errorRunnersOnBaseRef.current); // (a) 失策出塁の走者ぶん
+        errorRunnersOnBaseRef.current -= unearned;
+        return Math.max(0, runs - unearned);
+      };
+      // 犠飛・暴投・スクイズ等の失点を現在の投手の個人成績にも反映する。
+      // （これらは従来ボックススコア用の集計にしか加算されておらず、
+      //   個人の失点・防御率に載っていなかった）
+      const recordRunsToCurrentPitcher = (runs, currentOuts) => {
+        if (runs <= 0) return;
+        const p = getCurrentPitcher();
+        if (!p) return;
+        const defenseTeamType = isTopInning ? 'home' : 'away';
+        const earned = takeEarnedRuns(runs, currentOuts);
+        updatePitcherStats(p.id, defenseTeamType, {
+          runsAllowed: (p.stats?.pitching?.runsAllowed || 0) + runs,
+          earnedRuns: (p.stats?.pitching?.earnedRuns || 0) + earned,
+        });
+      };
       
       // チームシステム（ホーム vs アウェイ対戦機能）
       const [homeTeam, setHomeTeam] = useState({
@@ -1754,8 +1788,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
                 rbis: (currentBatterPlayer.stats?.batting?.rbis || 0) + runs
               });
               
+              // 失策での出塁は非自責走者として計上（失策が無ければアウトだったので想定アウトも+1）
+              if (result.isError) {
+                inningErrorOutsRef.current++;
+                errorRunnersOnBaseRef.current++;
+              }
+              const earned = takeEarnedRuns(runs, outs);
               updatePitcherStats(currentPitcherPlayer.id, defenseTeamType, {
-                runsAllowed: (currentPitcherPlayer.stats?.pitching?.runsAllowed || 0) + runs
+                runsAllowed: (currentPitcherPlayer.stats?.pitching?.runsAllowed || 0) + runs,
+                earnedRuns: (currentPitcherPlayer.stats?.pitching?.earnedRuns || 0) + earned
               });
             }
             
@@ -1860,6 +1901,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
                 setScore(prev => ({ ...prev, home: prev.home + 1 }));
               }
               setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+              recordRunsToCurrentPitcher(1, outs);
               newBases[2] = false;
               setLastResult({ ...result, description: result.description + '（犠牲フライ）' });
             }
@@ -1932,6 +1974,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               } else {
                 isTopInning ? newScore.away++ : newScore.home++;
                 setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+              recordRunsToCurrentPitcher(1, outs);
                 wpDescription += ' ⚡ 三塁ランナーがホームイン';
               }
               newBases[2] = false;
@@ -2237,6 +2280,7 @@ if (newOuts === 3) {
           } else {
             if (isTopInning) {
               setIsTopInning(false);
+              resetEarnedRunTracking(); // 自責点判定はイニング単位
               // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
               setTimeout(() => {
                 autoDefensiveSubstitution();
@@ -2247,6 +2291,7 @@ if (newOuts === 3) {
               }, 100);
             } else {
               setIsTopInning(true);
+              resetEarnedRunTracking(); // 自責点判定はイニング単位
               setInning(inning + 1);
               // イニング切り替え後に守備固めと投手起用最適化をチェック（順次実行）
               setTimeout(() => {
@@ -2429,6 +2474,7 @@ if (newOuts === 3) {
               if (squeezeRunnerSafe) {
                 isTopInning ? newScore.away++ : newScore.home++;
                 setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+              recordRunsToCurrentPitcher(1, outs);
                 setBatterStats(prev => ({ ...prev, rbis: prev.rbis + 1 }));
                 newBases[2] = false;
               } else {
@@ -2531,8 +2577,10 @@ if (newOuts === 3) {
           } else {
             if (isTopInning) {
               setIsTopInning(false);
+              resetEarnedRunTracking(); // 自責点判定はイニング単位
             } else {
               setIsTopInning(true);
+              resetEarnedRunTracking(); // 自責点判定はイニング単位
               setInning(inning + 1);
             }
           }
@@ -3455,7 +3503,7 @@ if (newOuts === 3) {
                         const totalOuts = seasonIP + gameOuts;
                         if (totalOuts === 0) return '-.--';
                         const seasonER = p.seasonStats?.pitching?.earnedRuns || 0;
-                        const gameER = p.stats?.pitching?.earnedRuns || p.stats?.pitching?.runsAllowed || 0;
+                        const gameER = p.stats?.pitching?.earnedRuns ?? p.stats?.pitching?.runsAllowed ?? 0;
                         return ((seasonER + gameER) * 27 / totalOuts).toFixed(2);
                       })()}
                     </div>

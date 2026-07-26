@@ -340,7 +340,8 @@ export function executeHandleManagedGameEnd(ctx) {
         sp.strikeouts = (sp.strikeouts || 0) + (ps.strikeouts || 0);
         sp.walks = (sp.walks || 0) + (ps.walks || 0);
         sp.runsAllowed = (sp.runsAllowed || 0) + (ps.runsAllowed || 0);
-        sp.earnedRuns = (sp.earnedRuns || 0) + (ps.earnedRuns || ps.runsAllowed || 0);
+        // 自責点0（全て失策絡み）が失点で上書きされないよう ?? を使う
+        sp.earnedRuns = (sp.earnedRuns || 0) + (ps.earnedRuns ?? ps.runsAllowed ?? 0);
         sp.hits = (sp.hits || 0) + (ps.hits || 0);
         sp.homeruns = (sp.homeruns || 0) + (ps.homeruns || 0);
         sp.pitches = (sp.pitches || 0) + (ps.pitches || 0);
