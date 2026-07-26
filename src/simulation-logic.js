@@ -189,9 +189,11 @@ export const calculateLaunchAngle = (meetQuality, batter) => {
   let baseLaunchAngle;
 
   if (meetQuality > 0.8) {
-    // 芯を捉えた打球: 半分はバレルゾーン、残りは上下のズレでゴロ〜ライナーに散る
-    baseLaunchAngle = Math.random() < 0.50
-      ? 24 + Math.random() * 12    // バレル（24-36度）
+    // 芯を捉えた打球: 6割がバレルゾーン、残りは上下のズレでゴロ〜ライナーに散る
+    // バレル帯は飛距離が最大化する30度を中心に狭く取る（26-34度）。24-36度に広げると
+    // 帯の下端がライナーに落ちて長打が2割減るため、幅は打球種別の比率より長打に効く。
+    baseLaunchAngle = Math.random() < 0.58
+      ? 26 + Math.random() * 8     // バレル（26-34度）
       : -8 + Math.random() * 40;   // 強いゴロ〜低いフライ
   } else if (meetQuality > 0.6) {
     // 高品質: ゴロとライナー〜フライが半々
