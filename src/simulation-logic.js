@@ -331,6 +331,23 @@ export const getErrorRate = (defense, arm = null, difficulty = 0) => {
   return (base + armPenalty) * (1 + difficulty);
 };
 
+/**
+ * 送球エラー率。捕球とは独立した判定で、送り手の肩と受け手の守備の両方が効く。
+ * 「肩は強いが受け手が下手」「連携の良い内野」といった差を作るための係数。
+ * 捕球エラー(getErrorRate)より低めに設定し、二重に厳しくならないようにする。
+ * @param {number} throwerArm 送球する野手の肩力
+ * @param {number} receiverDefense 受け手（一塁手・各塁のカバー）の守備力
+ * @param {number} difficulty 体勢の悪さ 0〜1
+ */
+export const getThrowErrorRate = (throwerArm, receiverDefense, difficulty = 0) => {
+  const a = typeof throwerArm === 'number' ? throwerArm : 60;
+  const r = typeof receiverDefense === 'number' ? receiverDefense : 60;
+  // 肩60・受け手60を基準に、双方が下回るほど悪送球・捕り損ねが増える
+  const throwPart = a >= 60 ? Math.max(0.002, 0.008 - (a - 60) * 0.00025) : 0.008 + (60 - a) * 0.0010;
+  const receivePart = r >= 60 ? Math.max(0.001, 0.004 - (r - 60) * 0.00015) : 0.004 + (60 - r) * 0.0007;
+  return (throwPart + receivePart) * (1 + difficulty);
+};
+
 export const judgeFielderReach = (battedBall, defense, batter) => {
   // 防御的チェック: defenseがnullまたはundefinedの場合はデフォルト値を使用
   const safeDefense = defense || {};
@@ -497,6 +514,19 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
         if (Math.random() < getErrorRate(fielder.defense, fielder.arm, errDifficulty)) {
           return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
         }
+        // 捕球成功後の「一塁への送球」を別判定にする。
+        // 送り手の肩・受け手（一塁手）の守備の両方が効くので、内野の連携精度が結果に出る。
+        // 一塁手自身の打球はベースを踏むだけなので送球判定を行わない。
+        if (position !== 'first') {
+          const firstBase = defense?.first || { defense: 60, arm: 60 };
+          const throwErr = getThrowErrorRate(fielder.arm, firstBase.defense, errDifficulty);
+          if (Math.random() < throwErr) {
+            return {
+              result: 'single', bases: 1, description: 'エラー（悪送球）',
+              isError: true, errorPosition: position, isThrowingError: true,
+            };
+          }
+        }
         return { result: 'out', bases: 0, description: `${position === 'pitcher' ? '投' : position === 'first' ? '一' : position === 'second' ? '二' : position === 'short' ? '遊' : '三'}ゴロ`, isOutfieldFly: false, fieldingPosition: position };
       }
       return { result: 'single', bases: 1, description: '内野安打', fieldingPosition: position };
@@ -621,6 +651,15 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   }
 
   // それ以外は単打（野手の前に落ちた or 弱い打球が抜けた）
+  // 中継ミス: 外野手の返球〜内野の中継が乱れると走者が余分に進む。
+  // 送り手＝外野手の肩、受け手＝遊撃/二塁の守備（カットマン）で判定する。
+  const cutoff = defense?.short || defense?.second || { defense: 60 };
+  if (Math.random() < getThrowErrorRate(fielder.arm, cutoff.defense, 0.3)) {
+    return {
+      result: 'single', bases: 1, description: 'ヒット！（中継ミス）',
+      isError: true, errorPosition: position, isThrowingError: true, extraAdvance: true,
+    };
+  }
   return { result: 'single', bases: 1, description: 'ヒット！' };
 };
 

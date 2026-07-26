@@ -1,5 +1,5 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
-import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect } from '../simulation-logic.js';
+import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate } from '../simulation-logic.js';
 import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty } from '../utils/constants.js';
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
@@ -797,7 +797,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           } else if (fieldResult.result === 'double') {
             return { type: 'double' };
           } else {
-            return { type: 'single', isError: fieldResult.isError || false, errorPosition: fieldResult.errorPosition };
+            return {
+              type: 'single',
+              isError: fieldResult.isError || false,
+              errorPosition: fieldResult.errorPosition,
+              // 悪送球・中継ミスは走者が余分に1つ進む
+              extraAdvance: !!fieldResult.extraAdvance || !!fieldResult.isThrowingError,
+            };
           }
         } else {
           // 空振り
@@ -831,7 +837,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   // hitType に応じて走者を進める。
   // 自責点判定のため、失策で出塁した走者には _reachedOnError を立てておき（塁の移動に追随する）、
   // 生還した非自責走者の数を unearnedRunsScored として返す。
-  const advanceRunners = (hitType, bases, defense, batter) => {
+  // extraAdvance: 悪送球・中継ミスで既存の走者が余分に1つ進むケース
+  const advanceRunners = (hitType, bases, defense, batter, extraAdvance = false) => {
     const newBases = [false, false, false];
     let runsScored = 0;
     let unearnedRunsScored = 0;
@@ -862,6 +869,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             newBase = Math.max(i + 1, newBase - 1); // 1つ手前で止める
           }
         }
+        // 悪送球・中継ミス: 送球が乱れているので走者が余分に1つ進む
+        if (extraAdvance) newBase++;
 
         if (newBase >= 3) {
           runsScored++;
@@ -941,6 +950,31 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             const runnerName = typeof stolenRunner === 'object' ? stolenRunner.name : '走者';
             return { success: true, base };
           } else {
+            // 刺すはずの送球が乱れると走者は生き、さらに次の塁まで進む（捕手の失策）。
+            // 送り手＝捕手の肩、受け手＝二塁/三塁カバーの守備で判定する。
+            const coverPos = base === 0 ? 'second' : 'third';
+            const cover = defenseTeam.players.find(p => p.position === coverPos && p.battingOrder >= 1);
+            const throwErr = getThrowErrorRate(catcherArm, cover?.fielding?.defense ?? 60, 0.4);
+            if (Math.random() < throwErr) {
+              const runnerObj = gameState.bases[base];
+              gameState.bases[base] = false;
+              const dest = base + 2; // 悪送球で1つ余分に進む
+              if (dest <= 2) {
+                gameState.bases[dest] = runnerObj;
+              } else {
+                // 生還（失策絡みなので非自責）
+                if (runnerObj && typeof runnerObj === 'object') runnerObj._reachedOnError = true;
+                if (gameState.isTopInning) gameState.score.away++;
+                else gameState.score.home++;
+                const p = getCurrentPitcher(defenseTeam);
+                if (p?.gameStats?.pitching) p.gameStats.pitching.runsAllowed++;
+              }
+              if (catcher?.gameStats?.fielding) {
+                catcher.gameStats.fielding.errors++;
+                catcher.gameStats.fielding.chances++;
+              }
+              return { success: true, base, throwError: true };
+            }
             gameState.bases[base] = false;
             gameState.outs++;
             const runnerName = typeof runner === 'object' ? runner.name : '走者';
@@ -1791,7 +1825,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             gameState.inningErrorOuts++;     // 失策が無ければアウトだった＝想定アウトを1つ加算
           }
           const { bases: newBases, runsScored, unearnedRunsScored } =
-            advanceRunners(result.type, gameState.bases, defense, batter);
+            advanceRunners(result.type, gameState.bases, defense, batter, !!result.extraAdvance);
           batter.gameStats.batting.atBats++;
           batter.gameStats.batting.hits++;
           batter.gameStats.batting.rbis += runsScored;
