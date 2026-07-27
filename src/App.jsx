@@ -30,6 +30,7 @@ import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach,
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL } from './game/pitchCalling.js';
+import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
@@ -1218,6 +1219,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             description: fieldingResult.description,
             hit: false,
             isOutfieldFly: fieldingResult.isOutfieldFly,
+            // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
+            isGroundOut: battedBall.launchAngle < 10 && !fieldingResult.isOutfieldFly,
             tagupThrowbackChance: fieldingResult.tagupThrowbackChance
           }
         };
@@ -1487,10 +1490,33 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
         
         const advancement = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
-        
+
+        // 積極進塁の判定に使う守備値。采配モードの bases は boolean で走者を識別
+        // できないため、走者の走力は攻撃側の平均で近似する。
+        const defTeam = getDefenseTeam();
+        const def = {};
+        defTeam.players.forEach(p => { if (p.battingOrder >= 1) def[p.position] = p; });
+        const ofArms = ['left', 'center', 'right'].map(p => def?.[p]?.physical?.arm ?? 60);
+        const avgArm = ofArms.reduce((a, b) => a + b, 0) / 3;
+        const offense = isTopInning ? awayTeam : homeTeam;
+        const starters = offense.players.filter(p => p.battingOrder > 0 && p.battingOrder <= 9);
+        const avgSpeed = starters.length
+          ? starters.reduce((sum, p) => sum + (p.physical?.speed ?? 55), 0) / starters.length : 55;
+        let outsFromThrow = 0;
+
         for (let i = 2; i >= 0; i--) {
           if (bases[i]) {
-            const newBase = i + advancement;
+            let newBase = i + advancement;
+            // 積極進塁（単打で 2塁→本塁 / 1塁→3塁、二塁打で 1塁→本塁）。
+            // 自動シミュレーションと同じ判定を共有する（baserunning.js）。
+            if (outsFromThrow === 0) {
+              const { attempt, thrownOut } = tryExtraAdvance({
+                hitType, fromBase: i, runnerSpeed: avgSpeed, avgArm,
+                currentOuts: outs, cutoffDefense: def?.short?.fielding?.defense ?? 60,
+              });
+              if (attempt && thrownOut) { outsFromThrow++; continue; }  // 捕殺で刺された
+              if (attempt) newBase++;
+            }
             if (newBase >= 3) {
               runsScored++;
             } else {
@@ -1506,7 +1532,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
         
         // setBases(newBases); ← 削除
-        return { bases: newBases, runsScored };
+        return { bases: newBases, runsScored, outsMade: outsFromThrow };
       };
 
       const throwPitch = () => {
@@ -1775,7 +1801,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           case 'double':
           case 'triple':
           case 'homerun':
-            const { bases: updatedBases, runsScored: runs } = advanceRunners(result.type);
+            const { bases: updatedBases, runsScored: runs, outsMade: throwOuts = 0 } = advanceRunners(result.type);
             
             // 打者成績: ヒット
             const bases_earned = result.type === 'single' ? 1 : result.type === 'double' ? 2 : result.type === 'triple' ? 3 : 4;
@@ -1839,6 +1865,11 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         
         isTopInning ? (newScore.away += runs) : (newScore.home += runs);
         newBases = updatedBases;
+        // 捕殺: 積極進塁を狙って刺された走者はアウトになる
+        if (throwOuts > 0) {
+          newOuts += throwOuts;
+          setPitcherStats(prev => ({ ...prev, outs: prev.outs + throwOuts }));
+        }
         atBatOver = true;
         {
           const hitLabel = result.type === 'homerun' ? '本塁打' : result.type === 'triple' ? '三塁打' : result.type === 'double' ? '二塁打' : '安打';
@@ -1903,6 +1934,28 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               }
             }
 
+            // 内野ゴロでの走者進塁（ゴロGO・進塁打）。詳細は baserunning.js 参照
+        if (result.isGroundOut && !result.isOutfieldFly && newOuts < 3) {
+          const dt = getDefenseTeam();
+          const infPos = ['first', 'second', 'third', 'short'];
+          const infVals = infPos.map(pos => {
+            const pl = dt.players.find(p => p.position === pos && p.battingOrder >= 1);
+            return pl?.fielding?.defense ?? 50;
+          });
+          const adv = resolveGroundOutAdvance({
+            hasThird: !!newBases[2], hasSecond: !!newBases[1],
+            infieldDefense: infVals.reduce((a, b) => a + b, 0) / infVals.length,
+          });
+          if (adv.scoreFromThird) {
+            newBases[2] = false;
+            if (isTopInning) newScore.away++; else newScore.home++;
+            setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+            recordRunsToCurrentPitcher(1, outs);
+            setLastResult({ ...result, description: (result.description || 'アウト') + '（進塁打）' });
+          }
+          if (adv.secondToThird) { newBases[2] = true; newBases[1] = false; }
+        }
+
             // タッチアップ判定（外野フライのみ）
         if (result.isOutfieldFly && newOuts < 3) {
           const throwbackChance = result.tagupThrowbackChance || 0;
@@ -1924,21 +1977,13 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             }
           }
           
-          // 二塁ランナーがいる場合（三塁進塁）
-          if (newBases[1]) {
-            const tagupSuccess = Math.random() > (throwbackChance * 0.7 - runnerSpeed * 0.2);
-            if (tagupSuccess) {
+          // 二塁ランナーの三塁進塁（三塁が空いている深いフライのみ）。
+          // 以前は1塁走者まで無条件にタッグアップさせており、自動シミュレーション
+          // （2塁走者のみ・確率0.4基準）より大幅に走者が進んでいた。
+          if (newBases[1] && !newBases[2] && newOuts < 3) {
+            if (Math.random() < 0.4 - throwbackChance * 0.5 + runnerSpeed * 0.15) {
               newBases[2] = true;
               newBases[1] = false;
-            }
-          }
-          
-          // 一塁ランナーがいる場合（二塁進塁）
-          if (newBases[0]) {
-            const tagupSuccess = Math.random() > (throwbackChance * 0.5 - runnerSpeed * 0.15);
-            if (tagupSuccess) {
-              newBases[1] = true;
-              newBases[0] = false;
             }
           }
         }

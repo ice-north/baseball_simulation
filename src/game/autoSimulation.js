@@ -5,6 +5,7 @@ import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVE
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY } from './pitchCalling.js';
+import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
 const PITCHER_REST_FATIGUE_THRESHOLD = 40;
@@ -805,6 +806,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         return {
           type: 'out',
           isOutfieldFly: fieldResult.isOutfieldFly || false,
+          // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
+          isGroundOut: battedBall.launchAngle < 10 && !fieldResult.isOutfieldFly,
           tagupThrowbackChance: fieldResult.tagupThrowbackChance || 0,
           fieldingPosition: fieldResult.fieldingPosition
         };
@@ -881,29 +884,20 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         // 足が速い走者ほど狙い、外野の肩が強いほど自重する。狙って失敗すれば捕殺で刺される。
         const runner = bases[i];
         const runnerSpeed = (runner && typeof runner === 'object' && runner.physical?.speed) || 55;
-        const canTryExtra = hitType === 'single' && i <= 1 && !extraAdvance
-          && outsMade === 0 && currentOuts < 2;
-        if (canTryExtra) {
-          // 実際の野球の傾向に合わせ、二塁走者の生還狙いは頻繁・一塁走者の三塁狙いは慎重。
-          // 走力が高いほど積極的、外野の肩が強いほど自重する。
-          const baseTry = i === 1 ? 0.55 : 0.22; // 2塁→本塁 / 1塁→3塁
-          const tryChance = Math.max(0, Math.min(0.85,
-            baseTry + (runnerSpeed - 55) / 100 * 0.6 - (avgArm - 55) / 100 * 0.4));
-          if (Math.random() < tryChance) {
-            const thrower = fieldingPosition ? (defense?.[fieldingPosition] || null) : null;
-            const throwerArm = thrower?.arm ?? avgArm;
-            const cutoff = defense?.short || defense?.second || { defense: 60 };
-            // 捕殺成功率: 肩60・カット60・走力55 で約22%。肩が強く走者が遅いほど刺せる
-            let throwOut = 0.22 + (throwerArm - 60) / 100 * 0.45 + ((cutoff.defense || 60) - 60) / 100 * 0.20
-              - (runnerSpeed - 55) / 100 * 0.45;
-            throwOut = Math.max(0.02, Math.min(0.45, throwOut));
-            if (Math.random() < throwOut) {
-              outsMade++;
-              assistBy = fieldingPosition || null;
-              continue; // 刺された → 進塁も得点もしない
-            }
-            newBase++; // 賭けに勝って余分に進塁
+        // 積極進塁（単打で 2塁→本塁 / 1塁→3塁、二塁打で 1塁→本塁）。詳細は baserunning.js 参照
+        if (!extraAdvance && outsMade === 0) {
+          const thrower = fieldingPosition ? (defense?.[fieldingPosition] || null) : null;
+          const cutoff = defense?.short || defense?.second || { defense: 60 };
+          const { attempt, thrownOut } = tryExtraAdvance({
+            hitType, fromBase: i, runnerSpeed, avgArm, currentOuts,
+            throwerArm: thrower?.arm ?? null, cutoffDefense: cutoff.defense || 60,
+          });
+          if (attempt && thrownOut) {
+            outsMade++;
+            assistBy = fieldingPosition || null;
+            continue; // 刺された → 進塁も得点もしない
           }
+          if (attempt) newBase++; // 賭けに勝って余分に進塁
         }
         // 悪送球・中継ミス: 送球が乱れているので走者が余分に1つ進む
         if (extraAdvance) newBase++;
@@ -1834,6 +1828,31 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             const outFielder = defenseTeam.players.find(p => p.position === result.fieldingPosition && p.battingOrder >= 1);
             if (outFielder) {
               outFielder.gameStats.fielding.chances++;
+            }
+          }
+
+          // 内野ゴロでの走者進塁（ゴロGO・進塁打）。詳細は baserunning.js 参照
+          if (result.isGroundOut && gameState.outs < 3) {
+            const inf = ['first', 'second', 'third', 'short'].map(p => defense[p]?.defense ?? 50);
+            const adv = resolveGroundOutAdvance({
+              hasThird: !!gameState.bases[2], hasSecond: !!gameState.bases[1],
+              infieldDefense: inf.reduce((a, b) => a + b, 0) / inf.length,
+              thirdSpeed: gameState.bases[2]?.speed ?? 50,
+              secondSpeed: gameState.bases[1]?.speed ?? 50,
+            });
+            if (adv.scoreFromThird) {
+              const unearned = gameState.bases[2]?._reachedOnError ? 1 : 0;
+              gameState.bases[2] = false;
+              if (gameState.isTopInning) gameState.score.away++;
+              else gameState.score.home++;
+              batter.gameStats.batting.rbis++;
+              pitcher.gameStats.pitching.runsAllowed++;
+              creditRuns(pitcher, 1, unearned);
+              atBatDamagePoints += 10; // 失点=10ダメージ
+            }
+            if (adv.secondToThird) {
+              gameState.bases[2] = gameState.bases[1];
+              gameState.bases[1] = false;
             }
           }
 
