@@ -28,10 +28,12 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // 線形にすると四球数の幅が 制球20で6.6個 / 制球100で1.4個 にしか開かない。
 // 四球は「1球ごとのボール率」に対して指数的に反応するため、両端を引き離すには
 // 支点から離れるほど効きを強める必要がある（上位帯は特に加速させる）。
-//   制球20→×1.34 / 40→×1.04 / 57→0 / 80→×2.82 / 100→×4.40
-// 結果: 9イニングあたりの四球が 制球20で7.4個 → 制球100で0.2個 まで開く。
+//   制球20→×1.34 / 40→×1.04 / 57→0 / 80→×1.87 / 100→×2.20
+// 結果: 9イニングあたりの四球が 制球20で7.3個 → 制球100で0.69個 まで開く。
+// 上限は加藤貴之2022（148回2/3で与四球11＝BB/9 0.67）を基準にしている。
+// ここをさらに下げるとゾーン率が実データの上限55%を大きく超えてしまう。
 const cc = (c) => { const t = (clamp(c, 0, 100) - 57) / 43;
-  return t >= 0 ? t * (1 + 3.4 * t) : t * (1 - 0.10 * t); };
+  return t >= 0 ? t * (1 + 1.2 * t) : t * (1 - 0.10 * t); };
 
 export const AIM_LABEL = { zone: '勝負', edge: '際どく', chase: '誘い' };
 
@@ -87,7 +89,7 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
 
   if (aim === 'zone') {
     // ゾーンで勝負。制球が低いと入っても真ん中（甘い球）になる
-    if (Math.random() < 0.704 + cc(c) * 0.146) {          // 制球20→57% / 57→70% / 80→112%(=必ず) 
+    if (Math.random() < 0.704 + cc(c) * 0.146) {          // 制球20→57% / 57→70% / 100→102%(=ほぼ必ず)
       inZone = true;
       quality = Math.random() < 0.42 - c * 0.0032 ? 'meatball' : 'good';
     } else {
@@ -95,7 +97,7 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
     }
   } else if (aim === 'edge') {
     // 際どいコース。決まればストライク、外し方は制球次第
-    if (Math.random() < 0.4294 + cc(c) * 0.181) {          // 制球20→22% / 57→43% / 100→110%(=必ず)
+    if (Math.random() < 0.4294 + cc(c) * 0.181) {          // 制球20→22% / 57→43% / 100→83%
       inZone = true; quality = 'edge';
     } else if (Math.random() < 0.30 - c * 0.0022) {   // 制球40→21% / 100→8%
       inZone = true; quality = 'meatball';             // 甘く入った失投
