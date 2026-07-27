@@ -5,6 +5,7 @@
 // ============================================================
 
 import { createSeasonData, initializeStandings } from './seasonManager.js';
+import { processNpbCareers } from '../game/npbCareer.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS, getUtilityScore } from '../utils/constants.js';
@@ -981,6 +982,10 @@ function simulateParallelWorldStats(allTeams) {
  * @returns {Object} - { newSeasonData, updatedTeams, awards, retirements }
  */
 export function advanceToNextYear(seasonData, allTeams) {
+  // 0. プロへ送り出した教え子のキャリアを1年進める（NPBは観るだけの階層）
+  const npbYear = seasonData.settings?.year || seasonData.year || 1;
+  processNpbCareers(allTeams, npbYear);
+
   // 1. シーズン終了処理（表彰）
   // ドラフト前にfrozenAwardsが確定済みならそれを使用（指名選手がランキングから消えるのを防ぐ）
   const awards = seasonData.frozenAwards || processSeasonEnd(seasonData, allTeams);

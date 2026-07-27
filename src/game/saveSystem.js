@@ -236,6 +236,14 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
     universityLeagues: WORLD_DATA.universityLeagues ? JSON.parse(JSON.stringify(WORLD_DATA.universityLeagues)) : {},
     corporateLeague: { teams: Object.keys(WORLD_DATA.corporateLeague?.teams || {}), userTeam: WORLD_DATA.corporateLeague?.userTeam },
     draft: JSON.parse(JSON.stringify(WORLD_DATA.draft)),
+    // 夏の甲子園。ブラケット全体は嵩むので、表示に使う結果だけを残す
+    koshien: WORLD_DATA.koshien ? {
+      year: WORLD_DATA.koshien.year,
+      champion: WORLD_DATA.koshien.champion,
+      runnerUp: WORLD_DATA.koshien.runnerUp,
+      entries: WORLD_DATA.koshien.entries,
+      notable: WORLD_DATA.koshien.notable,
+    } : null,
     corporateToshitaikou: WORLD_DATA.corporateToshitaikou ? {
       generated: WORLD_DATA.corporateToshitaikou.generated,
       qualifiersDone: WORLD_DATA.corporateToshitaikou.qualifiersDone,
@@ -243,6 +251,8 @@ export const buildSaveData = (gameState, slotIndex = 0) => {
       champion: WORLD_DATA.corporateToshitaikou.champion,
       runnerUp: WORLD_DATA.corporateToshitaikou.runnerUp,
     } : null,
+    // 注目選手リスト（playerIdだけ保持。現在地は表示時に各プールを引いて解決する）
+    watchList: Array.isArray(WORLD_DATA.watchList) ? JSON.parse(JSON.stringify(WORLD_DATA.watchList)) : [],
     corporateNihonSenshuken: WORLD_DATA.corporateNihonSenshuken ? {
       generated: WORLD_DATA.corporateNihonSenshuken.generated,
       done: WORLD_DATA.corporateNihonSenshuken.done,
@@ -390,6 +400,8 @@ export const loadGameFromSlot = async (slotIndex, keyOverride = null) => {
         }
       }
       WORLD_DATA.draft = wd.draft || { draftedPlayers: [], history: [] };
+      WORLD_DATA.koshien = wd.koshien || null;
+      WORLD_DATA.watchList = Array.isArray(wd.watchList) ? wd.watchList : [];
       // 未完了トーナメントはnullにリセット → checkAndTriggerEventsで再生成＋キャッチアップ
       const ctd = wd.corporateToshitaikou;
       WORLD_DATA.corporateToshitaikou = (ctd && ctd.mainDone) ? ctd : null;

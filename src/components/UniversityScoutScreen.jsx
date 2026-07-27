@@ -16,6 +16,7 @@ import {
   getMaxApproaches,
   getRivalInfo,
 } from '../corporate/scoutingSystem.js';
+import { addToWatchList, removeFromWatchList } from '../game/watchList.js';
 import { highSchoolPool } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 
@@ -30,6 +31,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
   const maxSlots = getUniversityScoutSlots(rank);
 
   const maxApproaches = getMaxApproaches(rank);
+  const gameYear = seasonData?.settings?.year || seasonData?.year || 1;
 
   const scoutData = WORLD_DATA._universityScout || {};
   const [candidates, setCandidates] = useState(scoutData.candidates || []);
@@ -103,6 +105,11 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
     const c = candidates.find(p => p.id === id);
     if (!c) return;
     toggleUniversityWatch(c);
+    // 注目した選手は「獲れなくても追い続けられる」ようにする。
+    // スカウトの注目(_watching=交渉率が上がる)と、階層をまたいだ追跡リストを
+    // 別概念にすると「注目」が2つ存在して混乱するため、ここで連動させる。
+    if (c._watching) addToWatchList(c, gameYear, '推薦スカウトで注目');
+    else removeFromWatchList(c.id);
     setCandidates([...candidates]);
   };
 

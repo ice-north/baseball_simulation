@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
 import { exportDraftedPlayers } from '../game/saveSystem.js';
+import { summarizeNpbCareer } from '../game/npbCareer.js';
+import { resolveWatchList, removeFromWatchList, WATCH_STATUS_LABEL } from '../game/watchList.js';
 import { POSITION_NAMES } from '../utils/constants.js';
 import { SECOND_CAREER_META } from '../season/secondCareer.js';
 import PlayerDetailModal from './PlayerDetailModal.jsx';
@@ -46,6 +48,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const [statCategory, setStatCategory] = useState('avg');
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [modalPlayer, setModalPlayer] = useState(null);
+  const [refreshWatch, setRefreshWatch] = useState(0);   // 注目リスト解除後の再描画
 
   // OB名鑑: プロへ送り出した教え子（team.npbAlumni）を年度降順で集約
   const alumniByYear = useMemo(() => {
@@ -432,6 +435,16 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               }`}
             >
               OB名鑑
+            </button>
+            <button
+              onClick={() => setActiveTab('watch')}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
+                activeTab === 'watch'
+                  ? 'bg-cyan-600 text-white shadow-sm'
+                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              }`}
+            >
+              注目選手
             </button>
           </div>
         </div>
@@ -1341,6 +1354,66 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           )
         )}
 
+        {/* 注目選手: 高校時代に目を付けた選手を、進路が分かれた後も追い続ける */}
+        {activeTab === 'watch' && (() => {
+          const rows = (refreshWatch, resolveWatchList());
+          const color = { highschool: 'text-emerald-300', university: 'text-sky-300', team: 'text-cyan-300',
+            npb: 'text-amber-300', released: 'text-gray-300', gone: 'text-gray-400' };
+          return (
+            <div>
+              {rows.length === 0 ? (
+                <div className="text-center py-12 text-gray-300 text-sm">
+                  注目している選手はいません。<br />
+                  <span className="text-gray-400">甲子園の結果やスカウト画面の ☆ から登録すると、進路先まで追えます。</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-300">
+                    注目中 <span className="text-cyan-300 font-bold tabular-nums">{rows.length}</span> 名
+                    <span className="text-gray-400 ml-2">（高校・大学・社会人・独立・プロを横断して現在地を追跡します）</span>
+                  </div>
+                  <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-x-auto">
+                    <table className="w-full text-xs whitespace-nowrap">
+                      <thead>
+                        <tr className="text-gray-300 border-b border-gray-700/50">
+                          <th className="text-left py-1.5 px-2 font-medium">選手</th>
+                          <th className="text-center py-1.5 px-2 font-medium">現在地</th>
+                          <th className="text-left py-1.5 px-2 font-medium">所属</th>
+                          <th className="text-left py-1.5 px-2 font-medium">状況</th>
+                          <th className="text-left py-1.5 px-2 font-medium">登録時からの変化</th>
+                          <th className="text-left py-1.5 px-2 font-medium">きっかけ</th>
+                          <th className="py-1.5 px-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r) => (
+                          <tr key={r.playerId} className="border-b border-gray-700/30 hover:bg-gray-700/30">
+                            <td className="py-1.5 px-2 text-white font-bold">
+                              {r.name}
+                              {r.snapshot?.school && <span className="text-gray-400 ml-1.5 font-normal">{r.snapshot.school}</span>}
+                            </td>
+                            <td className={`py-1.5 px-2 text-center font-bold ${color[r.status] || 'text-gray-300'}`}>
+                              {WATCH_STATUS_LABEL[r.status]}
+                            </td>
+                            <td className="py-1.5 px-2 text-gray-200">{r.location}</td>
+                            <td className="py-1.5 px-2 text-gray-200">{r.detail}</td>
+                            <td className="py-1.5 px-2 text-gray-200 tabular-nums">{r.growth || '—'}</td>
+                            <td className="py-1.5 px-2 text-gray-300">{r.addedYear}年目 {r.note}</td>
+                            <td className="py-1.5 px-2 text-right">
+                              <button onClick={() => { removeFromWatchList(r.playerId); setRefreshWatch(v => v + 1); }}
+                                className="text-gray-400 hover:text-red-300 text-sm px-1" title="注目を外す">✕</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* OB名鑑: プロへ送り出した教え子を能力込みで保存・閲覧 */}
         {activeTab === 'alumni' && (
           <div>
@@ -1354,6 +1427,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 <div className="text-sm text-gray-300">
                   プロへ送り出した教え子 <span className="text-cyan-300 font-bold tabular-nums">{alumniTotal}</span> 名
                   <span className="text-gray-400 ml-2">（指名時の能力を保存。サンドボックスモードで再登場させられます）</span>
+                  <div className="text-xs text-gray-300 mt-1">
+                    プロでの成績は毎年オフに更新されます。<b className="text-amber-200">操作はできません</b>——送り出した後の姿を見届ける階層です。
+                  </div>
                 </div>
                 {alumniByYear.map(({ year, players }) => (
                   <div key={year} className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-hidden">
@@ -1373,6 +1449,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             <th className="text-left py-1.5 px-2 font-medium">順位</th>
                             <th className="text-left py-1.5 px-2 font-medium">指名時の能力</th>
                             <th className="text-center py-1.5 px-2 font-medium">評価</th>
+                            <th className="text-center py-1.5 px-2 font-medium">現況</th>
+                            <th className="text-left py-1.5 px-2 font-medium">プロ通算</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1396,6 +1474,22 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 <td className="py-1.5 px-2 text-gray-300">{a.draftRound}</td>
                                 <td className="py-1.5 px-2 text-gray-200 font-mono tabular-nums">{abil}</td>
                                 <td className="py-1.5 px-2 text-center text-cyan-300 font-bold tabular-nums">{a.draftScore}</td>
+                                {(() => {
+                                  const seasons = a.npbSeasons || [];
+                                  const last = seasons[seasons.length - 1];
+                                  const status = a.retired ? `引退(${a.retiredYear}年)`
+                                    : last ? `${last.level} ${a.age}歳` : '入団直後';
+                                  const color = a.retired ? 'text-gray-400'
+                                    : last?.level === '一軍' ? 'text-emerald-300' : 'text-gray-300';
+                                  return (
+                                    <>
+                                      <td className={`py-1.5 px-2 text-center ${color} font-medium`}>{status}</td>
+                                      <td className="py-1.5 px-2 text-gray-200 tabular-nums">
+                                        {seasons.length ? summarizeNpbCareer(a).line : '—'}
+                                      </td>
+                                    </>
+                                  );
+                                })()}
                               </tr>
                             );
                           })}
