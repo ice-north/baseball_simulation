@@ -1420,9 +1420,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
     // 左打者対策: ワンポイント左投手を優先選択
     if (situation === 'lefty') {
+      // 疲労の少ない順。ロスター順に break すると、左のワンポイントが1人しか
+      // 居ないチームでは左打者のたびに毎回その1人が呼ばれ、
+      // 100試合中69登板というような突出した起用になる
       const onepointIds = (rotation.middleRelievers || []).filter(id =>
         pitcherRoles[id] === 'onepoint' && isAvailableMid(id)
-      );
+      ).sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
       for (const opId of onepointIds) {
         const opPlayer = defenseTeam.players.find(p => p.id === opId);
         if (opPlayer && opPlayer.physical?.throws === 'left') {
@@ -1442,9 +1445,12 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     }
 
     if (!reliever && (situation === 'hold' || situation === 'save')) {
-      for (const setupId of (rotation.setupMen || [])) {
+      const setupIds = (rotation.setupMen || [])
+        .filter(id => isAvailableMid(id))
+        .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0));
+      for (const setupId of setupIds) {
         const setupData = defenseTeam.players.find(p => p.id === setupId);
-        if (setupData && isAvailableMid(setupId)) {
+        if (setupData) {
           reliever = setupData;
           selectedRoleLabel = 'セットアッパー';
           break;
@@ -1456,6 +1462,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     if (!reliever && Math.abs(scoreDiff) <= 3) {
       const aceRelievers = (rotation.middleRelievers || [])
         .filter(id => pitcherRoles[id] === 'ace_relief' && isAvailableMid(id))
+        .sort((a, b) => (fatigue[a] || 0) - (fatigue[b] || 0))
         .map(id => defenseTeam.players.find(p => p.id === id))
         .filter(Boolean);
       if (aceRelievers.length > 0) {
@@ -1480,14 +1487,20 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     }
 
     if (!reliever) {
+      // 疲労の少ない順に選ぶ。ロスター順に .find() すると同じ投手が
+      // 毎試合指名され、1人だけ100試合中97登板というような偏りが生まれる
       const starterIds = new Set(rotation.starters || []);
-      reliever = defenseTeam.players.find(p =>
-        isPitcher(p) &&
-        p.battingOrder === 0 &&
-        !alreadyPitchedIds.has(p.id) &&
-        !starterIds.has(p.id) &&
-        (p.currentStamina || 80) > 40
-      );
+      reliever = defenseTeam.players
+        .filter(p =>
+          isPitcher(p) &&
+          p.battingOrder === 0 &&
+          !alreadyPitchedIds.has(p.id) &&
+          !starterIds.has(p.id) &&
+          (p.currentStamina || 80) > 40
+        )
+        // reliefFatigue（登板間隔の管理値）の少ない順。p.fatigue はシーズン疲労で
+        // リリーフではほとんど溜まらないため、ここで使うと選択が偏る
+        .sort((a, b) => (fatigue[a.id] || 0) - (fatigue[b.id] || 0))[0];
       if (reliever) selectedRoleLabel = '緊急中継ぎ';
     }
 
@@ -1497,7 +1510,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       const starterIdsSet = new Set(rotation.starters || []);
       const nonStarterPitchers = defenseTeam.players
         .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id) && !starterIdsSet.has(p.id))
-        .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
+        // currentStamina は登板のたびにリセットされるため、スタミナ順だと常に同じ投手が
+        // 選ばれてしまう。reliefFatigue の少ない順を主キーにする
+        .sort((a, b) => ((fatigue[a.id] || 0) - (fatigue[b.id] || 0)) || ((b.currentStamina || 0) - (a.currentStamina || 0)));
       if (nonStarterPitchers.length > 0) {
         reliever = nonStarterPitchers[0];
         selectedRoleLabel = '緊急登板';
@@ -1505,7 +1520,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         // 本当に誰もいない場合のみ先発投手を緊急起用
         const starterPitchers = defenseTeam.players
           .filter(p => isPitcher(p) && p.battingOrder === 0 && !alreadyPitchedIds.has(p.id))
-          .sort((a, b) => (b.currentStamina || 0) - (a.currentStamina || 0));
+          .sort((a, b) => ((fatigue[a.id] || 0) - (fatigue[b.id] || 0)) || ((b.currentStamina || 0) - (a.currentStamina || 0)));
         if (starterPitchers.length > 0) {
           reliever = starterPitchers[0];
           selectedRoleLabel = '緊急登板(先発)';
@@ -1576,8 +1591,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       gs.currentPitcherId[pitcherTeamKey] = reliever.id;
 
       if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
+        // 登板疲労。回復は1日25なので、+30 では 50 のゲートに永久に届かず、
+        // 同じリリーフが100試合中97登板するという偏りが生まれていた。
+        // +50 にすると2連投で頭打ちになり、最多登板が中央値で62→50登板に収まる。
+        // これ以上（+70等）にすると全員がゲートに掛かり、疲労を見ない緊急経路へ
+        // 流れて（22%→55%）かえって偏りが悪化する。
         TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
-          (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 30;
+          (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 50;
       }
     }
   };
