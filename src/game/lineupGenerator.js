@@ -404,7 +404,14 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
   // 難守備ポジション（捕手・遊撃・二塁・中堅）: 適性の高い選手が候補にいない場合、ロスターから追加
   // 閾値50で判定（元80は高すぎて適性79の本来の遊撃手が追加されないバグがあった）
   const candidateIds = new Set(candidates.map(ps => ps.player.id));
-  for (const mustPos of ['catcher', 'short', 'second', 'center']) {
+  for (const mustPos of ['catcher', 'short', 'second', 'center', 'third', 'first', 'left', 'right']) {
+    // まず本職がプールに居ることを保証する。適性50以上が1人居れば良しとすると、
+    // 例えば「遊撃(二塁適性77)が1人」でこの条件を満たしてしまい、その選手が
+    // 遊撃に入った結果、二塁に適性30の選手が回る、という編成が出来ていた。
+    if (candidates.some(ps => ps.player.position === mustPos)) continue;
+    const native = sortedCandidates.find(ps => !candidateIds.has(ps.player.id) && ps.player.position === mustPos);
+    if (native) { candidates.push(native); candidateIds.add(native.player.id); continue; }
+    // 本職がロスターに居ない場合だけ、適性50以上の選手で代替する
     if (candidates.some(ps => (ps.player.positionFitness?.[mustPos] || 0) >= 50)) continue;
     const best = sortedCandidates.find(ps => !candidateIds.has(ps.player.id) && (ps.player.positionFitness?.[mustPos] || 0) >= 50);
     if (best) { candidates.push(best); candidateIds.add(best.player.id); }
@@ -420,9 +427,25 @@ export const generateOptimalLineup = (teamName, mode = 'standard') => {
     const assignment = greedyAssignment(candidates, targetPositions, trial, mode);
     if (!assignment) continue;
 
-    const totalValue = Object.entries(assignment).reduce((sum, [pos, ps]) => {
+    let totalValue = Object.entries(assignment).reduce((sum, [pos, ps]) => {
       return sum + calcPositionValue(ps.player, pos, mode);
     }, 0);
+
+    // 難守備ポジションを適性のない選手で埋めた編成は採らない。
+    // 試行ごとに割り当て順を入れ替える（trialSeed % 3 === 1 で反転）ため、
+    // 捕手が最後に回った試行では「捕手を守れる選手が既に他へ取られ、
+    // 適性30の右翼手が捕手に入る」編成が出来る。他の8人が最適に収まるので
+    // calcPositionValue の適性ペナルティ(√)だけでは総合値で勝ててしまう。
+    // 適性55未満は「本来そこを守れない選手」なので強く減点する。守備の難しい
+    // ポジションほど重い。全トライアルが低適性なら最もマシな案が残るだけなので、
+    // ロスターが薄くて埋められない場合に編成が失敗することはない。
+    const HARD_POSITION_WEIGHT = { catcher: 2.0, short: 1.2, second: 1.2, center: 1.0 };
+    for (const [pos, ps] of Object.entries(assignment)) {
+      if (pos === 'dh') continue;
+      const fit = ps.player.positionFitness?.[pos] ?? 0;
+      if (fit >= 55) continue;
+      totalValue -= (55 - fit) * 5 * (HARD_POSITION_WEIGHT[pos] ?? 0.6);
+    }
 
     if (totalValue > bestTotalValue) {
       bestTotalValue = totalValue;

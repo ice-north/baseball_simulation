@@ -694,7 +694,8 @@ function generateIndependentNewcomer(id, year) {
       },
       batting: { meet: lowAbility(), power: lowAbility(), eye: lowAbility() },
       physical: { speed: baseAbility(), arm: baseAbility(), stamina: 50 + Math.floor(Math.random() * 30), bodyStamina: 40 + Math.floor(Math.random() * 30), recovery: 40 + Math.floor(Math.random() * 30) },
-      fielding: { defense: lowAbility(), catcher: 0, positionFitness: {} },
+      fielding: { defense: lowAbility(), catcher: 0 },
+      positionFitness: generatePositionFitness('pitcher'),
       experience: 0,
       growthPotential: 0.7 + Math.random() * 0.6,
       growthModifier: 0,
@@ -722,7 +723,11 @@ function generateIndependentNewcomer(id, year) {
     pitching: { velocity: 110 + Math.floor(Math.random() * 15), control: lowAbility(), stamina: 30 + Math.floor(Math.random() * 20), breakingBalls: [] },
     batting: { meet: baseAbility(), power: baseAbility(), eye: baseAbility() },
     physical: { speed: baseAbility(), arm: baseAbility(), stamina: 50 + Math.floor(Math.random() * 30), bodyStamina: 40 + Math.floor(Math.random() * 30), recovery: 40 + Math.floor(Math.random() * 30) },
-    fielding: { defense: baseAbility(), catcher: position === 'catcher' ? 30 + Math.floor(Math.random() * 30) : 0, positionFitness: { [position]: 80 + Math.floor(Math.random() * 20) } },
+    // positionFitness は選手直下に置く。fielding の中に入れると
+    // player.positionFitness?.[player.position] を見る守備計算から参照されず、
+    // 適性が常に既定値(50)扱いになる
+    fielding: { defense: baseAbility(), catcher: position === 'catcher' ? 30 + Math.floor(Math.random() * 30) : 0 },
+    positionFitness: generatePositionFitness(position),
     experience: 0,
     growthPotential: 0.7 + Math.random() * 0.6,
     growthModifier: 0,
