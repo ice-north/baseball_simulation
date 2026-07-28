@@ -259,6 +259,16 @@ NEW GAME → 大学チーム選択 → キャンプ
   - **独立グランドCS: 優勝+40, 準優勝+18**
   - **プロ輩出: 1名あたり+15**（`proDraftCountSeason` を年度末に消費してリセット）
 
+## 大学プールの初期化（既知の落とし穴）
+- `seedInitialUniversityClasses(gameYear)` は **セーブのロード時にしか呼ばれていなかった**ため、
+  新規ゲームでは在学生が1人も存在せず、新聞「ドラフト戦線」の大学欄が空のままだった
+  → `DateProgressScreen.checkAndTriggerEvents` の冒頭で毎回呼ぶ（中身があれば即returnする冪等な関数）
+  - 初回のみ約800ms（8920人生成）。2回目以降は実質ゼロ
+  - セーブは gzip+base64 で約1.46MB。IndexedDBに格納されるので問題ない
+- **`enrollYear` はゲーム内年度（1,2,3…）**。`seasonData.currentDate.year` はカレンダー年（2024等）。
+  学年判定でこの2つを混ぜると `2024 - 2` となり、全学年が3〜4年生として通ってしまう。
+  学年を出すときは必ず `seasonData.settings.year` を使うこと
+
 ## 大学リーグシステム (`src/university/`)
 - **チームデータ** (`universityTeamsData.js`): `UNIVERSITY_TEAMS` に234校定義（27リーグ、2部制12リーグ×12校＋1部制15リーグ×6校）
   - ランク分布: S=10校, A=22校, B=47校, C=96校, D=59校

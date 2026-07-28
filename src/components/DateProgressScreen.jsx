@@ -11,7 +11,7 @@ import { getUserFallSchedule } from '../university/universityInit.js';
 import { generateAprilHighSchoolClass, checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 import { simulateKoshien, getKoshienHeadline, KOSHIEN_STAGE_LABEL } from '../season/koshien.js';
 import { addToWatchList, removeFromWatchList, isWatched } from '../game/watchList.js';
-import { highSchoolPool, universityPool } from '../season/universityPool.js';
+import { highSchoolPool, universityPool, seedInitialUniversityClasses } from '../season/universityPool.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { updateAllTeamReputations, resetIndependentLeagueSchedules, getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
@@ -299,6 +299,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   };
 
   const checkAndTriggerEvents = (oldData, newData) => {
+    // 大学プールの初期化。従来はセーブのロード時にしか呼ばれておらず、
+    // 新規ゲームでは在学生が1人も居ないまま進行していた（新聞の大学欄が空になる）。
+    // 中身があれば即座に return する冪等な関数なので、毎回呼んで構わない。
+    seedInitialUniversityClasses(newData.settings?.year || seasonData?.year || 1);
+
     const oldPhase = oldData.phase;
     const newPhase = newData.phase;
     if (oldPhase !== newPhase) {
@@ -1992,7 +1997,9 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
 
     // 大学注目選手（3〜4年生）
     const uniAll = [];
-    const gameYear = seasonData.currentDate?.year || seasonData.settings?.year || 1;
+    // enrollYear はゲーム内年度（1,2,3…）なので、比較にもゲーム年を使う。
+    // currentDate.year はカレンダー年(2024等)なので、混ぜると全学年が3〜4年生として通ってしまう
+    const gameYear = seasonData.settings?.year || seasonData.year || 1;
     Object.entries(universityPool).forEach(([enrollYear, entries]) => {
       if (!entries) return;
       const yearsInUni = gameYear - parseInt(enrollYear);
