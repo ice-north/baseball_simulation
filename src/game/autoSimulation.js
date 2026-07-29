@@ -4,7 +4,7 @@ import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty 
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
-import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY } from './pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, selectPitchType } from './pitchCalling.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
@@ -694,17 +694,19 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const sameHand = pitcher.throws === batter.bats;
     const handBonus = sameHand ? -5 : 5;
 
-    // 投球する球種を選択（投手のarsenalから）
+    // 投球する球種を選択（捕手のリードが効く。詳細は pitchCalling.js）。
+    // 従来はここで変化球を完全ランダムに選んでおり、采配モードだけが
+    // リードでスコア選択していた。リーグ成績を作るのは自動側なので、
+    // 捕手のリード能力が成績にまったく反映されていなかった。
     const arsenal = pitcherPlayer.pitching?.arsenal || [{ type: 'straight', level: 50 }];
-    const breakingBalls = arsenal.filter(a => a.type !== 'straight');
-    let selectedPitch;
-    // 投球方針による変化球選択率調整
-    const breakingBallBonus = pitchingStrat === 'strikeout' ? 0.12 : pitchingStrat === 'contact' ? -0.08 : 0;
-    if (breakingBalls.length > 0 && Math.random() < 0.35 + breakingBalls.length * 0.06 + breakingBallBonus) {
-      selectedPitch = breakingBalls[Math.floor(Math.random() * breakingBalls.length)];
-    } else {
-      selectedPitch = arsenal.find(a => a.type === 'straight') || { type: 'straight', level: 50 };
-    }
+    const selectedPitch = selectPitchType({
+      arsenal,
+      catcherLead: catcherPlayer?.catching?.lead ?? 50,
+      form: pitcherPlayer.pitching?.form || 'threeQuarter',
+      strategy: pitchingStrat,
+      strikes: count.strikes,
+    });
+
 
     // 変化球の球速減速（緩急効果）
     let pitchVelocityFinal = effectiveVelocity;

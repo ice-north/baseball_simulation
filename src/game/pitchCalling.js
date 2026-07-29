@@ -22,6 +22,8 @@
 //   ストライク率 62-63%（加藤貴之クラスで75%）/ 四球率 8.5% / 三振率 19-22%
 // ============================================================
 
+import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY } from '../utils/constants.js';
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 // 制球の効き（リーグ平均の制球57を支点にした -1.0〜+1.0 の正規化値）。
@@ -182,3 +184,75 @@ export function getPitchQualityEffect(quality) {
 
 /** ボール球を打ったときの打球品質ペナルティ（泳いだ・引っ掛けた当たり） */
 export const BALL_ZONE_PENALTY = { meet: -4, power: -2 };
+
+// ============================================================
+// 球種の選択（捕手のリード）
+// ============================================================
+
+/**
+ * 球種1つの「効き」をスコア化する。
+ * 球種固有の効果(空振り/ゴロ/凡打誘発) × 球種レベル + 投球フォームとの相性。
+ */
+function scoreBall(ball, form, strategy, ballEffects) {
+  const eff = ballEffects[ball.type] || ballEffects.straight || {};
+  const levelFactor = (ball.level ?? 50) / 100;
+  let score = ((eff.whiffBonus || 0) + (eff.groundballBonus || 0) + (eff.weakBonus || 0)) * levelFactor;
+
+  // フォーム相性: 縦変化はオーバーハンド、横変化はサイドスロー等
+  const formEffect = PITCHING_FORM_EFFECTS[form] || PITCHING_FORM_EFFECTS.threeQuarter || {};
+  if ((FORM_PITCH_SYNERGY[form] || []).includes(ball.type)) {
+    if (VERTICAL_PITCHES.includes(ball.type)) score += (formEffect.verticalBreakBonus || 0) * levelFactor;
+    if (HORIZONTAL_PITCHES.includes(ball.type)) score += (formEffect.horizontalBreakBonus || 0) * levelFactor;
+  }
+
+  // 投球方針: 三振狙いは空振りを、打たせて取るならゴロを重く見る
+  if (strategy === 'strikeout') score += (eff.whiffBonus || 0) * 0.8 * levelFactor;
+  else if (strategy === 'contact') score += (eff.groundballBonus || 0) * 0.8 * levelFactor;
+
+  return score;
+}
+
+const VERTICAL_PITCHES = ['curve', 'fork', 'splitter', 'knuckle', 'sinker', 'palm'];
+const HORIZONTAL_PITCHES = ['slider', 'shoot', 'cutter', 'twoSeam'];
+
+/**
+ * 捕手が球種を要求する。
+ *
+ * 【設計】ストレートか変化球かは球種構成と投球方針で決まり、
+ * **捕手のリードは「どの変化球を選ぶか」に効く**。
+ * リードでストレートまで含めて最良の1球を選ばせると、スコア上ストレートは
+ * 常に最下位（whiff 0 / gb 0 / weak -0.04）なので、リードの高い捕手のチームが
+ * 変化球しか投げなくなり、実データの速球率45-55%から大きく外れる。
+ *
+ * 従来、自動シミュレーションは変化球を完全ランダムに選んでおり、
+ * 捕手のリードは球種選択に一切効いていなかった（采配モードだけがスコアで
+ * 選んでいた）。リーグ成績を作るのは自動側なので、リード能力が成績に
+ * 反映されない状態だった。
+ *
+ * @returns {Object} arsenal の中から選ばれた球種
+ */
+export function selectPitchType({
+  arsenal = [], catcherLead = 50, form = 'threeQuarter',
+  strategy = 'normal', strikes = 0, ballEffects = BALL_EFFECTS,
+} = {}) {
+  const list = arsenal.length ? arsenal : [{ type: 'straight', level: 50 }];
+  const straight = list.find(a => a.type === 'straight') || { type: 'straight', level: 50 };
+  const breaking = list.filter(a => a.type !== 'straight');
+  if (breaking.length === 0) return straight;
+
+  const strategyBonus = strategy === 'strikeout' ? 0.12 : strategy === 'contact' ? -0.08 : 0;
+  // 追い込んだ場面では、リードの高い捕手ほど決め球（変化球）を要求する
+  const twoStrikeBonus = strikes >= 2 ? (catcherLead - 50) / 100 * 0.15 : 0;
+  const breakingChance = 0.35 + breaking.length * 0.06 + strategyBonus + twoStrikeBonus;
+  if (Math.random() >= breakingChance) return straight;
+
+  // どの変化球にするか。リードが高いほど「効く球」を選べる
+  if (Math.random() < clamp(catcherLead / 100, 0, 1)) {
+    const scored = breaking
+      .map(b => ({ ball: b, score: scoreBall(b, form, strategy, ballEffects) }))
+      .sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, Math.max(1, Math.ceil(scored.length / 2)));
+    return top[Math.floor(Math.random() * top.length)].ball;
+  }
+  return breaking[Math.floor(Math.random() * breaking.length)];
+}

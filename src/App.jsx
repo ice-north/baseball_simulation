@@ -29,7 +29,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
-import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL } from './game/pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType } from './game/pitchCalling.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -1270,41 +1270,19 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const finalPredictionRate = basePredictionRate;
         const predictionCorrect = Math.random() < finalPredictionRate;
 
-        // キャッチャーリードで配球を最適化
+        // 捕手のリードで球種を選ぶ（自動シミュレーションと共有。pitchCalling.js）。
+        // 従来はここだけがスコア選択で、自動側は変化球を完全ランダムに選んでいた。
         let pitchChoice;
         let selectedBall;
-
-        if (catcher.lead > 0) {
-          const leadInfluence = catcher.lead / 100;
-          const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-          const ballScores = pitcher.pitches.map((ball, index) => {
-            const effect = ballEffects[ball.type];
-            const levelFactor = ball.level / 100;
-            let score = (effect.whiffBonus + effect.groundballBonus + effect.weakBonus) * levelFactor;
-
-            // 投球フォームとの相性ボーナスを適用
-            const synergyPitches = FORM_PITCH_SYNERGY[pitcher.form] || [];
-            if (synergyPitches.includes(ball.type)) {
-              if (['curve', 'fork', 'splitter', 'knuckle'].includes(ball.type)) {
-                score += pitchingFormEffect.verticalBreakBonus * levelFactor;
-              }
-              if (['slider', 'shoot', 'cutter', 'twoSeam'].includes(ball.type)) {
-                score += pitchingFormEffect.horizontalBreakBonus * levelFactor;
-              }
-            }
-            return { index, score, ball };
+        {
+          const chosen = selectPitchType({
+            arsenal: pitcher.pitches,
+            catcherLead: catcher.lead ?? 50,
+            form: pitcher.form || 'threeQuarter',
+            strikes: safeCount.strikes,
+            ballEffects,
           });
-
-          if (Math.random() < leadInfluence) {
-            ballScores.sort((a, b) => b.score - a.score);
-            const topChoices = ballScores.slice(0, Math.max(1, Math.floor(ballScores.length / 2)));
-            const chosen = topChoices[Math.floor(Math.random() * topChoices.length)];
-            pitchChoice = chosen.index;
-          } else {
-            pitchChoice = Math.floor(Math.random() * totalPitchTypes);
-          }
-        } else {
-          pitchChoice = Math.floor(Math.random() * totalPitchTypes);
+          pitchChoice = Math.max(0, pitcher.pitches.indexOf(chosen));
         }
 
         // プレイヤーが球種を指定していればそれを使う（'auto' は捕手のリードに任せる）
