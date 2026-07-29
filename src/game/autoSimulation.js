@@ -736,6 +736,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const aim = callPitchTarget({
       balls: count.balls, strikes: count.strikes, batterEye: batter.eye,
       catcherLead: catcherPlayer?.catching?.lead ?? 50, strategy: pitchingStrat,
+      pitcherControl: effectiveControl,
     });
     const loc = resolvePitchLocation({
       aim,

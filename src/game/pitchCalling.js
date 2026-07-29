@@ -46,6 +46,7 @@ export const AIM_LABEL = { zone: '勝負', edge: '際どく', chase: '誘い' };
  */
 export function callPitchTarget({
   balls = 0, strikes = 0, batterEye = 50, catcherLead = 50, strategy = 'normal',
+  pitcherControl = 50,
 } = {}) {
   // カウント別の基本方針。3ボールならストライクを取りに行き、
   // 追い込んでいれば誘い球を増やす（実際の配球と同じ）
@@ -56,8 +57,13 @@ export function callPitchTarget({
   else if (balls > strikes) w = { zone: 0.48, edge: 0.42, chase: 0.10 };
   else                      w = { zone: 0.34, edge: 0.48, chase: 0.18 };
 
-  // 捕手のリード: 際どいコースを要求できるのは配球が上手い捕手
-  const lead = (catcherLead - 50) / 100 * 0.20;
+  // 捕手のリード: 際どいコースを要求できるのは配球が上手い捕手。
+  // ただし**投手が投げ切れる時に限る**。制球の低い投手に無闇にコーナーを
+  // 要求しても四球が増えるだけで、実測では良い捕手ほど防御率が悪化した
+  // （係数を0.20→0.80にすると リード30で3.07 / リード90で3.39）。
+  // 良い捕手は投手の制球を見て、勝負どころを選ぶ。
+  const canExecute = Math.max(0, (pitcherControl - 50) / 50);   // 制球50で0 / 100で1
+  const lead = (catcherLead - 50) / 100 * (0.12 + canExecute * 0.6);
   w = { zone: w.zone - lead, edge: w.edge + lead, chase: w.chase };
 
   // 選球眼の高い打者に誘い球は通じない → 際どいコースへ切り替える

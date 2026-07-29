@@ -1309,6 +1309,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const aim = (aimChoice && aimChoice !== 'auto') ? aimChoice : callPitchTarget({
           balls: safeCount.balls, strikes: safeCount.strikes, batterEye: batter.eye,
           catcherLead: catcher.lead ?? 50,
+          pitcherControl: effectiveControl,
         });
         const loc = resolvePitchLocation({
           aim, control: effectiveControl, catcherDefense: catcher.defense ?? 50,
