@@ -4,7 +4,7 @@ import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty 
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
-import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, selectPitchType } from './pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
@@ -771,7 +771,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       const physicsResult = calculatePhysicsContact(
         { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50 },
         effBatter,
-        Math.random() < (selectedPitch.type === 'straight' ? 0.3 : 0.2),
+        // 打者の狙い球。的中するとタイミング窓が1.3倍になる（simulation-logic.js）。
+        // 従来はここが 0.3/0.2 の固定値で、捕手のリードも球種数も無視していた。
+        Math.random() < guessSuccessRate({
+          catcherLead: catcherPlayer?.catching?.lead ?? 50,
+          arsenalSize: arsenal.length,
+          batterEye: batter.eye,
+        }),
         pitchData,
         tunnelingEffect,
         handEffect

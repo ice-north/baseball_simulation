@@ -273,3 +273,35 @@ export function selectPitchType({
   }
   return breaking[Math.floor(Math.random() * breaking.length)];
 }
+
+/**
+ * 打者の球種予測（狙い球）が的中する確率。
+ *
+ * 【なぜここが捕手のリードの本体か】
+ * 的中すると `calculatePhysicsContact` でタイミング窓が **1.3倍** に広がる。
+ * 球種固有の空振り効果（whiffBonus 最大0.10）や制球ペナルティより桁が大きく、
+ * 「配球で打者の狙いを外す」という捕手の仕事がそのまま結果に効く経路になる。
+ *
+ * 従来:
+ *   - 自動シミュレーションは 0.3/0.2 の固定値で、リードも球種数も無視していた
+ *   - 采配モードはリードを見ていたが係数0.02で、3球種の投手だと
+ *     リード100でも的中率が 0.313→0.273 と13%しか下がらなかった
+ *
+ * リーグ平均のリード50で従来の中心値(0.25)に一致するよう中心を合わせてある。
+ *
+ * @param {number} arsenalSize 持ち球の総数（ストレート込み）
+ */
+export function guessSuccessRate({ catcherLead = 50, arsenalSize = 3, batterEye = 50 } = {}) {
+  // 持ち球が1種類なら何が来るか分かる
+  if (arsenalSize <= 1) return 0.95;
+  // 球種が増えるほど絞りきれない
+  const base = clamp(0.75 / arsenalSize, 0.08, 0.5);
+  // 捕手のリード: 配球を読ませない。リード0で1.5倍、50で等倍、100で半分
+  // 配球を読ませない。リード50で等倍（＝リーグ平均では従来の中心値0.25を維持）。
+  // 係数1.0では防御率差がノイズに埋もれたため1.5にしてある。
+  //   持ち球3種の場合: リード0で的中44% / 50で25% / 100で6%
+  const leadMult = 1 + (50 - clamp(catcherLead, 0, 100)) / 100 * 1.5;
+  // 選球眼の高い打者は球種を読む
+  const eyeMult = 1 + (clamp(batterEye, 0, 100) - 50) / 100 * 0.4;
+  return clamp(base * leadMult * eyeMult, 0.02, 0.8);
+}

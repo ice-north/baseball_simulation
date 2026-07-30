@@ -29,7 +29,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
-import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType } from './game/pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate } from './game/pitchCalling.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -1256,19 +1256,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // まず球種を選択（全ての球種から選ぶ）
         const totalPitchTypes = pitcher.pitches.length;
 
-        // 新しい予測式: 球種が増えるほど予測が外れやすくなる
-        let basePredictionRate;
-        if (totalPitchTypes === 1) {
-          basePredictionRate = 1.00;
-        } else {
-          const leadReduction = (catcher.lead / 100) * 0.02 * (totalPitchTypes - 1);
-          const baseRates = { 2: 0.50, 3: 0.313, 4: 0.21, 5: 0.16, 6: 0.106 };
-          basePredictionRate = baseRates[totalPitchTypes] || (0.106 - (totalPitchTypes - 6) * 0.02);
-          basePredictionRate = Math.max(0, basePredictionRate - leadReduction);
-        }
-
-        const finalPredictionRate = basePredictionRate;
-        const predictionCorrect = Math.random() < finalPredictionRate;
+        // 打者の狙い球（自動シミュレーションと共有。pitchCalling.js）。
+        // 従来はリード係数が0.02しかなく、3球種の投手でリード100でも
+        // 的中率が 0.313→0.273 と13%しか下がらなかった。
+        const predictionCorrect = Math.random() < guessSuccessRate({
+          catcherLead: catcher.lead ?? 50,
+          arsenalSize: totalPitchTypes,
+          batterEye: batter.eye,
+        });
 
         // 捕手のリードで球種を選ぶ（自動シミュレーションと共有。pitchCalling.js）。
         // 従来はここだけがスコア選択で、自動側は変化球を完全ランダムに選んでいた。
