@@ -61,9 +61,10 @@ export function callPitchTarget({
   // ただし**投手が投げ切れる時に限る**。制球の低い投手に無闇にコーナーを
   // 要求しても四球が増えるだけで、実測では良い捕手ほど防御率が悪化した
   // （係数を0.20→0.80にすると リード30で3.07 / リード90で3.39）。
-  // 良い捕手は投手の制球を見て、勝負どころを選ぶ。
+  // 係数は控えめに保つこと。ここを強めると四球のコストが、球種選択で得られる
+  // 利得（制球70で防御率-0.25）を食い潰してしまう。
   const canExecute = Math.max(0, (pitcherControl - 50) / 50);   // 制球50で0 / 100で1
-  const lead = (catcherLead - 50) / 100 * (0.12 + canExecute * 0.6);
+  const lead = (catcherLead - 50) / 100 * (0.10 + canExecute * 0.25);
   w = { zone: w.zone - lead, edge: w.edge + lead, chase: w.chase };
 
   // 選球眼の高い打者に誘い球は通じない → 際どいコースへ切り替える

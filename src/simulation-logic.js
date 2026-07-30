@@ -3,6 +3,7 @@
 // 野球シミュレーションの物理計算と判定ロジック
 // ============================================================
 import { PITCHING_FORM_EFFECTS } from './utils/constants.js';
+import { BALL_EFFECTS } from './utils/constants.js';
 
 /**
  * 物理衝突モデルによるコンタクト計算
@@ -57,6 +58,17 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   if (pitch.type !== 'straight' && pitch.level) {
     const breakingBallPenalty = (pitch.level / 100) * 0.18 * (1 - meetDeceptionResistance);  // 最大18%
     timingWindow *= (1 - breakingBallPenalty);
+  }
+
+  // 球種固有の空振り性能（BALL_EFFECTS.whiffBonus）。
+  // 従来この値は捕手の球種選択スコアでしか使われておらず、物理エンジンは
+  // 読んでいなかった。そのため「スライダーは空振りが取れる」という設定が
+  // 結果に一切反映されず、球種はレベルと球速差でしか差が出ていなかった。
+  const ballEffect = BALL_EFFECTS[pitch.type];
+  if (ballEffect && pitch.level) {
+    const lv = pitch.level / 100;
+    // ツーシームのように whiffBonus が負の球種は逆に当てやすくなる
+    timingWindow *= (1 - (ballEffect.whiffBonus || 0) * lv * (1 - meetDeceptionResistance));
   }
 
   // 回転数によるタイミング窓補正（MLB Statcast準拠）
@@ -137,6 +149,15 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     const pitchBonus = (pitchVelocity - 130) * 0.25 * powerTransferRate;
 
     exitVelocity = baseVelocity + qualityBonus + pitchBonus;
+
+    // 球種固有の凡打誘発（BALL_EFFECTS.weakBonus）。
+    // シンカー/シュート(0.23)のような手元で動く球は打球が弱くなる。
+    // 芯を捉えられた時ほど影響は小さい（差し込まれるから弱くなる）。
+    const weakEff = BALL_EFFECTS[pitch.type];
+    if (weakEff && pitch.level) {
+      const weakness = (weakEff.weakBonus || 0) * (pitch.level / 100) * (1 - meetQuality * 0.5);
+      exitVelocity -= weakness * 26;   // weakBonus 0.23 / level100 / 芯外し → 最大 -6.0km/h
+    }
 
     // ランダム要素（±5km/h）
     exitVelocity += (Math.random() * 10 - 5);
@@ -238,6 +259,12 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
 
   // 打出し角度（投手の回転数で補正）
   const spinAngleAdj = getSpinRateAngleAdjust(pitch.type, pitcher.spinRate);
+  // 球種固有のゴロ誘発（BALL_EFFECTS.groundballBonus）。
+  // シンカー(0.15)/チェンジアップ(0.14)/ツーシーム(0.12) は打球が上がりにくい。
+  const gbEff = BALL_EFFECTS[pitch.type];
+  const ballGroundAdj = gbEff
+    ? -(gbEff.groundballBonus || 0) * ((pitch.level ?? 50) / 100) * 34   // 0.15/level100 → -5.1度
+    : 0;
   // 速球で差し込まれるとゴロになりやすい（NPBデータ: 160+で50.7%GB）
   const pitchVelocity = pitch.velocity || pitcher.velocity;
   let velocityAngleAdj = 0;
@@ -249,7 +276,7 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
       velocityAngleAdj = -((135 - pitchVelocity) / 15) * deficit * 8;
     }
   }
-  const launchAngle = calculateLaunchAngle(meetQuality, batter) + spinAngleAdj + velocityAngleAdj;
+  const launchAngle = calculateLaunchAngle(meetQuality, batter) + spinAngleAdj + velocityAngleAdj + ballGroundAdj;
   // 物理シミュレーション（飛距離・滞空時間）
   const rad = launchAngle * Math.PI / 180;
   const v = exitVelocity / 3.6;  // km/h to m/s
