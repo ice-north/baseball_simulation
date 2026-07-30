@@ -308,3 +308,21 @@ export const getUtilityScore = (player) => {
   }
   return Math.max(0, Math.min(100, score));
 };
+
+/**
+ * 捕手のリード（配球）能力を生成する。
+ *
+ * 従来は生成箇所ごとに狭い一様分布だった（トライアウト35-70 / 大学25-55 /
+ * 補充30-50）。実在する捕手が25〜70に収まり中央45という狭さのため、
+ * 配球の仕組みを整えても「良い捕手」と「悪い捕手」の差が出しようがなかった。
+ *
+ * 正規分布 N(48, 18) を 5〜95 で切って、突出した捕手が稀に出るようにする。
+ * 平均は据え置き（リーグ全体の成績は変わらない）。
+ *   ±1σ: 30〜66 / ±2σ: 12〜84 / 90超は約1%
+ */
+export const generateCatcherLead = () => {
+  const u1 = Math.random() || 0.0001;
+  const u2 = Math.random();
+  const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  return Math.max(5, Math.min(95, Math.round(48 + normal * 18)));
+};

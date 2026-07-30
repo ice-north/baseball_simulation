@@ -61,10 +61,12 @@ export function callPitchTarget({
   // ただし**投手が投げ切れる時に限る**。制球の低い投手に無闇にコーナーを
   // 要求しても四球が増えるだけで、実測では良い捕手ほど防御率が悪化した
   // （係数を0.20→0.80にすると リード30で3.07 / リード90で3.39）。
-  // 係数は控えめに保つこと。ここを強めると四球のコストが、球種選択で得られる
-  // 利得（制球70で防御率-0.25）を食い潰してしまう。
+  // 基礎項を持たせず canExecute だけに掛けている。制球50（リーグ平均）では
+  // 配分が動かず、際どい要求は制球の高い投手に対してのみ発生する。
+  // この経路は測るたびに四球のコストが利得を上回った。リードの価値は
+  // 球種選択と失投抑制で出すこと。
   const canExecute = Math.max(0, (pitcherControl - 50) / 50);   // 制球50で0 / 100で1
-  const lead = (catcherLead - 50) / 100 * (0.10 + canExecute * 0.25);
+  const lead = (catcherLead - 50) / 100 * (canExecute * 0.25);
   w = { zone: w.zone - lead, edge: w.edge + lead, chase: w.chase };
 
   // 選球眼の高い打者に誘い球は通じない → 際どいコースへ切り替える
@@ -92,15 +94,21 @@ export function callPitchTarget({
  * @param {number} catcherDefense 捕手の守備力（フレーミング。リーグ平均50が基準）
  * @returns {{inZone: boolean, quality: 'meatball'|'good'|'edge'|'waste'}}
  */
-export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefense = 50 } = {}) {
+export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefense = 50, catcherLead = 50 } = {}) {
   const c = clamp(control, 0, 100);
+  // 良い捕手は投手が投げ切れない要求をしないので、甘く入る失投(meatball)が減る。
+  // ただし**減らした分はボールではなく「際どい良い球」に変える**こと。
+  // 単に失投判定を外すと、その球がゾーン外に落ちて四球が増え（実測 9.5%→10.9%）、
+  // 良い捕手ほど成績が悪化する。ゾーン内に収まる総量は変えずに質だけを上げる。
+  const meatballSave = clamp((clamp(catcherLead, 0, 100) - 50) / 100 * 0.8, -0.4, 0.6);
+  const saveMeatball = () => Math.random() < meatballSave;
   let inZone, quality;
 
   if (aim === 'zone') {
     // ゾーンで勝負。制球が低いと入っても真ん中（甘い球）になる
     if (Math.random() < 0.704 + cc(c) * 0.146) {          // 制球20→57% / 57→70% / 100→102%(=ほぼ必ず)
       inZone = true;
-      quality = Math.random() < 0.42 - c * 0.0032 ? 'meatball' : 'good';
+      quality = (Math.random() < 0.42 - c * 0.0032 && !saveMeatball()) ? 'meatball' : 'good';
     } else {
       inZone = false; quality = 'edge';                // ゾーンすぐ外 → 釣り球として機能する
     }
@@ -109,7 +117,8 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
     if (Math.random() < 0.4294 + cc(c) * 0.181) {          // 制球20→22% / 57→43% / 100→83%
       inZone = true; quality = 'edge';
     } else if (Math.random() < 0.30 - c * 0.0022) {   // 制球40→21% / 100→8%
-      inZone = true; quality = 'meatball';             // 甘く入った失投
+      // 甘く入りかけた球。良い捕手の要求なら際どい所に収まる
+      inZone = true; quality = saveMeatball() ? 'edge' : 'meatball';
     } else {
       inZone = false;
       quality = Math.random() < 0.7495 + cc(c) * 0.151 ? 'edge' : 'waste';
@@ -119,7 +128,7 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
     if (Math.random() < 0.7665 + cc(c) * 0.194) {          // 制球20→54% / 57→77% / 100→>100%(=必ず)
       inZone = false; quality = 'edge';
     } else if (Math.random() < 0.34 - c * 0.0026) {   // 制球40→24% / 100→8%
-      inZone = true; quality = 'meatball';             // 抜けて甘く入る
+      inZone = true; quality = saveMeatball() ? 'edge' : 'meatball';   // 抜けて甘く入る
     } else {
       inZone = false; quality = 'waste';               // 明らかなボール
     }

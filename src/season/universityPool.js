@@ -5,6 +5,7 @@
 // ============================================================
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
+import { generateCatcherLead } from '../utils/constants.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
@@ -384,7 +385,7 @@ function generateHighSchoolPlayer(id) {
     },
     fielding: { defense: abilities.defense },
     catching: {
-      lead: position === 'catcher' ? r(25, 55) : r(10, 30)
+      lead: position === 'catcher' ? generateCatcherLead() : r(10, 30)
     },
     pitching: {
       velocity: abilities.velocity, control: abilities.control,

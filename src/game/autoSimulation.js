@@ -742,6 +742,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       aim,
       control: effectiveControl - breakingControlPenalty + strategyControlBonus,
       catcherDefense: catcherPlayer?.fielding?.defense ?? 50,
+      catcherLead: catcherPlayer?.catching?.lead ?? 50,
     });
     const swung = decideSwing({
       inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,

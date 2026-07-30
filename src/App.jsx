@@ -1313,6 +1313,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         });
         const loc = resolvePitchLocation({
           aim, control: effectiveControl, catcherDefense: catcher.defense ?? 50,
+          catcherLead: catcher.lead ?? 50,
         });
         const isInStrikeZone = loc.inZone;
         let swingProb = swingProbability({

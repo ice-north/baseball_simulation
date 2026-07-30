@@ -6,7 +6,7 @@
 import { generateRandomPlayerName } from '../data/playerNames.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
 import { getHighSchoolTryoutCandidates, getUniversitySeniorTryoutCandidates } from './universityPool.js';
-import { getUtilityScore } from '../utils/constants.js';
+import { getUtilityScore, generateCatcherLead } from '../utils/constants.js';
 import { generateHandedness } from '../utils/handedness.js';
 
 // 2年目以降トライアウトの1チームあたり基準受験者数
@@ -272,7 +272,7 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
         defense: abilities.defense
       },
       catching: {
-        lead: position === 'catcher' ? Math.floor(Math.random() * 36) + 35 : Math.floor(Math.random() * 26) + 20
+        lead: position === 'catcher' ? generateCatcherLead() : Math.floor(Math.random() * 26) + 20
       },
       pitching: {
         velocity: abilities.velocity,
