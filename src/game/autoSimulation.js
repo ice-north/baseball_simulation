@@ -1419,7 +1419,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       gs.pitcherAppearances[teamKey].map(a => a.id)
     );
     alreadyPitchedIds.add(currentPitcher.id);
-    const isAvailableMid = (id) => !alreadyPitchedIds.has(id) && (fatigue[id] || 0) < 50;
+    // 登板間隔のゲート。絶対値50だけで判定すると、全員が50を超えた時点で
+    // ロール別の経路が総崩れになり、疲労を見ない緊急経路へ流れる（実測24%）。
+    // 「50未満」か「今日まだ投げていない中で最も疲労の少ない投手」なら通す
+    // 相対ゲートにして、ブルペンが枯れても必ずロール別の選択が働くようにする。
+    const bullpenIds = [...(rotation.middleRelievers || []), ...(rotation.setupMen || []),
+      rotation.closer].filter(Boolean).filter(id => !alreadyPitchedIds.has(id));
+    const freshest = bullpenIds.length
+      ? Math.min(...bullpenIds.map(id => fatigue[id] || 0)) : 0;
+    const fatigueGate = Math.max(50, freshest + 1);
+    const isAvailableMid = (id) => !alreadyPitchedIds.has(id) && (fatigue[id] || 0) < fatigueGate;
 
     // 左打者対策: ワンポイント左投手を優先選択
     if (situation === 'lefty') {
@@ -1532,7 +1541,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     }
 
     if (reliever) {
-
       // 投手交代記録を保存
       gs.pitcherChanges.push({
         inning: gs.inning,
@@ -1599,8 +1607,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         // +50 にすると2連投で頭打ちになり、最多登板が中央値で62→50登板に収まる。
         // これ以上（+70等）にすると全員がゲートに掛かり、疲労を見ない緊急経路へ
         // 流れて（22%→55%）かえって偏りが悪化する。
-        TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] =
-          (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 50;
+        // 上限を設ける。相対ゲートを入れたことで疲労が溜まり続けても登板できるため、
+        // 無制限だと 4210 のような値になり、他の箇所の絶対値判定（左ワンポイント投入の
+        // `< 50` など）が永久に無効化されてしまう。3登板ぶんで頭打ちにする。
+        TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] = Math.min(150,
+          (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[reliever.id] || 0) + 50);
       }
     }
   };

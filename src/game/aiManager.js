@@ -274,8 +274,11 @@ export function executeAutoSubstitutePitcher(ctx) {
       });
 
       if (TEAMS_DATA[teamName]?.pitchingRotation?.reliefFatigue) {
-        TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] =
-          (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] || 0) + 30;
+        // 自動シミュレーション(autoSimulation.js)と同じ +50 / 上限150 にする。
+        // ここだけ +30・上限なしだったため、采配モードで投げたリリーフは
+        // 登板間隔の管理値がズレ、疲労の絶対値判定も壊れていた。
+        TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] = Math.min(150,
+          (TEAMS_DATA[teamName].pitchingRotation.reliefFatigue[selectedPitcher.id] || 0) + 50);
       }
     }
 
