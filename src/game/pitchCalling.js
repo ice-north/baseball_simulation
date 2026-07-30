@@ -94,21 +94,19 @@ export function callPitchTarget({
  * @param {number} catcherDefense 捕手の守備力（フレーミング。リーグ平均50が基準）
  * @returns {{inZone: boolean, quality: 'meatball'|'good'|'edge'|'waste'}}
  */
-export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefense = 50, catcherLead = 50 } = {}) {
+export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefense = 50 } = {}) {
   const c = clamp(control, 0, 100);
-  // 良い捕手は投手が投げ切れない要求をしないので、甘く入る失投(meatball)が減る。
-  // ただし**減らした分はボールではなく「際どい良い球」に変える**こと。
-  // 単に失投判定を外すと、その球がゾーン外に落ちて四球が増え（実測 9.5%→10.9%）、
-  // 良い捕手ほど成績が悪化する。ゾーン内に収まる総量は変えずに質だけを上げる。
-  const meatballSave = clamp((clamp(catcherLead, 0, 100) - 50) / 100 * 0.8, -0.4, 0.6);
-  const saveMeatball = () => Math.random() < meatballSave;
+  // **失投(meatball)は投手の制球の問題であって、捕手には防げない。**
+  // 以前ここに「良い捕手は失投を減らす」処理を入れたが、前提が誤っていたため撤去した。
+  // 捕手に出来るのは 1)最も効果的な球種とコースを要求する 2)際どい球をストライクに
+  // する(フレーミング) 3)盗塁を刺す の3つ。
   let inZone, quality;
 
   if (aim === 'zone') {
     // ゾーンで勝負。制球が低いと入っても真ん中（甘い球）になる
     if (Math.random() < 0.704 + cc(c) * 0.146) {          // 制球20→57% / 57→70% / 100→102%(=ほぼ必ず)
       inZone = true;
-      quality = (Math.random() < 0.42 - c * 0.0032 && !saveMeatball()) ? 'meatball' : 'good';
+      quality = Math.random() < 0.42 - c * 0.0032 ? 'meatball' : 'good';
     } else {
       inZone = false; quality = 'edge';                // ゾーンすぐ外 → 釣り球として機能する
     }
@@ -117,8 +115,7 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
     if (Math.random() < 0.4294 + cc(c) * 0.181) {          // 制球20→22% / 57→43% / 100→83%
       inZone = true; quality = 'edge';
     } else if (Math.random() < 0.30 - c * 0.0022) {   // 制球40→21% / 100→8%
-      // 甘く入りかけた球。良い捕手の要求なら際どい所に収まる
-      inZone = true; quality = saveMeatball() ? 'edge' : 'meatball';
+      inZone = true; quality = 'meatball';             // 甘く入った失投
     } else {
       inZone = false;
       quality = Math.random() < 0.7495 + cc(c) * 0.151 ? 'edge' : 'waste';
@@ -128,7 +125,7 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
     if (Math.random() < 0.7665 + cc(c) * 0.194) {          // 制球20→54% / 57→77% / 100→>100%(=必ず)
       inZone = false; quality = 'edge';
     } else if (Math.random() < 0.34 - c * 0.0026) {   // 制球40→24% / 100→8%
-      inZone = true; quality = saveMeatball() ? 'edge' : 'meatball';   // 抜けて甘く入る
+      inZone = true; quality = 'meatball';             // 抜けて甘く入る
     } else {
       inZone = false; quality = 'waste';               // 明らかなボール
     }
@@ -213,6 +210,10 @@ function scoreBall(ball, form, strategy, ballEffects) {
   const eff = ballEffects[ball.type] || ballEffects.straight || {};
   const levelFactor = (ball.level ?? 50) / 100;
   let score = ((eff.whiffBonus || 0) + (eff.groundballBonus || 0) + (eff.weakBonus || 0)) * levelFactor;
+  // 未熟な球種は制球を損なう（breakingControlPenalty = (100-level)×0.20）。
+  // これを score に入れないと、捕手が「効くが投げられない球」を要求してしまい、
+  // 四球が増えて良い捕手ほど成績が悪化する（実測 BB/9 3.90→4.12）。
+  score -= (1 - levelFactor) * 0.20;
 
   // フォーム相性: 縦変化はオーバーハンド、横変化はサイドスロー等
   const formEffect = PITCHING_FORM_EFFECTS[form] || PITCHING_FORM_EFFECTS.threeQuarter || {};
