@@ -294,14 +294,17 @@ export function selectPitchType({
 export function guessSuccessRate({ catcherLead = 50, arsenalSize = 3, batterEye = 50 } = {}) {
   // 持ち球が1種類なら何が来るか分かる
   if (arsenalSize <= 1) return 0.95;
-  // 球種が増えるほど絞りきれない
-  const base = clamp(0.75 / arsenalSize, 0.08, 0.5);
-  // 捕手のリード: 配球を読ませない。リード0で1.5倍、50で等倍、100で半分
-  // 配球を読ませない。リード50で等倍（＝リーグ平均では従来の中心値0.25を維持）。
-  // 係数1.0では防御率差がノイズに埋もれたため1.5にしてある。
-  //   持ち球3種の場合: リード0で的中44% / 50で25% / 100で6%
-  const leadMult = 1 + (50 - clamp(catcherLead, 0, 100)) / 100 * 1.5;
+
+  // リード0 = 配球が完全にランダム。打者は持ち球数ぶんの1で当てられる
+  //   （2種類なら50% / 3種類33% / 4種類25%）
+  // リード100 = その8割を外す（2種類→10% / 3種類→6.7% / 4種類→5%）
+  // 「的中率20%」という絶対値にすると、持ち球5種類以上の投手では
+  // 完全ランダム(20%)と同じになりリードが無意味になるため、割合で定義する。
+  const chance = 1 / arsenalSize;
+  const t = clamp(catcherLead, 0, 100) / 100;
+  const base = chance * (1 - 0.8 * t);
+
   // 選球眼の高い打者は球種を読む
   const eyeMult = 1 + (clamp(batterEye, 0, 100) - 50) / 100 * 0.4;
-  return clamp(base * leadMult * eyeMult, 0.02, 0.8);
+  return clamp(base * eyeMult, 0.02, 0.8);
 }
