@@ -28,6 +28,8 @@
 // これなら生成側を1行も触らずに全プールの全選手が持てて、既存セーブもそのまま動く。
 // ============================================================
 
+import { colAxis, rowAxis } from './pitchZone.js';
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /** FNV-1a + avalanche。同じ文字列からは常に同じ値 */
@@ -81,20 +83,16 @@ export function getZoneProfile(player) {
   return profile;
 }
 
-/**
- * セル座標を打者から見た軸に変換する。
- *   colAxis -1 = 外角いっぱい / +1 = 内角いっぱい
- *   rowAxis -1 = 高め       / +1 = 低め
- * グリッドの外（-1 や 5）は端に丸める。
- */
-export const colAxis = (col) => clamp((col - 2) / 2, -1, 1);
-export const rowAxis = (row) => clamp((row - 2) / 2, -1, 1);
+// セル座標→打者から見た軸の変換はグリッド側（pitchZone.js）が持つ
+export { colAxis, rowAxis };
 
 // 苦手コースでどれだけミート・パワーが落ちるか。
-// 質ラベルの corner(-7/-5) と同程度の幅になるよう合わせてある。
+// 実データの打者はストライクゾーン内の得意ゾーンと苦手ゾーンで打率が倍近く違う。
+// 質ラベルの corner(-7/-5) と同程度に留めると、平均的な打者（|v|≈0.34）では
+// 実効ミートが±3程度しか動かず、弱点という言葉に見合わなかった。
 // これ以上大きくすると、コース適性が投手の制球より支配的になってしまう。
-const MEET_SWING = 9;
-const POWER_SWING = 7;
+const MEET_SWING = 13;
+const POWER_SWING = 10;
 
 /**
  * 投球位置と打者のコース適性から、実効ミート・パワーの補正を返す。

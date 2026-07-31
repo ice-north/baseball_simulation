@@ -93,9 +93,14 @@ export function callPitchTarget({
  * @param {'zone'|'edge'|'chase'} aim 狙い
  * @param {number} control 実効制球（スタミナ・球種レベルのペナルティ適用後）
  * @param {number} catcherDefense 捕手の守備力（フレーミング。リーグ平均50が基準）
+ * @param {Object} batterZone 打者のコース適性（batterZone.js の getZoneProfile）
+ * @param {number} catcherLead 捕手のリード（弱点を突く精度）
  * @returns {{inZone: boolean, quality: 'meatball'|'good'|'edge'|'waste'}}
  */
-export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefense = 50 } = {}) {
+export function resolvePitchLocation({
+  aim = 'edge', control = 50, catcherDefense = 50,
+  batterZone = null, catcherLead = 0,
+} = {}) {
   // 【段階1】5×5=25ゾーンのグリッドで位置を決める（pitchZone.js）。
   // 捕手が狙うセルを決め、投手の制球でそこからのばらつきが決まる。
   // 従来の (inZone, quality) はセルから導出するので、下流のコードは変更不要。
@@ -103,8 +108,12 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
   // 失投(meatball)は投手の制球の問題であって捕手には防げない。
   // 捕手に出来るのは 1)最も効果的な球種とコースを要求する 2)際どい球をストライクに
   // する(フレーミング) 3)盗塁を刺す の3つ。
+  //
+  // 【段階3】同じ狙いの中で「どのセルを要求するか」を打者の弱点で選ぶ（pitchZone.js）。
+  // zone/edge/chase の配分は動かさないので、ボールになる確率＝四球のコストは増えない。
   const c = clamp(control, 0, 100);
-  const cell = resolvePitchCell(pickTargetCell(aim), c);
+  const cell = resolvePitchCell(
+    pickTargetCell(aim, { profile: batterZone, lead: catcherLead }), c);
   let { inZone, quality, col, row } = cell;
 
   // フレーミング: 際どい球の判定が捕手の守備力で動く。基準はリーグ平均の捕手(=50)

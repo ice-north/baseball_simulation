@@ -745,6 +745,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       aim,
       control: effectiveControl - breakingControlPenalty + strategyControlBonus,
       catcherDefense: catcherPlayer?.fielding?.defense ?? 50,
+      // 捕手は打者の弱点コースを要求する（狙いの配分は変えない）
+      batterZone: batter.zone,
+      catcherLead: catcherPlayer?.catching?.lead ?? 50,
     });
     const swung = decideSwing({
       inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,

@@ -1309,6 +1309,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         });
         const loc = resolvePitchLocation({
           aim, control: effectiveControl, catcherDefense: catcher.defense ?? 50,
+          // 捕手は打者の弱点コースを要求する（狙いの配分は変えない）
+          batterZone: batter.zone, catcherLead: catcher.lead ?? 50,
         });
         const isInStrikeZone = loc.inZone;
         let swingProb = swingProbability({
