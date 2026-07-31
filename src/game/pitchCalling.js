@@ -23,6 +23,7 @@
 // ============================================================
 
 import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY } from '../utils/constants.js';
+import { resolvePitchCell, pickTargetCell } from './pitchZone.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -95,41 +96,16 @@ export function callPitchTarget({
  * @returns {{inZone: boolean, quality: 'meatball'|'good'|'edge'|'waste'}}
  */
 export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefense = 50 } = {}) {
-  const c = clamp(control, 0, 100);
-  // **失投(meatball)は投手の制球の問題であって、捕手には防げない。**
-  // 以前ここに「良い捕手は失投を減らす」処理を入れたが、前提が誤っていたため撤去した。
+  // 【段階1】5×5=25ゾーンのグリッドで位置を決める（pitchZone.js）。
+  // 捕手が狙うセルを決め、投手の制球でそこからのばらつきが決まる。
+  // 従来の (inZone, quality) はセルから導出するので、下流のコードは変更不要。
+  //
+  // 失投(meatball)は投手の制球の問題であって捕手には防げない。
   // 捕手に出来るのは 1)最も効果的な球種とコースを要求する 2)際どい球をストライクに
   // する(フレーミング) 3)盗塁を刺す の3つ。
-  let inZone, quality;
-
-  if (aim === 'zone') {
-    // ゾーンで勝負。制球が低いと入っても真ん中（甘い球）になる
-    if (Math.random() < 0.704 + cc(c) * 0.146) {          // 制球20→57% / 57→70% / 100→102%(=ほぼ必ず)
-      inZone = true;
-      quality = Math.random() < 0.42 - c * 0.0032 ? 'meatball' : 'good';
-    } else {
-      inZone = false; quality = 'edge';                // ゾーンすぐ外 → 釣り球として機能する
-    }
-  } else if (aim === 'edge') {
-    // 際どいコース。決まればストライク、外し方は制球次第
-    if (Math.random() < 0.4294 + cc(c) * 0.181) {          // 制球20→22% / 57→43% / 100→83%
-      inZone = true; quality = 'edge';
-    } else if (Math.random() < 0.30 - c * 0.0022) {   // 制球40→21% / 100→8%
-      inZone = true; quality = 'meatball';             // 甘く入った失投
-    } else {
-      inZone = false;
-      quality = Math.random() < 0.7495 + cc(c) * 0.151 ? 'edge' : 'waste';
-    }
-  } else {
-    // 誘い球（意図的なボール）。制球が高いほど「ゾーンすぐ外」に決まり振ってもらえる
-    if (Math.random() < 0.7665 + cc(c) * 0.194) {          // 制球20→54% / 57→77% / 100→>100%(=必ず)
-      inZone = false; quality = 'edge';
-    } else if (Math.random() < 0.34 - c * 0.0026) {   // 制球40→24% / 100→8%
-      inZone = true; quality = 'meatball';             // 抜けて甘く入る
-    } else {
-      inZone = false; quality = 'waste';               // 明らかなボール
-    }
-  }
+  const c = clamp(control, 0, 100);
+  const cell = resolvePitchCell(pickTargetCell(aim), c);
+  let { inZone, quality, col, row } = cell;
 
   // フレーミング: 際どい球の判定が捕手の守備力で動く。基準はリーグ平均の捕手(=50)
   const framing = (catcherDefense - 50) * 0.0018;
@@ -138,7 +114,7 @@ export function resolvePitchLocation({ aim = 'edge', control = 50, catcherDefens
     else if (inZone && framing < 0 && Math.random() < -framing) inZone = false;
   }
 
-  return { inZone, quality };
+  return { inZone, quality, col, row };
 }
 
 /**
@@ -150,7 +126,8 @@ export function swingProbability({
 } = {}) {
   let p;
   if (inZone) {
-    p = quality === 'meatball' ? 0.76 : quality === 'good' ? 0.64 : 0.47;
+    p = quality === 'meatball' ? 0.76 : quality === 'good' ? 0.64
+      : quality === 'corner' ? 0.56 : 0.47;
     p += strikes * 0.10;                       // 追い込まれたら振る
     p += (50 - batterEye) * 0.0006;            // 選球眼が低いと闇雲に振る（効果は小）
   } else if (quality === 'edge') {
@@ -192,6 +169,8 @@ export function ballZoneContactChance(batterEye = 50) {
 export function getPitchQualityEffect(quality) {
   if (quality === 'meatball') return { meet: 5, power: 3 };
   if (quality === 'edge') return { meet: -10, power: -8 };
+  // ストライクゾーンの隅。ゾーン外の際どい球ほどではないが打ちにくい
+  if (quality === 'corner') return { meet: -7, power: -5 };
   return { meet: 0, power: 0 };
 }
 
