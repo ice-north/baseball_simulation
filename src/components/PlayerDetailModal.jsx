@@ -6,6 +6,59 @@ import { formatInnings } from '../utils/physics.js';
 import { buildPlayerStory, fameLabel } from './playerStory.js';
 import AbilityHistoryChart from './AbilityHistoryChart.jsx';
 import PotentialBadge from './PotentialBadge.jsx';
+import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
+
+// コース適性のヒートマップ（5×5）。内側の3×3がストライクゾーン。
+// 色はパワプロ等と同じ慣習で 赤=得意（ホットゾーン） / 青=苦手（コールドゾーン）。
+const zoneCellClass = (v) =>
+  v >= 0.5 ? 'bg-red-600' : v >= 0.2 ? 'bg-orange-600/70'
+    : v > -0.2 ? 'bg-gray-600' : v > -0.5 ? 'bg-blue-800/70' : 'bg-blue-600';
+
+const ZoneHeatGrid = ({ player }) => {
+  const profile = getZoneProfile(player);
+  const grid = zoneHeatmap(profile);
+  const notes = describeZoneProfile(profile);
+  return (
+    <div className="bg-gray-700 rounded p-3 mb-4">
+      <h3 className="text-sm font-bold text-white mb-2">
+        コース適性
+        <span className="ml-2 text-xs font-normal text-gray-300">赤=得意 / 青=苦手</span>
+      </h3>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1">
+          <div className="flex flex-col justify-between text-xs text-gray-300 h-24 py-0.5">
+            <span>高</span><span>低</span>
+          </div>
+          <div>
+            <div className="inline-block">
+              {grid.map((line, row) => (
+                <div key={row} className="flex">
+                  {line.map((v, col) => {
+                    const inZone = col >= 1 && col <= 3 && row >= 1 && row <= 3;
+                    return (
+                      <div key={col}
+                        className={`w-5 h-5 m-px rounded-sm ${zoneCellClass(v)} ${inZone ? 'ring-1 ring-gray-200/70' : 'opacity-60'}`}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between text-xs text-gray-300 mt-0.5">
+              <span>外角</span><span>内角</span>
+            </div>
+          </div>
+        </div>
+        <div className="text-xs text-gray-200 space-y-1">
+          {notes.length > 0
+            ? notes.map((n, i) => <div key={i}>・{n}</div>)
+            : <div className="text-gray-300">・目立った得手不得手はない</div>}
+          <div className="text-gray-400 pt-1">枠内がストライクゾーン</div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // 変化球をレベル別に色付けして表示（レベルは0-100なのでgetAbilityColorをそのまま使用）
 const renderArsenal = (arsenal) => {
@@ -265,6 +318,9 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                 ))}
               </div>
             </div>
+
+            {/* コース適性（内外角・高低の得手不得手）。投手には出さない */}
+            {!isPitcher && player.batting && <ZoneHeatGrid player={player} />}
           </>)}
 
           {/* 物語タブ: キャリアの歩みを時系列で可視化 */}

@@ -30,6 +30,7 @@ import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach,
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate } from './game/pitchCalling.js';
+import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './game/batterZone.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -1346,14 +1347,18 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity }, newStamina };
         }
 
+        // コース適性: 苦手コースならミート・パワーが落ちる（得意なら上がる）
+        const zoneMatchup = getZoneMatchupEffect(loc, batter.zone);
+
         if (!isInStrikeZone) {
           // ボール球でもバットに当たる（引っ掛けゴロ、泳いでフライ等）。
           // 品質を落として物理エンジンに通すので、ほとんどが凡打になる。
           if (Math.random() < ballZoneContactChance(batter.eye)) {
             const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
+            const bz = combineBatterEffects(BALL_ZONE_PENALTY, zoneMatchup);
             const weakBatter = { ...batter,
-              meet: Math.max(1, batter.meet + BALL_ZONE_PENALTY.meet),
-              power: Math.max(1, batter.power + BALL_ZONE_PENALTY.power) };
+              meet: Math.max(1, batter.meet + bz.meet),
+              power: Math.max(1, batter.power + bz.power) };
             const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch);
             return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true }, newStamina };
           }
@@ -1368,7 +1373,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
         // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる。
         // 甘く入った失投(meatball)は長打され、際どいコース(edge)は打ち損じる。
-        const q = getPitchQualityEffect(loc.quality);
+        const q = combineBatterEffects(getPitchQualityEffect(loc.quality), zoneMatchup);
         const zoneBatter = { ...batter,
           meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
           power: Math.max(1, Math.min(100, batter.power + q.power)) };
@@ -1399,7 +1404,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           eye: currentBatter.batting.eye,
           speed: currentBatter.physical.speed,
           steal: currentBatter.batting.steal,
-          bats: currentBatter.batting.bats
+          bats: currentBatter.batting.bats,
+          // コース適性（内外角・高低の得手不得手）。自動シミュレーションと同じ導出
+          zone: getZoneProfile(currentBatter),
         };
 
         const pitcher = {

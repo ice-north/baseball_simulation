@@ -5,6 +5,7 @@ import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVE
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
+import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './batterZone.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
@@ -668,7 +669,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       power: (batterPlayer.batting?.power || 50) + stratPowerMod + batterCondMod - fatiguePenalty + batterClutchMod,
       eye: (batterPlayer.batting?.eye || 50) + stratEyeMod - Math.floor(fatiguePenalty * 0.5),
       speed: (batterPlayer.physical?.speed || 50) - fatiguePenalty,
-      bats: batterPlayer.batting?.bats || 'right'
+      bats: batterPlayer.batting?.bats || 'right',
+      // コース適性（内外角・高低の得手不得手）。25セルは持たず2数値から導出する
+      zone: getZoneProfile(batterPlayer),
     };
 
     // 投手の疲労ペナルティ（打者と同じ二次曲線: 疲労0→0, 50→-4, 100→-15）
@@ -836,9 +839,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       }
     };
 
+    // コース適性: 苦手なコースに来るとミート・パワーが落ちる（得意なら上がる）。
+    // 母集団の平均は0なのでリーグ成績は動かず、打者ごとの差だけが出る。
+    const matchup = getZoneMatchupEffect(loc, batter.zone);
+
     if (loc.inZone) {
       if (!swung) return { type: 'called_strike' };
-      const q = getPitchQualityEffect(loc.quality);
+      const q = combineBatterEffects(getPitchQualityEffect(loc.quality), matchup);
       const breakingPenalty = isBreaking ? (selectedPitch.level || 50) * 0.12 : 0;
       const contactChance = 82 + (batter.meet + q.meet) * 0.45 + handBonus - breakingPenalty - speedDiffPenalty;
       if (Math.random() * 100 >= contactChance) return { type: 'swinging_strike' };
@@ -851,7 +858,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     if (!swung) return { type: 'ball' };
     if (Math.random() >= ballZoneContactChance(batter.eye)) return { type: 'swinging_strike' };
     if (Math.random() < 0.56) return { type: 'foul' };
-    return resolveContact(BALL_ZONE_PENALTY);
+    return resolveContact(combineBatterEffects(BALL_ZONE_PENALTY, matchup));
   };
 
   // 走者進塁処理（外野手の肩で進塁を抑制）
@@ -1797,7 +1804,6 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
       // 一球シミュレーション（simulation-logic.jsの物理エンジンを使用）
       const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, lastPitch, offenseStrategy, defenseStrategy);
-
       // 次回のトンネリング効果のために今回の投球を記録
       if (result.lastPitch) {
         lastPitch = result.lastPitch;
