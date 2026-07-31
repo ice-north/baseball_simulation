@@ -32,6 +32,7 @@ import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate } from './game/pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './game/batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
+import PitchZonePlot, { PitchZoneLegend } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -1363,11 +1364,19 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
         const pitchTypeName = ballEffects[selectedBall.type].name;
 
+        // 投球位置（試合画面のコース表示用）。セル内のどこに来たかは描画時に
+        // 揺らすのではなく**ここで一度だけ決める**。再レンダリングのたびに
+        // 点が動いてしまうため。
+        const pitchLoc = {
+          col: loc.col, row: loc.row, inZone: loc.inZone, quality: loc.quality,
+          jx: Math.random(), jy: Math.random(),
+        };
+
         if (!doesSwing) {
           const result = isInStrikeZone
             ? { type: 'called_strike', description: '見逃しストライク' }
             : { type: 'ball', description: 'ボール' };
-          return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity }, newStamina };
+          return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc }, newStamina };
         }
 
         // コース適性 + 前球からの揺さぶり（どちらもリーグ平均では±0）
@@ -1385,10 +1394,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               meet: Math.max(1, batter.meet + bz.meet),
               power: Math.max(1, batter.power + bz.power) };
             const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch);
-            return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true }, newStamina };
+            return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true, pitchLoc }, newStamina };
           }
           return {
-            result: { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity },
+            result: { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc },
             newStamina
           };
         }
@@ -1404,7 +1413,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           power: Math.max(1, Math.min(100, batter.power + q.power)) };
         // コースを読み切った場合も球種を読んだのと同じ効果
         const result = determineContactResultPhysics(selectedBall, predictionCorrect || locationRead, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch);
-        return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity) }, newStamina };
+        return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), pitchLoc }, newStamina };
       };
 
       const simulatePitch = () => {
@@ -1670,6 +1679,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             result: result.description,
             pitchType: result.pitchType,
             velocity: result.velocity,
+            // コース表示用。paKey は打席の識別子（打者が変わったら描き直す）
+            pitchLoc: result.pitchLoc,
+            resultType: result.type,
+            paKey: pitchSeqRef.current.key,
             // 打球物理データ（インプレー時のみ）
             exitVelocity: result.exitVelocity,
             launchAngle: result.launchAngle,
@@ -3549,6 +3562,18 @@ if (newOuts === 3) {
                       })()}
                     </div>
                     <div className="text-orange-500 text-xs">km/h</div>
+                  </div>
+
+                  {/* 区切り線 */}
+                  <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
+
+                  {/* 投球コース（この打席の1球ごと。最新球が赤） */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <PitchZonePlot size={56} pitches={(() => {
+                      const key = pitchSeqRef.current.key;
+                      return gameLog.filter(l => l.pitchLoc && l.paKey === key);
+                    })()} />
+                    <PitchZoneLegend />
                   </div>
                 </div>
               </div>
