@@ -100,6 +100,7 @@ export function callPitchTarget({
 export function resolvePitchLocation({
   aim = 'edge', control = 50, catcherDefense = 50,
   batterZone = null, catcherLead = 0,
+  sequence = null, velocity = 145, isBreaking = false,
 } = {}) {
   // 【段階1】5×5=25ゾーンのグリッドで位置を決める（pitchZone.js）。
   // 捕手が狙うセルを決め、投手の制球でそこからのばらつきが決まる。
@@ -113,7 +114,11 @@ export function resolvePitchLocation({
   // zone/edge/chase の配分は動かさないので、ボールになる確率＝四球のコストは増えない。
   const c = clamp(control, 0, 100);
   const cell = resolvePitchCell(
-    pickTargetCell(aim, { profile: batterZone, lead: catcherLead }), c);
+    pickTargetCell(aim, {
+      profile: batterZone, lead: catcherLead,
+      // 【段階4】前球との関係（対角へ動かす／同じ引き出しを続けない）
+      sequence, velocity, isBreaking,
+    }), c);
   let { inZone, quality, col, row } = cell;
 
   // フレーミング: 際どい球の判定が捕手の守備力で動く。基準はリーグ平均の捕手(=50)
@@ -239,6 +244,7 @@ const HORIZONTAL_PITCHES = ['slider', 'shoot', 'cutter', 'twoSeam'];
 export function selectPitchType({
   arsenal = [], catcherLead = 50, form = 'threeQuarter',
   strategy = 'normal', strikes = 0, ballEffects = BALL_EFFECTS,
+  lastWasBreaking = null,
 } = {}) {
   const list = arsenal.length ? arsenal : [{ type: 'straight', level: 50 }];
   const straight = list.find(a => a.type === 'straight') || { type: 'straight', level: 50 };
@@ -248,7 +254,11 @@ export function selectPitchType({
   const strategyBonus = strategy === 'strikeout' ? 0.12 : strategy === 'contact' ? -0.08 : 0;
   // 追い込んだ場面では、リードの高い捕手ほど決め球（変化球）を要求する
   const twoStrikeBonus = strikes >= 2 ? (catcherLead - 50) / 100 * 0.15 : 0;
-  const breakingChance = 0.35 + breaking.length * 0.06 + strategyBonus + twoStrikeBonus;
+  // 【奥行き】速球のあとは変化球、変化球のあとは速球。緩急も配球の1次元。
+  // リードが高いほど意識的に球速帯を入れ替える。リード50では従来どおり動かない。
+  const depthBonus = lastWasBreaking === null ? 0
+    : (lastWasBreaking ? -1 : 1) * ((catcherLead - 50) / 100) * 0.30;
+  const breakingChance = 0.35 + breaking.length * 0.06 + strategyBonus + twoStrikeBonus + depthBonus;
   if (Math.random() >= breakingChance) return straight;
 
   // どの変化球にするか。リードが高いほど「効く球」を選べる

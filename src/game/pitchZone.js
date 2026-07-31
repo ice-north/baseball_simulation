@@ -27,6 +27,8 @@
 // 打者の得手不得手（段階2）と捕手の弱点狙い（段階3）はまだ入っていない。
 // ============================================================
 
+import { sequenceScore } from './pitchSequence.js';
+
 export const GRID_SIZE = 5;
 export const ZONE_MIN = 1;   // ストライクゾーンは col/row とも 1〜3
 export const ZONE_MAX = 3;
@@ -90,6 +92,11 @@ const CHASE_CELLS = [
 // 弱点側が2〜3倍選ばれやすくなる程度に留めてある。
 const TARGET_BETA = 2.2;
 
+// 弱点狙いと配球（対角・散らし）のどちらを重く見るか。
+// 弱点は「この打者に効くコース」、配球は「前球との関係」で、目的が競合する。
+// 良い捕手はこの2つを両立させる形でセルを選ぶ。
+const SEQUENCE_WEIGHT = 1.0;
+
 /**
  * 捕手が要求する目標セルを決める。
  *
@@ -108,7 +115,7 @@ const TARGET_BETA = 2.2;
  */
 export function pickTargetCell(aim, opts = {}) {
   const cells = aim === 'zone' ? ZONE_CELLS : aim === 'chase' ? CHASE_CELLS : ZONE_CORNERS;
-  const { profile, lead = 0 } = opts;
+  const { profile, lead = 0, sequence = null, velocity = 145, isBreaking = false } = opts;
   const t = clamp(lead, 0, 100) / 100;
   // **誘い球(chase)には弱点狙いを掛けない**。
   // 誘い球のセルは「どれも枠のすぐ外」だがストライクになる確率が揃っていない。
@@ -117,16 +124,23 @@ export function pickTargetCell(aim, opts = {}) {
   // 弱点狙いは後者のような角寄りのセルを選びがちなので、狙いの配分を変えていない
   // つもりでも四球が増える。実測で BB/9 が +0.34 悪化し、防御率の利得を食い潰した。
   // 誘い球はそもそも振らせる球で、当てさせない球ではないため除外して問題ない。
-  if (!profile || t <= 0 || aim === 'chase' || (!profile.inside && !profile.low)) {
+  const usesWeakness = profile && aim !== 'chase' && (profile.inside || profile.low);
+  if (t <= 0 || (!usesWeakness && !sequence)) {
     return cells[Math.floor(Math.random() * cells.length)];
   }
-  // 弱点側ほど選ばれやすくする（softmax）。合計は常に1なので狙いの配分は不変
+  // 弱点側ほど、かつ前球から動かせるセルほど選ばれやすくする（softmax）。
+  // 合計は常に1なので狙い(zone/edge/chase)の配分は不変＝四球のコストは出ない。
   let total = 0;
   const w = new Array(cells.length);
   for (let i = 0; i < cells.length; i++) {
-    const weakness = clamp(
-      profile.inside * colAxis(cells[i][0]) + profile.low * rowAxis(cells[i][1]), -1, 1);
-    w[i] = Math.exp(TARGET_BETA * t * weakness);
+    let score = 0;
+    if (usesWeakness) {
+      score += clamp(profile.inside * colAxis(cells[i][0]) + profile.low * rowAxis(cells[i][1]), -1, 1);
+    }
+    // 配球としての良さ（対角へ動かす／同じ引き出しを続けない）。
+    // 誘い球でもコースを散らす意味はあるので、こちらは chase も対象にする。
+    if (sequence) score += sequenceScore(sequence, cells[i], velocity, isBreaking) * SEQUENCE_WEIGHT;
+    w[i] = Math.exp(TARGET_BETA * t * score);
     total += w[i];
   }
   let r = Math.random() * total;

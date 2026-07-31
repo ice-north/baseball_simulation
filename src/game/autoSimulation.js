@@ -6,6 +6,7 @@ import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './batterZone.js';
+import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './pitchSequence.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
@@ -638,7 +639,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   };
 
   // 一球シミュレーション（自己完結型）
-  const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, lastPitch, offenseStrategy, defenseStrategy) => {
+  const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, sequence, offenseStrategy, defenseStrategy) => {
+    // 前球（打席内の配球メモリ。詳細は pitchSequence.js）
+    const lastPitch = lastCall(sequence);
     const battingStrat = offenseStrategy?.batting || 'balanced';
     const pitchingStrat = defenseStrategy?.pitching || 'balanced';
 
@@ -708,6 +711,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       form: pitcherPlayer.pitching?.form || 'threeQuarter',
       strategy: pitchingStrat,
       strikes: count.strikes,
+      // 奥行き: 速球のあとは変化球、変化球のあとは速球（リードが高いほど意識する）
+      lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
     });
 
 
@@ -718,12 +723,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       pitchVelocityFinal = effectiveVelocity - speedReduction;
     }
 
-    // 緩急ペナルティ: 前球と球種が違うと打者のタイミングが狂う（比率ベース）
-    // 遅い投手ほど同じ球速差でも体感の緩急が大きくなる
+    // 緩急ペナルティ: **前球との**球速差で打者のタイミングが狂う（比率ベース）。
+    // 遅い投手ほど同じ球速差でも体感の緩急が大きくなる。
+    // 従来は前球ではなく「その投手のストレート」と比べていたうえ、そもそも
+    // lastPitch が常に null だったため一度も発火していなかった。
     let speedDiffPenalty = 0;
-    if (lastPitch && selectedPitch.type !== lastPitch.type) {
-      const veloDiff = Math.abs(effectiveVelocity - pitchVelocityFinal);
-      const speedDiffRatio = effectiveVelocity > 0 ? veloDiff / effectiveVelocity : 0;
+    if (lastPitch && lastPitch.velocity) {
+      const veloDiff = Math.abs(lastPitch.velocity - pitchVelocityFinal);
+      const speedDiffRatio = veloDiff / Math.max(lastPitch.velocity, pitchVelocityFinal);
       speedDiffPenalty = speedDiffRatio * 22;
     }
 
@@ -748,7 +755,22 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       // 捕手は打者の弱点コースを要求する（狙いの配分は変えない）
       batterZone: batter.zone,
       catcherLead: catcherPlayer?.catching?.lead ?? 50,
+      // 前球との関係（対角へ動かす／同じ引き出しを続けない）
+      sequence, velocity: pitchVelocityFinal, isBreaking,
     });
+
+    // 揺さぶれた球は打ちにくく、同じ所へ続けた球は打たれやすい（リーグ平均で±0）
+    const shift = sequenceShift(lastPitch,
+      { col: loc.col, row: loc.row, velocity: pitchVelocityFinal });
+    const shiftMeet = shiftMeetAdjust(shift);
+    // 同じ引き出しが続くと打者に読まれる。的中の効果は球種の読みと同じ
+    const locationRead = Math.random()
+      < locationReadChance(sequence, loc.col, loc.row, isBreaking, batter.eye);
+    pushCall(sequence, {
+      col: loc.col, row: loc.row, isBreaking,
+      velocity: pitchVelocityFinal, type: selectedPitch.type,
+    });
+
     const swung = decideSwing({
       inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,
       pitcherControl: effectiveControl, isBreaking, breakingLevel: selectedPitch.level || 50,
@@ -778,6 +800,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50 },
         effBatter,
         // 打者の狙い球。的中するとタイミング窓が1.3倍になる（simulation-logic.js）。
+        // コースを読み切った場合も同じ効果（新しい物理係数を増やさない）。
+        locationRead ||
         // 従来はここが 0.3/0.2 の固定値で、捕手のリードも球種数も無視していた。
         Math.random() < guessSuccessRate({
           catcherLead: catcherPlayer?.catching?.lead ?? 50,
@@ -844,7 +868,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
     // コース適性: 苦手なコースに来るとミート・パワーが落ちる（得意なら上がる）。
     // 母集団の平均は0なのでリーグ成績は動かず、打者ごとの差だけが出る。
-    const matchup = getZoneMatchupEffect(loc, batter.zone);
+    // コース適性 + 前球からの揺さぶり（どちらもリーグ平均では±0）
+    const matchup = combineBatterEffects(
+      getZoneMatchupEffect(loc, batter.zone),
+      { meet: shiftMeet, power: shiftMeet * 0.6 });
 
     if (loc.inZone) {
       if (!swung) return { type: 'called_strike' };
@@ -1660,7 +1687,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     let atBatOver = false;
     let pitchCount = 0;
     const maxPitches = 20;
-    let lastPitch = null;
+    // 打席ごとの配球メモリ（前球の位置・球速・引き出し）。pitchSequence.js
+    const sequence = createSequence();
     gameState._stolenAttempted = false;
     let atBatDamagePoints = 0; // この打席で先発に蓄積するダメージポイント
 
@@ -1806,11 +1834,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       const defenseStrategy = (gameState.isTopInning ? gameState.homeTeam : gameState.awayTeam).strategy;
 
       // 一球シミュレーション（simulation-logic.jsの物理エンジンを使用）
-      const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, lastPitch, offenseStrategy, defenseStrategy);
-      // 次回のトンネリング効果のために今回の投球を記録
-      if (result.lastPitch) {
-        lastPitch = result.lastPitch;
-      }
+      // 前球の記録は simulateOnePitch 内で sequence に積まれる（緩急・対角の判定に使う）
+      const result = simulateOnePitch(batter, pitcher, catcher, defense, gameState.count, pitcherStamina, gameState.bases, sequence, offenseStrategy, defenseStrategy);
 
       // スタミナ減少
       pitcherData.currentStamina = Math.max(0, pitcherData.currentStamina - 1);

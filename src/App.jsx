@@ -31,6 +31,7 @@ import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate } from './game/pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './game/batterZone.js';
+import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -394,6 +395,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       } = strategy;
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
       const outOccurredRef = React.useRef(false); // アウト発生フラグ
+      // 打席ごとの配球メモリ（前球の位置・球速・引き出し）。自動シミュレーションと同じ
+      // モデルを共有する（src/game/pitchSequence.js）。打者が変わったら作り直す。
+      const pitchSeqRef = React.useRef({ key: null, seq: createSequence() });
 
       // --- 自責点（防御率）判定用 ---
       // 采配モードの bases は boolean 配列で走者を識別できないため、
@@ -1243,7 +1247,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       };
 
       // 共通投球シミュレーション関数（通常試合・自動シミュレーション共用）
-      const simulateSinglePitch = (batter, pitcher, catcher, defense, count, currentStamina, lastPitch = null) => {
+      const simulateSinglePitch = (batter, pitcher, catcher, defense, count, currentStamina, sequence = null) => {
+        // 前球（打席内の配球メモリ。自動シミュレーションと共有 / pitchSequence.js）
+        const lastPitch = lastCall(sequence);
         // スタミナを1減らす
         const newStamina = Math.max(0, currentStamina - 1);
 
@@ -1277,6 +1283,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             form: pitcher.form || 'threeQuarter',
             strikes: safeCount.strikes,
             ballEffects,
+            // 奥行き: 速球のあとは変化球、変化球のあとは速球
+            lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
           });
           pitchChoice = Math.max(0, pitcher.pitches.indexOf(chosen));
         }
@@ -1307,12 +1315,31 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           catcherLead: catcher.lead ?? 50,
           pitcherControl: effectiveControl,
         });
+        // 投球フォームの効果を適用（球速は配球の「奥行き」に使うので位置決定より前に出す）
+        const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
+        let baseVelocity = Math.round(pitcher.velocity * (pitchingFormEffect.velocityMult || 1.0)) + velocityPenalty;
+        baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
+        const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
+
         const loc = resolvePitchLocation({
           aim, control: effectiveControl, catcherDefense: catcher.defense ?? 50,
           // 捕手は打者の弱点コースを要求する（狙いの配分は変えない）
           batterZone: batter.zone, catcherLead: catcher.lead ?? 50,
+          // 前球との関係（対角へ動かす／同じ引き出しを続けない）
+          sequence, velocity: actualVelocity, isBreaking: isBreakingPitch,
         });
         const isInStrikeZone = loc.inZone;
+
+        // 揺さぶれた球は打ちにくく、同じ所へ続けた球は打たれやすい（リーグ平均で±0）
+        const shiftMeet = shiftMeetAdjust(sequenceShift(lastPitch,
+          { col: loc.col, row: loc.row, velocity: actualVelocity }));
+        // 同じ引き出しが続くと打者に読まれる（効果は球種の読みと同じ）
+        const locationRead = Math.random()
+          < locationReadChance(sequence, loc.col, loc.row, isBreakingPitch, batter.eye);
+        pushCall(sequence, {
+          col: loc.col, row: loc.row, isBreaking: isBreakingPitch,
+          velocity: actualVelocity, type: selectedBall.type,
+        });
         let swingProb = swingProbability({
           inZone: loc.inZone, quality: loc.quality, strikes: safeCount.strikes,
           batterEye: batter.eye, pitcherControl: effectiveControl,
@@ -1336,12 +1363,6 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
         const pitchTypeName = ballEffects[selectedBall.type].name;
 
-        // 投球フォームの効果を適用
-        const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
-        let baseVelocity = Math.round(pitcher.velocity * (pitchingFormEffect.velocityMult || 1.0)) + velocityPenalty;
-        baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
-        const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
-
         if (!doesSwing) {
           const result = isInStrikeZone
             ? { type: 'called_strike', description: '見逃しストライク' }
@@ -1349,8 +1370,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity }, newStamina };
         }
 
-        // コース適性: 苦手コースならミート・パワーが落ちる（得意なら上がる）
-        const zoneMatchup = getZoneMatchupEffect(loc, batter.zone);
+        // コース適性 + 前球からの揺さぶり（どちらもリーグ平均では±0）
+        const zoneMatchup = combineBatterEffects(
+          getZoneMatchupEffect(loc, batter.zone),
+          { meet: shiftMeet, power: shiftMeet * 0.6 });
 
         if (!isInStrikeZone) {
           // ボール球でもバットに当たる（引っ掛けゴロ、泳いでフライ等）。
@@ -1379,7 +1402,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const zoneBatter = { ...batter,
           meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
           power: Math.max(1, Math.min(100, batter.power + q.power)) };
-        const result = determineContactResultPhysics(selectedBall, predictionCorrect, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch);
+        // コースを読み切った場合も球種を読んだのと同じ効果
+        const result = determineContactResultPhysics(selectedBall, predictionCorrect || locationRead, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch);
         return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity) }, newStamina };
       };
 
@@ -1444,11 +1468,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           };
         });
 
-        // 前球情報を取得
-        const lastPitch = gameLog.length > 0 ? gameLog[gameLog.length - 1] : null;
+        // 打席ごとの配球メモリ。打者が変わったらリセットする
+        const seqKey = `${currentBatter.id}-${currentBatter.name}`;
+        if (pitchSeqRef.current.key !== seqKey) {
+          pitchSeqRef.current = { key: seqKey, seq: createSequence() };
+        }
 
         // 共通関数を呼び出し
-        const { result, newStamina } = simulateSinglePitch(batter, pitcher, catcher, defense, count, currentStamina, lastPitch);
+        const { result, newStamina } = simulateSinglePitch(batter, pitcher, catcher, defense, count, currentStamina, pitchSeqRef.current.seq);
 
         // スタミナを更新
         setCurrentStamina(newStamina);
