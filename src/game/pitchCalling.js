@@ -163,7 +163,7 @@ export function resolvePitchLocation({
  */
 export function swingProbability({
   inZone, quality, strikes = 0, batterEye = 50, pitcherControl = 50,
-  isBreaking = false, breakingLevel = 50,
+  isBreaking = false, breakingLevel = 50, zoneWeakness = 0,
 } = {}) {
   let p;
   if (inZone) {
@@ -182,8 +182,20 @@ export function swingProbability({
     // 明らかなボール球。よほど選球眼が悪くないと振らない
     p = 0.11 - batterEye * 0.0009 + strikes * 0.04;
   }
+  // 【打者は自分の得意コースをより振る】
+  // 「得意コースは強く打てる」(段階2)はあったのに「得意コースだから振る」が無く、
+  // 打者はどのコースにも同じ確率でバットを出していた。
+  // 実データでは打者のホットゾーンのスイング率はコールドゾーンより約10pt高い。
+  // weakness は -1(得意) 〜 +1(苦手)。母集団の平均は0なのでリーグ成績は動かない。
+  p *= 1 - clamp(zoneWeakness, -1, 1) * SWING_ZONE_W;
+
   return clamp(p, 0.02, 0.97);
 }
+
+// 得意/苦手コースでスイング率をどれだけ動かすか。
+// 0.20 で ホットゾーン ×1.20 / コールドゾーン ×0.80。
+// 基準スイング率が約50%なので、両端の差が実データの約10ptに相当する。
+const SWING_ZONE_W = 0.20;
 
 /**
  * 打者がスイングするかを判定する（自動シミュレーション用のbool版）。

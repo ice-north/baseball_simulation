@@ -5,7 +5,7 @@ import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVE
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
-import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './batterZone.js';
+import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './pitchSequence.js';
 import { decidePitchObjective } from './pitchSituation.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
@@ -780,7 +780,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const aiGuess = resolveAiBatterGuess({
       type: getBatterType(batterPlayer), player: batterPlayer,
       balls: count.balls, strikes: count.strikes,
-      isBreaking, col: loc.col,
+      isBreaking, col: loc.col, sequence, batterEye: batter.eye,
       guessRight: Math.random() < guessSuccessRate({
         catcherLead: catcherPlayer?.catching?.lead ?? 50,
         arsenalSize: arsenal.length, batterEye: batter.eye,
@@ -795,6 +795,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const swung = decideSwing({
       inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,
       pitcherControl: effectiveControl, isBreaking, breakingLevel: selectedPitch.level || 50,
+      // 打者は自分の得意コースをより振る
+      zoneWeakness: zoneWeaknessAt(loc, batter.zone),
       // B型は張っていないコースを見送る
       approachMult: aiGuess.swingMult ?? 1,
     });

@@ -78,8 +78,34 @@ const B_ATTACK = 1.12;  // 張った側を振る確率の倍率
  *   dirBias   C型が決めた打球方向（-1=流し / +1=引っ張り / 0=なし）
  *   swingMult スイング確率の倍率（B型が張っていない側を見送る）
  */
+/**
+ * B型・C型が「どちら側を待つか」を打席の頭で決める。
+ *
+ * 【得意な側で待つだけでは弱い】
+ * 捕手は弱点を突いてくるので、得意な側で待ち続けると**構造的に常に逆を向く**。
+ * B型の効果が +0.007 と小さかった根本原因がこれ。
+ * 現実の打者は「来る球」を読んで待つ側を切り替える。
+ *
+ * 選球眼が高いほど「捕手が突いてくる側（＝自分の弱点側）」を読み当てる。
+ * 弱点側で待って来れば、弱点の打撃補正は受けたままでも準備は出来ている
+ * （「分かっていれば打てる」）。
+ *
+ * **打席ごとに1回だけ決める**。1球ごとに引き直すと、打者が毎球
+ * 気を変えていることになって不自然（配球メモリ `sequence` に保持する）。
+ */
+export function chooseWaitSide(sequence, player, batterEye = 50) {
+  if (sequence && sequence.waitSide !== undefined) return sequence.waitSide;
+  const profile = getZoneProfile(player);
+  const strong = (profile.inside ?? 0) > 0 ? -1 : 1;   // 内角に弱ければ外角が得意
+  const readRate = Math.max(0.10, Math.min(0.70, 0.30 + (batterEye - 50) / 100 * 0.5));
+  const side = Math.random() < readRate ? -strong : strong;
+  if (sequence) sequence.waitSide = side;
+  return side;
+}
+
 export function resolveAiBatterGuess({
   type, player, balls = 0, strikes = 0, isBreaking = false, col = 2, guessRight = false,
+  sequence = null, batterEye = 50,
 } = {}) {
   if (type === 'A') {
     // 直球に重点を置きつつ変化球にも対応する。**外し（負の値）が無いのが理想型**。
@@ -97,10 +123,8 @@ export function resolveAiBatterGuess({
     return { level: guessRight ? 2 : -1, dirBias: 0, swingMult: 1 };
   }
 
-  // B型・C型は「コース」を張る。**待つのは自分の得意な側**。
-  // 得意な側で待つので、捕手が弱点を突いてくるほど裏をかかれる形になる。
-  const profile = getZoneProfile(player);
-  const wait = (profile.inside ?? 0) > 0 ? -1 : 1;   // 内角に弱ければ外角を待つ
+  // B型・C型は「コース」を張る。待つ側は打席の頭で決め、その打席は変えない。
+  const wait = chooseWaitSide(sequence, player, batterEye);
   const b = band(col);
   const hit = b === wait;
   const missed = b === -wait;

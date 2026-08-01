@@ -130,15 +130,23 @@ const POWER_SWING = 10;
  * @param {{inside:number,low:number}} profile getZoneProfile の戻り値
  */
 export function getZoneMatchupEffect(loc, profile) {
-  if (!loc || !profile) return { meet: 0, power: 0 };
-  const { inside = 0, low = 0 } = profile;
-  if (inside === 0 && low === 0) return { meet: 0, power: 0 };
-  // 内外角と高低は足し合わせる。内角低めが弱点なら両方効いて最も苦手になる
-  const weakness = clamp(inside * colAxis(loc.col) + low * rowAxis(loc.row), -1, 1);
+  const weakness = zoneWeaknessAt(loc, profile);
+  if (!weakness) return { meet: 0, power: 0 };
   return {
     meet: -weakness * MEET_SWING,
     power: -weakness * POWER_SWING,
   };
+}
+
+/**
+ * そのセルが打者にとってどれだけ苦手か（-1=得意 〜 +1=苦手）。
+ * 打撃補正（getZoneMatchupEffect）とスイング判断の両方から使う。
+ */
+export function zoneWeaknessAt(loc, profile) {
+  if (!loc || !profile) return 0;
+  const { inside = 0, low = 0 } = profile;
+  if (!inside && !low) return 0;
+  return clamp(inside * colAxis(loc.col) + low * rowAxis(loc.row), -1, 1);
 }
 
 /** 位置の質による補正とコース適性による補正を合算する */

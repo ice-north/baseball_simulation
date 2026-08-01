@@ -31,7 +31,7 @@ import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
 import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
-import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './game/batterZone.js';
+import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './game/batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
 import PitchZonePlot, { PitchZoneLegend } from './components/PitchZonePlot.jsx';
@@ -1364,6 +1364,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           type: getBatterType(currentBatter), player: currentBatter,
           balls: safeCount.balls, strikes: safeCount.strikes,
           isBreaking: isBreakingPitch, col: loc.col, guessRight: predictionCorrect,
+          sequence, batterEye: batter.eye,
         });
         // プレイヤーが張った次元はAIの読みを使わない
         const anyCommit = gType !== 'auto' || gZone !== 'auto';
@@ -1379,6 +1380,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           inZone: loc.inZone, quality: loc.quality, strikes: safeCount.strikes,
           batterEye: batter.eye, pitcherControl: effectiveControl,
           isBreaking: isBreakingPitch, breakingLevel: selectedBall.level || 50,
+          // 打者は自分の得意コースをより振る
+          zoneWeakness: zoneWeaknessAt(loc, batter.zone),
         });
         // 捕手のリードは打者の狙いを外す（スイング判断を鈍らせる）
         swingProb *= 1 - (catcher.lead / 100) * 0.08;
