@@ -29,7 +29,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
-import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate } from './game/pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './game/batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
@@ -393,6 +393,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex,
         triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
         battingApproachRef, defenseShiftRef, pitchAimRef, pitchTypeIndexRef,
+        batGuessType, batGuessZone, setBatGuessType, setBatGuessZone,
+        batGuessTypeRef, batGuessZoneRef,
         forceStealRef, forceSwingRef, intentionalWalkRef,
       } = strategy;
       const [simMode, setSimMode] = useState(null); // 'out' | 'end' | null
@@ -1345,6 +1347,20 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 打者の狙い球（コース）。捕手の要求の偏りと引き出しの繰り返しで読む
         const locationRead = Math.random()
           < locationReadChance(sequence, loc.col, loc.row, isBreakingPitch, batter.eye, loc.readSignal);
+
+        // 采配: 自チームの攻撃中はプレイヤーが狙い球を張れる。
+        // 張った次元はAIの読み合いを置き換える（当たれば+1 / 外せば-1）。
+        const userIsBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
+        const gType = userIsBatting ? batGuessTypeRef.current : 'auto';
+        const gZone = userIsBatting ? batGuessZoneRef.current : 'auto';
+        const committed = gType !== 'auto' || gZone !== 'auto';
+        const guess = committed
+          ? resolveBatterGuess(gType, gZone, { isBreaking: isBreakingPitch, col: loc.col, row: loc.row })
+          : { delta: 0 };
+        // 張っていない次元だけAIの読みを足す
+        const aiType = gType === 'auto' && predictionCorrect ? 1 : 0;
+        const aiZone = gZone === 'auto' && locationRead ? 1 : 0;
+        const guessLevel = Math.max(-2, Math.min(2, guess.delta + aiType + aiZone));
         pushCall(sequence, {
           col: loc.col, row: loc.row, isBreaking: isBreakingPitch,
           velocity: actualVelocity, type: selectedBall.type,
@@ -1403,7 +1419,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             const weakBatter = { ...batter,
               meet: Math.max(1, batter.meet + bz.meet),
               power: Math.max(1, batter.power + bz.power) };
-            const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch, loc);
+            const result = determineContactResultPhysics(selectedBall, guessLevel, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch, loc);
             return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true, pitchLoc }, newStamina };
           }
           return {
@@ -1422,7 +1438,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
           power: Math.max(1, Math.min(100, batter.power + q.power)) };
         // コースを読み切った場合も球種を読んだのと同じ効果
-        const result = determineContactResultPhysics(selectedBall, (predictionCorrect ? 1 : 0) + (locationRead ? 1 : 0), 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch, loc);
+        const result = determineContactResultPhysics(selectedBall, guessLevel, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch, loc);
         return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), pitchLoc }, newStamina };
       };
 
@@ -3702,6 +3718,42 @@ if (newOuts === 3) {
                           {label}
                         </button>
                       ))}
+                    </div>
+                  );
+                })()}
+                {/* 狙い球（攻撃時）: 球種とコースを張る。当たれば準備万端、外せば体が動く */}
+                {(() => {
+                  const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
+                  const dim = isUserBatting ? '' : 'opacity-40';
+                  const btn = (active, color) => `px-2 py-1 rounded text-xs font-bold transition ${
+                    active ? `${color} text-white` : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${dim}`;
+                  const on = batGuessType !== 'auto' || batGuessZone !== 'auto';
+                  return (
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap mb-2">
+                      <span className={`text-xs ${isUserBatting ? 'text-cyan-300' : 'text-gray-600'}`}>狙い球</span>
+                      <button onClick={() => setBatGuessType('auto')} disabled={!isUserBatting || gameOver}
+                        title="球種は張らない（打者の読みはAIに任せる）"
+                        className={btn(batGuessType === 'auto', 'bg-cyan-700')}>おまかせ</button>
+                      {['straight', 'breaking'].map(v => (
+                        <button key={v} onClick={() => setBatGuessType(v)} disabled={!isUserBatting || gameOver}
+                          title={`${GUESS_TYPE_LABEL[v]}に張る。来れば強く振れるが、違えば対応が遅れる`}
+                          className={btn(batGuessType === v, 'bg-cyan-700')}>{GUESS_TYPE_LABEL[v]}</button>
+                      ))}
+                      <span className="text-xs text-gray-600">｜</span>
+                      <span className={`text-xs ${isUserBatting ? 'text-cyan-300' : 'text-gray-600'}`}>コース</span>
+                      <button onClick={() => setBatGuessZone('auto')} disabled={!isUserBatting || gameOver}
+                        title="コースは張らない" className={btn(batGuessZone === 'auto', 'bg-teal-700')}>おまかせ</button>
+                      {['in', 'out', 'high', 'low'].map(v => (
+                        <button key={v} onClick={() => setBatGuessZone(v)} disabled={!isUserBatting || gameOver}
+                          title={`${GUESS_ZONE_LABEL[v]}に張る。その半面に来れば読み切れる`}
+                          className={btn(batGuessZone === v, 'bg-teal-700')}>{GUESS_ZONE_LABEL[v]}</button>
+                      ))}
+                      {on && isUserBatting && (
+                        <span className="text-xs px-2 py-1 rounded bg-amber-900 text-amber-200"
+                          title="張った次元が当たれば読み、外せば対応が遅れる。両方当てるとタイミング窓が1.5倍">
+                          ヤマ張り中
+                        </span>
+                      )}
                     </div>
                   );
                 })()}

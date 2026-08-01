@@ -215,6 +215,62 @@ export function getPitchQualityEffect(quality) {
   return { meet: 0, power: 0 };
 }
 
+// ============================================================
+// 打者の狙い球（プレイヤーが張る場合） - 采配モード専用
+// ============================================================
+
+export const GUESS_TYPE_LABEL = { straight: '直球', breaking: '変化球' };
+export const GUESS_ZONE_LABEL = { in: '内角', out: '外角', high: '高め', low: '低め' };
+
+// 張っていた通りに来たとき、実際に「読み切れた」ことにする確率。
+// 1.0 にしてはいけない。プレイヤーが半面に張るだけで全球読み切れてしまい、
+// 内外角のどちらかに張り続けるのが常に得になる。
+const COMMIT_HIT = 0.86;
+
+/**
+ * プレイヤーが張った狙い球の結果を、読みレベルの増減に変換する。
+ *
+ * 【設計】張るのは**賭け**であること。当たれば準備ができている（+1）、
+ * 外せば張った方に体が動いていて対応が遅れる（-1）。
+ * `おまかせ` は従来どおり捕手との読み合いをAIに任せる（0）。
+ *
+ * コースは「半面」で張る。5×5のセルを指定させるのは操作として重すぎるし、
+ * 打者の実際の意識も「外角を待つ」という粒度だから。
+ *
+ * @param {'auto'|'straight'|'breaking'} typeGuess
+ * @param {'auto'|'in'|'out'|'high'|'low'} zoneGuess
+ * @param {{isBreaking:boolean, col:number, row:number}} pitch
+ * @returns {{delta:number, typeHit:boolean|null, zoneHit:boolean|null}}
+ */
+export function resolveBatterGuess(typeGuess, zoneGuess, { isBreaking, col, row }) {
+  let delta = 0, typeHit = null, zoneHit = null;
+
+  if (typeGuess === 'straight' || typeGuess === 'breaking') {
+    typeHit = (typeGuess === 'breaking') === !!isBreaking;
+    if (typeHit) { if (Math.random() < COMMIT_HIT) delta += 1; }
+    else delta -= 1;
+  }
+
+  if (zoneGuess && zoneGuess !== 'auto') {
+    // 帯（外/中/内・高/中/低）で判定する。
+    // **真ん中に来た球は中立**（当たりでも外れでもない）。ここを外れ扱いにすると、
+    // 3分割なので正解の側に張っても期待値が負になり、機能として使う理由が無くなる
+    // （実測: 捕手が内角を狙ってくる場面で「内角に張る」が OPS -0.013）。
+    // 内角に張って真ん中に来ても致命傷ではない、という実感とも合う。
+    const cb = col <= 1 ? 'out' : col === 2 ? 'mid' : 'in';
+    const rb = row <= 1 ? 'high' : row === 2 ? 'mid' : 'low';
+    const axisBand = (zoneGuess === 'in' || zoneGuess === 'out') ? cb : rb;
+    if (axisBand === 'mid') zoneHit = null;
+    else {
+      zoneHit = zoneGuess === axisBand;
+      if (zoneHit) { if (Math.random() < COMMIT_HIT) delta += 1; }
+      else delta -= 1;
+    }
+  }
+
+  return { delta, typeHit, zoneHit };
+}
+
 /**
  * 高さと球種の相性。**空振りを取れる高さは球種で逆になる**。
  *

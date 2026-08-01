@@ -34,10 +34,16 @@ export function useGameStrategy() {
   const [pitchAim,       _setPitchAim]         = useState('auto');    // 'auto' | 'zone' | 'edge' | 'chase'
   // 球種指定: 'auto' は捕手のリードに任せる（従来動作）。それ以外は arsenal の index
   const [pitchTypeIndex, _setPitchTypeIndex]   = useState('auto');
+  // 打者の狙い球（攻撃時）。'auto' は従来どおり捕手との読み合いをAIに任せる。
+  // 張った場合は賭けになる: 当たれば準備完了、外せば体が動いて対応が遅れる。
+  const [batGuessType, _setBatGuessType]       = useState('auto');    // 'auto' | 'straight' | 'breaking'
+  const [batGuessZone, _setBatGuessZone]       = useState('auto');    // 'auto' | 'in' | 'out' | 'high' | 'low'
   const battingApproachRef = useRef('normal');
   const defenseShiftRef    = useRef('normal');
   const pitchAimRef        = useRef('auto');
   const pitchTypeIndexRef  = useRef('auto');
+  const batGuessTypeRef    = useRef('auto');
+  const batGuessZoneRef    = useRef('auto');
 
   // ワンショット指示（次の1球で消費）— stateにする必要はなく ref のみ
   const forceStealRef      = useRef(false); // 盗塁指示
@@ -60,6 +66,14 @@ export function useGameStrategy() {
   const setPitchTypeIndex = useCallback((v) => {
     _setPitchTypeIndex(v);
     pitchTypeIndexRef.current = v;
+  }, []);
+  const setBatGuessType = useCallback((v) => {
+    _setBatGuessType(v);
+    batGuessTypeRef.current = v;
+  }, []);
+  const setBatGuessZone = useCallback((v) => {
+    _setBatGuessZone(v);
+    batGuessZoneRef.current = v;
   }, []);
 
   // 攻撃側ワンショット指示: 呼び出し側から throwPitch を渡してもらい、
@@ -85,6 +99,8 @@ export function useGameStrategy() {
     defenseShift:    defenseShiftRef.current,
     pitchAim:        pitchAimRef.current,
     pitchTypeIndex:  pitchTypeIndexRef.current,
+    batGuessType:    batGuessTypeRef.current,
+    batGuessZone:    batGuessZoneRef.current,
     forceSteal:      forceStealRef.current,
     forceSwing:      forceSwingRef.current,
     intentionalWalk: intentionalWalkRef.current,
@@ -103,17 +119,23 @@ export function useGameStrategy() {
     setDefenseShift('normal');
     setPitchAim('auto');
     setPitchTypeIndex('auto');
-  }, [setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex]);
+    setBatGuessType('auto');
+    setBatGuessZone('auto');
+  }, [setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex,
+      setBatGuessType, setBatGuessZone]);
 
   return {
     // UI 表示用の state
     battingApproach, defenseShift, pitchAim, pitchTypeIndex,
+    batGuessType, batGuessZone,
     // UI からの設定変更
     setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex,
+    setBatGuessType, setBatGuessZone,
     // ワンショット指示（ボタンから呼ぶ）
     triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
     // 投球ロジック用の ref（simulateSinglePitch などが直接参照）
     battingApproachRef, defenseShiftRef, pitchAimRef, pitchTypeIndexRef,
+    batGuessTypeRef, batGuessZoneRef,
     forceStealRef, forceSwingRef, intentionalWalkRef,
     // 1球ライフサイクル
     snapshot, consumeOneShot,

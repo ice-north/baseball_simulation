@@ -41,10 +41,13 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
 
   // 読みが当たれば窓が広がる（準備ができている）。
   // **球種とコースの両方を張り当てると別格**（1つ=×1.30 / 両方=×1.50）。
+  // 采配モードでプレイヤーが張って外した場合は負の値が来る（×0.84）。
   // 旧来の boolean もそのまま「1つ的中」として動く。
   const guessLevel = isGuessRight === true ? 1 : (Number(isGuessRight) || 0);
   if (guessLevel >= 2) timingWindow *= 1.50;
   else if (guessLevel >= 1) timingWindow *= 1.30;
+  else if (guessLevel <= -2) timingWindow *= 0.72;   // 球種もコースも張り外し
+  else if (guessLevel <= -1) timingWindow *= 0.84;   // どちらかを張り外し
 
   // ミート力による「緩急・変化球への耐性」
   // ミートが高い打者はタイミングを外されにくい（最大50%軽減）
