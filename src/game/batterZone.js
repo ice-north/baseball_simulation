@@ -67,19 +67,47 @@ const cache = new WeakMap();
  * @param {Object} player 選手オブジェクト
  * @returns {{inside:number, low:number}} それぞれ -1〜+1
  */
+// ミートとパワーのバランスから来る内外角の得手不得手。
+//
+//   パワーが無い技巧派 … 内角を捌けない（詰まる）
+//   ミートが無い長距離砲 … 外角を捉えられない（泳ぐ・引っ掛ける）
+//
+// これが無いと、内角は「引っ張り方向に飛ばす球」でしかなくなり、
+// パワー35の打者でも引っ張りの飛距離ボーナスを受け取ってしまう。
+// 実測（ミート75/パワー35の打者）で**内角の方が長打になっていた**
+// （塁打/打球 0.451 対 外角0.394、本塁打 1.69% 対 0.50%）。
+// 現実の「技巧派は内角で詰まらせる」と逆で、打者のタイプに関わらず
+// 「常に外角が正解」になり、内外角の使い分けが成立していなかった。
+//
+// 先天的な得手不得手（ハッシュ由来 σ0.337）と同じ `inside` に足し込むので、
+// 段階2の打撃補正・段階3の捕手の弱点狙い・選手詳細のヒートマップに
+// 追加の配線なしで全部反映される。
+// **中心は「平均的な打者」に合わせる**。生成される野手はミートがパワーより
+// 平均で11ほど高いので、素の (meet - power) を使うとリーグ全員が
+// 「内角に弱い」側に寄ってしまう（実測 平均+0.108）。実データの打者は
+// 平均するとむしろ外角が苦手なので、向きとしても逆になる。
+// ここは絶対値ではなく**打者間の相対差**を表す項なので、平均を引く。
+const TENDENCY_W = 1.0;
+const TENDENCY_MID = 10;
+const tendencyInside = (b) =>
+  b ? (((b.meet ?? 50) - (b.power ?? 50)) - TENDENCY_MID) / 100 * TENDENCY_W : 0;
+
 export function getZoneProfile(player) {
   if (!player) return NEUTRAL_ZONE_PROFILE;
   // 明示的に持っていればそれを優先する（将来の成長・矯正や検証用の差し替え）
   if (player.zoneProfile) return player.zoneProfile;
+  const b = player.batting;
   const hit = cache.get(player);
-  if (hit) return hit;
+  // 成長でミート・パワーが動いたら作り直す（キャッシュが古くなるため）
+  if (hit && hit.m === (b?.meet ?? -1) && hit.p === (b?.power ?? -1)) return hit.profile;
   // IDはチーム内でしか一意でない（players.js は 1〜9）ので名前と混ぜる
   const key = `${player.name || ''}#${player.id ?? 0}`;
+  const r2 = (v) => Math.round(clamp(v, -1, 1) * 100) / 100;
   const profile = {
-    inside: Math.round(bell(key, 0x01000193) * 100) / 100,
-    low: Math.round(bell(key, 0x7feb352d) * 100) / 100,
+    inside: r2(bell(key, 0x01000193) + tendencyInside(b)),
+    low: r2(bell(key, 0x7feb352d)),
   };
-  cache.set(player, profile);
+  cache.set(player, { profile, m: b?.meet ?? -1, p: b?.power ?? -1 });
   return profile;
 }
 
