@@ -4,10 +4,11 @@ import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty 
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
-import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate, batterCommitRate } from './pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './pitchSequence.js';
 import { decidePitchObjective } from './pitchSituation.js';
+import { getBatterType, resolveAiBatterGuess } from './batterType.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
@@ -774,6 +775,18 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // 打者の狙い球（コース）。捕手の要求の偏りと、同じ引き出しの繰り返しで読む
     const locationRead = Math.random()
       < locationReadChance(sequence, loc.col, loc.row, isBreaking, batter.eye, loc.readSignal);
+
+    // 打者の型（野村の4分類）ごとの狙い方。batterType.js
+    const aiGuess = resolveAiBatterGuess({
+      type: getBatterType(batterPlayer), player: batterPlayer,
+      balls: count.balls, strikes: count.strikes,
+      isBreaking, col: loc.col,
+      guessRight: Math.random() < guessSuccessRate({
+        catcherLead: catcherPlayer?.catching?.lead ?? 50,
+        arsenalSize: arsenal.length, batterEye: batter.eye,
+      }),
+    });
+    const guessLevel = Math.max(-2, Math.min(2, aiGuess.level + (locationRead ? 1 : 0)));
     pushCall(sequence, {
       col: loc.col, row: loc.row, isBreaking,
       velocity: pitchVelocityFinal, type: selectedPitch.type,
@@ -791,6 +804,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         ...batter,
         meet: Math.max(1, Math.min(100, batter.meet + (mod?.meet || 0))),
         power: Math.max(1, Math.min(100, batter.power + (mod?.power || 0))),
+        // C型（方向決定型）が決めた打球方向
+        dirBias: aiGuess.dirBias,
       };
       const pitchData = {
         type: selectedPitch.type,
@@ -810,16 +825,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         // 打者の狙い球。球種とコースを別々に張り、当たった数で効果が変わる
         // （1つ=タイミング窓×1.30 / 両方=×1.50。simulation-logic.js）。
         // 従来は球種だけで、しかも 0.3/0.2 の固定値だった。
-        (() => {
-          const right = Math.random() < guessSuccessRate({
-            catcherLead: catcherPlayer?.catching?.lead ?? 50,
-            arsenalSize: arsenal.length, batterEye: batter.eye });
-          // ヤマを張った打席では当たれば大きく、外せば代償を払う。
-          // これが無いと良い捕手は「読ませない」ことしかできない
-          const commit = Math.random() < batterCommitRate(count);
-          const typeTerm = commit ? (right ? 2 : -1) : (right ? 1 : 0);
-          return Math.max(-2, Math.min(2, typeTerm + (locationRead ? 1 : 0)));
-        })(),
+        guessLevel,
         pitchData,
         tunnelingEffect,
         handEffect

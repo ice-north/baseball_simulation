@@ -7,6 +7,7 @@ import { buildPlayerStory, fameLabel } from './playerStory.js';
 import AbilityHistoryChart from './AbilityHistoryChart.jsx';
 import PotentialBadge from './PotentialBadge.jsx';
 import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
+import { getBatterType, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from '../game/batterType.js';
 
 // コース適性のヒートマップ（5×5）。内側の3×3がストライクゾーン。
 // 色はパワプロ等と同じ慣習で 赤=得意（ホットゾーン） / 青=苦手（コールドゾーン）。
@@ -24,6 +25,18 @@ const ZoneHeatGrid = ({ player }) => {
         コース適性
         <span className="ml-2 text-xs font-normal text-gray-300">赤=得意 / 青=苦手</span>
       </h3>
+      {/* 打者の型（野村の4分類）。能力から決まり、狙い方が変わる */}
+      {(() => {
+        const t = getBatterType(player);
+        const color = { A: 'bg-red-900 text-red-200', B: 'bg-sky-900 text-sky-200',
+          C: 'bg-amber-900 text-amber-200', D: 'bg-emerald-900 text-emerald-200' }[t];
+        return (
+          <div className="mb-2">
+            <span className={`text-xs px-2 py-1 rounded font-bold ${color}`}>{BATTER_TYPE_LABEL[t]}</span>
+            <div className="text-xs text-gray-300 mt-1">{BATTER_TYPE_NOTE[t]}</div>
+          </div>
+        );
+      })()}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-1">
           <div className="flex flex-col justify-between text-xs text-gray-300 h-24 py-0.5">

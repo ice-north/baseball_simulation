@@ -329,7 +329,9 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   const pullTendency = ((batter.power || 50) - (batter.meet || 50)) * -0.12 * batSide;
   // 内角は引っ張り、外角は流し打ち（引っ張り＝右打者は負・左打者は正）
   const locPullAdj = -locCol * LOC_PULL_DEG * batSide;
-  let direction = Math.random() * 90 - 45 + pullTendency + velShift + locPullAdj;
+  // C型（方向決定型）: 引っ張ると決めていれば引っ張り方向へ寄る（batterType.js）
+  const dirBiasAdj = -(batter.dirBias || 0) * 9 * batSide;
+  let direction = Math.random() * 90 - 45 + pullTendency + velShift + locPullAdj + dirBiasAdj;
   direction = Math.max(-45, Math.min(45, direction));
 
   // 飛距離（メートル）- MLB実測値ベース（空気抵抗込み）

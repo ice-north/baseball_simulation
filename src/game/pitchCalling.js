@@ -399,24 +399,6 @@ export function selectPitchType({
  *
  * @param {number} arsenalSize 持ち球の総数（ストレート込み）
  */
-/**
- * AI打者が「ヤマを張る」確率（カウント別）。
- *
- * 【なぜ必要か】従来のAI打者は読みが外れても代償が無く、0 か +1 しか取らなかった。
- * つまり良い捕手は「読ませない」ことしかできず、**読み違えさせることができなかった**。
- * リードの価値が頭打ちになっていた原因がここにある。
- *
- * 張れば当たったとき大きい（+2 = タイミング窓×1.50）が、外せば -1（×0.84）。
- * 打者有利のカウントほど張り、追い込まれたら当てにいく（張らない）という
- * 実際の打者の行動に合わせてある。
- */
-export function batterCommitRate({ balls = 0, strikes = 0 } = {}) {
-  if (strikes >= 2) return 0.08;          // 追い込まれたら当てにいく
-  if (balls > strikes) return 0.40;       // 打者有利。狙い球を絞れる
-  if (strikes > balls) return 0.15;
-  return 0.25;
-}
-
 export function guessSuccessRate({ catcherLead = 50, arsenalSize = 3, batterEye = 50 } = {}) {
   // 持ち球が1種類なら何が来るか分かる
   if (arsenalSize <= 1) return 0.95;

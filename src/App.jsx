@@ -29,7 +29,8 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
-import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, batterCommitRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
+import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './game/batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
@@ -1357,14 +1358,19 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const guess = committed
           ? resolveBatterGuess(gType, gZone, { isBreaking: isBreakingPitch, col: loc.col, row: loc.row })
           : { delta: 0 };
-        // 張っていない次元だけAIの読みを足す。
-        // プレイヤーが張らない打者（＝相手チーム）もヤマは張る：
-        // 当たれば+2、外せば-1。良い捕手が「読み違えさせる」経路。
-        const aiType = gType !== 'auto' ? 0
-          : (Math.random() < batterCommitRate(safeCount)
-            ? (predictionCorrect ? 2 : -1) : (predictionCorrect ? 1 : 0));
+        // プレイヤーが張らない打者（＝相手チーム、または「おまかせ」）は
+        // 打者の型（野村の4分類）に従って自分で狙う。batterType.js
+        const aiG = resolveAiBatterGuess({
+          type: getBatterType(currentBatter), player: currentBatter,
+          balls: safeCount.balls, strikes: safeCount.strikes,
+          isBreaking: isBreakingPitch, col: loc.col, guessRight: predictionCorrect,
+        });
+        // プレイヤーが張った次元はAIの読みを使わない
+        const anyCommit = gType !== 'auto' || gZone !== 'auto';
+        const aiLevel = anyCommit ? 0 : aiG.level;
         const aiZone = gZone === 'auto' && locationRead ? 1 : 0;
-        const guessLevel = Math.max(-2, Math.min(2, guess.delta + aiType + aiZone));
+        const guessLevel = Math.max(-2, Math.min(2, guess.delta + aiLevel + aiZone));
+        const dirBias = anyCommit ? 0 : aiG.dirBias;
         pushCall(sequence, {
           col: loc.col, row: loc.row, isBreaking: isBreakingPitch,
           velocity: actualVelocity, type: selectedBall.type,
@@ -1420,7 +1426,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           if (Math.random() < ballZoneContactChance(batter.eye)) {
             const handEffect = getHandednessEffect(pitcher.throws, batter.bats);
             const bz = combineBatterEffects(BALL_ZONE_PENALTY, zoneMatchup);
-            const weakBatter = { ...batter,
+            const weakBatter = { ...batter, dirBias,
               meet: Math.max(1, batter.meet + bz.meet),
               power: Math.max(1, batter.power + bz.power) };
             const result = determineContactResultPhysics(selectedBall, guessLevel, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch, loc);
@@ -1438,7 +1444,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 【新物理モデル】空振り判定も含めて全てdetermineContactResultPhysicsに委ねる。
         // 甘く入った失投(meatball)は長打され、際どいコース(edge)は打ち損じる。
         const q = combineBatterEffects(getPitchQualityEffect(loc.quality), zoneMatchup);
-        const zoneBatter = { ...batter,
+        const zoneBatter = { ...batter, dirBias,
           meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
           power: Math.max(1, Math.min(100, batter.power + q.power)) };
         // コースを読み切った場合も球種を読んだのと同じ効果
