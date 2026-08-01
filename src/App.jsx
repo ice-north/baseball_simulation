@@ -1383,6 +1383,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 捕手のリードは打者の狙いを外す（スイング判断を鈍らせる）
         swingProb *= 1 - (catcher.lead / 100) * 0.08;
         swingProb *= adjustment.swingRate;
+        // B型は張っていないコースを見送る（プレイヤーが張っている場合は適用しない）
+        if (!anyCommit) swingProb *= (aiG.swingMult ?? 1);
         // 采配: 自チームが攻撃中のとき打撃方針を反映（待て=見送り増/積極=打ちにいく）
         if ((isTopInning ? awayTeam.name : homeTeam.name) === userTeamName) {
           const _bam = battingApproachRef.current === 'take' ? 0.55

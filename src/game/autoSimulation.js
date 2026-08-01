@@ -795,6 +795,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const swung = decideSwing({
       inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,
       pitcherControl: effectiveControl, isBreaking, breakingLevel: selectedPitch.level || 50,
+      // B型は張っていないコースを見送る
+      approachMult: aiGuess.swingMult ?? 1,
     });
 
     // 打球の解決。投球位置の質（甘い球=meatball / 際どい球=edge / ボール球）で
