@@ -29,6 +29,7 @@
 
 import { sequenceScore } from './pitchSequence.js';
 import { objectiveRowScore } from './pitchSituation.js';
+import { shapeCallScore, shapeSigma } from './pitchShape.js';
 
 export const GRID_SIZE = 5;
 export const ZONE_MIN = 1;   // ストライクゾーンは col/row とも 1〜3
@@ -118,7 +119,7 @@ export function pickTargetCell(aim, opts = {}) {
   const cells = aim === 'zone' ? ZONE_CELLS : aim === 'chase' ? CHASE_CELLS : ZONE_CORNERS;
   const {
     profile, lead = 0, sequence = null, velocity = 145, isBreaking = false,
-    objective = 'normal',
+    objective = 'normal', natural = null,
   } = opts;
   const t = clamp(lead, 0, 100) / 100;
   const usesObjective = objective && objective !== 'normal';
@@ -129,8 +130,9 @@ export function pickTargetCell(aim, opts = {}) {
   // 弱点狙いは後者のような角寄りのセルを選びがちなので、狙いの配分を変えていない
   // つもりでも四球が増える。実測で BB/9 が +0.34 悪化し、防御率の利得を食い潰した。
   // 誘い球はそもそも振らせる球で、当てさせない球ではないため除外して問題ない。
+  const usesShape = aim !== 'chase' && natural && (natural.col || natural.row);
   const usesWeakness = profile && aim !== 'chase' && (profile.inside || profile.low);
-  if (!usesObjective && (t <= 0 || (!usesWeakness && !sequence))) {
+  if (!usesObjective && !usesShape && (t <= 0 || (!usesWeakness && !sequence))) {
     return { cell: cells[Math.floor(Math.random() * cells.length)], p: 1 / cells.length };
   }
   // 弱点側ほど、かつ前球から動かせるセルほど選ばれやすくする（softmax）。
@@ -150,7 +152,10 @@ export function pickTargetCell(aim, opts = {}) {
     // リード0の捕手も行う。リードが効くのは同じ高さの中でどのセルかの部分。
     const objScore = usesObjective
       ? objectiveRowScore(objective, rowAxis(cells[i][1]), isBreaking) : 0;
-    w[i] = Math.exp(TARGET_BETA * (t * score + objScore));
+    // 【③④】球種に合ったコースを要求する（速球は高め / スライダーは逃げる側）。
+    // これも巧拙ではなく基本なのでリードで割り引かない。
+    const shapeScore = usesShape ? shapeCallScore(cells[i], natural, aim) : 0;
+    w[i] = Math.exp(TARGET_BETA * (t * score + objScore + shapeScore));
     total += w[i];
   }
   let r = Math.random() * total;
@@ -178,12 +183,16 @@ function gaussian() {
  *
  * @returns {{col:number,row:number,inZone:boolean,quality:string}}
  */
-export function resolvePitchCell(target, control) {
+export function resolvePitchCell(target, control, shape = null) {
   const c = Math.max(0, Math.min(100, control));
   // σ は**リーグ成績が現行モデルと一致するよう**較正してある
   //（ラベルの周辺分布ではなくリーグ成績が本来の基準）。
   //   制球20→1.18 / 60→0.78 / 100→0.38
-  const sigma = 1.38 - (c / 100) * 1.00;
+  let sigma = 1.38 - (c / 100) * 1.00;
+  // 【③】球種に合ったコースは決まりやすく、逆は決まらない。
+  // 変化球はレベルが高いほど狙ったところへ行く。
+  if (shape) { sigma = sigma * shape.mult + shape.add; }
+  sigma = Math.max(0.15, sigma);
   const col = target[0] + Math.round(gaussian() * sigma);
   const row = target[1] + Math.round(gaussian() * sigma);
   const inZone = isStrikeCell(col, row);

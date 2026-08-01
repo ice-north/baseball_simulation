@@ -25,6 +25,7 @@
 import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY } from '../utils/constants.js';
 import { resolvePitchCell, pickTargetCell } from './pitchZone.js';
 import { objectiveAimShift, objectiveBallWeight } from './pitchSituation.js';
+import { naturalCourse, shapeSigma } from './pitchShape.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -111,6 +112,7 @@ export function resolvePitchLocation({
   aim = 'edge', control = 50, catcherDefense = 50,
   batterZone = null, catcherLead = 0,
   sequence = null, velocity = 145, isBreaking = false, objective = 'normal',
+  pitchType = 'straight', pitchLevel = 50, pitcherThrows = 'right', batterBats = 'right',
 } = {}) {
   // 【段階1】5×5=25ゾーンのグリッドで位置を決める（pitchZone.js）。
   // 捕手が狙うセルを決め、投手の制球でそこからのばらつきが決まる。
@@ -123,14 +125,19 @@ export function resolvePitchLocation({
   // 【段階3】同じ狙いの中で「どのセルを要求するか」を打者の弱点で選ぶ（pitchZone.js）。
   // zone/edge/chase の配分は動かさないので、ボールになる確率＝四球のコストは増えない。
   const c = clamp(control, 0, 100);
+  // 【③④】球種にとって自然なコース（速球=高め / スライダー=逃げる側 …）
+  const natural = naturalCourse(pitchType, pitcherThrows, batterBats);
   const target = pickTargetCell(aim, {
     profile: batterZone, lead: catcherLead,
     // 【段階4】前球との関係（対角へ動かす／同じ引き出しを続けない）
     sequence, velocity, isBreaking,
     // 【段階6】場面による高さの要求（併殺狙い=低め / 三振狙い=高め）
     objective,
+    // 【③④】球種に合ったコースを要求する
+    natural,
   });
-  const cell = resolvePitchCell(target.cell, c);
+  const cell = resolvePitchCell(target.cell, c,
+    shapeSigma(target.cell, natural, isBreaking, pitchLevel));
   let { inZone, quality, col, row } = cell;
 
   // 【段階7】打者がコースを張れる度合い。

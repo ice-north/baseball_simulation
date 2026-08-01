@@ -1305,12 +1305,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
         selectedBall = pitcher.pitches[pitchChoice];
 
-        // 球種レベルによる制球ペナルティ + スタミナペナルティ
-        let effectiveControl = pitcher.control + controlPenalty;
-        if (selectedBall && selectedBall.type !== 'straight') {
-          const ballControlPenalty = 30 - (selectedBall.level / 100) * 30;
-          effectiveControl = Math.max(0, effectiveControl - ballControlPenalty);
-        }
+        // スタミナペナルティのみ。変化球のばらつきは pitchShape.shapeSigma に一本化
+        // （旧 ballControlPenalty。自動シミュとは係数が違っていた）
+        const effectiveControl = Math.max(0, pitcher.control + controlPenalty);
 
         // ===== 配球 → 投球位置 → スイング判定 =====
         // 自動シミュレーションと同じ共有モデル（src/game/pitchCalling.js）を使う。
@@ -1338,6 +1335,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           sequence, velocity: actualVelocity, isBreaking: isBreakingPitch,
           // 場面: 併殺が欲しければ低め、三振が欲しければ高め
           objective: objective.goal,
+          // 球種に合ったコースと、変化球レベルによる決まりやすさ
+          pitchType: selectedBall.type, pitchLevel: selectedBall.level ?? 50,
+          pitcherThrows: pitcher.throws, batterBats: batter.bats,
         });
         const isInStrikeZone = loc.inZone;
 

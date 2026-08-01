@@ -744,8 +744,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // 制球は「ストライク率」ではなく「狙った所へ投げられる再現性」として効く。
     // 詳細は pitchCalling.js 参照。采配モード(App.jsx)と同じモデルを共有している。
     const isBreaking = selectedPitch.type !== 'straight';
-    // 変化球は制球が落ちる（レベルが高いほど操れる）
-    const breakingControlPenalty = isBreaking ? (100 - (selectedPitch.level || 50)) * 0.20 : 0;
+    // 変化球のばらつきは pitchShape.shapeSigma に一本化した
+    // （旧 breakingControlPenalty。自動と采配で係数が 0.20 / 0.30 と食い違っていた）
     // 投球方針: contact=ゾーンで勝負しやすく / strikeout=誘い球を増やす（callPitchTarget側）
     const strategyControlBonus = pitchingStrat === 'contact' ? 4 : 0;
 
@@ -756,7 +756,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     });
     const loc = resolvePitchLocation({
       aim,
-      control: effectiveControl - breakingControlPenalty + strategyControlBonus,
+      control: effectiveControl + strategyControlBonus,
       catcherDefense: catcherPlayer?.fielding?.defense ?? 50,
       // 捕手は打者の弱点コースを要求する（狙いの配分は変えない）
       batterZone: batter.zone,
@@ -765,6 +765,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       sequence, velocity: pitchVelocityFinal, isBreaking,
       // 場面: 併殺が欲しければ低め、三振が欲しければ高め
       objective: objective.goal,
+      // 球種に合ったコース（速球=高め / スライダーは逃げる側）と、
+      // 変化球レベルによる決まりやすさ
+      pitchType: selectedPitch.type, pitchLevel: selectedPitch.level ?? 50,
+      pitcherThrows: pitcher.throws, batterBats: batter.bats,
     });
 
     // 揺さぶれた球は打ちにくく、同じ所へ続けた球は打たれやすい（リーグ平均で±0）
