@@ -24,6 +24,7 @@
 
 import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY } from '../utils/constants.js';
 import { resolvePitchCell, pickTargetCell } from './pitchZone.js';
+import { objectiveAimShift, objectiveBallWeight } from './pitchSituation.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -47,7 +48,7 @@ export const AIM_LABEL = { zone: '勝負', edge: '際どく', chase: '誘い' };
  */
 export function callPitchTarget({
   balls = 0, strikes = 0, batterEye = 50, catcherLead = 50, strategy = 'normal',
-  pitcherControl = 50,
+  pitcherControl = 50, objective = null,
 } = {}) {
   // カウント別の基本方針。3ボールならストライクを取りに行き、
   // 追い込んでいれば誘い球を増やす（実際の配球と同じ）
@@ -79,6 +80,15 @@ export function callPitchTarget({
   if (strategy === 'strikeout') { w.zone -= 0.08; w.chase += 0.08; }
   else if (strategy === 'contact') { w.zone += 0.10; w.chase -= 0.10; }
 
+  // 場面による補正（走者一塁=併殺狙い / 走者三塁=三振狙い / 満塁=押し出し回避）。
+  // **三振狙いだけは四球のコストを払う**が、それは1点を防ぐ価値がある場面に
+  // 限られるから成立する。満塁では逆にゾーンへ寄せる（objectiveAimShift 参照）。
+  // 3ボールのときは押し出し・四球が最優先なので場面補正を掛けない。
+  if (objective && balls < 3) {
+    const shift = objectiveAimShift(objective);
+    if (shift) { w.zone += shift.zone; w.edge += shift.edge; w.chase += shift.chase; }
+  }
+
   const zone = Math.max(0.02, w.zone), edge = Math.max(0.02, w.edge), chase = Math.max(0, w.chase);
   const total = zone + edge + chase;
   const r = Math.random() * total;
@@ -100,7 +110,7 @@ export function callPitchTarget({
 export function resolvePitchLocation({
   aim = 'edge', control = 50, catcherDefense = 50,
   batterZone = null, catcherLead = 0,
-  sequence = null, velocity = 145, isBreaking = false,
+  sequence = null, velocity = 145, isBreaking = false, objective = 'normal',
 } = {}) {
   // 【段階1】5×5=25ゾーンのグリッドで位置を決める（pitchZone.js）。
   // 捕手が狙うセルを決め、投手の制球でそこからのばらつきが決まる。
@@ -118,6 +128,8 @@ export function resolvePitchLocation({
       profile: batterZone, lead: catcherLead,
       // 【段階4】前球との関係（対角へ動かす／同じ引き出しを続けない）
       sequence, velocity, isBreaking,
+      // 【段階6】場面による高さの要求（併殺狙い=低め / 三振狙い=高め）
+      objective,
     }), c);
   let { inZone, quality, col, row } = cell;
 
@@ -188,6 +200,27 @@ export function getPitchQualityEffect(quality) {
   return { meet: 0, power: 0 };
 }
 
+/**
+ * 高さと球種の相性。**空振りを取れる高さは球種で逆になる**。
+ *
+ *   高めの速球  … 打者がバットの下を振る（三振が取れる古典的な球）
+ *   低めの変化球 … 落ちる球。バットの上を振る
+ *   低めの速球  … 抜け球と同じで、いちばん打たれる
+ *   高めの変化球 … 「抜けたスライダー」。長打になる
+ *
+ * 対称なので母集団の平均は0＝リーグ成績は動かず、
+ * 「どの高さにどの球種を要求するか」という配球の判断だけが効く。
+ * これが無いと三振狙いの高め要求がフライを増やすだけで空振りを取れない。
+ *
+ * @param {number} row 0=高めボール 〜 4=低めボール
+ * @param {boolean} isBreaking 変化球か
+ */
+export function getHeightPitchEffect(row, isBreaking) {
+  const r = Math.max(-1, Math.min(1, row - 2));   // -1=高め / +1=低め
+  const v = isBreaking ? r : -r;                  // 変化球は低いほど / 速球は高いほど有効
+  return { meet: -v * 6, power: -v * 4 };
+}
+
 /** ボール球を打ったときの打球品質ペナルティ（泳いだ・引っ掛けた当たり） */
 export const BALL_ZONE_PENALTY = { meet: -4, power: -2 };
 
@@ -199,7 +232,7 @@ export const BALL_ZONE_PENALTY = { meet: -4, power: -2 };
  * 球種1つの「効き」をスコア化する。
  * 球種固有の効果(空振り/ゴロ/凡打誘発) × 球種レベル + 投球フォームとの相性。
  */
-function scoreBall(ball, form, strategy, ballEffects) {
+function scoreBall(ball, form, strategy, ballEffects, objective = 'normal') {
   const eff = ballEffects[ball.type] || ballEffects.straight || {};
   const levelFactor = (ball.level ?? 50) / 100;
   let score = ((eff.whiffBonus || 0) + (eff.groundballBonus || 0) + (eff.weakBonus || 0)) * levelFactor;
@@ -218,6 +251,12 @@ function scoreBall(ball, form, strategy, ballEffects) {
   // 投球方針: 三振狙いは空振りを、打たせて取るならゴロを重く見る
   if (strategy === 'strikeout') score += (eff.whiffBonus || 0) * 0.8 * levelFactor;
   else if (strategy === 'contact') score += (eff.groundballBonus || 0) * 0.8 * levelFactor;
+
+  // 場面による重み。走者一塁ならシンカー、走者三塁ならフォークを選ぶ、という判断。
+  // 「その球を持っていれば」効くので、球種構成がそのまま場面対応力になる。
+  const ow = objectiveBallWeight(objective);
+  if (ow.groundball) score += (eff.groundballBonus || 0) * ow.groundball * levelFactor;
+  if (ow.whiff) score += (eff.whiffBonus || 0) * ow.whiff * levelFactor;
 
   return score;
 }
@@ -244,7 +283,7 @@ const HORIZONTAL_PITCHES = ['slider', 'shoot', 'cutter', 'twoSeam'];
 export function selectPitchType({
   arsenal = [], catcherLead = 50, form = 'threeQuarter',
   strategy = 'normal', strikes = 0, ballEffects = BALL_EFFECTS,
-  lastWasBreaking = null,
+  lastWasBreaking = null, objective = 'normal',
 } = {}) {
   const list = arsenal.length ? arsenal : [{ type: 'straight', level: 50 }];
   const straight = list.find(a => a.type === 'straight') || { type: 'straight', level: 50 };
@@ -264,7 +303,7 @@ export function selectPitchType({
   // どの変化球にするか。リードが高いほど「効く球」を選べる
   if (Math.random() < clamp(catcherLead / 100, 0, 1)) {
     const scored = breaking
-      .map(b => ({ ball: b, score: scoreBall(b, form, strategy, ballEffects) }))
+      .map(b => ({ ball: b, score: scoreBall(b, form, strategy, ballEffects, objective) }))
       .sort((a, b) => b.score - a.score);
     const top = scored.slice(0, Math.max(1, Math.ceil(scored.length / 2)));
     return top[Math.floor(Math.random() * top.length)].ball;

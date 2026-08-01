@@ -28,6 +28,7 @@
 // ============================================================
 
 import { sequenceScore } from './pitchSequence.js';
+import { objectiveRowScore } from './pitchSituation.js';
 
 export const GRID_SIZE = 5;
 export const ZONE_MIN = 1;   // ストライクゾーンは col/row とも 1〜3
@@ -115,8 +116,12 @@ const SEQUENCE_WEIGHT = 1.0;
  */
 export function pickTargetCell(aim, opts = {}) {
   const cells = aim === 'zone' ? ZONE_CELLS : aim === 'chase' ? CHASE_CELLS : ZONE_CORNERS;
-  const { profile, lead = 0, sequence = null, velocity = 145, isBreaking = false } = opts;
+  const {
+    profile, lead = 0, sequence = null, velocity = 145, isBreaking = false,
+    objective = 'normal',
+  } = opts;
   const t = clamp(lead, 0, 100) / 100;
+  const usesObjective = objective && objective !== 'normal';
   // **誘い球(chase)には弱点狙いを掛けない**。
   // 誘い球のセルは「どれも枠のすぐ外」だがストライクになる確率が揃っていない。
   //   [0,2] は列を1つ戻せばストライク（行は中央なので外れにくい）
@@ -125,7 +130,7 @@ export function pickTargetCell(aim, opts = {}) {
   // つもりでも四球が増える。実測で BB/9 が +0.34 悪化し、防御率の利得を食い潰した。
   // 誘い球はそもそも振らせる球で、当てさせない球ではないため除外して問題ない。
   const usesWeakness = profile && aim !== 'chase' && (profile.inside || profile.low);
-  if (t <= 0 || (!usesWeakness && !sequence)) {
+  if (!usesObjective && (t <= 0 || (!usesWeakness && !sequence))) {
     return cells[Math.floor(Math.random() * cells.length)];
   }
   // 弱点側ほど、かつ前球から動かせるセルほど選ばれやすくする（softmax）。
@@ -140,7 +145,12 @@ export function pickTargetCell(aim, opts = {}) {
     // 配球としての良さ（対角へ動かす／同じ引き出しを続けない）。
     // 誘い球でもコースを散らす意味はあるので、こちらは chase も対象にする。
     if (sequence) score += sequenceScore(sequence, cells[i], velocity, isBreaking) * SEQUENCE_WEIGHT;
-    w[i] = Math.exp(TARGET_BETA * t * score);
+    // 場面による高さの要求（併殺狙いは低め／三振狙いは高め）。
+    // **リードで割り引かない**。「一塁に走者だから低めへ」は巧拙ではなく基本なので、
+    // リード0の捕手も行う。リードが効くのは同じ高さの中でどのセルかの部分。
+    const objScore = usesObjective
+      ? objectiveRowScore(objective, rowAxis(cells[i][1]), isBreaking) : 0;
+    w[i] = Math.exp(TARGET_BETA * (t * score + objScore));
     total += w[i];
   }
   let r = Math.random() * total;

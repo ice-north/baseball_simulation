@@ -29,9 +29,10 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
-import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate } from './game/pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate } from './game/pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './game/batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
+import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
 import PitchZonePlot, { PitchZoneLegend } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
@@ -1251,6 +1252,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       const simulateSinglePitch = (batter, pitcher, catcher, defense, count, currentStamina, sequence = null) => {
         // 前球（打席内の配球メモリ。自動シミュレーションと共有 / pitchSequence.js）
         const lastPitch = lastCall(sequence);
+        // この場面で捕手が求める結果（併殺狙い / 三振狙い / 通常。pitchSituation.js）
+        const objective = decidePitchObjective(bases, outs);
         // スタミナを1減らす
         const newStamina = Math.max(0, currentStamina - 1);
 
@@ -1286,6 +1289,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             ballEffects,
             // 奥行き: 速球のあとは変化球、変化球のあとは速球
             lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
+            // 場面: 走者一塁ならゴロ系、走者三塁なら空振り系の決め球
+            objective: objective.goal,
           });
           pitchChoice = Math.max(0, pitcher.pitches.indexOf(chosen));
         }
@@ -1314,7 +1319,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const aim = (aimChoice && aimChoice !== 'auto') ? aimChoice : callPitchTarget({
           balls: safeCount.balls, strikes: safeCount.strikes, batterEye: batter.eye,
           catcherLead: catcher.lead ?? 50,
-          pitcherControl: effectiveControl,
+          pitcherControl: effectiveControl, objective,
         });
         // 投球フォームの効果を適用（球速は配球の「奥行き」に使うので位置決定より前に出す）
         const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
@@ -1328,6 +1333,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           batterZone: batter.zone, catcherLead: catcher.lead ?? 50,
           // 前球との関係（対角へ動かす／同じ引き出しを続けない）
           sequence, velocity: actualVelocity, isBreaking: isBreakingPitch,
+          // 場面: 併殺が欲しければ低め、三振が欲しければ高め
+          objective: objective.goal,
         });
         const isInStrikeZone = loc.inZone;
 
@@ -1381,7 +1388,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
         // コース適性 + 前球からの揺さぶり（どちらもリーグ平均では±0）
         const zoneMatchup = combineBatterEffects(
-          getZoneMatchupEffect(loc, batter.zone),
+          combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
+            // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
+            getHeightPitchEffect(loc.row, isBreakingPitch)),
           { meet: shiftMeet, power: shiftMeet * 0.6 });
 
         if (!isInStrikeZone) {
@@ -3725,6 +3734,20 @@ if (newOuts === 3) {
                             : '誘い球（ボール球）。振らせれば凡打、見逃されれば四球に近づく'}
                           className={btn(pitchAim === v, 'bg-rose-700')}>{AIM_LABEL[v]}</button>
                       ))}
+                      {/* 場面から捕手が求める結果（走者一塁=併殺 / 走者三塁=三振）。
+                          プレイヤーは操作しないが、何を狙っているかは見せる */}
+                      {(() => {
+                        const obj = decidePitchObjective(bases, outs);
+                        if (obj.goal === 'normal') return null;
+                        return (
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            obj.goal === 'groundball' ? 'bg-emerald-900 text-emerald-200'
+                              : 'bg-sky-900 text-sky-200'} ${dim}`}
+                            title={OBJECTIVE_NOTE[obj.goal] + (obj.avoidWalk ? '（満塁なので押し出しを避ける）' : '')}>
+                            {OBJECTIVE_LABEL[obj.goal]}{obj.avoidWalk ? '・押し出し回避' : ''}
+                          </span>
+                        );
+                      })()}
                     </div>
                   );
                 })()}

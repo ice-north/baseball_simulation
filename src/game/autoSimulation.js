@@ -4,9 +4,10 @@ import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty 
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
-import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './pitchSequence.js';
+import { decidePitchObjective } from './pitchSituation.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
@@ -642,6 +643,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
   const simulateOnePitch = (batterPlayer, pitcherPlayer, catcherPlayer, defense, count, pitcherStamina, bases, sequence, offenseStrategy, defenseStrategy) => {
     // 前球（打席内の配球メモリ。詳細は pitchSequence.js）
     const lastPitch = lastCall(sequence);
+    // この場面で捕手が求める結果（併殺狙い / 三振狙い / 通常。pitchSituation.js）
+    const objective = decidePitchObjective(bases, gameState.outs);
     const battingStrat = offenseStrategy?.batting || 'balanced';
     const pitchingStrat = defenseStrategy?.pitching || 'balanced';
 
@@ -713,6 +716,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       strikes: count.strikes,
       // 奥行き: 速球のあとは変化球、変化球のあとは速球（リードが高いほど意識する）
       lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
+      // 場面: 走者一塁ならゴロ系、走者三塁なら空振り系の決め球を選ぶ
+      objective: objective.goal,
     });
 
 
@@ -746,7 +751,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     const aim = callPitchTarget({
       balls: count.balls, strikes: count.strikes, batterEye: batter.eye,
       catcherLead: catcherPlayer?.catching?.lead ?? 50, strategy: pitchingStrat,
-      pitcherControl: effectiveControl,
+      pitcherControl: effectiveControl, objective,
     });
     const loc = resolvePitchLocation({
       aim,
@@ -757,6 +762,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       catcherLead: catcherPlayer?.catching?.lead ?? 50,
       // 前球との関係（対角へ動かす／同じ引き出しを続けない）
       sequence, velocity: pitchVelocityFinal, isBreaking,
+      // 場面: 併殺が欲しければ低め、三振が欲しければ高め
+      objective: objective.goal,
     });
 
     // 揺さぶれた球は打ちにくく、同じ所へ続けた球は打たれやすい（リーグ平均で±0）
@@ -834,7 +841,11 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       if (fieldResult.result === 'homerun') {
         return { type: 'homerun' };
       } else if (fieldResult.result === 'out') {
-        if (bases[0] && battedBall.launchAngle < 10 && battedBall.distance < 40) {
+        // 2アウトからは併殺が成立しない（打者アウトで3アウト目）。
+        // outs のチェックが無かったため、2アウトから「4アウト目」が記録され
+        // 投手の投球回がわずかに水増しされていた。
+        if (bases[0] && gameState.outs < 2
+            && battedBall.launchAngle < 10 && battedBall.distance < 40) {
           const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
           const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
           const dpBase = 15 + (ifAvg - 50) * 0.35;
@@ -870,7 +881,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // 母集団の平均は0なのでリーグ成績は動かず、打者ごとの差だけが出る。
     // コース適性 + 前球からの揺さぶり（どちらもリーグ平均では±0）
     const matchup = combineBatterEffects(
-      getZoneMatchupEffect(loc, batter.zone),
+      combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
+        // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
+        getHeightPitchEffect(loc.row, isBreaking)),
       { meet: shiftMeet, power: shiftMeet * 0.6 });
 
     if (loc.inZone) {
