@@ -1342,8 +1342,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const shiftMeet = shiftMeetAdjust(sequenceShift(lastPitch,
           { col: loc.col, row: loc.row, velocity: actualVelocity }));
         // 同じ引き出しが続くと打者に読まれる（効果は球種の読みと同じ）
+        // 打者の狙い球（コース）。捕手の要求の偏りと引き出しの繰り返しで読む
         const locationRead = Math.random()
-          < locationReadChance(sequence, loc.col, loc.row, isBreakingPitch, batter.eye);
+          < locationReadChance(sequence, loc.col, loc.row, isBreakingPitch, batter.eye, loc.readSignal);
         pushCall(sequence, {
           col: loc.col, row: loc.row, isBreaking: isBreakingPitch,
           velocity: actualVelocity, type: selectedBall.type,
@@ -1421,7 +1422,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
           power: Math.max(1, Math.min(100, batter.power + q.power)) };
         // コースを読み切った場合も球種を読んだのと同じ効果
-        const result = determineContactResultPhysics(selectedBall, predictionCorrect || locationRead, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch, loc);
+        const result = determineContactResultPhysics(selectedBall, (predictionCorrect ? 1 : 0) + (locationRead ? 1 : 0), 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch, loc);
         return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), pitchLoc }, newStamina };
       };
 

@@ -118,11 +118,22 @@ export function repeatCount(seq, col, row, isBreaking) {
 // 「対角一辺倒・散らさない」が最善のままだった（下記の方針比較）。
 const READ_MAX = 0.60;
 
-export function locationReadChance(seq, col, row, isBreaking, batterEye = 50) {
+// **要求の偏りそのものを読む**（段階7）。
+// 捕手が弱点を突きにいくほど softmax が尖り、次にどこへ来るかが読みやすくなる。
+// これが無いと弱点狙い（段階3）に代償がまったく無く、
+// 「常に最も効くセルへ要求する」が無条件に最善になってしまう。
+const CONCENTRATION_W = 0.60;
+
+/**
+ * @param {number} readSignal 捕手の要求の偏り（0〜1）。resolvePitchLocation が返す。
+ *   投手が目標を外した球では0になる（張っていてもそこに来ないため）。
+ */
+export function locationReadChance(seq, col, row, isBreaking, batterEye = 50, readSignal = 0) {
   const n = repeatCount(seq, col, row, isBreaking);
-  if (n === 0) return 0;
+  if (n === 0 && readSignal <= 0) return 0;
   const eyeMult = 1 + (clamp(batterEye, 0, 100) - 50) / 100 * 0.6;
-  return clamp((n / MEMORY) * READ_MAX * eyeMult, 0, 0.60);
+  const base = (n / MEMORY) * READ_MAX + readSignal * CONCENTRATION_W;
+  return clamp(base * eyeMult, 0, 0.60);
 }
 
 /**

@@ -131,7 +131,7 @@ export function pickTargetCell(aim, opts = {}) {
   // 誘い球はそもそも振らせる球で、当てさせない球ではないため除外して問題ない。
   const usesWeakness = profile && aim !== 'chase' && (profile.inside || profile.low);
   if (!usesObjective && (t <= 0 || (!usesWeakness && !sequence))) {
-    return cells[Math.floor(Math.random() * cells.length)];
+    return { cell: cells[Math.floor(Math.random() * cells.length)], p: 1 / cells.length };
   }
   // 弱点側ほど、かつ前球から動かせるセルほど選ばれやすくする（softmax）。
   // 合計は常に1なので狙い(zone/edge/chase)の配分は不変＝四球のコストは出ない。
@@ -154,8 +154,13 @@ export function pickTargetCell(aim, opts = {}) {
     total += w[i];
   }
   let r = Math.random() * total;
-  for (let i = 0; i < cells.length; i++) { r -= w[i]; if (r <= 0) return cells[i]; }
-  return cells[cells.length - 1];
+  for (let i = 0; i < cells.length; i++) {
+    r -= w[i];
+    // p = そのセルが選ばれる確率。**打者はこれを読む**（偏るほど張られる）
+    if (r <= 0) return { cell: cells[i], p: w[i] / total, uniform: 1 / cells.length };
+  }
+  const last = cells.length - 1;
+  return { cell: cells[last], p: w[last] / total, uniform: 1 / cells.length };
 }
 
 /** 標準正規乱数（Box-Muller） */

@@ -123,15 +123,30 @@ export function resolvePitchLocation({
   // 【段階3】同じ狙いの中で「どのセルを要求するか」を打者の弱点で選ぶ（pitchZone.js）。
   // zone/edge/chase の配分は動かさないので、ボールになる確率＝四球のコストは増えない。
   const c = clamp(control, 0, 100);
-  const cell = resolvePitchCell(
-    pickTargetCell(aim, {
-      profile: batterZone, lead: catcherLead,
-      // 【段階4】前球との関係（対角へ動かす／同じ引き出しを続けない）
-      sequence, velocity, isBreaking,
-      // 【段階6】場面による高さの要求（併殺狙い=低め / 三振狙い=高め）
-      objective,
-    }), c);
+  const target = pickTargetCell(aim, {
+    profile: batterZone, lead: catcherLead,
+    // 【段階4】前球との関係（対角へ動かす／同じ引き出しを続けない）
+    sequence, velocity, isBreaking,
+    // 【段階6】場面による高さの要求（併殺狙い=低め / 三振狙い=高め）
+    objective,
+  });
+  const cell = resolvePitchCell(target.cell, c);
   let { inZone, quality, col, row } = cell;
+
+  // 【段階7】打者がコースを張れる度合い。
+  // 捕手の要求が偏っているほど（＝softmaxの確率が高いほど）読まれる。
+  // ただし**投手が狙った帯に投げられた場合だけ**。目標を外した球は張っていても
+  // そこに来ないので、制球の低い投手は「読みにくい」という形になる。
+  //
+  // 判定はセル単位ではなく**帯（外/中/内 × 高/中/低）**。打者は
+  // 「外角低め」に張るのであって「(1,3)のセル」に張るわけではない。
+  // セル一致にすると発火率が1割程度にしかならず、機構が実質死ぬ。
+  const band = (v) => (v <= 1 ? 0 : v === 2 ? 1 : 2);
+  const onTarget = band(target.cell[0]) === band(col) && band(target.cell[1]) === band(row);
+  const uni = target.uniform ?? 0.25;
+  const readSignal = onTarget
+    ? Math.max(0, (target.p - uni) / Math.max(1e-6, 1 - uni))
+    : 0;
 
   // フレーミング: 際どい球の判定が捕手の守備力で動く。基準はリーグ平均の捕手(=50)
   const framing = (catcherDefense - 50) * 0.0018;
@@ -140,7 +155,7 @@ export function resolvePitchLocation({
     else if (inZone && framing < 0 && Math.random() < -framing) inZone = false;
   }
 
-  return { inZone, quality, col, row };
+  return { inZone, quality, col, row, readSignal };
 }
 
 /**

@@ -39,10 +39,12 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   const meetBonus = (batter.meet / 100) * 0.20;  // 最大+20%（打率+0.5割相当の強化）
   timingWindow *= (1 + meetBonus);
 
-  // 読みが当たれば窓が広がる（準備ができている）
-  if (isGuessRight) {
-    timingWindow *= 1.3;  // ×1.3
-  }
+  // 読みが当たれば窓が広がる（準備ができている）。
+  // **球種とコースの両方を張り当てると別格**（1つ=×1.30 / 両方=×1.50）。
+  // 旧来の boolean もそのまま「1つ的中」として動く。
+  const guessLevel = isGuessRight === true ? 1 : (Number(isGuessRight) || 0);
+  if (guessLevel >= 2) timingWindow *= 1.50;
+  else if (guessLevel >= 1) timingWindow *= 1.30;
 
   // ミート力による「緩急・変化球への耐性」
   // ミートが高い打者はタイミングを外されにくい（最大50%軽減）

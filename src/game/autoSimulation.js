@@ -771,8 +771,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       { col: loc.col, row: loc.row, velocity: pitchVelocityFinal });
     const shiftMeet = shiftMeetAdjust(shift);
     // 同じ引き出しが続くと打者に読まれる。的中の効果は球種の読みと同じ
+    // 打者の狙い球（コース）。捕手の要求の偏りと、同じ引き出しの繰り返しで読む
     const locationRead = Math.random()
-      < locationReadChance(sequence, loc.col, loc.row, isBreaking, batter.eye);
+      < locationReadChance(sequence, loc.col, loc.row, isBreaking, batter.eye, loc.readSignal);
     pushCall(sequence, {
       col: loc.col, row: loc.row, isBreaking,
       velocity: pitchVelocityFinal, type: selectedPitch.type,
@@ -806,15 +807,14 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       const physicsResult = calculatePhysicsContact(
         { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50 },
         effBatter,
-        // 打者の狙い球。的中するとタイミング窓が1.3倍になる（simulation-logic.js）。
-        // コースを読み切った場合も同じ効果（新しい物理係数を増やさない）。
-        locationRead ||
-        // 従来はここが 0.3/0.2 の固定値で、捕手のリードも球種数も無視していた。
-        Math.random() < guessSuccessRate({
+        // 打者の狙い球。球種とコースを別々に張り、当たった数で効果が変わる
+        // （1つ=タイミング窓×1.30 / 両方=×1.50。simulation-logic.js）。
+        // 従来は球種だけで、しかも 0.3/0.2 の固定値だった。
+        (locationRead ? 1 : 0) + (Math.random() < guessSuccessRate({
           catcherLead: catcherPlayer?.catching?.lead ?? 50,
           arsenalSize: arsenal.length,
           batterEye: batter.eye,
-        }),
+        }) ? 1 : 0),
         pitchData,
         tunnelingEffect,
         handEffect
