@@ -30,7 +30,14 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // ★修正: 係数は投手の「素の球速」で連続的に決定
   const basePitcherVelocity = pitcher.velocity;
   const clampedVel = Math.max(120, Math.min(165, basePitcherVelocity));
-  const windowCoef = 0.40 - (clampedVel - 120) * 0.00511;
+  // 基準係数 0.42。**一連のコースシステム（段階1〜8）で捕手が段階的に賢くなり、
+  // その累積で打者が不利になったぶんを戻す再較正**。
+  // 弱点狙い・場面別の目的・球種に合ったコース要求…はどれも「捕手が良い仕事を
+  // する」方向なので、全捕手が行うぶんリーグ全体が投手寄りに寄っていた。
+  //   0.40 のまま: 打率.2334 / 三振23.5% / 失点3.46（三振が実データ帯19-22%を超過）
+  //   0.42:        打率.2386 / 三振21.9% / 失点3.69（実NPB 失点3.70 に一致）
+  // 打者個々の能力ではなく物理の基準を動かしているので、能力の相対関係は不変。
+  const windowCoef = 0.42 - (clampedVel - 120) * 0.00511;
 
   // 窓の計算は実際の球速で（速い変化球は打ちにくい）
   let timingWindow = (1000 / (pitchVelocity / 3.6)) * windowCoef;
