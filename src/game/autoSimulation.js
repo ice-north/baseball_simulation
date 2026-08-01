@@ -4,7 +4,7 @@ import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty 
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
-import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate, batterCommitRate } from './pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './pitchSequence.js';
 import { decidePitchObjective } from './pitchSituation.js';
@@ -810,11 +810,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         // 打者の狙い球。球種とコースを別々に張り、当たった数で効果が変わる
         // （1つ=タイミング窓×1.30 / 両方=×1.50。simulation-logic.js）。
         // 従来は球種だけで、しかも 0.3/0.2 の固定値だった。
-        (locationRead ? 1 : 0) + (Math.random() < guessSuccessRate({
-          catcherLead: catcherPlayer?.catching?.lead ?? 50,
-          arsenalSize: arsenal.length,
-          batterEye: batter.eye,
-        }) ? 1 : 0),
+        (() => {
+          const right = Math.random() < guessSuccessRate({
+            catcherLead: catcherPlayer?.catching?.lead ?? 50,
+            arsenalSize: arsenal.length, batterEye: batter.eye });
+          // ヤマを張った打席では当たれば大きく、外せば代償を払う。
+          // これが無いと良い捕手は「読ませない」ことしかできない
+          const commit = Math.random() < batterCommitRate(count);
+          const typeTerm = commit ? (right ? 2 : -1) : (right ? 1 : 0);
+          return Math.max(-2, Math.min(2, typeTerm + (locationRead ? 1 : 0)));
+        })(),
         pitchData,
         tunnelingEffect,
         handEffect

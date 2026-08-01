@@ -29,7 +29,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
-import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, batterCommitRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects } from './game/batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
@@ -1357,8 +1357,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const guess = committed
           ? resolveBatterGuess(gType, gZone, { isBreaking: isBreakingPitch, col: loc.col, row: loc.row })
           : { delta: 0 };
-        // 張っていない次元だけAIの読みを足す
-        const aiType = gType === 'auto' && predictionCorrect ? 1 : 0;
+        // 張っていない次元だけAIの読みを足す。
+        // プレイヤーが張らない打者（＝相手チーム）もヤマは張る：
+        // 当たれば+2、外せば-1。良い捕手が「読み違えさせる」経路。
+        const aiType = gType !== 'auto' ? 0
+          : (Math.random() < batterCommitRate(safeCount)
+            ? (predictionCorrect ? 2 : -1) : (predictionCorrect ? 1 : 0));
         const aiZone = gZone === 'auto' && locationRead ? 1 : 0;
         const guessLevel = Math.max(-2, Math.min(2, guess.delta + aiType + aiZone));
         pushCall(sequence, {
