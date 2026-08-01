@@ -826,7 +826,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       }
 
       // 打球物理パラメータ計算
-      const battedBall = calculateBattedBallPhysics(effBatter, pitcher, pitchData, physicsResult);
+      const battedBall = calculateBattedBallPhysics(effBatter, pitcher, pitchData, physicsResult, loc);
 
       // 守備判定
       const fieldResult = judgeFielderReach(battedBall, defense, effBatter);

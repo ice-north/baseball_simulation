@@ -254,8 +254,31 @@ export const getSpinRateAngleAdjust = (pitchType, spinRate) => {
 /**
  * 物理エンジン：打球パラメータの計算
  */
-export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult) => {
+// ============================================================
+// 投球コース → 打球傾向（25分割グリッド 段階5）
+//
+//   内角 → 引っ張り / 外角 → 流し打ち（バットが出る位置で打球方向が決まる）
+//   低め → ゴロ     / 高め → フライ  （スイング平面と球の高さの関係）
+//
+// **打者から見た向きで効かせる**（col 4 = その打者にとっての内角）。
+// 引っ張り方向は右打者=三塁側(負)・左打者=一塁側(正)なので `batSide` で反転する。
+//
+// 中心値は「打球になった投球」の平均コース。ここがずれるとリーグ全体の
+// ゴロ率・引っ張り率が動いてしまう（打球種別は較正済みの数字）。
+// **実測すると両方ほぼ0だった**（13048打球で colAxis -0.001 / rowAxis +0.009）。
+// 誘い球は外角低めに偏っているが、そもそも打球になりにくいので効いてこない。
+// 誘い球の配分や弱点狙いを変えたときは測り直すこと。
+const LOC_COL_MEAN = 0.00;
+const LOC_ROW_MEAN = 0.01;
+const LOC_PULL_DEG = 11;      // 内角/外角いっぱいで±11度      // 内角/外角いっぱいで±11度
+const LOC_ANGLE_DEG = 5;      // 高め/低めいっぱいで±5度      // 高め/低めいっぱいで±6度
+
+const locAxis = (v) => Math.max(-1, Math.min(1, v - 2));
+
+export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult, pitchLoc = null) => {
   const { exitVelocity, meetQuality } = physicsResult;
+  const locCol = pitchLoc ? locAxis(pitchLoc.col) - LOC_COL_MEAN : 0;
+  const locRow = pitchLoc ? locAxis(pitchLoc.row) - LOC_ROW_MEAN : 0;
 
   // 打出し角度（投手の回転数で補正）
   const spinAngleAdj = getSpinRateAngleAdjust(pitch.type, pitcher.spinRate);
@@ -276,7 +299,10 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
       velocityAngleAdj = -((135 - pitchVelocity) / 15) * deficit * 8;
     }
   }
-  const launchAngle = calculateLaunchAngle(meetQuality, batter) + spinAngleAdj + velocityAngleAdj + ballGroundAdj;
+  // 低めはゴロ・高めはフライ
+  const locAngleAdj = -locRow * LOC_ANGLE_DEG;
+  const launchAngle = calculateLaunchAngle(meetQuality, batter)
+    + spinAngleAdj + velocityAngleAdj + ballGroundAdj + locAngleAdj;
   // 物理シミュレーション（飛距離・滞空時間）
   const rad = launchAngle * Math.PI / 180;
   const v = exitVelocity / 3.6;  // km/h to m/s
@@ -286,15 +312,19 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   const hangTime = Math.max(0.5, (2 * v * Math.sin(Math.max(0, rad))) / g);
 
   // 打球方向（-45〜45度）- NPBデータ準拠（振り遅れ効果含む）
+  // スイッチヒッターは投手と逆の打席に立つ（`throwingArm` は誰も設定しておらず、
+  // 実際のフィールドは `throws`。従来スイッチは常に右打者扱いになっていた）
   const batSide = batter.bats === 'left' ? -1
-    : batter.bats === 'switch' ? (pitcher.throwingArm === 'left' ? -1 : 1)
+    : batter.bats === 'switch' ? ((pitcher.throws || pitcher.throwingArm) === 'left' ? 1 : -1)
     : 1;
   const velDiff = pitchVelocity - 142;
   const velShift = (velDiff >= 0 ? velDiff * 0.67 : velDiff * 0.50) * batSide;
   // 打者傾向: power>meetなら引っ張り、meet>powerなら広角（逆方向に打てる）
   // RHBの引っ張り=負方向なのでpower優位で負にシフト
   const pullTendency = ((batter.power || 50) - (batter.meet || 50)) * -0.12 * batSide;
-  let direction = Math.random() * 90 - 45 + pullTendency + velShift;
+  // 内角は引っ張り、外角は流し打ち（引っ張り＝右打者は負・左打者は正）
+  const locPullAdj = -locCol * LOC_PULL_DEG * batSide;
+  let direction = Math.random() * 90 - 45 + pullTendency + velShift + locPullAdj;
   direction = Math.max(-45, Math.min(45, direction));
 
   // 飛距離（メートル）- MLB実測値ベース（空気抵抗込み）

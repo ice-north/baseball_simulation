@@ -1118,7 +1118,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       /**
        * 物理演算ベースのコンタクト結果判定（新エンジン）
        */
-      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null, lastPitchArg = null) => {
+      const determineContactResultPhysics = (selectedBall, predictionCorrect, tempoGroundballBonus = 0, handEffect = {}, actualVelocity = 145, batter = null, pitcher = null, defense = null, catcher = null, lastPitchArg = null, pitchLoc = null) => {
         const effectiveBatter = batter || { meet: 60, power: 60, eye: 60, speed: 60 };
         const effectiveCatcher = catcher || { lead: 50 };
         const safeCount = count || { balls: 0, strikes: 0 };
@@ -1178,7 +1178,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
 
         // 物理演算で打球パラメータを計算
-        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult);
+        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult, pitchLoc);
 
         // 角度によるファウル判定（強化）
         if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {  // 55%→70%
@@ -1393,7 +1393,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             const weakBatter = { ...batter,
               meet: Math.max(1, batter.meet + bz.meet),
               power: Math.max(1, batter.power + bz.power) };
-            const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch);
+            const result = determineContactResultPhysics(selectedBall, false, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch, loc);
             return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true, pitchLoc }, newStamina };
           }
           return {
@@ -1412,7 +1412,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           meet: Math.max(1, Math.min(100, batter.meet + q.meet)),
           power: Math.max(1, Math.min(100, batter.power + q.power)) };
         // コースを読み切った場合も球種を読んだのと同じ効果
-        const result = determineContactResultPhysics(selectedBall, predictionCorrect || locationRead, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch);
+        const result = determineContactResultPhysics(selectedBall, predictionCorrect || locationRead, 0, handEffect, actualVelocity, zoneBatter, pitcher, defense, catcher, lastPitch, loc);
         return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), pitchLoc }, newStamina };
       };
 
