@@ -35,34 +35,60 @@ const place = (v, jitter) => {
   return (pos + PAD) / SPAN;
 };
 
-// 結果ごとの見え方。○=ボール □=ストライク ▷=ファウル △=空振り ●=インプレー
-const STYLE = {
-  ball:            { shape: 'circle', color: '#ec4899', fill: 'none' },
-  called_strike:   { shape: 'square', color: '#2563eb', fill: 'none' },
-  swinging_strike: { shape: 'tri',    color: '#f97316', fill: 'none' },
-  foul:            { shape: 'play',   color: '#10b981', fill: 'none' },
+// 【形＝球種】変化の向きが形になる。
+//   〇 ストレート
+//   △ カーブ
+//   ▽ 落ちる球（フォーク・チェンジアップ・パーム・ナックル・スプリッター）
+//   ◁ グラブ側へ逃げる球（スライダー・カットボール・シンカー）
+//   ▷ 腕側へ食い込む球（シュート・ツーシーム）
+const SHAPE_BY_PITCH = {
+  straight: 'circle',
+  curve: 'up',
+  fork: 'down', splitter: 'down', changeup: 'down', palm: 'down', knuckle: 'down',
+  slider: 'left', cutter: 'left', sinker: 'left',
+  shoot: 'right', twoSeam: 'right',
 };
-const IN_PLAY = { shape: 'circle', color: '#a855f7', fill: '#a855f7' };
-const LATEST = '#ef4444';
+export const PITCH_SHAPE_LEGEND = [
+  ['circle', 'ストレート'], ['up', 'カーブ'], ['down', '落ちる球'],
+  ['left', 'スライダー系'], ['right', 'シュート系'],
+];
 
-const styleFor = (type) => STYLE[type] || IN_PLAY;
+// 【色＝結果】ボール=緑 / ストライク=黄 / アウト=赤 / 安打=白。
+// 塗りつぶしは「スイングした」ことを表すので、黄の中でも
+// 見逃し（中空）と空振り・ファウル（塗り）が区別できる。
+const C_BALL = '#22c55e', C_STRIKE = '#facc15', C_OUT = '#ef4444', C_HIT = '#f8fafc';
+const RESULT_STYLE = {
+  ball:            { color: C_BALL,   swung: false },
+  called_strike:   { color: C_STRIKE, swung: false },
+  swinging_strike: { color: C_STRIKE, swung: true },
+  foul:            { color: C_STRIKE, swung: true },
+  foul_2strike:    { color: C_STRIKE, swung: true },
+  out:             { color: C_OUT,    swung: true },
+  double_play:     { color: C_OUT,    swung: true },
+  single:          { color: C_HIT,    swung: true },
+  double:          { color: C_HIT,    swung: true },
+  triple:          { color: C_HIT,    swung: true },
+  homerun:         { color: C_HIT,    swung: true },
+};
+const UNKNOWN = { color: C_OUT, swung: true };
 
-function Marker({ x, y, type, latest, scale = 1 }) {
-  const s = styleFor(type);
-  const color = latest ? LATEST : s.color;
-  const fill = latest ? LATEST : s.fill;
-  const r = (latest ? 5.0 : 4.2) * scale;
-  const w = (latest ? 1.8 : 1.4) * scale;
-  if (s.shape === 'square') {
-    return <rect x={x - r} y={y - r} width={r * 2} height={r * 2} fill={fill} stroke={color} strokeWidth={w} />;
-  }
-  if (s.shape === 'tri') {
-    return <polygon points={`${x},${y - r} ${x + r},${y + r} ${x - r},${y + r}`} fill={fill} stroke={color} strokeWidth={w} strokeLinejoin="round" />;
-  }
-  if (s.shape === 'play') {
-    return <polygon points={`${x - r},${y - r} ${x + r},${y} ${x - r},${y + r}`} fill={fill} stroke={color} strokeWidth={w} strokeLinejoin="round" />;
-  }
-  return <circle cx={x} cy={y} r={r} fill={fill} stroke={color} strokeWidth={w} />;
+export const RESULT_COLOR_LEGEND = [
+  [C_BALL, 'ボール'], [C_STRIKE, 'ストライク'], [C_OUT, 'アウト'], [C_HIT, '安打'],
+];
+
+const resultStyle = (t) => RESULT_STYLE[t] || UNKNOWN;
+const pitchShape = (t) => SHAPE_BY_PITCH[t] || 'circle';
+
+function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, scale = 1 }) {
+  const r = 4.4 * scale;
+  const w = 1.5 * scale;
+  const fill = filled ? color : 'none';
+  const common = { fill, stroke: color, strokeWidth: w, strokeLinejoin: 'round' };
+  if (shape === 'up')    return <polygon points={`${x},${y - r} ${x + r},${y + r * 0.8} ${x - r},${y + r * 0.8}`} {...common} />;
+  if (shape === 'down')  return <polygon points={`${x},${y + r} ${x + r},${y - r * 0.8} ${x - r},${y - r * 0.8}`} {...common} />;
+  if (shape === 'left')  return <polygon points={`${x - r},${y} ${x + r * 0.8},${y - r} ${x + r * 0.8},${y + r}`} {...common} />;
+  if (shape === 'right') return <polygon points={`${x + r},${y} ${x - r * 0.8},${y - r} ${x - r * 0.8},${y + r}`} {...common} />;
+  return <circle cx={x} cy={y} r={r * 0.92} {...common} />;
 }
 
 /**
@@ -148,13 +174,20 @@ export default function PitchZonePlot({
         const x = toX(p.pitchLoc.col, p.pitchLoc.jx ?? 0.5);
         const y = place(p.pitchLoc.row, p.pitchLoc.jy ?? 0.5) * V;
         const latest = i === list.length - 1;
-        const r = (latest ? 5.0 : 4.2) * mk;
+        const rs = resultStyle(p.resultType);
+        const r = 4.4 * mk;
         return (
           <g key={i}>
-            <Marker x={x} y={y} type={p.resultType} scale={mk} latest={latest} />
+            {/* 最新の1球は白いリングで囲う。赤は「アウト」に使うので色では示せない */}
+            {latest && (
+              <circle cx={x} cy={y} r={r + 2.4 * mk} fill="none"
+                stroke="#f1f5f9" strokeWidth={1.2 * mk} opacity="0.9" />
+            )}
+            <Marker x={x} y={y} shape={pitchShape(p.pitchLoc.type)}
+              color={rs.color} filled={rs.swung} scale={mk} />
             {/* 何球目か。マーカーの右上に置き、縁取りで背景と分離する */}
-            <text x={x + r + 0.8} y={y - r + 1.5} fontSize={6.2} fontWeight="bold"
-              fill={latest ? '#fecaca' : '#e5e7eb'} stroke="#0b0f19" strokeWidth="1.6"
+            <text x={x + r + 1.6} y={y - r + 1.2} fontSize={6.2} fontWeight="bold"
+              fill="#e5e7eb" stroke="#0b0f19" strokeWidth="1.6"
               paintOrder="stroke" textAnchor="start">{i + 1}</text>
           </g>
         );
@@ -163,29 +196,36 @@ export default function PitchZonePlot({
   );
 }
 
-/** 凡例（縦並び。プロットの横に置く） */
+/** 凡例。**形＝球種（曲がる方向）/ 色＝結果**の2列に分ける */
 export function PitchZoneLegend() {
-  const items = [
-    ['ball', 'ボール'], ['called_strike', '見逃し'],
-    ['swinging_strike', '空振り'], ['foul', 'ファウル'], ['inplay', '打球'],
-  ];
+  const Sw = ({ shape, color, filled }) => (
+    <svg width="13" height="13" viewBox="-7 -7 14 14" className="flex-shrink-0">
+      <Marker x={0} y={0} shape={shape} color={color} filled={filled} />
+    </svg>
+  );
   return (
-    <div className="flex flex-col justify-center gap-1">
-      {items.map(([k, label]) => (
-        <div key={k} className="flex items-center gap-1.5">
-          <svg width="12" height="12" viewBox="-7 -7 14 14">
-            <Marker x={0} y={0} type={k} latest={false} />
-          </svg>
-          <span className="text-xs text-gray-300 leading-none">{label}</span>
-        </div>
-      ))}
-      <div className="flex items-center gap-1.5 pt-0.5">
-        <svg width="12" height="12" viewBox="-7 -7 14 14">
-          <Marker x={0} y={0} type="ball" latest />
-        </svg>
-        <span className="text-xs text-gray-300 leading-none">最新の1球</span>
+    <div className="flex gap-3">
+      <div className="flex flex-col gap-1">
+        <div className="text-xs text-gray-400">形＝球種</div>
+        {PITCH_SHAPE_LEGEND.map(([shape, label]) => (
+          <div key={shape} className="flex items-center gap-1.5">
+            <Sw shape={shape} color="#cbd5e1" filled={false} />
+            <span className="text-xs text-gray-300 leading-none">{label}</span>
+          </div>
+        ))}
       </div>
-      <div className="text-xs text-gray-400 pt-1 leading-tight">数字は<br />何球目か</div>
+      <div className="flex flex-col gap-1">
+        <div className="text-xs text-gray-400">色＝結果</div>
+        {RESULT_COLOR_LEGEND.map(([color, label]) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <Sw shape="circle" color={color} filled />
+            <span className="text-xs text-gray-300 leading-none">{label}</span>
+          </div>
+        ))}
+        <div className="text-xs text-gray-400 pt-1 leading-tight">
+          塗り＝スイング<br />白丸＝最新<br />数字＝何球目
+        </div>
+      </div>
     </div>
   );
 }

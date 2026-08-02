@@ -1408,6 +1408,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 点が動いてしまうため。
         const pitchLoc = {
           col: loc.col, row: loc.row, inZone: loc.inZone, quality: loc.quality,
+          // 表示のマーカー形状は球種で決まるので、生のキーを持たせる
+          // （gameLog の pitchType は日本語の表示名なので逆引きできない）
+          type: selectedBall.type,
           jx: Math.random(), jy: Math.random(),
         };
 
