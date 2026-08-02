@@ -3677,7 +3677,7 @@ if (newOuts === 3) {
 
                 {/* 投球コース: この打席の1球ごとの到達点。捕手側から見た向きで、
                     最新の1球が赤。投手と打者の下に大きく置く */}
-                <div className="flex items-center justify-center gap-4 mb-3">
+                <div className="flex items-start gap-3 mb-3">
                   <PitchZonePlot size={168}
                     bats={getCurrentBatter().batting?.bats}
                     pitcherThrows={getCurrentPitcher().physical?.throws}
@@ -3686,6 +3686,42 @@ if (newOuts === 3) {
                       return gameLog.filter(l => l.pitchLoc && l.paKey === key);
                     })()} />
                   <PitchZoneLegend />
+                  {/* 投球ログ。コースの右に置き、高さをプロットに揃える
+                      （flex内のスクロール領域なので高さを明示すること） */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-400 mb-1">投球ログ</div>
+                    <div className="h-[150px] overflow-y-auto text-xs space-y-0.5 pr-1">
+                      {gameLog.slice().reverse().slice(0, 30).map((log, i) => (
+                        <div key={i} className={`px-1.5 py-1 rounded leading-tight ${
+                          i === 0 ? 'bg-blue-900/40' : 'bg-gray-700/40'}`}>
+                          {log.isSpecial ? (
+                            <span className="font-bold text-purple-300">{log.description}</span>
+                          ) : (
+                            <>
+                              <span className="text-gray-400">{log.inning}回{log.isTop ? '表' : '裏'}</span>
+                              <span className="mx-1 text-gray-600">|</span>
+                              <span className="font-mono tabular-nums text-gray-300">
+                                {log.count?.balls || 0}-{log.count?.strikes || 0}
+                              </span>
+                              <span className="mx-1 text-gray-600">|</span>
+                              <span className="text-blue-300">{log.pitchType}</span>
+                              <span className="text-gray-400 ml-1 tabular-nums">{log.velocity}km</span>
+                              <span className="mx-1 text-gray-600">→</span>
+                              <span className="font-bold text-gray-100">{log.result}</span>
+                              {log.exitVelocity && (
+                                <span className="text-gray-400 ml-1">
+                                  （EV{log.exitVelocity} {log.launchAngle}° {log.distance}m 芯{log.meetQuality}%）
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {gameLog.length === 0 && (
+                        <div className="text-gray-400 text-center py-2">まだ投球がありません</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* 采配コントロール。攻撃中は攻撃の指示だけ、守備中は配球だけを出す
@@ -4042,42 +4078,6 @@ if (newOuts === 3) {
                   </div>
                 );
               })()}
-
-              {/* 試合ログ */}
-              {gameStarted && (
-              <div className="bg-gray-800 rounded-lg p-2 shadow-lg border border-gray-700/50">
-                <h4 className="font-bold text-sm text-gray-200 mb-1">試合ログ</h4>
-                <div className="max-h-40 overflow-y-auto text-xs space-y-0.5">
-                  {gameLog.slice().reverse().slice(0, 20).map((log, i) => (
-                    <div key={i} className={`p-1 rounded ${i === 0 ? 'bg-blue-900/30' : 'bg-gray-700/40'}`}>
-                      {log.isSpecial ? (
-                        <span className="font-bold text-purple-400">{log.description}</span>
-                      ) : (
-                        <>
-                          <span className="text-gray-400">{log.inning}回{log.isTop ? '表' : '裏'}</span>
-                          <span className="mx-1">|</span>
-                          <span className="font-mono">{log.count?.balls || 0}-{log.count?.strikes || 0}</span>
-                          <span className="mx-1">|</span>
-                          <span className="text-blue-400">{log.pitchType}</span>
-                          <span className="text-gray-400 ml-1">{log.velocity}km</span>
-                          <span className="mx-1">→</span>
-                          <span className="font-bold">{log.result}</span>
-                          {/* 打球物理データ（ヒット/アウト時のみ表示） */}
-                          {log.exitVelocity && (
-                            <span className="ml-2 text-gray-400 text-xs">
-                              EV:{log.exitVelocity} LA:{log.launchAngle}° {log.distance}m 芯:{log.meetQuality}%
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ))}
-                  {gameLog.length === 0 && (
-                    <div className="text-gray-400 text-center py-2">試合ログがありません</div>
-                  )}
-                </div>
-              </div>
-              )}
 
               {/* 試合結果（下段に配置） */}
               {gameOver && (() => {
