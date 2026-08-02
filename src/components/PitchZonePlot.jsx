@@ -66,11 +66,39 @@ function Marker({ x, y, type, latest, scale = 1 }) {
 }
 
 /**
- * @param {Array}  pitches この打席の投球（古い順）。{ pitchLoc, resultType }
- * @param {number} size    1辺のピクセル
- * @param {string} bats    打者の左右（'right' | 'left' | 'switch'）。左右反転に使う
+ * 打者のシルエット（枠の左側に立つ姿を描き、右打者は左右反転して使う）。
+ * 「いま誰がどちらの打席か」を文字を読まずに分かるようにするための目印。
+ * 薄く描いてマーカーの視認性を落とさない。
  */
-export default function PitchZonePlot({ pitches = [], size = 96, bats = 'right' }) {
+function BatterSilhouette({ onRight }) {
+  return (
+    <g opacity="0.20" fill="#93c5fd"
+      transform={onRight ? 'translate(100,0) scale(-1,1)' : undefined}>
+      {/* バット */}
+      <polygon points="20,24 29,3 32.5,5 23.5,26" />
+      {/* 腕 */}
+      <polygon points="13,28 21,21 23.5,24 15.5,31" />
+      {/* 頭（ヘルメット） */}
+      <circle cx="12" cy="17" r="6.2" />
+      <path d="M5.5,17 h13 a1,1 0 0 1 0,2.6 h-13 z" />
+      {/* 胴 */}
+      <polygon points="6,24 18,24 16,50 8,50" />
+      {/* 脚 */}
+      <polygon points="7.5,50 12,50 11,91 6,91" />
+      <polygon points="12,50 16.5,50 19.5,91 14.5,91" />
+    </g>
+  );
+}
+
+/**
+ * @param {Array}  pitches       この打席の投球（古い順）。{ pitchLoc, resultType }
+ * @param {number} size          1辺のピクセル
+ * @param {string} bats          打者の左右（'right' | 'left' | 'switch'）
+ * @param {string} pitcherThrows 投手の利き腕。スイッチヒッターの打席を決めるのに使う
+ */
+export default function PitchZonePlot({
+  pitches = [], size = 96, bats = 'right', pitcherThrows = 'right',
+}) {
   const V = 100;                                   // viewBox の1辺
   // viewBox は固定なので、大きく表示するときはマーカーを相対的に小さくして
   // 点が潰れないようにする（168px で約0.72倍）
@@ -80,8 +108,12 @@ export default function PitchZonePlot({ pitches = [], size = 96, bats = 'right' 
   const step = (z1 - z0) / 3;
   const list = pitches.filter(p => p?.pitchLoc);
 
+  // スイッチヒッターは投手と逆の打席に立つので、実際に立つ側へ解決してから使う
+  const side = bats === 'switch'
+    ? ((pitcherThrows || 'right') === 'left' ? 'right' : 'left')
+    : (bats || 'right');
   // 左打者は内角が画面左に来るので左右を反転する（上のコメント参照）
-  const flip = bats === 'left';
+  const flip = side === 'left';
   const toX = (col, jx) => {
     const t = place(col, jx);
     return (flip ? 1 - t : t) * V;
@@ -93,6 +125,11 @@ export default function PitchZonePlot({ pitches = [], size = 96, bats = 'right' 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${V} ${V}`} className="flex-shrink-0">
       <rect x="0" y="0" width={V} height={V} rx="3" fill="#0b0f19" stroke="#374151" strokeWidth="0.8" />
+      {/* 打者のシルエット。投手から見て 右打者は画面右・左打者は画面左に立つ */}
+      <BatterSilhouette onRight={!flip} />
+      {/* ホームベース（下端中央）。向きの基準になる */}
+      <polygon points="43,95 57,95 57,89 50,85.5 43,89"
+        fill="#1f2937" stroke="#4b5563" strokeWidth="0.7" />
       {/* ストライクゾーン 3×3 */}
       {[1, 2].map(i => (
         <g key={i} stroke="#6b7280" strokeWidth="0.6">

@@ -3677,6 +3677,7 @@ if (newOuts === 3) {
                 <div className="flex items-center justify-center gap-4 mb-3">
                   <PitchZonePlot size={168}
                     bats={getCurrentBatter().batting?.bats}
+                    pitcherThrows={getCurrentPitcher().physical?.throws}
                     pitches={(() => {
                       const key = pitchSeqRef.current.key;
                       return gameLog.filter(l => l.pitchLoc && l.paKey === key);
