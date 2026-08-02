@@ -3675,10 +3675,12 @@ if (newOuts === 3) {
                 {/* 投球コース: この打席の1球ごとの到達点。捕手側から見た向きで、
                     最新の1球が赤。投手と打者の下に大きく置く */}
                 <div className="flex items-center justify-center gap-4 mb-3">
-                  <PitchZonePlot size={168} pitches={(() => {
-                    const key = pitchSeqRef.current.key;
-                    return gameLog.filter(l => l.pitchLoc && l.paKey === key);
-                  })()} />
+                  <PitchZonePlot size={168}
+                    bats={getCurrentBatter().batting?.bats}
+                    pitches={(() => {
+                      const key = pitchSeqRef.current.key;
+                      return gameLog.filter(l => l.pitchLoc && l.paKey === key);
+                    })()} />
                   <PitchZoneLegend />
                 </div>
 

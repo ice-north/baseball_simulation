@@ -1,15 +1,26 @@
 // ============================================================
 // 投球コース表示 - PitchZonePlot.jsx
 //
-// 捕手側から見たストライクゾーン（3×3）に、この打席の1球ごとの到達点を打つ。
-// 内部モデルは 5×5=25セル（src/game/pitchZone.js）なので、
+// **投手から見たストライクゾーン**（3×3）に、この打席の到達点を何球目かの
+// 数字つきで打つ。内部モデルは 5×5=25セル（src/game/pitchZone.js）なので、
 // セル中心 + セル内の揺らぎ で連続的な位置に落とす。
+//
+// 【向き】内部の col は**打者基準**（col 4 = その打者の内角）。
+// 画面は投手視点に統一するので、打者の左右で左右反転が要る。
+//
+//   ホームを原点、センター方向を +Y、一塁を +X とすると
+//     右打者は -X 側に立つ → 内角は -X
+//     左打者は +X 側に立つ → 内角は +X
+//   投手はホームを向いている（-Y を向く）ので、投手から見て
+//     画面の右 = -X = 三塁側 / 画面の左 = +X = 一塁側
+//   したがって **右打者の内角は画面右、左打者の内角は画面左**。
+//
+// ⚠ 以前は打者基準の col をそのまま x に使い「捕手側から見た向き」と
+//   書いていたが、実際には右打者では投手視点・左打者では捕手視点という
+//   混在状態だった。ここで打者の左右を見て統一する。
 //
 // **揺らぎ(jx/jy)は投球時に一度だけ決めて保存してある**。
 // 描画のたびに乱数を引くと、再レンダリングごとに点が動いてしまう。
-//
-// col 0=外角ボール / 1-3=ゾーン / 4=内角ボール（打者から見た向き）
-// row 0=高めボール / 1-3=ゾーン / 4=低めボール
 // ============================================================
 
 const SIZE = 5;                       // 5×5セル
@@ -55,10 +66,11 @@ function Marker({ x, y, type, latest, scale = 1 }) {
 }
 
 /**
- * @param {Array} pitches この打席の投球（古い順）。{ pitchLoc, resultType }
- * @param {number} size   1辺のピクセル
+ * @param {Array}  pitches この打席の投球（古い順）。{ pitchLoc, resultType }
+ * @param {number} size    1辺のピクセル
+ * @param {string} bats    打者の左右（'right' | 'left' | 'switch'）。左右反転に使う
  */
-export default function PitchZonePlot({ pitches = [], size = 96 }) {
+export default function PitchZonePlot({ pitches = [], size = 96, bats = 'right' }) {
   const V = 100;                                   // viewBox の1辺
   // viewBox は固定なので、大きく表示するときはマーカーを相対的に小さくして
   // 点が潰れないようにする（168px で約0.72倍）
@@ -67,6 +79,16 @@ export default function PitchZonePlot({ pitches = [], size = 96 }) {
   const z1 = ((4 + PAD) / SPAN) * V;               // 右下
   const step = (z1 - z0) / 3;
   const list = pitches.filter(p => p?.pitchLoc);
+
+  // 左打者は内角が画面左に来るので左右を反転する（上のコメント参照）
+  const flip = bats === 'left';
+  const toX = (col, jx) => {
+    const t = place(col, jx);
+    return (flip ? 1 - t : t) * V;
+  };
+  // 内角/外角のラベルも打者の左右で入れ替わる
+  const rightLabel = flip ? '外角' : '内角';
+  const leftLabel = flip ? '内角' : '外角';
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${V} ${V}`} className="flex-shrink-0">
@@ -80,16 +102,26 @@ export default function PitchZonePlot({ pitches = [], size = 96 }) {
       ))}
       <rect x={z0} y={z0} width={z1 - z0} height={z1 - z0}
         fill="none" stroke="#d1d5db" strokeWidth="1.6" />
-      {/* 打者から見た向きの目印 */}
-      <text x={z0 - 3} y={V - 2} fill="#6b7280" fontSize="5" textAnchor="start">外角</text>
-      <text x={z1 + 3} y={V - 2} fill="#6b7280" fontSize="5" textAnchor="end">内角</text>
-      {list.map((p, i) => (
-        <Marker key={i}
-          x={place(p.pitchLoc.col, p.pitchLoc.jx ?? 0.5) * V}
-          y={place(p.pitchLoc.row, p.pitchLoc.jy ?? 0.5) * V}
-          type={p.resultType} scale={mk}
-          latest={i === list.length - 1} />
-      ))}
+      {/* 投手から見た向きの目印 */}
+      <text x="2" y="7" fill="#6b7280" fontSize="5" textAnchor="start">一塁側</text>
+      <text x={V - 2} y="7" fill="#6b7280" fontSize="5" textAnchor="end">三塁側</text>
+      <text x="2" y={V - 2.5} fill="#9ca3af" fontSize="5.5" textAnchor="start">{leftLabel}</text>
+      <text x={V - 2} y={V - 2.5} fill="#9ca3af" fontSize="5.5" textAnchor="end">{rightLabel}</text>
+      {list.map((p, i) => {
+        const x = toX(p.pitchLoc.col, p.pitchLoc.jx ?? 0.5);
+        const y = place(p.pitchLoc.row, p.pitchLoc.jy ?? 0.5) * V;
+        const latest = i === list.length - 1;
+        const r = (latest ? 5.0 : 4.2) * mk;
+        return (
+          <g key={i}>
+            <Marker x={x} y={y} type={p.resultType} scale={mk} latest={latest} />
+            {/* 何球目か。マーカーの右上に置き、縁取りで背景と分離する */}
+            <text x={x + r + 0.8} y={y - r + 1.5} fontSize={6.2} fontWeight="bold"
+              fill={latest ? '#fecaca' : '#e5e7eb'} stroke="#0b0f19" strokeWidth="1.6"
+              paintOrder="stroke" textAnchor="start">{i + 1}</text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -116,6 +148,7 @@ export function PitchZoneLegend() {
         </svg>
         <span className="text-xs text-gray-300 leading-none">最新の1球</span>
       </div>
+      <div className="text-xs text-gray-400 pt-1 leading-tight">数字は<br />何球目か</div>
     </div>
   );
 }
