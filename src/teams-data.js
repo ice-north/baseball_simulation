@@ -120,13 +120,13 @@ export const initializeTeamsData = () => {
   // デフォルト4チームを初期化
   initializeTeamsForCount(4);
 
-  // players.jsの関数が読み込まれているか確認
-  if (typeof createDefaultPlayers === 'function') {
-    TEAMS_DATA['チームA'].players = [...createDefaultPlayers(), ...createHomeBench()];
-  }
-  if (typeof createAwayPlayers === 'function') {
-    TEAMS_DATA['チームB'].players = [...createAwayPlayers(), ...createAwayBench()];
-  }
+  // 【削除済み】ここに players.js の固定ロスターを読み込む分岐があったが、
+  // `typeof createDefaultPlayers === 'function'` というガードで囲まれており、
+  // このファイルは players.js を import していないため**一度も実行されていなかった**
+  // （ESモジュールなので typeof は必ず 'undefined'）。
+  // 実際のロスターは initializeTeamsForCount() が生成している。
+  // 今さら有効にすると新規ゲームのチームA/Bだけ固定ロスターに変わってしまうため、
+  // 到達しないコードとして除去した。
 
   // 全選手に背番号と初期成績を設定
   Object.keys(TEAMS_DATA).forEach(teamName => {

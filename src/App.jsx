@@ -1361,7 +1361,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // プレイヤーが張らない打者（＝相手チーム、または「おまかせ」）は
         // 打者の型（野村の4分類）に従って自分で狙う。batterType.js
         const aiG = resolveAiBatterGuess({
-          type: getBatterType(currentBatter), player: currentBatter,
+          type: batter.type || 'D', player: batter.player,
           balls: safeCount.balls, strikes: safeCount.strikes,
           isBreaking: isBreakingPitch, col: loc.col, guessRight: predictionCorrect,
           sequence, batterEye: batter.eye,
@@ -1483,6 +1483,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           bats: currentBatter.batting.bats,
           // コース適性（内外角・高低の得手不得手）。自動シミュレーションと同じ導出
           zone: getZoneProfile(currentBatter),
+          // 打者の型と選手実体。simulateSinglePitch は別関数なので
+          // currentBatter を直接は参照できない（ここで詰めて渡す）
+          type: getBatterType(currentBatter),
+          player: currentBatter,
         };
 
         const pitcher = {

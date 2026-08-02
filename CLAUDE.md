@@ -56,6 +56,27 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - **UI**: オフシーズン画面の「🧳 監督移籍」。カテゴリ別タブ＋チーム名検索から就任先を選ぶ
 - **キャリア履歴**: `WORLD_DATA.managerCareer`（year/from/to/category）に記録・セーブされる
 
+## ⚠ 采配モードはハーネスで実行されない（`npm run check:scope`）
+`App.jsx` の `simulateSinglePitch` は React コンポーネントの中に閉じているため、
+**sim-harness では一度も実行されない**。自動シミュレーションだけがテストされている
+状態なので、采配モードのスコープ由来のバグはブラウザで踏むまで分からない。
+
+実際に起きた事故: `simulateSinglePitch` から `currentBatter`
+（`simulatePitch` のローカル）を参照し、投球のたびに ReferenceError で
+試合が進まなくなった。**ビルドは通り、season-check も全項目PASSしていた**。
+
+`tools/sim-harness/scope-check.mjs` が `@babel/parser` で全 `src/` を走査し、
+未定義の識別子を検出する（`npm run check` に組み込み済み）。
+- 別の関数のローカル変数を参照したら即FAILする
+- `typeof x === 'function'` のような未宣言ガードは警告（到達しない分岐）
+- **采配モードに手を入れたら必ず走らせること**
+
+この検査で見つかった既存バグ2件:
+- `dateProgression.js` が `getNextGame` を import しておらず、
+  「次の試合まで進む」が ReferenceError でクラッシュしていた
+- `teams-data.js` の `typeof createDefaultPlayers === 'function'` 分岐は
+  ESモジュールでは必ず false。一度も実行されていない到達しないコードだった（除去）
+
 ## 主要ファイル
 - `src/App.jsx` (~5130行) - メインアプリ、試合シミュレーション、画面遷移（下記セクション参照）
 - `src/game/autoSimulation.js` (~2430行) - 自動シミュレーション・buildDefense

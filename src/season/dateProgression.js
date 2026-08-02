@@ -4,7 +4,7 @@
 // ============================================================
 
 import { advanceDate, getCurrentPhase, getNPBDraftDay, createSeasonData, initializeStandings, SEASON_PHASES, updateStandings, generatePlayoffSchedule, updatePlayoffProgress } from './seasonManager.js';
-import { generateFullSeasonSchedule } from './scheduleGenerator.js';
+import { generateFullSeasonSchedule, getNextGame } from './scheduleGenerator.js';
 import { recoverAllPitcherFatigue } from '../game/autoSimulation.js';
 import { updateAllPlayersCondition } from '../game/condition.js';
 
