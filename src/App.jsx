@@ -390,10 +390,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
       // 詳細は src/game/useGameStrategy.js 参照。
       const strategy = useGameStrategy();
       const {
-        battingApproach, defenseShift, pitchAim, pitchTypeIndex,
-        setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex,
+        battingApproach, pitchAim, pitchTypeIndex,
+        setBattingApproach, setPitchAim, setPitchTypeIndex,
         triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
-        battingApproachRef, defenseShiftRef, pitchAimRef, pitchTypeIndexRef,
+        battingApproachRef, pitchAimRef, pitchTypeIndexRef,
         batGuessType, batGuessZone, setBatGuessType, setBatGuessZone,
         batGuessTypeRef, batGuessZoneRef,
         forceStealRef, forceSwingRef, intentionalWalkRef,
@@ -1680,21 +1680,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (doIntentionalWalk) {
           result = { type: 'ball', description: '敬遠', pitchType: '—', velocity: 0 };
         }
-        // 采配: 守備シフト（自チーム守備時）。打球方向がシフト方向なら併殺/アウトに、逆なら安打になりやすい
-        if (defenseShiftRef.current !== 'normal' && result.ballDirection &&
-            (isTopInning ? homeTeam.name : awayTeam.name) === userTeamName) {
-          const bats = getCurrentBatter().batting?.bats;
-          const pullLeft = bats !== 'left';            // 右/両打→左が引っ張り, 左打→右が引っ張り
-          const shiftLeft = defenseShiftRef.current === 'pull' ? pullLeft : !pullLeft;
-          const toLeft = result.ballDirection === 'left' || result.ballDirection === 'leftCenter';
-          const toRight = result.ballDirection === 'right' || result.ballDirection === 'rightCenter';
-          if (result.type === 'single' && ((shiftLeft && toLeft) || (!shiftLeft && toRight))) {
-            if (Math.random() < 0.35) result = { ...result, type: 'out', hit: false, description: 'シフト正面でアウト' };
-          } else if (result.type === 'out' && !result.isOutfieldFly && ((shiftLeft && toRight) || (!shiftLeft && toLeft))) {
-            if (Math.random() < 0.30) result = { ...result, type: 'single', hit: true, description: 'シフトの逆を突く安打' };
-          }
-        }
-
+        // 【守備シフトは廃止】打球方向モデル（段階5）を作った後も、シフトは
+        // 「単打の35%をアウトに書き換える」後付け処理のままで整合していなかった。
+        // 守備は全て基本配置とする。
         // 球速履歴を更新（最新2球分のみ保持）
         setRecentVelocities(prev => {
           const updated = [...prev, result.velocity];
@@ -3608,18 +3596,6 @@ if (newOuts === 3) {
                     </div>
                     <div className="text-orange-500 text-xs">km/h</div>
                   </div>
-
-                  {/* 区切り線 */}
-                  <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
-
-                  {/* 投球コース（この打席の1球ごと。最新球が赤） */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <PitchZonePlot size={56} pitches={(() => {
-                      const key = pitchSeqRef.current.key;
-                      return gameLog.filter(l => l.pitchLoc && l.paKey === key);
-                    })()} />
-                    <PitchZoneLegend />
-                  </div>
                 </div>
               </div>
               )}
@@ -3695,143 +3671,142 @@ if (newOuts === 3) {
                     </div>
                   </div>
                 </div>
-                
-                {/* 采配コントロール（攻撃時＝打撃方針/盗塁/エンドラン/スクイズ、守備時＝敬遠/守備シフト） */}
+
+                {/* 投球コース: この打席の1球ごとの到達点。捕手側から見た向きで、
+                    最新の1球が赤。投手と打者の下に大きく置く */}
+                <div className="flex items-center justify-center gap-4 mb-3">
+                  <PitchZonePlot size={168} pitches={(() => {
+                    const key = pitchSeqRef.current.key;
+                    return gameLog.filter(l => l.pitchLoc && l.paKey === key);
+                  })()} />
+                  <PitchZoneLegend />
+                </div>
+
+                {/* 采配コントロール。攻撃中は攻撃の指示だけ、守備中は配球だけを出す
+                    （従来は両方を常に並べて、使えない側を薄く表示していた） */}
                 <TutorialHint id="ingame-tactics" title="試合の采配">
-                  攻撃中は<b className="text-cyan-200">打撃方針（待て/おまかせ/積極）・盗塁・エンドラン・スクイズ</b>、守備中は<b className="text-cyan-200">敬遠・守備シフト</b>を指示できます。投球を進めながら状況に応じて使い分けましょう。おまかせにすれば監督AIが自動で采配します。
+                  <b className="text-cyan-200">攻撃中</b>は打撃方針・狙い球（球種／コース）・盗塁・エンドラン・バント、
+                  <b className="text-amber-200">守備中</b>は配球（球種／狙い）・敬遠を指示できます。
+                  いま操作できる側だけが表示されます。おまかせにすれば監督AIと捕手AIが自動で判断します。
                 </TutorialHint>
                 {(() => {
                   const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
                   const busy = isAutoSimulating || gameOver;
-                  const offBtn = 'px-2.5 py-1 rounded text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed';
-                  return (
-                    <div className="flex items-center justify-center gap-1.5 flex-wrap mb-2">
-                      {/* 攻撃 */}
-                      <span className={`text-xs ${isUserBatting ? 'text-cyan-300' : 'text-gray-600'}`}>攻撃</span>
-                      {[['take', '待て'], ['normal', 'おまかせ'], ['aggressive', '積極']].map(([v, label]) => (
-                        <button key={v} onClick={() => setBattingApproach(v)} disabled={!isUserBatting || gameOver}
-                          className={`px-2 py-1 rounded text-xs font-bold transition ${
-                            battingApproach === v ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${!isUserBatting ? 'opacity-40' : ''}`}>
-                          {label}
-                        </button>
-                      ))}
-                      <button onClick={() => triggerSteal(throwPitch)}
-                        disabled={!isUserBatting || !bases[0] || busy} title="一塁走者が次球で盗塁"
-                        className={`${offBtn} bg-emerald-700 text-emerald-100 hover:bg-emerald-600`}>🏃 盗塁</button>
-                      <button onClick={() => triggerHitAndRun(throwPitch)}
-                        disabled={!isUserBatting || !bases[0] || outs >= 2 || busy} title="走者を走らせ打者は必ず打ちにいく"
-                        className={`${offBtn} bg-emerald-800 text-emerald-100 hover:bg-emerald-700`}>エンドラン</button>
-                      <button onClick={() => handleBunt()}
-                        disabled={!isUserBatting || !bases[2] || outs > 1 || busy} title="三塁走者を還すスクイズバント"
-                        className={`${offBtn} bg-yellow-700 text-yellow-100 hover:bg-yellow-600`}>スクイズ</button>
-                      <span className="text-xs text-gray-600">｜</span>
-                      {/* 守備 */}
-                      <span className={`text-xs ${!isUserBatting ? 'text-indigo-300' : 'text-gray-600'}`}>守備</span>
-                      <button onClick={() => triggerIntentionalWalk(throwPitch)}
-                        disabled={isUserBatting || busy} title="現在の打者を敬遠"
-                        className={`${offBtn} bg-indigo-700 text-indigo-100 hover:bg-indigo-600`}>敬遠</button>
-                      {[['normal', '通常'], ['pull', '引っ張り'], ['oppo', '流し']].map(([v, label]) => (
-                        <button key={v} onClick={() => setDefenseShift(v)} disabled={isUserBatting || gameOver}
-                          title="守備シフト" className={`px-2 py-1 rounded text-xs font-bold transition ${
-                            defenseShift === v ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${isUserBatting ? 'opacity-40' : ''}`}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })()}
-                {/* 狙い球（攻撃時）: 球種とコースを張る。当たれば準備万端、外せば体が動く */}
-                {(() => {
-                  const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
-                  const dim = isUserBatting ? '' : 'opacity-40';
-                  const btn = (active, color) => `px-2 py-1 rounded text-xs font-bold transition ${
-                    active ? `${color} text-white` : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${dim}`;
-                  const on = batGuessType !== 'auto' || batGuessZone !== 'auto';
-                  return (
-                    <div className="flex items-center justify-center gap-1.5 flex-wrap mb-2">
-                      <span className={`text-xs ${isUserBatting ? 'text-cyan-300' : 'text-gray-600'}`}>狙い球</span>
-                      <button onClick={() => setBatGuessType('auto')} disabled={!isUserBatting || gameOver}
-                        title="球種は張らない（打者の読みはAIに任せる）"
-                        className={btn(batGuessType === 'auto', 'bg-cyan-700')}>おまかせ</button>
-                      {['straight', 'breaking'].map(v => (
-                        <button key={v} onClick={() => setBatGuessType(v)} disabled={!isUserBatting || gameOver}
-                          title={`${GUESS_TYPE_LABEL[v]}に張る。来れば強く振れるが、違えば対応が遅れる`}
-                          className={btn(batGuessType === v, 'bg-cyan-700')}>{GUESS_TYPE_LABEL[v]}</button>
-                      ))}
-                      <span className="text-xs text-gray-600">｜</span>
-                      <span className={`text-xs ${isUserBatting ? 'text-cyan-300' : 'text-gray-600'}`}>コース</span>
-                      <button onClick={() => setBatGuessZone('auto')} disabled={!isUserBatting || gameOver}
-                        title="コースは張らない" className={btn(batGuessZone === 'auto', 'bg-teal-700')}>おまかせ</button>
-                      {['in', 'out', 'high', 'low'].map(v => (
-                        <button key={v} onClick={() => setBatGuessZone(v)} disabled={!isUserBatting || gameOver}
-                          title={`${GUESS_ZONE_LABEL[v]}に張る。その半面に来れば読み切れる`}
-                          className={btn(batGuessZone === v, 'bg-teal-700')}>{GUESS_ZONE_LABEL[v]}</button>
-                      ))}
-                      {on && isUserBatting && (
-                        <span className="text-xs px-2 py-1 rounded bg-amber-900 text-amber-200"
-                          title="張った次元が当たれば読み、外せば対応が遅れる。両方当てるとタイミング窓が1.5倍">
-                          ヤマ張り中
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()}
-                {/* 配球（守備時）: 球種と狙いを指定する。おまかせなら捕手AIが決める */}
-                {(() => {
-                  const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
+                  const pick = (active, color) => `px-2.5 py-1 rounded text-xs font-bold transition ${
+                    active ? `${color} text-white` : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`;
+                  const act = 'px-2.5 py-1 rounded text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed';
+                  const row = 'flex items-center justify-center gap-1.5 flex-wrap';
+                  const tag = (color) => `text-xs w-14 text-right ${color}`;
+
+                  // ===== 攻撃中 =====
+                  if (isUserBatting) {
+                    const aiming = batGuessType !== 'auto' || batGuessZone !== 'auto';
+                    return (
+                      <div className="bg-cyan-950/30 border border-cyan-800/40 rounded p-2 mb-2 space-y-1.5">
+                        <div className={row}>
+                          <span className={tag('text-cyan-300')}>打撃</span>
+                          {[['take', '待て'], ['normal', 'おまかせ'], ['aggressive', '積極']].map(([v, label]) => (
+                            <button key={v} onClick={() => setBattingApproach(v)} disabled={gameOver}
+                              title={v === 'take' ? '見送りを増やして球数を稼ぐ'
+                                : v === 'aggressive' ? '早いカウントから積極的に打ちにいく' : '監督AIに任せる'}
+                              className={pick(battingApproach === v, 'bg-cyan-600')}>{label}</button>
+                          ))}
+                          <span className="text-xs text-gray-600">｜</span>
+                          <button onClick={() => triggerSteal(throwPitch)} disabled={!bases[0] || busy}
+                            title="一塁走者が次球で盗塁"
+                            className={`${act} bg-emerald-700 text-emerald-100 hover:bg-emerald-600`}>🏃 盗塁</button>
+                          <button onClick={() => triggerHitAndRun(throwPitch)} disabled={!bases[0] || outs >= 2 || busy}
+                            title="走者を走らせ打者は必ず打ちにいく"
+                            className={`${act} bg-emerald-800 text-emerald-100 hover:bg-emerald-700`}>エンドラン</button>
+                          <button onClick={() => handleBunt()} disabled={busy}
+                            title="送りバント"
+                            className={`${act} bg-yellow-700 text-yellow-100 hover:bg-yellow-600`}>バント</button>
+                          <button onClick={() => handleBunt()} disabled={!bases[2] || outs > 1 || busy}
+                            title="三塁走者を還すスクイズバント"
+                            className={`${act} bg-yellow-800 text-yellow-100 hover:bg-yellow-700`}>スクイズ</button>
+                        </div>
+                        <div className={row}>
+                          <span className={tag('text-cyan-300')}>狙い球</span>
+                          <button onClick={() => setBatGuessType('auto')} disabled={gameOver}
+                            title="球種は張らない（読み合いはAIに任せる）"
+                            className={pick(batGuessType === 'auto', 'bg-cyan-700')}>おまかせ</button>
+                          {['straight', 'breaking'].map(v => (
+                            <button key={v} onClick={() => setBatGuessType(v)} disabled={gameOver}
+                              title={`${GUESS_TYPE_LABEL[v]}に張る。来れば強く振れるが、違えば対応が遅れる`}
+                              className={pick(batGuessType === v, 'bg-cyan-700')}>{GUESS_TYPE_LABEL[v]}</button>
+                          ))}
+                          <span className="text-xs text-gray-600">｜</span>
+                          <span className={tag('text-teal-300')}>コース</span>
+                          <button onClick={() => setBatGuessZone('auto')} disabled={gameOver}
+                            title="コースは張らない"
+                            className={pick(batGuessZone === 'auto', 'bg-teal-700')}>おまかせ</button>
+                          {['in', 'out', 'high', 'low'].map(v => (
+                            <button key={v} onClick={() => setBatGuessZone(v)} disabled={gameOver}
+                              title={`${GUESS_ZONE_LABEL[v]}に張る。その半面に来れば読み切れる`}
+                              className={pick(batGuessZone === v, 'bg-teal-700')}>{GUESS_ZONE_LABEL[v]}</button>
+                          ))}
+                          {aiming && (
+                            <span className="text-xs px-2 py-1 rounded bg-amber-900 text-amber-200"
+                              title="張った次元が当たれば読み、外せば対応が遅れる。両方当てるとタイミング窓が1.5倍">
+                              ヤマ張り中
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ===== 守備中 =====
                   const arsenal = getCurrentPitcher()?.pitches || [];
-                  const dim = isUserBatting ? 'opacity-40' : '';
-                  const btn = (active, color) => `px-2 py-1 rounded text-xs font-bold transition ${
-                    active ? `${color} text-white` : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} ${dim}`;
+                  const obj = decidePitchObjective(bases, outs);
                   return (
-                    <div className="flex items-center justify-center gap-1.5 flex-wrap mb-2">
-                      <span className={`text-xs ${!isUserBatting ? 'text-amber-300' : 'text-gray-600'}`}>配球</span>
-                      <button onClick={() => setPitchTypeIndex('auto')} disabled={isUserBatting || gameOver}
-                        title="球種は捕手のリードに任せる" className={btn(pitchTypeIndex === 'auto', 'bg-amber-700')}>おまかせ</button>
-                      {arsenal.map((b, i) => (
-                        <button key={i} onClick={() => setPitchTypeIndex(i)} disabled={isUserBatting || gameOver}
-                          title={`${ballEffects[b.type]?.name || b.type} Lv${b.level}`}
-                          className={btn(pitchTypeIndex === i, 'bg-amber-700')}>
-                          {ballEffects[b.type]?.name || b.type}
-                        </button>
-                      ))}
-                      <span className="text-xs text-gray-600">｜</span>
-                      <span className={`text-xs ${!isUserBatting ? 'text-amber-300' : 'text-gray-600'}`}>狙い</span>
-                      <button onClick={() => setPitchAim('auto')} disabled={isUserBatting || gameOver}
-                        title="狙いも捕手のリードに任せる" className={btn(pitchAim === 'auto', 'bg-rose-700')}>おまかせ</button>
-                      {['zone', 'edge', 'chase'].map(v => (
-                        <button key={v} onClick={() => setPitchAim(v)} disabled={isUserBatting || gameOver}
-                          title={v === 'zone' ? 'ゾーンで勝負。ストライクは取れるが打たれやすい'
-                            : v === 'edge' ? '際どいコース。打ち損じを誘うが四球のリスク'
-                            : '誘い球（ボール球）。振らせれば凡打、見逃されれば四球に近づく'}
-                          className={btn(pitchAim === v, 'bg-rose-700')}>{AIM_LABEL[v]}</button>
-                      ))}
-                      {/* 場面から捕手が求める結果（走者一塁=併殺 / 走者三塁=三振）。
-                          プレイヤーは操作しないが、何を狙っているかは見せる */}
-                      {(() => {
-                        const obj = decidePitchObjective(bases, outs);
-                        if (obj.goal === 'normal') return null;
-                        return (
+                    <div className="bg-amber-950/30 border border-amber-800/40 rounded p-2 mb-2 space-y-1.5">
+                      <div className={row}>
+                        <span className={tag('text-amber-300')}>配球</span>
+                        <button onClick={() => setPitchTypeIndex('auto')} disabled={gameOver}
+                          title="球種は捕手のリードに任せる"
+                          className={pick(pitchTypeIndex === 'auto', 'bg-amber-700')}>おまかせ</button>
+                        {arsenal.map((b, i) => (
+                          <button key={i} onClick={() => setPitchTypeIndex(i)} disabled={gameOver}
+                            title={`${ballEffects[b.type]?.name || b.type} Lv${b.level}`}
+                            className={pick(pitchTypeIndex === i, 'bg-amber-700')}>
+                            {ballEffects[b.type]?.name || b.type}
+                          </button>
+                        ))}
+                      </div>
+                      <div className={row}>
+                        <span className={tag('text-rose-300')}>狙い</span>
+                        <button onClick={() => setPitchAim('auto')} disabled={gameOver}
+                          title="狙いも捕手のリードに任せる"
+                          className={pick(pitchAim === 'auto', 'bg-rose-700')}>おまかせ</button>
+                        {['zone', 'edge', 'chase'].map(v => (
+                          <button key={v} onClick={() => setPitchAim(v)} disabled={gameOver}
+                            title={v === 'zone' ? 'ゾーンで勝負。ストライクは取れるが打たれやすい'
+                              : v === 'edge' ? '際どいコース。打ち損じを誘うが四球のリスク'
+                              : '誘い球（ボール球）。振らせれば凡打、見逃されれば四球に近づく'}
+                            className={pick(pitchAim === v, 'bg-rose-700')}>{AIM_LABEL[v]}</button>
+                        ))}
+                        <span className="text-xs text-gray-600">｜</span>
+                        <button onClick={() => triggerIntentionalWalk(throwPitch)} disabled={busy}
+                          title="現在の打者を敬遠"
+                          className={`${act} bg-indigo-700 text-indigo-100 hover:bg-indigo-600`}>敬遠</button>
+                        {/* 場面から捕手が求める結果。プレイヤーは操作しないが何を狙っているかは見せる */}
+                        {obj.goal !== 'normal' && (
                           <span className={`text-xs px-2 py-1 rounded ${
-                            obj.goal === 'groundball' ? 'bg-emerald-900 text-emerald-200'
-                              : 'bg-sky-900 text-sky-200'} ${dim}`}
+                            obj.goal === 'groundball' ? 'bg-emerald-900 text-emerald-200' : 'bg-sky-900 text-sky-200'}`}
                             title={OBJECTIVE_NOTE[obj.goal] + (obj.avoidWalk ? '（満塁なので押し出しを避ける）' : '')}>
                             {OBJECTIVE_LABEL[obj.goal]}{obj.avoidWalk ? '・押し出し回避' : ''}
                           </span>
-                        );
-                      })()}
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
-                {/* 操作ボタン */}
-                <div className="flex justify-center gap-2 flex-wrap">
+                {/* 試合進行。采配（上）と進行（下）を分ける */}
+                <div className="flex justify-center items-center gap-2 flex-wrap border-t border-gray-700/60 pt-2">
                   <button onClick={throwPitch} disabled={isAutoSimulating || gameOver}
-                    className="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 disabled:opacity-50">
+                    className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 disabled:opacity-50">
                     ⚾ 1球
-                  </button>
-                  <button onClick={handleBunt} disabled={isAutoSimulating || gameOver}
-                    className="bg-yellow-600 text-white px-3 py-2 rounded text-sm font-bold hover:bg-yellow-700 disabled:opacity-50">
-                    バント
                   </button>
                   <button onClick={() => startSimMode('out')} disabled={isAutoSimulating || gameOver}
                     className="bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50">
@@ -3841,12 +3816,12 @@ if (newOuts === 3) {
                     className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50">
                     試合終了まで
                   </button>
-                  <button
-                    onClick={() => setAutoManagerMode(!autoManagerMode)}
+                  <span className="w-px h-7 bg-gray-700 mx-1" />
+                  <button onClick={() => setAutoManagerMode(!autoManagerMode)}
+                    title="監督AIに采配を任せる"
                     className={`px-3 py-2 rounded text-sm font-semibold transition ${
                       autoManagerMode ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                    }`}
-                  >
+                    }`}>
                     🤖 {autoManagerMode ? 'AI ON' : 'AI OFF'}
                   </button>
                   {managedGameInfo && !gameOver && (

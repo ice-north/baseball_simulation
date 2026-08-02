@@ -6,7 +6,8 @@
 // スコープ由来のバグを構造的に防ぐためのモジュール。
 //
 // 采配は 2 種類ある:
-//   - 継続する設定  : battingApproach (打撃方針), defenseShift (守備シフト)
+//   - 継続する設定  : battingApproach (打撃方針), pitchAim/pitchTypeIndex (配球),
+//                    batGuessType/batGuessZone (打者の狙い球)
 //     → UI 表示用の state と、投球ロジックが読む ref を同期。
 //   - ワンショット指示: forceSteal / forceSwing / intentionalWalk
 //     → ref のみ。次の 1 球で「消費」して自動で false に戻る。
@@ -29,7 +30,6 @@ import { useState, useRef, useCallback } from 'react';
 export function useGameStrategy() {
   // 継続する設定（画面にも状態を反映するので state ＋ ref のペア）
   const [battingApproach, _setBattingApproach] = useState('normal'); // 'take' | 'normal' | 'aggressive'
-  const [defenseShift,   _setDefenseShift]     = useState('normal'); // 'normal' | 'pull' | 'oppo'
   // 配球: 投球の狙い。'auto' は捕手AIに任せる（従来動作）
   const [pitchAim,       _setPitchAim]         = useState('auto');    // 'auto' | 'zone' | 'edge' | 'chase'
   // 球種指定: 'auto' は捕手のリードに任せる（従来動作）。それ以外は arsenal の index
@@ -39,7 +39,6 @@ export function useGameStrategy() {
   const [batGuessType, _setBatGuessType]       = useState('auto');    // 'auto' | 'straight' | 'breaking'
   const [batGuessZone, _setBatGuessZone]       = useState('auto');    // 'auto' | 'in' | 'out' | 'high' | 'low'
   const battingApproachRef = useRef('normal');
-  const defenseShiftRef    = useRef('normal');
   const pitchAimRef        = useRef('auto');
   const pitchTypeIndexRef  = useRef('auto');
   const batGuessTypeRef    = useRef('auto');
@@ -54,10 +53,6 @@ export function useGameStrategy() {
   const setBattingApproach = useCallback((v) => {
     _setBattingApproach(v);
     battingApproachRef.current = v;
-  }, []);
-  const setDefenseShift = useCallback((v) => {
-    _setDefenseShift(v);
-    defenseShiftRef.current = v;
   }, []);
   const setPitchAim = useCallback((v) => {
     _setPitchAim(v);
@@ -96,7 +91,6 @@ export function useGameStrategy() {
   // ref を直接参照させたくない箇所（例: 敬遠のresult上書き）はこの返り値を使う。
   const snapshot = useCallback(() => ({
     battingApproach: battingApproachRef.current,
-    defenseShift:    defenseShiftRef.current,
     pitchAim:        pitchAimRef.current,
     pitchTypeIndex:  pitchTypeIndexRef.current,
     batGuessType:    batGuessTypeRef.current,
@@ -116,25 +110,24 @@ export function useGameStrategy() {
   // 打席・イニング・試合の切れ目でリセットしたい時に使う（現状は未使用でも公開）。
   const resetPersistent = useCallback(() => {
     setBattingApproach('normal');
-    setDefenseShift('normal');
     setPitchAim('auto');
     setPitchTypeIndex('auto');
     setBatGuessType('auto');
     setBatGuessZone('auto');
-  }, [setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex,
+  }, [setBattingApproach, setPitchAim, setPitchTypeIndex,
       setBatGuessType, setBatGuessZone]);
 
   return {
     // UI 表示用の state
-    battingApproach, defenseShift, pitchAim, pitchTypeIndex,
+    battingApproach, pitchAim, pitchTypeIndex,
     batGuessType, batGuessZone,
     // UI からの設定変更
-    setBattingApproach, setDefenseShift, setPitchAim, setPitchTypeIndex,
+    setBattingApproach, setPitchAim, setPitchTypeIndex,
     setBatGuessType, setBatGuessZone,
     // ワンショット指示（ボタンから呼ぶ）
     triggerSteal, triggerHitAndRun, triggerIntentionalWalk,
     // 投球ロジック用の ref（simulateSinglePitch などが直接参照）
-    battingApproachRef, defenseShiftRef, pitchAimRef, pitchTypeIndexRef,
+    battingApproachRef, pitchAimRef, pitchTypeIndexRef,
     batGuessTypeRef, batGuessZoneRef,
     forceStealRef, forceSwingRef, intentionalWalkRef,
     // 1球ライフサイクル

@@ -36,12 +36,12 @@ const LATEST = '#ef4444';
 
 const styleFor = (type) => STYLE[type] || IN_PLAY;
 
-function Marker({ x, y, type, latest }) {
+function Marker({ x, y, type, latest, scale = 1 }) {
   const s = styleFor(type);
   const color = latest ? LATEST : s.color;
   const fill = latest ? LATEST : s.fill;
-  const r = latest ? 5.5 : 4.5;
-  const w = latest ? 2 : 1.6;
+  const r = (latest ? 5.0 : 4.2) * scale;
+  const w = (latest ? 1.8 : 1.4) * scale;
   if (s.shape === 'square') {
     return <rect x={x - r} y={y - r} width={r * 2} height={r * 2} fill={fill} stroke={color} strokeWidth={w} />;
   }
@@ -60,6 +60,9 @@ function Marker({ x, y, type, latest }) {
  */
 export default function PitchZonePlot({ pitches = [], size = 96 }) {
   const V = 100;                                   // viewBox の1辺
+  // viewBox は固定なので、大きく表示するときはマーカーを相対的に小さくして
+  // 点が潰れないようにする（168px で約0.72倍）
+  const mk = Math.max(0.6, Math.min(1, 120 / size));
   const z0 = ((1 + PAD) / SPAN) * V;               // ストライクゾーンの左上
   const z1 = ((4 + PAD) / SPAN) * V;               // 右下
   const step = (z1 - z0) / 3;
@@ -67,43 +70,52 @@ export default function PitchZonePlot({ pitches = [], size = 96 }) {
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${V} ${V}`} className="flex-shrink-0">
-      <rect x="0" y="0" width={V} height={V} rx="3" fill="#0b0f19" stroke="#374151" strokeWidth="1" />
+      <rect x="0" y="0" width={V} height={V} rx="3" fill="#0b0f19" stroke="#374151" strokeWidth="0.8" />
       {/* ストライクゾーン 3×3 */}
       {[1, 2].map(i => (
-        <g key={i} stroke="#6b7280" strokeWidth="0.8">
+        <g key={i} stroke="#6b7280" strokeWidth="0.6">
           <line x1={z0 + step * i} y1={z0} x2={z0 + step * i} y2={z1} />
           <line x1={z0} y1={z0 + step * i} x2={z1} y2={z0 + step * i} />
         </g>
       ))}
       <rect x={z0} y={z0} width={z1 - z0} height={z1 - z0}
-        fill="none" stroke="#d1d5db" strokeWidth="2" />
+        fill="none" stroke="#d1d5db" strokeWidth="1.6" />
+      {/* 打者から見た向きの目印 */}
+      <text x={z0 - 3} y={V - 2} fill="#6b7280" fontSize="5" textAnchor="start">外角</text>
+      <text x={z1 + 3} y={V - 2} fill="#6b7280" fontSize="5" textAnchor="end">内角</text>
       {list.map((p, i) => (
         <Marker key={i}
           x={place(p.pitchLoc.col, p.pitchLoc.jx ?? 0.5) * V}
           y={place(p.pitchLoc.row, p.pitchLoc.jy ?? 0.5) * V}
-          type={p.resultType}
+          type={p.resultType} scale={mk}
           latest={i === list.length - 1} />
       ))}
     </svg>
   );
 }
 
-/** 凡例（縦並び。試合画面のバーに収まる高さ） */
+/** 凡例（縦並び。プロットの横に置く） */
 export function PitchZoneLegend() {
   const items = [
     ['ball', 'ボール'], ['called_strike', '見逃し'],
     ['swinging_strike', '空振り'], ['foul', 'ファウル'], ['inplay', '打球'],
   ];
   return (
-    <div className="flex flex-col justify-center gap-0.5">
+    <div className="flex flex-col justify-center gap-1">
       {items.map(([k, label]) => (
-        <div key={k} className="flex items-center gap-1">
-          <svg width="10" height="10" viewBox="-6 -6 12 12">
+        <div key={k} className="flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="-7 -7 14 14">
             <Marker x={0} y={0} type={k} latest={false} />
           </svg>
           <span className="text-xs text-gray-300 leading-none">{label}</span>
         </div>
       ))}
+      <div className="flex items-center gap-1.5 pt-0.5">
+        <svg width="12" height="12" viewBox="-7 -7 14 14">
+          <Marker x={0} y={0} type="ball" latest />
+        </svg>
+        <span className="text-xs text-gray-300 leading-none">最新の1球</span>
+      </div>
     </div>
   );
 }
