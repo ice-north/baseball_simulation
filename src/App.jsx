@@ -34,7 +34,7 @@ import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOT
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './game/batterZone.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
-import PitchZonePlot, { PitchZoneLegend } from './components/PitchZonePlot.jsx';
+import PitchZonePlot from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -3675,8 +3675,8 @@ if (newOuts === 3) {
                   </div>
                 </div>
 
-                {/* 投球コース: この打席の1球ごとの到達点。捕手側から見た向きで、
-                    最新の1球が赤。投手と打者の下に大きく置く */}
+                {/* 投球コース（投手視点）と投球ログ。図と文字を同じ行に並べて
+                    「どこに来て何が起きたか」を目線を動かさずに追えるようにする */}
                 <div className="flex items-start gap-3 mb-3">
                   <PitchZonePlot size={168}
                     bats={getCurrentBatter().batting?.bats}
@@ -3685,8 +3685,7 @@ if (newOuts === 3) {
                       const key = pitchSeqRef.current.key;
                       return gameLog.filter(l => l.pitchLoc && l.paKey === key);
                     })()} />
-                  <PitchZoneLegend />
-                  {/* 投球ログ。コースの右に置き、高さをプロットに揃える
+                  {/* 投球ログ。コースの右いっぱいに広げる
                       （flex内のスクロール領域なので高さを明示すること） */}
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-gray-400 mb-1">投球ログ</div>
@@ -3723,6 +3722,59 @@ if (newOuts === 3) {
                     </div>
                   </div>
                 </div>
+
+                {/* 最新結果 */}
+                {gameStarted && lastResult && (() => {
+                  // 結果種別で色分け（安打=緑/長打=金/三振=赤/四死球=青/アウト=灰）
+                  const d = lastResult.description || '';
+                  const cat = /本塁打|ホームラン|三塁打|３塁打|二塁打|２塁打/.test(d) ? 'xbh'
+                    : /ヒット|安打|出塁/.test(d) ? 'hit'
+                    : /三振/.test(d) ? 'k'
+                    : /四球|死球|フォアボール|敬遠/.test(d) ? 'bb'
+                    : /アウト|ゴロ|フライ|併殺|邪飛|ライナー|失敗/.test(d) ? 'out'
+                    : 'neutral';
+                  const S = {
+                    xbh: { box: 'border-amber-400 bg-amber-900/30', text: 'text-amber-200', icon: '💥' },
+                    hit: { box: 'border-green-500 bg-green-900/25', text: 'text-green-200', icon: '🟢' },
+                    k: { box: 'border-red-500 bg-red-900/25', text: 'text-red-200', icon: '❌' },
+                    bb: { box: 'border-blue-500 bg-blue-900/25', text: 'text-blue-200', icon: '🎫' },
+                    out: { box: 'border-gray-600 bg-gray-800', text: 'text-gray-200', icon: '' },
+                    neutral: { box: 'border-yellow-500/60 bg-gray-800', text: 'text-yellow-100', icon: '' },
+                  }[cat];
+                  // 打球の飛距離バー（0-140m目安）
+                  const distPct = lastResult.distance ? Math.max(4, Math.min(100, (lastResult.distance / 140) * 100)) : 0;
+                  return (
+                    <div className={`rounded-lg p-2 text-center border mb-3 ${S.box}`}>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <div>
+                          {S.icon && <span className="mr-1">{S.icon}</span>}
+                          <span className={`font-bold text-lg ${S.text}`}>{d}</span>
+                          {lastResult.pitchType && (
+                            <span className="ml-2 text-gray-300 text-sm">
+                              ({lastResult.pitchType} {lastResult.velocity}km/h)
+                            </span>
+                          )}
+                        </div>
+                        {/* 打球物理データ + 飛距離バー */}
+                        {lastResult.exitVelocity && (
+                          <div className="w-full max-w-[280px] mt-0.5">
+                            <div className="text-xs text-gray-400 tabular-nums">
+                              EV {lastResult.exitVelocity} / 角度 {lastResult.launchAngle}° / {lastResult.distance}m / 芯 {lastResult.meetQuality}%
+                            </div>
+                            <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mt-0.5">
+                              <div className={`h-full rounded-full ${cat === 'xbh' ? 'bg-amber-400' : cat === 'hit' ? 'bg-green-500' : 'bg-gray-500'}`} style={{ width: `${distPct}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {lastResult.timingWindow && !lastResult.exitVelocity && (
+                        <div className="text-xs text-red-500 mt-1">
+                          窓: {lastResult.timingWindow}ms | 誤差: {lastResult.timingError}ms
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* 采配コントロール。攻撃中は攻撃の指示だけ、守備中は配球だけを出す
                     （従来は両方を常に並べて、使えない側を薄く表示していた） */}
@@ -4022,59 +4074,6 @@ if (newOuts === 3) {
                         )}
                       </div>
                     </div>
-                  </div>
-                );
-              })()}
-
-              {/* 最新結果 */}
-              {gameStarted && lastResult && (() => {
-                // 結果種別で色分け（安打=緑/長打=金/三振=赤/四死球=青/アウト=灰）
-                const d = lastResult.description || '';
-                const cat = /本塁打|ホームラン|三塁打|３塁打|二塁打|２塁打/.test(d) ? 'xbh'
-                  : /ヒット|安打|出塁/.test(d) ? 'hit'
-                  : /三振/.test(d) ? 'k'
-                  : /四球|死球|フォアボール|敬遠/.test(d) ? 'bb'
-                  : /アウト|ゴロ|フライ|併殺|邪飛|ライナー|失敗/.test(d) ? 'out'
-                  : 'neutral';
-                const S = {
-                  xbh: { box: 'border-amber-400 bg-amber-900/30', text: 'text-amber-200', icon: '💥' },
-                  hit: { box: 'border-green-500 bg-green-900/25', text: 'text-green-200', icon: '🟢' },
-                  k: { box: 'border-red-500 bg-red-900/25', text: 'text-red-200', icon: '❌' },
-                  bb: { box: 'border-blue-500 bg-blue-900/25', text: 'text-blue-200', icon: '🎫' },
-                  out: { box: 'border-gray-600 bg-gray-800', text: 'text-gray-200', icon: '' },
-                  neutral: { box: 'border-yellow-500/60 bg-gray-800', text: 'text-yellow-100', icon: '' },
-                }[cat];
-                // 打球の飛距離バー（0-140m目安）
-                const distPct = lastResult.distance ? Math.max(4, Math.min(100, (lastResult.distance / 140) * 100)) : 0;
-                return (
-                  <div className={`rounded-lg p-2 text-center border ${S.box}`}>
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div>
-                        {S.icon && <span className="mr-1">{S.icon}</span>}
-                        <span className={`font-bold text-lg ${S.text}`}>{d}</span>
-                        {lastResult.pitchType && (
-                          <span className="ml-2 text-gray-300 text-sm">
-                            ({lastResult.pitchType} {lastResult.velocity}km/h)
-                          </span>
-                        )}
-                      </div>
-                      {/* 打球物理データ + 飛距離バー */}
-                      {lastResult.exitVelocity && (
-                        <div className="w-full max-w-[280px] mt-0.5">
-                          <div className="text-xs text-gray-400 tabular-nums">
-                            EV {lastResult.exitVelocity} / 角度 {lastResult.launchAngle}° / {lastResult.distance}m / 芯 {lastResult.meetQuality}%
-                          </div>
-                          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mt-0.5">
-                            <div className={`h-full rounded-full ${cat === 'xbh' ? 'bg-amber-400' : cat === 'hit' ? 'bg-green-500' : 'bg-gray-500'}`} style={{ width: `${distPct}%` }} />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    {lastResult.timingWindow && !lastResult.exitVelocity && (
-                      <div className="text-xs text-red-500 mt-1">
-                        窓: {lastResult.timingWindow}ms | 誤差: {lastResult.timingError}ms
-                      </div>
-                    )}
                   </div>
                 );
               })()}

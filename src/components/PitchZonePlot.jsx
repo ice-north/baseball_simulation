@@ -35,12 +35,17 @@ const place = (v, jitter) => {
   return (pos + PAD) / SPAN;
 };
 
-// 【形＝球種】変化の向きが形になる。
+// 【形＝球種】**三角が実際に曲がっていく向きを指す**。
 //   〇 ストレート
 //   △ カーブ
 //   ▽ 落ちる球（フォーク・チェンジアップ・パーム・ナックル・スプリッター）
-//   ◁ グラブ側へ逃げる球（スライダー・カットボール・シンカー）
-//   ▷ 腕側へ食い込む球（シュート・ツーシーム）
+//   ◁▷ 横に曲がる球
+//
+// 横変化の向きは**投手の利き腕で逆になる**。画面は投手視点なので
+// 画面左 = 一塁側 / 画面右 = 三塁側。
+//   右投手 … グラブ側は一塁側 → スライダー系は ◁ / シュート系は ▷
+//   左投手 … グラブ側は三塁側 → スライダー系は ▷ / シュート系は ◁
+// 下の表は右投手を基準に持ち、左投手のときだけ左右を入れ替える。
 const SHAPE_BY_PITCH = {
   straight: 'circle',
   curve: 'up',
@@ -52,6 +57,7 @@ export const PITCH_SHAPE_LEGEND = [
   ['circle', 'ストレート'], ['up', 'カーブ'], ['down', '落ちる球'],
   ['left', 'スライダー系'], ['right', 'シュート系'],
 ];
+const mirrorShape = (s) => (s === 'left' ? 'right' : s === 'right' ? 'left' : s);
 
 // 【色＝結果】ボール=緑 / ストライク=黄 / アウト=赤 / 安打=白。
 // 塗りつぶしは「スイングした」ことを表すので、黄の中でも
@@ -77,7 +83,10 @@ export const RESULT_COLOR_LEGEND = [
 ];
 
 const resultStyle = (t) => RESULT_STYLE[t] || UNKNOWN;
-const pitchShape = (t) => SHAPE_BY_PITCH[t] || 'circle';
+const pitchShape = (t, leftHanded) => {
+  const s = SHAPE_BY_PITCH[t] || 'circle';
+  return leftHanded ? mirrorShape(s) : s;
+};
 
 function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, scale = 1 }) {
   const r = 4.4 * scale;
@@ -140,6 +149,8 @@ export default function PitchZonePlot({
     : (bats || 'right');
   // 左打者は内角が画面左に来るので左右を反転する（上のコメント参照）
   const flip = side === 'left';
+  // 横変化の向きは投手の利き腕で逆になる（打者の左右とは無関係）
+  const leftHandedPitcher = (pitcherThrows || 'right') === 'left';
   const toX = (col, jx) => {
     const t = place(col, jx);
     return (flip ? 1 - t : t) * V;
@@ -183,7 +194,7 @@ export default function PitchZonePlot({
               <circle cx={x} cy={y} r={r + 2.4 * mk} fill="none"
                 stroke="#f1f5f9" strokeWidth={1.2 * mk} opacity="0.9" />
             )}
-            <Marker x={x} y={y} shape={pitchShape(p.pitchLoc.type)}
+            <Marker x={x} y={y} shape={pitchShape(p.pitchLoc.type, leftHandedPitcher)}
               color={rs.color} filled={rs.swung} scale={mk} />
             {/* 何球目か。マーカーの右上に置き、縁取りで背景と分離する */}
             <text x={x + r + 1.6} y={y - r + 1.2} fontSize={6.2} fontWeight="bold"
