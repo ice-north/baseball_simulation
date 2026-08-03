@@ -38,7 +38,7 @@ import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, loc
   pushSwingQuality, decayFooled, fooledLevel } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
 import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
-import PitchZonePlot from './components/PitchZonePlot.jsx';
+import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
@@ -3759,9 +3759,8 @@ if (newOuts === 3) {
                       <span className="text-xs text-gray-300 truncate">{isTopInning ? awayTeam.name : homeTeam.name}</span>
                       <span className="text-xs font-bold text-cyan-300 shrink-0">攻撃 {currentBatterOrder}番</span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1 min-w-0 text-right">
-                        <div className="font-bold text-xl text-gray-100 truncate leading-tight">{getCurrentBatter().name}</div>
+                    <div className="text-right">
+                      <div className="font-bold text-xl text-gray-100 truncate leading-tight">{getCurrentBatter().name}</div>
                         <div className="text-xs text-gray-300 tabular-nums">
                           {getCurrentBatter().batting.bats === 'switch' ? '両打' : getCurrentBatter().batting.bats === 'right' ? '右打' : '左打'}
                           {(() => {
@@ -3800,33 +3799,7 @@ if (newOuts === 3) {
                           }`}>
                             {getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).label}
                           </span>
-                        </div>
                       </div>
-                      {/* コース適性のミニヒートマップ。**下のコース図と同じ投手視点に揃える**
-                          （打者基準のまま出すと左打者で内外角が逆になり読み違える） */}
-                      {(() => {
-                        const b = getCurrentBatter();
-                        const side = b.batting?.bats === 'switch'
-                          ? (getCurrentPitcher().physical?.throws === 'left' ? 'left' : 'right')
-                          : (b.batting?.bats || 'right');
-                        const flip = side === 'left';
-                        const grid = zoneHeatmap(getZoneProfile(b));
-                        return (
-                          <div className="shrink-0" title="コース適性（投手から見た向き）。赤=得意 / 青=苦手。内枠がストライクゾーン">
-                            <div className="grid grid-cols-5 gap-px p-px bg-gray-700 rounded-sm">
-                              {grid.map((line, r) => (flip ? [...line].reverse() : line).map((v, c) => {
-                                const inZone = r >= 1 && r <= 3 && c >= 1 && c <= 3;
-                                const a = Math.min(0.85, Math.abs(v) * 0.85);
-                                const bg = Math.abs(v) < 0.06 ? 'rgba(75,85,99,0.6)'
-                                  : v > 0 ? `rgba(239,68,68,${a})` : `rgba(59,130,246,${a})`;
-                                return <div key={`${r}-${c}`} className="w-[7px] h-[7px]"
-                                  style={{ background: bg, outline: inZone ? '1px solid rgba(209,213,219,0.45)' : 'none', outlineOffset: '-1px' }} />;
-                              }))}
-                            </div>
-                            <div className="text-xs text-gray-400 text-center mt-0.5 leading-none">適性</div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   </div>
                 </div>
@@ -3849,13 +3822,24 @@ if (newOuts === 3) {
                         </span>
                       ))}
                     </div>
+                    {/* 打者の得手不得手（heat）は図に重ねる。別の小さいヒートマップを
+                        対戦カードに置くと2枚を見比べることになって読みにくい */}
                     <PitchZonePlot size={168}
                       bats={getCurrentBatter().batting?.bats}
                       pitcherThrows={getCurrentPitcher().physical?.throws}
+                      heat={zoneHeatmap(getZoneProfile(getCurrentBatter()))}
                       pitches={(() => {
                         const key = pitchSeqRef.current.key;
                         return gameLog.filter(l => l.pitchLoc && l.paKey === key);
                       })()} />
+                    <div className="flex items-center justify-center gap-2 mt-1 text-xs text-gray-300">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: HEAT_HOT, opacity: 0.55 }} />得意
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: HEAT_COLD, opacity: 0.55 }} />苦手
+                      </span>
+                    </div>
                   </div>
                   {/* 投球ログ。コースの右いっぱいに広げる
                       （flex内のスクロール領域なので高さを明示すること） */}

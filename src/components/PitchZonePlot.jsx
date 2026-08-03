@@ -127,14 +127,24 @@ function BatterSilhouette({ onRight }) {
   );
 }
 
+// 打者のコース適性を背景に敷く色。**赤=得意 / 青=苦手**で選手詳細のヒートマップと揃える。
+// 投手にとっては「赤いところへ投げてはいけない」という読み方になる。
+// マーカー（結果の意味色）より必ず薄くすること。塗りが濃いと点が読めなくなる。
+const HEAT_MAX_ALPHA = 0.30;
+const HEAT_DEADZONE = 0.06;
+export const HEAT_HOT = '#ef4444';
+export const HEAT_COLD = '#3b82f6';
+
 /**
  * @param {Array}  pitches       この打席の投球（古い順）。{ pitchLoc, resultType }
  * @param {number} size          1辺のピクセル
  * @param {string} bats          打者の左右（'right' | 'left' | 'switch'）
  * @param {string} pitcherThrows 投手の利き腕。スイッチヒッターの打席を決めるのに使う
+ * @param {Array}  heat          打者のコース適性 5×5（zoneHeatmap の戻り値。+1=得意 / -1=苦手）。
+ *                               **打者基準で渡すこと**。ここで投手視点へ反転する
  */
 export default function PitchZonePlot({
-  pitches = [], size = 96, bats = 'right', pitcherThrows = 'right',
+  pitches = [], size = 96, bats = 'right', pitcherThrows = 'right', heat = null,
 }) {
   const V = 100;                                   // viewBox の1辺
   // viewBox は固定なので、大きく表示するときはマーカーを相対的に小さくして
@@ -164,6 +174,19 @@ export default function PitchZonePlot({
   return (
     <svg width={size} height={size} viewBox={`0 0 ${V} ${V}`} className="flex-shrink-0">
       <rect x="0" y="0" width={V} height={V} rx="3" fill="#0b0f19" stroke="#374151" strokeWidth="0.8" />
+      {/* 打者のコース適性。**投球位置と同じ図に重ねる**のが一番読みやすいので、
+          対戦カードに別の小さいヒートマップを置くのはやめてここへ寄せた。
+          heat は打者基準なので、投球位置と同じ規則で左打者だけ反転する */}
+      {heat && heat.map((line, r) => line.map((v, c) => {
+        if (Math.abs(v) < HEAT_DEADZONE) return null;
+        const cc = flip ? SIZE - 1 - c : c;
+        const w = V / SPAN;
+        return (
+          <rect key={`h${r}-${c}`} x={((cc + PAD) / SPAN) * V} y={((r + PAD) / SPAN) * V}
+            width={w} height={w} fill={v > 0 ? HEAT_HOT : HEAT_COLD}
+            opacity={Math.min(HEAT_MAX_ALPHA, Math.abs(v) * HEAT_MAX_ALPHA * 1.15)} />
+        );
+      }))}
       {/* 打者のシルエット。投手から見て 右打者は画面右・左打者は画面左に立つ */}
       <BatterSilhouette onRight={!flip} />
       {/* ホームベース（下端中央）。向きの基準になる */}
