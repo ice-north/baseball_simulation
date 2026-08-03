@@ -36,7 +36,7 @@ import { decideSwingPower, getSwingPowerEffect, swingPowerLabel } from './game/s
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
   pushSwingQuality, decayFooled, fooledLevel } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
-import { hitByPitchChance } from './game/pitchZone.js';
+import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
 import PitchZonePlot from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
@@ -1430,8 +1430,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (!doesSwing) {
           decayFooled(sequence);
           // あまりにも内角へ外れた球は打者に当たる（pitchZone.js）
+          // 死球は疲労が大きく溜まる。隠れたコストにしないよう投球ログにも出す
+          const hbpFat = hitByPitchFatigue(actualVelocity, batter.player?.physical?.bodyStamina ?? 50);
           const result = !isInStrikeZone && Math.random() < hitByPitchChance(loc.col, loc.row)
-            ? { type: 'hit_by_pitch', description: '死球' }
+            ? { type: 'hit_by_pitch', description: `死球（疲労+${hbpFat}）`, hbpFatigue: hbpFat }
             : isInStrikeZone
               ? { type: 'called_strike', description: '見逃しストライク' }
               : { type: 'ball', description: 'ボール' };
@@ -1839,8 +1841,10 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             {
               const b = getCurrentBatter();
               const pi = getCurrentPitcher();
+              // 故障は作らないが、**疲労は大きく溜まる**（速い球ほど・体力が無いほど）
               updateBatterStats(b.id, isTopInning ? 'away' : 'home', {
-                hitByPitch: (b.stats?.batting?.hitByPitch || 0) + 1
+                hitByPitch: (b.stats?.batting?.hitByPitch || 0) + 1,
+                hbpFatigue: (b.gameStats?.hbpFatigue || 0) + (result.hbpFatigue || 0)
               });
               updatePitcherStats(pi.id, isTopInning ? 'home' : 'away', {
                 hitBatters: (pi.stats?.pitching?.hitBatters || 0) + 1

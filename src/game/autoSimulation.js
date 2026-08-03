@@ -10,7 +10,7 @@ import { decideSwingPower, getSwingPowerEffect } from './swingType.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
   pushSwingQuality, decayFooled, fooledLevel } from './pitchSequence.js';
 import { decidePitchObjective } from './pitchSituation.js';
-import { hitByPitchChance } from './pitchZone.js';
+import { hitByPitchChance, hitByPitchFatigue } from './pitchZone.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
@@ -938,7 +938,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       decayFooled(sequence);
       // あまりにも内角へ外れた球は打者に当たる（pitchZone.js）。
       // 振って当たればストライクなので、見送った球にだけ問う
-      if (Math.random() < hitByPitchChance(loc.col, loc.row)) return { type: 'hit_by_pitch' };
+      if (Math.random() < hitByPitchChance(loc.col, loc.row)) {
+        return { type: 'hit_by_pitch', velocity: pitchVelocityFinal };
+      }
       return { type: 'ball' };
     }
     if (Math.random() >= ballZoneContactChance(batter.eye)) { pushSwingQuality(sequence, null); return { type: 'swinging_strike' }; }
@@ -1929,6 +1931,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           // 死球。四球と同じ押し出し進塁だが、打数にも四球にも計上しない
           batter.gameStats.batting.hitByPitch++;
           pitcher.gameStats.pitching.hitBatters++;
+          // 故障は作らないが、**疲労は大きく溜まる**（速い球ほど・体力が無いほど）
+          batter.gameStats.batting.hbpFatigue =
+            (batter.gameStats.batting.hbpFatigue || 0)
+            + hitByPitchFatigue(result.velocity, batter.physical?.bodyStamina ?? 50);
           atBatDamagePoints += 4;
           if (gameState.bases[0] && gameState.bases[1] && gameState.bases[2]) {
             if (gameState.isTopInning) gameState.score.away++;
@@ -2696,6 +2702,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
           playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
         }
+        // 死球の疲労は打席数に関わらず乗る（代打の1打席で当たっても痛い）
+        if (b.hbpFatigue) playerData.fatigue = (playerData.fatigue || 0) + b.hbpFatigue;
 
         // 成長率変動: 10試合出場ごとに+0.01
         // 摩耗ペナルティはスタメン出場(3打席以上)時のみ、疲労度に応じて段階的に適用

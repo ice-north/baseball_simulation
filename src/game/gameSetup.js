@@ -329,6 +329,8 @@ export function executeHandleManagedGameEnd(ctx) {
           const baseFatigue = Math.round(15 - (bodyStamina / 100) * 8);
           playerData.fatigue = (playerData.fatigue || 0) + baseFatigue;
         }
+        // 死球の疲労は打席数に関わらず乗る（代打の1打席で当たっても痛い）
+        if (gs.hbpFatigue) playerData.fatigue = (playerData.fatigue || 0) + gs.hbpFatigue;
       }
 
       const ps = p.stats?.pitching || {};

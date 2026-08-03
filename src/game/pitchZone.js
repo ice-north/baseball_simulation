@@ -104,6 +104,22 @@ export function hitByPitchChance(col, row) {
   return c * (HBP_ROW[row] ?? 0) * HBP_BASE;
 }
 
+// 死球で溜まる疲労。故障は作らず、**疲労が大きく溜まる**形で痛みを表現する。
+// スタメン出場1試合ぶんの疲労が 7〜13 なので、1球で 1.5〜2.5試合ぶん相当。
+// 日次回復は約7/日なので「数日は本調子でない」になる。
+const HBP_FATIGUE_BASE = 16;
+const HBP_FATIGUE_VELO = 0.25;   // 140km/h を基準に、速い球ほど痛い
+
+/**
+ * @param {number} velocity ぶつかった球の球速
+ * @param {number} bodyStamina 打者の体力（頑丈な選手ほど響かない）
+ */
+export function hitByPitchFatigue(velocity = 140, bodyStamina = 50) {
+  const v = HBP_FATIGUE_BASE + (clamp(velocity, 110, 165) - 140) * HBP_FATIGUE_VELO;
+  const tough = 1.3 - clamp(bodyStamina, 0, 100) / 100 * 0.6;   // 体力30→1.12 / 100→0.70
+  return Math.round(Math.max(4, v * tough));
+}
+
 // 狙いごとの目標セル。捕手が「どこへ要求するか」
 const ZONE_CORNERS = [[1, 1], [1, 3], [3, 1], [3, 3]];
 // ゾーンで勝負。**ど真ん中(2,2)は狙わない**。
