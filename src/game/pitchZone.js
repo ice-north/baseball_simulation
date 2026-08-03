@@ -54,6 +54,43 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const colAxis = (col) => clamp(col - 2, -1, 1);
 export const rowAxis = (row) => clamp(row - 2, -1, 1);
 
+// ============================================================
+// 打者のコース適性 → そのセルの苦手さ
+//
+// 【なぜここに置くか】3箇所（zoneWeaknessAt / zoneHeatmap / pickTargetCell）に
+// 同じ式が複製されていた。項を1つ足すたびに3箇所直す必要があり、必ずどれかが
+// 取り残される。colAxis/rowAxis を持つこのファイルに一本化し、
+// batterZone.js は再エクスポートするだけにする。
+//
+// 【ど真ん中の項が必要な理由】
+// `inside * colAxis + low * rowAxis` は**線形の勾配しか作れない**ので、
+// 中心 (2,2) は colAxis も rowAxis も 0 になり、**どの打者も必ず 0**になる。
+// つまり「ど真ん中に強い打者」「甘い球を打ち損じる打者」が一人も存在しなかった。
+// 中心からの距離 `radial` を使って半径方向の項を足す。
+//   middle > 0 … ど真ん中に弱い（甘い球を仕留められない）
+//   middle < 0 … ど真ん中に強い（失投を逃さない）
+//
+// **捕手はど真ん中(2,2)を目標にしない**（`ZONE_CELLS` 参照）ので、この項は主に
+// 「投手が狙いを外して真ん中へ流れた球＝失投」で効く。まさに狙いどおり。
+// ============================================================
+
+/** 中心からの距離。0 = ど真ん中 / 1 = 隅 */
+export const radial = (col, row) =>
+  Math.min(1, Math.hypot(colAxis(col), rowAxis(row)) / Math.SQRT2);
+
+/**
+ * そのセルが打者にとってどれだけ苦手か（-1=得意 〜 +1=苦手）。
+ * @param {{inside:number, low:number, middle:number}} profile
+ */
+export function cellWeakness(profile, col, row) {
+  if (!profile) return 0;
+  const { inside = 0, low = 0, middle = 0 } = profile;
+  if (!inside && !low && !middle) return 0;
+  return clamp(
+    inside * colAxis(col) + low * rowAxis(row) + middle * (1 - radial(col, row)),
+    -1, 1);
+}
+
 /**
  * セルから従来の quality ラベルを導出する。
  * ゾーン内は中央ほど打ちやすく、四隅ほど打ちにくい。
@@ -176,7 +213,8 @@ export function pickTargetCell(aim, opts = {}) {
   // つもりでも四球が増える。実測で BB/9 が +0.34 悪化し、防御率の利得を食い潰した。
   // 誘い球はそもそも振らせる球で、当てさせない球ではないため除外して問題ない。
   const usesShape = aim !== 'chase' && natural && (natural.col || natural.row);
-  const usesWeakness = profile && aim !== 'chase' && (profile.inside || profile.low);
+  const usesWeakness = profile && aim !== 'chase'
+    && (profile.inside || profile.low || profile.middle);
   if (!usesObjective && !usesShape && (t <= 0 || (!usesWeakness && !sequence))) {
     return { cell: cells[Math.floor(Math.random() * cells.length)], p: 1 / cells.length };
   }
@@ -187,7 +225,7 @@ export function pickTargetCell(aim, opts = {}) {
   for (let i = 0; i < cells.length; i++) {
     let score = 0;
     if (usesWeakness) {
-      score += clamp(profile.inside * colAxis(cells[i][0]) + profile.low * rowAxis(cells[i][1]), -1, 1);
+      score += cellWeakness(profile, cells[i][0], cells[i][1]);
     }
     // 配球としての良さ（対角へ動かす／同じ引き出しを続けない）。
     // 誘い球でもコースを散らす意味はあるので、こちらは chase も対象にする。

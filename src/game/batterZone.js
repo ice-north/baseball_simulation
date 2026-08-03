@@ -28,7 +28,7 @@
 // これなら生成側を1行も触らずに全プールの全選手が持てて、既存セーブもそのまま動く。
 // ============================================================
 
-import { colAxis, rowAxis } from './pitchZone.js';
+import { colAxis, rowAxis, cellWeakness } from './pitchZone.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -58,7 +58,7 @@ function bell(key, seed) {
   return (a + b + c - 1.5) / 1.5;
 }
 
-export const NEUTRAL_ZONE_PROFILE = Object.freeze({ inside: 0, low: 0 });
+export const NEUTRAL_ZONE_PROFILE = Object.freeze({ inside: 0, low: 0, middle: 0 });
 
 const cache = new WeakMap();
 
@@ -106,6 +106,8 @@ export function getZoneProfile(player) {
   const profile = {
     inside: r2(bell(key, 0x01000193) + tendencyInside(b)),
     low: r2(bell(key, 0x7feb352d)),
+    // ど真ん中の得手不得手。これが無いと中心は全打者ぴったり0になる（下記）
+    middle: r2(bell(key, 0x2545f491)),
   };
   cache.set(player, { profile, m: b?.meet ?? -1, p: b?.power ?? -1 });
   return profile;
@@ -144,9 +146,8 @@ export function getZoneMatchupEffect(loc, profile) {
  */
 export function zoneWeaknessAt(loc, profile) {
   if (!loc || !profile) return 0;
-  const { inside = 0, low = 0 } = profile;
-  if (!inside && !low) return 0;
-  return clamp(inside * colAxis(loc.col) + low * rowAxis(loc.row), -1, 1);
+  // 式は pitchZone.js に一本化してある（捕手の弱点狙いと同じものを使うため）
+  return cellWeakness(profile, loc.col, loc.row);
 }
 
 /** 位置の質による補正とコース適性による補正を合算する */
@@ -175,6 +176,8 @@ export function describeZoneProfile(profile) {
   };
   push(profile.inside, '内角に弱い', '外角に弱い');
   push(profile.low, '低めに弱い', '高めに弱い');
+  // ど真ん中。「甘い球を仕留められるか」なので言い回しを変える
+  push(profile.middle, '甘い球を打ち損じる', '失投を逃さない');
   return out;
 }
 
@@ -188,7 +191,7 @@ export function zoneHeatmap(profile) {
   for (let row = 0; row < 5; row++) {
     const line = [];
     for (let col = 0; col < 5; col++) {
-      line.push(-clamp(p.inside * colAxis(col) + p.low * rowAxis(row), -1, 1));
+      line.push(-cellWeakness(p, col, row));
     }
     grid.push(line);
   }
