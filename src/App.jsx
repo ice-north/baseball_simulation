@@ -32,6 +32,7 @@ import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
 import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './game/batterZone.js';
+import { decideSwingPower, getSwingPowerEffect, swingPowerLabel } from './game/swingType.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
 import PitchZonePlot from './components/PitchZonePlot.jsx';
@@ -1349,6 +1350,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const locationRead = Math.random()
           < locationReadChance(sequence, loc.col, loc.row, isBreakingPitch, batter.eye, loc.readSignal);
 
+        // そのセルが打者にとってどれだけ苦手か。スイング判断・打撃補正・振り方で共有する
+        const weakness = zoneWeaknessAt(loc, batter.zone);
+
         // 采配: 自チームの攻撃中はプレイヤーが狙い球を張れる。
         // 張った次元はAIの読み合いを置き換える（当たれば+1 / 外せば-1）。
         const userIsBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
@@ -1381,7 +1385,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           batterEye: batter.eye, pitcherControl: effectiveControl,
           isBreaking: isBreakingPitch, breakingLevel: selectedBall.level || 50,
           // 打者は自分の得意コースをより振る
-          zoneWeakness: zoneWeaknessAt(loc, batter.zone),
+          zoneWeakness: weakness,
         });
         // 捕手のリードは打者の狙いを外す（スイング判断を鈍らせる）
         swingProb *= 1 - (catcher.lead / 100) * 0.08;
@@ -1421,11 +1425,23 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc }, newStamina };
         }
 
-        // コース適性 + 前球からの揺さぶり（どちらもリーグ平均では±0）
+        // 振り方: 得意コース・打者有利カウントならフルスイング、
+        // 苦手コース・2ストライクなら当てにいく（swingType.js）。
+        // 采配モードでは自チームの打撃方針（待て/おまかせ/積極）がここに乗る。
+        const swingPower = decideSwingPower({
+          weakness, balls: safeCount.balls, strikes: safeCount.strikes,
+          meet: batter.meet, power: batter.power,
+          approach: userIsBatting ? battingApproachRef.current : 'balanced',
+        });
+        pitchLoc.swing = swingPowerLabel(swingPower);
+
+        // コース適性 + 振り方 + 前球からの揺さぶり（どれもリーグ平均では±0）
         const zoneMatchup = combineBatterEffects(
-          combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
-            // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
-            getHeightPitchEffect(loc.row, isBreakingPitch)),
+          combineBatterEffects(
+            combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
+              // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
+              getHeightPitchEffect(loc.row, isBreakingPitch)),
+            getSwingPowerEffect(swingPower)),
           { meet: shiftMeet, power: shiftMeet * 0.6 });
 
         if (!isInStrikeZone) {
@@ -3707,6 +3723,11 @@ if (newOuts === 3) {
                               <span className="text-gray-400 ml-1 tabular-nums">{log.velocity}km</span>
                               <span className="mx-1 text-gray-600">→</span>
                               <span className="font-bold text-gray-100">{log.result}</span>
+                              {/* 振り方（得意コース・打者有利カウントならフルスイング） */}
+                              {log.pitchLoc?.swing && (
+                                <span className={`ml-1 ${log.pitchLoc.swing === 'フルスイング'
+                                  ? 'text-orange-300' : 'text-sky-300'}`}>[{log.pitchLoc.swing}]</span>
+                              )}
                               {log.exitVelocity && (
                                 <span className="text-gray-400 ml-1">
                                   （EV{log.exitVelocity} {log.launchAngle}° {log.distance}m 芯{log.meetQuality}%）
@@ -3801,8 +3822,9 @@ if (newOuts === 3) {
                           <span className={tag('text-cyan-300')}>打撃</span>
                           {[['take', '待て'], ['normal', 'おまかせ'], ['aggressive', '積極']].map(([v, label]) => (
                             <button key={v} onClick={() => setBattingApproach(v)} disabled={gameOver}
-                              title={v === 'take' ? '見送りを増やして球数を稼ぐ'
-                                : v === 'aggressive' ? '早いカウントから積極的に打ちにいく' : '監督AIに任せる'}
+                              title={v === 'take' ? '見送りを増やして球数を稼ぐ。振るときも当てにいく'
+                                : v === 'aggressive' ? '早いカウントから積極的に打ちにいく。フルスイングが増える'
+                                : '監督AIに任せる（得意コースはフルスイング／追い込まれたら当てにいく）'}
                               className={pick(battingApproach === v, 'bg-cyan-600')}>{label}</button>
                           ))}
                           <span className="text-xs text-gray-600">｜</span>

@@ -6,6 +6,7 @@ import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './batterZone.js';
+import { decideSwingPower, getSwingPowerEffect } from './swingType.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './pitchSequence.js';
 import { decidePitchObjective } from './pitchSituation.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
@@ -796,11 +797,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       velocity: pitchVelocityFinal, type: selectedPitch.type,
     });
 
+    // そのセルが打者にとってどれだけ苦手か。スイング判断・打撃補正・振り方で共有する
+    const weakness = zoneWeaknessAt(loc, batter.zone);
     const swung = decideSwing({
       inZone: loc.inZone, quality: loc.quality, strikes: count.strikes, batterEye: batter.eye,
       pitcherControl: effectiveControl, isBreaking, breakingLevel: selectedPitch.level || 50,
       // 打者は自分の得意コースをより振る
-      zoneWeakness: zoneWeaknessAt(loc, batter.zone),
+      zoneWeakness: weakness,
       // B型は張っていないコースを見送る
       approachMult: aiGuess.swingMult ?? 1,
     });
@@ -899,10 +902,18 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // コース適性: 苦手なコースに来るとミート・パワーが落ちる（得意なら上がる）。
     // 母集団の平均は0なのでリーグ成績は動かず、打者ごとの差だけが出る。
     // コース適性 + 前球からの揺さぶり（どちらもリーグ平均では±0）
+    // 振り方: 得意コース・打者有利カウントならフルスイング、
+    // 苦手コース・2ストライクなら当てにいく（swingType.js）
+    const swingPower = swung ? decideSwingPower({
+      weakness, balls: count.balls, strikes: count.strikes,
+      meet: batter.meet, power: batter.power, approach: battingStrat,
+    }) : 0;
     const matchup = combineBatterEffects(
-      combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
-        // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
-        getHeightPitchEffect(loc.row, isBreaking)),
+      combineBatterEffects(
+        combineBatterEffects(getZoneMatchupEffect(loc, batter.zone),
+          // 高めの速球・低めの変化球は空振りを取れる（逆は打たれる）
+          getHeightPitchEffect(loc.row, isBreaking)),
+        getSwingPowerEffect(swingPower)),
       { meet: shiftMeet, power: shiftMeet * 0.6 });
 
     if (loc.inZone) {
