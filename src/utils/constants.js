@@ -177,10 +177,32 @@ export const POSITION_NAMES = {
  * ベンチ（控え）を並べる順。**野手を守備位置順に並べ、投手は最後**。
  * 交代要員を探すときは「捕手の控えは誰か」「内野の控えは誰か」を見るので、
  * ロスター順のままだと投手と野手が混ざって探せない。
+ *
+ * ⚠ **DHは守備位置ではない**。「打撃に優れ守備が苦手な選手が入る打順」なので、
+ * ここに枠を作ってはいけない。`position: 'dh'` は打線のエントリ側だけの概念で、
+ * 選手の `position` としては `saveMigration.normalizePlayer` が実ポジションへ
+ * 寄せている（旧セーブ対策）。万一残っていたら守備適性から解決する。
  */
 export const BENCH_POSITION_ORDER = {
   catcher: 0, first: 1, second: 2, third: 3, short: 4,
-  left: 5, center: 6, right: 7, dh: 8, pitcher: 9,
+  left: 5, center: 6, right: 7, pitcher: 8,
+};
+
+/** 守備適性が最も高いポジション。position が守備位置でない選手の保険 */
+const bestFieldingPosition = (player) => {
+  const f = player?.positionFitness;
+  if (!f) return 'first';   // 守備の弱い選手を置く定位置
+  let best = 'first', max = -1;
+  for (const pos of Object.keys(BENCH_POSITION_ORDER)) {
+    const v = f[pos] ?? 0;
+    if (v > max) { max = v; best = pos; }
+  }
+  return best;
+};
+
+const benchRank = (player) => {
+  const r = BENCH_POSITION_ORDER[player?.position];
+  return r !== undefined ? r : BENCH_POSITION_ORDER[bestFieldingPosition(player)];
 };
 
 /**
@@ -188,8 +210,7 @@ export const BENCH_POSITION_ORDER = {
  * 同じポジション内はロスター順のまま（Array#sort は安定ソート）。
  */
 export const sortBenchByPosition = (players) =>
-  [...players].sort((a, b) =>
-    (BENCH_POSITION_ORDER[a.position] ?? 99) - (BENCH_POSITION_ORDER[b.position] ?? 99));
+  [...players].sort((a, b) => benchRank(a) - benchRank(b));
 
 /**
  * ポジション別の色設定（背景色）
