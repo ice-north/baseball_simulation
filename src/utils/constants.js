@@ -174,6 +174,24 @@ export const POSITION_NAMES = {
 };
 
 /**
+ * ベンチ（控え）を並べる順。**野手を守備位置順に並べ、投手は最後**。
+ * 交代要員を探すときは「捕手の控えは誰か」「内野の控えは誰か」を見るので、
+ * ロスター順のままだと投手と野手が混ざって探せない。
+ */
+export const BENCH_POSITION_ORDER = {
+  catcher: 0, first: 1, second: 2, third: 3, short: 4,
+  left: 5, center: 6, right: 7, dh: 8, pitcher: 9,
+};
+
+/**
+ * 控え選手をポジション順に並べ替える（元配列は変更しない）。
+ * 同じポジション内はロスター順のまま（Array#sort は安定ソート）。
+ */
+export const sortBenchByPosition = (players) =>
+  [...players].sort((a, b) =>
+    (BENCH_POSITION_ORDER[a.position] ?? 99) - (BENCH_POSITION_ORDER[b.position] ?? 99));
+
+/**
  * ポジション別の色設定（背景色）
  */
 export const POSITION_COLORS = {

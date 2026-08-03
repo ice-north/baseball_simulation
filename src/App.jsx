@@ -7,7 +7,8 @@ import {
   FORM_PITCH_SYNERGY,
   POSITION_NAMES,
   POSITION_COLORS,
-  HAND_LABELS
+  HAND_LABELS,
+  sortBenchByPosition
 } from './utils/constants.js';
 
 import {
@@ -3074,8 +3075,9 @@ if (newOuts === 3) {
                   <div>
                     <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">ベンチメンバー</div>
                     <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
-                      {awayTeam.players
-                        .filter(p => !p.isStarter)
+                      {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
+                          ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
+                      {sortBenchByPosition(awayTeam.players.filter(p => !p.isStarter))
                         .map(player => {
                           const posNames = POSITION_NAMES;
                           const isPitcher = player.position === 'pitcher';
@@ -3267,8 +3269,9 @@ if (newOuts === 3) {
 
                   {showBenchAway && (
                     <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
-                      {awayTeam.players
-                        .filter(p => !p.isStarter)
+                      {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
+                          ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
+                      {sortBenchByPosition(awayTeam.players.filter(p => !p.isStarter))
                         .map(player => {
                           const posNames = POSITION_NAMES;
                           const isPitcher = player.position === 'pitcher';
@@ -4107,7 +4110,8 @@ if (newOuts === 3) {
                 const fieldPlayers = userTeam.players
                   .filter(p => p.isStarter && !p.hasSubbedOut && (p.battingOrder > 0 || p.position === 'pitcher'))
                   .sort((a, b) => (a.battingOrder || 10) - (b.battingOrder || 10));
-                const benchPlayers = userTeam.players.filter(p => !p.isStarter && !p.hasSubbedOut);
+                // 交代モーダルも同じ並び（捕→一→…→右→投）
+                const benchPlayers = sortBenchByPosition(userTeam.players.filter(p => !p.isStarter && !p.hasSubbedOut));
                 const posNames = POSITION_NAMES;
                 const selectedPlayer = subModalSelected ? userTeam.players.find(p => p.id === subModalSelected) : null;
                 const selectedIsField = selectedPlayer?.isStarter && !selectedPlayer?.hasSubbedOut && (selectedPlayer?.battingOrder > 0 || selectedPlayer?.position === 'pitcher');
@@ -4591,8 +4595,9 @@ if (newOuts === 3) {
                   <div>
                     <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">ベンチメンバー</div>
                     <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
-                      {homeTeam.players
-                        .filter(p => !p.isStarter)
+                      {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
+                          ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
+                      {sortBenchByPosition(homeTeam.players.filter(p => !p.isStarter))
                         .map(player => {
                           const posNames = POSITION_NAMES;
                           const isPitcher = player.position === 'pitcher';
@@ -4784,8 +4789,9 @@ if (newOuts === 3) {
 
                   {showBenchHome && (
                     <div className="mt-2 space-y-1 text-xs max-h-64 overflow-y-auto">
-                      {homeTeam.players
-                        .filter(p => !p.isStarter)
+                      {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
+                          ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
+                      {sortBenchByPosition(homeTeam.players.filter(p => !p.isStarter))
                         .map(player => {
                           const posNames = POSITION_NAMES;
                           const isPitcher = player.position === 'pitcher';
