@@ -45,6 +45,13 @@ const COUNT_BEHIND = -0.15;     // 0-1 のように投手有利（2ストライ�
 const TYPE_MID = -11;
 const TYPE_W = 1.2;
 
+// **前の球で崩されたら当てにいく**。
+// どんなにパワーのある打者でも、タイミングを外された次の球でフルスイングはしない。
+// 物理エンジンの `powerTransferRate`（崩されたスイングにはパワーが乗らない）は
+// あくまで**結果**の話で、打者が次の球で構え直すという**判断**が無かった。
+// 2ストライク(-0.60)に次ぐ重みを持たせてある。
+const FOOLED_W = 0.50;
+
 // 打撃方針（自動=offenseStrategy.batting / 采配=battingApproach）
 const APPROACH = {
   aggressive: 0.35,
@@ -54,21 +61,22 @@ const APPROACH = {
   normal: 0,
 };
 
-// 母集団の平均。**スイングした球だけ**で実測すると生スコアの平均は -0.126
-// （2ストライクが多いので当てにいく側へ寄る）。ここを引いてリーグ平均を0に置く。
+// 母集団の平均。**スイングした球だけ**で実測すると生スコアの平均は -0.217
+// （2ストライクと「崩された」が多いので当てにいく側へ寄る）。
+// ここを引いてリーグ平均を0に置く。
 //
 // ⚠ この値は**不動点として求めること**。MEAN を下げると振り抜く球が増え、
 // 空振りが増え、2ストライクのカウントが増えて生スコアの平均がまた下がる。
-// -0.075 → -0.095 → -0.108 → -0.125 と3回反復して収束させた。
-// カウント分布や捕手の弱点狙いを変えたら測り直す。
-const MEAN = -0.125;
+// -0.075 → -0.095 → -0.108 → -0.125（FOOLED_W 追加後 -0.19 → -0.215）と
+// 反復して収束させた。カウント分布や捕手の弱点狙いを変えたら測り直す。
+const MEAN = -0.215;
 
 /**
  * この1球をどう振るかを決める。
  * @returns {number} -1（完全に当てにいく）〜 +1（フルスイング）
  */
 export function decideSwingPower({
-  weakness = 0, balls = 0, strikes = 0,
+  weakness = 0, balls = 0, strikes = 0, fooled = 0,
   meet = 50, power = 50, approach = 'balanced',
 } = {}) {
   let s = -weakness * ZONE_W;
@@ -78,6 +86,7 @@ export function decideSwingPower({
   else if (balls > strikes) s += COUNT_AHEAD;
   else if (strikes > balls) s += COUNT_BEHIND;
 
+  s -= fooled * FOOLED_W;
   s += ((power - meet) - TYPE_MID) / 100 * TYPE_W;
   s += APPROACH[approach] || 0;
 

@@ -33,7 +33,8 @@ import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContac
 import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './game/batterZone.js';
 import { decideSwingPower, getSwingPowerEffect, swingPowerLabel } from './game/swingType.js';
-import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './game/pitchSequence.js';
+import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
+  pushSwingQuality, decayFooled, fooledLevel } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
 import PitchZonePlot from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
@@ -1149,6 +1150,11 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           handEffect
         );
 
+        // 崩されたか（芯品質）を打席の記憶に残す。次の球の振り方に効く。
+        // ※ pitchSeqRef は ref なので別関数からでも安全に参照できる
+        pushSwingQuality(pitchSeqRef.current.seq,
+          physicsResult.isContact ? physicsResult.meetQuality : null);
+
         // 空振り判定（物理モデルから）
         if (!physicsResult.isContact) {
           return {
@@ -1419,6 +1425,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         };
 
         if (!doesSwing) {
+          decayFooled(sequence);
           const result = isInStrikeZone
             ? { type: 'called_strike', description: '見逃しストライク' }
             : { type: 'ball', description: 'ボール' };
@@ -1430,6 +1437,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 采配モードでは自チームの打撃方針（待て/おまかせ/積極）がここに乗る。
         const swingPower = decideSwingPower({
           weakness, balls: safeCount.balls, strikes: safeCount.strikes,
+          // 前の球で崩されていれば当てにいく（pitchSequence.js）
+          fooled: fooledLevel(sequence),
           meet: batter.meet, power: batter.power,
           approach: userIsBatting ? battingApproachRef.current : 'balanced',
         });
@@ -1456,6 +1465,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             const result = determineContactResultPhysics(selectedBall, guessLevel, 0, handEffect, actualVelocity, weakBatter, pitcher, defense, catcher, lastPitch, loc);
             return { result: { ...result, pitchType: pitchTypeName, velocity: Math.round(actualVelocity), isBallZone: true, pitchLoc }, newStamina };
           }
+          pushSwingQuality(sequence, null);
           return {
             result: { type: 'swinging_strike', description: '空振り（ボール球）', pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc },
             newStamina

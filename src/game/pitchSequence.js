@@ -57,6 +57,40 @@ export function pushCall(seq, { col, row, isBreaking, velocity }) {
 
 export const lastCall = (seq) => (seq && seq.calls.length ? seq.calls[seq.calls.length - 1] : null);
 
+// ============================================================
+// 「崩された」の記憶
+//
+// どんなにパワーのある打者でも、前の球でタイミングを崩されたら次は当てにいく。
+// 物理エンジン側は既に `powerTransferRate = meetQuality^0.6` で
+// 「崩されたスイングにはパワーが乗らない」を表現しているが、それは**結果**の話で、
+// 打者が**次の球で構え直す**（振り方を変える）という判断が無かった。
+// ここは打席内の記憶なので配球メモリと同じ場所に置く。
+// ============================================================
+
+// これ以上の芯品質なら「崩されていない」とみなす境界
+const FOOLED_OK = 0.55;
+// 見送った1球で timing がどれだけ戻るか（完全には戻らない）
+const FOOLED_DECAY = 0.5;
+
+/**
+ * 振った結果を記憶する。`meetQuality` が null/undefined なら空振り（＝完全に崩された）。
+ * @returns {void}
+ */
+export function pushSwingQuality(seq, meetQuality) {
+  if (!seq) return;
+  seq.fooled = meetQuality == null ? 1
+    : clamp(1 - meetQuality / FOOLED_OK, 0, 1);
+}
+
+/** 見送った（振らなかった）。崩れは残るが少し戻る */
+export function decayFooled(seq) {
+  if (!seq || !seq.fooled) return;
+  seq.fooled *= FOOLED_DECAY;
+}
+
+/** 直前のスイングでどれだけ崩されているか（0=芯で捉えた 〜 1=空振り） */
+export const fooledLevel = (seq) => (seq && seq.fooled) || 0;
+
 /**
  * 前の球からどれだけ動いたか（0〜1強）。打者はこれが大きいほど対応しにくい。
  *

@@ -7,7 +7,8 @@ import { getTeamStaffBonus } from '../corporate/staffData.js';
 import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './batterZone.js';
 import { decideSwingPower, getSwingPowerEffect } from './swingType.js';
-import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance } from './pitchSequence.js';
+import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
+  pushSwingQuality, decayFooled, fooledLevel } from './pitchSequence.js';
 import { decidePitchObjective } from './pitchSituation.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
@@ -842,6 +843,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         handEffect
       );
 
+      // 崩されたか（芯品質）を打席の記憶に残す。次の球の振り方に効く
+      pushSwingQuality(sequence, physicsResult.isContact ? physicsResult.meetQuality : null);
       if (!physicsResult.isContact) {
         return { type: 'swinging_strike' };
       }
@@ -906,6 +909,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // 苦手コース・2ストライクなら当てにいく（swingType.js）
     const swingPower = swung ? decideSwingPower({
       weakness, balls: count.balls, strikes: count.strikes,
+      // 前の球で崩されていれば当てにいく（pitchSequence.js）
+      fooled: fooledLevel(sequence),
       meet: batter.meet, power: batter.power, approach: battingStrat,
     }) : 0;
     const matchup = combineBatterEffects(
@@ -917,19 +922,19 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       { meet: shiftMeet, power: shiftMeet * 0.6 });
 
     if (loc.inZone) {
-      if (!swung) return { type: 'called_strike' };
+      if (!swung) { decayFooled(sequence); return { type: 'called_strike' }; }
       const q = combineBatterEffects(getPitchQualityEffect(loc.quality), matchup);
       const breakingPenalty = isBreaking ? (selectedPitch.level || 50) * 0.12 : 0;
       const contactChance = 82 + (batter.meet + q.meet) * 0.45 + handBonus - breakingPenalty - speedDiffPenalty;
-      if (Math.random() * 100 >= contactChance) return { type: 'swinging_strike' };
+      if (Math.random() * 100 >= contactChance) { pushSwingQuality(sequence, null); return { type: 'swinging_strike' }; }
       return resolveContact(q);
     }
 
     // ボールゾーン。振ってしまった場合は半分以上バットに当たり、凡打になる。
     // 以前は「20%ファウル / 80%空振り」で打球が一切発生せず、chase率を上げると
     // 三振だけが増えてしまう構造だった。
-    if (!swung) return { type: 'ball' };
-    if (Math.random() >= ballZoneContactChance(batter.eye)) return { type: 'swinging_strike' };
+    if (!swung) { decayFooled(sequence); return { type: 'ball' }; }
+    if (Math.random() >= ballZoneContactChance(batter.eye)) { pushSwingQuality(sequence, null); return { type: 'swinging_strike' }; }
     if (Math.random() < 0.56) return { type: 'foul' };
     return resolveContact(combineBatterEffects(BALL_ZONE_PENALTY, matchup));
   };
