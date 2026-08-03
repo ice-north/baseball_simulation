@@ -2975,8 +2975,10 @@ if (newOuts === 3) {
             </div>
           </div>
 
-          {/* 3カラムレイアウト: 試合前は選手欄重視(5-3-5)、試合中は1:1:1 */}
-          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '1fr 1fr 1fr' : '5fr 3fr 5fr'}}>
+          {/* 3カラムレイアウト。試合前は選手を並べ替えるので選手欄重視(5-3-5)、
+              試合中は中央（掲示板・対戦カード・コース図・ログ・采配）が主役なので
+              中央を広げる(3-5-3)。左右のメンバー表は試合中は参照用 */}
+          <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '3fr 5fr 3fr' : '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
             <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
