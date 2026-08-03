@@ -62,8 +62,8 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     .map(p => {
       const stats = statsTab === 'season' ? p.seasonStats.batting : getCombinedCareer(p, 'batting');
       const avg = stats.atBats > 0 ? (stats.hits / stats.atBats) : 0;
-      const pa = stats.atBats + (stats.walks || 0);
-      const obp = pa > 0 ? ((stats.hits + (stats.walks || 0)) / pa) : 0;
+      const pa = stats.atBats + (stats.walks || 0) + (stats.hitByPitch || 0);
+      const obp = pa > 0 ? ((stats.hits + (stats.walks || 0) + (stats.hitByPitch || 0)) / pa) : 0;
       const singles = stats.hits - (stats.doubles || 0) - (stats.triples || 0) - stats.homeruns;
       const slg = stats.atBats > 0 ? ((singles + (stats.doubles || 0) * 2 + (stats.triples || 0) * 3 + stats.homeruns * 4) / stats.atBats) : 0;
       const ops = obp + slg;

@@ -36,6 +36,7 @@ import { decideSwingPower, getSwingPowerEffect, swingPowerLabel } from './game/s
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
   pushSwingQuality, decayFooled, fooledLevel } from './game/pitchSequence.js';
 import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pitchSituation.js';
+import { hitByPitchChance } from './game/pitchZone.js';
 import PitchZonePlot from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import TutorialHint from './components/TutorialHint.jsx';
@@ -989,6 +990,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         hits: 0,
         homeruns: 0,
         walks: 0,
+        hitByPitch: 0,
         strikeouts: 0,
         totalBases: 0,
         stolenBases: 0,       // 盗塁成功数
@@ -1000,6 +1002,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         outs: 0,
         strikeouts: 0,
         walks: 0,
+        hitBatters: 0,   // 与死球
         runsAllowed: 0,
         errors: 0,  // エラー数
         wildPitches: 0,  // 暴投数を追加
@@ -1426,9 +1429,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
         if (!doesSwing) {
           decayFooled(sequence);
-          const result = isInStrikeZone
-            ? { type: 'called_strike', description: '見逃しストライク' }
-            : { type: 'ball', description: 'ボール' };
+          // あまりにも内角へ外れた球は打者に当たる（pitchZone.js）
+          const result = !isInStrikeZone && Math.random() < hitByPitchChance(loc.col, loc.row)
+            ? { type: 'hit_by_pitch', description: '死球' }
+            : isInStrikeZone
+              ? { type: 'called_strike', description: '見逃しストライク' }
+              : { type: 'ball', description: 'ボール' };
           return { result: { ...result, pitchType: pitchTypeName, velocity: actualVelocity, pitchLoc }, newStamina };
         }
 
@@ -1822,6 +1828,42 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '四球');
             }
             break;
+          case 'hit_by_pitch': {
+            // 死球。四球と同じ押し出し進塁だが、打数にも四球にも計上しない
+            setBatterStats(prev => ({
+              ...prev,
+              plateAppearances: prev.plateAppearances + 1,
+              hitByPitch: (prev.hitByPitch || 0) + 1
+            }));
+            setPitcherStats(prev => ({ ...prev, hitBatters: (prev.hitBatters || 0) + 1 }));
+            {
+              const b = getCurrentBatter();
+              const pi = getCurrentPitcher();
+              updateBatterStats(b.id, isTopInning ? 'away' : 'home', {
+                hitByPitch: (b.stats?.batting?.hitByPitch || 0) + 1
+              });
+              updatePitcherStats(pi.id, isTopInning ? 'home' : 'away', {
+                hitBatters: (pi.stats?.pitching?.hitBatters || 0) + 1
+              });
+            }
+            if (bases[0] && bases[1] && bases[2]) {
+              isTopInning ? newScore.away++ : newScore.home++;
+              setPitcherStats(prev => ({ ...prev, runsAllowed: prev.runsAllowed + 1 }));
+              {
+                const pi = getCurrentPitcher();
+                updatePitcherStats(pi.id, isTopInning ? 'home' : 'away', {
+                  runsAllowed: (pi.stats?.pitching?.runsAllowed || 0) + 1
+                });
+              }
+            } else {
+              if (bases[1] && bases[0]) newBases[2] = true;
+              if (bases[0]) newBases[1] = true;
+              newBases[0] = true;
+            }
+            atBatOver = true;
+            addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '死球');
+            break;
+          }
           case 'called_strike':
           case 'swinging_strike':
             newCount.strikes++;
@@ -3145,6 +3187,7 @@ if (newOuts === 3) {
                                   r === '本塁打' ? 'bg-red-600' :
                                   r === '三振' ? 'bg-blue-700' :
                                   r === '四球' ? 'bg-green-700' :
+                                  r === '死球' ? 'bg-emerald-800' :
                                   r === '併殺' ? 'bg-purple-700' :
                                   'bg-gray-600'
                                 }`}>{r}</span>
@@ -4582,6 +4625,7 @@ if (newOuts === 3) {
                                   r === '本塁打' ? 'bg-red-600' :
                                   r === '三振' ? 'bg-blue-700' :
                                   r === '四球' ? 'bg-green-700' :
+                                  r === '死球' ? 'bg-emerald-800' :
                                   r === '併殺' ? 'bg-purple-700' :
                                   'bg-gray-600'
                                 }`}>{r}</span>

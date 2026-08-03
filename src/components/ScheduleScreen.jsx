@@ -140,7 +140,7 @@ const getOPSRanking = (teamNames) => {
     .filter(p => p.seasonStats?.batting?.atBats > 0)
     .map(p => {
       const s = p.seasonStats.batting;
-      const obp = (s.hits + s.walks) / (s.atBats + s.walks);
+      const obp = (s.hits + s.walks + (s.hitByPitch || 0)) / (s.atBats + s.walks + (s.hitByPitch || 0));
       const totalBases = (s.hits - (s.doubles || 0) - (s.triples || 0) - s.homeruns) + (s.doubles || 0) * 2 + (s.triples || 0) * 3 + s.homeruns * 4;
       const slg = totalBases / s.atBats;
       return { rank: 0, name: p.name, team: p.teamName, value: (obp + slg).toFixed(3), sortValue: obp + slg };

@@ -10,6 +10,7 @@ import { decideSwingPower, getSwingPowerEffect } from './swingType.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
   pushSwingQuality, decayFooled, fooledLevel } from './pitchSequence.js';
 import { decidePitchObjective } from './pitchSituation.js';
+import { hitByPitchChance } from './pitchZone.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 
@@ -524,8 +525,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         ...p,
         currentStamina: startStamina,
         gameStats: {
-          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0, wildPitches: 0 },
+          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, hitByPitch: 0, strikeouts: 0, stolenBases: 0 },
+          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, hitBatters: 0, pitches: 0, wildPitches: 0 },
           fielding: { chances: 0, errors: 0, assists: 0 }
         }
       };})
@@ -541,8 +542,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         ...p,
         currentStamina: startStamina,
         gameStats: {
-          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, strikeouts: 0, stolenBases: 0 },
-          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, pitches: 0, wildPitches: 0 },
+          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, hitByPitch: 0, strikeouts: 0, stolenBases: 0 },
+          pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, hitBatters: 0, pitches: 0, wildPitches: 0 },
           fielding: { chances: 0, errors: 0, assists: 0 }
         }
       };})
@@ -933,7 +934,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // ボールゾーン。振ってしまった場合は半分以上バットに当たり、凡打になる。
     // 以前は「20%ファウル / 80%空振り」で打球が一切発生せず、chase率を上げると
     // 三振だけが増えてしまう構造だった。
-    if (!swung) { decayFooled(sequence); return { type: 'ball' }; }
+    if (!swung) {
+      decayFooled(sequence);
+      // あまりにも内角へ外れた球は打者に当たる（pitchZone.js）。
+      // 振って当たればストライクなので、見送った球にだけ問う
+      if (Math.random() < hitByPitchChance(loc.col, loc.row)) return { type: 'hit_by_pitch' };
+      return { type: 'ball' };
+    }
     if (Math.random() >= ballZoneContactChance(batter.eye)) { pushSwingQuality(sequence, null); return { type: 'swinging_strike' }; }
     if (Math.random() < 0.56) return { type: 'foul' };
     return resolveContact(combineBatterEffects(BALL_ZONE_PENALTY, matchup));
@@ -1918,6 +1925,29 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           }
           break;
 
+        case 'hit_by_pitch': {
+          // 死球。四球と同じ押し出し進塁だが、打数にも四球にも計上しない
+          batter.gameStats.batting.hitByPitch++;
+          pitcher.gameStats.pitching.hitBatters++;
+          atBatDamagePoints += 4;
+          if (gameState.bases[0] && gameState.bases[1] && gameState.bases[2]) {
+            if (gameState.isTopInning) gameState.score.away++;
+            else gameState.score.home++;
+            pitcher.gameStats.pitching.runsAllowed++;
+            creditRuns(pitcher, 1, gameState.bases[2]?._reachedOnError ? 1 : 0);
+            atBatDamagePoints += 10;
+            gameState.bases[2] = gameState.bases[1];
+            gameState.bases[1] = gameState.bases[0];
+            gameState.bases[0] = batter;
+          } else {
+            if (gameState.bases[1] && gameState.bases[0]) gameState.bases[2] = gameState.bases[1];
+            if (gameState.bases[0]) gameState.bases[1] = gameState.bases[0];
+            gameState.bases[0] = batter;
+          }
+          atBatOver = true;
+          break;
+        }
+
         case 'called_strike':
         case 'swinging_strike':
           gameState.count.strikes++;
@@ -2615,14 +2645,18 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       {
         const gb = player.gameStats.batting || {};
         const gp = player.gameStats.pitching || {};
-        const appeared = (gb.atBats || 0) > 0 || (gb.walks || 0) > 0
+        const appeared = (gb.atBats || 0) > 0 || (gb.walks || 0) > 0 || (gb.hitByPitch || 0) > 0
           || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
           || (player.battingOrder || 0) > 0;
         if (appeared) playerData._playedToday = true;
       }
 
       // 打撃成績の集計
-      if (player.gameStats.batting.atBats > 0) {
+      // ⚠ 条件を atBats>0 だけにすると「0打数2四球」の試合の四球・死球が
+      //    シーズン成績から丸ごと落ちる（実測で死球が9%欠けていた）
+      if (player.gameStats.batting.atBats > 0
+          || player.gameStats.batting.walks > 0
+          || player.gameStats.batting.hitByPitch > 0) {
         const b = player.gameStats.batting;
         const season = playerData.seasonStats.batting;
 
@@ -2634,6 +2668,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         season.homeruns = (season.homeruns || 0) + b.homeruns;
         season.rbis = (season.rbis || 0) + b.rbis;
         season.walks = (season.walks || 0) + b.walks;
+        season.hitByPitch = (season.hitByPitch || 0) + (b.hitByPitch || 0);
         season.strikeouts = (season.strikeouts || 0) + b.strikeouts;
         season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
         season.sacrificeBunts = (season.sacrificeBunts || 0) + (b.sacrificeBunts || 0);
@@ -2684,6 +2719,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         season.homeruns = (season.homeruns || 0) + (p.homeruns || 0);
         season.strikeouts = (season.strikeouts || 0) + p.strikeouts;
         season.walks = (season.walks || 0) + p.walks;
+        season.hitBatters = (season.hitBatters || 0) + (p.hitBatters || 0);
         season.pitches = (season.pitches || 0) + p.pitches;
         season.wildPitches = (season.wildPitches || 0) + (p.wildPitches || 0);
 

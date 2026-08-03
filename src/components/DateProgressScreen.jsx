@@ -1538,8 +1538,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
         topics.push({ cat: 'bat_hits', icon: '📊', text: `${abbr} ${p.name}がシーズン${bs.hits}安打到達`, color: 'text-blue-300', team: p.teamName });
       }
       if (bs?.atBats >= 30) {
-        const pa = bs.atBats + (bs.walks || 0);
-        const obp = (bs.hits + (bs.walks || 0)) / pa;
+        const pa = bs.atBats + (bs.walks || 0) + (bs.hitByPitch || 0);
+        const obp = (bs.hits + (bs.walks || 0) + (bs.hitByPitch || 0)) / pa;
         if (obp >= 0.420) {
           topics.push({ cat: 'bat_obp', icon: '👁️', text: `${abbr} ${p.name}の出塁率${obp.toFixed(3)}は驚異的`, color: 'text-teal-400' });
         }

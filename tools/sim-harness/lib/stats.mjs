@@ -4,14 +4,15 @@
 
 // リーグ全体の打撃・投球成績を seasonStats から集計する。
 export function aggregateStats(TEAMS_DATA, names) {
-  let AB = 0, H = 0, doubles = 0, triples = 0, HR = 0, BB = 0, K = 0, SB = 0;
+  let AB = 0, H = 0, doubles = 0, triples = 0, HR = 0, BB = 0, HBP = 0, K = 0, SB = 0;
   let outsIP = 0, ER = 0, pK = 0, pBB = 0, pH = 0;
   for (const name of names) {
     for (const p of TEAMS_DATA[name].players) {
       const b = p.seasonStats?.batting;
       if (b?.atBats) {
         AB += b.atBats; H += b.hits || 0; doubles += b.doubles || 0; triples += b.triples || 0;
-        HR += b.homeruns || 0; BB += b.walks || 0; K += b.strikeouts || 0; SB += b.stolenBases || 0;
+        HR += b.homeruns || 0; BB += b.walks || 0; HBP += b.hitByPitch || 0;
+        K += b.strikeouts || 0; SB += b.stolenBases || 0;
       }
       const pi = p.seasonStats?.pitching;
       if (pi?.inningsPitched) {
@@ -24,13 +25,15 @@ export function aggregateStats(TEAMS_DATA, names) {
   const singles = H - doubles - triples - HR;
   const TB = singles + doubles * 2 + triples * 3 + HR * 4;
   return {
-    AB, H, HR, BB, K, SB, IP,
+    AB, H, HR, BB, HBP, K, SB, IP,
     avg: H / AB,
-    obp: (H + BB) / (AB + BB),
+    // 出塁率は死球を含む（ゲーム側の表示と揃える）
+    obp: (H + BB + HBP) / (AB + BB + HBP),
     slg: TB / AB,
     hrPerGamePerTeam: HR, // 呼び出し側で割る
-    bbRate: BB / (AB + BB),
-    kRate: K / (AB + BB),
+    bbRate: BB / (AB + BB + HBP),
+    kRate: K / (AB + BB + HBP),
+    hbpRate: HBP / (AB + BB + HBP),
     era: ER / IP * 9,
     k9: pK / IP * 9,
     bb9: pBB / IP * 9,

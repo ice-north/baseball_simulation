@@ -99,6 +99,8 @@ r.band('BB/9',           acc.bb9,  3.00,  5.20,  v => v.toFixed(2));
 r.band('四球率(対打席)', acc.bbRate, 0.075, 0.125, v => (v * 100).toFixed(1) + '%');
 r.band('三振率(対打席)', acc.kRate,  0.155, 0.235, v => (v * 100).toFixed(1) + '%');
 r.band('本塁打/試合',    hrPerTeamGame, 0.20, 0.75, v => v.toFixed(2));
+// 死球: 実NPB 約0.36/チーム/試合（打席の約0.9%）。あまりにも内角へ外れた球が当たる
+r.band('死球率(対打席)', acc.hbpRate, 0.004, 0.016, v => (v * 100).toFixed(2) + '%');
 r.info('総打数',         acc.AB.toFixed(0));
 r.info('総投球回',       acc.IP.toFixed(0));
 r.info('実行試合数(1シード)', gamesPerTeamPerSeed.toFixed(0) + '試合/チーム');

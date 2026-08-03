@@ -298,13 +298,13 @@ export function executeHandleManagedGameEnd(ctx) {
       // 打席・登板が無くても、打順を持っていれば途中出場（代走・守備固め）とみなす。
       {
         const gp = gs.pitching || {};
-        const appeared = (gs.atBats || 0) > 0 || (gs.walks || 0) > 0
+        const appeared = (gs.atBats || 0) > 0 || (gs.walks || 0) > 0 || (gs.hitByPitch || 0) > 0
           || (gp.outs || 0) > 0 || (gp.pitches || 0) > 0
           || (p.battingOrder || 0) > 0;
         if (appeared) playerData._playedToday = true;
       }
 
-      if (gs.atBats > 0 || gs.walks > 0) {
+      if (gs.atBats > 0 || gs.walks > 0 || gs.hitByPitch > 0) {
         if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
         if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
         const season = playerData.seasonStats.batting;
@@ -315,6 +315,7 @@ export function executeHandleManagedGameEnd(ctx) {
         season.rbis = (season.rbis || 0) + (gs.rbis || 0);
         season.strikeouts = (season.strikeouts || 0) + (gs.strikeouts || 0);
         season.walks = (season.walks || 0) + (gs.walks || 0);
+        season.hitByPitch = (season.hitByPitch || 0) + (gs.hitByPitch || 0);
 
         // 成長率変動: 摩耗ペナルティはスタメン出場(3打席以上)時のみ、疲労度に応じて段階的に適用
         // （代打・代走・守備固めではペナルティ無し）
@@ -339,6 +340,7 @@ export function executeHandleManagedGameEnd(ctx) {
         sp.inningsPitched = (sp.inningsPitched || 0) + (ps.outs || 0);
         sp.strikeouts = (sp.strikeouts || 0) + (ps.strikeouts || 0);
         sp.walks = (sp.walks || 0) + (ps.walks || 0);
+        sp.hitBatters = (sp.hitBatters || 0) + (ps.hitBatters || 0);
         sp.runsAllowed = (sp.runsAllowed || 0) + (ps.runsAllowed || 0);
         // 自責点0（全て失策絡み）が失点で上書きされないよう ?? を使う
         sp.earnedRuns = (sp.earnedRuns || 0) + (ps.earnedRuns ?? ps.runsAllowed ?? 0);

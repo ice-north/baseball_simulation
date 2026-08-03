@@ -458,7 +458,7 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
     const whip = ps?.inningsPitched > 0 ? (((ps.walks || 0) + (ps.hits || 0)) / (ps.inningsPitched / 3)).toFixed(2) : '-';
     const ip = ps?.inningsPitched ? (ps.inningsPitched / 3).toFixed(1) : '0.0';
     const avg = bs?.atBats > 0 ? (bs.hits / bs.atBats).toFixed(3) : '-';
-    const obp = bs?.atBats > 0 ? ((bs.hits + (bs.walks || 0)) / (bs.atBats + (bs.walks || 0))).toFixed(3) : '-';
+    const obp = bs?.atBats > 0 ? ((bs.hits + (bs.walks || 0) + (bs.hitByPitch || 0)) / (bs.atBats + (bs.walks || 0) + (bs.hitByPitch || 0))).toFixed(3) : '-';
 
     const StatBox = ({ label, value, isVelocity, isStamina, highlight }) => {
       const rank = isVelocity ? getVelocityRank(value) : getAbilityRank(value, false, isStamina);

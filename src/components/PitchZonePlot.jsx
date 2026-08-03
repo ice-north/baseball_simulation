@@ -65,6 +65,8 @@ const mirrorShape = (s) => (s === 'left' ? 'right' : s === 'right' ? 'left' : s)
 const C_BALL = '#22c55e', C_STRIKE = '#facc15', C_OUT = '#ef4444', C_HIT = '#f8fafc';
 const RESULT_STYLE = {
   ball:            { color: C_BALL,   swung: false },
+  // 死球はボールの一種。振っていないので中空のまま
+  hit_by_pitch:    { color: C_BALL,   swung: false },
   called_strike:   { color: C_STRIKE, swung: false },
   swinging_strike: { color: C_STRIKE, swung: true },
   foul:            { color: C_STRIKE, swung: true },
