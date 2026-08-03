@@ -31,7 +31,8 @@ import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
 import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
-import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './game/batterZone.js';
+import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt,
+  zoneHeatmap, describeZoneProfile } from './game/batterZone.js';
 import { decideSwingPower, getSwingPowerEffect, swingPowerLabel } from './game/swingType.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
   pushSwingQuality, decayFooled, fooledLevel } from './game/pitchSequence.js';
@@ -3519,24 +3520,24 @@ if (newOuts === 3) {
                     {/* ヘッダー行 */}
                     <thead>
                       <tr className="border-b border-gray-700">
-                        <th className="py-1 px-1 text-left text-orange-600" style={{width: '20%'}}>TEAM</th>
+                        <th className="py-1 px-1 text-left text-orange-400" style={{width: '20%'}}>TEAM</th>
                         {inning <= 9 ? (
                           // 9回まで: 1-9回を表示
                           [1,2,3,4,5,6,7,8,9].map(i => (
-                            <th key={i} className={`py-1 px-0 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
+                            <th key={i} className={`py-1 px-0 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
                           ))
                         ) : (
                           // 延長: 10回以降を表示（最大3イニング分）
                           [0,1,2].map(i => {
                             const extraInn = 10 + i;
                             return (
-                              <th key={i} className={`py-1 px-0 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-600'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
+                              <th key={i} className={`py-1 px-0 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
                             );
                           })
                         )}
                         <th className="py-1 px-1 text-orange-400 font-bold border-l border-gray-700" style={{width: '8%'}}>計</th>
-                        <th className="py-1 px-1 text-orange-600" style={{width: '7%'}}>安</th>
-                        <th className="py-1 px-1 text-orange-600" style={{width: '7%'}}>失</th>
+                        <th className="py-1 px-1 text-orange-400" style={{width: '7%'}}>安</th>
+                        <th className="py-1 px-1 text-orange-400" style={{width: '7%'}}>失</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3645,20 +3646,39 @@ if (newOuts === 3) {
                   <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
                   
                   {/* 投手名・投球数（固定幅） */}
-                  <div className="text-center w-20 flex-shrink-0">
-                    <div className="text-orange-500 text-xs truncate">{getCurrentPitcher().name}</div>
-                    <div className="text-orange-600 text-xs">投球数</div>
-                    <div className="text-orange-400 text-xl font-bold font-mono" style={{textShadow: '0 0 6px #f97316'}}>
+                  <div className="text-center w-24 flex-shrink-0">
+                    <div className="text-orange-500 text-xs">P</div>
+                    <div className="text-orange-300 text-xs truncate" style={{textShadow: '0 0 6px #f97316'}}>{getCurrentPitcher().name}</div>
+                    <div className="text-orange-400 text-xl font-bold font-mono leading-tight" style={{textShadow: '0 0 6px #f97316'}}>
                       {String(getCurrentPitcher().stats?.pitching?.pitches || 0).padStart(3, ' ')}
                     </div>
+                    <div className="text-orange-500 text-xs leading-none">球</div>
                   </div>
-                  
+
+                  {/* 区切り線 */}
+                  <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
+
+                  {/* 打者（球場の電光掲示板は打順・名前・打率を出す） */}
+                  <div className="text-center w-24 flex-shrink-0">
+                    <div className="text-orange-500 text-xs">B {currentBatterOrder}</div>
+                    <div className="text-orange-300 text-xs truncate" style={{textShadow: '0 0 6px #f97316'}}>{getCurrentBatter().name}</div>
+                    <div className="text-orange-400 text-xl font-bold font-mono leading-tight" style={{textShadow: '0 0 6px #f97316'}}>
+                      {(() => {
+                        const b = getCurrentBatter();
+                        const ab = (b.seasonStats?.batting?.atBats || 0) + (b.gameStats?.atBats || 0);
+                        const h = (b.seasonStats?.batting?.hits || 0) + (b.gameStats?.hits || 0);
+                        return ab > 0 ? (h / ab).toFixed(3).replace(/^0/, '') : '.---';
+                      })()}
+                    </div>
+                    <div className="text-orange-500 text-xs leading-none">打率</div>
+                  </div>
+
                   {/* 区切り線 */}
                   <div className="w-px h-14 bg-gray-700 flex-shrink-0" />
                   
                   {/* 球種・球速表示（固定幅） */}
                   <div className="text-center w-20 flex-shrink-0">
-                    <div className="text-orange-500 text-xs truncate">
+                    <div className="text-orange-300 text-xs truncate">
                       {(() => {
                         const lastPitch = [...gameLog].reverse().find(log => log.velocity !== undefined);
                         return lastPitch ? lastPitch.pitchType : '---';
@@ -3679,71 +3699,134 @@ if (newOuts === 3) {
               {/* 対戦カード & 操作ボタン */}
               {gameStarted && (
               <div className="bg-gray-800 rounded-lg p-3 shadow-lg border border-gray-700/50">
-                <div className="flex items-center justify-between mb-3">
-                  {/* 投手情報 */}
-                  <div className="text-center flex-1">
-                    <div className="text-xs text-gray-400">投手 ({isTopInning ? homeTeam.name : awayTeam.name})</div>
-                    <div className="font-bold text-xl text-blue-300">{getCurrentPitcher().name}</div>
-                    <div className="text-sm text-gray-300">
-                      {getCurrentPitcher().physical.throws === 'right' ? '右投' : '左投'} |
-                      {getCurrentPitcher().pitching.velocity}km/h |
-                      回転<span className="font-bold">{getCurrentPitcher().pitching.spinRate ?? 50}</span>
+                {/* 対戦カード。**チーム色分けは使わない**（表裏で意味が反転するため）。
+                    守備側=amber / 攻撃側=cyan で采配パネルと語彙を揃える。
+                    名前は白、数字は tabular-nums で「目に入りやすさ」を優先する */}
+                <div className="flex items-stretch gap-2 mb-3">
+                  {/* ===== 守備側 ===== */}
+                  <div className="flex-1 min-w-0 bg-gray-900/50 rounded p-2 border-l-2 border-amber-600/70">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-bold text-amber-300 shrink-0">守備</span>
+                      <span className="text-xs text-gray-300 truncate">{isTopInning ? homeTeam.name : awayTeam.name}</span>
                     </div>
-                    <div className="text-sm font-bold text-blue-300">
-                      防御率 {(() => {
+                    <div className="font-bold text-xl text-gray-100 truncate leading-tight">{getCurrentPitcher().name}</div>
+                    <div className="text-xs text-gray-300 tabular-nums">
+                      {getCurrentPitcher().physical.throws === 'right' ? '右投' : '左投'}
+                      <span className="mx-1 text-gray-500">|</span>{getCurrentPitcher().pitching.velocity}km
+                      <span className="mx-1 text-gray-500">|</span>回転{getCurrentPitcher().pitching.spinRate ?? 50}
+                      <span className="mx-1 text-gray-500">|</span>防{(() => {
                         const p = getCurrentPitcher();
-                        const seasonIP = p.seasonStats?.pitching?.inningsPitched || 0;
-                        const gameOuts = p.stats?.pitching?.outs || 0;
-                        const totalOuts = seasonIP + gameOuts;
+                        const totalOuts = (p.seasonStats?.pitching?.inningsPitched || 0) + (p.stats?.pitching?.outs || 0);
                         if (totalOuts === 0) return '-.--';
-                        const seasonER = p.seasonStats?.pitching?.earnedRuns || 0;
-                        const gameER = p.stats?.pitching?.earnedRuns ?? p.stats?.pitching?.runsAllowed ?? 0;
-                        return ((seasonER + gameER) * 27 / totalOuts).toFixed(2);
+                        const er = (p.seasonStats?.pitching?.earnedRuns || 0)
+                          + (p.stats?.pitching?.earnedRuns ?? p.stats?.pitching?.runsAllowed ?? 0);
+                        return (er * 27 / totalOuts).toFixed(2);
                       })()}
                     </div>
-                    <div className="text-xs text-orange-500 mt-1">
-                      スタミナ: {currentStamina}/{getCurrentPitcher().pitching.stamina}
+                    {/* スタミナ */}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs text-gray-300 shrink-0">体力</span>
+                      <div className="flex-1 bg-gray-700 rounded-full h-1.5 min-w-0">
+                        <div className="bg-amber-500 h-1.5 rounded-full transition-all"
+                          style={{width: `${(currentStamina / getCurrentPitcher().pitching.stamina) * 100}%`}} />
+                      </div>
+                      <span className="text-xs text-gray-200 tabular-nums shrink-0">
+                        {currentStamina}/{getCurrentPitcher().pitching.stamina}
+                      </span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-1.5 mt-1">
-                      <div
-                        className="bg-orange-500 h-1.5 rounded-full"
-                        style={{width: `${(currentStamina / getCurrentPitcher().pitching.stamina) * 100}%`}}
-                      />
-                    </div>
+                    {/* 捕手。このゲームで配球を決めているのは捕手なので試合画面に出す */}
+                    {(() => {
+                      const c = getCurrentCatcher();
+                      if (!c) return null;
+                      const lead = c.catching?.lead ?? 50;
+                      const def = c.fielding?.defense ?? 50;
+                      return (
+                        <div className="text-xs text-gray-300 mt-1 truncate"
+                          title="リード=配球の巧さ（弱点を突く・読ませない） / 守備=フレーミング・暴投抑止">
+                          捕 <span className="text-gray-100">{c.name}</span>
+                          <span className="ml-1 tabular-nums">リード<span className={`font-bold ${getAbilityTextColor(lead)}`}>{lead}</span></span>
+                          <span className="ml-1 tabular-nums">守<span className={`font-bold ${getAbilityTextColor(def)}`}>{def}</span></span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  <div className="text-3xl font-bold text-gray-300 px-4">VS</div>
+                  <div className="self-center text-lg font-bold text-gray-500 px-1 shrink-0">VS</div>
 
-                  {/* 打者情報 */}
-                  <div className="text-center flex-1">
-                    <div className="text-xs text-gray-400">{currentBatterOrder}番打者 ({isTopInning ? awayTeam.name : homeTeam.name})</div>
-                    <div className="font-bold text-xl text-red-400">{getCurrentBatter().name}</div>
-                    <div className="text-sm text-gray-300">
-                      {getCurrentBatter().batting.bats === 'switch' ? '両打' : getCurrentBatter().batting.bats === 'right' ? '右打' : '左打'}
+                  {/* ===== 攻撃側 ===== */}
+                  <div className="flex-1 min-w-0 bg-gray-900/50 rounded p-2 border-r-2 border-cyan-600/70">
+                    <div className="flex items-baseline gap-2 justify-end">
+                      <span className="text-xs text-gray-300 truncate">{isTopInning ? awayTeam.name : homeTeam.name}</span>
+                      <span className="text-xs font-bold text-cyan-300 shrink-0">攻撃 {currentBatterOrder}番</span>
                     </div>
-                    <div className="text-sm font-bold text-red-300">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0 text-right">
+                        <div className="font-bold text-xl text-gray-100 truncate leading-tight">{getCurrentBatter().name}</div>
+                        <div className="text-xs text-gray-300 tabular-nums">
+                          {getCurrentBatter().batting.bats === 'switch' ? '両打' : getCurrentBatter().batting.bats === 'right' ? '右打' : '左打'}
+                          {(() => {
+                            const b = getCurrentBatter();
+                            const ab = (b.seasonStats?.batting?.atBats || 0) + (b.gameStats?.atBats || 0);
+                            const h = (b.seasonStats?.batting?.hits || 0) + (b.gameStats?.hits || 0);
+                            const hr = (b.seasonStats?.batting?.homeruns || 0) + (b.gameStats?.homeruns || 0);
+                            const rbi = (b.seasonStats?.batting?.rbis || 0) + (b.gameStats?.rbis || 0);
+                            return <>
+                              <span className="mx-1 text-gray-500">|</span>{ab > 0 ? (h / ab).toFixed(3).replace(/^0/, '') : '.---'}
+                              <span className="mx-1 text-gray-500">|</span>{hr}本
+                              <span className="mx-1 text-gray-500">|</span>{rbi}点
+                            </>;
+                          })()}
+                        </div>
+                        {/* 打者の型（野村の4分類）。狙い方が型で変わるので配球の材料になる */}
+                        {(() => {
+                          const t = getBatterType(getCurrentBatter());
+                          const prof = getZoneProfile(getCurrentBatter());
+                          const desc = describeZoneProfile(prof);
+                          return (
+                            <div className="flex items-center gap-1 justify-end flex-wrap mt-1">
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-900/70 text-cyan-200 font-bold"
+                                title={BATTER_TYPE_NOTE[t]}>{BATTER_TYPE_LABEL[t]}</span>
+                              {desc.length > 0 && (
+                                <span className="text-xs text-gray-300">{desc.join('・')}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        <div className="text-xs mt-1">
+                          <span className={`px-2 py-0.5 rounded ${
+                            getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).meetBonus
+                              ? 'bg-blue-900/50 text-blue-200'
+                              : 'bg-red-900/50 text-red-200'
+                          }`}>
+                            {getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).label}
+                          </span>
+                        </div>
+                      </div>
+                      {/* コース適性のミニヒートマップ。**下のコース図と同じ投手視点に揃える**
+                          （打者基準のまま出すと左打者で内外角が逆になり読み違える） */}
                       {(() => {
                         const b = getCurrentBatter();
-                        const sAB = b.seasonStats?.batting?.atBats || 0;
-                        const sH = b.seasonStats?.batting?.hits || 0;
-                        const gAB = b.gameStats?.atBats || 0;
-                        const gH = b.gameStats?.hits || 0;
-                        const totalAB = sAB + gAB;
-                        const totalH = sH + gH;
-                        const avg = totalAB > 0 ? (totalH / totalAB).toFixed(3) : '.000';
-                        const hr = (b.seasonStats?.batting?.homeruns || 0) + (b.gameStats?.homeruns || 0);
-                        const rbi = (b.seasonStats?.batting?.rbis || 0) + (b.gameStats?.rbis || 0);
-                        return `${avg} | ${hr}本 | ${rbi}打点`;
+                        const side = b.batting?.bats === 'switch'
+                          ? (getCurrentPitcher().physical?.throws === 'left' ? 'left' : 'right')
+                          : (b.batting?.bats || 'right');
+                        const flip = side === 'left';
+                        const grid = zoneHeatmap(getZoneProfile(b));
+                        return (
+                          <div className="shrink-0" title="コース適性（投手から見た向き）。赤=得意 / 青=苦手。内枠がストライクゾーン">
+                            <div className="grid grid-cols-5 gap-px p-px bg-gray-700 rounded-sm">
+                              {grid.map((line, r) => (flip ? [...line].reverse() : line).map((v, c) => {
+                                const inZone = r >= 1 && r <= 3 && c >= 1 && c <= 3;
+                                const a = Math.min(0.85, Math.abs(v) * 0.85);
+                                const bg = Math.abs(v) < 0.06 ? 'rgba(75,85,99,0.6)'
+                                  : v > 0 ? `rgba(239,68,68,${a})` : `rgba(59,130,246,${a})`;
+                                return <div key={`${r}-${c}`} className="w-[7px] h-[7px]"
+                                  style={{ background: bg, outline: inZone ? '1px solid rgba(209,213,219,0.45)' : 'none', outlineOffset: '-1px' }} />;
+                              }))}
+                            </div>
+                            <div className="text-xs text-gray-400 text-center mt-0.5 leading-none">適性</div>
+                          </div>
+                        );
                       })()}
-                    </div>
-                    <div className="text-xs mt-1">
-                      <span className={`px-2 py-0.5 rounded ${
-                        getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).meetBonus 
-                          ? 'bg-blue-900/40 text-blue-300'
-                          : 'bg-red-900/40 text-red-300'
-                      }`}>
-                        {getHandednessEffect(getCurrentPitcher().physical.throws, getCurrentBatter().batting.bats).label}
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -3751,18 +3834,39 @@ if (newOuts === 3) {
                 {/* 投球コース（投手視点）と投球ログ。図と文字を同じ行に並べて
                     「どこに来て何が起きたか」を目線を動かさずに追えるようにする */}
                 <div className="flex items-start gap-3 mb-3">
-                  <PitchZonePlot size={168}
-                    bats={getCurrentBatter().batting?.bats}
-                    pitcherThrows={getCurrentPitcher().physical?.throws}
-                    pitches={(() => {
-                      const key = pitchSeqRef.current.key;
-                      return gameLog.filter(l => l.pitchLoc && l.paKey === key);
-                    })()} />
+                  <div className="shrink-0">
+                    {/* カウントは図のすぐ上に置く。配球を決める時に電光掲示板まで
+                        目線を戻さずに済ませるため（掲示板側にも残してある） */}
+                    <div className="flex items-center gap-2 mb-1 h-4">
+                      {[['B', count?.balls || 0, 3, 'bg-green-500'],
+                        ['S', count?.strikes || 0, 2, 'bg-yellow-400'],
+                        ['O', outs, 2, 'bg-red-500']].map(([label, n, max, on]) => (
+                        <span key={label} className="flex items-center gap-0.5">
+                          <span className="text-xs font-bold text-gray-300 mr-0.5">{label}</span>
+                          {Array.from({ length: max }, (_, i) => (
+                            <span key={i} className={`w-2 h-2 rounded-full ${i < n ? on : 'bg-gray-700'}`} />
+                          ))}
+                        </span>
+                      ))}
+                    </div>
+                    <PitchZonePlot size={168}
+                      bats={getCurrentBatter().batting?.bats}
+                      pitcherThrows={getCurrentPitcher().physical?.throws}
+                      pitches={(() => {
+                        const key = pitchSeqRef.current.key;
+                        return gameLog.filter(l => l.pitchLoc && l.paKey === key);
+                      })()} />
+                  </div>
                   {/* 投球ログ。コースの右いっぱいに広げる
                       （flex内のスクロール領域なので高さを明示すること） */}
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-400 mb-1">投球ログ</div>
-                    <div className="h-[150px] overflow-y-auto text-xs space-y-0.5 pr-1">
+                    <div className="flex items-baseline gap-2 mb-1 h-4">
+                      <span className="text-xs font-bold text-gray-300">投球ログ</span>
+                      <span className="text-xs text-gray-400 tabular-nums">
+                        この打席 {gameLog.filter(l => l.pitchLoc && l.paKey === pitchSeqRef.current.key).length}球
+                      </span>
+                    </div>
+                    <div className="h-[168px] overflow-y-auto text-xs space-y-0.5 pr-1">
                       {gameLog.slice().reverse().slice(0, 30).map((log, i) => (
                         <div key={i} className={`px-1.5 py-1 rounded leading-tight ${
                           i === 0 ? 'bg-blue-900/40' : 'bg-gray-700/40'}`}>
@@ -3770,14 +3874,14 @@ if (newOuts === 3) {
                             <span className="font-bold text-purple-300">{log.description}</span>
                           ) : (
                             <>
-                              <span className="text-gray-400">{log.inning}回{log.isTop ? '表' : '裏'}</span>
+                              <span className="text-gray-300">{log.inning}回{log.isTop ? '表' : '裏'}</span>
                               <span className="mx-1 text-gray-600">|</span>
                               <span className="font-mono tabular-nums text-gray-300">
                                 {log.count?.balls || 0}-{log.count?.strikes || 0}
                               </span>
                               <span className="mx-1 text-gray-600">|</span>
                               <span className="text-blue-300">{log.pitchType}</span>
-                              <span className="text-gray-400 ml-1 tabular-nums">{log.velocity}km</span>
+                              <span className="text-gray-300 ml-1 tabular-nums">{log.velocity}km</span>
                               <span className="mx-1 text-gray-600">→</span>
                               <span className="font-bold text-gray-100">{log.result}</span>
                               {/* 振り方（得意コース・打者有利カウントならフルスイング） */}
@@ -3786,7 +3890,7 @@ if (newOuts === 3) {
                                   ? 'text-orange-300' : 'text-sky-300'}`}>[{log.pitchLoc.swing}]</span>
                               )}
                               {log.exitVelocity && (
-                                <span className="text-gray-400 ml-1">
+                                <span className="text-gray-300 ml-1 tabular-nums">
                                   （EV{log.exitVelocity} {log.launchAngle}° {log.distance}m 芯{log.meetQuality}%）
                                 </span>
                               )}
@@ -3795,7 +3899,7 @@ if (newOuts === 3) {
                         </div>
                       ))}
                       {gameLog.length === 0 && (
-                        <div className="text-gray-400 text-center py-2">まだ投球がありません</div>
+                        <div className="text-gray-300 text-center py-2">まだ投球がありません</div>
                       )}
                     </div>
                   </div>
@@ -3821,35 +3925,27 @@ if (newOuts === 3) {
                   }[cat];
                   // 打球の飛距離バー（0-140m目安）
                   const distPct = lastResult.distance ? Math.max(4, Math.min(100, (lastResult.distance / 140) * 100)) : 0;
+                  // 1行に畳む。球種・球速は電光掲示板とログに出ているので繰り返さない
                   return (
-                    <div className={`rounded-lg p-2 text-center border mb-3 ${S.box}`}>
-                      <div className="flex flex-col items-center gap-0.5">
-                        <div>
-                          {S.icon && <span className="mr-1">{S.icon}</span>}
-                          <span className={`font-bold text-lg ${S.text}`}>{d}</span>
-                          {lastResult.pitchType && (
-                            <span className="ml-2 text-gray-300 text-sm">
-                              ({lastResult.pitchType} {lastResult.velocity}km/h)
-                            </span>
-                          )}
-                        </div>
-                        {/* 打球物理データ + 飛距離バー */}
-                        {lastResult.exitVelocity && (
-                          <div className="w-full max-w-[280px] mt-0.5">
-                            <div className="text-xs text-gray-400 tabular-nums">
-                              EV {lastResult.exitVelocity} / 角度 {lastResult.launchAngle}° / {lastResult.distance}m / 芯 {lastResult.meetQuality}%
-                            </div>
-                            <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mt-0.5">
-                              <div className={`h-full rounded-full ${cat === 'xbh' ? 'bg-amber-400' : cat === 'hit' ? 'bg-green-500' : 'bg-gray-500'}`} style={{ width: `${distPct}%` }} />
-                            </div>
-                          </div>
-                        )}
+                    <div className={`rounded-lg px-3 py-1.5 border mb-2 flex items-center gap-3 ${S.box}`}>
+                      <div className="shrink-0">
+                        {S.icon && <span className="mr-1">{S.icon}</span>}
+                        <span className={`font-bold text-lg ${S.text}`}>{d}</span>
                       </div>
-                      {lastResult.timingWindow && !lastResult.exitVelocity && (
-                        <div className="text-xs text-red-500 mt-1">
-                          窓: {lastResult.timingWindow}ms | 誤差: {lastResult.timingError}ms
+                      {lastResult.exitVelocity ? (
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-gray-300 tabular-nums text-right">
+                            EV {lastResult.exitVelocity} / {lastResult.launchAngle}° / {lastResult.distance}m / 芯 {lastResult.meetQuality}%
+                          </div>
+                          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mt-0.5">
+                            <div className={`h-full rounded-full ${cat === 'xbh' ? 'bg-amber-400' : cat === 'hit' ? 'bg-green-500' : 'bg-gray-500'}`} style={{ width: `${distPct}%` }} />
+                          </div>
                         </div>
-                      )}
+                      ) : lastResult.timingWindow ? (
+                        <div className="flex-1 text-xs text-gray-300 tabular-nums text-right">
+                          タイミング窓 {lastResult.timingWindow}ms / 誤差 {lastResult.timingError}ms
+                        </div>
+                      ) : <div className="flex-1" />}
                     </div>
                   );
                 })()}
