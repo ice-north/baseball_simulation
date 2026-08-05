@@ -497,6 +497,28 @@ export const getThrowErrorRate = (throwerArm, receiverDefense, difficulty = 0) =
   return (throwPart + receivePart) * (1 + difficulty);
 };
 
+/**
+ * 打球方向から担当する外野手を返す。中堅手は左右両翼より広い範囲を守る。
+ *
+ * **内野を抜けた打球を「誰が拾うか」にも使う**。ゴロやライナーが内野手の脇を
+ * 抜けたとき、記録上の担当は抜かれた内野手ではなく**回り込んだ外野手**。
+ * ここを内野手のままにすると、積極進塁の判定（走者の足 対 外野の肩）に
+ * 内野手の肩が使われてしまい、強肩の外野手を置く意味がなくなる。
+ */
+export function pickOutfielder(direction, defense = {}) {
+  const cfSpeed = defense.center?.speed || 65;
+  const cfExpand = (cfSpeed - 65) / 100 * 12;   // 足90→+3度拡張
+  const cfLeft = -17 - cfExpand;
+  const cfRight = 17 + cfExpand;
+  if (direction < cfLeft) {
+    const lfExpand = ((defense.left?.speed || 65) - 65) / 100 * 7;
+    return (direction >= cfLeft - lfExpand) && Math.random() < 0.3 ? 'center' : 'left';
+  }
+  if (direction <= cfRight) return 'center';
+  const rfExpand = ((defense.right?.speed || 65) - 65) / 100 * 7;
+  return (direction <= cfRight + rfExpand) && Math.random() < 0.3 ? 'center' : 'right';
+}
+
 export const judgeFielderReach = (battedBall, defense, batter) => {
   // 防御的チェック: defenseがnullまたはundefinedの場合はデフォルト値を使用
   const safeDefense = defense || {};
@@ -572,27 +594,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     }
     fielder = safeDefense[position] || { defense: 70, speed: 60, arm: 65 };
   } else {
-    // 外野 - 中堅手の守備範囲を広く設定
     isOutfield = true;
-    const cfSpeed = safeDefense.center?.speed || 65;
-    const cfExpand = (cfSpeed - 65) / 100 * 12; // 足90→+3度拡張（走力強化）
-    // 中堅は左右両翼より広い範囲を守る（実際の守備隊形に合わせ基準±21度）
-    const cfLeft = -17 - cfExpand;  // 中堅の左端
-    const cfRight = 17 + cfExpand;  // 中堅の右端
-
-    if (direction < cfLeft) {
-      // 左翼側 - 左翼手の足でもカバー拡張
-      const lfSpeed = safeDefense.left?.speed || 65;
-      const lfExpand = (lfSpeed - 65) / 100 * 7; // 走力強化
-      position = (direction >= cfLeft - lfExpand) && Math.random() < 0.3 ? 'center' : 'left';
-    } else if (direction <= cfRight) {
-      position = 'center'; // 中堅手の広い範囲（30度幅＋足で拡張）
-    } else {
-      // 右翼側 - 右翼手の足でもカバー拡張
-      const rfSpeed = safeDefense.right?.speed || 65;
-      const rfExpand = (rfSpeed - 65) / 100 * 7; // 走力強化
-      position = (direction <= cfRight + rfExpand) && Math.random() < 0.3 ? 'center' : 'right';
-    }
+    position = pickOutfielder(direction, safeDefense);
     fielder = safeDefense[position] || { defense: 70, speed: 65, arm: 70 };
   }
   // ポジション別守備重要度係数（ライナー・フライ用の総合係数）
@@ -655,7 +658,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
         // 横っ飛びなど難しい打球ほど失策率が上がる
         const errDifficulty = offset <= frontZone ? 0 : Math.min(1.0, (offset - frontZone) / 14);
         if (Math.random() < getErrorRate(fielder.defense, fielder.arm, errDifficulty)) {
-          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）',
+            isError: true, errorPosition: position, fieldingPosition: position };
         }
         // 捕球成功後の「一塁への送球」を別判定にする。
         // 送り手の肩・受け手（一塁手）の守備の両方が効くので、内野の連携精度が結果に出る。
@@ -666,7 +670,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
           if (Math.random() < throwErr) {
             return {
               result: 'single', bases: 1, description: 'エラー（悪送球）',
-              isError: true, errorPosition: position, isThrowingError: true,
+              isError: true, errorPosition: position, fieldingPosition: position,
+              isThrowingError: true,
             };
           }
         }
@@ -674,10 +679,13 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       }
       // 内野を処理できず → 内野安打 or 外野へ抜ける安打（強い打球は外野を転がり二塁打も）
       if (distance >= 40) {
+        // **抜けた打球を拾うのは外野手**。抜かれた内野手を担当にすると、
+        // 積極進塁の判定に内野手の肩が使われてしまう
+        const of = pickOutfielder(direction, safeDefense);
         if (exitVelocity >= 167 && Math.abs(direction) > 28 && Math.random() < 0.25) {
-          return { result: 'double', bases: 2, description: '左右を破る二塁打！' };
+          return { result: 'double', bases: 2, description: '左右を破る二塁打！', fieldingPosition: of };
         }
-        return { result: 'single', bases: 1, description: '外野への安打' };
+        return { result: 'single', bases: 1, description: '外野への安打', fieldingPosition: of };
       }
       return { result: 'single', bases: 1, description: '内野安打', fieldingPosition: position };
     }
@@ -697,11 +705,14 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       if (Math.random() < catchProb) {
         // 内野ライナーは捕球が難しく、弾くことがある
         if (Math.random() < getErrorRate(fielder.defense, fielder.arm, 0.5)) {
-          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）',
+            isError: true, errorPosition: position, fieldingPosition: position };
         }
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: false, fieldingPosition: position };
       }
-      return { result: 'single', bases: 1, description: 'ヒット！' };
+      // 内野手の脇を抜けたライナーも、拾うのは外野手
+      return { result: 'single', bases: 1, description: 'ヒット！',
+        fieldingPosition: pickOutfielder(direction, safeDefense) };
     } else {
       // 外野ライナー - CF/RFの守備・足が大きく効く
       const baseOutRate = CATCH.linerOutfield;
@@ -714,7 +725,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       if (Math.random() < catchProb) {
         // 外野ライナーの目測・捕球ミス
         if (Math.random() < getErrorRate(fielder.defense, fielder.arm, 0.5)) {
-          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）', isError: true, errorPosition: position };
+          return { result: 'single', bases: 1, description: 'エラー（ヒット扱い）',
+            isError: true, errorPosition: position, fieldingPosition: position };
         }
         return { result: 'out', bases: 0, description: 'ライナーアウト', isOutfieldFly: true, tagupThrowbackChance: (fielder.arm / 100) * 0.5, fieldingPosition: position };
       }
@@ -722,7 +734,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       if (distance > 70 && exitVelocity >= 157) {
         return { result: 'double', bases: 2, description: '二塁打！', fieldingPosition: position };
       }
-      return { result: 'single', bases: 1, description: 'ヒット！' };
+      return { result: 'single', bases: 1, description: 'ヒット！', fieldingPosition: position };
     }
   }
 
@@ -744,7 +756,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     if (Math.random() < catchProb) {
       return { result: 'out', bases: 0, description: 'フライアウト', isOutfieldFly: false, fieldingPosition: position };
     }
-    return { result: 'single', bases: 1, description: 'ポテンヒット' };
+    return { result: 'single', bases: 1, description: 'ポテンヒット', fieldingPosition: position };
   }
 
   // 外野フライ
@@ -772,7 +784,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     const isDeepFly = distance > 70;
     // 落球（深い打球ほど難しい）。守備力の低い外野手は目測を誤る
     if (Math.random() < getErrorRate(fielder.defense, fielder.arm, isDeepFly ? 0.5 : 0.2)) {
-      return { result: 'single', bases: 1, description: 'エラー（落球）', isError: true, errorPosition: position };
+      return { result: 'single', bases: 1, description: 'エラー（落球）',
+        isError: true, errorPosition: position, fieldingPosition: position };
     }
     return {
       result: 'out',
@@ -816,7 +829,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   if (Math.random() < getThrowErrorRate(fielder.arm, cutoff.defense, 0.3)) {
     return {
       result: 'single', bases: 1, description: 'ヒット！（中継ミス）',
-      isError: true, errorPosition: position, isThrowingError: true, extraAdvance: true,
+      isError: true, errorPosition: position, fieldingPosition: position,
+      isThrowingError: true, extraAdvance: true,
     };
   }
   return { result: 'single', bases: 1, description: 'ヒット！', fieldingPosition: position };

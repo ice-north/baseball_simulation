@@ -954,6 +954,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     return resolveContact(combineBatterEffects(BALL_ZONE_PENALTY, matchup));
   };
 
+  // 守備機会（刺殺・補殺）を1つ記録する。守備位置が取れないものは無視する
+  const addFieldingChance = (team, position) => {
+    if (!position || !team) return;
+    const f = team.players.find(p => p.position === position && p.battingOrder >= 1);
+    if (f?.gameStats?.fielding) f.gameStats.fielding.chances++;
+  };
+
   // 走者進塁処理（外野手の肩で進塁を抑制）
   // bases配列にはプレイヤーオブジェクト or false が格納される
   // hitType に応じて走者を進める。
@@ -1967,6 +1974,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             // 三振
             batter.gameStats.batting.atBats++;
             batter.gameStats.batting.strikeouts++;
+            addFieldingChance(defenseTeam, 'catcher');   // 三振は捕手の刺殺
             pitcher.gameStats.pitching.outs++;
             pitcher.gameStats.pitching.strikeouts++;
             gameState.outs++;
@@ -1988,11 +1996,13 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
           gameState.outs++;
 
           // 守備機会を記録（アウトにした野手）
-          if (result.fieldingPosition) {
-            const outFielder = defenseTeam.players.find(p => p.position === result.fieldingPosition && p.battingOrder >= 1);
-            if (outFielder) {
-              outFielder.gameStats.fielding.chances++;
-            }
+          addFieldingChance(defenseTeam, result.fieldingPosition);
+          // **送球を受けた側にも刺殺が付く**。内野ゴロのアウトは
+          // 「捕った野手の補殺 ＋ 一塁手の刺殺」の2つが記録される。
+          // これが無いと一塁手の守備機会が実NPBの9.5に対し1.1しか出ず、
+          // 守備率が事実上測定できない（三振の捕手も同様）
+          if (result.isGroundOut && result.fieldingPosition && result.fieldingPosition !== 'first') {
+            addFieldingChance(defenseTeam, 'first');
           }
 
           // 内野ゴロでの走者進塁（ゴロGO・進塁打）。詳細は baserunning.js 参照
@@ -2056,6 +2066,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         }
 
         case 'double_play':
+          // 二塁のピボット(fieldingPosition)＋一塁でのアウトで刺殺2つ
+          addFieldingChance(defenseTeam, 'first');
           batter.gameStats.batting.atBats++;
           pitcher.gameStats.pitching.outs += 2;
           gameState.outs += 2;

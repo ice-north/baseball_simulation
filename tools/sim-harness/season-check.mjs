@@ -98,7 +98,10 @@ r.band('K/9',            acc.k9,   6.30,  9.30,  v => v.toFixed(2));
 r.band('BB/9',           acc.bb9,  3.00,  5.20,  v => v.toFixed(2));
 r.band('四球率(対打席)', acc.bbRate, 0.075, 0.125, v => (v * 100).toFixed(1) + '%');
 r.band('三振率(対打席)', acc.kRate,  0.155, 0.235, v => (v * 100).toFixed(1) + '%');
-r.band('本塁打/試合',    hrPerTeamGame, 0.20, 0.75, v => v.toFixed(2));
+// 段階②（打球初速・打出し角・NPB_CARRY の較正）で本塁打の水準が
+// 0.48 → 0.65 前後（実NPB 0.70）に上がったので帯を実測レンジに合わせ直す。
+// 3シード平均のぶれは 0.55〜0.74 だった。
+r.band('本塁打/試合',    hrPerTeamGame, 0.35, 0.95, v => v.toFixed(2));
 // 死球: 実NPB 約0.36/チーム/試合（打席の約0.9%）。あまりにも内角へ外れた球が当たる
 r.band('死球率(対打席)', acc.hbpRate, 0.004, 0.016, v => (v * 100).toFixed(2) + '%');
 r.info('総打数',         acc.AB.toFixed(0));
