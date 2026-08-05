@@ -212,6 +212,44 @@ const benchRank = (player) => {
 export const sortBenchByPosition = (players) =>
   [...players].sort((a, b) => benchRank(a) - benchRank(b));
 
+// ============================================================
+// 打席結果バッジ
+//
+// `addAtBatResult` に渡る文字列は 2〜4文字とまちまち（安打 / 二塁打 / 投ゴロ /
+// ライナー …）で、そのまま並べるとバッジの幅が揃わず、数が増えると2行に折り返して
+// 打順の行がガタガタになる。**スコアブックと同じ1文字に畳んで幅を固定する**。
+// 元の表記は `title` で出すので情報は失われない。
+// ============================================================
+
+const AT_BAT_RESULT_ABBR = {
+  安打: '安', 二塁打: '二', 三塁打: '三', 本塁打: '本',
+  三振: '振', 四球: '球', 死球: '死', 併殺: '併', 犠打: '犠',
+  バ飛: '飛', バ失: '失',
+};
+
+/** 打席結果 → 1文字。未知の表記は打球種別から推測する */
+export const abbreviateAtBatResult = (label) => {
+  if (!label) return '';
+  const fixed = AT_BAT_RESULT_ABBR[label];
+  if (fixed) return fixed;
+  if (label.includes('ゴロ')) return 'ゴ';
+  if (label.includes('ライナー')) return '直';
+  if (label.includes('邪')) return '邪';
+  if (label.includes('フライ')) return '飛';
+  return label.slice(0, 1);
+};
+
+/** 打席結果バッジの背景色。安打=黄 / 本塁打=赤 / 三振=青 / 四死球=緑 / 併殺=紫 */
+export const atBatResultColor = (label) => {
+  if (label === '本塁打') return 'bg-red-600';
+  if (label === '安打' || label === '二塁打' || label === '三塁打') return 'bg-yellow-600';
+  if (label === '三振') return 'bg-blue-700';
+  if (label === '四球') return 'bg-green-700';
+  if (label === '死球') return 'bg-emerald-800';
+  if (label === '併殺') return 'bg-purple-700';
+  return 'bg-gray-600';
+};
+
 /**
  * ポジション別の色設定（背景色）
  */

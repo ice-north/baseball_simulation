@@ -8,7 +8,9 @@ import {
   POSITION_NAMES,
   POSITION_COLORS,
   HAND_LABELS,
-  sortBenchByPosition
+  sortBenchByPosition,
+  abbreviateAtBatResult,
+  atBatResultColor
 } from './utils/constants.js';
 
 import {
@@ -2993,7 +2995,7 @@ if (newOuts === 3) {
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   {/* 左: スタメン */}
                   <div>
-                    <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">スターティングメンバー</div>
+                    <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">スターティングメンバー</div>
                     <div className="space-y-1 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
                       {awayTeam.players
                         .filter(p => p.isStarter)
@@ -3044,7 +3046,7 @@ if (newOuts === 3) {
                                   <span className={`ml-0.5 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                                 </span>
                                 <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
-<span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
+<span className="text-sm text-gray-300 font-semibold">{throwHand}{batHand}</span>
                                 {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
                                 {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
                                 {isPositionSelected && <span className="text-purple-300 animate-pulse">◀</span>}
@@ -3073,7 +3075,7 @@ if (newOuts === 3) {
 
                   {/* 右: 控え選手 */}
                   <div>
-                    <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">ベンチメンバー</div>
+                    <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">ベンチメンバー</div>
                     <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
                       {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
                           ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
@@ -3101,14 +3103,14 @@ if (newOuts === 3) {
                               <div className="flex items-center gap-1">
                                 <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
                                 <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
+                                <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
-                              <div className="flex gap-1.5 text-xs ml-6 text-gray-400">
+                              <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
                                 <span>M{player.batting.meet}</span>
                                 <span>P{player.batting.power}</span>
-                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
+                                <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
                               </div>
                             </div>
                           );
@@ -3188,18 +3190,15 @@ if (newOuts === 3) {
                           <span className="font-bold truncate">{player.name}</span>
                           <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          {/* 打席結果は1文字に畳んで固定幅にする。2〜4文字のまま並べると
+                              幅が揃わず、打席が増えると折り返して行がガタつく */}
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-xs ml-1 flex-wrap shrink-0">
-                              {player.gameStats.atBatResults.map((r, i) => (
-                                <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
-                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
-                                  r === '本塁打' ? 'bg-red-600' :
-                                  r === '三振' ? 'bg-blue-700' :
-                                  r === '四球' ? 'bg-green-700' :
-                                  r === '死球' ? 'bg-emerald-800' :
-                                  r === '併殺' ? 'bg-purple-700' :
-                                  'bg-gray-600'
-                                }`}>{r}</span>
+                            <span className="flex gap-0.5 text-xs ml-1 shrink-0">
+                              {player.gameStats.atBatResults.slice(-6).map((r, i) => (
+                                <span key={i} title={r}
+                                  className={`w-4 text-center rounded text-white font-bold ${atBatResultColor(r)}`}>
+                                  {abbreviateAtBatResult(r)}
+                                </span>
                               ))}
                             </span>
                           )}
@@ -3210,8 +3209,10 @@ if (newOuts === 3) {
                           {isSelected && <span className="shrink-0">👆</span>}
                           {isPositionSelected && <span className="shrink-0">🔄</span>}
                         </div>
+                        {/* 数字は等分グリッド＋tabular-nums。桁数で位置がずれると
+                            打順を縦に読んだときに比較できない */}
                         {gameStarted ? (
-                          <div className={`flex gap-2 text-xs ml-6 mt-0.5 font-bold ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
+                          <div className={`grid grid-cols-4 gap-1 text-xs ml-6 mt-0.5 font-bold tabular-nums text-right ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
                             {(() => {
                               const ss = player.seasonStats?.batting;
                               if (ss && ss.atBats > 0) {
@@ -3227,19 +3228,21 @@ if (newOuts === 3) {
                                 const ps = player.seasonStats?.pitching;
                                 if (ps && ps.inningsPitched > 0) {
                                   const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
-                                  return <span>ERA {era}</span>;
+                                  return <span className="col-span-4">防御率 {era}</span>;
                                 }
                               }
-                              return <span>---</span>;
+                              return <span className="col-span-4 text-gray-400">出場なし</span>;
                             })()}
                           </div>
                         ) : (
                           <>
-                            <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
+                            <div className={`grid grid-cols-4 gap-1 text-xs ml-6 mt-0.5 tabular-nums ${isSelected ? 'text-blue-200' : 'text-gray-300'}`}>
                               <span>M{player.batting.meet}</span>
                               <span>P{player.batting.power}</span>
                               <span>E{player.batting.eye}</span>
-                              {isPitcher && <span className={isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
+                              <span className={isSelected ? 'text-blue-200' : 'text-blue-300'}>
+                                {isPitcher ? `⚡${player.pitching.velocity}` : ''}
+                              </span>
                             </div>
                             <div className={`text-xs ml-6 mt-0.5 ${
                               fitness.grade === 'S' ? 'text-yellow-400' :
@@ -3295,14 +3298,14 @@ if (newOuts === 3) {
                               <div className="flex items-center gap-1">
                                 <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
                                 <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
+                                <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
-                              <div className="flex gap-1.5 text-xs ml-6 text-gray-400">
+                              <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
                                 <span>M{player.batting.meet}</span>
                                 <span>P{player.batting.power}</span>
-                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
+                                <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
                               </div>
                             </div>
                           );
@@ -3317,7 +3320,7 @@ if (newOuts === 3) {
               <div className="mt-2 pt-2 border-t border-gray-700">
                 {gameStarted ? (
                   <>
-                    <div className="text-sm text-gray-400 mb-1">📊 試合スタッツ</div>
+                    <div className="text-sm text-gray-300 mb-1 font-semibold">📊 試合スタッツ</div>
                     {/* 投手成績 */}
                     <div className="bg-gray-800 rounded p-2 mb-1">
                       <div className="text-xs text-blue-400 mb-0.5">投手</div>
@@ -4442,36 +4445,40 @@ if (newOuts === 3) {
                     </div>
                   )}
 
-                  {/* 打撃成績サマリー */}
+                  {/* 打撃成績サマリー。**列を固定した表**にする。
+                      以前は「名前: N打数 N安打 NHR N打点」という自由文で、
+                      名前の長さで数字の位置が毎行ずれて縦に読めなかった。
+                      ⚠ players.sort() は state配列を破壊するので必ずコピーしてから並べる */}
                   <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <h4 className="font-bold text-red-400 mb-2">✈️ {awayTeam.name} 打撃成績</h4>
-                      <div className="space-y-1">
-                        {awayTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).slice(0, 3).map(player => {
-                          const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
-                          return (
-                            <div key={player.id} className="text-xs text-gray-400">
-                              {player.name}: {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}HR {stats.rbis || 0}打点
-                            </div>
-                          );
-                        })}
-                        <div className="text-xs text-gray-500 mt-1">他{awayTeam.players.length - 3}名...</div>
+                    {[[awayTeam, '✈️'], [homeTeam, '🏠']].map(([team, icon]) => (
+                      <div key={team.name} className="min-w-0">
+                        <h4 className="font-bold text-gray-100 mb-2 truncate" title={team.name}>
+                          {icon} {team.name} 打撃成績
+                        </h4>
+                        <div className="grid grid-cols-[1fr_2rem_2rem_2rem_2rem] gap-x-1 text-xs tabular-nums">
+                          <span className="text-gray-400">選手</span>
+                          <span className="text-gray-400 text-right">打数</span>
+                          <span className="text-gray-400 text-right">安打</span>
+                          <span className="text-gray-400 text-right">本</span>
+                          <span className="text-gray-400 text-right">打点</span>
+                          {[...team.players]
+                            .filter(p => (p.gameStats?.atBats || 0) > 0 || (p.gameStats?.hits || 0) > 0)
+                            .sort((a, b) => (a.battingOrder || 99) - (b.battingOrder || 99))
+                            .map(player => {
+                              const st = player.gameStats || {};
+                              return (
+                                <React.Fragment key={player.id}>
+                                  <span className="text-gray-200 truncate" title={player.name}>{player.name}</span>
+                                  <span className="text-gray-200 text-right">{st.atBats || 0}</span>
+                                  <span className="text-gray-200 text-right">{st.hits || 0}</span>
+                                  <span className={`text-right ${st.homeruns ? 'text-amber-300 font-bold' : 'text-gray-200'}`}>{st.homeruns || 0}</span>
+                                  <span className="text-gray-200 text-right">{st.rbis || 0}</span>
+                                </React.Fragment>
+                              );
+                            })}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-blue-400 mb-2">🏠 {homeTeam.name} 打撃成績</h4>
-                      <div className="space-y-1">
-                        {homeTeam.players.sort((a, b) => a.battingOrder - b.battingOrder).slice(0, 3).map(player => {
-                          const stats = player.gameStats || { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0 };
-                          return (
-                            <div key={player.id} className="text-xs text-gray-400">
-                              {player.name}: {stats.atBats}打数 {stats.hits}安打 {stats.homeruns}HR {stats.rbis || 0}打点
-                            </div>
-                          );
-                        })}
-                        <div className="text-xs text-gray-500 mt-1">他{homeTeam.players.length - 3}名...</div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
 
                   <div className="text-center mt-4 flex justify-center gap-3">
@@ -4504,8 +4511,9 @@ if (newOuts === 3) {
             {/* ===== 右カラム: ホームチーム ===== */}
             <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
-                <span className="text-2xl font-bold text-blue-400">{score?.home || 0}</span>
-                <h3 className="font-bold text-blue-400">🏠 {homeTeam.name}</h3>
+                {/* 長いチーム名で2行にならないよう truncate。チーム色分けは使わない */}
+                <span className="text-2xl font-bold text-gray-100 tabular-nums shrink-0 mr-2">{score?.home || 0}</span>
+                <h3 className="font-bold text-gray-100 truncate min-w-0 text-right" title={homeTeam.name}>🏠 {homeTeam.name}</h3>
               </div>
               
               {/* スタメンと控え選手を横並び表示 */}
@@ -4513,7 +4521,7 @@ if (newOuts === 3) {
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   {/* 左: スタメン */}
                   <div>
-                    <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">スターティングメンバー</div>
+                    <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">スターティングメンバー</div>
                     <div className="space-y-1 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
                       {homeTeam.players
                         .filter(p => p.isStarter)
@@ -4564,7 +4572,7 @@ if (newOuts === 3) {
                                   <span className={`ml-0.5 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                                 </span>
                                 <span className="text-xs text-gray-600 font-mono font-bold">#{player.number || player.id}</span>
-<span className="text-sm text-gray-400 font-semibold">{throwHand}{batHand}</span>
+<span className="text-sm text-gray-300 font-semibold">{throwHand}{batHand}</span>
                                 {isSubSelected && <span className="text-blue-300 animate-pulse">◀</span>}
                                 {isSelected && <span className="text-blue-300 animate-pulse">◀</span>}
                                 {isPositionSelected && <span className="text-purple-300 animate-pulse">◀</span>}
@@ -4593,7 +4601,7 @@ if (newOuts === 3) {
 
                   {/* 右: 控え選手 */}
                   <div>
-                    <div className="text-xs text-gray-500 mb-1 px-1 font-semibold">ベンチメンバー</div>
+                    <div className="text-xs text-gray-300 mb-1 px-1 font-semibold">ベンチメンバー</div>
                     <div className="space-y-0.5 text-xs max-h-[calc(100vh-350px)] overflow-y-auto">
                       {/* 控えは 捕→一→二→三→遊→左→中→右→投 の順に並べる（constants.js）。
                           ロスター順のままだと投手と野手が混ざって交代要員を探せない */}
@@ -4621,14 +4629,14 @@ if (newOuts === 3) {
                               <div className="flex items-center gap-1">
                                 <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
                                 <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
+                                <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
-                              <div className="flex gap-1.5 text-xs ml-6 text-gray-400">
+                              <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
                                 <span>M{player.batting.meet}</span>
                                 <span>P{player.batting.power}</span>
-                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
+                                <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
                               </div>
                             </div>
                           );
@@ -4708,18 +4716,15 @@ if (newOuts === 3) {
                           <span className="font-bold truncate">{player.name}</span>
                           <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
+                          {/* 打席結果は1文字に畳んで固定幅にする。2〜4文字のまま並べると
+                              幅が揃わず、打席が増えると折り返して行がガタつく */}
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-xs ml-1 flex-wrap shrink-0">
-                              {player.gameStats.atBatResults.map((r, i) => (
-                                <span key={i} className={`px-1 py-0.5 rounded text-white font-bold ${
-                                  r === '安打' || r === '二塁打' || r === '三塁打' ? 'bg-yellow-600' :
-                                  r === '本塁打' ? 'bg-red-600' :
-                                  r === '三振' ? 'bg-blue-700' :
-                                  r === '四球' ? 'bg-green-700' :
-                                  r === '死球' ? 'bg-emerald-800' :
-                                  r === '併殺' ? 'bg-purple-700' :
-                                  'bg-gray-600'
-                                }`}>{r}</span>
+                            <span className="flex gap-0.5 text-xs ml-1 shrink-0">
+                              {player.gameStats.atBatResults.slice(-6).map((r, i) => (
+                                <span key={i} title={r}
+                                  className={`w-4 text-center rounded text-white font-bold ${atBatResultColor(r)}`}>
+                                  {abbreviateAtBatResult(r)}
+                                </span>
                               ))}
                             </span>
                           )}
@@ -4730,8 +4735,10 @@ if (newOuts === 3) {
                           {isSelected && <span>👆</span>}
                           {isPositionSelected && <span>🔄</span>}
                         </div>
+                        {/* 数字は等分グリッド＋tabular-nums。桁数で位置がずれると
+                            打順を縦に読んだときに比較できない */}
                         {gameStarted ? (
-                          <div className={`flex gap-2 text-xs ml-6 mt-0.5 font-bold ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
+                          <div className={`grid grid-cols-4 gap-1 text-xs ml-6 mt-0.5 font-bold tabular-nums text-right ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
                             {(() => {
                               const ss = player.seasonStats?.batting;
                               if (ss && ss.atBats > 0) {
@@ -4747,19 +4754,21 @@ if (newOuts === 3) {
                                 const ps = player.seasonStats?.pitching;
                                 if (ps && ps.inningsPitched > 0) {
                                   const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
-                                  return <span>ERA {era}</span>;
+                                  return <span className="col-span-4">防御率 {era}</span>;
                                 }
                               }
-                              return <span>---</span>;
+                              return <span className="col-span-4 text-gray-400">出場なし</span>;
                             })()}
                           </div>
                         ) : (
                           <>
-                            <div className={`flex gap-2 text-xs ml-6 mt-0.5 ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
+                            <div className={`grid grid-cols-4 gap-1 text-xs ml-6 mt-0.5 tabular-nums ${isSelected ? 'text-blue-200' : 'text-gray-300'}`}>
                               <span>M{player.batting.meet}</span>
                               <span>P{player.batting.power}</span>
                               <span>E{player.batting.eye}</span>
-                              {isPitcher && <span className={isSelected ? 'text-blue-200' : 'text-blue-400'}>⚡{player.pitching.velocity}km</span>}
+                              <span className={isSelected ? 'text-blue-200' : 'text-blue-300'}>
+                                {isPitcher ? `⚡${player.pitching.velocity}` : ''}
+                              </span>
                             </div>
                             <div className={`text-xs ml-6 mt-0.5 ${
                               fitness.grade === 'S' ? 'text-yellow-400' :
@@ -4815,14 +4824,14 @@ if (newOuts === 3) {
                               <div className="flex items-center gap-1">
                                 <span className={`w-6 text-center text-sm font-bold ${getPositionColor(player.position)} rounded`}>{posNames[player.position]}</span>
                                 <span className="font-medium text-sm truncate flex-1">{player.name}</span>
-                                <span className="text-xs text-gray-400">{throwHand}{batHand}</span>
+                                <span className="text-xs text-gray-300 shrink-0">{throwHand}{batHand}</span>
                                 {isSubbedOut && <span className="text-red-400 text-xs">交代済</span>}
                                 {isSubSelected && <span className="text-blue-300">👆</span>}
                               </div>
-                              <div className="flex gap-1.5 text-xs ml-6 text-gray-400">
+                              <div className="grid grid-cols-3 gap-1 text-xs ml-6 text-gray-300 tabular-nums">
                                 <span>M{player.batting.meet}</span>
                                 <span>P{player.batting.power}</span>
-                                {isPitcher && <span className="text-blue-400">⚡{player.pitching.velocity}km</span>}
+                                <span className="text-blue-300">{isPitcher ? `⚡${player.pitching.velocity}` : ''}</span>
                               </div>
                             </div>
                           );
@@ -4837,7 +4846,7 @@ if (newOuts === 3) {
               <div className="mt-2 pt-2 border-t border-gray-700">
                 {gameStarted ? (
                   <>
-                    <div className="text-sm text-gray-400 mb-1">📊 試合スタッツ</div>
+                    <div className="text-sm text-gray-300 mb-1 font-semibold">📊 試合スタッツ</div>
                     {/* 投手成績 */}
                     <div className="bg-gray-800 rounded p-2 mb-1">
                       <div className="text-xs text-blue-400 mb-0.5">投手</div>
