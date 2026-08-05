@@ -273,10 +273,10 @@ export const calculateLaunchAngle = (meetQuality, batter) => {
       : -2 + Math.random() * 52;   // ライナー〜高いフライ
   } else if (meetQuality > 0.4) {
     // 中品質: 幅広い分布（ゴロ寄り）
-    baseLaunchAngle = -12 + Math.random() * 66;
+    baseLaunchAngle = -12 + Math.random() * 74;
   } else {
     // 低品質: ボテボテゴロが主、残りはポップフライ
-    baseLaunchAngle = Math.random() < 0.66
+    baseLaunchAngle = Math.random() < 0.42
       ? -18 + Math.random() * 26   // ボテボテゴロ
       : 50 + Math.random() * 35;   // ポップフライ
   }
