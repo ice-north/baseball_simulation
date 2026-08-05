@@ -3235,8 +3235,12 @@ if (newOuts === 3) {
                               })()}
                             </div>
                             {player.gameStats?.atBatResults?.length > 0 && (
-                              <div className="flex gap-0.5 justify-end flex-1 min-w-0 overflow-hidden">
-                                {player.gameStats.atBatResults.slice(-5).map((r, i) => (
+                              /* **左から右へ増やす**。右寄せ(justify-end)にすると
+                                 打席が増えるたびに既存のバッジが左へずれて落ち着かない。
+                                 先頭から並べれば N打席目は常に同じ位置に出る。
+                                 slice も先頭からにすること（-6 だと6打席目で全部ずれる） */
+                              <div className="flex gap-0.5 flex-1 min-w-0 overflow-hidden">
+                                {player.gameStats.atBatResults.slice(0, 6).map((r, i) => (
                                   <span key={i} title={r}
                                     style={{ textAlignLast: 'justify' }}
                                     className={`w-10 shrink-0 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
@@ -4764,8 +4768,12 @@ if (newOuts === 3) {
                               })()}
                             </div>
                             {player.gameStats?.atBatResults?.length > 0 && (
-                              <div className="flex gap-0.5 justify-end flex-1 min-w-0 overflow-hidden">
-                                {player.gameStats.atBatResults.slice(-5).map((r, i) => (
+                              /* **左から右へ増やす**。右寄せ(justify-end)にすると
+                                 打席が増えるたびに既存のバッジが左へずれて落ち着かない。
+                                 先頭から並べれば N打席目は常に同じ位置に出る。
+                                 slice も先頭からにすること（-6 だと6打席目で全部ずれる） */
+                              <div className="flex gap-0.5 flex-1 min-w-0 overflow-hidden">
+                                {player.gameStats.atBatResults.slice(0, 6).map((r, i) => (
                                   <span key={i} title={r}
                                     style={{ textAlignLast: 'justify' }}
                                     className={`w-10 shrink-0 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
