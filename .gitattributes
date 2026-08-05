@@ -1,0 +1,4 @@
+# Windows のバッチファイルは CRLF でないと環境によって解釈が崩れる。
+# クローン先の core.autocrlf 設定に左右されないよう固定する。
+*.cmd text eol=crlf
+*.bat text eol=crlf
