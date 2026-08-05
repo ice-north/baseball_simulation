@@ -3199,20 +3199,6 @@ if (newOuts === 3) {
                           <span className="font-bold truncate">{player.name}</span>
                           <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
-                          {/* 打席結果は**3文字幅に固定**し、2文字は均等割り付けで埋める。
-                              1文字まで削ると何のことか分からず、可変幅だと打席が
-                              増えたときに折り返して行がガタつく */}
-                          {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-xs ml-1 shrink-0">
-                              {player.gameStats.atBatResults.slice(-5).map((r, i) => (
-                                <span key={i} title={r}
-                                  style={{ textAlignLast: 'justify' }}
-                                  className={`w-10 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
-                                  {formatAtBatResult(r)}
-                                </span>
-                              ))}
-                            </span>
-                          )}
                           <span className="flex-1"></span>
                           {isSubbedOut && <span className="text-red-400 text-xs shrink-0">交代済</span>}
                           {isCurrentBatter && <span className="shrink-0">⚾</span>}
@@ -3220,30 +3206,45 @@ if (newOuts === 3) {
                           {isSelected && <span className="shrink-0">👆</span>}
                           {isPositionSelected && <span className="shrink-0">🔄</span>}
                         </div>
-                        {/* 数字は等分グリッド＋tabular-nums。桁数で位置がずれると
-                            打順を縦に読んだときに比較できない */}
+                        {/* 2行目: 成績（打率・本塁打・打点）と打席結果。
+                            打席結果を1行目に置くと選手名が切れるのでこちらへ移した。
+                            成績は固定幅の右寄せで縦に揃えつつ、間隔を詰めて1かたまりに見せる。
+                            バッジは右端に寄せ、入り切らない場合は**古い方から隠れる**
+                            （justify-end + overflow-hidden） */}
                         {gameStarted ? (
-                          <div className={`grid grid-cols-4 gap-1 text-xs ml-6 mt-0.5 font-bold tabular-nums text-right ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
-                            {(() => {
-                              const ss = player.seasonStats?.batting;
-                              if (ss && ss.atBats > 0) {
-                                const avg = (ss.hits / ss.atBats).toFixed(3);
-                                return <>
-                                  <span>.{avg.split('.')[1]}</span>
-                                  <span>{ss.homeruns || 0}本</span>
-                                  <span>{ss.rbis || 0}点</span>
-                                  <span>{ss.hits || 0}安</span>
-                                </>;
-                              }
-                              if (isPitcher) {
-                                const ps = player.seasonStats?.pitching;
-                                if (ps && ps.inningsPitched > 0) {
-                                  const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
-                                  return <span className="col-span-4">防御率 {era}</span>;
+                          <div className="flex items-center gap-2 ml-6 mt-0.5 text-xs">
+                            <div className={`flex gap-1 font-bold tabular-nums shrink-0 ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
+                              {(() => {
+                                const ss = player.seasonStats?.batting;
+                                if (ss && ss.atBats > 0) {
+                                  const avg = (ss.hits / ss.atBats).toFixed(3);
+                                  return <>
+                                    <span className="w-8 text-right">.{avg.split('.')[1]}</span>
+                                    <span className="w-9 text-right">{ss.homeruns || 0}本</span>
+                                    <span className="w-10 text-right">{ss.rbis || 0}点</span>
+                                  </>;
                                 }
-                              }
-                              return <span className="col-span-4 text-gray-400">出場なし</span>;
-                            })()}
+                                if (isPitcher) {
+                                  const ps = player.seasonStats?.pitching;
+                                  if (ps && ps.inningsPitched > 0) {
+                                    const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
+                                    return <span>防御率 {era}</span>;
+                                  }
+                                }
+                                return <span className={isCurrentBatter ? '' : 'text-gray-400'}>出場なし</span>;
+                              })()}
+                            </div>
+                            {player.gameStats?.atBatResults?.length > 0 && (
+                              <div className="flex gap-0.5 justify-end flex-1 min-w-0 overflow-hidden">
+                                {player.gameStats.atBatResults.slice(-5).map((r, i) => (
+                                  <span key={i} title={r}
+                                    style={{ textAlignLast: 'justify' }}
+                                    className={`w-10 shrink-0 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
+                                    {formatAtBatResult(r)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <>
@@ -4727,20 +4728,6 @@ if (newOuts === 3) {
                           <span className="font-bold truncate">{player.name}</span>
                           <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
-                          {/* 打席結果は**3文字幅に固定**し、2文字は均等割り付けで埋める。
-                              1文字まで削ると何のことか分からず、可変幅だと打席が
-                              増えたときに折り返して行がガタつく */}
-                          {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
-                            <span className="flex gap-0.5 text-xs ml-1 shrink-0">
-                              {player.gameStats.atBatResults.slice(-5).map((r, i) => (
-                                <span key={i} title={r}
-                                  style={{ textAlignLast: 'justify' }}
-                                  className={`w-10 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
-                                  {formatAtBatResult(r)}
-                                </span>
-                              ))}
-                            </span>
-                          )}
                           <span className="flex-1"></span>
                           {isSubbedOut && <span className="text-red-400 text-xs shrink-0">交代済</span>}
                           {isCurrentBatter && <span className="shrink-0">⚾</span>}
@@ -4748,30 +4735,45 @@ if (newOuts === 3) {
                           {isSelected && <span>👆</span>}
                           {isPositionSelected && <span>🔄</span>}
                         </div>
-                        {/* 数字は等分グリッド＋tabular-nums。桁数で位置がずれると
-                            打順を縦に読んだときに比較できない */}
+                        {/* 2行目: 成績（打率・本塁打・打点）と打席結果。
+                            打席結果を1行目に置くと選手名が切れるのでこちらへ移した。
+                            成績は固定幅の右寄せで縦に揃えつつ、間隔を詰めて1かたまりに見せる。
+                            バッジは右端に寄せ、入り切らない場合は**古い方から隠れる**
+                            （justify-end + overflow-hidden） */}
                         {gameStarted ? (
-                          <div className={`grid grid-cols-4 gap-1 text-xs ml-6 mt-0.5 font-bold tabular-nums text-right ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
-                            {(() => {
-                              const ss = player.seasonStats?.batting;
-                              if (ss && ss.atBats > 0) {
-                                const avg = (ss.hits / ss.atBats).toFixed(3);
-                                return <>
-                                  <span>.{avg.split('.')[1]}</span>
-                                  <span>{ss.homeruns || 0}本</span>
-                                  <span>{ss.rbis || 0}点</span>
-                                  <span>{ss.hits || 0}安</span>
-                                </>;
-                              }
-                              if (isPitcher) {
-                                const ps = player.seasonStats?.pitching;
-                                if (ps && ps.inningsPitched > 0) {
-                                  const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
-                                  return <span className="col-span-4">防御率 {era}</span>;
+                          <div className="flex items-center gap-2 ml-6 mt-0.5 text-xs">
+                            <div className={`flex gap-1 font-bold tabular-nums shrink-0 ${isCurrentBatter ? 'text-yellow-800' : 'text-white'}`}>
+                              {(() => {
+                                const ss = player.seasonStats?.batting;
+                                if (ss && ss.atBats > 0) {
+                                  const avg = (ss.hits / ss.atBats).toFixed(3);
+                                  return <>
+                                    <span className="w-8 text-right">.{avg.split('.')[1]}</span>
+                                    <span className="w-9 text-right">{ss.homeruns || 0}本</span>
+                                    <span className="w-10 text-right">{ss.rbis || 0}点</span>
+                                  </>;
                                 }
-                              }
-                              return <span className="col-span-4 text-gray-400">出場なし</span>;
-                            })()}
+                                if (isPitcher) {
+                                  const ps = player.seasonStats?.pitching;
+                                  if (ps && ps.inningsPitched > 0) {
+                                    const era = ((ps.earnedRuns || 0) * 27 / ps.inningsPitched).toFixed(2);
+                                    return <span>防御率 {era}</span>;
+                                  }
+                                }
+                                return <span className={isCurrentBatter ? '' : 'text-gray-400'}>出場なし</span>;
+                              })()}
+                            </div>
+                            {player.gameStats?.atBatResults?.length > 0 && (
+                              <div className="flex gap-0.5 justify-end flex-1 min-w-0 overflow-hidden">
+                                {player.gameStats.atBatResults.slice(-5).map((r, i) => (
+                                  <span key={i} title={r}
+                                    style={{ textAlignLast: 'justify' }}
+                                    className={`w-10 shrink-0 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
+                                    {formatAtBatResult(r)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <>

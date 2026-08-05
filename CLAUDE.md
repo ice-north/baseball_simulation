@@ -83,8 +83,13 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
   従来は `description` から「アウト」を削るだけで、ゴロは3文字・ライナーは4文字と
   バラバラだった。`judgeFielderReach` の `fieldingPosition` を out の結果に通して
   守備位置を頭に付ける
-- **成績は等分グリッド**（`grid grid-cols-4 ... tabular-nums text-right`）。
-  `flex gap-2` だと打率.312/本塁打の桁数で毎行ずれる
+- **打席結果は2行目に置く**。1行目に並べると選手名が `truncate` で切れる。
+  1行目＝打順・守備位置・名前・調子・左右 / 2行目＝成績＋打席結果、と分ける。
+  バッジは右端に寄せ、入り切らない場合は古い方から隠れる
+  （`justify-end` + `overflow-hidden`）
+- **成績は打率・本塁打・打点の3つだけ**を固定幅の右寄せで詰めて置く
+  （`w-8/w-9/w-10 text-right` + `tabular-nums`）。等分グリッドで横いっぱいに
+  広げると3つが離れて1かたまりに見えない。安打数は打率と重複するので出さない
 - **チーム名・選手名は `truncate min-w-0`**。長い名前が2行になると行の高さが揃わない
 - ⚠ **`players.sort()` は state配列を破壊する**。必ず `[...players].sort()` にすること
   （試合終了サマリーで実際にやってしまっていた）
