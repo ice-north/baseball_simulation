@@ -380,6 +380,29 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   };
 };
 
+// ============================================================
+// 打球種別ごとの捕球率の基準値
+//
+// 【なぜ分けて持つか】実データの安打率は打球種別で桁違いに違う。
+//   ゴロ .240 / ライナー .660 / フライ .210(本塁打込) / ポップ .020
+// **ライナーが最も安打になる打球**で、ゴロの3倍近い。ここを揃えないと
+// 「強い当たりが正面を突かれた」と「ボテボテが抜けた」が同じ価値になり、
+// 打者の質が打球の質に反映されない。
+//
+// ⚠ 4つは**必ずセットで較正する**こと。リーグ全体のBABIPは
+//   Σ(打球種別の割合 × 安打率) で決まるので、1つだけ動かすと打率が壊れる。
+// ============================================================
+const CATCH = {
+  groundFront: 0.93,   // 内野ゴロ・正面
+  groundSide:  0.87,   // 内野ゴロ・横（difficulty で減衰）
+  linerInfield: 0.60,  // 内野ライナー
+  linerOutfield: 0.455, // 外野ライナー
+  flyInfield: 0.97,    // 内野フライ
+  flyShallow: 0.985,    // 浅い外野フライ (<70m)
+  flyMedium: 0.975,     // 中間 (70-90m)
+  flyDeep: 0.945,       // 深い (90m~)
+};
+
 /**
  * 守備の「時間競合」モデル
  * 野手が打球地点に物理的に到達できるかで判定
@@ -562,12 +585,12 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       let catchProb;
       if (offset <= frontZone) {
         // 正面: ルーティンプレー（守備力で微調整）
-        catchProb = 0.85 + (fielder.defense - 50) / 100 * 0.02;
+        catchProb = CATCH.groundFront + (fielder.defense - 50) / 100 * 0.02;
         catchProb -= (batter.speed - 60) / 100 * 0.04;
       } else {
         // 横の打球: 距離に応じて難易度が上がり、守備力が重要になる
         const difficulty = Math.min(1.0, (offset - frontZone) / 14);
-        catchProb = 0.74 - difficulty * 0.30;
+        catchProb = CATCH.groundSide - difficulty * 0.30;
         catchProb += (fielder.defense - 50) / 100 * 0.20 * pw.defense * (1 + difficulty * 0.5);
         catchProb += (fielder.speed - 50) / 100 * 0.06 * pw.speed;
         catchProb += ((fielder.arm || 60) - 50) / 100 * 0.05 * pw.arm;
@@ -614,7 +637,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   if (launchAngle < 25) {
     if (distance < 40) {
       // 内野ライナー - ポジション重要度で守備力の効きが変わる
-      const baseOutRate = 0.88;
+      const baseOutRate = CATCH.linerInfield;
       const defenseBonus = (fielder.defense - 70) / 100 * 0.13 * weight;
       const speedBonus = (fielder.speed - 60) / 100 * 0.10 * weight;
       // ミートが高い打者は鋭いライナーで野手の正面を避けやすい（ミート30以上から段階的に効果）
@@ -631,7 +654,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
       return { result: 'single', bases: 1, description: 'ヒット！' };
     } else {
       // 外野ライナー - CF/RFの守備・足が大きく効く
-      const baseOutRate = 0.78;
+      const baseOutRate = CATCH.linerOutfield;
       const defenseBonus = (fielder.defense - 70) / 100 * 0.18 * weight;
       const speedBonus = (fielder.speed - 65) / 100 * 0.18 * weight;
       // ミートが高い打者は野手の間を抜く鋭いライナーを打てる（ミート30以上から段階的に効果）
@@ -667,7 +690,7 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   // ===== フライの場合 =====
   if (distance < 40) {
     // 内野フライ - 旧モデル: 97%アウト
-    const catchProb = 0.97 + (fielder.defense / 100) * 0.02;
+    const catchProb = CATCH.flyInfield + (fielder.defense / 100) * 0.02;
     if (Math.random() < catchProb) {
       return { result: 'out', bases: 0, description: 'フライアウト', isOutfieldFly: false, fieldingPosition: position };
     }
@@ -678,13 +701,13 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   let baseOutRate;
   if (distance < 70) {
     // 浅いフライ（ポテンヒットがたまに発生）
-    baseOutRate = 0.93;
+    baseOutRate = CATCH.flyShallow;
   } else if (distance < 90) {
     // 中堅フライ（ポテンヒット多め）
-    baseOutRate = 0.84;
+    baseOutRate = CATCH.flyMedium;
   } else {
     // 深いフライ
-    baseOutRate = 0.71;
+    baseOutRate = CATCH.flyDeep;
   }
 
   const defenseBonus = (fielder.defense - 70) / 100 * 0.10 * weight;
@@ -716,8 +739,8 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
   const isCorner = Math.abs(direction) > 26;
 
   // 三塁打: コーナー寄り（＝外野手が追う距離が長い）+ 深い打球 + 足のある走者
-  if (isCorner && distance > 88 && batterSpeed >= 55) {
-    const tripleProb = 0.28 + (batterSpeed - 55) / 100 * 1.4;
+  if (isCorner && distance > 84 && batterSpeed >= 55) {
+    const tripleProb = 0.85 + (batterSpeed - 55) / 100 * 1.4;
     if (Math.random() < tripleProb) {
       return { result: 'triple', bases: 3, description: '三塁打！', fieldingPosition: position };
     }

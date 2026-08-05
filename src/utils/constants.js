@@ -213,6 +213,14 @@ export const sortBenchByPosition = (players) =>
   [...players].sort((a, b) => benchRank(a) - benchRank(b));
 
 /**
+ * 併殺の成立率（内野守備50・走者の足55のときの%）。
+ * 実NPBの併殺は約0.70/チーム/試合。**判定は「内野ゴロのアウト」だけを対象にする**
+ * （外野へ抜けた打球はそもそもアウトにならないので距離の条件は要らない）。
+ * judgeFielderReach のゴロ捕球率と両方効くので、ゴロの較正を変えたら測り直すこと。
+ */
+export const DP_BASE = 34;
+
+/**
  * 球種キー → 日本語名。**`BALL_EFFECTS` を唯一の出典にする**。
  *
  * 以前は App.jsx（予告先発）・DraftResultScreen・campTraining が

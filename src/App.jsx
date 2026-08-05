@@ -11,7 +11,8 @@ import {
   sortBenchByPosition,
   formatAtBatResult,
   atBatResultColor,
-  getPitchTypeName
+  getPitchTypeName,
+  DP_BASE
 } from './utils/constants.js';
 
 import {
@@ -2046,12 +2047,16 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
 
             // 併殺打判定（一塁ランナーがいて内野ゴロの場合）
             let isDoublePlay = false;
+            // **内野ゴロのアウトなら距離は問わない**（自動シミュと同じ条件）。
+            // 外野へ抜けた打球はそもそも 'out' にならないので、距離を足すと
+            // 二重の門番になって併殺が実NPBの1/4しか出なくなる
             if (newBases[0] && result.launchAngle != null && result.launchAngle < 10
-                && result.distance != null && result.distance < 40 && newOuts < 3) {
+                && !result.isOutfieldFly && newOuts < 3) {
               const ssDefense = defense.short?.defense || 50;
               const sbDefense = defense.second?.defense || 50;
               const ifAvg = (ssDefense + sbDefense) / 2;
-              const dpBase = 15 + (ifAvg - 50) * 0.35;
+              // 走者の足は采配モードでは走者オブジェクトを持たないので基準値のまま
+              const dpBase = DP_BASE + (ifAvg - 50) * 0.35;
               if (Math.random() * 100 < dpBase) {
                 isDoublePlay = true;
                 newOuts++;

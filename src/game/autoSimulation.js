@@ -1,6 +1,6 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate } from '../simulation-logic.js';
-import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE } from '../utils/constants.js';
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
@@ -870,11 +870,17 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         // 2アウトからは併殺が成立しない（打者アウトで3アウト目）。
         // outs のチェックが無かったため、2アウトから「4アウト目」が記録され
         // 投手の投球回がわずかに水増しされていた。
-        if (bases[0] && gameState.outs < 2
-            && battedBall.launchAngle < 10 && battedBall.distance < 40) {
+        // 併殺。**内野ゴロのアウトなら距離は問わない**。
+        // 以前は `distance < 40` も条件にしていたが、この分岐に来た時点で
+        // 内野手が捕球している（外野へ抜けた打球は 'out' にならない）ので
+        // 二重の門番になっており、実NPBの1/4しか併殺が出ていなかった。
+        if (bases[0] && gameState.outs < 2 && battedBall.launchAngle < 10
+            && !fieldResult.isOutfieldFly) {
           const ifDefense = ['second', 'short'].map(p => defense[p]?.defense || 50);
           const ifAvg = ifDefense.reduce((a, b) => a + b, 0) / 2;
-          const dpBase = 15 + (ifAvg - 50) * 0.35;
+          // 走者の足が速いと二塁が間に合わない／一塁がセーフになる
+          const runnerSpeed = bases[0]?.physical?.speed ?? 55;
+          const dpBase = DP_BASE + (ifAvg - 50) * 0.35 - (runnerSpeed - 55) * 0.30;
           if (Math.random() * 100 < dpBase) {
             return { type: 'double_play' };
           }
