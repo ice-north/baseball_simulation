@@ -212,6 +212,19 @@ const benchRank = (player) => {
 export const sortBenchByPosition = (players) =>
   [...players].sort((a, b) => benchRank(a) - benchRank(b));
 
+/**
+ * 球種キー → 日本語名。**`BALL_EFFECTS` を唯一の出典にする**。
+ *
+ * 以前は App.jsx（予告先発）・DraftResultScreen・campTraining が
+ * それぞれ独自の対応表を持っており、App.jsx の表だけが
+ *   - `knuckleball` という**存在しないキー**（実際は `knuckle`）
+ *   - `twoSeam` / `palm` が抜けている
+ *   - `splitter` が「スプリット」（他は「スプリッター」）
+ * という状態で、ナックルが `knuckle` と生のアルファベットで表示されていた。
+ * 球種を1つ足すたびに4箇所直す形になっていたので、ここに集約する。
+ */
+export const getPitchTypeName = (type) => BALL_EFFECTS[type]?.name || type;
+
 // ============================================================
 // 打席結果バッジ
 //

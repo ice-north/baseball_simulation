@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { POSITION_NAMES, getAbilityColor } from '../utils/constants.js';
+import { POSITION_NAMES, getAbilityColor, getPitchTypeName } from '../utils/constants.js';
 
 const NPB_TEAMS_INFO = [
   { name: '読売ジャイアンツ', short: '読売', color: '#FF6600', textColor: '#000', league: 'ce', flag: 'giants' },
@@ -697,12 +697,6 @@ const DraftConferenceScreen = ({ draftedPlayers, firstRoundData, npbStandings, o
   );
 };
 
-const PITCH_NAMES = {
-  straight: 'ストレート', slider: 'スライダー', curve: 'カーブ',
-  fork: 'フォーク', changeup: 'チェンジアップ', sinker: 'シンカー',
-  shoot: 'シュート', cutter: 'カッター', splitter: 'スプリッター',
-  twoSeam: 'ツーシーム', palm: 'パーム', knuckle: 'ナックル',
-};
 const FORM_NAMES = { overhand: 'オーバー', threeQuarter: 'スリークォーター', sidearm: 'サイド', submarine: 'アンダー' };
 const FULL_POS_NAMES = { pitcher: '投手', catcher: '捕手', first: '一塁手', second: '二塁手', third: '三塁手', short: '遊撃手', left: '左翼手', center: '中堅手', right: '右翼手' };
 
@@ -774,7 +768,7 @@ const DraftPlayerDetail = ({ player }) => {
               <div className="flex flex-wrap gap-1.5">
                 {p.pitching.arsenal.map((b, i) => (
                   <span key={i} className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-0.5 text-xs">
-                    <span className="text-gray-700">{PITCH_NAMES[b.type] || b.type}</span>
+                    <span className="text-gray-700">{getPitchTypeName(b.type)}</span>
                     <span className={`font-bold ${getAbilityColor(b.level)}`}>{b.level}</span>
                   </span>
                 ))}

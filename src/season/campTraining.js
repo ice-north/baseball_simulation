@@ -4,7 +4,7 @@
 // ============================================================
 
 import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
-import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, getPitchTypeName } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 
 // 練習カテゴリ → スタッフ指導能力のマッピング
@@ -1185,18 +1185,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
   return { player: updatedPlayer, growthReport };
 }
 
-/**
- * 球種名を取得
- */
-function getPitchTypeName(type) {
-  const names = {
-    straight: 'ストレート', slider: 'スライダー', curve: 'カーブ',
-    fork: 'フォーク', changeup: 'チェンジアップ', sinker: 'シンカー',
-    shoot: 'シュート', cutter: 'カッター', splitter: 'スプリッター',
-    twoSeam: 'ツーシーム', palm: 'パーム', knuckle: 'ナックル'
-  };
-  return names[type] || type;
-}
+// getPitchTypeName は utils/constants.js（BALL_EFFECTS が出典）から取り込んで再輸出する
 export { ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY };
 
 /**

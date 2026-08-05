@@ -10,7 +10,8 @@ import {
   HAND_LABELS,
   sortBenchByPosition,
   formatAtBatResult,
-  atBatResultColor
+  atBatResultColor,
+  getPitchTypeName
 } from './utils/constants.js';
 
 import {
@@ -3385,19 +3386,6 @@ if (newOuts === 3) {
                         sidearm: 'サイドアーム',
                         submarine: 'アンダースロー'
                       };
-                      const ballTypeNames = {
-                        straight: 'ストレート',
-                        slider: 'スライダー',
-                        curveball: 'カーブ',
-                        curve: 'カーブ',
-                        changeup: 'チェンジアップ',
-                        fork: 'フォーク',
-                        sinker: 'シンカー',
-                        cutter: 'カッター',
-                        splitter: 'スプリット',
-                        knuckleball: 'ナックル',
-                        shoot: 'シュート'
-                      };
                       const getValueColor = (val) => {
                         if (val >= 80) return 'text-red-400';
                         if (val >= 70) return 'text-orange-400';
@@ -3454,7 +3442,7 @@ if (newOuts === 3) {
                               <div className="flex flex-wrap gap-1.5">
                                 {pitcher.pitching.arsenal.map((ball, i) => (
                                   <span key={i} className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded font-semibold">
-                                    {ballTypeNames[ball.type] || ball.type}
+                                    {getPitchTypeName(ball.type)}
                                   </span>
                                 ))}
                               </div>
@@ -4923,19 +4911,6 @@ if (newOuts === 3) {
                         sidearm: 'サイドアーム',
                         submarine: 'アンダースロー'
                       };
-                      const ballTypeNames = {
-                        straight: 'ストレート',
-                        slider: 'スライダー',
-                        curveball: 'カーブ',
-                        curve: 'カーブ',
-                        changeup: 'チェンジアップ',
-                        fork: 'フォーク',
-                        sinker: 'シンカー',
-                        cutter: 'カッター',
-                        splitter: 'スプリット',
-                        knuckleball: 'ナックル',
-                        shoot: 'シュート'
-                      };
                       const getValueColor = (val) => {
                         if (val >= 80) return 'text-red-400';
                         if (val >= 70) return 'text-orange-400';
@@ -4992,7 +4967,7 @@ if (newOuts === 3) {
                               <div className="flex flex-wrap gap-1.5">
                                 {pitcher.pitching.arsenal.map((ball, i) => (
                                   <span key={i} className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded font-semibold">
-                                    {ballTypeNames[ball.type] || ball.type}
+                                    {getPitchTypeName(ball.type)}
                                   </span>
                                 ))}
                               </div>
