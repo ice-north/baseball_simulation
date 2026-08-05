@@ -9,7 +9,7 @@ import {
   POSITION_COLORS,
   HAND_LABELS,
   sortBenchByPosition,
-  abbreviateAtBatResult,
+  formatAtBatResult,
   atBatResultColor
 } from './utils/constants.js';
 
@@ -1242,6 +1242,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             type: 'out',
             description: fieldingResult.description,
             hit: false,
+            // 打席結果を「中飛」「右直」と書くのに使う（バッジの表記を揃えるため）
+            fieldingPosition: fieldingResult.fieldingPosition,
             isOutfieldFly: fieldingResult.isOutfieldFly,
             // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
             isGroundOut: battedBall.launchAngle < 10 && !fieldingResult.isOutfieldFly,
@@ -2127,8 +2129,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         if (isDoublePlay) {
           addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '併殺');
         } else {
+          // スコアブックと同じ表記にする（遊ゴロ / 中飛 / 右直）。
+          // 元は description から「アウト」を削るだけで、ゴロは3文字・
+          // ライナーは4文字・フライは3文字とバラバラだった
           const desc = result.description || '';
-          const outLabel = desc.replace('アウト', '').replace('（ポップフライ）', '') || 'アウト';
+          const pc = POSITION_NAMES[result.fieldingPosition] || '';
+          const outLabel = desc.includes('ゴロ') ? (desc.replace('アウト', '') || 'ゴロ')
+            : desc.includes('ライナー') ? (pc ? `${pc}直` : '直線')
+            : desc.includes('フライ') ? (pc ? `${pc}飛` : '飛球')
+            : (desc.replace('アウト', '').replace('（ポップフライ）', '') || 'アウト');
           addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', outLabel);
         }
         break;
@@ -3190,14 +3199,16 @@ if (newOuts === 3) {
                           <span className="font-bold truncate">{player.name}</span>
                           <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
-                          {/* 打席結果は1文字に畳んで固定幅にする。2〜4文字のまま並べると
-                              幅が揃わず、打席が増えると折り返して行がガタつく */}
+                          {/* 打席結果は**3文字幅に固定**し、2文字は均等割り付けで埋める。
+                              1文字まで削ると何のことか分からず、可変幅だと打席が
+                              増えたときに折り返して行がガタつく */}
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
                             <span className="flex gap-0.5 text-xs ml-1 shrink-0">
-                              {player.gameStats.atBatResults.slice(-6).map((r, i) => (
+                              {player.gameStats.atBatResults.slice(-5).map((r, i) => (
                                 <span key={i} title={r}
-                                  className={`w-4 text-center rounded text-white font-bold ${atBatResultColor(r)}`}>
-                                  {abbreviateAtBatResult(r)}
+                                  style={{ textAlignLast: 'justify' }}
+                                  className={`w-10 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
+                                  {formatAtBatResult(r)}
                                 </span>
                               ))}
                             </span>
@@ -4716,14 +4727,16 @@ if (newOuts === 3) {
                           <span className="font-bold truncate">{player.name}</span>
                           <span className={`text-xs shrink-0 ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>{CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}</span>
                           <span className={`text-xs shrink-0 ${isCurrentBatter ? 'text-yellow-800' : isSelected ? 'text-blue-200' : 'text-gray-400'}`}>{throwHand}{batHand}</span>
-                          {/* 打席結果は1文字に畳んで固定幅にする。2〜4文字のまま並べると
-                              幅が揃わず、打席が増えると折り返して行がガタつく */}
+                          {/* 打席結果は**3文字幅に固定**し、2文字は均等割り付けで埋める。
+                              1文字まで削ると何のことか分からず、可変幅だと打席が
+                              増えたときに折り返して行がガタつく */}
                           {gameStarted && player.gameStats?.atBatResults?.length > 0 && (
                             <span className="flex gap-0.5 text-xs ml-1 shrink-0">
-                              {player.gameStats.atBatResults.slice(-6).map((r, i) => (
+                              {player.gameStats.atBatResults.slice(-5).map((r, i) => (
                                 <span key={i} title={r}
-                                  className={`w-4 text-center rounded text-white font-bold ${atBatResultColor(r)}`}>
-                                  {abbreviateAtBatResult(r)}
+                                  style={{ textAlignLast: 'justify' }}
+                                  className={`w-10 px-0.5 rounded text-white font-bold tracking-tight ${atBatResultColor(r)}`}>
+                                  {formatAtBatResult(r)}
                                 </span>
                               ))}
                             </span>

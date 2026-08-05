@@ -215,28 +215,31 @@ export const sortBenchByPosition = (players) =>
 // ============================================================
 // 打席結果バッジ
 //
-// `addAtBatResult` に渡る文字列は 2〜4文字とまちまち（安打 / 二塁打 / 投ゴロ /
-// ライナー …）で、そのまま並べるとバッジの幅が揃わず、数が増えると2行に折り返して
-// 打順の行がガタガタになる。**スコアブックと同じ1文字に畳んで幅を固定する**。
-// 元の表記は `title` で出すので情報は失われない。
+// `addAtBatResult` に渡る文字列は 安打 / 二塁打 / 遊ゴロ / ライナー … と
+// 長さがまちまちで、そのまま並べるとバッジの幅が揃わない。数が増えると
+// 折り返して打順の行がガタガタになる。
+//
+// **枠を3文字幅に固定し、2文字の結果は均等割り付けで埋める**
+// （`text-align-last: justify`）。1文字まで削ると何のことか分からないので、
+// 読める長さを保ったまま幅だけ揃えるのがちょうどいい。
 // ============================================================
 
-const AT_BAT_RESULT_ABBR = {
-  安打: '安', 二塁打: '二', 三塁打: '三', 本塁打: '本',
-  三振: '振', 四球: '球', 死球: '死', 併殺: '併', 犠打: '犠',
-  バ飛: '飛', バ失: '失',
+/** 3文字を超える表記だけ、意味を保ったまま3文字以内に畳む */
+const AT_BAT_RESULT_LABEL = {
+  併殺: '併殺打',
 };
 
-/** 打席結果 → 1文字。未知の表記は打球種別から推測する */
-export const abbreviateAtBatResult = (label) => {
+/** バッジに出す表記（2〜3文字）。元の文字列はそのまま `title` に出すこと */
+export const formatAtBatResult = (label) => {
   if (!label) return '';
-  const fixed = AT_BAT_RESULT_ABBR[label];
+  const fixed = AT_BAT_RESULT_LABEL[label];
   if (fixed) return fixed;
-  if (label.includes('ゴロ')) return 'ゴ';
-  if (label.includes('ライナー')) return '直';
-  if (label.includes('邪')) return '邪';
-  if (label.includes('フライ')) return '飛';
-  return label.slice(0, 1);
+  if (label.length <= 3) return label;
+  // 想定外の長い表記（守備位置が取れなかった凡打など）は打球種別だけ残す
+  if (label.includes('ライナー')) return '直線';
+  if (label.includes('ゴロ')) return 'ゴロ';
+  if (label.includes('フライ')) return '飛球';
+  return label.slice(0, 3);
 };
 
 /** 打席結果バッジの背景色。安打=黄 / 本塁打=赤 / 三振=青 / 四死球=緑 / 併殺=紫 */
