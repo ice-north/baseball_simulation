@@ -3899,7 +3899,12 @@ if (newOuts === 3) {
                               )}
                               {log.exitVelocity && (
                                 <span className="text-gray-300 ml-1 tabular-nums">
-                                  （EV{log.exitVelocity} {log.launchAngle}° {log.distance}m 芯{log.meetQuality}%）
+                                  {/* 打出し角は整数で出す。物理側は回転数・球速・コースの補正を
+                                      足した生の小数（16.15000000000002 のような値）を持っている。
+                                      ⚠ 丸めるのは表示だけ。judgeFielderReach が
+                                      「20〜45度なら本塁打」「10度未満はゴロ」と閾値で見ているので、
+                                      物理側の値を丸めると境目の打球の判定が変わってしまう */}
+                                  （EV{log.exitVelocity} {Math.round(log.launchAngle ?? 0)}° {log.distance}m 芯{log.meetQuality}%）
                                 </span>
                               )}
                             </>
@@ -3943,7 +3948,7 @@ if (newOuts === 3) {
                       {lastResult.exitVelocity ? (
                         <div className="flex-1 min-w-0">
                           <div className="text-xs text-gray-300 tabular-nums text-right">
-                            EV {lastResult.exitVelocity} / {lastResult.launchAngle}° / {lastResult.distance}m / 芯 {lastResult.meetQuality}%
+                            EV {lastResult.exitVelocity} / {Math.round(lastResult.launchAngle ?? 0)}° / {lastResult.distance}m / 芯 {lastResult.meetQuality}%
                           </div>
                           <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mt-0.5">
                             <div className={`h-full rounded-full ${cat === 'xbh' ? 'bg-amber-400' : cat === 'hit' ? 'bg-green-500' : 'bg-gray-500'}`} style={{ width: `${distPct}%` }} />
