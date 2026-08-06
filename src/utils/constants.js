@@ -221,6 +221,31 @@ export const sortBenchByPosition = (players) =>
 export const DP_BASE = 34;
 
 /**
+ * 変化球の球速減（km/h）。**2エンジンで共有すること**。
+ *
+ * 以前は自動シミュが `8 + level/100 × 15`（Lv100なら全球種一律 -23）、
+ * 采配モードが `BALL_EFFECTS.velocityMinus`（ナックル-30 / ツーシーム-5）と
+ * 別式だった。スキップだとツーシームもナックルも同じ速さで来ていた。
+ * 緩急は打球方向（`SEQ_DIR`）とタイミングの両方に効くので揃える必要がある。
+ *
+ * レベルで少し伸びる（磨いた球ほど緩急がはっきりする）。
+ */
+export const pitchVelocityDrop = (type, level = 50) => {
+  const base = BALL_EFFECTS[type]?.velocityMinus ?? 0;
+  if (!base) return 0;
+  return base * (0.72 + Math.max(0, Math.min(100, level)) / 100 * 0.28);
+};
+
+/**
+ * **読めない球**。打者が球種を張り当てても効果が出ない。
+ * ナックルは回転を殺して不規則に揺れる球で、投手・捕手・打者の誰にも
+ * どこへ来るか分からない。「ナックルが来ると分かっていても打てない」という
+ * 実際の性質を、読み合いを無効にすることで表現する。
+ */
+export const UNREADABLE_PITCHES = new Set(['knuckle']);
+export const isUnreadablePitch = (type) => UNREADABLE_PITCHES.has(type);
+
+/**
  * 球種キー → 日本語名。**`BALL_EFFECTS` を唯一の出典にする**。
  *
  * 以前は App.jsx（予告先発）・DraftResultScreen・campTraining が

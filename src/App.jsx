@@ -9,6 +9,8 @@ import {
   POSITION_COLORS,
   HAND_LABELS,
   sortBenchByPosition,
+  pitchVelocityDrop,
+  isUnreadablePitch,
   formatAtBatResult,
   atBatResultColor,
   getPitchTypeName,
@@ -1351,7 +1353,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 投球フォームの効果を適用（球速は配球の「奥行き」に使うので位置決定より前に出す）
         const pitchingFormEffect = PITCHING_FORM_EFFECTS[pitcher.form] || PITCHING_FORM_EFFECTS.threeQuarter;
         let baseVelocity = Math.round(pitcher.velocity * (pitchingFormEffect.velocityMult || 1.0)) + velocityPenalty;
-        baseVelocity -= ballEffects[selectedBall.type].velocityMinus;
+        // 球種ごとの球速減は自動シミュと共有（constants.js）
+        baseVelocity -= pitchVelocityDrop(selectedBall.type, selectedBall.level ?? 50);
         const actualVelocity = Math.round(baseVelocity - (Math.random() * 8));
 
         const loc = resolvePitchLocation({
@@ -1385,15 +1388,20 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const gType = userIsBatting ? batGuessTypeRef.current : 'auto';
         const gZone = userIsBatting ? batGuessZoneRef.current : 'auto';
         const committed = gType !== 'auto' || gZone !== 'auto';
+        // ナックルは読み合いが成立しない（誰にもどこへ来るか分からない）。
+        // 球種を張っても当たり外れが付かず、コースだけが残る
+        const unreadable = isUnreadablePitch(selectedBall.type);
         const guess = committed
-          ? resolveBatterGuess(gType, gZone, { isBreaking: isBreakingPitch, col: loc.col, row: loc.row })
+          ? resolveBatterGuess(unreadable ? 'auto' : gType, gZone,
+              { isBreaking: isBreakingPitch, col: loc.col, row: loc.row })
           : { delta: 0 };
         // プレイヤーが張らない打者（＝相手チーム、または「おまかせ」）は
         // 打者の型（野村の4分類）に従って自分で狙う。batterType.js
         const aiG = resolveAiBatterGuess({
           type: batter.type || 'D', player: batter.player,
           balls: safeCount.balls, strikes: safeCount.strikes,
-          isBreaking: isBreakingPitch, col: loc.col, guessRight: predictionCorrect,
+          isBreaking: isBreakingPitch, col: loc.col,
+          guessRight: !unreadable && predictionCorrect,
           sequence, batterEye: batter.eye,
         });
         // プレイヤーが張った次元はAIの読みを使わない

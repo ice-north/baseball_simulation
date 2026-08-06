@@ -1,6 +1,7 @@
 import { TEAMS_DATA, LEAGUE_SETTINGS } from '../teams-data.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, getTunnelingEffect, getThrowErrorRate } from '../simulation-logic.js';
-import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty, DP_BASE,
+  pitchVelocityDrop, isUnreadablePitch } from '../utils/constants.js';
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
@@ -729,11 +730,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
 
     // 変化球の球速減速（緩急効果）
-    let pitchVelocityFinal = effectiveVelocity;
-    if (selectedPitch.type !== 'straight') {
-      const speedReduction = 8 + (selectedPitch.level / 100) * 15;
-      pitchVelocityFinal = effectiveVelocity - speedReduction;
-    }
+    // 球種ごとの球速減。**采配モードと同じ式を使う**（constants.js）。
+    // 以前はここだけ `8 + level/100×15` で、Lv100なら全球種が一律 -23 だった
+    let pitchVelocityFinal = effectiveVelocity
+      - pitchVelocityDrop(selectedPitch.type, selectedPitch.level ?? 50);
 
     // 緩急ペナルティ: **前球との**球速差で打者のタイミングが狂う（比率ベース）。
     // 遅い投手ほど同じ球速差でも体感の緩急が大きくなる。
@@ -791,7 +791,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       type: getBatterType(batterPlayer), player: batterPlayer,
       balls: count.balls, strikes: count.strikes,
       isBreaking, col: loc.col, sequence, batterEye: batter.eye,
-      guessRight: Math.random() < guessSuccessRate({
+      // ナックルは読み合いが成立しない（誰にもどこへ来るか分からない）
+      guessRight: !isUnreadablePitch(selectedPitch.type) && Math.random() < guessSuccessRate({
         catcherLead: catcherPlayer?.catching?.lead ?? 50,
         // **何球種持っているかではなく、どれだけ幅があるか**（arsenal.js）。
         // 似た球（スライダー＋カット等）は同じ引き出しとして数えない
