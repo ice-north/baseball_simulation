@@ -266,6 +266,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   });
   const [newPitchSelections, setNewPitchSelections] = useState({});
   const [subPositionSelections, setSubPositionSelections] = useState({});
+  // 変化球練習で1球種を指定して集中練習する（未指定なら従来どおり全球種に分配）
+  const [subPitchSelections, setSubPitchSelections] = useState({});
   const [formSelections, setFormSelections] = useState({});
   const [batsSelections, setBatsSelections] = useState({});
   const [roundResults, setRoundResults] = useState(null);
@@ -405,6 +407,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
       const subType = subAssignments[p.id] || 'physique';
       const subOptions = {
         targetPosition: subPositionSelections[p.id],
+        targetPitch: subPitchSelections[p.id],
         targetForm: formSelections[p.id],
         targetBats: batsSelections[p.id],
       };
@@ -1057,6 +1060,23 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 {['catcher','first','second','third','short','left','center','right']
                                   .filter(pos => pos !== player.position)
                                   .map(pos => <option key={pos} value={pos}>{POSITION_NAMES[pos]}</option>)}
+                              </select>
+                            )}
+                            {(subAssignments[player.id] || 'physique') === 'breaking' && player.position === 'pitcher' && (
+                              <select
+                                value={subPitchSelections[player.id] || ''}
+                                onChange={(e) => setSubPitchSelections(prev => ({ ...prev, [player.id]: e.target.value }))}
+                                title="1球種を選ぶと分散させず集中して磨く（伸びが速い）"
+                                className="bg-gray-600 text-white text-xs px-1.5 py-0.5 rounded w-24"
+                              >
+                                <option value="">全部（分配）</option>
+                                {(player.pitching?.arsenal || [])
+                                  .filter(a => a.type !== 'straight' && (a.level ?? 0) < 100)
+                                  .map(a => (
+                                    <option key={a.type} value={a.type}>
+                                      {getPitchTypeName(a.type)} {a.level}
+                                    </option>
+                                  ))}
                               </select>
                             )}
                             {(subAssignments[player.id] || 'physique') === 'form_change' && player.position === 'pitcher' && (

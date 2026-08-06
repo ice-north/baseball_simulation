@@ -177,7 +177,7 @@ export const SUB_TRAINING_MENUS = {
   breaking: {
     name: '変化球練習',
     icon: '🌀',
-    description: '変化球レベルを強化（投手のみ）',
+    description: '変化球レベルを強化（1球種を選んで集中練習も可）',
     targets: ['breaking'],
   },
   subposition: {
@@ -232,7 +232,7 @@ function applyTechStatDecay(currentValue, growth) {
  * サブ練習を実行（メイン練習の半分程度の効果）
  * @param {Object} player - 選手
  * @param {string} subType - サブ練習タイプ
- * @param {Object} options - オプション { targetPosition, targetForm, targetBats }
+ * @param {Object} options - オプション { targetPosition, targetForm, targetBats, targetPitch }
  */
 export function executeSubTraining(player, subType, options = {}, staffBonus = null) {
   const menu = SUB_TRAINING_MENUS[subType];
@@ -502,7 +502,23 @@ export function executeSubTraining(player, subType, options = {}, staffBonus = n
             growthReport.push({ statName: `${getPitchTypeName(pitch.type)} [MAX]`, before: pitch.level, after: pitch.level, growth: 0 });
           });
 
-          if (growable.length > 0) {
+          // **1球種を指定して集中練習できる**（options.targetPitch）。
+          // 分散させず1つに全ポイントを注ぎ込むので伸びが速い。
+          // 習熟度の低い球は「防御率は変わらず四球だけ増える」ので、
+          // 封印しつつ1つを集中して磨く、という育成が成立する。
+          const focus = options.targetPitch
+            ? growable.find(p => p.type === options.targetPitch) : null;
+          if (focus) {
+            const formAff = getFormPitchAffinity(playerForm, focus.type);
+            // 集中練習は分散させないぶん +2（適性があればさらに +1）
+            const growth = effectivePool + 2 + (formAff ? 1 : 0);
+            const before = focus.level;
+            focus.level = Math.min(100, before + growth);
+            growthReport.push({
+              statName: `${getPitchTypeName(focus.type)}${formAff ? ' [適性]' : ''} [集中]`,
+              before, after: focus.level, growth: focus.level - before,
+            });
+          } else if (growable.length > 0) {
             // プールをレベルアップ可能な球種で均等分配し、余りはランダムな球種に+1
             const count = growable.length;
             const base = Math.floor(effectivePool / count);
