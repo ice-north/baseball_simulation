@@ -320,12 +320,25 @@ export const getSpinRateAngleAdjust = (pitchType, spinRate) => {
 // 誘い球の配分や弱点狙いを変えたときは測り直すこと。
 const LOC_COL_MEAN = 0.00;
 const LOC_ROW_MEAN = 0.01;
+// 球速そのものによる方向のずれ（度/km/h）。142km/hを基準に、速いほど流し打ち。
+// 実MLBの球種間の引っ張り率差（約6pt）に合わせて 0.67 → 0.15 へ下げた。
+const VEL_DIR = 0.15;
+// 打者は基本的に引っ張る（バットの軌道が前で最速になる）。
+// 旧モデルはこれを velShift の係数に混ぜ込んでいたため、係数を実データに
+// 合わせて下げるとリーグ全体の引っ張り率まで 44.8%→28.2% に落ちてしまった。
+// **「球種による差」と「そもそも引っ張り気味」は別の要素**なので分けて持つ。
+const PULL_BASE = 6.0;
+// **前の球からの速度差**による方向のずれ（度/km/h）。
+// 速球→遅球で早く振り出して引っ張り、遅球→速球で振り遅れて流す。
+// 絶対球速より効きを強くしてある（タイミングは相対的なものなので）。
+const SEQ_DIR = 0.22;
+
 const LOC_PULL_DEG = 11;      // 内角/外角いっぱいで±11度      // 内角/外角いっぱいで±11度
 const LOC_ANGLE_DEG = 5;      // 高め/低めいっぱいで±5度      // 高め/低めいっぱいで±6度
 
 const locAxis = (v) => Math.max(-1, Math.min(1, v - 2));
 
-export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult, pitchLoc = null) => {
+export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult, pitchLoc = null, lastPitch = null) => {
   const { exitVelocity, meetQuality } = physicsResult;
   const locCol = pitchLoc ? locAxis(pitchLoc.col) - LOC_COL_MEAN : 0;
   const locRow = pitchLoc ? locAxis(pitchLoc.row) - LOC_ROW_MEAN : 0;
@@ -367,8 +380,21 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   const batSide = batter.bats === 'left' ? -1
     : batter.bats === 'switch' ? ((pitcher.throws || pitcher.throwingArm) === 'left' ? 1 : -1)
     : 1;
+  // 【球速そのもの】速い球は差し込まれて流し打ち、遅い球は引っ張り。
+  // ⚠ 係数は 0.67/0.50 だったが**実データより3〜4倍効きすぎていた**
+  // （実測で球種間の引っ張り率が20pt動く。実MLBは速球37%対カーブ43%で6pt程度）。
+  // 165km/hに対して右打者がほぼ全打球を右方向へ打つ状態だった。
   const velDiff = pitchVelocity - 142;
-  const velShift = (velDiff >= 0 ? velDiff * 0.67 : velDiff * 0.50) * batSide;
+  const velShift = velDiff * VEL_DIR * batSide;
+
+  // 【緩急】**前の球との速度差**。打者は直前の球にタイミングを合わせているので、
+  //   速球のあとの遅球 → 早く振り出す → 引っ張り
+  //   遅球のあとの速球 → 振り遅れる     → 流し打ち
+  // 絶対的な球速（上の velShift）とは別の要素で、配球の「奥行き」が
+  // 打球方向に出るのはここ。前球が無い初球は0。
+  // 母集団の平均は0（球速は上下に振れるだけ）なのでリーグ成績は動かない。
+  const seqDiff = lastPitch?.velocity ? (pitchVelocity - lastPitch.velocity) : 0;
+  const seqShift = seqDiff * SEQ_DIR * batSide;
   // 打者傾向: power>meetなら引っ張り、meet>powerなら広角（逆方向に打てる）
   // RHBの引っ張り=負方向なのでpower優位で負にシフト
   const pullTendency = ((batter.power || 50) - (batter.meet || 50)) * -0.12 * batSide;
@@ -382,7 +408,7 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   // 実データの4倍出ていた最大の原因で、飛距離やEVの問題ではなかった。
   // 三角分布（一様2つの和）で SD 18.4度・範囲は±45度（フェアゾーン）ちょうど。
   const spray = (Math.random() + Math.random() - 1) * 45;
-  let direction = spray + pullTendency + velShift + locPullAdj + dirBiasAdj;
+  let direction = spray - PULL_BASE * batSide + pullTendency + velShift + seqShift + locPullAdj + dirBiasAdj;
   direction = Math.max(-45, Math.min(45, direction));
 
   // 飛距離（メートル）- MLB実測値ベース（空気抵抗込み）

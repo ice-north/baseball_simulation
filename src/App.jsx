@@ -1199,7 +1199,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         }
 
         // 物理演算で打球パラメータを計算
-        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult, pitchLoc);
+        const battedBall = calculateBattedBallPhysics(effectiveBatter, pitcher, currentPitch, physicsResult, pitchLoc, lastPitch);
 
         // 角度によるファウル判定（強化）
         if (Math.abs(battedBall.direction) > 30 && Math.random() < 0.70) {  // 55%→70%

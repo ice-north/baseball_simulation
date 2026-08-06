@@ -860,7 +860,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       }
 
       // 打球物理パラメータ計算
-      const battedBall = calculateBattedBallPhysics(effBatter, pitcher, pitchData, physicsResult, loc);
+      // 緩急（前球との速度差）を打球方向に効かせるため lastPitch を渡す
+      const battedBall = calculateBattedBallPhysics(effBatter, pitcher, pitchData, physicsResult, loc, lastPitch);
 
       // 守備判定
       const fieldResult = judgeFielderReach(battedBall, defense, effBatter);
