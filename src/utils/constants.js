@@ -21,7 +21,7 @@ export const BALL_EFFECTS = {
   twoSeam: {
     name: 'ツーシーム',
     whiffBonus: -0.05,
-    groundballBonus: 0.12,
+    groundballBonus: 0.2,
     weakBonus: 0.12,
     velocityMinus: 5
   },
@@ -63,14 +63,14 @@ export const BALL_EFFECTS = {
   shoot: {
     name: 'シュート',
     whiffBonus: 0,
-    groundballBonus: 0.12,
+    groundballBonus: 0.19,
     weakBonus: 0.23,
     velocityMinus: 5
   },
   cutter: {
     name: 'カッター',
     whiffBonus: 0,
-    groundballBonus: 0.09,
+    groundballBonus: 0.17,
     weakBonus: 0.2,
     velocityMinus: 5
   },

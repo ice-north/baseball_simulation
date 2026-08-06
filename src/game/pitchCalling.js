@@ -141,7 +141,7 @@ export function resolvePitchLocation({
     natural,
   });
   const cell = resolvePitchCell(target.cell, c,
-    shapeSigma(target.cell, natural, isBreaking, pitchLevel));
+    shapeSigma(target.cell, natural, isBreaking, pitchLevel, pitchType));
   let { inZone, quality, col, row } = cell;
 
   // 【段階7】打者がコースを張れる度合い。

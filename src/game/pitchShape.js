@@ -90,14 +90,30 @@ const FIT_MEAN = 0.115;
 // 采配モード(100-level)×0.30 で係数が違っていた。ここに一本化して揃える。
 const LEVEL_SIGMA_W = 0.20;
 
+// 球種そのものの「決まりにくさ」。**効くが投げ切れない球**を表現する。
+// これが無いと、同じレベルなら全球種が同じ精度で決まるので、
+// 効果の大きい球を選ばない理由が無くなる（実測でシンカーが常に最善だった）。
+// ナックルは握りが特殊で回転を殺す球なので、投手自身も落ちる場所が分からない。
+// フォーク・スプリッターも抜けやすい。
+// 実測の目安（レベル50）: ナックルで BB/9 が +0.4 程度。実際のナックルボーラーも
+// リーグ平均より 0.4〜0.5 多い程度で、投げられないほどではない。
+// 0.30 まで上げると +1.3 になって球種として成立しなくなった。
+const TYPE_SIGMA = {
+  knuckle: 0.13,     // 握りが特殊で回転を殺す球。投手自身も落ちる場所が分からない
+  fork: 0.06,        // 抜けやすい
+  splitter: 0.06,
+  palm: 0.05,
+};
+
 /**
  * 目標セルと球種から、ばらつき σ の倍率と加算量を返す。
  * @param {[number,number]} cell 目標セル
  * @param {{col:number,row:number}} natural naturalCourse の戻り値
  * @param {boolean} isBreaking
  * @param {number} level 変化球レベル
+ * @param {string} type 球種キー（球種そのものの決まりにくさ）
  */
-export function shapeSigma(cell, natural, isBreaking, level = 50) {
+export function shapeSigma(cell, natural, isBreaking, level = 50, type = null) {
   let mult = 1, add = 0;
   if (natural && (natural.col || natural.row)) {
     // 自然な向きとの一致度（-1〜+1）。一致していれば σ が小さくなる
@@ -106,5 +122,9 @@ export function shapeSigma(cell, natural, isBreaking, level = 50) {
     mult = 1 - (fit - FIT_MEAN) * SHAPE_SIGMA_W;
   }
   if (isBreaking) add = (1 - clamp(level, 0, 100) / 100) * LEVEL_SIGMA_W;
+  // 球種そのものの決まりにくさ。レベルを上げても完全には消えない
+  // （レベル100で半分になる。ナックルは名手でも制御しきれない）
+  const t = TYPE_SIGMA[type];
+  if (t) add += t * (1 - clamp(level, 0, 100) / 100 * 0.5);
   return { mult, add };
 }
