@@ -46,6 +46,7 @@ import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
 import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './game/stealing.js';
+import { effectiveArsenalSize } from './game/arsenal.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
@@ -1300,7 +1301,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         // 的中率が 0.313→0.273 と13%しか下がらなかった。
         const predictionCorrect = Math.random() < guessSuccessRate({
           catcherLead: catcher.lead ?? 50,
-          arsenalSize: totalPitchTypes,
+          // 持ち球の「幅」で読まれにくさが決まる（arsenal.js）
+          arsenalSize: effectiveArsenalSize(pitcher.pitches),
           batterEye: batter.eye,
         });
 

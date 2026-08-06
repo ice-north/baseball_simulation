@@ -14,6 +14,7 @@ import { hitByPitchChance, hitByPitchFatigue } from './pitchZone.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './stealing.js';
+import { effectiveArsenalSize } from './arsenal.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
 const PITCHER_REST_FATIGUE_THRESHOLD = 40;
@@ -791,7 +792,9 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       isBreaking, col: loc.col, sequence, batterEye: batter.eye,
       guessRight: Math.random() < guessSuccessRate({
         catcherLead: catcherPlayer?.catching?.lead ?? 50,
-        arsenalSize: arsenal.length, batterEye: batter.eye,
+        // **何球種持っているかではなく、どれだけ幅があるか**（arsenal.js）。
+        // 似た球（スライダー＋カット等）は同じ引き出しとして数えない
+        arsenalSize: effectiveArsenalSize(arsenal), batterEye: batter.eye,
       }),
     });
     const guessLevel = Math.max(-2, Math.min(2, aiGuess.level + (locationRead ? 1 : 0)));

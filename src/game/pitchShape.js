@@ -28,14 +28,14 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
  * 球種の横変化。+1 = 腕側（シュート方向） / -1 = グラブ側（スライダー方向）。
  * 0 は縦変化主体で横には逃げない球種。
  */
-const ARM_SIDE = {
+export const PITCH_AXIS_SIDE = {
   slider: -1.0, cutter: -0.75, curve: -0.5,
   shoot: 1.0, sinker: 0.8, twoSeam: 0.8, changeup: 0.45, palm: 0.3,
   fork: 0, splitter: 0, knuckle: 0, straight: 0,
 };
 
 /** 球種の縦の性格。+1 = 低めが自然（変化球） / -1 = 高めが自然（速球） */
-const NATURAL_LOW = {
+export const PITCH_AXIS_VERTICAL = {
   straight: -1.0, twoSeam: -0.3, cutter: -0.2,
   slider: 0.6, curve: 0.9, fork: 1.0, splitter: 1.0,
   changeup: 0.8, sinker: 1.0, shoot: 0.3, palm: 0.7, knuckle: 0.4,
@@ -46,11 +46,11 @@ const NATURAL_LOW = {
  * @returns {{col:number, row:number}} それぞれ -1〜+1。col +1=内角 / row +1=低め
  */
 export function naturalCourse(type, pitcherThrows, batterBats) {
-  const arm = ARM_SIDE[type] ?? 0;
+  const arm = PITCH_AXIS_SIDE[type] ?? 0;
   // スイッチヒッターは常に投手と逆の打席に立つので「逆の利き手」で固定
   const sameHand = batterBats === 'switch' ? false
     : (pitcherThrows || 'right') === (batterBats || 'right');
-  return { col: arm * (sameHand ? 1 : -1), row: NATURAL_LOW[type] ?? 0 };
+  return { col: arm * (sameHand ? 1 : -1), row: PITCH_AXIS_VERTICAL[type] ?? 0 };
 }
 
 // 捕手が「その球種に合ったコース」をどれだけ優先するか。
