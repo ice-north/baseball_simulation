@@ -45,6 +45,7 @@ import { decidePitchObjective, OBJECTIVE_LABEL, OBJECTIVE_NOTE } from './game/pi
 import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
 import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
+import { stealSuccessRate, stealAttemptRate } from './game/stealing.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
@@ -2273,29 +2274,19 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         
         // 盗塁判定
         if (!atBatOver && newOuts < 3 && result.type !== 'foul' && result.type !== 'foul_2strike' && (bases[0] || bases[1])) {
-          const runnerSpeed = batter.speed / 100;
-          const stealSkill = batter.steal / 100;
-          const pitcherControl = pitcher.control / 100;
-          const pitchVelocity = result.velocity || pitcher.velocity;
-          
-          // 盗塁試行率
-          const stealSkillBonus = Math.pow(stealSkill, 1.5) * 0.18;  // 0-18%
-          const speedBonus = runnerSpeed * 0.02;  // 0-2%
-          const countBonus = newCount.balls >= 2 ? 0.01 : 0;  // 1%
-          const outsBonus = 0;  // アウトカウントボーナス廃止
-          
           // 二塁盗塁試行
           if (bases[0] && !bases[1]) {
-            // 二塁盗塁は正面への送球なので左右ペナルティなし
-            let catcherArm = defense.catcher.arm / 100;
-            let catcherDeterrent = catcherArm * 0.18;  // 捕手の肩による牽制効果 0-18%
-            
-            // 左投手は牽制ボーナス
-            if (pitcher.throws === 'left') {
-              catcherDeterrent += 0.03;  // +3%の牽制ボーナス
-            }
-            
-            let stealAttempt = Math.max(0, stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrent);
+            // 盗塁の判断・成否は自動シミュレーションと共有する（stealing.js）。
+            // ⚠ 采配モードの bases は boolean で走者を識別できないため、
+            //    走者の走力・盗塁スキルは打者のもので近似している（構造的制約）
+            const stealRate2 = stealSuccessRate({
+              runnerSpeed: batter.speed, runnerSteal: batter.steal,
+              catcherArm: defense.catcher.arm, pitcherControl: pitcher.control,
+              pitcherThrows: pitcher.throws, toBase: 2,
+            });
+            let stealAttempt = stealAttemptRate({
+              successRate: stealRate2, runnerSteal: batter.steal, outs: newOuts, toBase: 2,
+            });
 
             // 監督AI：盗塁判断（Phase 3）
             if (autoManagerMode) {
@@ -2325,32 +2316,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             if (doForceSteal) { stealAttempt = 1; }
 
             if (Math.random() < stealAttempt) {
-              // 成功率システム
-              // ステップ1: 走力による基本成功率（30%-90%）
-              const baseRate = 0.30 + runnerSpeed * 0.60;
-
-              // ステップ2: 各種補正
-              const stealBonus = stealSkill * 0.15;  // 0-15%
-              const velocityEffect = (pitchVelocity - 135) / 350;  // ±10%
-              const controlEffect = pitcherControl * 0.05;  // 0-5%
-
-              const adjustedRate = baseRate + stealBonus - velocityEffect - controlEffect;
-
-              // ステップ3: 捕手の肩による阻止（二乗スケール: 肩が弱いとほぼ刺せない）
-              const catcherArmSq = catcherArm * catcherArm;
-              let catcherBlock;
-              if (adjustedRate < 0.30) {
-                catcherBlock = adjustedRate * catcherArmSq * 0.80;
-              } else if (adjustedRate > 0.60) {
-                catcherBlock = adjustedRate * catcherArmSq * 0.35;
-              } else {
-                const t = (adjustedRate - 0.30) / 0.30;
-                catcherBlock = adjustedRate * catcherArmSq * (0.80 - t * 0.45);
-              }
-
-              const stealSuccess = Math.max(0.05, Math.min(0.95, adjustedRate - catcherBlock));
-              
-              if (Math.random() < stealSuccess) {
+              if (Math.random() < stealRate2) {
                 // 盗塁成功
         newBases[1] = true;
         newBases[0] = false;
@@ -2377,22 +2343,15 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
   
   // 三塁盗塁試行
   if (bases[1] && !bases[2] && newOuts < 3) {
-    // 三塁盗塁は体の向きを変える必要があるため左投げペナルティあり
-    let catcherArmForThird = defense.catcher.arm / 100;
-    
-    // 左投げ捕手は三塁送球でペナルティ
-    if (catcher.throws === 'left') {
-      catcherArmForThird = Math.max(0, catcherArmForThird - 0.20);  // -20%
-    }
-    
-    let catcherDeterrentThird = catcherArmForThird * 0.22;
-    
-    // 左投手は牽制ボーナス
-    if (pitcher.throws === 'left') {
-      catcherDeterrentThird += 0.05;
-    }
-    
-    let stealThirdAttempt = Math.max(0, (stealSkillBonus + speedBonus + countBonus + outsBonus - catcherDeterrentThird) * 0.5);
+    // 判断・成否は自動シミュレーションと共有（stealing.js）。三塁は成功しやすいが試行は少ない
+    const stealRate3 = stealSuccessRate({
+      runnerSpeed: batter.speed, runnerSteal: batter.steal,
+      catcherArm: defense.catcher.arm, pitcherControl: pitcher.control,
+      pitcherThrows: pitcher.throws, toBase: 3,
+    });
+    let stealThirdAttempt = stealAttemptRate({
+      successRate: stealRate3, runnerSteal: batter.steal, outs: newOuts, toBase: 3,
+    });
 
     // 監督AI：盗塁判断（Phase 3）
     if (autoManagerMode) {
@@ -2419,32 +2378,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
     }
 
     if (Math.random() < stealThirdAttempt) {
-      // 三塁盗塁は基本成功率が高い
-      // ステップ1: 走力による基本成功率（40%-100%）
-      const baseRate = 0.40 + runnerSpeed * 0.60;
-
-      // ステップ2: 各種補正
-      const stealBonus = stealSkill * 0.12;  // 0-12%
-      const velocityEffect = (pitchVelocity - 135) / 350;  // ±10%
-      const controlEffect = pitcherControl * 0.04;  // 0-4%
-
-      const adjustedRate = baseRate + stealBonus - velocityEffect - controlEffect;
-
-      // ステップ3: 捕手の肩による阻止（二乗スケール）
-              const catcherArmThirdSq = catcherArmForThird * catcherArmForThird;
-              let catcherBlock;
-              if (adjustedRate < 0.30) {
-                catcherBlock = adjustedRate * catcherArmThirdSq * 0.80;
-              } else if (adjustedRate > 0.60) {
-                catcherBlock = adjustedRate * catcherArmThirdSq * 0.35;
-              } else {
-                const t = (adjustedRate - 0.30) / 0.30;
-                catcherBlock = adjustedRate * catcherArmThirdSq * (0.80 - t * 0.45);
-              }
-
-              const stealThirdSuccess = Math.max(0.05, Math.min(0.95, adjustedRate - catcherBlock));
-              
-              if (Math.random() < stealThirdSuccess) {
+              if (Math.random() < stealRate3) {
                 // 盗塁成功
         newBases[2] = true;
         newBases[1] = false;

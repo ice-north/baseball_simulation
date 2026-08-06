@@ -13,6 +13,7 @@ import { decidePitchObjective } from './pitchSituation.js';
 import { hitByPitchChance, hitByPitchFatigue } from './pitchZone.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
+import { stealSuccessRate, stealAttemptRate } from './stealing.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
 const PITCHER_REST_FATIGUE_THRESHOLD = 40;
@@ -525,7 +526,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         ...p,
         currentStamina: startStamina,
         gameStats: {
-          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, hitByPitch: 0, strikeouts: 0, stolenBases: 0 },
+          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, hitByPitch: 0, strikeouts: 0, stolenBases: 0, caughtStealing: 0 },
           pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, hitBatters: 0, pitches: 0, wildPitches: 0 },
           fielding: { chances: 0, errors: 0, assists: 0 }
         }
@@ -542,7 +543,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         ...p,
         currentStamina: startStamina,
         gameStats: {
-          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, hitByPitch: 0, strikeouts: 0, stolenBases: 0 },
+          batting: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, walks: 0, hitByPitch: 0, strikeouts: 0, stolenBases: 0, caughtStealing: 0 },
           pitching: { outs: 0, runsAllowed: 0, earnedRuns: 0, strikeouts: 0, walks: 0, hitBatters: 0, pitches: 0, wildPitches: 0 },
           fielding: { chances: 0, errors: 0, assists: 0 }
         }
@@ -1065,27 +1066,22 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
               .reduce((sum, p) => sum + (p.physical?.speed || 50), 0) / 9;
 
         const catcherArm = catcher?.physical?.arm || 50;
-        const pitcherQuick = pitcher?.pitching?.control || 50;
+        // 盗塁の判断・成否は采配モードと共有する（stealing.js）。
+        // 以前は2エンジンが別式で、しかもこちらは盗塁スキル(steal)を見ていなかった
+        const runnerSteal = (typeof runner === 'object' && runner?.batting?.steal) ?? 50;
+        const successChance = stealSuccessRate({
+          runnerSpeed, runnerSteal, catcherArm,
+          pitcherControl: pitcher?.pitching?.control || 50,
+          pitcherThrows: pitcher?.physical?.throws || 'right',
+          toBase: base + 2,
+        });
+        const attemptRate = stealAttemptRate({
+          successRate: successChance, runnerSteal, outs: gameState.outs, toBase: base + 2,
+          strategy: offenseTeam.strategy?.baseRunning || 'normal',
+        });
 
-        // 盗塁成功確率: 走力ベース（50で40%、70で76%、90で112%→capped）
-        const baseChance = (runnerSpeed - 25) * 1.8;
-        const catcherPenalty = catcherArm * 0.3;
-        const pitcherPenalty = pitcherQuick * 0.1;
-        const successChance = Math.max(0, Math.min(100, baseChance - catcherPenalty - pitcherPenalty + (Math.random() * 20 - 10)));
-
-        // 走塁方針の効果
-        const baseRunStrat = offenseTeam.strategy?.baseRunning || 'normal';
-        const stealThreshold = baseRunStrat === 'aggressive' ? 45 : baseRunStrat === 'conservative' ? 65 : 55;
-        const stealAggressMod = baseRunStrat === 'aggressive' ? 1.1 : baseRunStrat === 'conservative' ? 0.3 : 0.6;
-
-        // 盗塁を試みる条件
-        const shouldAttempt = runnerSpeed >= 55 && gameState.outs < 2 && successChance > stealThreshold;
-        // 走力が高いほど積極的に走る（方針で補正）
-        const aggressiveness = Math.random() * 100 < (runnerSpeed - 45) * 1.0 * stealAggressMod;
-
-        if (shouldAttempt && aggressiveness) {
-          const rand = Math.random() * 100;
-          if (rand < successChance) {
+        if (Math.random() < attemptRate) {
+          if (Math.random() < successChance) {
             const stolenRunner = gameState.bases[base];
             gameState.bases[base] = false;
             gameState.bases[base + 1] = stolenRunner;
@@ -1123,7 +1119,16 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
             }
             gameState.bases[base] = false;
             gameState.outs++;
-            const runnerName = typeof runner === 'object' ? runner.name : '走者';
+            // 盗塁死を走者の成績に記録する（従来は記録されておらず成功率が常に100%だった）
+            if (typeof runner === 'object' && runner?.gameStats?.batting) {
+              runner.gameStats.batting.caughtStealing = (runner.gameStats.batting.caughtStealing || 0) + 1;
+            }
+            // 盗塁刺は捕手の補殺＋塁のカバーの刺殺
+            if (catcher?.gameStats?.fielding) {
+              catcher.gameStats.fielding.chances++;
+              catcher.gameStats.fielding.assists = (catcher.gameStats.fielding.assists || 0) + 1;
+            }
+            if (cover?.gameStats?.fielding) cover.gameStats.fielding.chances++;
             return { success: false, base };
           }
         }
@@ -2695,6 +2700,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         season.hitByPitch = (season.hitByPitch || 0) + (b.hitByPitch || 0);
         season.strikeouts = (season.strikeouts || 0) + b.strikeouts;
         season.stolenBases = (season.stolenBases || 0) + (b.stolenBases || 0);
+        season.caughtStealing = (season.caughtStealing || 0) + (b.caughtStealing || 0);
         season.sacrificeBunts = (season.sacrificeBunts || 0) + (b.sacrificeBunts || 0);
 
         // 経験値蓄積（出場1 + 打席数/3）
