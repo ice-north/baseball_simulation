@@ -15,6 +15,14 @@ import { BALL_EFFECTS } from './utils/constants.js';
 //   実測（旧係数）: 三振率 19.2〜20.0% / 本塁打 0.638〜0.691 と
 //   whiffBonus が -0.05〜+0.10 も違うのに差が出ていなかった。
 // ============================================================
+// 【曲がりの効き】実際の変化量は **回転数 ÷ 球速** に比例するので物理的には
+// 遅いほど曲がる。しかし遅すぎると打者に見極める時間ができるので、
+// 打者にとっての実効的な効きは **130km/h 付近が頂点**になる。
+// 速球（150km+）は曲がりきる前に到達し、超スローボールは曲がっても見える。
+const BREAK_PEAK = 130;
+export const breakEfficiency = (v) =>
+  Math.max(0.60, 1.18 - ((v - BREAK_PEAK) / 50) ** 2 * 0.58);
+
 const BALL_WHIFF_W = 2.2;   // 空振り: タイミング窓を狭める強さ
 const BALL_WEAK_W = 46;     // 凡打誘発: 打球初速を落とす km/h 係数
 const BALL_GB_W = 58;       // ゴロ誘発: 打出し角を下げる度数係数
@@ -118,7 +126,8 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   if (ballEffect && pitch.level) {
     const lv = pitch.level / 100;
     // ツーシームのように whiffBonus が負の球種は逆に当てやすくなる
-    timingWindow *= (1 - (ballEffect.whiffBonus || 0) * BALL_WHIFF_W * lv * (1 - meetDeceptionResistance));
+    timingWindow *= (1 - (ballEffect.whiffBonus || 0) * BALL_WHIFF_W * lv
+      * breakEfficiency(pitchVelocity) * (1 - meetDeceptionResistance));
   }
 
   // 回転数によるタイミング窓補正（MLB Statcast準拠）
@@ -205,7 +214,8 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     // 芯を捉えられた時ほど影響は小さい（差し込まれるから弱くなる）。
     const weakEff = BALL_EFFECTS[pitch.type];
     if (weakEff && pitch.level) {
-      const weakness = (weakEff.weakBonus || 0) * (pitch.level / 100) * (1 - meetQuality * 0.5);
+      const weakness = (weakEff.weakBonus || 0) * (pitch.level / 100)
+        * breakEfficiency(pitchVelocity) * (1 - meetQuality * 0.5);
       exitVelocity -= weakness * BALL_WEAK_W;
     }
 
@@ -361,12 +371,13 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   const spinAngleAdj = getSpinRateAngleAdjust(pitch.type, pitcher.spinRate);
   // 球種固有のゴロ誘発（BALL_EFFECTS.groundballBonus）。
   // シンカー(0.15)/チェンジアップ(0.14)/ツーシーム(0.12) は打球が上がりにくい。
+  const pitchVelocity = pitch.velocity || pitcher.velocity;
   const gbEff = BALL_EFFECTS[pitch.type];
   const ballGroundAdj = gbEff
-    ? -(gbEff.groundballBonus || 0) * ((pitch.level ?? 50) / 100) * BALL_GB_W
+    ? -(gbEff.groundballBonus || 0) * ((pitch.level ?? 50) / 100)
+      * breakEfficiency(pitchVelocity) * BALL_GB_W
     : 0;
   // 速球で差し込まれるとゴロになりやすい（NPBデータ: 160+で50.7%GB）
-  const pitchVelocity = pitch.velocity || pitcher.velocity;
   let velocityAngleAdj = 0;
   if (meetQuality < 0.75) {
     const deficit = 1 - meetQuality;
