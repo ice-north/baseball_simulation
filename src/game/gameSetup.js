@@ -333,6 +333,17 @@ export function executeHandleManagedGameEnd(ctx) {
         if (gs.hbpFatigue) playerData.fatigue = (playerData.fatigue || 0) + gs.hbpFatigue;
       }
 
+      // 守備成績。**采配モードにも自動シミュと同じ集計を持たせる**
+      // （打席が無くても守備には就いているので、打撃の集計とは別に見る）
+      if (gs.fieldingChances || gs.fieldErrors || gs.assists) {
+        if (!playerData.seasonStats) playerData.seasonStats = { batting: {}, pitching: {} };
+        if (!playerData.seasonStats.batting) playerData.seasonStats.batting = {};
+        const sb = playerData.seasonStats.batting;
+        sb.fieldingChances = (sb.fieldingChances || 0) + (gs.fieldingChances || 0);
+        sb.errors = (sb.errors || 0) + (gs.fieldErrors || 0);
+        sb.assists = (sb.assists || 0) + (gs.assists || 0);
+      }
+
       const ps = p.stats?.pitching || {};
       if (ps.outs > 0 || ps.pitches > 0) {
         if (!playerData.seasonStats.pitching) playerData.seasonStats.pitching = {};

@@ -507,9 +507,9 @@ export const getThrowErrorRate = (throwerArm, receiverDefense, difficulty = 0) =
  */
 export function pickOutfielder(direction, defense = {}) {
   const cfSpeed = defense.center?.speed || 65;
-  const cfExpand = (cfSpeed - 65) / 100 * 12;   // 足90→+3度拡張
-  const cfLeft = -17 - cfExpand;
-  const cfRight = 17 + cfExpand;
+  const cfExpand = (cfSpeed - 65) / 100 * 9;    // 足90→+2.3度拡張
+  const cfLeft = -11 - cfExpand;
+  const cfRight = 11 + cfExpand;
   if (direction < cfLeft) {
     const lfExpand = ((defense.left?.speed || 65) - 65) / 100 * 7;
     return (direction >= cfLeft - lfExpand) && Math.random() < 0.3 ? 'center' : 'left';
@@ -573,24 +573,24 @@ export const judgeFielderReach = (battedBall, defense, batter) => {
     } else if (distance < 29 && Math.abs(direction) < 14) {
       // 投手正面の弱い打球（マウンドは本塁から18.4m。中央方向の緩い当たりは投手が処理）
       position = 'pitcher';
-    } else if (direction < -28) {
+    } else if (direction < -23) {
       // 三塁側 - 遊撃手の足で範囲拡張
       const ssSpeed = safeDefense.short?.speed || 60;
       const ssExpand = (ssSpeed - 60) / 100 * 8; // 足90→+2.4度拡張（走力強化）
-      if (direction >= -28 - ssExpand) {
+      if (direction >= -23 - ssExpand) {
         position = 'short'; // 遊撃手がカバー
       } else {
         position = 'third';
       }
     } else if (direction < 3) {
       position = 'short'; // -24〜+3: 遊撃手の広い範囲
-    } else if (direction < 28) {
+    } else if (direction < 23) {
       position = 'second'; // +3〜+26: 二塁手（一塁手は線寄りのみを守るため二塁の範囲を広く取る）
     } else {
       // 一塁側 - 二塁手の足で範囲拡張
       const sbSpeed = safeDefense.second?.speed || 60;
       const sbExpand = (sbSpeed - 60) / 100 * 7; // 走力強化
-      position = direction < 28 + sbExpand ? 'second' : 'first';
+      position = direction < 23 + sbExpand ? 'second' : 'first';
     }
     fielder = safeDefense[position] || { defense: 70, speed: 60, arm: 65 };
   } else {

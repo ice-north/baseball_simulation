@@ -1235,17 +1235,23 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         const fieldingResult = judgeFielderReach(battedBall, defense, effectiveBatter);
 
         // 結果を変換して返す
+        // ⚠ **自動シミュレーションと同じ情報を持たせること**。以前は 'out' にしか
+        //   fieldingPosition が載っておらず、采配モードだけ
+        //   「積極進塁で使う外野手の肩」と「守備成績の記録先」が分からなかった。
+        const fp = fieldingResult.fieldingPosition;
+        const ep = fieldingResult.errorPosition;
         const resultMap = {
           'homerun': { type: 'homerun', description: fieldingResult.description, hit: true },
-          'triple': { type: 'triple', description: fieldingResult.description, hit: true },
-          'double': { type: 'double', description: fieldingResult.description, hit: true },
-          'single': { type: 'single', description: fieldingResult.description, hit: true, isError: fieldingResult.isError },
+          'triple': { type: 'triple', description: fieldingResult.description, hit: true, fieldingPosition: fp },
+          'double': { type: 'double', description: fieldingResult.description, hit: true, fieldingPosition: fp },
+          'single': { type: 'single', description: fieldingResult.description, hit: true,
+            isError: fieldingResult.isError, errorPosition: ep, fieldingPosition: fp },
           'out': {
             type: 'out',
             description: fieldingResult.description,
             hit: false,
             // 打席結果を「中飛」「右直」と書くのに使う（バッジの表記を揃えるため）
-            fieldingPosition: fieldingResult.fieldingPosition,
+            fieldingPosition: fp,
             isOutfieldFly: fieldingResult.isOutfieldFly,
             // 内野ゴロは走者を進める（ゴロGO・進塁打）。フライ・ライナーは進まない
             isGroundOut: battedBall.launchAngle < 10 && !fieldingResult.isOutfieldFly,
@@ -1588,7 +1594,29 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         return determineContactResultPhysics(selectedBall, predictionCorrect, tempoGroundballBonus, handEffect, actualVelocity, batter, pitcher, defense, null);
       };
 
-      const advanceRunners = (hitType) => {
+      // 守備成績（守備機会＝刺殺+補殺 / 失策）を記録する。
+      // ⚠ **采配モードには従来これが一切なかった**。自動シミュ（スキップ）だけが
+      //    記録しており、自分で采配した試合の守備成績が誰にも付かなかった。
+      const recordFielding = (position, { chance = 0, error = 0, assist = 0 } = {}) => {
+        if (!position) return;
+        const defenseTeamType = isTopInning ? 'home' : 'away';
+        const setTeam = defenseTeamType === 'home' ? setHomeTeam : setAwayTeam;
+        setTeam(prev => ({
+          ...prev,
+          players: prev.players.map(p => {
+            if (p.position !== position || !(p.battingOrder > 0)) return p;
+            const g = p.gameStats || {};
+            return { ...p, gameStats: {
+              ...g,
+              fieldingChances: (g.fieldingChances || 0) + chance + error,
+              fieldErrors: (g.fieldErrors || 0) + error,
+              assists: (g.assists || 0) + assist,
+            } };
+          }),
+        }));
+      };
+
+      const advanceRunners = (hitType, fieldingPosition = null) => {
         const newBases = [false, false, false];
         let runsScored = 0;
         
@@ -1619,11 +1647,19 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             // 積極進塁（単打で 2塁→本塁 / 1塁→3塁、二塁打で 1塁→本塁）。
             // 自動シミュレーションと同じ判定を共有する（baserunning.js）。
             if (outsFromThrow === 0) {
+              // 打球を処理した野手の肩で判定する（自動シミュと同じ）。
+              // avgArm だけだと「強肩の外野手を置く」意味が出ない
+              const thrower = fieldingPosition ? def?.[fieldingPosition] : null;
               const { attempt, thrownOut } = tryExtraAdvance({
                 hitType, fromBase: i, runnerSpeed: avgSpeed, avgArm,
+                throwerArm: thrower?.physical?.arm ?? null,
                 currentOuts: outs, cutoffDefense: def?.short?.fielding?.defense ?? 60,
               });
-              if (attempt && thrownOut) { outsFromThrow++; continue; }  // 捕殺で刺された
+              if (attempt && thrownOut) {
+                outsFromThrow++;
+                recordFielding(fieldingPosition, { chance: 1, assist: 1 });   // 捕殺
+                continue;
+              }
               if (attempt) newBase++;
             }
             if (newBase >= 3) {
@@ -1913,6 +1949,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               
               newOuts++;
               atBatOver = true;
+              recordFielding('catcher', { chance: 1 });   // 三振は捕手の刺殺
               addAtBatResult(getCurrentBatter().id, isTopInning ? 'away' : 'home', '三振');
             }
             break;
@@ -1940,7 +1977,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           case 'double':
           case 'triple':
           case 'homerun':
-            const { bases: updatedBases, runsScored: runs, outsMade: throwOuts = 0 } = advanceRunners(result.type);
+            const { bases: updatedBases, runsScored: runs, outsMade: throwOuts = 0 } = advanceRunners(result.type, result.fieldingPosition);
             
             // 打者成績: ヒット
             const bases_earned = result.type === 'single' ? 1 : result.type === 'double' ? 2 : result.type === 'triple' ? 3 : 4;
@@ -1988,12 +2025,14 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           setTeamRBIs(prev => ({ ...prev, away: prev.away + runs }));
           if (result.isError) {
             setTeamErrors(prev => ({ ...prev, home: prev.home + 1 }));
+            recordFielding(result.errorPosition, { error: 1 });
           }
         } else {
           setTeamHits(prev => ({ ...prev, home: prev.home + 1 }));
           setTeamRBIs(prev => ({ ...prev, home: prev.home + runs }));
           if (result.isError) {
             setTeamErrors(prev => ({ ...prev, away: prev.away + 1 }));
+            recordFielding(result.errorPosition, { error: 1 });
           }
         }
         
@@ -2045,6 +2084,12 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             
             newOuts++;
 
+            // 守備機会（刺殺・補殺）。内野ゴロは「捕った野手の補殺＋一塁手の刺殺」
+            recordFielding(result.fieldingPosition, { chance: 1 });
+            if (result.isGroundOut && result.fieldingPosition && result.fieldingPosition !== 'first') {
+              recordFielding('first', { chance: 1 });
+            }
+
             // 併殺打判定（一塁ランナーがいて内野ゴロの場合）
             let isDoublePlay = false;
             // **内野ゴロのアウトなら距離は問わない**（自動シミュと同じ条件）。
@@ -2059,6 +2104,7 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
               const dpBase = DP_BASE + (ifAvg - 50) * 0.35;
               if (Math.random() * 100 < dpBase) {
                 isDoublePlay = true;
+                recordFielding('first', { chance: 1 });   // 一塁でのアウト
                 newOuts++;
                 newBases[0] = false;
                 setPitcherStats(prev => ({
@@ -3510,14 +3556,16 @@ if (newOuts === 3) {
                         ...prev,
                         players: prev.players.map(p => ({
                           ...p,
-                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [],
+                            fieldingChances: 0, fieldErrors: 0, assists: 0 }
                         }))
                       }));
                       setHomeTeam(prev => ({
                         ...prev,
                         players: prev.players.map(p => ({
                           ...p,
-                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [] }
+                          gameStats: { atBats: 0, hits: 0, homeruns: 0, rbis: 0, strikeouts: 0, atBatResults: [],
+                            fieldingChances: 0, fieldErrors: 0, assists: 0 }
                         }))
                       }));
                     }}
