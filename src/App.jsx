@@ -46,7 +46,7 @@ import { hitByPitchChance, hitByPitchFatigue } from './game/pitchZone.js';
 import PitchZonePlot, { HEAT_HOT, HEAT_COLD } from './components/PitchZonePlot.jsx';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './game/baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './game/stealing.js';
-import { effectiveArsenalSize } from './game/arsenal.js';
+import { effectiveArsenalSize, activeArsenal } from './game/arsenal.js';
 import TutorialHint from './components/TutorialHint.jsx';
 import { setGameSnapshotProvider } from './game/crashRecovery.js';
 import { getUiScale, UISCALE_EVENT } from './game/uiSettings.js';
@@ -1549,7 +1549,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           control: currentPitcher.pitching.control + pitcherCondMod + pitcherMentalMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
-          pitches: currentPitcher.pitching.arsenal,
+          // 封印した球は投げない（arsenal.js）
+          pitches: activeArsenal(currentPitcher.pitching.arsenal),
           form: currentPitcher.pitching.form,
           spinRate: currentPitcher.pitching.spinRate ?? 50
         };
@@ -1731,7 +1732,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           control: currentPitcher.pitching.control + pCondMod,
           stamina: currentPitcher.pitching.stamina,
           throws: currentPitcher.physical.throws,
-          pitches: currentPitcher.pitching.arsenal,
+          // 封印した球は投げない（arsenal.js）
+          pitches: activeArsenal(currentPitcher.pitching.arsenal),
           form: currentPitcher.pitching.form,
           spinRate: currentPitcher.pitching.spinRate ?? 50
         };

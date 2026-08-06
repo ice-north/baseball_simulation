@@ -549,17 +549,39 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
               </div>
             )}
 
-            {/* 変化球 */}
-            {isPitcher && arsenal.length > 0 && (
+            {/* 変化球。クリックで封印/解禁を切り替える。
+                封印した球は**試合で投げないだけ**で練習・成長は続く。
+                習熟度の低い球は「防御率はほぼ変わらず四球だけ増える」ので、
+                Lv20〜30 まで磨いてから解禁するのが実際に得になる */}
+            {isPitcher && (p.arsenal || []).length > 0 && (
               <div>
-                <h4 className="text-green-400 text-xs font-bold uppercase tracking-wider mb-1.5">変化球</h4>
+                <h4 className="text-green-400 text-xs font-bold uppercase tracking-wider mb-1.5">
+                  変化球 <span className="text-gray-300 normal-case font-normal tracking-normal">
+                    — クリックで封印／解禁（封印した球は試合で投げません）
+                  </span>
+                </h4>
                 <div className="flex flex-wrap gap-1.5">
-                  {arsenal.map((a, i) => {
+                  {(p.arsenal || []).map((a, i) => {
                     const rank = getAbilityRank(a.level || 0);
+                    const sealed = !!a.sealed;
+                    // 全部は封印できない（投げる球が無くなるため）
+                    const canSeal = sealed || (p.arsenal || []).filter(x => !x.sealed).length > 1;
                     return (
-                      <span key={i} className={`px-2 py-0.5 rounded bg-gray-700/60 text-xs font-semibold ${getRankColor(rank)}`}>
-                        {getPitchTypeName(a.type)} <span className="text-xs opacity-70">Lv{a.level}</span>
-                      </span>
+                      <button key={i} type="button" disabled={!canSeal}
+                        title={sealed ? '封印中：試合では投げません。クリックで解禁'
+                          : canSeal ? '試合で投げています。クリックで封印'
+                          : '最後の1球は封印できません'}
+                        onClick={() => {
+                          if (!canSeal) return;
+                          a.sealed = !sealed;
+                          setUpdateTrigger(prev => prev + 1);
+                        }}
+                        className={`px-2 py-0.5 rounded text-xs font-semibold transition ${
+                          sealed ? 'bg-gray-800 text-gray-500 line-through ring-1 ring-gray-600'
+                            : `bg-gray-700/60 ${getRankColor(rank)} hover:bg-gray-600`
+                        } ${canSeal ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                        {sealed && '🔒'}{getPitchTypeName(a.type)} <span className="text-xs opacity-70">Lv{a.level}</span>
+                      </button>
                     );
                   })}
                 </div>

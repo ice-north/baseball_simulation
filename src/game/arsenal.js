@@ -87,3 +87,27 @@ export function effectiveArsenalSize(arsenal) {
   }
   return Math.max(1, total);
 }
+
+// ============================================================
+// 変化球の封印
+//
+// 覚えている球でも**試合では使わない**という選択を持たせる。
+//   ・習熟度の低い変化球は「防御率はほぼ変わらず四球だけ +0.9」なので、
+//     Lv20〜30 まで練習してから解禁するのが実際に得になる（LEVEL_SIGMA_W 参照）
+//   ・ストレートを封印してナックルボーラーになる、といった尖った育成もできる
+//
+// 封印した球は**試合で投げないだけ**で、練習・成長・表示からは消さない。
+// 打者の読み合い（effectiveArsenalSize）からも外れる——投げない球は
+// 引き出しとして数えられないので、封印すると読まれやすくなる代償がある。
+// ============================================================
+
+/**
+ * 実際に投げる球だけを返す。全部封印されていたら封印を無視する
+ * （投げる球が無くなると試合が成立しないため）。
+ */
+export function activeArsenal(arsenal) {
+  const list = (arsenal || []).filter(b => b && b.type);
+  if (!list.length) return [{ type: 'straight', level: 50 }];
+  const active = list.filter(b => !b.sealed);
+  return active.length ? active : list;
+}

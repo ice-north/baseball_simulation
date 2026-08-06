@@ -14,7 +14,7 @@ import { hitByPitchChance, hitByPitchFatigue } from './pitchZone.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './stealing.js';
-import { effectiveArsenalSize } from './arsenal.js';
+import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
 
 // 投手疲労閾値: この値以上の疲労なら先発起用しない
 const PITCHER_REST_FATIGUE_THRESHOLD = 40;
@@ -713,7 +713,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
     // 従来はここで変化球を完全ランダムに選んでおり、采配モードだけが
     // リードでスコア選択していた。リーグ成績を作るのは自動側なので、
     // 捕手のリード能力が成績にまったく反映されていなかった。
-    const arsenal = pitcherPlayer.pitching?.arsenal || [{ type: 'straight', level: 50 }];
+    // 封印した球は投げない（arsenal.js）。練習・成長からは消さない
+    const arsenal = activeArsenal(pitcherPlayer.pitching?.arsenal);
     const selectedPitch = selectPitchType({
       arsenal,
       catcherLead: catcherPlayer?.catching?.lead ?? 50,
