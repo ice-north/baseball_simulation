@@ -265,15 +265,15 @@ export const calculateLaunchAngle = (meetQuality, batter) => {
     // 最適角に密集して本塁打が実データの3倍出ていた。
     baseLaunchAngle = Math.random() < BARREL_SHARE
       ? BARREL_LO + Math.random() * BARREL_W   // バレル帯
-      : -16 + Math.random() * 66;  // 強いゴロ〜高いフライ
+      : -18 + Math.random() * 62;  // 強いゴロ〜高いフライ
   } else if (meetQuality > 0.6) {
     // 高品質: ゴロとライナー〜フライが半々
     baseLaunchAngle = Math.random() < 0.50
       ? -10 + Math.random() * 23   // 硬いゴロ〜低いライナー
-      : -2 + Math.random() * 52;   // ライナー〜高いフライ
+      : -6 + Math.random() * 50;   // ライナー〜高いフライ
   } else if (meetQuality > 0.4) {
     // 中品質: 幅広い分布（ゴロ寄り）
-    baseLaunchAngle = -12 + Math.random() * 74;
+    baseLaunchAngle = -14 + Math.random() * 72;
   } else {
     // 低品質: ボテボテゴロが主、残りはポップフライ
     baseLaunchAngle = Math.random() < 0.42

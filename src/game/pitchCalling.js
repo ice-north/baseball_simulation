@@ -53,12 +53,16 @@ export function callPitchTarget({
 } = {}) {
   // カウント別の基本方針。3ボールならストライクを取りに行き、
   // 追い込んでいれば誘い球を増やす（実際の配球と同じ）
+  // ⚠ 四球率はここの配分に敏感。実NPBは打席の8.5%だが、本作は長らく11%台で、
+  // その分インプレーが減ってリーグ打率が実際より2分ほど低く出ていた。
+  // ゾーン率そのものは実データ帯（44-50%）に収まっているので、
+  // **ボール先行のカウントでもう一段ストライクを取りに行く**形で詰める。
   let w;
-  if (balls >= 3)          w = { zone: 0.66, edge: 0.32, chase: 0.02 };
-  else if (strikes === 2)  w = { zone: 0.20, edge: 0.42, chase: 0.38 };
-  else if (strikes > balls) w = { zone: 0.26, edge: 0.46, chase: 0.28 };
-  else if (balls > strikes) w = { zone: 0.48, edge: 0.42, chase: 0.10 };
-  else                      w = { zone: 0.34, edge: 0.48, chase: 0.18 };
+  if (balls >= 3)          w = { zone: 0.82, edge: 0.17, chase: 0.01 };
+  else if (strikes === 2)  w = { zone: 0.22, edge: 0.42, chase: 0.36 };
+  else if (strikes > balls) w = { zone: 0.31, edge: 0.45, chase: 0.24 };
+  else if (balls > strikes) w = { zone: 0.64, edge: 0.32, chase: 0.04 };
+  else                      w = { zone: 0.44, edge: 0.45, chase: 0.11 };
 
   // 捕手のリード: 際どいコースを要求できるのは配球が上手い捕手。
   // ただし**投手が投げ切れる時に限る**。制球の低い投手に無闇にコーナーを
