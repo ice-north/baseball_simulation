@@ -90,16 +90,58 @@ const pitchShape = (t, leftHanded) => {
   return leftHanded ? mirrorShape(s) : s;
 };
 
-function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, scale = 1 }) {
-  const r = 4.4 * scale;
-  const w = 1.5 * scale;
-  const fill = filled ? color : 'none';
+// **何球目かはマーカーの中に書く**（スポーツナビの投球図と同じ）。
+// 以前は右上に添えていたが、点が増えると数字どうしが重なって読めなかった。
+// 中に入れるぶんマーカーを大きくする必要があるので、形（球種）は
+// 数字が収まるサイズで描く。
+function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, scale = 1, label = '' }) {
+  const r = 7.0 * scale;
+  const w = 1.6 * scale;
+  const fill = filled ? color : '#0b0f19';
   const common = { fill, stroke: color, strokeWidth: w, strokeLinejoin: 'round' };
-  if (shape === 'up')    return <polygon points={`${x},${y - r} ${x + r},${y + r * 0.8} ${x - r},${y + r * 0.8}`} {...common} />;
-  if (shape === 'down')  return <polygon points={`${x},${y + r} ${x + r},${y - r * 0.8} ${x - r},${y - r * 0.8}`} {...common} />;
-  if (shape === 'left')  return <polygon points={`${x - r},${y} ${x + r * 0.8},${y - r} ${x + r * 0.8},${y + r}`} {...common} />;
-  if (shape === 'right') return <polygon points={`${x + r},${y} ${x - r * 0.8},${y - r} ${x - r * 0.8},${y + r}`} {...common} />;
-  return <circle cx={x} cy={y} r={r * 0.92} {...common} />;
+  // 三角は同じ外接円でも面積が小さいので、数字が収まるよう少し大きく取る
+  const t = r * 1.18;
+  let body;
+  if (shape === 'up')         body = <polygon points={`${x},${y - t} ${x + t},${y + t * 0.72} ${x - t},${y + t * 0.72}`} {...common} />;
+  else if (shape === 'down')  body = <polygon points={`${x},${y + t} ${x + t},${y - t * 0.72} ${x - t},${y - t * 0.72}`} {...common} />;
+  else if (shape === 'left')  body = <polygon points={`${x - t},${y} ${x + t * 0.72},${y - t} ${x + t * 0.72},${y + t}`} {...common} />;
+  else if (shape === 'right') body = <polygon points={`${x + t},${y} ${x - t * 0.72},${y - t} ${x - t * 0.72},${y + t}`} {...common} />;
+  else                        body = <circle cx={x} cy={y} r={r} {...common} />;
+  // 三角は重心が中心からずれるので数字の位置を寄せる
+  const ty = shape === 'up' ? y + r * 0.34 : shape === 'down' ? y - r * 0.22 : y;
+  const tx = shape === 'left' ? x + r * 0.20 : shape === 'right' ? x - r * 0.20 : x;
+  return (
+    <g>
+      {body}
+      {label !== '' && (
+        <text x={tx} y={ty} fontSize={r * 1.15} fontWeight="bold"
+          fill={filled ? '#0b0f19' : color} textAnchor="middle" dominantBaseline="central">
+          {label}
+        </text>
+      )}
+    </g>
+  );
+}
+
+/**
+ * 捕手のシルエット（枠の中央下、構えている姿）。
+ * スポーツナビの投球図と同じく「捕手の後ろから見ている」画にするための背景。
+ * マーカーより必ず薄く描く。
+ */
+function CatcherSilhouette() {
+  return (
+    <g opacity="0.13" fill="#cbd5e1">
+      {/* ヘルメット */}
+      <circle cx="50" cy="40" r="8.5" />
+      {/* 肩・胴（プロテクター） */}
+      <path d="M36,52 q14,-7 28,0 l4,26 q-18,7 -36,0 z" />
+      {/* 太もも（しゃがんだ膝） */}
+      <ellipse cx="33" cy="82" rx="10" ry="13" />
+      <ellipse cx="67" cy="82" rx="10" ry="13" />
+      {/* ミット */}
+      <circle cx="70" cy="60" r="7" />
+    </g>
+  );
 }
 
 /**
@@ -107,10 +149,12 @@ function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, sca
  * 「いま誰がどちらの打席か」を文字を読まずに分かるようにするための目印。
  * 薄く描いてマーカーの視認性を落とさない。
  */
+// 枠の外に立たせる（スポーツナビの図と同じ）。以前は枠に重なっていて
+// マーカーが読みにくかった
 function BatterSilhouette({ onRight }) {
   return (
-    <g opacity="0.20" fill="#93c5fd"
-      transform={onRight ? 'translate(100,0) scale(-1,1)' : undefined}>
+    <g opacity="0.16" fill="#93c5fd"
+      transform={onRight ? 'translate(103,0) scale(-0.82,0.82)' : 'scale(0.82,0.82)'}>
       {/* バット */}
       <polygon points="20,24 29,3 32.5,5 23.5,26" />
       {/* 腕 */}
@@ -187,11 +231,11 @@ export default function PitchZonePlot({
             opacity={Math.min(HEAT_MAX_ALPHA, Math.abs(v) * HEAT_MAX_ALPHA * 1.15)} />
         );
       }))}
-      {/* 打者のシルエット。投手から見て 右打者は画面右・左打者は画面左に立つ */}
+      {/* 捕手（中央）→ 打者（枠の外）の順に薄く敷く。
+          スポーツナビの投球図と同じ「捕手の後ろから見た画」にする */}
+      <CatcherSilhouette />
+      {/* 投手から見て 右打者は画面右・左打者は画面左に立つ */}
       <BatterSilhouette onRight={!flip} />
-      {/* ホームベース（下端中央）。向きの基準になる */}
-      <polygon points="43,95 57,95 57,89 50,85.5 43,89"
-        fill="#1f2937" stroke="#4b5563" strokeWidth="0.7" />
       {/* ストライクゾーン 3×3 */}
       {[1, 2].map(i => (
         <g key={i} stroke="#6b7280" strokeWidth="0.6">
@@ -199,8 +243,11 @@ export default function PitchZonePlot({
           <line x1={z0} y1={z0 + step * i} x2={z1} y2={z0 + step * i} />
         </g>
       ))}
+      {/* 外枠（5×5の範囲）は薄く、内枠（ストライクゾーン）を強調する */}
+      <rect x={z0 - step} y={z0 - step} width={(z1 - z0) + step * 2} height={(z1 - z0) + step * 2}
+        fill="none" stroke="#4b5563" strokeWidth="0.8" />
       <rect x={z0} y={z0} width={z1 - z0} height={z1 - z0}
-        fill="none" stroke="#d1d5db" strokeWidth="1.6" />
+        fill="none" stroke="#e5e7eb" strokeWidth="1.8" />
       {/* 投手から見た向きの目印 */}
       <text x="2" y="7" fill="#6b7280" fontSize="5" textAnchor="start">一塁側</text>
       <text x={V - 2} y="7" fill="#6b7280" fontSize="5" textAnchor="end">三塁側</text>
@@ -211,20 +258,16 @@ export default function PitchZonePlot({
         const y = place(p.pitchLoc.row, p.pitchLoc.jy ?? 0.5) * V;
         const latest = i === list.length - 1;
         const rs = resultStyle(p.resultType);
-        const r = 4.4 * mk;
+        const r = 7.0 * mk;
         return (
           <g key={i}>
             {/* 最新の1球は白いリングで囲う。赤は「アウト」に使うので色では示せない */}
             {latest && (
-              <circle cx={x} cy={y} r={r + 2.4 * mk} fill="none"
-                stroke="#f1f5f9" strokeWidth={1.2 * mk} opacity="0.9" />
+              <circle cx={x} cy={y} r={r + 3.2 * mk} fill="none"
+                stroke="#f1f5f9" strokeWidth={1.3 * mk} opacity="0.9" />
             )}
             <Marker x={x} y={y} shape={pitchShape(p.pitchLoc.type, leftHandedPitcher)}
-              color={rs.color} filled={rs.swung} scale={mk} />
-            {/* 何球目か。マーカーの右上に置き、縁取りで背景と分離する */}
-            <text x={x + r + 1.6} y={y - r + 1.2} fontSize={6.2} fontWeight="bold"
-              fill="#e5e7eb" stroke="#0b0f19" strokeWidth="1.6"
-              paintOrder="stroke" textAnchor="start">{i + 1}</text>
+              color={rs.color} filled={rs.swung} scale={mk} label={i + 1} />
           </g>
         );
       })}
