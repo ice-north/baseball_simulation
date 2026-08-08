@@ -1340,7 +1340,12 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
 
                             {/* 行2: 能力値チップ + 体力/疲労バー + 成績 */}
                             <div className="flex items-center gap-1.5">
-                              <div className="flex gap-1.5">
+                              {/* 能力チップは「ラベルの下に数字」の2段固定。
+                                  以前は <span>ミ<span>68</span></span> と1つのspanに
+                                  インラインで入れていたため、幅が足りないと**チップの
+                                  内側で勝手に改行**し、折り返す行と折り返さない行が
+                                  混ざって縦の桁が揃わなかった。 */}
+                              <div className="flex gap-1">
                                 {[
                                   { label: 'ミ', value: player.batting?.meet || 0 },
                                   { label: 'パ', value: player.batting?.power || 0 },
@@ -1350,8 +1355,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                                 ].map(stat => {
                                   const rank = getAbilityRank(stat.value);
                                   return (
-                                    <span key={stat.label} className={`text-xs font-semibold ${getRankColor(rank)}`}>
-                                      {stat.label}<span className="opacity-80">{stat.value}</span>
+                                    <span key={stat.label}
+                                      className={`flex flex-col items-center leading-tight w-6 shrink-0 text-xs font-semibold tabular-nums ${getRankColor(rank)}`}>
+                                      <span>{stat.label}</span>
+                                      <span className="opacity-90">{stat.value}</span>
                                     </span>
                                   );
                                 })}
@@ -1359,12 +1366,16 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                               <div className="flex items-center gap-1 ml-auto">
                                 {player.personality && (
                                   <div className="flex items-center gap-1 mr-1">
-                                    <span className={`text-xs ${(player.personality.discipline ?? 50) >= 80 ? 'text-red-400' : (player.personality.discipline ?? 50) >= 60 ? 'text-orange-400' : (player.personality.discipline ?? 50) >= 40 ? 'text-yellow-400' : (player.personality.discipline ?? 50) >= 20 ? 'text-blue-400' : 'text-gray-400'}`} title="プロ意識">
-                                      プ{player.personality.discipline ?? 50}
-                                    </span>
-                                    <span className={`text-xs ${(player.personality.mental ?? 50) >= 80 ? 'text-red-400' : (player.personality.mental ?? 50) >= 60 ? 'text-orange-400' : (player.personality.mental ?? 50) >= 40 ? 'text-yellow-400' : (player.personality.mental ?? 50) >= 20 ? 'text-blue-400' : 'text-gray-400'}`} title="精神力">
-                                      精{player.personality.mental ?? 50}
-                                    </span>
+                                    {[
+                                      { label: 'プ', title: 'プロ意識', value: player.personality.discipline ?? 50 },
+                                      { label: '精', title: '精神力', value: player.personality.mental ?? 50 },
+                                    ].map(stat => (
+                                      <span key={stat.label} title={stat.title}
+                                        className={`flex flex-col items-center leading-tight w-6 shrink-0 text-xs tabular-nums ${stat.value >= 80 ? 'text-red-400' : stat.value >= 60 ? 'text-orange-400' : stat.value >= 40 ? 'text-yellow-400' : stat.value >= 20 ? 'text-blue-400' : 'text-gray-300'}`}>
+                                        <span>{stat.label}</span>
+                                        <span className="opacity-90">{stat.value}</span>
+                                      </span>
+                                    ))}
                                   </div>
                                 )}
                                 <div className="flex items-center gap-0.5">
