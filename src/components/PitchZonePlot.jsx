@@ -165,7 +165,9 @@ function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, sca
  */
 function CatcherSilhouette() {
   return (
-    <g opacity="0.13" fill="#cbd5e1">
+    // 等倍だとしゃがんだ膝が5×5の外枠からはみ出し、ゾーンより捕手が主役に見える。
+    // 図の主役はあくまで投球位置なので、重心(50,63)まわりで少しだけ縮める
+    <g opacity="0.13" fill="#cbd5e1" transform="translate(50,63) scale(0.85) translate(-50,-63)">
       {/* ヘルメット */}
       <circle cx="50" cy="40" r="8.5" />
       {/* 肩・胴（プロテクター） */}
@@ -186,14 +188,17 @@ function CatcherSilhouette() {
  */
 // 枠の外に立たせる（スポーツナビの図と同じ）。以前は枠に重なっていて
 // マーカーが読みにくかった
+//
+// **バットと腕は描かない**。この絵の役目は「どちらの打席に立っているか」を
+// 文字を読まずに伝えることだけで、構えを描き込む必要はない。バットは
+// ゾーン側へ張り出してマーカーと重なるし、バットを消したまま腕だけ残すと
+// 何かを指しているように見える。そのぶん**身体を一回り大きく**して、
+// 左右どちらかが遠目でも分かるようにしてある。
+// translate は x=50 での鏡映（x' = 100 - s·x）。scale を変えたらここも変わる
 function BatterSilhouette({ onRight }) {
   return (
     <g opacity="0.16" fill="#93c5fd"
-      transform={onRight ? 'translate(103,0) scale(-0.82,0.82)' : 'scale(0.82,0.82)'}>
-      {/* バット */}
-      <polygon points="20,24 29,3 32.5,5 23.5,26" />
-      {/* 腕 */}
-      <polygon points="13,28 21,21 23.5,24 15.5,31" />
+      transform={onRight ? 'translate(100,0) scale(-0.95,0.95)' : 'scale(0.95,0.95)'}>
       {/* 頭（ヘルメット） */}
       <circle cx="12" cy="17" r="6.2" />
       <path d="M5.5,17 h13 a1,1 0 0 1 0,2.6 h-13 z" />
