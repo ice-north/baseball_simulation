@@ -3,7 +3,7 @@
 // 野球シミュレーションの物理計算と判定ロジック
 // ============================================================
 import { PITCHING_FORM_EFFECTS } from './utils/constants.js';
-import { BALL_EFFECTS } from './utils/constants.js';
+import { BALL_EFFECTS, formPitchBonus } from './utils/constants.js';
 
 // ============================================================
 // 球種の効果を物理エンジンへ繋ぐ係数（BALL_EFFECTS → 物理）
@@ -127,7 +127,8 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     const lv = pitch.level / 100;
     // ツーシームのように whiffBonus が負の球種は逆に当てやすくなる
     timingWindow *= (1 - (ballEffect.whiffBonus || 0) * BALL_WHIFF_W * lv
-      * breakEfficiency(pitchVelocity) * (1 - meetDeceptionResistance));
+      * breakEfficiency(pitchVelocity) * formPitchBonus(pitcher.form, pitch.type)
+      * (1 - meetDeceptionResistance));
   }
 
   // 回転数によるタイミング窓補正（MLB Statcast準拠）
@@ -215,7 +216,8 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
     const weakEff = BALL_EFFECTS[pitch.type];
     if (weakEff && pitch.level) {
       const weakness = (weakEff.weakBonus || 0) * (pitch.level / 100)
-        * breakEfficiency(pitchVelocity) * (1 - meetQuality * 0.5);
+        * breakEfficiency(pitchVelocity) * formPitchBonus(pitcher.form, pitch.type)
+        * (1 - meetQuality * 0.5);
       exitVelocity -= weakness * BALL_WEAK_W;
     }
 
@@ -375,7 +377,7 @@ export const calculateBattedBallPhysics = (batter, pitcher, pitch, physicsResult
   const gbEff = BALL_EFFECTS[pitch.type];
   const ballGroundAdj = gbEff
     ? -(gbEff.groundballBonus || 0) * ((pitch.level ?? 50) / 100)
-      * breakEfficiency(pitchVelocity) * BALL_GB_W
+      * breakEfficiency(pitchVelocity) * formPitchBonus(pitcher.form, pitch.type) * BALL_GB_W
     : 0;
   // 速球で差し込まれるとゴロになりやすい（NPBデータ: 160+で50.7%GB）
   let velocityAngleAdj = 0;

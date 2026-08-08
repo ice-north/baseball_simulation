@@ -150,7 +150,7 @@ export const PITCHING_FORM_EFFECTS = {
 export const FORM_PITCH_SYNERGY = {
   overhand: ['curve', 'fork', 'splitter', 'knuckle'],      // 縦変化
   threeQuarter: [],                                         // すべて平均的
-  sidearm: ['slider', 'shoot', 'cutter', 'twoSeam'],       // 横変化
+  sidearm: ['slider', 'shoot', 'cutter', 'twoSeam', 'sinker'], // 横変化。シンカーはサイドの武器でもある
   submarine: ['sinker', 'curve', 'palm']                    // 浮き上がり系
 };
 
@@ -219,6 +219,28 @@ export const sortBenchByPosition = (players) =>
  * judgeFielderReach のゴロ捕球率と両方効くので、ゴロの較正を変えたら測り直すこと。
  */
 export const DP_BASE = 34;
+
+/**
+ * フォームと球種の相性が**試合の効きに与える倍率**。
+ *
+ * ⚠ `FORM_PITCH_SYNERGY` は長らく**キャンプの成長倍率と習得成功率にしか
+ * 効いていなかった**。そのため同じレベルで揃えると
+ *   サイド＋シンカー(適性) 2.670 対 サイド＋フォーク(適性外) 2.643
+ * と適性が結果に一切出ず、「サイド・アンダースローはシンカーが武器」という
+ * 設計が球速ペナルティ（アンダーは×0.92）だけ受けて損をする形になっていた。
+ *
+ * 適性球はよく曲がり、適性外の球は曲がりきらない。これで
+ * 「球速は落ちるが適性球はよく効く」というトレードオフが成立する。
+ * スリークォーターは適性リストが空＝すべて平均（倍率1.0）。
+ */
+const FORM_SYNERGY_ON = 1.30;
+const FORM_SYNERGY_OFF = 0.88;
+export const formPitchBonus = (form, type) => {
+  if (!type || type === 'straight') return 1;
+  const list = FORM_PITCH_SYNERGY[form];
+  if (!list || !list.length) return 1;
+  return list.includes(type) ? FORM_SYNERGY_ON : FORM_SYNERGY_OFF;
+};
 
 /**
  * 変化球の球速減（km/h）。**2エンジンで共有すること**。
