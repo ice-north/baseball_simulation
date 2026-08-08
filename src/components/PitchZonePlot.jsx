@@ -120,8 +120,11 @@ function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, sca
   const w = 1.6 * scale;
   const fill = filled ? color : '#0b0f19';
   const common = { fill, stroke: color, strokeWidth: w, strokeLinejoin: 'round' };
-  // 三角は同じ外接円でも面積が小さいので、数字が収まるよう少し大きく取る
-  const t = r * 1.18;
+  // 三角は同じ外接円でも面積が小さいので、数字が収まるよう少し大きく取る。
+  // ⚠ 大きくしすぎると〇のストレートより目立って球種の重みが揃わない。
+  // 1.18 では2桁（10球目以降）が輪郭に触れていたので、枠は 1.10 に詰めて
+  // **2桁のときだけ数字を小さくする**（1桁は従来どおりの大きさ）。
+  const t = r * 1.10;
   const dir = TRI_DIR[shape];
   let body;
   if (dir) {
@@ -142,7 +145,7 @@ function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, sca
     <g>
       {body}
       {label !== '' && (
-        <text x={tx} y={ty} fontSize={r * 1.15} fontWeight="bold"
+        <text x={tx} y={ty} fontSize={r * (String(label).length >= 2 ? 0.95 : 1.15)} fontWeight="bold"
           fill={filled ? '#0b0f19' : color} textAnchor="middle" dominantBaseline="central">
           {label}
         </text>
