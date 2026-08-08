@@ -116,7 +116,11 @@ const pitchShape = (t, leftHanded) => {
 // 中に入れるぶんマーカーを大きくする必要があるので、形（球種）は
 // 数字が収まるサイズで描く。
 function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, scale = 1, label = '' }) {
-  const r = 7.0 * scale;
+  // 基準半径。**マーカーの実寸を決めるのはここだけ**（`mk` が枠の大きさを
+  // 打ち消すので、枠を広げてもマーカーは大きくならない）。
+  // 打席が長引くと点が密集して図が狭く見えるので、三角と同じ幅で1段階詰めた
+  // （7.0 → 6.5。168px 表示で直径 16.8px → 15.6px）。
+  const r = 6.5 * scale;
   const w = 1.6 * scale;
   const fill = filled ? color : '#0b0f19';
   const common = { fill, stroke: color, strokeWidth: w, strokeLinejoin: 'round' };
