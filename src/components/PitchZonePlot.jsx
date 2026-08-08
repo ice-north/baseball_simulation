@@ -23,6 +23,8 @@
 // 描画のたびに乱数を引くと、再レンダリングごとに点が動いてしまう。
 // ============================================================
 
+import { PITCH_AXIS_SIDE } from '../game/pitchShape.js';
+
 const SIZE = 5;                       // 5×5セル
 const PAD = 0.55;                     // グリッド外（col=-1 や 5）を置く余白（セル単位）
 const SPAN = SIZE + PAD * 2;          // 描画範囲（セル単位）
@@ -39,25 +41,38 @@ const place = (v, jitter) => {
 //   〇 ストレート
 //   △ カーブ
 //   ▽ 落ちる球（フォーク・チェンジアップ・パーム・ナックル・スプリッター）
-//   ◁▷ 横に曲がる球
+//   ◁▷ 横に逃げる球
+//   ◣◢ 横に逃げながら落ちる球（シンカー）
 //
 // 横変化の向きは**投手の利き腕で逆になる**。画面は投手視点なので
 // 画面左 = 一塁側 / 画面右 = 三塁側。
 //   右投手 … グラブ側は一塁側 → スライダー系は ◁ / シュート系は ▷
 //   左投手 … グラブ側は三塁側 → スライダー系は ▷ / シュート系は ◁
-// 下の表は右投手を基準に持ち、左投手のときだけ左右を入れ替える。
-const SHAPE_BY_PITCH = {
+//
+// ⚠ **どちら側に逃げるかを手書きの表で持たないこと**。ここに独自の表を
+// 置いていたため `PITCH_AXIS_SIDE` と食い違い、**腕側(+0.8)のシンカーが
+// グラブ側のスライダーと同じ ◁ になっていた**（右投手のシンカーは
+// 三塁側へ逃げながら落ちるので ◢ が正しい）。向きは pitchShape.js を正とし、
+// ここでは「縦に落ちるかどうか」の分類だけを持つ。
+const SHAPE_FAMILY = {
   straight: 'circle',
   curve: 'up',
   fork: 'down', splitter: 'down', changeup: 'down', palm: 'down', knuckle: 'down',
-  slider: 'left', cutter: 'left', sinker: 'left',
-  shoot: 'right', twoSeam: 'right',
+  // 'side' = 横に逃げる / 'sideDown' = 逃げながら落ちる（PITCH_AXIS_VERTICAL が高い）
+  slider: 'side', cutter: 'side', shoot: 'side', twoSeam: 'side',
+  sinker: 'sideDown',
 };
 export const PITCH_SHAPE_LEGEND = [
   ['circle', 'ストレート'], ['up', 'カーブ'], ['down', '落ちる球'],
-  ['left', 'スライダー系'], ['right', 'シュート系'],
+  ['left', 'スライダー系'], ['right', 'シュート系'], ['downRight', 'シンカー'],
 ];
-const mirrorShape = (s) => (s === 'left' ? 'right' : s === 'right' ? 'left' : s);
+
+// 三角の向き（画面座標。x+ = 三塁側 / y+ = 下）。circle はここに無い
+const D = Math.SQRT1_2;
+const TRI_DIR = {
+  up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0],
+  downLeft: [-D, D], downRight: [D, D],
+};
 
 // 【色＝結果】ボール=緑 / ストライク=黄 / アウト=赤 / 安打=白。
 // 塗りつぶしは「スイングした」ことを表すので、黄の中でも
@@ -86,8 +101,14 @@ export const RESULT_COLOR_LEGEND = [
 
 const resultStyle = (t) => RESULT_STYLE[t] || UNKNOWN;
 const pitchShape = (t, leftHanded) => {
-  const s = SHAPE_BY_PITCH[t] || 'circle';
-  return leftHanded ? mirrorShape(s) : s;
+  const fam = SHAPE_FAMILY[t] || 'circle';
+  if (fam !== 'side' && fam !== 'sideDown') return fam;
+  // 腕側(+)かグラブ側(-)かは pitchShape.js の PITCH_AXIS_SIDE を正とする。
+  // 右投手の腕側は三塁側＝画面右、左投手はその逆。
+  const arm = PITCH_AXIS_SIDE[t] ?? 0;
+  const toRight = leftHanded ? arm < 0 : arm > 0;
+  if (fam === 'sideDown') return toRight ? 'downRight' : 'downLeft';
+  return toRight ? 'right' : 'left';
 };
 
 // **何球目かはマーカーの中に書く**（スポーツナビの投球図と同じ）。
@@ -101,15 +122,22 @@ function Marker({ x, y, shape = 'circle', color = '#9ca3af', filled = false, sca
   const common = { fill, stroke: color, strokeWidth: w, strokeLinejoin: 'round' };
   // 三角は同じ外接円でも面積が小さいので、数字が収まるよう少し大きく取る
   const t = r * 1.18;
+  const dir = TRI_DIR[shape];
   let body;
-  if (shape === 'up')         body = <polygon points={`${x},${y - t} ${x + t},${y + t * 0.72} ${x - t},${y + t * 0.72}`} {...common} />;
-  else if (shape === 'down')  body = <polygon points={`${x},${y + t} ${x + t},${y - t * 0.72} ${x - t},${y - t * 0.72}`} {...common} />;
-  else if (shape === 'left')  body = <polygon points={`${x - t},${y} ${x + t * 0.72},${y - t} ${x + t * 0.72},${y + t}`} {...common} />;
-  else if (shape === 'right') body = <polygon points={`${x + t},${y} ${x - t * 0.72},${y - t} ${x - t * 0.72},${y + t}`} {...common} />;
-  else                        body = <circle cx={x} cy={y} r={r} {...common} />;
-  // 三角は重心が中心からずれるので数字の位置を寄せる
-  const ty = shape === 'up' ? y + r * 0.34 : shape === 'down' ? y - r * 0.22 : y;
-  const tx = shape === 'left' ? x + r * 0.20 : shape === 'right' ? x - r * 0.20 : x;
+  if (dir) {
+    // 頂点は向き d の先。底辺は逆側へ 0.72、そこから法線方向へ ±1
+    const [dx, dy] = dir, nx = -dy, ny = dx;
+    body = <polygon {...common} points={
+      `${x + dx * t},${y + dy * t} ` +
+      `${x - dx * t * 0.72 + nx * t},${y - dy * t * 0.72 + ny * t} ` +
+      `${x - dx * t * 0.72 - nx * t},${y - dy * t * 0.72 - ny * t}`} />;
+  } else {
+    body = <circle cx={x} cy={y} r={r} {...common} />;
+  }
+  // 三角は重心が中心からずれるので数字を頂点と逆へ寄せる
+  const back = shape === 'up' ? 0.34 : shape === 'down' ? 0.22 : 0.20;
+  const tx = dir ? x - dir[0] * r * back : x;
+  const ty = dir ? y - dir[1] * r * back : y;
   return (
     <g>
       {body}
