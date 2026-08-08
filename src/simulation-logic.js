@@ -3,7 +3,7 @@
 // 野球シミュレーションの物理計算と判定ロジック
 // ============================================================
 import { PITCHING_FORM_EFFECTS } from './utils/constants.js';
-import { BALL_EFFECTS, formPitchBonus } from './utils/constants.js';
+import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop } from './utils/constants.js';
 
 // ============================================================
 // 球種の効果を物理エンジンへ繋ぐ係数（BALL_EFFECTS → 物理）
@@ -32,6 +32,24 @@ export const breakEfficiency = (v) =>
 const FASTBALL_WHIFF_REF = 138;
 const FASTBALL_WHIFF_W = 0.0060;
 const FASTBALL_TYPES = new Set(['straight']);
+
+// 【遅い球は「時間をくれる球」ではない】
+// 基準のタイミング窓は `1000 / (球速/3.6)` なので、**遅い球ほど窓が広い**。
+// これは球速を知っている打者には正しいが、打者は投手の速球にタイミングを
+// 合わせて振り出すので、遅い球は「余裕ができる」のではなく **早く振ってしまう**。
+// 旧実装はこの経路が無く、空振り率の順位が到達球速でほぼ決まっていた:
+//   スプリッター(到達134) 21.5% > スライダー(129) 18.8% > フォーク(125) 15.8%
+//   …3つとも whiffBonus は同じ 0.09。カーブ(120) 6.6% / チェンジアップ(121) 7.0% と、
+//   **遅さが武器の球ほど損をする**逆転が起きていた（実MLBはどちらも31%）。
+// 速球からの落差そのものを欺きとして窓に効かせ、この handicap を打ち消す。
+//
+// ⚠ **落差は「km/h」ではなく「その投手の速球に対する比」で効かせること**。
+// 窓は 1/球速 に比例するので、打ち消すのに必要な量は投手の球速に依存する
+// （速球140kmなら 1km あたり 1/140、122km なら 1/122）。絶対値の係数にすると
+// 独立リーグ（速球122km）で打ち消し切れず、カーブ・チェンジアップだけ
+// 空振りが取れないままだった。1.0 = ちょうど相殺 ＝「タイミングの持ち時間は
+// 実際の球速ではなく、打者が身構えている速球で決まる」。
+const OFFSPEED_WHIFF_K = 1.0;
 
 const BALL_WHIFF_W = 2.2;   // 空振り: タイミング窓を狭める強さ
 const BALL_WEAK_W = 46;     // 凡打誘発: 打球初速を落とす km/h 係数
@@ -123,8 +141,14 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
 
   // 変化球はさらに窓を狭める（軌道予測が難しい、レベルが高いほど曲がる）
   // ミート高打者は変化球にも対応しやすい
+  //
+  // ⚠ ここは**球種を問わない一律の項**なので、大きくすると `whiffBonus` の
+  // 性格を薄めてしまう。0.18 だったころは詰まらせる球（シンカー・シュート・
+  // カッター、実MLBの空振りは 15〜25% でストレート 22% と同等以下）まで
+  // ストレートより空振りが増えていた。**性格は whiffBonus に持たせ、
+  // ここは「ストレートでない」ことの最小限の取り分だけにする**。
   if (pitch.type !== 'straight' && pitch.level) {
-    const breakingBallPenalty = (pitch.level / 100) * 0.18 * (1 - meetDeceptionResistance);  // 最大18%
+    const breakingBallPenalty = (pitch.level / 100) * 0.06 * (1 - meetDeceptionResistance);
     timingWindow *= (1 - breakingBallPenalty);
   }
 
@@ -136,6 +160,17 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   if (FASTBALL_TYPES.has(pitch.type)) {
     const fw = (pitchVelocity - FASTBALL_WHIFF_REF) * FASTBALL_WHIFF_W;
     timingWindow *= (1 - fw * (1 - meetDeceptionResistance));
+  }
+
+  // ⚠ 落差は**球種自身の減速量**から取る。`pitcher.velocity - pitch.velocity` で
+  // 引き算すると、2エンジンで `pitcher.velocity` の意味が違う
+  // （自動シミュ=スタミナ補正後 / 采配モード=素の値）ため揃わない。
+  // 采配モードでは疲れたアンダースローのストレートまで「大きな緩急」に化ける。
+  // `pitchVelocityDrop` は両エンジンが実際の球速を出すのに使っている当の関数。
+  const typeDrop = pitchVelocityDrop(pitch.type, pitch.level ?? 50);
+  if (typeDrop > 0) {
+    const drop = typeDrop / Math.max(80, pitchVelocity + typeDrop);
+    timingWindow *= (1 - drop * OFFSPEED_WHIFF_K * (1 - meetDeceptionResistance));
   }
 
   const ballEffect = BALL_EFFECTS[pitch.type];

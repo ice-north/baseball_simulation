@@ -27,70 +27,70 @@ export const BALL_EFFECTS = {
   },
   slider: {
     name: 'スライダー',
-    whiffBonus: 0.09,
+    whiffBonus: 0.07,
     groundballBonus: 0.05,
     weakBonus: -0.02,
     velocityMinus: 12
   },
   curve: {
     name: 'カーブ',
-    whiffBonus: 0.04,
+    whiffBonus: 0.075,
     groundballBonus: 0.06,
     weakBonus: 0,
     velocityMinus: 23
   },
   fork: {
     name: 'フォーク',
-    whiffBonus: 0.09,
+    whiffBonus: 0.085,
     groundballBonus: 0.06,
     weakBonus: 0.13,
     velocityMinus: 17
   },
   changeup: {
     name: 'チェンジアップ',
-    whiffBonus: 0.03,
+    whiffBonus: 0.07,
     groundballBonus: 0.14,
     weakBonus: 0.02,
     velocityMinus: 21
   },
   sinker: {
     name: 'シンカー',
-    whiffBonus: 0,
+    whiffBonus: -0.04,
     groundballBonus: 0.15,
     weakBonus: 0.23,
     velocityMinus: 8
   },
   shoot: {
     name: 'シュート',
-    whiffBonus: 0,
+    whiffBonus: -0.04,
     groundballBonus: 0.19,
     weakBonus: 0.23,
     velocityMinus: 5
   },
   cutter: {
     name: 'カッター',
-    whiffBonus: 0,
+    whiffBonus: 0.01,
     groundballBonus: 0.17,
     weakBonus: 0.2,
     velocityMinus: 5
   },
   splitter: {
     name: 'スプリッター',
-    whiffBonus: 0.09,
+    whiffBonus: 0.07,
     groundballBonus: 0.05,
     weakBonus: 0.05,
     velocityMinus: 7
   },
   palm: {
     name: 'パーム',
-    whiffBonus: 0.05,
+    whiffBonus: 0.07,
     groundballBonus: 0.07,
     weakBonus: 0.11,
     velocityMinus: 22
   },
   knuckle: {
     name: 'ナックル',
-    whiffBonus: 0.1,
+    whiffBonus: 0.07,
     groundballBonus: 0.02,
     weakBonus: 0.15,
     velocityMinus: 30
