@@ -23,6 +23,16 @@ const BREAK_PEAK = 130;
 export const breakEfficiency = (v) =>
   Math.max(0.60, 1.18 - ((v - BREAK_PEAK) / 50) ** 2 * 0.58);
 
+// 【速球の空振りは球速そのもので決まる】
+// `BALL_EFFECTS.whiffBonus` は「変化による欺き」なのでストレートは 0 だが、
+// 実際のフォーシームは球速で空振りを取る（実MLB: 145km→18% / 153km→24% /
+// 161km→30%。平均22%はこれを均した値）。旧実装は球速→タイミング窓の経路しか
+// なく、実測でストレートの空振り率が 12.6%（実22%）しか出ていなかった。
+// 142km/h を境に、速ければ空振りが増え、遅ければ当てられやすくなる。
+const FASTBALL_WHIFF_REF = 138;
+const FASTBALL_WHIFF_W = 0.0060;
+const FASTBALL_TYPES = new Set(['straight']);
+
 const BALL_WHIFF_W = 2.2;   // 空振り: タイミング窓を狭める強さ
 const BALL_WEAK_W = 46;     // 凡打誘発: 打球初速を落とす km/h 係数
 const BALL_GB_W = 58;       // ゴロ誘発: 打出し角を下げる度数係数
@@ -122,6 +132,12 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   // 従来この値は捕手の球種選択スコアでしか使われておらず、物理エンジンは
   // 読んでいなかった。そのため「スライダーは空振りが取れる」という設定が
   // 結果に一切反映されず、球種はレベルと球速差でしか差が出ていなかった。
+  // 速球は球速が上がるほど空振りが取れる（遅ければ逆に当てられる）
+  if (FASTBALL_TYPES.has(pitch.type)) {
+    const fw = (pitchVelocity - FASTBALL_WHIFF_REF) * FASTBALL_WHIFF_W;
+    timingWindow *= (1 - fw * (1 - meetDeceptionResistance));
+  }
+
   const ballEffect = BALL_EFFECTS[pitch.type];
   if (ballEffect && pitch.level) {
     const lv = pitch.level / 100;

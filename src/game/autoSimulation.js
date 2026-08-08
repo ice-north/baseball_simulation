@@ -853,6 +853,7 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       // 崩されたか（芯品質）を打席の記憶に残す。次の球の振り方に効く
       pushSwingQuality(sequence, physicsResult.isContact ? physicsResult.meetQuality : null);
       if (!physicsResult.isContact) {
+       
         return { type: 'swinging_strike' };
       }
 
