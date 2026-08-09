@@ -396,6 +396,28 @@ export function infieldDefenseOf(defense) {
   return n ? sum / n : 50;
 }
 
+/**
+ * **その球種を持っていること自体の価値**（ストレートのみとの防御率差に相当）。
+ * 上の重みは type × level のグリッド実測への回帰なので、そのまま
+ * 「スカウトがこの変化球をどう評価するか」の物差しに使える。
+ * 場面・守備・フォーム・到達球速に依存する部分は入れない
+ * （それは「今この場面で何を要求するか」の話で、素質の評価ではない）。
+ *
+ * カーブLv100 ≒ 1.20 / カーブLv50 ≒ 0.79 / ツーシームLv100 ≒ 0.72 / Lv0 ≒ 0。
+ */
+export function pitchOwnValue(type, level = 50) {
+  const eff = BALL_EFFECTS[type];
+  if (!eff || type === 'straight') return 0;
+  const lv = clamp(level, 0, 100) / 100;
+  return Math.max(0,
+    LEAD_W_LEVEL * lv
+    + ((eff.whiffBonus || 0) * LEAD_W_WHIFF
+      + (eff.groundballBonus || 0) * LEAD_W_GB
+      + (eff.weakBonus || 0) * LEAD_W_WEAK) * lv
+    + pitchVelocityDrop(type, level) / 100 * LEAD_W_DEPTH
+    - (TYPE_SIGMA[type] || 0) * (1 - lv * 0.5) * 0.74);
+}
+
 function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velocity = 140, infieldDefense = 50) {
   const eff = ballEffects[ball.type] || ballEffects.straight || {};
   const levelFactor = (ball.level ?? 50) / 100;

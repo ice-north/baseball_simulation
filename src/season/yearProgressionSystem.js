@@ -9,6 +9,7 @@ import { processNpbCareers } from '../game/npbCareer.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS, getUtilityScore } from '../utils/constants.js';
+import { pitchOwnValue } from '../game/pitchCalling.js';
 import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates, HIGH_SCHOOL_CLASS_SIZE } from './universityPool.js';
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
@@ -313,7 +314,23 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     if (velocity >= 140) velocityScore += (velocity - 140) * vel140;
     if (velocity >= 150) velocityScore += (velocity - 150) * vel150;
 
-    const breakingScore = bestBreaking * breakW + (arsenalCount >= 3 ? 12 : arsenalCount >= 2 ? 5 : 0);
+    // 【変化球は種類込みで評価する】
+    // 以前は `最高レベル1つ × 重み + 本数ボーナス` で、**球種の違いを見ていなかった**。
+    // 実測では同じLv100でも カーブ1.16 対 ツーシーム0.72 と 0.44 も違う
+    // （緩急の大きい球ほど価値が高い）。スカウトがそこを見ないのは不自然。
+    // `pitchOwnValue` は捕手の球種スコアと**同じ回帰係数**（type × level の
+    // グリッド実測）なので、物差しを二重に作らずに済む。
+    // 2球種目以降は逓減させる（3つ目・4つ目の価値は薄い）。
+    // スケール29.4 は**プール全体の平均が従来と一致する**よう合わせてあり、
+    // 指名の構成比は動かさずに投手間の順位だけが変わる。
+    const OWN_DIMINISH = [1.0, 0.55, 0.30, 0.18, 0.10];
+    const OWN_SCALE = 29.4;
+    const ownValues = breakingBalls
+      .map(a => pitchOwnValue(a.type, a.level || 0))
+      .sort((x, y) => y - x);
+    const breakingScore = ownValues
+      .reduce((sum, v, i) => sum + v * (OWN_DIMINISH[i] ?? 0.06), 0) * OWN_SCALE
+      * (breakW / 0.5);   // 年齢別ウェイト（高校生0.5 / 社会人1.0）は従来どおり掛ける
 
     let rawAbility = velocityScore + control * ctrlW + stamina * staW + breakingScore;
 
@@ -368,7 +385,21 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
 
     // ユーティリティ（守備の幅）を小さく加点。複数守れる選手はプロでも重宝される。
     const utilBonus = getUtilityScore(player) * 0.08; // 最大+8pt
-    const rawAbility = meet * meetW + power * powerW + eye * eyeW + speed * speedW + defense * defW + arm * armW + utilBonus;
+
+    // 【捕手のリードは守備の一部として評価する】
+    // 以前は捕手も meet/power/eye/speed/defense/arm でしか見ておらず、
+    // **リードが完全に盲点**だった（ドラフト評価との相関 -0.074、
+    // 上位30人の平均リード43.4 が全体49.2 を下回るという逆転が起きていた）。
+    // 実測の1点あたりの価値は リード -0.0044 / 捕手守備 -0.0041 とほぼ同じなので、
+    // **守備と同じ重み**で足す。
+    // ⚠ **平均50からの差で足すこと**。絶対値で足すと全捕手に一律 +34pt 乗り、
+    // 上位120人に入る捕手が 14人 → 19人（実NPBは約8%）に膨らむ。
+    // ここで見たいのは「捕手の中でリードが良いか」なので、centering が正しい。
+    const leadScore = player.position === 'catcher'
+      ? ((player.catching?.lead ?? 50) - 50) * defW : 0;
+
+    const rawAbility = meet * meetW + power * powerW + eye * eyeW + speed * speedW
+      + defense * defW + arm * armW + utilBonus + leadScore;
     const abilityScore = rawAbility * potentialMult;
 
     const abilityFactor = Math.min(1.0, rawAbility / 130);
@@ -389,6 +420,7 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
     if (isMature && meet >= 60) reasons.push(`ミート${meet}`);
     if (isMature && defense >= 65) reasons.push(`守備${defense}`);
     if (isMature && eye >= 55) reasons.push(`選球眼${eye}`);
+    if (player.position === 'catcher' && (player.catching?.lead ?? 0) >= 60) reasons.push(`リード${player.catching.lead}`);
     if (age <= 22) reasons.push(`${age}歳の将来性`);
   }
 
