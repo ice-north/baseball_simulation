@@ -1323,6 +1323,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
             // 場面: 走者一塁ならゴロ系、走者三塁なら空振り系の決め球
             objective: objective.goal,
+            // 到達球速で曲がりの効き(breakEfficiency)が変わるので投手の速球を渡す
+            velocity: (pitcher.velocity || 140) + velocityPenalty,
           });
           pitchChoice = Math.max(0, pitcher.pitches.indexOf(chosen));
         }

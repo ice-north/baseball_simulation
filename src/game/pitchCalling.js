@@ -22,10 +22,11 @@
 //   ストライク率 62-63%（加藤貴之クラスで75%）/ 四球率 8.5% / 三振率 19-22%
 // ============================================================
 
-import { BALL_EFFECTS, PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY } from '../utils/constants.js';
+import { BALL_EFFECTS, formPitchBonus, pitchVelocityDrop } from '../utils/constants.js';
+import { breakEfficiency } from '../simulation-logic.js';
 import { resolvePitchCell, pickTargetCell } from './pitchZone.js';
 import { objectiveAimShift, objectiveBallWeight } from './pitchSituation.js';
-import { naturalCourse, shapeSigma } from './pitchShape.js';
+import { naturalCourse, shapeSigma, TYPE_SIGMA } from './pitchShape.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -326,21 +327,47 @@ export const BALL_ZONE_PENALTY = { meet: -4, power: -2 };
  * 球種1つの「効き」をスコア化する。
  * 球種固有の効果(空振り/ゴロ/凡打誘発) × 球種レベル + 投球フォームとの相性。
  */
-function scoreBall(ball, form, strategy, ballEffects, objective = 'normal') {
+// 【球種の価値の重み】捕手が「どの球が効くか」を測る物差し。
+//
+// ⚠ 以前は `whiff + gb + weak` の**単純合計**だった。つまり三振とゴロを同じ価値と
+// 見なしており、実測の防御率差と**順位相関 -0.500**（＝良い捕手ほど価値の低い球を
+// 要求する）という逆転が起きていた。捕手の1位はシュート（実測7位）、
+// カーブ（実測1位）は8位。
+//
+// 最大の欠落は **`velocityMinus`（緩急）が入っていなかった**こと。
+// `OFFSPEED_WHIFF_K` で「速球からの落差そのものが欺き」になったので、
+// 落差は今や最も強い価値の源泉（回帰係数 0.67 で最大）。
+// 実測9球種への回帰から重みを取り直して順位相関 **+0.917**。
+//   ゴロは「打球になる」ぶん三振より価値が低い（BABIP .240 なので確実な
+//   アウトではない）。gb を下げ、whiff と落差を上げるのが正しい向き。
+const LEAD_W_WHIFF = 1.0;
+const LEAD_W_GB = 0.2;
+const LEAD_W_WEAK = 0.3;
+const LEAD_W_DEPTH = 1.5;   // velocityMinus / 100 に掛ける
+
+function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velocity = 140) {
   const eff = ballEffects[ball.type] || ballEffects.straight || {};
   const levelFactor = (ball.level ?? 50) / 100;
-  let score = ((eff.whiffBonus || 0) + (eff.groundballBonus || 0) + (eff.weakBonus || 0)) * levelFactor;
-  // 未熟な球種は制球を損なう（breakingControlPenalty = (100-level)×0.20）。
+  // ⚠ **物理エンジンと同じ倍率を掛ける**。`calculatePhysicsContact` は
+  // whiff/gb/weak に `breakEfficiency(到達球速)` と `formPitchBonus(フォーム,球種)`
+  // を掛けている。捕手側がこれを見ないと、サイド・アンダースローの投手で
+  // シンカーを過小評価し、遅い投手で曲がりの落ちた球を過大評価する。
+  const arrival = velocity - pitchVelocityDrop(ball.type, ball.level ?? 50);
+  const mult = breakEfficiency(arrival) * formPitchBonus(form, ball.type);
+  let score = ((eff.whiffBonus || 0) * LEAD_W_WHIFF
+    + (eff.groundballBonus || 0) * LEAD_W_GB
+    + (eff.weakBonus || 0) * LEAD_W_WEAK) * levelFactor * mult;
+  // 緩急。落差はレベルにほぼ依存しない（pitchVelocityDrop 参照）ので levelFactor を掛けない
+  score += (eff.velocityMinus || 0) / 100 * LEAD_W_DEPTH;
+  // 未熟な球種は制球を損なう（LEVEL_SIGMA_W）。
   // これを score に入れないと、捕手が「効くが投げられない球」を要求してしまい、
   // 四球が増えて良い捕手ほど成績が悪化する（実測 BB/9 3.90→4.12）。
   score -= (1 - levelFactor) * 0.20;
-
-  // フォーム相性: 縦変化はオーバーハンド、横変化はサイドスロー等
-  const formEffect = PITCHING_FORM_EFFECTS[form] || PITCHING_FORM_EFFECTS.threeQuarter || {};
-  if ((FORM_PITCH_SYNERGY[form] || []).includes(ball.type)) {
-    if (VERTICAL_PITCHES.includes(ball.type)) score += (formEffect.verticalBreakBonus || 0) * levelFactor;
-    if (HORIZONTAL_PITCHES.includes(ball.type)) score += (formEffect.horizontalBreakBonus || 0) * levelFactor;
-  }
+  // 球種そのものの投げにくさ（TYPE_SIGMA。ナックル0.13 / フォーク0.06 …）。
+  // これも σ の項なので上と同じ換算（LEVEL_SIGMA_W 0.27 → 0.20 ＝ ×0.74）。
+  // 入れないと捕手がナックルを無条件に最良と見なし、リードが高いほど四球が増える
+  // （実測 リード18→81 の BB/9 が +0.210 → +0.275 に悪化していた）。
+  score -= (TYPE_SIGMA[ball.type] || 0) * (1 - levelFactor * 0.5) * 0.74;
 
   // 投球方針: 三振狙いは空振りを、打たせて取るならゴロを重く見る
   if (strategy === 'strikeout') score += (eff.whiffBonus || 0) * 0.8 * levelFactor;
@@ -355,8 +382,6 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal') {
   return score;
 }
 
-const VERTICAL_PITCHES = ['curve', 'fork', 'splitter', 'knuckle', 'sinker', 'palm'];
-const HORIZONTAL_PITCHES = ['slider', 'shoot', 'cutter', 'twoSeam'];
 
 /**
  * 捕手が球種を要求する。
@@ -377,7 +402,7 @@ const HORIZONTAL_PITCHES = ['slider', 'shoot', 'cutter', 'twoSeam'];
 export function selectPitchType({
   arsenal = [], catcherLead = 50, form = 'threeQuarter',
   strategy = 'normal', strikes = 0, ballEffects = BALL_EFFECTS,
-  lastWasBreaking = null, objective = 'normal',
+  lastWasBreaking = null, objective = 'normal', velocity = 140,
 } = {}) {
   const list = arsenal.length ? arsenal : [{ type: 'straight', level: 50 }];
   const straight = list.find(a => a.type === 'straight') || { type: 'straight', level: 50 };
@@ -397,7 +422,7 @@ export function selectPitchType({
   // どの変化球にするか。リードが高いほど「効く球」を選べる
   if (Math.random() < clamp(catcherLead / 100, 0, 1)) {
     const scored = breaking
-      .map(b => ({ ball: b, score: scoreBall(b, form, strategy, ballEffects, objective) }))
+      .map(b => ({ ball: b, score: scoreBall(b, form, strategy, ballEffects, objective, velocity) }))
       .sort((a, b) => b.score - a.score);
     const top = scored.slice(0, Math.max(1, Math.ceil(scored.length / 2)));
     return top[Math.floor(Math.random() * top.length)].ball;

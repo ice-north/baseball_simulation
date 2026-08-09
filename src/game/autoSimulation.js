@@ -726,6 +726,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       lastWasBreaking: lastPitch ? lastPitch.isBreaking : null,
       // 場面: 走者一塁ならゴロ系、走者三塁なら空振り系の決め球を選ぶ
       objective: objective.goal,
+      // 到達球速で曲がりの効き(breakEfficiency)が変わるので投手の速球を渡す
+      velocity: effectiveVelocity,
     });
 
 
