@@ -28,7 +28,8 @@
 // これなら生成側を1行も触らずに全プールの全選手が持てて、既存セーブもそのまま動く。
 // ============================================================
 
-import { colAxis, rowAxis, cellWeakness } from './pitchZone.js';
+import { colAxis, rowAxis, cellWeakness, cellQuality } from './pitchZone.js';
+import { getPitchQualityEffect } from './pitchCalling.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -92,6 +93,25 @@ const TENDENCY_MID = 10;
 const tendencyInside = (b) =>
   b ? (((b.meet ?? 50) - (b.power ?? 50)) - TENDENCY_MID) / 100 * TENDENCY_W : 0;
 
+// 【高低の幅は内外角と揃える】
+// `inside` はハッシュ(σ0.344)に `tendencyInside`（ミートとパワーの差）が
+// 乗るので実測σ0.408、`low` はハッシュだけなので0.344しかなかった。
+// さらに inside の上乗せは選手のタイプと相関する＝**打者を並べると内外角の
+// 傾きだけが systematic に見える**ため、「得意コースが内か外かしか無い」
+// という印象になっていた。高低にも同じ幅を持たせる。
+// ⚠ 母集団の平均は0のまま（上下対称）なのでリーグ成績は動かない。
+const LOW_W = 1.19;
+
+// 【四隅が苦手な打者が多数派】
+// `middle` は「ど真ん中の苦手さ」で平均0だった。つまりリーグの半分は
+// 甘い球を打ち損じ、四隅と真ん中の得手不得手が五分だった。
+// 実際は**ほとんどの打者が真ん中を最も打てて、隅へ行くほど打てない**。
+// 平均を負（＝真ん中に強い＝相対的に四隅が苦手）へずらす。
+// -0.35 / σ0.344 なので「真ん中より隅が得意」な打者は約14%しか残らない。
+// ⚠ 平均をずらせるのは `cellWeakness` が RADIAL_MID で centering されているから。
+//    そちらを外すとリーグ全体が動く。
+const MIDDLE_BIAS = -0.35;
+
 export function getZoneProfile(player) {
   if (!player) return NEUTRAL_ZONE_PROFILE;
   // 明示的に持っていればそれを優先する（将来の成長・矯正や検証用の差し替え）
@@ -105,9 +125,9 @@ export function getZoneProfile(player) {
   const r2 = (v) => Math.round(clamp(v, -1, 1) * 100) / 100;
   const profile = {
     inside: r2(bell(key, 0x01000193) + tendencyInside(b)),
-    low: r2(bell(key, 0x7feb352d)),
-    // ど真ん中の得手不得手。これが無いと中心は全打者ぴったり0になる（下記）
-    middle: r2(bell(key, 0x2545f491)),
+    low: r2(bell(key, 0x7feb352d) * LOW_W),
+    // 真ん中↔四隅の得手不得手。これが無いと中心は全打者ぴったり0になる（下記）
+    middle: r2(bell(key, 0x2545f491) + MIDDLE_BIAS),
   };
   cache.set(player, { profile, m: b?.meet ?? -1, p: b?.power ?? -1 });
   return profile;
@@ -176,22 +196,37 @@ export function describeZoneProfile(profile) {
   };
   push(profile.inside, '内角に弱い', '外角に弱い');
   push(profile.low, '低めに弱い', '高めに弱い');
-  // ど真ん中。「甘い球を仕留められるか」なので言い回しを変える
-  push(profile.middle, '甘い球を打ち損じる', '失投を逃さない');
+  // 真ん中↔四隅。「甘い球を仕留められるか」なので言い回しを変える。
+  // ⚠ **平均(MIDDLE_BIAS)からのズレで言うこと**。真ん中に強いのが多数派なので、
+  //   生の値で判定すると全打者が「失投を逃さない」になって情報量が消える
+  push(profile.middle - MIDDLE_BIAS, '甘い球を打ち損じる', '失投を逃さない');
   return out;
 }
 
 /**
  * 5×5の各セルの得手不得手を返す（表示用のヒートマップ）。
  * 値は -1（最も苦手）〜 +1（最も得意）。
+ *
+ * `withLocation` で**そのコース自体の打ちにくさ**（`getPitchQualityEffect` の
+ * 失投 +5 / 隅 -7 / 枠外 -10）を混ぜるかどうかを選ぶ。用途が違う:
+ *
+ *   選手詳細（true）  … 「この打者はどこを打てるか」の資料。コースそのものの
+ *                       難しさを外すと、平均的な打者の四隅が中立に見えてしまい
+ *                       「隅は誰でも苦手」という当たり前が絵に出ない
+ *   試合画面（false） … 投球図に重ねる。**この打者固有の偏り**が知りたいので、
+ *                       全打者に共通の地形を混ぜると全員同じ絵になって意味が消える。
+ *                       塗りが濃くなるとマーカーも読みにくい
  */
-export function zoneHeatmap(profile) {
+export function zoneHeatmap(profile, { withLocation = false } = {}) {
   const p = profile || NEUTRAL_ZONE_PROFILE;
   const grid = [];
   for (let row = 0; row < 5; row++) {
     const line = [];
     for (let col = 0; col < 5; col++) {
-      line.push(-cellWeakness(p, col, row));
+      // 質による実効ミートの増減を weakness の単位に戻して足す
+      const locW = withLocation
+        ? -getPitchQualityEffect(cellQuality(col, row)).meet / MEET_SWING : 0;
+      line.push(clamp(-(cellWeakness(p, col, row) + locW), -1, 1));
     }
     grid.push(line);
   }

@@ -17,7 +17,10 @@ const zoneCellClass = (v) =>
 
 const ZoneHeatGrid = ({ player }) => {
   const profile = getZoneProfile(player);
-  const grid = zoneHeatmap(profile);
+  // 資料としての見え方なので**コースそのものの難しさ込み**。
+  // これが無いと平均的な打者の四隅が中立に見えてしまう（試合画面の重ね塗りは逆に
+  // この打者固有の偏りだけが欲しいので混ぜない。batterZone.js の zoneHeatmap 参照）
+  const grid = zoneHeatmap(profile, { withLocation: true });
   const notes = describeZoneProfile(profile);
   return (
     <div className="bg-gray-700 rounded p-3 mb-4">

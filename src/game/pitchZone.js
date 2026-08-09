@@ -78,6 +78,13 @@ export const rowAxis = (row) => clamp(row - 2, -1, 1);
 export const radial = (col, row) =>
   Math.min(1, Math.hypot(colAxis(col), rowAxis(row)) / Math.SQRT2);
 
+// 実際に投げられた球の radial の平均（8チーム×110試合×2シード・43万球で実測）。
+// **ここを引かないと `middle` の平均をずらした瞬間にリーグ全体が動く**。
+// 中心が0.82と高いのは、colAxis/rowAxis が3段階に丸められるため25セル中16セルが
+// radial=1 になるから。`middle` の平均を負にして「四隅が苦手な打者が多数派」に
+// してあるので、centering が無いと全打者が一律に有利／不利になる。
+const RADIAL_MID = 0.82;
+
 /**
  * そのセルが打者にとってどれだけ苦手か（-1=得意 〜 +1=苦手）。
  * @param {{inside:number, low:number, middle:number}} profile
@@ -87,7 +94,8 @@ export function cellWeakness(profile, col, row) {
   const { inside = 0, low = 0, middle = 0 } = profile;
   if (!inside && !low && !middle) return 0;
   return clamp(
-    inside * colAxis(col) + low * rowAxis(row) + middle * (1 - radial(col, row)),
+    inside * colAxis(col) + low * rowAxis(row)
+      + middle * (RADIAL_MID - radial(col, row)),
     -1, 1);
 }
 
