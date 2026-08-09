@@ -1306,6 +1306,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           // 持ち球の「幅」で読まれにくさが決まる（arsenal.js）
           arsenalSize: effectiveArsenalSize(pitcher.pitches),
           batterEye: batter.eye,
+          // 崩された直後は球種を読むどころではない（pitchSequence.js）
+          fooled: fooledLevel(sequence),
         });
 
         // 捕手のリードで球種を選ぶ（自動シミュレーションと共有。pitchCalling.js）。
@@ -1325,6 +1327,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             objective: objective.goal,
             // 到達球速で曲がりの効き(breakEfficiency)が変わるので投手の速球を渡す
             velocity: (pitcher.velocity || 140) + velocityPenalty,
+            // 崩した直後は球速帯を替えずに畳み掛けてよい
+            fooled: fooledLevel(sequence),
           });
           pitchChoice = Math.max(0, pitcher.pitches.indexOf(chosen));
         }
@@ -1422,6 +1426,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           isBreaking: isBreakingPitch, breakingLevel: selectedBall.level || 50,
           // 打者は自分の得意コースをより振る
           zoneWeakness: weakness,
+          // 崩された打者はゾーンを広げる（pitchCalling.js）
+          fooled: fooledLevel(sequence),
         });
         // 捕手のリードは打者の狙いを外す（スイング判断を鈍らせる）
         swingProb *= 1 - (catcher.lead / 100) * 0.08;

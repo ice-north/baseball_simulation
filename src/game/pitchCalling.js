@@ -173,16 +173,32 @@ export function resolvePitchLocation({
 /**
  * 打者がスイングする確率。采配モード（打撃方針・エンドラン等の補正を掛ける）で使う。
  */
+// 【崩された打者はゾーンを広げる】
+// 物理側は「崩されるとパワーが乗らない」(powerTransferRate)を、判断側は
+// 「崩されたら当てにいく」(swingType.js)を既に持っていた。**抜けていたのは
+// 「守勢に入った打者はボール球に手を出す」**——泳がされた次の球で、打者が
+// 平然といつもどおりの見極めをしていた。
+//
+// これがあると、捕手の**既存の**誘い球が崩した直後にだけよく効くようになる。
+// ⚠ `aim` の配分（zone/edge/chase）は動かさないこと。配分を動かす案は過去に
+// 7通り試して全て四球のコストが利得を上回った。**打者側の見極めを変える**なら
+// 捕手が余分にボール球を投げるわけではないので、四球のコストが出ない。
+const FOOLED_CHASE = 0.06;    // 枠のすぐ外（釣り球）に手を出す
+const FOOLED_WASTE = 0.022;    // 明らかなボール球にも多少手が出る
+const FOOLED_PROTECT = 0.03;  // ゾーン内も「守って」振る
+
 export function swingProbability({
   inZone, quality, strikes = 0, batterEye = 50, pitcherControl = 50,
-  isBreaking = false, breakingLevel = 50, zoneWeakness = 0,
+  isBreaking = false, breakingLevel = 50, zoneWeakness = 0, fooled = 0,
 } = {}) {
+  const f = clamp(fooled, 0, 1);
   let p;
   if (inZone) {
     p = quality === 'meatball' ? 0.76 : quality === 'good' ? 0.64
       : quality === 'corner' ? 0.56 : 0.47;
     p += strikes * 0.10;                       // 追い込まれたら振る
     p += (50 - batterEye) * 0.0006;            // 選球眼が低いと闇雲に振る（効果は小）
+    p += f * FOOLED_PROTECT;
   } else if (quality === 'edge') {
     // ゾーンすぐ外の釣り球。実データのchase率28-31%の主役
     p = 0.44 - batterEye * 0.0036 + strikes * 0.09;
@@ -190,9 +206,11 @@ export function swingProbability({
     // 加藤貴之のようにストライク率70%超に達する投手はこの経路で四球が減る
     p += cc(pitcherControl) * 0.060;
     if (isBreaking) p += breakingLevel * 0.0010;
+    p += f * FOOLED_CHASE;
   } else {
     // 明らかなボール球。よほど選球眼が悪くないと振らない
     p = 0.11 - batterEye * 0.0009 + strikes * 0.04;
+    p += f * FOOLED_WASTE;
   }
   // 【打者は自分の得意コースをより振る】
   // 「得意コースは強く打てる」(段階2)はあったのに「得意コースだから振る」が無く、
@@ -402,7 +420,7 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velo
 export function selectPitchType({
   arsenal = [], catcherLead = 50, form = 'threeQuarter',
   strategy = 'normal', strikes = 0, ballEffects = BALL_EFFECTS,
-  lastWasBreaking = null, objective = 'normal', velocity = 140,
+  lastWasBreaking = null, objective = 'normal', velocity = 140, fooled = 0,
 } = {}) {
   const list = arsenal.length ? arsenal : [{ type: 'straight', level: 50 }];
   const straight = list.find(a => a.type === 'straight') || { type: 'straight', level: 50 };

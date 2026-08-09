@@ -728,6 +728,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       objective: objective.goal,
       // 到達球速で曲がりの効き(breakEfficiency)が変わるので投手の速球を渡す
       velocity: effectiveVelocity,
+      // 崩した直後は球速帯を替えずに畳み掛けてよい（pitchSequence.js）
+      fooled: fooledLevel(sequence),
     });
 
 
@@ -799,6 +801,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         // **何球種持っているかではなく、どれだけ幅があるか**（arsenal.js）。
         // 似た球（スライダー＋カット等）は同じ引き出しとして数えない
         arsenalSize: effectiveArsenalSize(arsenal), batterEye: batter.eye,
+        // 崩された直後は球種を読むどころではない
+        fooled: fooledLevel(sequence),
       }),
     });
     const guessLevel = Math.max(-2, Math.min(2, aiGuess.level + (locationRead ? 1 : 0)));
@@ -816,6 +820,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       zoneWeakness: weakness,
       // B型は張っていないコースを見送る
       approachMult: aiGuess.swingMult ?? 1,
+      // 崩された打者はゾーンを広げる（pitchCalling.js）
+      fooled: fooledLevel(sequence),
     });
 
     // 打球の解決。投球位置の質（甘い球=meatball / 際どい球=edge / ボール球）で
