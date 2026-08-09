@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { TEAMS_DATA } from '../teams-data.js';
 import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityRank, getRankColor } from '../utils/constants.js';
-import { cleanupPlayerReferences } from '../season/yearProgressionSystem.js';
+import { cleanupPlayerReferences, draftAbilityScore } from '../season/yearProgressionSystem.js';
+import { toCommonValue } from '../game/playerValue.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 
@@ -122,26 +123,15 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
 
   if (!myTeam) return <div className="p-8 text-white">チームが見つかりません</div>;
 
+  // ⚠ **独自の評価式を持たないこと**。以前はここに投手／野手それぞれの式があり、
+  // ドラフト評価（checkNPBDraftEligibility）とも別物だった。投打のスケールが
+  // 揃っていないと等価交換にならないので、共通の物差し（playerValue.js）を使う。
+  // 表示の都合で 0 未満にならないよう +100 の下駄を履かせてあるが、
+  // 差し引き（等価かどうか）には影響しない。
   const getPlayerValue = (player) => {
-    const isPitcher = player.position === 'pitcher';
     const age = player.age || 20;
     const ageBonus = age <= 22 ? 15 : age <= 25 ? 8 : age <= 28 ? 0 : age <= 32 ? -5 : -15;
-    if (isPitcher) {
-      const v = player.pitching?.velocity || 0;
-      const c = player.pitching?.control || 0;
-      const s = player.pitching?.stamina || 0;
-      const arsenal = player.pitching?.arsenal || [];
-      const best = arsenal.filter(a => a.type !== 'straight').reduce((m, a) => Math.max(m, a.level || 0), 0);
-      return Math.max(0, (v - 130) * 2) + c + s * 0.5 + best * 0.5 + ageBonus;
-    } else {
-      const m = player.batting?.meet || 0;
-      const p = player.batting?.power || 0;
-      const e = player.batting?.eye || 0;
-      const sp = player.physical?.speed || 0;
-      const d = player.fielding?.defense || 0;
-      const a = player.physical?.arm || 0;
-      return m + p + e * 0.5 + sp * 0.3 + d * 0.3 + a * 0.3 + ageBonus;
-    }
+    return 100 + toCommonValue(player, draftAbilityScore(player)) + ageBonus;
   };
 
   const getValueColor = (val) => {

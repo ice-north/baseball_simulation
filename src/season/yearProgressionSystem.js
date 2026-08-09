@@ -255,6 +255,106 @@ export function updateAllPlayerAges(allTeams) {
  * @param {number} awardBonus - シーズン個人成績ボーナス（デフォルト0）
  * @returns {Object} - { isDraftEligible: boolean, reasons: string[], totalScore: number }
  */
+/**
+ * ドラフト評価の「能力点」だけを返す（年齢・知名度・成長力は含まない）。
+ * **ドラフトとトレードで同じ物差しを使う**ために切り出してある。
+ * ここに独自の評価式をもう1つ書かないこと。
+ */
+export function draftAbilityScore(player) {
+  const age = player.age || 20;
+  const isYoung = age <= 19;
+  const isMature = age >= 22;
+  if (player.position === 'pitcher') {
+    const velocity = player.pitching?.velocity || 0;
+    const control = player.pitching?.control || 0;
+    const stamina = player.pitching?.stamina || 0;
+    const arsenal = player.pitching?.arsenal || [];
+    const breakingBalls = arsenal.filter(a => a.type !== 'straight');
+    const bestBreaking = breakingBalls.reduce((max, a) => Math.max(max, a.level || 0), 0);
+    const arsenalCount = breakingBalls.filter(a => (a.level || 0) >= 20).length;
+
+    // 年齢別ウェイト: 高校生は球速重視、社会人は制球・変化球重視
+    const velBase = isYoung ? 1.5 : isMature ? 0.9 : 1.1;
+    const vel140 = isYoung ? 4.0 : isMature ? 2.5 : 3.0;
+    const vel150 = isYoung ? 5.0 : isMature ? 3.0 : 3.5;
+    const ctrlW = isYoung ? 0.7 : isMature ? 1.4 : 1.1;
+    const staW = isYoung ? 0.15 : isMature ? 0.35 : 0.25;
+    const breakW = isYoung ? 0.5 : isMature ? 1.0 : 0.8;
+
+    let velocityScore = Math.max(0, (velocity - 110) * velBase);
+    if (velocity >= 140) velocityScore += (velocity - 140) * vel140;
+    if (velocity >= 150) velocityScore += (velocity - 150) * vel150;
+
+    // 【変化球は種類込みで評価する】
+    // 以前は `最高レベル1つ × 重み + 本数ボーナス` で、**球種の違いを見ていなかった**。
+    // 実測では同じLv100でも カーブ1.16 対 ツーシーム0.72 と 0.44 も違う
+    // （緩急の大きい球ほど価値が高い）。スカウトがそこを見ないのは不自然。
+    // `pitchOwnValue` は捕手の球種スコアと**同じ回帰係数**（type × level の
+    // グリッド実測）なので、物差しを二重に作らずに済む。
+    // 2球種目以降は逓減させる（3つ目・4つ目の価値は薄い）。
+    // スケール29.4 は**プール全体の平均が従来と一致する**よう合わせてあり、
+    // 指名の構成比は動かさずに投手間の順位だけが変わる。
+    const OWN_DIMINISH = [1.0, 0.55, 0.30, 0.18, 0.10];
+    const OWN_SCALE = 29.4;
+    const ownValues = breakingBalls
+      .map(a => pitchOwnValue(a.type, a.level || 0))
+      .sort((x, y) => y - x);
+    const breakingScore = ownValues
+      .reduce((sum, v, i) => sum + v * (OWN_DIMINISH[i] ?? 0.06), 0) * OWN_SCALE
+      * (breakW / 0.5);   // 年齢別ウェイト（高校生0.5 / 社会人1.0）は従来どおり掛ける
+
+    let rawAbility = velocityScore + control * ctrlW + stamina * staW + breakingScore;
+
+    // 高校生: 肩力(フィジカル素材)を加点、変則フォーム(アンダー/サイド)は指名されにくい
+    if (isYoung) {
+      rawAbility += (player.physical?.arm || 0) * 0.3;
+      const form = player.pitching?.form;
+      if (form === 'submarine') rawAbility -= 20;
+      else if (form === 'sidearm') rawAbility -= 10;
+    }
+    // 社会人: 変則フォームは技術・希少性として評価
+    if (isMature) {
+      const form = player.pitching?.form;
+      if (form === 'submarine') rawAbility += 8;
+      else if (form === 'sidearm') rawAbility += 5;
+    }
+    return rawAbility;
+  }
+    const meet = player.batting?.meet || 0;
+    const power = player.batting?.power || 0;
+    const eye = player.batting?.eye || 0;
+    const speed = player.physical?.speed || 0;
+    const defense = player.fielding?.defense || 0;
+    const arm = player.physical?.arm || 0;
+
+    // 年齢別ウェイト: 高校生はパワー/足/肩、社会人はミート/選球眼/守備
+    const meetW = isYoung ? 0.6 : isMature ? 1.3 : 1.0;
+    const powerW = isYoung ? 1.4 : isMature ? 0.8 : 1.0;
+    const eyeW = isYoung ? 0.2 : isMature ? 0.8 : 0.5;
+    const speedW = isYoung ? 0.8 : isMature ? 0.3 : 0.4;
+    const defW = isYoung ? 0.2 : isMature ? 0.7 : 0.4;
+    const armW = isYoung ? 0.6 : isMature ? 0.2 : 0.3;
+
+    // ユーティリティ（守備の幅）を小さく加点。複数守れる選手はプロでも重宝される。
+    const utilBonus = getUtilityScore(player) * 0.08; // 最大+8pt
+
+    // 【捕手のリードは守備の一部として評価する】
+    // 以前は捕手も meet/power/eye/speed/defense/arm でしか見ておらず、
+    // **リードが完全に盲点**だった（ドラフト評価との相関 -0.074、
+    // 上位30人の平均リード43.4 が全体49.2 を下回るという逆転が起きていた）。
+    // 実測の1点あたりの価値は リード -0.0044 / 捕手守備 -0.0041 とほぼ同じなので、
+    // **守備と同じ重み**で足す。
+    // ⚠ **平均50からの差で足すこと**。絶対値で足すと全捕手に一律 +34pt 乗り、
+    // 上位120人に入る捕手が 14人 → 19人（実NPBは約8%）に膨らむ。
+    // ここで見たいのは「捕手の中でリードが良いか」なので、centering が正しい。
+    const leadScore = player.position === 'catcher'
+      ? ((player.catching?.lead ?? 50) - 50) * defW : 0;
+
+    const rawAbility = meet * meetW + power * powerW + eye * eyeW + speed * speedW
+      + defense * defW + arm * armW + utilBonus + leadScore;
+  return rawAbility;
+}
+
 export function checkNPBDraftEligibility(player, awardBonus = 0) {
   const isPitcher = player.position === 'pitcher';
   const reasons = [];
