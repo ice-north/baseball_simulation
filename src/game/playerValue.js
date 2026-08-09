@@ -26,6 +26,76 @@ export const valueGroup = (player) =>
   player?.position === 'pitcher' ? 'P'
     : player?.position === 'catcher' ? 'C' : 'F';
 
+// ============================================================
+// メイン／サブ に分けて、**ポジション群ごとの偏差値**で比べる
+//
+// 【なぜ偏差値か】投手と野手の能力点は**素点のスケールが揃わない**。
+// 揃えようと倍率を掛けると2通りとも壊れた（下記）。偏差値なら
+//   ・ゼロ点が対応していなくても関係ない
+//   ・年齢帯でウェイトが違って素点のスケールがずれても関係ない
+// ので、今日ハマった罠を両方回避できる。
+// 「同じポジションの中でどれだけ抜けているか」で比べるのは、
+// スカウトの 20-80 スケールと同じ考え方でもある。
+//
+// ⚠ **年齢帯では分けないこと**。分けると各帯の平均が50になり、
+// ソース構成が `ageBonus` だけで決まって高校生に偏る（実測 高校84%）。
+// 年齢による素点の差は残したまま群だけで標準化し、将来性は
+// `ageBonus`/`potentialMult` が別に見る、という分業にする。
+// ============================================================
+
+// メインとサブの重み。メインは「スカウトが最初に見る3つ」なので厚く。
+const W_MAIN = 1.0;
+const W_SUB = 0.6;
+
+// 群ごとの素点（main + sub×W_SUB）の平均とσ。
+// リーグロスター＋高校生プール＋大学プールで実測。
+// ⚠ 生成やウェイトを触ったら測り直すこと。
+export const VALUE_DIST = {
+  P: { mean: 81, sd: 34 },
+  C: { mean: 108, sd: 35 },
+  F: { mean: 113, sd: 36 },
+};
+
+// σ は**年齢帯ごとに持つ**。高校生投手のσは19、高校生野手は25 と幅が違い、
+// 群共通のσで標準化すると高校生投手だけ偏差値が伸びず、上位120人の投手が
+// プール比率42%に対して20%しか入らなかった。
+// ⚠ **平均は群共通のまま**にすること。平均まで年齢帯別にすると各帯の平均が
+// 50になり、ソース構成が `ageBonus` だけで決まって高校生に偏る（実測 高校84%）。
+// 「年齢による水準の差は残し、幅だけ揃える」のが正しい切り分け。
+export const BAND_SD = {
+  'P|young': 19, 'P|mid': 25, 'P|mature': 35,
+  'C|young': 25, 'C|mid': 27, 'C|mature': 34,
+  'F|young': 25, 'F|mid': 27, 'F|mature': 30,
+};
+
+// 偏差値をドラフト評価の桁に合わせる係数。
+// 従来の能力点は σ 25〜30 程度だったので、偏差値(σ10)を約3倍して揃える。
+const DEV_SCALE = 3.0;
+
+/**
+ * メイン／サブから、**投打で比較できる**評価点を作る。
+ * 群ごとの偏差値 × DEV_SCALE。50（＝群の平均）が 150 になる。
+ */
+export function deviationValue(player, main, sub) {
+  const g = valueGroup(player);
+  const raw = main * W_MAIN + sub * W_SUB;
+  return devOf(g, player?.age, raw) * DEV_SCALE;
+}
+
+/** 偏差値そのもの（平均50・σ10）。成長力ボーナスの倍率などに使う */
+export function deviationOf(player, main, sub) {
+  return devOf(valueGroup(player), player?.age, main * W_MAIN + sub * W_SUB);
+}
+
+function devOf(g, age, raw) {
+  const mean = (VALUE_DIST[g] || VALUE_DIST.F).mean;
+  const sd = BAND_SD[`${g}|${AGE_BAND(age)}`] || (VALUE_DIST[g] || VALUE_DIST.F).sd;
+  return 50 + 10 * (raw - mean) / (sd || 1);
+}
+
+/** 素点（偏差値にする前）。分布の実測用 */
+export function rawAbilityOf(main, sub) { return main * W_MAIN + sub * W_SUB; }
+
 // 群 × 年齢帯 ごとの能力点の平均（リーグロスター＋高校生プール＋大学プールで実測）。
 //
 // ⚠ **年齢帯ごとに持つこと**。`draftAbilityScore` は 高校生(isYoung) と

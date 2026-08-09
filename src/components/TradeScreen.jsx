@@ -3,7 +3,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { addToRoster } from '../state/roster.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityRank, getRankColor } from '../utils/constants.js';
 import { cleanupPlayerReferences, draftAbilityScore } from '../season/yearProgressionSystem.js';
-import { toCommonValue } from '../game/playerValue.js';
+import { deviationValue } from '../game/playerValue.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
 
@@ -131,7 +131,9 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
   const getPlayerValue = (player) => {
     const age = player.age || 20;
     const ageBonus = age <= 22 ? 15 : age <= 25 ? 8 : age <= 28 ? 0 : age <= 32 ? -5 : -15;
-    return 100 + toCommonValue(player, draftAbilityScore(player)) + ageBonus;
+    const { main, sub } = draftAbilityScore(player);
+    // 偏差値（群ごと）× 3 なので、平均的な選手が 150。投打で直接比べられる
+    return Math.round(deviationValue(player, main, sub) + ageBonus);
   };
 
   const getValueColor = (val) => {
