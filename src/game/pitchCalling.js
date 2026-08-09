@@ -375,8 +375,13 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velo
   let score = ((eff.whiffBonus || 0) * LEAD_W_WHIFF
     + (eff.groundballBonus || 0) * LEAD_W_GB
     + (eff.weakBonus || 0) * LEAD_W_WEAK) * levelFactor * mult;
-  // 緩急。落差はレベルにほぼ依存しない（pitchVelocityDrop 参照）ので levelFactor を掛けない
-  score += (eff.velocityMinus || 0) / 100 * LEAD_W_DEPTH;
+  // 緩急。⚠ **生の `velocityMinus` ではなく実際の減速量を使うこと**。
+  // `pitchVelocityDrop` はレベルで少し伸びる（×0.72〜1.00）ので、
+  // 生の値を使うと**未熟な遅い球が満額の緩急として評価される**。
+  // 実例: スライダー20/カーブ20/シュート100 の投手で、カーブLv20（実際の減速
+  // 17.8km）がシュートLv100 と同格に選ばれていた。実測の価値は
+  // シュートLv100 ≈ 0.72 に対しカーブLv20 ≈ 0.46 で逆。
+  score += pitchVelocityDrop(ball.type, ball.level ?? 50) / 100 * LEAD_W_DEPTH;
   // 未熟な球種は制球を損なう（LEVEL_SIGMA_W）。
   // これを score に入れないと、捕手が「効くが投げられない球」を要求してしまい、
   // 四球が増えて良い捕手ほど成績が悪化する（実測 BB/9 3.90→4.12）。
