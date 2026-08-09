@@ -380,6 +380,10 @@ const LEAD_W_DEPTH = 1.89;    // 実際の減速量 / 100 に掛ける
 // 係数は「カーブ対シュートの差が守備30→75 で 0.15 縮む」よう合わせてある
 // （両者の gb+weak の差 0.36 に対し 0.417/45点 → 0.010/点）。
 const LEAD_DEF_W = 0.010;
+
+// 出どころが見えない投手は球種も読まれない（deception.js）。
+// **ここが球速との違い**——速いだけの球は「何が来るか」までは隠せない。
+const DECEPTION_READ_W = 0.50;
 const INFIELD = ['first', 'second', 'third', 'short'];
 /** 内野4人の平均守備。渡されなければリーグ平均 */
 export function infieldDefenseOf(defense) {
@@ -502,7 +506,7 @@ export function selectPitchType({
  *
  * @param {number} arsenalSize 持ち球の総数（ストレート込み）
  */
-export function guessSuccessRate({ catcherLead = 50, arsenalSize = 3, batterEye = 50 } = {}) {
+export function guessSuccessRate({ catcherLead = 50, arsenalSize = 3, batterEye = 50, deception = 0 } = {}) {
   // 持ち球が1種類なら何が来るか分かる
   if (arsenalSize <= 1) return 0.95;
 
@@ -517,5 +521,8 @@ export function guessSuccessRate({ catcherLead = 50, arsenalSize = 3, batterEye 
 
   // 選球眼の高い打者は球種を読む
   const eyeMult = 1 + (clamp(batterEye, 0, 100) - 50) / 100 * 0.4;
-  return clamp(base * eyeMult, 0.02, 0.8);
+  // 【球の出どころ】グリップもリリースも見えなければ球種は判断できない。
+  // **ここが球速との違い**（速いだけの球は「何が来るか」は分かる）。
+  const decMult = 1 - clamp(deception, -1, 1) * DECEPTION_READ_W;
+  return clamp(base * eyeMult * decMult, 0.02, 0.8);
 }

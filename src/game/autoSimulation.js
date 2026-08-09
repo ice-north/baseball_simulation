@@ -13,6 +13,7 @@ import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, loc
 import { decidePitchObjective } from './pitchSituation.js';
 import { hitByPitchChance, hitByPitchFatigue } from './pitchZone.js';
 import { getBatterType, resolveAiBatterGuess } from './batterType.js';
+import { getDeception, deceptionAxis } from './deception.js';
 import { resolveGroundOutAdvance, tryExtraAdvance } from './baserunning.js';
 import { stealSuccessRate, stealAttemptRate } from './stealing.js';
 import { effectiveArsenalSize, activeArsenal } from './arsenal.js';
@@ -805,6 +806,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
         arsenalSize: effectiveArsenalSize(arsenal), batterEye: batter.eye,
         // 崩された直後は球種を読むどころではない
         fooled: fooledLevel(sequence),
+        // 出どころが見えなければ球種も判断できない（deception.js）
+        deception: deceptionAxis(getDeception(pitcherPlayer)),
       }),
     });
     const guessLevel = Math.max(-2, Math.min(2, aiGuess.level + (locationRead ? 1 : 0)));
@@ -849,7 +852,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
       // 物理コンタクト計算
       const physicsResult = calculatePhysicsContact(
-        { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50 },
+        { velocity: effectiveVelocity, throws: pitcher.throws, form: pitcherPlayer.pitching?.form || 'threeQuarter', spinRate: pitcherPlayer.pitching?.spinRate ?? 50,
+          deception: deceptionAxis(getDeception(pitcherPlayer)) },
         effBatter,
         // 打者の狙い球。球種とコースを別々に張り、当たった数で効果が変わる
         // （1つ=タイミング窓×1.30 / 両方=×1.50。simulation-logic.js）。

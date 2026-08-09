@@ -7,6 +7,7 @@ import { buildPlayerStory, fameLabel } from './playerStory.js';
 import AbilityHistoryChart from './AbilityHistoryChart.jsx';
 import PotentialBadge from './PotentialBadge.jsx';
 import { getZoneProfile, zoneHeatmap, describeZoneProfile } from '../game/batterZone.js';
+import { getDeception, describeDeception } from '../game/deception.js';
 import { getBatterType, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from '../game/batterType.js';
 
 // コース適性のヒートマップ（5×5）。内側の3×3がストライクゾーン。
@@ -295,7 +296,14 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                     <StatBar label="制球" value={player.pitching?.control || 0} />
                     <StatBar label="スタミナ" value={player.pitching?.stamina || 0} isSta />
                     <StatBar label="回転" value={player.pitching?.spinRate ?? 50} />
-                    <div className="mt-2 text-xs text-gray-400">
+                    {/* 球の出どころ。球速でも変化球でもない第3の軸（deception.js） */}
+                    <StatBar label="出どころ" value={getDeception(player)} />
+                    {describeDeception(getDeception(player)) && (
+                      <div className="text-xs text-gray-300 mt-0.5">
+                        {describeDeception(getDeception(player))}
+                      </div>
+                    )}
+                    <div className="mt-2 text-xs text-gray-300">
                       フォーム: <span className="text-white">{formName}</span>
                     </div>
                     <div className="mt-2">

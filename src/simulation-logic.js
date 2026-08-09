@@ -51,6 +51,17 @@ const FASTBALL_TYPES = new Set(['straight']);
 // 実際の球速ではなく、打者が身構えている速球で決まる」。
 const OFFSPEED_WHIFF_K = 1.0;
 
+// 【球の出どころ】成瀬善久のように球速も決め球も無いのに打たれない投手がいる。
+// 球持ちが長く、体の陰から腕が出るのでリリースが見えない＝打者の反応が遅れる。
+// `deception` は名前+IDから決定的に導出する（src/game/deception.js）。
+// ⚠ ここは**球速と同じ効果**（反応時間を削る）。球速と違うのは「球種・コースを
+// 見分けにくくする」方で、そちらは `guessSuccessRate` に入れてある。
+// 窓は 1/球速 に比例するので、**遅い投手ほど同じ割合でも削れる ms が大きい**。
+// これが「遅いのに打ちにくい」を成立させる。
+// 較正: deception 20→80（実測レンジのほぼ両端）で K/9 +0.82 ± 0.05 /
+// 防御率 -0.17 ± 0.05。捕手のリード(18→81 で -0.35)の半分ほどの重みにしてある。
+const DECEPTION_W = 0.18;
+
 const BALL_WHIFF_W = 2.2;   // 空振り: タイミング窓を狭める強さ
 const BALL_WEAK_W = 46;     // 凡打誘発: 打球初速を落とす km/h 係数
 const BALL_GB_W = 58;       // ゴロ誘発: 打出し角を下げる度数係数
@@ -171,6 +182,11 @@ export const calculatePhysicsContact = (pitcher, batter, isGuessRight, pitch, tu
   if (typeDrop > 0) {
     const drop = typeDrop / Math.max(80, pitchVelocity + typeDrop);
     timingWindow *= (1 - drop * OFFSPEED_WHIFF_K * (1 - meetDeceptionResistance));
+  }
+
+  // 出どころの見づらさ。ミートの高い打者は騙されにくい（他の欺きと同じ扱い）
+  if (pitcher.deception) {
+    timingWindow *= (1 - pitcher.deception * DECEPTION_W * (1 - meetDeceptionResistance));
   }
 
   const ballEffect = BALL_EFFECTS[pitch.type];

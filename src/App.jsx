@@ -38,6 +38,7 @@ import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
 import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, infieldDefenseOf, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
 import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
+import { getDeception, deceptionAxis, describeDeception } from './game/deception.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt,
   zoneHeatmap, describeZoneProfile } from './game/batterZone.js';
 import { decideSwingPower, getSwingPowerEffect, swingPowerLabel } from './game/swingType.js';
@@ -1308,6 +1309,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           batterEye: batter.eye,
           // 崩された直後は球種を読むどころではない（pitchSequence.js）
           fooled: fooledLevel(sequence),
+          // 出どころが見えなければ球種も判断できない（deception.js）
+          deception: pitcher.deception ?? 0,
         });
 
         // 捕手のリードで球種を選ぶ（自動シミュレーションと共有。pitchCalling.js）。
@@ -1570,7 +1573,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           // 封印した球は投げない（arsenal.js）
           pitches: activeArsenal(currentPitcher.pitching.arsenal),
           form: currentPitcher.pitching.form,
-          spinRate: currentPitcher.pitching.spinRate ?? 50
+          spinRate: currentPitcher.pitching.spinRate ?? 50,
+          // 球の出どころの見づらさ（deception.js）。-1=丸見え 〜 +1=見えない
+          deception: deceptionAxis(getDeception(currentPitcher))
         };
 
         const catcher = {
@@ -1753,7 +1758,9 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
           // 封印した球は投げない（arsenal.js）
           pitches: activeArsenal(currentPitcher.pitching.arsenal),
           form: currentPitcher.pitching.form,
-          spinRate: currentPitcher.pitching.spinRate ?? 50
+          spinRate: currentPitcher.pitching.spinRate ?? 50,
+          // 球の出どころの見づらさ（deception.js）。-1=丸見え 〜 +1=見えない
+          deception: deceptionAxis(getDeception(currentPitcher))
         };
         
         const catcher = {
