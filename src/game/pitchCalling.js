@@ -367,7 +367,32 @@ const LEAD_W_GB = 0.0;        // 回帰は -0.03。ゴロは weak と相関が�
 const LEAD_W_WEAK = 0.68;     // 凡打誘発が効果項では最大
 const LEAD_W_DEPTH = 1.89;    // 実際の減速量 / 100 に掛ける
 
-function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velocity = 140) {
+// 【味方の守備で「打球になる球」の値打ちが変わる】
+// 三振は確実にアウトが取れるが球数を食う。ゴロ・凡打は省エネだが**守備に預ける**。
+// 実測（Lv100・守備30 対 75・4シード×110試合）で、三振型の優位は守備が
+// 良くなるほど縮む:
+//   カーブ − シュート  0.181 → 0.046
+//   カーブ − シンカー  0.207 → 0.018（守備75ではほぼ並ぶ）
+// つまり**守備の堅いチームではゴロ投手が活きる**。捕手はこれを見ていなかった
+// （`LEAD_W_GB` はリーグ平均の守備で当てはめた値なので固定だった）。
+//
+// 内野4人の守備の、リーグ平均(50)からの差で gb/weak の重みを動かす。
+// 係数は「カーブ対シュートの差が守備30→75 で 0.15 縮む」よう合わせてある
+// （両者の gb+weak の差 0.36 に対し 0.417/45点 → 0.010/点）。
+const LEAD_DEF_W = 0.010;
+const INFIELD = ['first', 'second', 'third', 'short'];
+/** 内野4人の平均守備。渡されなければリーグ平均 */
+export function infieldDefenseOf(defense) {
+  if (!defense) return 50;
+  let n = 0, sum = 0;
+  for (const pos of INFIELD) {
+    const d = defense[pos]?.defense;
+    if (typeof d === 'number') { sum += d; n++; }
+  }
+  return n ? sum / n : 50;
+}
+
+function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velocity = 140, infieldDefense = 50) {
   const eff = ballEffects[ball.type] || ballEffects.straight || {};
   const levelFactor = (ball.level ?? 50) / 100;
   // ⚠ **物理エンジンと同じ倍率を掛ける**。`calculatePhysicsContact` は
@@ -378,9 +403,11 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velo
   const mult = breakEfficiency(arrival) * formPitchBonus(form, ball.type);
   // 習熟度そのもの。**ここが最大の項**（未熟な球は球種を問わず使えない）
   let score = LEAD_W_LEVEL * levelFactor;
+  // 打球になる球（ゴロ・凡打）は味方の守備が良いほど価値が上がる
+  const defAdj = (clamp(infieldDefense, 0, 100) - 50) * LEAD_DEF_W;
   score += ((eff.whiffBonus || 0) * LEAD_W_WHIFF
-    + (eff.groundballBonus || 0) * LEAD_W_GB
-    + (eff.weakBonus || 0) * LEAD_W_WEAK) * levelFactor * mult;
+    + (eff.groundballBonus || 0) * (LEAD_W_GB + defAdj)
+    + (eff.weakBonus || 0) * (LEAD_W_WEAK + defAdj)) * levelFactor * mult;
   // 緩急。⚠ **生の `velocityMinus` ではなく実際の減速量を使うこと**。
   // `pitchVelocityDrop` はレベルで少し伸びる（×0.72〜1.00）ので、
   // 生の値を使うと**未熟な遅い球が満額の緩急として評価される**。
@@ -430,6 +457,7 @@ export function selectPitchType({
   arsenal = [], catcherLead = 50, form = 'threeQuarter',
   strategy = 'normal', strikes = 0, ballEffects = BALL_EFFECTS,
   lastWasBreaking = null, objective = 'normal', velocity = 140, fooled = 0,
+  infieldDefense = 50,
 } = {}) {
   const list = arsenal.length ? arsenal : [{ type: 'straight', level: 50 }];
   const straight = list.find(a => a.type === 'straight') || { type: 'straight', level: 50 };
@@ -449,7 +477,7 @@ export function selectPitchType({
   // どの変化球にするか。リードが高いほど「効く球」を選べる
   if (Math.random() < clamp(catcherLead / 100, 0, 1)) {
     const scored = breaking
-      .map(b => ({ ball: b, score: scoreBall(b, form, strategy, ballEffects, objective, velocity) }))
+      .map(b => ({ ball: b, score: scoreBall(b, form, strategy, ballEffects, objective, velocity, infieldDefense) }))
       .sort((a, b) => b.score - a.score);
     const top = scored.slice(0, Math.max(1, Math.ceil(scored.length / 2)));
     return top[Math.floor(Math.random() * top.length)].ball;

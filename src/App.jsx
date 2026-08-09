@@ -36,7 +36,7 @@ import { generateRandomPlayerName } from './data/playerNames.js';
 import { calculatePhysicsContact, calculateBattedBallPhysics, judgeFielderReach, calculateDefensiveFitness, getTunnelingEffect } from './simulation-logic.js';
 import { autoSimulateGame } from './game/autoSimulation.js';
 import { useGameStrategy } from './game/useGameStrategy.js';
-import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, swingProbability, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, AIM_LABEL, selectPitchType, infieldDefenseOf, guessSuccessRate, resolveBatterGuess, GUESS_TYPE_LABEL, GUESS_ZONE_LABEL } from './game/pitchCalling.js';
 import { getBatterType, resolveAiBatterGuess, BATTER_TYPE_LABEL, BATTER_TYPE_NOTE } from './game/batterType.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt,
   zoneHeatmap, describeZoneProfile } from './game/batterZone.js';
@@ -1329,6 +1329,8 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
             velocity: (pitcher.velocity || 140) + velocityPenalty,
             // 崩した直後は球速帯を替えずに畳み掛けてよい
             fooled: fooledLevel(sequence),
+            // 守備の堅いチームではゴロ・凡打を狙う球の値打ちが上がる
+            infieldDefense: infieldDefenseOf(defense),
           });
           pitchChoice = Math.max(0, pitcher.pitches.indexOf(chosen));
         }

@@ -5,7 +5,7 @@ import { PITCHING_FORM_EFFECTS, adjustGrowthModifier, applyFatigueGrowthPenalty,
 import { CONDITION_BATTING_MODIFIER, CONDITION_PITCHING_MODIFIER, CONDITION_LEVELS, initializeCondition } from './condition.js';
 import { getPositionFitness } from '../utils/physics.js';
 import { getTeamStaffBonus } from '../corporate/staffData.js';
-import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, guessSuccessRate } from './pitchCalling.js';
+import { callPitchTarget, resolvePitchLocation, decideSwing, ballZoneContactChance, getPitchQualityEffect, getHeightPitchEffect, BALL_ZONE_PENALTY, selectPitchType, infieldDefenseOf, guessSuccessRate } from './pitchCalling.js';
 import { getZoneProfile, getZoneMatchupEffect, combineBatterEffects, zoneWeaknessAt } from './batterZone.js';
 import { decideSwingPower, getSwingPowerEffect } from './swingType.js';
 import { createSequence, pushCall, lastCall, sequenceShift, shiftMeetAdjust, locationReadChance,
@@ -730,6 +730,8 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
       velocity: effectiveVelocity,
       // 崩した直後は球速帯を替えずに畳み掛けてよい（pitchSequence.js）
       fooled: fooledLevel(sequence),
+      // 守備の堅いチームではゴロ・凡打を狙う球の値打ちが上がる
+      infieldDefense: infieldDefenseOf(defense),
     });
 
 
