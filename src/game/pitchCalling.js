@@ -347,21 +347,25 @@ export const BALL_ZONE_PENALTY = { meet: -4, power: -2 };
  */
 // 【球種の価値の重み】捕手が「どの球が効くか」を測る物差し。
 //
-// ⚠ 以前は `whiff + gb + weak` の**単純合計**だった。つまり三振とゴロを同じ価値と
-// 見なしており、実測の防御率差と**順位相関 -0.500**（＝良い捕手ほど価値の低い球を
-// 要求する）という逆転が起きていた。捕手の1位はシュート（実測7位）、
-// カーブ（実測1位）は8位。
+// **type × level のグリッド実測に回帰して決めてある**（6球種 × Lv25/55/100 の
+// 18点。ストレート＋1球種で1シーズン回し、ストレートのみとの防御率差を価値とする）。
+// R²=0.974 / 順位相関 +0.969。独立した9球種Lv50のデータでも +0.967 と汎化する。
 //
-// 最大の欠落は **`velocityMinus`（緩急）が入っていなかった**こと。
-// `OFFSPEED_WHIFF_K` で「速球からの落差そのものが欺き」になったので、
-// 落差は今や最も強い価値の源泉（回帰係数 0.67 で最大）。
-// 実測9球種への回帰から重みを取り直して順位相関 **+0.917**。
-//   ゴロは「打球になる」ぶん三振より価値が低い（BABIP .240 なので確実な
-//   アウトではない）。gb を下げ、whiff と落差を上げるのが正しい向き。
-const LEAD_W_WHIFF = 1.0;
-const LEAD_W_GB = 0.2;
-const LEAD_W_WEAK = 0.3;
-const LEAD_W_DEPTH = 1.5;   // velocityMinus / 100 に掛ける
+// ⚠ 以前は `whiff + gb + weak` の単純合計で、実測との順位相関が **-0.500**
+// （良い捕手ほど価値の低い球を要求する）だった。そこは直したが、次に
+// **習熟度の価値を4分の1に見積もっていた**ことが分かった:
+//   実測 シュートLv100 は カーブLv55 に 0.31 勝つ（1.080 対 0.578）のに、
+//   スコアは逆（0.154 対 0.247）だった。**Lv100はどの球種でもLv55を上回る**
+//   （実測 0.93〜1.20 対 0.53〜0.77）のが正しい姿。
+//
+// 回帰の要点: **レベルの type非依存項が最大**（0.765）。よく練った球は
+// 球種を問わず価値がある——`effectiveArsenalSize` がレベルで引き出しの重みを
+// 変える（0.55〜1.00）のと同じ話で、捕手側にこの項が無かった。
+const LEAD_W_LEVEL = 0.765;   // 習熟度そのもの（球種によらない）
+const LEAD_W_WHIFF = 0.09;
+const LEAD_W_GB = 0.0;        // 回帰は -0.03。ゴロは weak と相関が強く単体の寄与はほぼ無い
+const LEAD_W_WEAK = 0.68;     // 凡打誘発が効果項では最大
+const LEAD_W_DEPTH = 1.89;    // 実際の減速量 / 100 に掛ける
 
 function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velocity = 140) {
   const eff = ballEffects[ball.type] || ballEffects.straight || {};
@@ -372,7 +376,9 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velo
   // シンカーを過小評価し、遅い投手で曲がりの落ちた球を過大評価する。
   const arrival = velocity - pitchVelocityDrop(ball.type, ball.level ?? 50);
   const mult = breakEfficiency(arrival) * formPitchBonus(form, ball.type);
-  let score = ((eff.whiffBonus || 0) * LEAD_W_WHIFF
+  // 習熟度そのもの。**ここが最大の項**（未熟な球は球種を問わず使えない）
+  let score = LEAD_W_LEVEL * levelFactor;
+  score += ((eff.whiffBonus || 0) * LEAD_W_WHIFF
     + (eff.groundballBonus || 0) * LEAD_W_GB
     + (eff.weakBonus || 0) * LEAD_W_WEAK) * levelFactor * mult;
   // 緩急。⚠ **生の `velocityMinus` ではなく実際の減速量を使うこと**。
@@ -382,10 +388,8 @@ function scoreBall(ball, form, strategy, ballEffects, objective = 'normal', velo
   // 17.8km）がシュートLv100 と同格に選ばれていた。実測の価値は
   // シュートLv100 ≈ 0.72 に対しカーブLv20 ≈ 0.46 で逆。
   score += pitchVelocityDrop(ball.type, ball.level ?? 50) / 100 * LEAD_W_DEPTH;
-  // 未熟な球種は制球を損なう（LEVEL_SIGMA_W）。
-  // これを score に入れないと、捕手が「効くが投げられない球」を要求してしまい、
-  // 四球が増えて良い捕手ほど成績が悪化する（実測 BB/9 3.90→4.12）。
-  score -= (1 - levelFactor) * 0.20;
+  // ※「未熟な球は制球を損なう」ぶんは上の LEAD_W_LEVEL に含まれている
+  // （回帰では -(1-lv)×0.765 と +lv×0.765 が定数差でしかない）。
   // 球種そのものの投げにくさ（TYPE_SIGMA。ナックル0.13 / フォーク0.06 …）。
   // これも σ の項なので上と同じ換算（LEVEL_SIGMA_W 0.27 → 0.20 ＝ ×0.74）。
   // 入れないと捕手がナックルを無条件に最良と見なし、リードが高いほど四球が増える
