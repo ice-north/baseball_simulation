@@ -287,16 +287,35 @@ export function draftAbilityScore(player) {
     const breakingBalls = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
 
     // 年齢別ウェイト: 高校生は球速重視、社会人は制球・変化球重視
-    const velBase = isYoung ? 1.5 : isMature ? 0.9 : 1.1;
+    //
+    // ⚠ **140km未満の傾きが足りていなかった**（社会人 0.9 / 高校生 1.5）。
+    // 実測では 1km = 0.0512 防御率、投手ブランチ平均は 1pt = 0.0206 なので、
+    // 価値に見合う重みは **2.5 pt/km**。140km以上は閾値ボーナスで
+    // 3.4〜5.5 と足りていたが、独立リーグの投手は大半が120〜135kmなので
+    // **実際に効くのは下限帯**で、そこが2.8倍の過小評価だった。
+    const velBase = isYoung ? 3.4 : isMature ? 2.5 : 2.8;
     const vel140 = isYoung ? 4.0 : isMature ? 2.5 : 3.0;
     const vel150 = isYoung ? 5.0 : isMature ? 3.0 : 3.5;
     const ctrlW = isYoung ? 0.7 : isMature ? 1.4 : 1.1;
     const staW = isYoung ? 0.15 : isMature ? 0.35 : 0.25;
     const breakW = isYoung ? 0.5 : isMature ? 1.0 : 0.8;
 
-    let velocityScore = Math.max(0, (velocity - 110) * velBase);
-    if (velocity >= 140) velocityScore += (velocity - 140) * vel140;
-    if (velocity >= 150) velocityScore += (velocity - 150) * vel150;
+    // 【左投手はプロ候補の「線」が低い】実際のスカウトは
+    // 「右なら145km、左なら140km」を目安にする。
+    // ⚠ 幅の決め方を3通り試した（高校生投手の上位100人に占める左の割合。
+    //    プール比率は約30%）:
+    //      +5km を全球速帯に … **52%**（効きすぎ）
+    //      +5km を閾値だけに … **18%**（足りない。左は生成時点で-3kmされている）
+    //      **+3km を全体に**  … **27%** ≒ プール比率
+    // +3 は生成時の左投手ペナルティ(-3km)をちょうど打ち消す値でもある。
+    // 実測で上位に入る左投手は右より **2.3km 遅い**（134.1 対 136.4）ので、
+    // 「左は少し遅くても候補に挙がる」という関係は出ている。
+    const LEFTY_VELOCITY_EDGE = 3;
+    const sv = velocity + (player.physical?.throws === 'left' ? LEFTY_VELOCITY_EDGE : 0);
+
+    let velocityScore = Math.max(0, (sv - 110) * velBase);
+    if (sv >= 140) velocityScore += (sv - 140) * vel140;
+    if (sv >= 150) velocityScore += (sv - 150) * vel150;
 
     // 【変化球は種類込みで評価する】以前は「最高レベル1つ×重み＋本数ボーナス」で
     // 球種の違いを見ていなかった。実測では同じLv100でもカーブ1.16対ツーシーム0.72。
