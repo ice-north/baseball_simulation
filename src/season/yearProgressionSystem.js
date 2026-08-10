@@ -10,7 +10,7 @@ import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS, getUtilityScore } from '../utils/constants.js';
 import { pitchOwnValue } from '../game/pitchCalling.js';
-import { deviationValue, deviationOf } from '../game/playerValue.js';
+import { deviationValue, deviationOf, valueGroup, DRAFT_DEMAND } from '../game/playerValue.js';
 import { generateHighSchoolClass, assignCareerPaths, enrollInUniversity, processUniversityYear, universityPool, highSchoolPool, processHighSchoolNPBDraft, distributeHighSchoolGraduates, HIGH_SCHOOL_CLASS_SIZE } from './universityPool.js';
 import { initializeUniversityLeagues, processUniversityPromotionRelegation } from '../university/universityLeagueManager.js';
 import { getUniversityLeagueSchedule, getUniversityLeagueStandings } from '../university/universityInit.js';
@@ -423,7 +423,9 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
                       : age <= 22 ? Math.max(0, (gp - 0.8) * 25) * abilityFactor
                       : Math.max(0, (gp - 1.0) * 15);
 
-  const baseScore = abilityScore + ageBonus + gpBonusScaled + fameBonus;
+  // ロスター需要（価値ではない。playerValue.js の DRAFT_DEMAND 参照）
+  const demandBonus = DRAFT_DEMAND[valueGroup(player)] || 0;
+  const baseScore = abilityScore + ageBonus + gpBonusScaled + fameBonus + demandBonus;
   const totalScore = baseScore + awardBonus;
 
   reasons.push(`${isPitcher ? '投手力' : '野手力'}${Math.round(abilityScore)}pt`);
