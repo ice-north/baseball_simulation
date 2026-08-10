@@ -19,66 +19,135 @@ const RANK_LABELS = {
   S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興',
 };
 
+// 就任先を選ぶための判断材料。ランクは「チームの強さ」だが、
+// プレイヤーが知りたいのは「どれくらい難しいか」。強いチームほど楽で、
+// **クラブはキャンプが無く実践経験も少ない**ぶん1段階難しい
+// （corporateInit.js の proChance / standout はクラブを除外している）。
+const DIFFICULTY = ['やさしい', 'ふつう', 'ややむずかしい', 'むずかしい', '高難度'];
+const DIFF_COLOR = ['text-green-400', 'text-emerald-400', 'text-yellow-400', 'text-orange-400', 'text-red-400'];
+const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 };
+const difficultyOf = (team) =>
+  Math.min(4, (RANK_ORDER[team.rank] ?? 3) + (team.type === 'club' ? 1 : 0));
+
+/** 所属選手の能力の目安（RANK_ABILITY_RANGE と同じ値。クラブは初期能力が低い） */
+function strengthOf(team) {
+  const r = RANK_ABILITY_RANGE[team.rank] || RANK_ABILITY_RANGE.C;
+  const scale = team.type === 'club' ? 0.75 : 1;
+  return { min: Math.round(r.min * scale), max: Math.round(r.max * scale), star: r.starChance };
+}
+
+// モードごとの性格。**選ぶ前に「何が違うのか」が分かる**ようにする。
+// 以前は幅384pxのカードを縦に3枚並べるだけで、1280px画面の左右が空いていた。
+const MODES = [
+  {
+    key: 'university', title: '大学野球', sub: '4年で選手が入れ替わる',
+    grad: 'from-amber-700 to-orange-700', hover: 'hover:from-amber-600 hover:to-orange-600',
+    tagBg: 'bg-amber-900/60 text-amber-100', accent: 'text-amber-200',
+    lead: '春季・秋季リーグを戦い、選手をプロへ送り出す。',
+    points: [
+      ['選手の集め方', 'スポーツ推薦スカウト'],
+      ['育成の期間', '4年で卒業。回転が速い'],
+      ['年に2度の優勝機会', '春秋のリーグ戦'],
+    ],
+    tags: ['春季・秋季リーグ', '全日本選手権', '明治神宮大会', '推薦スカウト', 'NPBドラフト'],
+    difficulty: 2,
+  },
+  {
+    key: 'corporate', title: '社会人野球', sub: '企業かクラブかで別ゲーム',
+    grad: 'from-blue-700 to-indigo-700', hover: 'hover:from-blue-600 hover:to-indigo-600',
+    tagBg: 'bg-blue-900/60 text-blue-100', accent: 'text-blue-200',
+    lead: '企業チームまたはクラブチームの監督に就任する。',
+    points: [
+      ['選手の集め方', 'スカウトで交渉して獲る'],
+      ['企業', '予算とスカウトで強化できる'],
+      ['クラブ', 'キャンプが無く自然成長のみ'],
+    ],
+    tags: ['都市対抗予選', '都市対抗本戦', '日本選手権', 'スカウト入団', '企業 or クラブ'],
+    difficulty: 3,
+  },
+  {
+    key: 'independent', title: '独立リーグ', sub: 'リーグごと作る',
+    grad: 'from-green-700 to-emerald-700', hover: 'hover:from-green-600 hover:to-emerald-600',
+    tagBg: 'bg-green-900/60 text-green-100', accent: 'text-green-200',
+    lead: 'リーグを立ち上げ、トライアウトで選手を集める。',
+    points: [
+      ['選手の集め方', 'トライアウトで指名'],
+      ['自由度', 'チーム数・日程まで設計できる'],
+      ['育つ理由', '出場機会そのものが経験値'],
+    ],
+    tags: ['トライアウト', 'リーグ戦', 'グランドCS', 'NPBドラフト', 'リーグ設計'],
+    difficulty: 2,
+  },
+];
+
+const DIFF_DOTS = (n) => (
+  <span className="inline-flex gap-0.5 align-middle">
+    {[0, 1, 2, 3, 4].map(i => (
+      <span key={i} className={`w-1.5 h-1.5 rounded-full ${i < n ? 'bg-white/90' : 'bg-white/25'}`} />
+    ))}
+  </span>
+);
+
 const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniversity, onBack }) => {
+  const handlers = {
+    university: onSelectUniversity, corporate: onSelectCorporate, independent: onSelectIndependent,
+  };
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
-      <div className="text-center max-w-2xl mx-auto px-4">
-        <h1 className="text-4xl font-bold text-white mb-2">GAME MODE</h1>
-        <p className="text-gray-400 mb-10">プレイするモードを選択してください</p>
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center p-6">
+      <div className="max-w-6xl w-full mx-auto">
+        <h1 className="text-4xl font-bold text-white mb-1 text-center">GAME MODE</h1>
+        <p className="text-gray-300 mb-8 text-center">
+          どれも同じ1つの球界。違うのは
+          <span className="text-white font-bold mx-1">どのチームを操作し、どのカレンダーで進むか</span>
+          だけ
+        </p>
 
-        <div className="flex flex-col items-center space-y-6">
-          <button
-            onClick={onSelectUniversity}
-            className="group w-96 bg-gradient-to-r from-amber-700 to-orange-700 hover:from-amber-600 hover:to-orange-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] text-left"
-          >
-            <div className="text-2xl mb-1 text-center">大学野球</div>
-            <div className="text-sm font-normal text-amber-200 mb-2 text-center">
-              大学チームの監督として春季・秋季リーグを戦い、選手をプロへ送り出す。
-            </div>
-            <div className="flex flex-wrap gap-1.5 justify-center">
-              {['春季・秋季リーグ', '全日本選手権', '明治神宮大会', '推薦スカウト', 'NPBドラフト'].map(tag => (
-                <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-100/80">{tag}</span>
-              ))}
-            </div>
-          </button>
-
-          <button
-            onClick={onSelectCorporate}
-            className="group w-96 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] text-left"
-          >
-            <div className="text-2xl mb-1 text-center">社会人野球</div>
-            <div className="text-sm font-normal text-blue-200 mb-2 text-center">
-              企業チームまたはクラブチームの監督に就任。企業はスカウトとコーチで強化、クラブは入部希望者と自然成長で戦う。
-            </div>
-            <div className="flex flex-wrap gap-1.5 justify-center">
-              {['都市対抗予選', '都市対抗本戦', '日本選手権', 'スカウト入団', '企業 or クラブ'].map(tag => (
-                <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-100/80">{tag}</span>
-              ))}
-            </div>
-          </button>
-
-          <button
-            onClick={onSelectIndependent}
-            className="group w-96 bg-gradient-to-r from-green-700 to-emerald-700 hover:from-green-600 hover:to-emerald-600 text-white px-8 py-6 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] text-left"
-          >
-            <div className="text-2xl mb-1 text-center">独立リーグ</div>
-            <div className="text-sm font-normal text-green-200 mb-2 text-center">
-              リーグを立ち上げ、トライアウトで選手を集める。経験が選手を育てる。
-            </div>
-            <div className="flex flex-wrap gap-1.5 justify-center">
-              {['トライアウト', 'リーグ戦', 'グランドCS', 'NPBドラフト', 'リーグ設計'].map(tag => (
-                <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-green-900/60 text-green-100/80">{tag}</span>
-              ))}
-            </div>
-          </button>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {MODES.map(m => (
+            <button
+              key={m.key}
+              onClick={handlers[m.key]}
+              className={`group bg-gradient-to-b ${m.grad} ${m.hover} text-white rounded-xl transition-all shadow-lg active:scale-[0.98] text-left overflow-hidden flex flex-col`}
+            >
+              <div className="px-5 pt-5 pb-3">
+                <div className="text-2xl font-bold">{m.title}</div>
+                <div className={`text-xs ${m.accent}`}>{m.sub}</div>
+              </div>
+              <div className="px-5 pb-3">
+                <div className="text-sm font-normal text-white/90">{m.lead}</div>
+              </div>
+              {/* 3つの軸で並べると、モード間の違いが縦に読み比べられる */}
+              <div className="px-5 pb-3 space-y-1.5">
+                {m.points.map(([k, v]) => (
+                  <div key={k} className="text-xs">
+                    <span className={`${m.accent} font-normal`}>{k}</span>
+                    <span className="text-white ml-1.5 font-normal">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="px-5 pb-3 mt-auto">
+                <div className="flex flex-wrap gap-1">
+                  {m.tags.map(tag => (
+                    <span key={tag} className={`text-xs px-1.5 py-0.5 rounded font-normal ${m.tagBg}`}>{tag}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="px-5 py-2.5 bg-black/25 flex items-center justify-between">
+                <span className="text-xs font-normal text-white/80">難易度の目安</span>
+                {DIFF_DOTS(m.difficulty)}
+              </div>
+            </button>
+          ))}
         </div>
 
-        <button
-          onClick={onBack}
-          className="mt-8 inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-800 text-sm transition"
-        >
-          ← 戻る
-        </button>
+        <div className="text-center">
+          <button
+            onClick={onBack}
+            className="mt-7 inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 text-sm transition"
+          >
+            ← 戻る
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -190,68 +259,84 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-2 text-center">
+        <h1 className="text-3xl font-bold text-white mb-1 text-center">
           {REGIONS.find(r => r.id === selectedRegion)?.name} のチーム
         </h1>
-        <p className="text-gray-400 mb-6 text-center">監督として就任するチームを選んでください</p>
+        <p className="text-gray-300 mb-4 text-center text-sm">
+          監督として就任するチームを選んでください
+          <span className="text-gray-400 ml-2">全{regionTeams.length}チーム</span>
+        </p>
 
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+        {/* 2列にして幅を使う。1列だと9チームでスクロールアウトしていた */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[58vh] overflow-y-auto pr-1">
           {regionTeams.map(team => {
             const typeInfo = TYPE_LABELS[team.type] || TYPE_LABELS.club;
             const isClub = team.type === 'club';
             const isSelected = selectedTeam?.id === team.id;
+            const diff = difficultyOf(team);
+            const st = strengthOf(team);
             return (
               <div
                 key={team.id}
                 onClick={() => { if (editingNameId !== team.id) setSelectedTeam(team); }}
-                className={`w-full flex items-center justify-between p-3 rounded-lg border transition ${
+                className={`group w-full p-2.5 rounded-lg border transition cursor-pointer ${
                   isSelected
-                    ? (isClub ? 'bg-green-900/50 border-green-500 cursor-pointer' : 'bg-blue-900/50 border-blue-500 cursor-pointer')
-                    : 'bg-gray-800 border-gray-700 hover:border-gray-500 cursor-pointer'
+                    ? (isClub ? 'bg-green-900/50 border-green-500' : 'bg-blue-900/50 border-blue-500')
+                    : 'bg-gray-800 border-gray-700 hover:border-gray-500'
                 }`}
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <span className={`font-bold text-lg w-6 shrink-0 ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${typeInfo.color}`}>{typeInfo.label}</span>
-                  <div className="text-left min-w-0">
-                    {editingNameId === team.id ? (
-                      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          value={editNameValue}
-                          onChange={(e) => setEditNameValue(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') saveEditName(team.id); if (e.key === 'Escape') setEditingNameId(null); }}
-                          className="bg-gray-700 border border-gray-500 text-white px-2 py-1 rounded w-44 focus:border-blue-400 focus:outline-none text-sm"
-                          autoFocus
-                        />
-                        <button onClick={() => saveEditName(team.id)} className="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs">保存</button>
-                        <button onClick={() => setEditingNameId(null)} className="text-gray-400 hover:text-white text-xs">取消</button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-white font-bold">{team.displayName}</span>
-                        <span className="text-gray-500 text-xs">({team.city})</span>
-                        {team.displayName !== team.name && (
-                          <span className="text-gray-600 text-xs">元:{team.name}</span>
-                        )}
-                      </div>
-                    )}
+                {editingNameId === team.id ? (
+                  <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') saveEditName(team.id); if (e.key === 'Escape') setEditingNameId(null); }}
+                      className="bg-gray-700 border border-gray-500 text-white px-2 py-1 rounded flex-1 min-w-0 focus:border-blue-400 focus:outline-none text-sm"
+                      autoFocus
+                    />
+                    <button onClick={() => saveEditName(team.id)} className="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs shrink-0">保存</button>
+                    <button onClick={() => setEditingNameId(null)} className="text-gray-300 hover:text-white text-xs shrink-0">取消</button>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  {editingNameId !== team.id && !team.isCustom && (
-                    <button onClick={(e) => startEditName(e, team)} className="text-gray-600 hover:text-blue-400 text-xs">名前変更</button>
-                  )}
-                  {team.displayName !== team.name && editingNameId !== team.id && (
-                    <button onClick={(e) => handleResetName(e, team.id)} className="text-gray-600 hover:text-yellow-400 text-xs">リセット</button>
-                  )}
-                  <span className="text-gray-500 text-xs w-16 text-right">
-                    {RANK_LABELS[team.rank]}
-                  </span>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`font-bold text-lg w-5 shrink-0 text-center ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${typeInfo.color}`}>{typeInfo.label}</span>
+                      <span className="text-white font-bold truncate min-w-0">{team.displayName}</span>
+                      <span className="text-gray-400 text-xs shrink-0">{team.city}</span>
+                      <span className="ml-auto flex items-center gap-2 shrink-0">
+                        {/* 改名は常時出すと全行の視覚ノイズになるのでホバー時だけ */}
+                        {!team.isCustom && (
+                          <button onClick={(e) => startEditName(e, team)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-300 text-xs transition">改名</button>
+                        )}
+                        {team.displayName !== team.name && (
+                          <button onClick={(e) => handleResetName(e, team.id)}
+                            className="text-gray-400 hover:text-yellow-300 text-xs">戻す</button>
+                        )}
+                      </span>
+                    </div>
+                    {/* 就任先を決めるための材料。ランクだけでは中身が分からなかった */}
+                    <div className="flex items-center gap-3 text-xs tabular-nums pl-7">
+                      <span className="text-gray-300">{RANK_LABELS[team.rank]}</span>
+                      <span className="text-gray-300">戦力<span className="text-gray-100 ml-0.5">{st.min}〜{st.max}</span></span>
+                      <span className="text-gray-300">主力級<span className="text-gray-100 ml-0.5">{Math.round(st.star * 100)}%</span></span>
+                      {team.budget != null && (
+                        <span className="text-gray-300">予算<span className="text-gray-100 ml-0.5">{team.budget}</span></span>
+                      )}
+                      <span className={`ml-auto font-bold ${DIFF_COLOR[diff]}`}>{DIFFICULTY[diff]}</span>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
+        </div>
+
+        <div className="text-xs text-gray-400 mt-2 text-center">
+          戦力＝所属選手の能力の目安 ／ 主力級＝突出した選手が出る確率 ／
+          クラブはキャンプが無く成長も遅いぶん難しい
         </div>
 
         {/* チーム作成（企業チーム・Dランク固定、Dクラブ1つと自動入れ替え） */}
