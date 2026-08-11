@@ -217,7 +217,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
   return (
     <div className="p-3 bg-gray-900 min-h-screen">
       <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
-      <p className="text-gray-400 text-xs mb-1">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
+      <p className="text-gray-300 text-xs mb-1">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
       <AbilityLegend className="mb-2" />
       {aiReleasedCount > 0 && (
         <p className="text-yellow-400 text-xs mb-2">AIチームは{aiReleasedCount}人の選手を自動解雇します。</p>
@@ -235,7 +235,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           <div className="mb-3 overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-gray-800">
-                <tr className="border-b border-gray-600 text-xs text-gray-400">
+                <tr className="border-b border-gray-600 text-xs text-gray-300">
                   <th className="py-1 px-1">状態</th>
                   <SortHeader label="名前" sortKeyVal="name" />
                   <SortHeader label="齢" sortKeyVal="age" />
@@ -294,7 +294,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                           const base = player.growthPotential ?? 1.0;
                           const mod = player.growthModifier || 0;
                           const effective = Math.max(0.3, Math.min(1.8, base + mod));
-                          const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-400';
+                          const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-300';
                           return (
                             <span className={color} title={`基礎:${base.toFixed(2)} 変動:${mod >= 0 ? '+' : ''}${mod.toFixed(2)}`}>
                               {effective.toFixed(2)}
@@ -303,7 +303,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                         })()}
                       </td>
                       <td className="py-1 px-1 text-xs text-gray-300 text-center">{POSITION_NAMES[player.position] || player.position}</td>
-                      <td className="py-1 px-1 text-xs text-center text-gray-400 whitespace-nowrap">
+                      <td className="py-1 px-1 text-xs text-center text-gray-300 whitespace-nowrap">
                         {player.physical?.throws === 'left' ? '左投' : '右投'}{player.batting?.bats === 'left' ? '左打' : player.batting?.bats === 'switch' ? '両打' : '右打'}
                       </td>
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.batting?.meet || 0)}`}>{player.batting?.meet || 0}</td>
@@ -319,9 +319,9 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                       <td className={`py-1 px-1 text-xs text-center ${getAbilityColor(player.pitching?.spinRate ?? 0)}`}>{isPitcher ? (player.pitching?.spinRate ?? '-') : '-'}</td>
                       <td className="py-1 px-1 text-xs text-center whitespace-nowrap">
                         {(() => {
-                          if (!isPitcher) return <span className="text-gray-600">-</span>;
+                          if (!isPitcher) return <span className="text-gray-400">-</span>;
                           const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
-                          if (arsenal.length === 0) return <span className="text-gray-600">-</span>;
+                          if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
                           return arsenal.map((a, i) => (
                             <span key={i} className={getAbilityColor(a.level || 0)}>{i > 0 ? '/' : ''}{getPitchTypeName(a.type)}{a.level || 0}</span>
                           ));
@@ -361,21 +361,21 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
               <div className="bg-gray-800 rounded-xl border border-gray-600 max-w-lg w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h3 className="text-white font-bold text-lg mb-3">契約更改の確認</h3>
                 <div className="bg-gray-900/60 rounded-lg p-3 mb-3 max-h-48 overflow-y-auto">
-                  <div className="text-gray-400 text-xs mb-2">解雇予定選手 ({userReleased.length}人)</div>
+                  <div className="text-gray-300 text-xs mb-2">解雇予定選手 ({userReleased.length}人)</div>
                   {players.filter(p => userReleased.includes(p.id)).map(p => (
                     <div key={p.id} className="flex items-center justify-between text-sm py-1 border-b border-gray-700/50 last:border-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-400 text-xs">{POSITION_NAMES[p.position]}</span>
+                        <span className="text-gray-300 text-xs">{POSITION_NAMES[p.position]}</span>
                         <span className="text-white font-bold">{p.name}</span>
-                        <span className="text-gray-500 text-xs">{p.age}歳</span>
+                        <span className="text-gray-400 text-xs">{p.age}歳</span>
                       </div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${(p.age || 20) >= 33 ? 'bg-gray-700 text-gray-400' : 'bg-blue-900/50 text-blue-300'}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${(p.age || 20) >= 33 ? 'bg-gray-700 text-gray-300' : 'bg-blue-900/50 text-blue-300'}`}>
                         {(p.age || 20) >= 33 ? '引退' : 'リリースプール'}
                       </span>
                     </div>
                   ))}
                 </div>
-                <div className="text-gray-400 text-xs mb-4 space-y-1">
+                <div className="text-gray-300 text-xs mb-4 space-y-1">
                   <div>残りロスター: <span className="text-white font-bold">{players.length - userReleased.length}人</span></div>
                   <div className="text-yellow-400/80">この操作は取り消せません。33歳以上の選手は引退、33歳未満はリリースプールに移動します。</div>
                 </div>
@@ -397,7 +397,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           {totalReleased > 0 && (
             <p className="text-gray-300 mb-4">{totalReleased}人の選手を解雇しました。(AI: {aiReleasedCount}人, 自チーム: {userReleased.length}人)</p>
           )}
-          <p className="text-gray-400 mb-6">次はトライアウトで新選手を獲得できます。</p>
+          <p className="text-gray-300 mb-6">次はトライアウトで新選手を獲得できます。</p>
           <button
             onClick={() => { if (onComplete) onComplete(); }}
             className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-lg font-bold text-lg"

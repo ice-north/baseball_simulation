@@ -66,10 +66,10 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
       <div className="p-4 bg-gray-900 min-h-screen">
         <h1 className="text-xl font-bold text-white mb-3">入部受付完了</h1>
         <div className="mb-4 bg-gray-800 rounded p-3">
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-gray-300">
             新規入部: <span className="text-green-400 font-bold">{acceptedCount}名</span>
           </div>
-          <div className="text-xs text-gray-400 mt-1">
+          <div className="text-xs text-gray-300 mt-1">
             来季ロスター: <span className="text-white font-bold">{teamData?.players?.length || 0}名</span>
           </div>
         </div>
@@ -81,7 +81,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
                 <div key={c.player.id} className="text-xs text-gray-300 bg-gray-800 p-1.5 rounded">
                   <span className="text-yellow-300">{POSITION_NAMES[c.player.position]}</span>
                   <span className="ml-1 text-white font-bold">{c.player.name}</span>
-                  <span className="text-gray-500 ml-1">({c.player.age}歳)</span>
+                  <span className="text-gray-400 ml-1">({c.player.age}歳)</span>
                 </div>
               ))}
             </div>
@@ -100,11 +100,11 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
   return (
     <div className="p-4 bg-gray-900 min-h-screen">
       <h1 className="text-xl font-bold text-white mb-1">入部希望者</h1>
-      <p className="text-gray-400 text-xs mb-4">
+      <p className="text-gray-300 text-xs mb-4">
         プロや企業チームに入れなかった選手たちが入部を希望しています。受け入れる選手を選んでください。
       </p>
 
-      <div className="mb-3 flex items-center gap-3 text-xs text-gray-400">
+      <div className="mb-3 flex items-center gap-3 text-xs text-gray-300">
         <span>現在のロスター: <span className="text-white font-bold">{currentRoster}名</span></span>
         <span>入部希望: <span className="text-green-400 font-bold">{candidates.length}名</span></span>
         <span>受入予定: <span className="text-blue-400 font-bold">{acceptedCount}名</span></span>
@@ -112,7 +112,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
 
       {candidates.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <p className="text-gray-400">今年は入部希望者がいませんでした。</p>
+          <p className="text-gray-300">今年は入部希望者がいませんでした。</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -131,13 +131,13 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
                   <div className="flex items-center gap-2">
                     <span className="text-yellow-400 text-xs font-bold">{POSITION_NAMES[player.position]}</span>
                     <span className="text-white font-bold">{player.name}</span>
-                    <span className="text-gray-500 text-xs">({player.age}歳)</span>
-                    <span className="text-gray-600 text-xs">
+                    <span className="text-gray-400 text-xs">({player.age}歳)</span>
+                    <span className="text-gray-400 text-xs">
                       {player.throws === 'left' ? '左投' : '右投'}{player.bats === 'left' ? '左打' : player.bats === 'switch' ? '両打' : '右打'}
                     </span>
                   </div>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                    isAccepted ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'
+                    isAccepted ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'
                   }`}>
                     {isAccepted ? '受入' : '見送り'}
                   </span>
@@ -160,7 +160,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
                   )}
                 </div>
                 {player.careerHistory?.length > 0 && (
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-gray-400 mt-1">
                     経歴: {player.careerHistory.map(h => h.label).join(' → ')}
                   </div>
                 )}

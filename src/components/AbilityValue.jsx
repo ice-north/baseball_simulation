@@ -19,7 +19,7 @@ import { getAbilityRank, getRankColor, getUtilityScore } from '../utils/constant
 //   placeholder  : 値が無い/未判明時の表示（スカウトのぼかし '?' など）
 export function AbilityValue({ value, isVel = false, isSta = false, showRank = false, placeholder = '?', className = '' }) {
   const n = typeof value === 'number' ? value : (value == null ? NaN : parseInt(value));
-  if (isNaN(n)) return <span className="text-gray-500">{placeholder}</span>;
+  if (isNaN(n)) return <span className="text-gray-400">{placeholder}</span>;
   const rank = getAbilityRank(n, isVel, isSta);
   const color = getRankColor(rank);
   return (
@@ -77,7 +77,7 @@ export function OverallBadge({ player, className = '' }) {
   const rating = overallRating(player);
   if (rating == null) {
     return (
-      <span className={`inline-flex items-center justify-center w-5 h-5 rounded font-mono font-extrabold text-xs bg-gray-800 border border-gray-700 text-gray-500 ${className}`}>?</span>
+      <span className={`inline-flex items-center justify-center w-5 h-5 rounded font-mono font-extrabold text-xs bg-gray-800 border border-gray-700 text-gray-400 ${className}`}>?</span>
     );
   }
   return <RankBadge value={rating} className={className} />;

@@ -259,14 +259,14 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       <div className="p-4">
         <div className="max-w-3xl mx-auto">
           <div className="mb-6">
-            <p className="text-gray-400 text-sm font-semibold tracking-[0.15em] uppercase">Graduation Report</p>
+            <p className="text-gray-300 text-sm font-semibold tracking-[0.15em] uppercase">Graduation Report</p>
             <h1 className="text-3xl font-black text-white">🎓 卒業・入部レポート</h1>
           </div>
 
           {/* サマリー */}
           <div className="grid grid-cols-3 gap-3 mb-5">
             <div className="bg-gray-800/60 rounded-xl p-3 text-center border border-gray-700/40">
-              <div className="text-gray-400 text-xs mb-1">卒業生</div>
+              <div className="text-gray-300 text-xs mb-1">卒業生</div>
               <div className="text-white font-black text-2xl">{r.graduated.length}</div>
             </div>
             <div className="bg-red-900/20 rounded-xl p-3 text-center border border-red-800/30">
@@ -291,8 +291,8 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                   <div key={i} className="flex items-center gap-2 bg-red-900/25 rounded-lg px-3 py-2 text-sm">
                     <span className="text-red-300/70 text-xs font-bold w-20 shrink-0">{d.draftRound}</span>
                     <span className="text-white font-bold flex-1">{d.name}</span>
-                    <span className="text-gray-400 text-xs">{posLabel[d.position] || d.position}</span>
-                    <span className="text-gray-500 text-xs">{d.team}</span>
+                    <span className="text-gray-300 text-xs">{posLabel[d.position] || d.position}</span>
+                    <span className="text-gray-400 text-xs">{d.team}</span>
                     <span className="text-red-300 font-bold text-xs shrink-0">→ {d.npbTeam}</span>
                   </div>
                 ))}
@@ -307,12 +307,12 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                 <span className="w-2 h-2 rounded-full bg-amber-400"></span>
                 卒業生の進路
               </h3>
-              <p className="text-xs text-gray-500 mb-3">
+              <p className="text-xs text-gray-400 mb-3">
                 社会人 {r.postGradPaths.corporate}名 / 独立リーグ {r.postGradPaths.independent}名 / クラブ {r.postGradPaths.club || 0}名 / 引退 {r.postGradPaths.retired}名
               </p>
               {Object.entries(teamGroups).map(([team, grads]) => (
                 <div key={team} className="mb-3 last:mb-0">
-                  <div className="text-xs font-bold text-gray-400 mb-1 px-1">{team}</div>
+                  <div className="text-xs font-bold text-gray-300 mb-1 px-1">{team}</div>
                   <div className="space-y-1">
                     {grads.map((g, i) => (
                       <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
@@ -325,15 +325,15 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                           g.path === 'corporate' ? 'bg-blue-800/50 text-blue-300' :
                           g.path === 'independent' ? 'bg-green-800/50 text-green-300' :
                           g.path === 'club' ? 'bg-cyan-800/50 text-cyan-300' :
-                          'bg-gray-700/50 text-gray-400'
+                          'bg-gray-700/50 text-gray-300'
                         }`}>{pathLabel[g.path]}</span>
                         <span className="text-white font-bold flex-1">{g.name}</span>
-                        <span className="text-gray-400 text-xs w-6 text-center">{posLabel[g.position] || g.position}</span>
+                        <span className="text-gray-300 text-xs w-6 text-center">{posLabel[g.position] || g.position}</span>
                         {g.nextYearTeam && (
                           <span className="text-amber-400/80 text-xs font-bold shrink-0">→ {g.nextYearTeam}</span>
                         )}
                         {g.stats && (
-                          <span className="text-gray-500 text-xs tabular-nums w-28 text-right">
+                          <span className="text-gray-400 text-xs tabular-nums w-28 text-right">
                             {g.position === 'pitcher'
                               ? `${g.stats.velocity}km / 制球${g.stats.control}`
                               : `M${g.stats.meet} P${g.stats.power} E${g.stats.eye} S${g.stats.speed}`
@@ -361,21 +361,21 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                   <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                   新入生
                 </h3>
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="text-xs text-gray-400 mb-3">
                   推薦入学 {r.recruited.filter(p => p.type === 'recommended').length}名 / 一般入部 {r.recruited.filter(p => p.type === 'general').length}名
                 </p>
                 {Object.entries(recTeamGroups).map(([team, players]) => (
                   <div key={team} className="mb-2 last:mb-0">
-                    <div className="text-xs font-bold text-gray-400 mb-1 px-1">{team}</div>
+                    <div className="text-xs font-bold text-gray-300 mb-1 px-1">{team}</div>
                     <div className="flex flex-wrap gap-1.5">
                       {players.map((p, i) => (
                         <span key={i} className={`text-xs rounded px-2 py-1 ${
                           p.type === 'recommended'
                             ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/40'
-                            : 'bg-gray-800/60 text-gray-400'
+                            : 'bg-gray-800/60 text-gray-300'
                         }`}>
                           {p.name}
-                          <span className="text-gray-500 ml-1">{posLabel[p.position] || p.position}</span>
+                          <span className="text-gray-400 ml-1">{posLabel[p.position] || p.position}</span>
                           {p.type === 'recommended' && <span className="ml-1 text-emerald-500 font-bold">推</span>}
                         </span>
                       ))}
@@ -417,7 +417,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       <div className="max-w-3xl mx-auto">
         {/* ヘッダー */}
         <div className="mb-6">
-          <p className="text-gray-400 text-sm font-semibold tracking-[0.15em] uppercase">Off Season</p>
+          <p className="text-gray-300 text-sm font-semibold tracking-[0.15em] uppercase">Off Season</p>
           <h1 className="text-3xl font-black text-white">{seasonData.year}年目 シーズン終了</h1>
           {gameMode === 'sandbox' && (
             <span className="inline-block mt-1 bg-orange-500/20 text-orange-400 border border-orange-500/40 text-sm font-bold px-3 py-0.5 rounded-full">
@@ -479,7 +479,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               }`}
             >
               <span className={`font-black text-base w-6 text-center ${
-                idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'
+                idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-400'
               }`}>{idx + 1}</span>
               <span className={`font-bold text-base flex-1 ${idx === 0 ? 'text-yellow-200' : 'text-white'}`}>
                 {s.team}
@@ -487,7 +487,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               <span className="text-gray-300 text-sm font-semibold tabular-nums">
                 {s.wins}勝{s.losses}敗{s.draws > 0 ? `${s.draws}分` : ''}
               </span>
-              <span className="text-gray-400 text-sm tabular-nums w-12 text-right">
+              <span className="text-gray-300 text-sm tabular-nums w-12 text-right">
                 {(s.winRate || 0).toFixed(3)}
               </span>
             </div>
@@ -519,18 +519,18 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           const userTeamName = seasonData.settings?.teamNames?.[0] || Object.keys(TEAMS_DATA)[0];
           const cd = TEAMS_DATA[userTeamName]?.corporateData;
           if (!cd) return null;
-          const rankColors = { S: 'text-yellow-400 border-yellow-500/40 bg-yellow-900/20', A: 'text-blue-400 border-blue-500/40 bg-blue-900/20', B: 'text-green-400 border-green-500/40 bg-green-900/20', C: 'text-gray-300 border-gray-500/40 bg-gray-800/40', D: 'text-gray-500 border-gray-600/40 bg-gray-800/20' };
+          const rankColors = { S: 'text-yellow-400 border-yellow-500/40 bg-yellow-900/20', A: 'text-blue-400 border-blue-500/40 bg-blue-900/20', B: 'text-green-400 border-green-500/40 bg-green-900/20', C: 'text-gray-300 border-gray-500/40 bg-gray-800/40', D: 'text-gray-400 border-gray-600/40 bg-gray-800/20' };
           const colors = rankColors[cd.rank] || rankColors.C;
           return (
             <div className={`rounded-xl border p-4 mb-5 ${colors}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-400 mb-1">チームランク・注目度</h3>
+                  <h3 className="text-sm font-bold text-gray-300 mb-1">チームランク・注目度</h3>
                   <div className="flex items-center gap-3">
                     <span className={`text-3xl font-black ${colors.split(' ')[0]}`}>{cd.rank}</span>
                     <div>
                       <div className="text-white text-sm font-bold">{userTeamName}</div>
-                      <div className="text-gray-400 text-xs">注目度: {Math.round(cd.reputation)} / 100</div>
+                      <div className="text-gray-300 text-xs">注目度: {Math.round(cd.reputation)} / 100</div>
                     </div>
                   </div>
                 </div>

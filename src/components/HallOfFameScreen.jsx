@@ -331,7 +331,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
   const statusColor = (status) => {
     if (status === '現役') return 'text-green-400';
     if (status === 'NPB') return 'text-yellow-400';
-    return 'text-gray-500';
+    return 'text-gray-400';
   };
 
   const teamNames = useMemo(() => {
@@ -371,7 +371,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'npbdraft'
                   ? 'bg-red-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               NPBドラフト
@@ -381,7 +381,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'roster'
                   ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               入団記録
@@ -391,7 +391,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'stats'
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               通算成績
@@ -401,7 +401,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'teamhistory'
                   ? 'bg-green-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               チーム成績
@@ -411,7 +411,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'almanac'
                   ? 'bg-amber-500 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               年鑑
@@ -421,7 +421,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'tournaments'
                   ? 'bg-yellow-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               大会記録
@@ -431,7 +431,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'alumni'
                   ? 'bg-cyan-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               OB名鑑
@@ -441,7 +441,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                 activeTab === 'watch'
                   ? 'bg-cyan-600 text-white shadow-sm'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               注目選手
@@ -454,8 +454,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           <div>
             {npbDraftYears.length === 0 ? (
               <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-400">まだNPBドラフト記録がありません</p>
-                <p className="text-gray-500 text-sm mt-1">10月のNPBドラフト会議で指名された選手がここに記録されます</p>
+                <p className="text-gray-300">まだNPBドラフト記録がありません</p>
+                <p className="text-gray-400 text-sm mt-1">10月のNPBドラフト会議で指名された選手がここに記録されます</p>
               </div>
             ) : (
               <>
@@ -467,7 +467,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${
                         npbDraftYear === year
                           ? 'bg-red-600 text-white shadow-md'
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                       }`}
                     >
                       {year}年目
@@ -480,7 +480,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     {/* サマリー */}
                     <div className="bg-gray-800 rounded-lg p-3 mb-3 flex items-center gap-4 flex-wrap">
                       <span className="text-white font-bold">{npbDraftYear}年目 NPBドラフト会議</span>
-                      <span className="text-gray-400 text-sm">指名 {npbDraftGridData.total}名</span>
+                      <span className="text-gray-300 text-sm">指名 {npbDraftGridData.total}名</span>
                       {(() => {
                         const src = { highschool: 0, university: 0, corporate: 0, independent: 0 };
                         npbDraftGridData.yearPlayers.forEach(p => {
@@ -510,11 +510,11 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             >
                               <img src={`/flag/${team.flag}.png`} alt="" className="shrink-0 object-contain" style={{ height: '18px', width: '27px' }} />
                               <span className="text-white font-bold text-xs">{team.short}</span>
-                              <span className="text-gray-500 text-xs ml-auto">{picks.length}名</span>
+                              <span className="text-gray-400 text-xs ml-auto">{picks.length}名</span>
                             </div>
                             <div className="bg-gray-800/90 p-2" style={{ minHeight: '60px' }}>
                               {picks.length === 0 ? (
-                                <div className="flex items-center justify-center h-full text-gray-500 text-sm min-h-[40px]">
+                                <div className="flex items-center justify-center h-full text-gray-400 text-sm min-h-[40px]">
                                   指名なし
                                 </div>
                               ) : (
@@ -550,7 +550,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                           <span className={entry.bats === 'left' ? 'text-green-400' : entry.bats === 'switch' ? 'text-purple-400' : 'text-white'}>{batHand}</span>
                                           <span className="inline-block w-2" />
                                           <span className="text-white">{entry.age}歳</span>
-                                          <span className="text-gray-400 ml-3">{entry.teamName}</span>
+                                          <span className="text-gray-300 ml-3">{entry.teamName}</span>
                                         </td>
                                       </tr>
                                     );
@@ -566,13 +566,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
 
                     {/* 詳細テーブル（折りたたみ） */}
                     <details className="mt-4">
-                      <summary className="cursor-pointer text-sm text-gray-400 hover:text-gray-200 transition bg-gray-800 rounded-lg px-4 py-2">
+                      <summary className="cursor-pointer text-sm text-gray-300 hover:text-gray-200 transition bg-gray-800 rounded-lg px-4 py-2">
                         指名選手一覧（詳細テーブル） — {npbDraftGridData.total}名
                       </summary>
                       <div className="bg-gray-800 rounded-b-lg overflow-hidden mt-px">
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="bg-gray-700/80 text-gray-400 text-xs">
+                            <tr className="bg-gray-700/80 text-gray-300 text-xs">
                               <th className="py-1.5 px-2 text-left">順位</th>
                               <th className="py-1.5 px-2 text-left">選手名</th>
                               <th className="py-1.5 px-1 text-center">守</th>
@@ -621,18 +621,18 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                         </span>
                                       )}
                                     </td>
-                                    <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
+                                    <td className="py-1.5 px-1 text-center text-gray-400">{getPositionName(player.position)}</td>
                                     <td className="py-1.5 px-1 text-center text-xs">
-                                      <span className={player.throws === 'left' ? 'text-green-400' : 'text-gray-500'}>
+                                      <span className={player.throws === 'left' ? 'text-green-400' : 'text-gray-400'}>
                                         {player.throws === 'left' ? '左' : '右'}
                                       </span>
-                                      <span className="text-gray-500">/</span>
-                                      <span className={player.bats === 'left' ? 'text-green-400' : player.bats === 'switch' ? 'text-purple-400' : 'text-gray-500'}>
+                                      <span className="text-gray-400">/</span>
+                                      <span className={player.bats === 'left' ? 'text-green-400' : player.bats === 'switch' ? 'text-purple-400' : 'text-gray-400'}>
                                         {player.bats === 'left' ? '左' : player.bats === 'switch' ? '両' : '右'}
                                       </span>
                                     </td>
-                                    <td className="py-1.5 px-1 text-center text-gray-500">{player.age}</td>
-                                    <td className="py-1.5 px-2 text-gray-400 text-xs">{player.teamName}</td>
+                                    <td className="py-1.5 px-1 text-center text-gray-400">{player.age}</td>
+                                    <td className="py-1.5 px-2 text-gray-300 text-xs">{player.teamName}</td>
                                     <td className="py-1.5 px-2 text-yellow-400 font-bold text-xs">{player.npbTeam}</td>
                                     <td className="py-1.5 px-2 text-right text-gray-300 font-mono text-xs">{mainStat}</td>
                                   </tr>
@@ -664,8 +664,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           <div>
             {draftYears.length === 0 ? (
               <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-400">まだ入団記録がありません</p>
-                <p className="text-gray-500 text-sm mt-1">トライアウトで指名した選手の記録がここに表示されます</p>
+                <p className="text-gray-300">まだ入団記録がありません</p>
+                <p className="text-gray-400 text-sm mt-1">トライアウトで指名した選手の記録がここに表示されます</p>
               </div>
             ) : (
               <div>
@@ -676,7 +676,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       className={`px-3 py-1 rounded text-xs font-bold transition ${
                         draftHistoryYear === year
                           ? 'bg-purple-600 text-white'
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                       }`}
                     >
                       {year}年目
@@ -696,7 +696,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     <div>
                       <div className="bg-gray-800 rounded-lg p-3 mb-3 flex items-center gap-4 flex-wrap">
                         <span className="text-white font-bold">{draftHistoryYear}年目 入団</span>
-                        <span className="text-gray-400 text-sm">{yearRecords.length}名 / {teamNames.length}チーム</span>
+                        <span className="text-gray-300 text-sm">{yearRecords.length}名 / {teamNames.length}チーム</span>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {teamNames.map(tn => {
@@ -716,7 +716,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                     </div>
                                     <div className="flex items-center gap-1.5 ml-5 mt-0.5">
                                       <span className="text-blue-400 text-xs">{getPositionName(p.position)}</span>
-                                      <span className="text-gray-500 text-xs">{p.draftAge}歳</span>
+                                      <span className="text-gray-400 text-xs">{p.draftAge}歳</span>
                                       {isCorporate && p.source && (
                                         <span className="text-cyan-400 text-xs">{p.source}</span>
                                       )}
@@ -733,7 +733,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 })()}
                 {!draftHistoryYear && (
                   <div className="bg-gray-800 rounded-lg p-6 text-center">
-                    <p className="text-gray-500 text-sm">年度を選択してください</p>
+                    <p className="text-gray-400 text-sm">年度を選択してください</p>
                   </div>
                 )}
               </div>
@@ -746,7 +746,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           <div>
             <div className="bg-gray-800 rounded-lg p-2 mb-2">
               <div className="flex items-center gap-1 mb-1">
-                <span className="text-gray-500 text-xs mr-1 w-8">打撃</span>
+                <span className="text-gray-400 text-xs mr-1 w-8">打撃</span>
                 {battingCategories.map(cat => (
                   <button
                     key={cat.key}
@@ -754,7 +754,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     className={`px-2 py-0.5 text-xs rounded transition ${
                       statCategory === cat.key
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                     }`}
                   >
                     {cat.label}
@@ -762,7 +762,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 ))}
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-gray-500 text-xs mr-1 w-8">投手</span>
+                <span className="text-gray-400 text-xs mr-1 w-8">投手</span>
                 {pitchingCategories.map(cat => (
                   <button
                     key={cat.key}
@@ -770,7 +770,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     className={`px-2 py-0.5 text-xs rounded transition ${
                       statCategory === cat.key
                         ? 'bg-red-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                     }`}
                   >
                     {cat.label}
@@ -781,13 +781,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
 
             {rankings.length === 0 ? (
               <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-500">データがありません</p>
+                <p className="text-gray-400">データがありません</p>
               </div>
             ) : (
               <div className="bg-gray-800 rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-gray-700/80 text-gray-400 text-xs">
+                    <tr className="bg-gray-700/80 text-gray-300 text-xs">
                       <th className="py-1.5 px-2 text-center w-8">#</th>
                       <th className="py-1.5 px-2 text-left">選手名</th>
                       <th className="py-1.5 px-1 text-center">位</th>
@@ -803,15 +803,15 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       return (
                         <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer" onClick={() => openModal(player)}>
                           <td className="py-1.5 px-2 text-center">
-                            <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
+                            <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-gray-400'}`}>
                               {idx + 1}
                             </span>
                           </td>
                           <td className="py-1.5 px-2">
                             <span className={`font-bold ${isP ? 'text-red-400' : 'text-blue-300'}`}>{player.name}</span>
                           </td>
-                          <td className="py-1.5 px-1 text-center text-gray-500">{getPositionName(player.position)}</td>
-                          <td className="py-1.5 px-2 text-gray-400">{player.teamName}</td>
+                          <td className="py-1.5 px-1 text-center text-gray-400">{getPositionName(player.position)}</td>
+                          <td className="py-1.5 px-2 text-gray-300">{player.teamName}</td>
                           <td className={`py-1.5 px-1 text-center text-xs font-bold ${statusColor(player.status)}`}>
                             {player.status}
                           </td>
@@ -833,20 +833,20 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
           <div>
             {teamHistory.length === 0 ? (
               <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-400">まだチーム成績データがありません</p>
-                <p className="text-gray-500 text-sm mt-1">シーズン終了後にチーム成績が記録されます</p>
+                <p className="text-gray-300">まだチーム成績データがありません</p>
+                <p className="text-gray-400 text-sm mt-1">シーズン終了後にチーム成績が記録されます</p>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="bg-gray-800 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-2">チームを選択して年度別成績を表示</div>
+                  <div className="text-xs text-gray-300 mb-2">チームを選択して年度別成績を表示</div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => { setSelectedTeamForHistory(null); setExpandedYear(null); }}
                       className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                         !selectedTeamForHistory
                           ? 'bg-green-600 text-white shadow-sm'
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                       }`}
                     >
                       全体
@@ -858,7 +858,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${
                           selectedTeamForHistory === name
                             ? 'bg-green-600 text-white shadow-sm'
-                            : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         }`}
                       >
                         {name}
@@ -886,13 +886,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                 </span>
                               )}
                             </div>
-                            <span className="text-gray-500">{isExpanded ? '▲' : '▼'}</span>
+                            <span className="text-gray-400">{isExpanded ? '▲' : '▼'}</span>
                           </button>
                           {isExpanded && entry.standings && (
                             <div className="px-4 pb-3">
                               <table className="w-full text-sm">
                                 <thead>
-                                  <tr className="text-gray-400 text-xs border-b border-gray-700">
+                                  <tr className="text-gray-300 text-xs border-b border-gray-700">
                                     <th className="py-1.5 px-2 text-center w-8">順位</th>
                                     <th className="py-1.5 px-2 text-left">チーム</th>
                                     <th className="py-1.5 px-2 text-center">勝</th>
@@ -907,34 +907,34 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                   {entry.standings.map((s, si) => (
                                     <tr key={si} className={`border-b border-gray-700/50 ${si === 0 ? 'bg-yellow-900/20' : ''}`}>
                                       <td className="py-2 px-2 text-center">
-                                        <span className={`font-bold ${si === 0 ? 'text-yellow-400' : si === 1 ? 'text-gray-300' : si === 2 ? 'text-orange-400' : 'text-gray-500'}`}>
+                                        <span className={`font-bold ${si === 0 ? 'text-yellow-400' : si === 1 ? 'text-gray-300' : si === 2 ? 'text-orange-400' : 'text-gray-400'}`}>
                                           {s.rank}
                                         </span>
                                       </td>
                                       <td className="py-2 px-2 font-bold text-white">{s.team}</td>
                                       <td className="py-2 px-2 text-center text-green-400 font-bold">{s.wins}</td>
                                       <td className="py-2 px-2 text-center text-red-400">{s.losses}</td>
-                                      <td className="py-2 px-2 text-center text-gray-400">{s.draws || 0}</td>
+                                      <td className="py-2 px-2 text-center text-gray-300">{s.draws || 0}</td>
                                       <td className="py-2 px-2 text-center text-white font-mono">{(s.winRate || 0).toFixed(3)}</td>
                                       <td className="py-2 px-2 text-xs">
                                         {s.mvpBatter ? (
                                           <span className="text-blue-300">
                                             {s.mvpBatter.name}
-                                            <span className="text-gray-500 ml-1">
+                                            <span className="text-gray-400 ml-1">
                                               {s.mvpBatter.avg} {s.mvpBatter.hr}HR {s.mvpBatter.rbi}打点
                                             </span>
                                           </span>
-                                        ) : <span className="text-gray-500">-</span>}
+                                        ) : <span className="text-gray-400">-</span>}
                                       </td>
                                       <td className="py-2 px-2 text-xs">
                                         {s.mvpPitcher ? (
                                           <span className="text-red-300">
                                             {s.mvpPitcher.name}
-                                            <span className="text-gray-500 ml-1">
+                                            <span className="text-gray-400 ml-1">
                                               {s.mvpPitcher.wins}勝{s.mvpPitcher.losses}敗 {s.mvpPitcher.saves > 0 ? `${s.mvpPitcher.saves}S ` : ''}防{s.mvpPitcher.era}
                                             </span>
                                           </span>
-                                        ) : <span className="text-gray-500">-</span>}
+                                        ) : <span className="text-gray-400">-</span>}
                                       </td>
                                     </tr>
                                   ))}
@@ -952,13 +952,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                   <div>
                     {selectedTeamHistory.length === 0 ? (
                       <div className="bg-gray-800 rounded-lg p-6 text-center">
-                        <p className="text-gray-500">{selectedTeamForHistory}の成績データがありません</p>
+                        <p className="text-gray-400">{selectedTeamForHistory}の成績データがありません</p>
                       </div>
                     ) : (
                       <div className="bg-gray-800 rounded-lg overflow-hidden">
                         <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-3">
                           <span className="text-lg font-bold text-white">{selectedTeamForHistory}</span>
-                          <span className="text-sm text-gray-400">
+                          <span className="text-sm text-gray-300">
                             通算 {selectedTeamHistory.reduce((s, r) => s + r.wins, 0)}勝
                             {selectedTeamHistory.reduce((s, r) => s + r.losses, 0)}敗
                             {selectedTeamHistory.reduce((s, r) => s + (r.draws || 0), 0) > 0 && ` ${selectedTeamHistory.reduce((s, r) => s + (r.draws || 0), 0)}分`}
@@ -969,7 +969,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         </div>
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="bg-gray-700/60 text-gray-400 text-xs">
+                            <tr className="bg-gray-700/60 text-gray-300 text-xs">
                               <th className="py-1.5 px-3 text-left">年度</th>
                               <th className="py-1.5 px-2 text-center">順位</th>
                               <th className="py-1.5 px-2 text-center">勝</th>
@@ -985,33 +985,33 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                               <tr key={ri} className={`border-b border-gray-700/50 ${record.rank === 1 ? 'bg-yellow-900/20' : ''}`}>
                                 <td className="py-2 px-3 font-bold text-white">{record.year}年目</td>
                                 <td className="py-2 px-2 text-center">
-                                  <span className={`font-bold text-base ${record.rank === 1 ? 'text-yellow-400' : record.rank === 2 ? 'text-gray-300' : record.rank === 3 ? 'text-orange-400' : 'text-gray-500'}`}>
+                                  <span className={`font-bold text-base ${record.rank === 1 ? 'text-yellow-400' : record.rank === 2 ? 'text-gray-300' : record.rank === 3 ? 'text-orange-400' : 'text-gray-400'}`}>
                                     {record.rank}位
                                   </span>
                                 </td>
                                 <td className="py-2 px-2 text-center text-green-400 font-bold">{record.wins}</td>
                                 <td className="py-2 px-2 text-center text-red-400">{record.losses}</td>
-                                <td className="py-2 px-2 text-center text-gray-400">{record.draws || 0}</td>
+                                <td className="py-2 px-2 text-center text-gray-300">{record.draws || 0}</td>
                                 <td className="py-2 px-2 text-center text-white font-mono">{(record.winRate || 0).toFixed(3)}</td>
                                 <td className="py-2 px-2 text-xs">
                                   {record.mvpBatter ? (
                                     <div>
                                       <span className="text-blue-300 font-bold">{record.mvpBatter.name}</span>
-                                      <div className="text-gray-500 text-xs">
+                                      <div className="text-gray-400 text-xs">
                                         {record.mvpBatter.avg} {record.mvpBatter.hr}HR {record.mvpBatter.rbi}打点 {record.mvpBatter.hits}安
                                       </div>
                                     </div>
-                                  ) : <span className="text-gray-500">-</span>}
+                                  ) : <span className="text-gray-400">-</span>}
                                 </td>
                                 <td className="py-2 px-2 text-xs">
                                   {record.mvpPitcher ? (
                                     <div>
                                       <span className="text-red-300 font-bold">{record.mvpPitcher.name}</span>
-                                      <div className="text-gray-500 text-xs">
+                                      <div className="text-gray-400 text-xs">
                                         {record.mvpPitcher.wins}勝{record.mvpPitcher.losses}敗 {record.mvpPitcher.saves > 0 ? `${record.mvpPitcher.saves}S ` : ''}防{record.mvpPitcher.era} {record.mvpPitcher.strikeouts}K
                                       </div>
                                     </div>
-                                  ) : <span className="text-gray-500">-</span>}
+                                  ) : <span className="text-gray-400">-</span>}
                                 </td>
                               </tr>
                             ))}
@@ -1076,7 +1076,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               {sorted.length === 0 ? (
                 <div className="bg-gray-800 rounded-lg p-6 text-center">
                   <p className="text-gray-300">まだ大会記録がありません</p>
-                  <p className="text-gray-500 text-sm mt-1">シーズン終了後に大会結果がここに記録されます</p>
+                  <p className="text-gray-400 text-sm mt-1">シーズン終了後に大会結果がここに記録されます</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1084,7 +1084,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                     <div key={ri} className="bg-gray-800 rounded-lg overflow-hidden">
                       <div className="px-4 py-2.5 border-b border-gray-700 flex items-center gap-3">
                         <span className="text-lg font-bold text-white">{rec.year}年目</span>
-                        {rec.calendarYear && <span className="text-gray-500 text-sm">({rec.calendarYear}年)</span>}
+                        {rec.calendarYear && <span className="text-gray-400 text-sm">({rec.calendarYear}年)</span>}
                         {rec.isCurrent && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded font-bold">今季</span>}
                       </div>
                       <div className="p-3 space-y-2">
@@ -1109,9 +1109,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             {rec.universityChampionship.champion ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-yellow-400 font-bold">優勝: {rec.universityChampionship.champion}</span>
-                                {rec.universityChampionship.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.universityChampionship.runnerUp}</span>}
+                                {rec.universityChampionship.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.universityChampionship.runnerUp}</span>}
                               </div>
-                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
                           </div>
                         )}
                         {/* 大学: 明治神宮大会 */}
@@ -1121,9 +1121,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             {rec.meijiJingu.champion ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-yellow-400 font-bold">優勝: {rec.meijiJingu.champion}</span>
-                                {rec.meijiJingu.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.meijiJingu.runnerUp}</span>}
+                                {rec.meijiJingu.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.meijiJingu.runnerUp}</span>}
                               </div>
-                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
                           </div>
                         )}
                         {/* 社会人: 都市対抗 */}
@@ -1133,9 +1133,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             {rec.toshitaikou.champion ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-yellow-400 font-bold">優勝: {rec.toshitaikou.champion}</span>
-                                {rec.toshitaikou.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.toshitaikou.runnerUp}</span>}
+                                {rec.toshitaikou.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.toshitaikou.runnerUp}</span>}
                               </div>
-                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
                           </div>
                         )}
                         {/* 社会人: 日本選手権 */}
@@ -1145,9 +1145,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             {rec.senshuken.champion ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-yellow-400 font-bold">優勝: {rec.senshuken.champion}</span>
-                                {rec.senshuken.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.senshuken.runnerUp}</span>}
+                                {rec.senshuken.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.senshuken.runnerUp}</span>}
                               </div>
-                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
                           </div>
                         )}
                         {/* 社会人: クラブ選手権 */}
@@ -1157,9 +1157,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             {rec.club.champion ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-yellow-400 font-bold">優勝: {rec.club.champion}</span>
-                                {rec.club.runnerUp && <span className="text-gray-400 text-xs">準優勝: {rec.club.runnerUp}</span>}
+                                {rec.club.runnerUp && <span className="text-gray-300 text-xs">準優勝: {rec.club.runnerUp}</span>}
                               </div>
-                            ) : <span className="text-gray-500 text-sm">開催中...</span>}
+                            ) : <span className="text-gray-400 text-sm">開催中...</span>}
                           </div>
                         )}
                         {/* 社会人: 地域トーナメント */}
@@ -1169,7 +1169,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             <div className="flex flex-wrap gap-x-4 gap-y-1">
                               {Object.values(rec.regional).map((r, i) => (
                                 <span key={i} className="text-xs">
-                                  <span className="text-gray-400">{r.regionName}:</span>
+                                  <span className="text-gray-300">{r.regionName}:</span>
                                   <span className="text-white font-bold ml-1">{r.champion || '未決定'}</span>
                                 </span>
                               ))}
@@ -1179,13 +1179,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         {/* 社会人: 都市対抗予選 */}
                         {rec.toshitaikouQualifiers && (
                           <details className="group">
-                            <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200 transition px-1">
+                            <summary className="cursor-pointer text-xs text-gray-300 hover:text-gray-200 transition px-1">
                               都市対抗 地区予選結果 ▼
                             </summary>
                             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 px-1">
                               {Object.values(rec.toshitaikouQualifiers).map((q, i) => (
                                 <span key={i} className="text-xs">
-                                  <span className="text-gray-400">{q.regionName}:</span>
+                                  <span className="text-gray-300">{q.regionName}:</span>
                                   <span className="text-blue-300 ml-1">{q.qualifiedTeams?.join(', ') || '-'}</span>
                                 </span>
                               ))}
@@ -1204,8 +1204,8 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         {activeTab === 'almanac' && (
           (almanac.years.length === 0 && almanac.secondCareers.length === 0) ? (
             <div className="bg-gray-800 rounded-lg p-6 text-center">
-              <p className="text-gray-400">まだ年鑑データがありません</p>
-              <p className="text-gray-500 text-sm mt-1">シーズンを終えるごとに、その年のタイトルホルダーが記録されていきます</p>
+              <p className="text-gray-300">まだ年鑑データがありません</p>
+              <p className="text-gray-400 text-sm mt-1">シーズンを終えるごとに、その年のタイトルホルダーが記録されていきます</p>
             </div>
           ) : (
             <div className="space-y-5">
@@ -1222,9 +1222,9 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                           <>
                             <div className="text-lg font-bold text-white tabular-nums leading-tight">{b.display}</div>
                             <div className="text-xs text-gray-300 truncate">{b.name}</div>
-                            <div className="text-xs text-gray-500">{b.team}・{b.year}年目</div>
+                            <div className="text-xs text-gray-400">{b.team}・{b.year}年目</div>
                           </>
-                        ) : <div className="text-gray-600 text-sm">-</div>}
+                        ) : <div className="text-gray-400 text-sm">-</div>}
                       </div>
                     );
                   })}
@@ -1235,12 +1235,12 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
               <div>
                 <h2 className="text-sm font-bold text-amber-300 mb-2">通算タイトル数</h2>
                 {almanac.titleRanking.length === 0 ? (
-                  <div className="bg-gray-800 rounded-lg p-4 text-center text-gray-500 text-sm">記録なし</div>
+                  <div className="bg-gray-800 rounded-lg p-4 text-center text-gray-400 text-sm">記録なし</div>
                 ) : (
                   <div className="bg-gray-800 rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-gray-400 text-xs border-b border-gray-700">
+                        <tr className="text-gray-300 text-xs border-b border-gray-700">
                           <th className="py-1.5 px-2 text-center w-8">#</th>
                           <th className="py-1.5 px-2 text-left">選手</th>
                           <th className="py-1.5 px-2 text-center w-16">タイトル</th>
@@ -1250,13 +1250,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                       <tbody>
                         {almanac.titleRanking.map((p, i) => (
                           <tr key={p.name + i} className="border-b border-gray-700/40">
-                            <td className="py-1.5 px-2 text-center font-bold text-gray-400">{i + 1}</td>
+                            <td className="py-1.5 px-2 text-center font-bold text-gray-300">{i + 1}</td>
                             <td className="py-1.5 px-2 font-bold text-white whitespace-nowrap">
-                              {p.name}<span className="text-gray-500 font-normal text-xs ml-1">{p.team}</span>
+                              {p.name}<span className="text-gray-400 font-normal text-xs ml-1">{p.team}</span>
                             </td>
                             <td className="py-1.5 px-2 text-center">
                               <span className="text-amber-300 font-bold text-base tabular-nums">{p.total}</span>
-                              <span className="text-gray-500 text-xs">冠</span>
+                              <span className="text-gray-400 text-xs">冠</span>
                             </td>
                             <td className="py-1.5 px-2">
                               <div className="flex flex-wrap gap-1">
@@ -1285,7 +1285,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                         <span className="text-yellow-400">🏆</span>
                         <span className="text-white font-bold text-sm">{c.team}</span>
                         <span className="text-yellow-300 font-bold tabular-nums">{c.n}</span>
-                        <span className="text-gray-500 text-xs">回</span>
+                        <span className="text-gray-400 text-xs">回</span>
                       </div>
                     ))}
                   </div>
@@ -1304,7 +1304,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                           <span className="text-lg">{meta.icon}</span>
                           <span className="text-white font-bold text-sm">{sc.name}</span>
                           <span className={`text-xs font-bold ${meta.color}`}>{sc.title}</span>
-                          <span className="text-gray-500 text-xs ml-auto whitespace-nowrap">{sc.team}・{sc.year}年目〜</span>
+                          <span className="text-gray-400 text-xs ml-auto whitespace-nowrap">{sc.team}・{sc.year}年目〜</span>
                         </div>
                       );
                     })}
@@ -1318,7 +1318,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                 <div className="bg-gray-800 rounded-lg overflow-x-auto">
                   <table className="w-full text-xs whitespace-nowrap">
                     <thead>
-                      <tr className="text-gray-400 border-b border-gray-700">
+                      <tr className="text-gray-300 border-b border-gray-700">
                         <th className="py-2 px-2 text-center sticky left-0 bg-gray-800">年</th>
                         <th className="py-2 px-2 text-left">優勝</th>
                         {TITLE_DEFS.map(d => <th key={d.key} className="py-2 px-2 text-left">{d.label}</th>)}
@@ -1340,7 +1340,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                     <span className="text-white">{a.name}</span>
                                     <span className={`ml-1 ${d.color}`}>{d.fmt(a[d.stat])}</span>
                                   </>
-                                ) : <span className="text-gray-600">-</span>}
+                                ) : <span className="text-gray-400">-</span>}
                               </td>
                             );
                           })}
@@ -1358,19 +1358,19 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
         {activeTab === 'watch' && (() => {
           const rows = (refreshWatch, resolveWatchList());
           const color = { highschool: 'text-emerald-300', university: 'text-sky-300', team: 'text-cyan-300',
-            npb: 'text-amber-300', released: 'text-gray-300', gone: 'text-gray-400' };
+            npb: 'text-amber-300', released: 'text-gray-300', gone: 'text-gray-300' };
           return (
             <div>
               {rows.length === 0 ? (
                 <div className="text-center py-12 text-gray-300 text-sm">
                   注目している選手はいません。<br />
-                  <span className="text-gray-400">甲子園の結果やスカウト画面の ☆ から登録すると、進路先まで追えます。</span>
+                  <span className="text-gray-300">甲子園の結果やスカウト画面の ☆ から登録すると、進路先まで追えます。</span>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="text-sm text-gray-300">
                     注目中 <span className="text-cyan-300 font-bold tabular-nums">{rows.length}</span> 名
-                    <span className="text-gray-400 ml-2">（高校・大学・社会人・独立・プロを横断して現在地を追跡します）</span>
+                    <span className="text-gray-300 ml-2">（高校・大学・社会人・独立・プロを横断して現在地を追跡します）</span>
                   </div>
                   <div className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-x-auto">
                     <table className="w-full text-xs whitespace-nowrap">
@@ -1390,7 +1390,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                           <tr key={r.playerId} className="border-b border-gray-700/30 hover:bg-gray-700/30">
                             <td className="py-1.5 px-2 text-white font-bold">
                               {r.name}
-                              {r.snapshot?.school && <span className="text-gray-400 ml-1.5 font-normal">{r.snapshot.school}</span>}
+                              {r.snapshot?.school && <span className="text-gray-300 ml-1.5 font-normal">{r.snapshot.school}</span>}
                             </td>
                             <td className={`py-1.5 px-2 text-center font-bold ${color[r.status] || 'text-gray-300'}`}>
                               {WATCH_STATUS_LABEL[r.status]}
@@ -1401,7 +1401,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                             <td className="py-1.5 px-2 text-gray-300">{r.addedYear}年目 {r.note}</td>
                             <td className="py-1.5 px-2 text-right">
                               <button onClick={() => { removeFromWatchList(r.playerId); setRefreshWatch(v => v + 1); }}
-                                className="text-gray-400 hover:text-red-300 text-sm px-1" title="注目を外す">✕</button>
+                                className="text-gray-300 hover:text-red-300 text-sm px-1" title="注目を外す">✕</button>
                             </td>
                           </tr>
                         ))}
@@ -1420,13 +1420,13 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
             {alumniTotal === 0 ? (
               <div className="text-center py-12 text-gray-300 text-sm">
                 まだプロへ送り出した選手はいません。<br />
-                <span className="text-gray-400">ドラフトで指名された所属選手がここに記録されます。</span>
+                <span className="text-gray-300">ドラフトで指名された所属選手がここに記録されます。</span>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="text-sm text-gray-300">
                   プロへ送り出した教え子 <span className="text-cyan-300 font-bold tabular-nums">{alumniTotal}</span> 名
-                  <span className="text-gray-400 ml-2">（指名時の能力を保存。サンドボックスモードで再登場させられます）</span>
+                  <span className="text-gray-300 ml-2">（指名時の能力を保存。サンドボックスモードで再登場させられます）</span>
                   <div className="text-xs text-gray-300 mt-1">
                     プロでの成績は毎年オフに更新されます。<b className="text-amber-200">操作はできません</b>——送り出した後の姿を見届ける階層です。
                   </div>
@@ -1435,12 +1435,12 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                   <div key={year} className="bg-gray-800/70 rounded-lg border border-gray-700/50 overflow-hidden">
                     <div className="px-3 py-2 bg-gray-900/60 border-b border-gray-700/50 flex items-center gap-2">
                       <span className="text-cyan-300 font-bold text-sm">{year}年目ドラフト</span>
-                      <span className="text-xs text-gray-400">{players.length}名</span>
+                      <span className="text-xs text-gray-300">{players.length}名</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs whitespace-nowrap">
                         <thead>
-                          <tr className="text-gray-400 border-b border-gray-700/50">
+                          <tr className="text-gray-300 border-b border-gray-700/50">
                             <th className="text-left py-1.5 px-2 font-medium">選手</th>
                             <th className="text-center py-1.5 px-1 font-medium">守備</th>
                             <th className="text-center py-1.5 px-1 font-medium">齢</th>
@@ -1479,7 +1479,7 @@ const HallOfFameScreen = ({ hallOfFamePlayers = [], allTeams = {}, teamHistory =
                                   const last = seasons[seasons.length - 1];
                                   const status = a.retired ? `引退(${a.retiredYear}年)`
                                     : last ? `${last.level} ${a.age}歳` : '入団直後';
-                                  const color = a.retired ? 'text-gray-400'
+                                  const color = a.retired ? 'text-gray-300'
                                     : last?.level === '一軍' ? 'text-emerald-300' : 'text-gray-300';
                                   return (
                                     <>

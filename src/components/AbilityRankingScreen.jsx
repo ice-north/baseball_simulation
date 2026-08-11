@@ -6,7 +6,7 @@ import { POSITION_NAMES } from '../utils/constants.js';
 import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 
-const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
+const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
 const RANK_BG = { S: 'bg-yellow-900/30 border-yellow-700/50', A: 'bg-red-900/20 border-red-700/50', B: 'bg-blue-900/20 border-blue-700/50', C: 'bg-green-900/20 border-green-700/50', D: 'bg-gray-800 border-gray-700/50' };
 
 const getOverallColor = (v) => {
@@ -14,7 +14,7 @@ const getOverallColor = (v) => {
   if (v >= 60) return 'text-red-400';
   if (v >= 50) return 'text-blue-400';
   if (v >= 40) return 'text-green-400';
-  return 'text-gray-400';
+  return 'text-gray-300';
 };
 
 const getStatColor = (v) => {
@@ -22,7 +22,7 @@ const getStatColor = (v) => {
   if (v >= 65) return 'text-red-400';
   if (v >= 50) return 'text-blue-400';
   if (v >= 35) return 'text-green-400';
-  return 'text-gray-500';
+  return 'text-gray-400';
 };
 
 const getTeamType = (team) => {
@@ -408,9 +408,9 @@ const AbilityRankingScreen = () => {
   const renderPlayerTable = (playerList, showAmScouts = false) => {
     return (
       <div className="bg-gray-800 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="tabular-nums w-full text-sm">
           <thead>
-            <tr className="text-gray-400 text-xs border-b border-gray-700">
+            <tr className="text-gray-300 text-xs border-b border-gray-700">
               <th className="px-1.5 py-2 text-left w-6">#</th>
               <th className="px-1.5 py-2 text-left">選手</th>
               <th className="px-1.5 py-2 text-center">守</th>
@@ -436,23 +436,23 @@ const AbilityRankingScreen = () => {
               const bestBrk = getBestBreaking(p);
               return (
                 <tr key={`${p.id}-${i}`} className={`border-b border-gray-700/30 hover:bg-gray-700/30 ${i < 3 ? 'bg-gray-700/20' : ''}`}>
-                  <td className="px-1.5 py-1.5 text-gray-500 text-xs">{i + 1}</td>
+                  <td className="px-1.5 py-1.5 text-gray-400 text-xs">{i + 1}</td>
                   <td className="px-1.5 py-1.5 font-bold text-white text-xs">{p.name}</td>
-                  <td className="px-1.5 py-1.5 text-center text-gray-400 text-xs">{POSITION_NAMES[p.position] || p.position}</td>
-                  <td className="px-1.5 py-1.5 text-center text-gray-400 text-xs">{p.age}</td>
+                  <td className="px-1.5 py-1.5 text-center text-gray-300 text-xs">{POSITION_NAMES[p.position] || p.position}</td>
+                  <td className="px-1.5 py-1.5 text-center text-gray-300 text-xs">{p.age}</td>
                   <td className="px-1.5 py-1.5 text-xs">
                     <span className={typeInfo.color}>{p.teamAbbr}</span>
                   </td>
                   <td className={`px-1.5 py-1.5 text-center font-bold ${getOverallColor(p.overall)}`}>{p.overall}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.batting?.meet || 0)}`}>{p.batting?.meet || 0}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.batting?.power || 0)}`}>{p.batting?.power || 0}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.physical?.speed || 0)}`}>{p.physical?.speed || 0}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.fielding?.defense || 0)}`}>{p.fielding?.defense || 0}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-600' : getStatColor(p.batting?.eye || 0)}`}>{p.batting?.eye || 0}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-600' : getStatColor((p.pitching?.velocity || 130) - 100)}`}>{p.pitching?.velocity || 0}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-600' : getStatColor(p.pitching?.control || 0)}`}>{p.pitching?.control || 0}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-600' : getStatColor(bestBrk)}`}>{bestBrk}</td>
-                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-600' : getStatColor(p.pitching?.stamina || 0)}`}>{p.pitching?.stamina || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-400' : getStatColor(p.batting?.meet || 0)}`}>{p.batting?.meet || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-400' : getStatColor(p.batting?.power || 0)}`}>{p.batting?.power || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-400' : getStatColor(p.physical?.speed || 0)}`}>{p.physical?.speed || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-400' : getStatColor(p.fielding?.defense || 0)}`}>{p.fielding?.defense || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${isPitcher ? 'text-gray-400' : getStatColor(p.batting?.eye || 0)}`}>{p.batting?.eye || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-400' : getStatColor((p.pitching?.velocity || 130) - 100)}`}>{p.pitching?.velocity || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-400' : getStatColor(p.pitching?.control || 0)}`}>{p.pitching?.control || 0}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-400' : getStatColor(bestBrk)}`}>{bestBrk}</td>
+                  <td className={`px-1 py-1.5 text-center text-xs ${!isPitcher ? 'text-gray-400' : getStatColor(p.pitching?.stamina || 0)}`}>{p.pitching?.stamina || 0}</td>
                   <td className="px-1 py-1 text-xs">
                     <ScoutBadges npbScouts={p.npbScouts} amScouts={showAmScouts ? p.amScouts : null} />
                   </td>
@@ -470,7 +470,7 @@ const AbilityRankingScreen = () => {
   return (
     <div className="p-4 bg-gray-900 min-h-screen text-white">
       <h1 className="text-2xl font-bold mb-1">📰 総合ランキング</h1>
-      <p className="text-gray-400 text-xs mb-4">全チーム・全選手の能力ランキング</p>
+      <p className="text-gray-300 text-xs mb-4">全チーム・全選手の能力ランキング</p>
 
       <div className="flex gap-2 mb-4">
         {[
@@ -482,7 +482,7 @@ const AbilityRankingScreen = () => {
           <button key={t.key}
             onClick={() => { setMode(t.key); setCategory('all'); setSortKey(t.key === 'highschool' ? 'draft' : 'overall'); }}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-              mode === t.key ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+              mode === t.key ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'
             }`}
           >{t.label}</button>
         ))}
@@ -497,20 +497,20 @@ const AbilityRankingScreen = () => {
               <button key={t.key}
                 onClick={() => { setCategory(t.key); setSortKey(mode === 'highschool' ? 'draft' : 'overall'); }}
                 className={`px-3 py-1.5 rounded text-sm font-bold transition ${
-                  category === t.key ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                  category === t.key ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'
                 }`}
               >{t.label}</button>
             ))}
           </div>
 
           <div className="flex items-center gap-3 mb-3">
-            <span className="text-xs text-gray-500">ソート:</span>
+            <span className="text-xs text-gray-400">ソート:</span>
             <div className="flex flex-wrap gap-1">
               {currentSortOptions.map(o => (
                 <button key={o.key}
                   onClick={() => setSortKey(o.key)}
                   className={`px-2 py-1 rounded text-xs font-bold transition ${
-                    sortKey === o.key ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                    sortKey === o.key ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'
                   }`}
                 >{o.label}</button>
               ))}
@@ -518,7 +518,7 @@ const AbilityRankingScreen = () => {
             <div className="ml-auto flex gap-1">
               {[50, 100, 200].map(n => (
                 <button key={n} onClick={() => setLimit(n)}
-                  className={`px-2 py-1 rounded text-xs ${limit === n ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-500'}`}
+                  className={`px-2 py-1 rounded text-xs ${limit === n ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400'}`}
                 >Top{n}</button>
               ))}
             </div>
@@ -527,18 +527,18 @@ const AbilityRankingScreen = () => {
           {mode === 'player' ? (
             <>
               {renderPlayerTable(filteredPlayers, sortKey === 'draft')}
-              <div className="text-xs text-gray-500 mt-2">
+              <div className="text-xs text-gray-400 mt-2">
                 全{allPlayers.length}選手{sortKey === 'draft' && hsPlayers.length > 0 ? ` + 高校生${hsPlayers.length}名` : ''}中 上位{Math.min(limit, filteredPlayers.length)}名を表示
               </div>
             </>
           ) : (
             <>
               {hsPlayers.length === 0 ? (
-                <div className="text-gray-500 text-center py-8">高校3年生はまだ生成されていません（4月に生成されます）</div>
+                <div className="text-gray-400 text-center py-8">高校3年生はまだ生成されていません（4月に生成されます）</div>
               ) : (
                 <>
                   {renderPlayerTable(filteredHsPlayers, true)}
-                  <div className="text-xs text-gray-500 mt-2">
+                  <div className="text-xs text-gray-400 mt-2">
                     全{hsPlayers.length}名中 上位{Math.min(limit, filteredHsPlayers.length)}名を表示
                   </div>
                 </>
@@ -567,7 +567,7 @@ const AbilityRankingScreen = () => {
                 className={`px-3 py-1.5 rounded text-xs font-bold transition ${
                   teamRankFilter === t.key
                     ? (RANK_COLORS[t.key] ? `bg-gray-700 ${RANK_COLORS[t.key]}` : 'bg-green-700 text-white')
-                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                    : 'bg-gray-800 text-gray-300 hover:text-white'
                 }`}
               >{t.label}</button>
             ))}
@@ -583,13 +583,13 @@ const AbilityRankingScreen = () => {
                 <div key={`${team.type}_${team.name}`} className={`rounded-lg border p-3 ${bgClass}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-500 text-xs w-6">{i + 1}.</span>
+                      <span className="text-gray-400 text-xs w-6">{i + 1}.</span>
                       <span className="font-bold text-sm">{team.name}</span>
                       <span className={`text-xs ${typeInfo.color}`}>{typeInfo.text}</span>
                       {team.rank && <span className={`text-xs font-bold ${RANK_COLORS[team.rank]}`}>{team.rank}</span>}
                     </div>
                     <div className="flex items-center gap-4 text-xs">
-                      <span className="text-gray-400">{team.count}人</span>
+                      <span className="text-gray-300">{team.count}人</span>
                       <span>
                         総合<span className={`font-bold ml-1 ${getOverallColor(team.avg)}`}>{team.avg.toFixed(1)}</span>
                       </span>
@@ -604,7 +604,7 @@ const AbilityRankingScreen = () => {
                   <div className="flex gap-1 flex-wrap">
                     {team.topPlayers.map((tp, j) => (
                       <span key={j} className="text-xs bg-gray-900/50 px-2 py-0.5 rounded inline-flex items-center gap-1">
-                        <span className="text-gray-500">{POSITION_NAMES[tp.position]}</span>
+                        <span className="text-gray-400">{POSITION_NAMES[tp.position]}</span>
                         <span className="text-white">{tp.name}</span>
                         <span className={`font-bold ${getOverallColor(tp.overall)}`}>{tp.overall}</span>
                       </span>
@@ -614,7 +614,7 @@ const AbilityRankingScreen = () => {
               );
             })}
           </div>
-          <div className="text-xs text-gray-500 mt-3">
+          <div className="text-xs text-gray-400 mt-3">
             {filteredTeams.length}チーム表示
           </div>
         </>

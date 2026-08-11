@@ -182,7 +182,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
             <p>フェーズ: <span className="text-blue-400">{getPhaseLabel(seasonData.phase)}</span></p>
           </div>
         ) : (
-          <p className="text-gray-500">ゲームが開始されていません</p>
+          <p className="text-gray-400">ゲームが開始されていません</p>
         )}
       </div>
 
@@ -192,7 +192,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <div className="text-cyan-200 font-bold text-sm">💾 オートセーブ</div>
-              <div className="text-xs text-gray-400 mt-0.5">
+              <div className="text-xs text-gray-300 mt-0.5">
                 {autosaveInfo.year ? `${autosaveInfo.year}年目` : ''}{autosaveInfo.date ? ` | ${autosaveInfo.date.month}月${autosaveInfo.date.day}日` : ''} | 保存日時: {formatTimestamp(autosaveInfo.timestamp)}
               </div>
             </div>
@@ -201,7 +201,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
               オートセーブをロード
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">※月替わり・年替わりの節目で自動保存されます（タイトル画面でON/OFF切り替え可）。</p>
+          <p className="text-xs text-gray-400 mt-2">※月替わり・年替わりの節目で自動保存されます（タイトル画面でON/OFF切り替え可）。</p>
         </div>
       )}
 
@@ -217,12 +217,12 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                   <div>
                     <div className="text-white font-bold text-lg">{name}</div>
                     {info ? (
-                      <div className="text-sm text-gray-400 mt-1">
+                      <div className="text-sm text-gray-300 mt-1">
                         <p>{info.year}年目 | {info.date?.month}月{info.date?.day}日{info.teamName ? ` | ${info.teamName}` : ''}</p>
                         <p>保存日時: {formatTimestamp(info.timestamp)}</p>
                       </div>
                     ) : (
-                      <p className="text-gray-500 text-sm mt-1">セーブデータなし</p>
+                      <p className="text-gray-400 text-sm mt-1">セーブデータなし</p>
                     )}
                   </div>
                 </div>
@@ -231,7 +231,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                     onClick={() => handleSave(idx)}
                     disabled={!seasonData}
                     className={`flex-1 px-4 py-2 rounded font-bold transition ${
-                      seasonData ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      seasonData ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'
                     }`}
                   >
                     {info ? '上書き保存' : '新規保存'}
@@ -240,7 +240,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                     onClick={() => handleLoad(idx)}
                     disabled={!info}
                     className={`flex-1 px-4 py-2 rounded font-bold transition ${
-                      info ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      info ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'
                     }`}
                   >
                     ロード
@@ -249,7 +249,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                     onClick={() => handleDelete(idx)}
                     disabled={!info}
                     className={`px-4 py-2 rounded font-bold transition ${
-                      info ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      info ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'
                     }`}
                   >
                     🗑️
@@ -267,7 +267,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
           })}
         </div>
 
-        <p className="text-xs text-gray-500 mt-4">
+        <p className="text-xs text-gray-400 mt-4">
           ※ セーブデータはブラウザのローカルストレージに保存されます。<br />
           ※ ブラウザのデータを消去すると、セーブデータも削除されます。
         </p>

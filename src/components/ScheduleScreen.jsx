@@ -206,9 +206,9 @@ const RankingTable = ({ title, data, valueLabel }) => (
     <div className="px-4 py-2.5 border-b border-gray-700/50">
       <h3 className="text-sm font-semibold text-white">{title}</h3>
     </div>
-    <table className="w-full text-sm">
+    <table className="tabular-nums w-full text-sm">
       <thead>
-        <tr className="border-b border-gray-700/40 text-xs text-gray-500 font-medium">
+        <tr className="border-b border-gray-700/40 text-xs text-gray-400 font-medium">
           <th className="text-left py-1.5 pl-3 w-8">#</th>
           <th className="text-left py-1.5">選手名</th>
           <th className="text-left py-1.5 w-14">チーム</th>
@@ -219,15 +219,15 @@ const RankingTable = ({ title, data, valueLabel }) => (
         {data.length > 0 ? (
           data.map((player, index) => (
             <tr key={index} className={`border-b border-gray-700/30 hover:bg-gray-700/30 transition-colors ${index === 0 ? 'bg-yellow-900/10' : ''}`}>
-              <td className={`py-1.5 pl-3 font-bold text-xs ${index === 0 ? 'text-yellow-400' : index < 3 ? 'text-gray-300' : 'text-gray-600'}`}>{player.rank}</td>
+              <td className={`py-1.5 pl-3 font-bold text-xs ${index === 0 ? 'text-yellow-400' : index < 3 ? 'text-gray-300' : 'text-gray-400'}`}>{player.rank}</td>
               <td className="py-1.5 text-white text-xs font-medium">{player.name}</td>
-              <td className="py-1.5 text-xs text-gray-400">{getTeamAbbreviation(player.team)}</td>
+              <td className="py-1.5 text-xs text-gray-300">{getTeamAbbreviation(player.team)}</td>
               <td className={`text-right py-1.5 pr-3 font-bold text-sm ${index === 0 ? 'text-yellow-300' : 'text-gray-200'}`}>{player.value}</td>
             </tr>
           ))
         ) : (
           <tr>
-            <td colSpan="4" className="py-6 text-center text-gray-600 text-xs">データなし</td>
+            <td colSpan="4" className="py-6 text-center text-gray-400 text-xs">データなし</td>
           </tr>
         )}
       </tbody>
@@ -332,7 +332,7 @@ const ScheduleScreen = ({
                 return (
                   <div key={p.key} className="absolute h-4 rounded-sm flex items-center justify-center overflow-hidden transition-all"
                     style={{ left: `${left}%`, width: `${width}%`, backgroundColor: isActive ? p.color : `${p.color}33`, border: isActive ? `1.5px solid ${p.color}` : '1px solid transparent' }}>
-                    <span className={`text-xs font-bold ${isActive ? 'text-white' : 'text-gray-500'}`}>{p.label}</span>
+                    <span className={`text-xs font-bold ${isActive ? 'text-white' : 'text-gray-400'}`}>{p.label}</span>
                   </div>
                 );
               })}
@@ -351,7 +351,7 @@ const ScheduleScreen = ({
             </div>
             <div className="flex justify-between mt-1">
               {[1,4,7,10,12].map(m => (
-                <span key={m} className={`text-xs ${currentDate.month === m ? 'text-white font-bold' : 'text-gray-600'}`}>{m}月</span>
+                <span key={m} className={`text-xs ${currentDate.month === m ? 'text-white font-bold' : 'text-gray-400'}`}>{m}月</span>
               ))}
             </div>
           </div>
@@ -367,7 +367,7 @@ const ScheduleScreen = ({
               {phaseInfo.name}
             </span>
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-sm text-gray-400 mt-0.5">
             {currentDate.year}年{currentDate.month}月{currentDate.day}日（{['日','月','火','水','木','金','土'][new Date(currentDate.year, currentDate.month - 1, currentDate.day).getDay()]}）
           </p>
         </div>
@@ -416,11 +416,11 @@ const ScheduleScreen = ({
         <div className="text-xs font-semibold text-gray-300 mb-2 px-1">{selectedMonth}月の日程（{userTeamName}）</div>
         <div className="grid grid-cols-7 gap-0.5">
           <div className="text-center text-red-400 font-bold py-1 text-xs">日</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-xs">月</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-xs">火</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-xs">水</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-xs">木</div>
-          <div className="text-center text-gray-500 font-bold py-1 text-xs">金</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">月</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">火</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">水</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">木</div>
+          <div className="text-center text-gray-400 font-bold py-1 text-xs">金</div>
           <div className="text-center text-blue-400 font-bold py-1 text-xs">土</div>
           {calendarData.map((day, index) => {
             if (!day.day) {
@@ -441,7 +441,7 @@ const ScheduleScreen = ({
                     : 'bg-gray-900'
                 }`}
               >
-                <div className={`text-xs mb-0.5 ${isCurrentDate ? 'text-white font-bold' : 'text-gray-400'}`}>
+                <div className={`text-xs mb-0.5 ${isCurrentDate ? 'text-white font-bold' : 'text-gray-300'}`}>
                   {day.day}日
                 </div>
                 {day.opponent ? (
@@ -456,7 +456,7 @@ const ScheduleScreen = ({
                         {day.result}
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-500">未消化</div>
+                      <div className="text-xs text-gray-400">未消化</div>
                     )}
                   </>
                 ) : day.eventLabel ? (
@@ -465,14 +465,14 @@ const ScheduleScreen = ({
                     day.eventLabel === 'プレーオフ' ? 'text-yellow-400' :
                     day.eventLabel === '契約更改' ? 'text-teal-400' :
                     day.eventLabel === 'トライアウト' ? 'text-orange-400' :
-                    day.eventLabel === 'オフシーズン' ? 'text-gray-400' :
+                    day.eventLabel === 'オフシーズン' ? 'text-gray-300' :
                     day.eventLabel === 'キャンプ' ? 'text-green-400' :
                     day.eventLabel === 'ドラフト' ? 'text-purple-400' :
                     day.eventLabel === 'セレクション' ? 'text-pink-400' :
-                    'text-gray-500'
+                    'text-gray-400'
                   }`}>{day.eventLabel}</div>
                 ) : (
-                  <div className="text-xs text-gray-600">-</div>
+                  <div className="text-xs text-gray-400">-</div>
                 )}
               </div>
             );
@@ -496,20 +496,20 @@ const ScheduleScreen = ({
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-center flex-1">
                         <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.away)}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">{awayP ? awayP.name : '先発未定'}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{awayP ? awayP.name : '先発未定'}</div>
                       </div>
-                      <div className="text-gray-600 text-xs font-mono px-1">
+                      <div className="text-gray-400 text-xs font-mono px-1">
                         {game.result ? (
                           <span>
-                            <span className={game.result.awayScore > game.result.homeScore ? 'text-green-400 font-bold' : 'text-gray-400'}>{game.result.awayScore}</span>
-                            <span className="text-gray-600 mx-0.5">-</span>
-                            <span className={game.result.homeScore > game.result.awayScore ? 'text-green-400 font-bold' : 'text-gray-400'}>{game.result.homeScore}</span>
+                            <span className={game.result.awayScore > game.result.homeScore ? 'text-green-400 font-bold' : 'text-gray-300'}>{game.result.awayScore}</span>
+                            <span className="text-gray-400 mx-0.5">-</span>
+                            <span className={game.result.homeScore > game.result.awayScore ? 'text-green-400 font-bold' : 'text-gray-300'}>{game.result.homeScore}</span>
                           </span>
-                        ) : <span className="text-gray-600">vs</span>}
+                        ) : <span className="text-gray-400">vs</span>}
                       </div>
                       <div className="text-center flex-1">
                         <div className="text-white font-bold text-sm">{getTeamAbbreviation(game.home)}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">{homeP ? homeP.name : '先発未定'}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{homeP ? homeP.name : '先発未定'}</div>
                       </div>
                     </div>
                   </div>
@@ -518,7 +518,7 @@ const ScheduleScreen = ({
             </div>
           );
           if (todayGames.length === 0) {
-            return <div className="text-center text-gray-600 text-xs py-3">本日は試合がありません（休養日）</div>;
+            return <div className="text-center text-gray-400 text-xs py-3">本日は試合がありません（休養日）</div>;
           }
           if (isTwoLeague) {
             const l1Games = todayGames.filter(g => league1Teams.includes(g.home) && league1Teams.includes(g.away));
@@ -589,7 +589,7 @@ const ScheduleScreen = ({
           return (
             <div className="bg-gray-800 rounded-lg p-6">
               <h2 className={`text-2xl font-bold mb-4 ${titleColor || 'text-white'}`}>{title}</h2>
-              <table className="w-full text-white">
+              <table className="tabular-nums w-full text-white">
                 <thead>
                   <tr className="border-b border-gray-700">
                     <th className="text-left py-2 text-sm font-bold">順位</th>
@@ -633,12 +633,12 @@ const ScheduleScreen = ({
                       : index === 0 ? 'bg-blue-900/15'
                       : index <= 2 && gbNum <= 5 && remaining > 0 ? 'bg-green-900/10'
                       : '';
-                    const dimClass = isEliminated ? 'text-gray-500' : '';
+                    const dimClass = isEliminated ? 'text-gray-400' : '';
                     return (
                       <tr key={index} className={`border-b border-gray-700 ${rowBg}`}>
                         <td className={`py-2 text-sm font-bold ${dimClass}`}>{index + 1}</td>
                         <td className={`py-2 text-sm font-bold ${
-                          index === 0 && lIsChampion ? 'text-yellow-300' : isEliminated ? 'text-gray-500' : index === 0 ? 'text-blue-300' : ''
+                          index === 0 && lIsChampion ? 'text-yellow-300' : isEliminated ? 'text-gray-400' : index === 0 ? 'text-blue-300' : ''
                         }`}>{team.team}</td>
                         <td className={`text-center py-2 text-sm ${dimClass}`}>{played}</td>
                         <td className={`text-center py-2 text-sm ${dimClass}`}>{team.wins}</td>
@@ -646,7 +646,7 @@ const ScheduleScreen = ({
                         <td className={`text-center py-2 text-sm ${dimClass}`}>{team.draws}</td>
                         <td className={`text-center py-2 text-sm ${dimClass}`}>{winRate > 0 ? winRate.toFixed(3) : '.000'}</td>
                         <td className={`text-center py-2 text-sm font-bold ${
-                          index === 0 && lIsChampion ? 'text-yellow-400' : isEliminated ? 'text-gray-600' : 'text-gray-300'
+                          index === 0 && lIsChampion ? 'text-yellow-400' : isEliminated ? 'text-gray-400' : 'text-gray-300'
                         }`}>
                           {gameBehind}
                           {isEliminated && <span className="text-red-500/70 text-xs ml-1">消</span>}
@@ -693,7 +693,7 @@ const ScheduleScreen = ({
               return (
                 <div className="bg-gray-800/60 rounded-lg p-4 border border-gray-700/40">
                   <h2 className="text-lg font-bold text-green-400 mb-3">春季最終順位</h2>
-                  <table className="w-full text-white text-sm">
+                  <table className="tabular-nums w-full text-white text-sm">
                     <thead>
                       <tr className="border-b border-gray-700">
                         <th className="text-left py-2">順位</th>

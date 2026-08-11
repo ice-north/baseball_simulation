@@ -17,6 +17,22 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - `bg-gray-800` 背景には `text-gray-100` または `text-white` を使う
 - 薄い文字（`text-gray-500` 以下）は「意図的に読ませない装飾」以外に使わない
 
+#### 一括是正済み（`text-gray-500`/`600` は暗い背景から全廃）
+このルールは長らく守られておらず、実際には `text-gray-400`〜`600` が **1270箇所**あった。
+（例: チーム選択の「戦力45〜85 主力級20% 予算100」が `text-gray-500` で事実上読めなかった）
+階層を保ったまま一段ずつ引き上げてある。**順序が重要**——逆にすると 500/600 が 300 まで飛ぶ。
+
+    1. text-gray-400 → text-gray-300
+    2. text-gray-500 → text-gray-400
+    3. text-gray-600 → text-gray-400   ← 400 が下限なので 500 と統合される
+
+- ⚠ **`DraftResultScreen.jsx` だけは新聞風の明るいカード（`bg-white`/`bg-gray-100/200`）を
+  持つ**ので一括対象から外してある。この画面は暗い部分と明るい部分が同居していて、
+  明るいカードの上では **逆に濃くする**（`text-gray-400` → `500`）のが正解。
+  行単位で振り分けてある。**新しく明るい背景の画面を作るならここと同じ扱いにすること**
+- ⚠ `hover:` / `disabled:` 付きの指定は一括置換で**関係が潰れる**
+  （`text-gray-600 hover:text-gray-400` が両方 400 になる等）。置換後に必ず確認する
+
 ### 3. スクロールバー抑制
 - コンテナに `overflow-y-auto` や `overflow-auto` を安易に付けない
 - 画面全体のレイアウトは `h-screen` + flexboxで高さを分配し、**画面外にはみ出さない**設計にする
@@ -29,6 +45,12 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - **チャート**: `var(--chart-grid)`（グリッド線・控えめ） / `var(--chart-axis)`（軸線）
 - **日本語フォント**: bodyでHiragino/Yu Gothic/Noto Sans JP等のシステムJPスタックを優先（webフォント不使用）
 - **数字揃え**: 桁を揃えたい表・スタッツには `.tnum`（`font-variant-numeric: tabular-nums`）または Tailwind の `tabular-nums`
+  - **セルに1つずつ付けるのではなく `<table>` 自身に付ける**。継承するので全セルに効くうえ、
+    列を足すたびに付け忘れる事故が起きない。日本語の選手名は数字を含まないので影響しない
+  - 適用済み: 順位表・成績ランキング（`ScheduleScreen`）/ 個人成績（`PlayerStatsScreen`）/
+    能力ランキング（`AbilityRankingScreen`）/ チーム運営（`CorporateManagementScreen`）/
+    日程進行（`DateProgressScreen`）
+  - **1個ずつのカード（「プロ輩出数 12名」等）には要らない**。縦に比較する列でないと意味がない
 
 ### 5. 能力の可視化
 - **配色統一**: 能力値の色は共有 `AbilityValue`（球速=(v-115)×2.5・投手スタミナ=v/2 で正規化）に集約。生の `getAbilityColor(velocity/stamina)` は常に最大色になるので**使わない**

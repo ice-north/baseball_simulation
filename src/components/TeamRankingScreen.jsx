@@ -6,7 +6,7 @@ import { UNIVERSITY_TEAMS } from '../university/universityTeamsData.js';
 import { universityPool } from '../season/universityPool.js';
 import { calcPlayerOverall } from '../season/dispatchSystem.js';
 
-const RANK_COLOR = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-400' };
+const RANK_COLOR = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
 const RANK_BG = { S: 'bg-yellow-900/40 border-yellow-700/60', A: 'bg-orange-900/30 border-orange-700/50', B: 'bg-green-900/30 border-green-700/50', C: 'bg-blue-900/20 border-blue-700/40', D: 'bg-gray-900/20 border-gray-700/30' };
 const TYPE_LABEL = { corporate: '社会人', worldUniversity: '大学', university: '大学', independent: '独立' };
 const RANK_BAND_PCT = { S: '上位5%', A: '6-20%', B: '21-45%', C: '46-75%', D: '下位25%' };
@@ -317,10 +317,10 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
           {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
           <h2 className="text-xl font-bold">チームランキング</h2>
         </div>
-        <div className="text-gray-400 text-center py-16">
+        <div className="text-gray-300 text-center py-16">
           <div className="text-5xl mb-4">📊</div>
           <p className="text-lg mb-2">ランキングデータがまだありません</p>
-          <p className="text-sm text-gray-500">オフシーズン終了後にランキングが確定します</p>
+          <p className="text-sm text-gray-400">オフシーズン終了後にランキングが確定します</p>
         </div>
       </div>
     );
@@ -339,7 +339,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
         {isProvisional && (
           <span className="text-xs font-bold text-amber-200 bg-amber-900/50 border border-amber-600/50 rounded px-2 py-0.5">暫定（戦力評価）</span>
         )}
-        <span className="text-gray-400 text-sm ml-auto">全 {totalTeams} チーム</span>
+        <span className="text-gray-300 text-sm ml-auto">全 {totalTeams} チーム</span>
       </div>
       <TutorialHint id="teamranking-intro" title="全チームの序列">
         全国の社会人・大学・独立チームをS〜Dランクで序列化しています。<b className="text-cyan-200">行をクリック</b>すると成績・打撃・投手・編成の詳細が開きます。ヘッダーで並び替え可。1年目は成績が無いため所属選手の戦力から算出した暫定順位です。
@@ -377,9 +377,9 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
                   <span className="text-gray-300">成績 </span>
                   <span className="font-mono font-bold">
                     <span className="text-green-300">{userEntry.record.wins}</span>
-                    <span className="text-gray-500">−</span>
+                    <span className="text-gray-400">−</span>
                     <span className="text-red-300">{userEntry.record.losses}</span>
-                    <span className="text-gray-500">−</span>
+                    <span className="text-gray-400">−</span>
                     <span className="text-gray-200">{userEntry.record.draws}</span>
                   </span>
                   {userEntry.winRate != null && (
@@ -425,7 +425,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
           <div key={r} className={`flex-1 text-center p-2 rounded border ${RANK_BG[r]}`}>
             <div className={`font-bold ${RANK_COLOR[r]}`}>{r}</div>
             <div className="text-xs text-gray-300">{rankCounts[r]}チーム</div>
-            <div className="text-xs text-gray-500">{RANK_BAND_PCT[r]}</div>
+            <div className="text-xs text-gray-400">{RANK_BAND_PCT[r]}</div>
           </div>
         ))}
       </div>
@@ -455,7 +455,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
           onChange={e => setSearchText(e.target.value)}
           className="px-2 py-1 rounded text-xs bg-gray-800 border border-gray-600 text-white placeholder-gray-500 w-32"
         />
-        <span className="text-xs text-gray-400 self-center">{filtered.length}件表示</span>
+        <span className="text-xs text-gray-300 self-center">{filtered.length}件表示</span>
       </div>
 
       {/* Ranking table */}
@@ -508,7 +508,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
                     #{entry.position}
                   </td>
                   <td className={`pl-1 py-1.5 ${isUser ? 'font-bold text-yellow-300' : 'text-white'}`}>
-                    <span className="text-gray-500 mr-1">{isExpanded ? '▾' : '▸'}</span>
+                    <span className="text-gray-400 mr-1">{isExpanded ? '▾' : '▸'}</span>
                     {entry.name}
                     {isUser && <span className="ml-1 text-yellow-500 text-xs">★</span>}
                   </td>
@@ -528,7 +528,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
                     {entry.roster != null ? (
                       <>
                         {entry.roster}
-                        {entry.rosterSource === 'pool' && <span className="text-gray-500 text-xs ml-0.5">†</span>}
+                        {entry.rosterSource === 'pool' && <span className="text-gray-400 text-xs ml-0.5">†</span>}
                       </>
                     ) : '—'}
                   </td>
@@ -536,12 +536,12 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
                     {rec ? (
                       <span className="font-mono">
                         <span className="text-green-400 font-bold">{rec.wins}</span>
-                        <span className="text-gray-500">−</span>
+                        <span className="text-gray-400">−</span>
                         <span className="text-red-400 font-bold">{rec.losses}</span>
-                        <span className="text-gray-500">−</span>
+                        <span className="text-gray-400">−</span>
                         <span className="text-gray-300">{rec.draws}</span>
                       </span>
-                    ) : <span className="text-gray-600">—</span>}
+                    ) : <span className="text-gray-400">—</span>}
                   </td>
                   <td className={`text-center py-1.5 font-mono ${entry.winRate != null && entry.winRate >= 0.5 ? 'text-green-300' : 'text-gray-300'}`}>
                     {wrText}
@@ -552,7 +552,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
                   <td className={`text-center py-1.5 font-mono ${entry.stats?.era != null && entry.stats.era <= 3.5 ? 'text-orange-300' : 'text-gray-300'}`}>
                     {eraText}
                   </td>
-                  <td className="text-center py-1.5 text-gray-400 text-xs">{TYPE_LABEL[entry.displayType] || '—'}</td>
+                  <td className="text-center py-1.5 text-gray-300 text-xs">{TYPE_LABEL[entry.displayType] || '—'}</td>
                 </tr>
                 {isExpanded && (
                   <tr className="bg-gray-800/40 border-b border-gray-700/70">
@@ -603,14 +603,14 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       {isProvisional ? (
         <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-amber-300">暫定戦力スコア：</span> ランク基礎値（S=1200 / A=1050 / B=900 / C=750 / D=600）に、所属選手の平均総合力による補正を加算した値。順位・ランクとも戦力スコア順で算出（上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D）。公式戦を消化するとEloスコア方式の実力ランキングに切り替わります。</div>
-          <div className="text-gray-400">行をクリックすると、試合成績・打撃・投手・編成の詳細を展開できます。ヘッダーをクリックでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（並行世界の実体化されていない大学）。</div>
+          <div className="text-gray-300">行をクリックすると、試合成績・打撃・投手・編成の詳細を展開できます。ヘッダーをクリックでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（並行世界の実体化されていない大学）。</div>
         </div>
       ) : (
         <div className="mt-3 p-2 bg-gray-900/50 rounded text-xs text-gray-300 space-y-1">
           <div><span className="font-bold text-gray-100">FIFAランキング方式Elo：</span> ΔP = I×(W−We) / We = 1/(10^(−Δスコア/400)+1)。
           重要度I: レギュラーシーズン=50 / リーグ=40 / 全国大会1回戦=40・決勝=60。
           初期値: S=1200 / A=1050 / B=900 / C=750 / D=600。上位5%=S / 6-20%=A / 21-45%=B / 46-75%=C / 下位25%=D。</div>
-          <div className="text-gray-400">成績・打率・防御率は各リーグ順位表と選手個人成績から集計。行をクリックで詳細展開、ヘッダーでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（選手が個別に実体化されていない並行世界チーム）を示します。</div>
+          <div className="text-gray-300">成績・打率・防御率は各リーグ順位表と選手個人成績から集計。行をクリックで詳細展開、ヘッダーでソート可。人数の <span className="text-gray-300">†</span> 印は大学プール由来（選手が個別に実体化されていない並行世界チーム）を示します。</div>
         </div>
       )}
     </div>

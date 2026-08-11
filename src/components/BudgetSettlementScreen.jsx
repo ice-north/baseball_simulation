@@ -49,7 +49,7 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
         <h1 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
           <span className="text-yellow-400">💰</span> 年度末決算（11月30日）
         </h1>
-        <p className="text-xs text-gray-400 mb-4">
+        <p className="text-xs text-gray-300 mb-4">
           退団・入団・スタッフ整理・スポンサー契約を踏まえた最終決算です。
         </p>
 
@@ -58,30 +58,30 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
           <h2 className="text-sm font-bold text-green-400 mb-2">収入の部</h2>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between">
-              <span className="text-gray-400">基本予算</span>
+              <span className="text-gray-300">基本予算</span>
               <span className="text-white">{baseBudget.toLocaleString()}万円</span>
             </div>
             {reputationBonus > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-400">注目度ボーナス</span>
+                <span className="text-gray-300">注目度ボーナス</span>
                 <span className="text-green-300">+{reputationBonus.toLocaleString()}万円</span>
               </div>
             )}
             {managingBonus > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-400">経営手腕ボーナス</span>
+                <span className="text-gray-300">経営手腕ボーナス</span>
                 <span className="text-green-300">+{managingBonus.toLocaleString()}万円</span>
               </div>
             )}
             {tournamentBonus > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-400">大会成績ボーナス</span>
+                <span className="text-gray-300">大会成績ボーナス</span>
                 <span className="text-green-300">+{tournamentBonus.toLocaleString()}万円</span>
               </div>
             )}
             {sponsorIncome > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-400">スポンサー収入</span>
+                <span className="text-gray-300">スポンサー収入</span>
                 <span className="text-green-300">+{sponsorIncome.toLocaleString()}万円</span>
               </div>
             )}
@@ -97,11 +97,11 @@ const BudgetSettlementScreen = ({ seasonData, onComplete }) => {
           <h2 className="text-sm font-bold text-red-400 mb-2">支出の部</h2>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between">
-              <span className="text-gray-400">選手年俸（{players.length}名）</span>
+              <span className="text-gray-300">選手年俸（{players.length}名）</span>
               <span className="text-white">{playerSalary.toLocaleString()}万円</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">スタッフ人件費（{staff.length}名）</span>
+              <span className="text-gray-300">スタッフ人件費（{staff.length}名）</span>
               <span className="text-white">{staffSalary.toLocaleString()}万円</span>
             </div>
             <div className="flex justify-between border-t border-gray-600 pt-1 mt-1">

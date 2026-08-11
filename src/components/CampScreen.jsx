@@ -33,10 +33,10 @@ function getCampCoachComment(player, round) {
     return { text: ['順調に伸びている', '良い成長を見せている'][Math.floor(Math.random() * 2)], color: 'text-green-400' };
   }
   if (gp <= 0.7 && Math.random() < 0.5) {
-    return { text: ['伸び悩みか…', '壁にぶつかっている'][Math.floor(Math.random() * 2)], color: 'text-gray-500' };
+    return { text: ['伸び悩みか…', '壁にぶつかっている'][Math.floor(Math.random() * 2)], color: 'text-gray-400' };
   }
   if (gp <= 0.85 && Math.random() < 0.3) {
-    return { text: '現状維持が精一杯か', color: 'text-gray-500' };
+    return { text: '現状維持が精一杯か', color: 'text-gray-400' };
   }
   return null;
 }
@@ -509,7 +509,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
   const getArsenalDisplay = (player) => {
     const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
-    if (arsenal.length === 0) return <span className="text-gray-600">-</span>;
+    if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
     // 変化球はレベルで色付け（0-100スケールなのでgetAbilityColorをそのまま使用）
     return arsenal.map((a, i) => (
       <span key={i} className={getAbilityColor(a.level || 0)}>
@@ -546,7 +546,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   <h2 className="text-base font-bold text-white mb-3 text-center">🎓 派遣先大学を選択</h2>
                   <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
                     <div className="text-white font-bold text-lg mb-1">{player.name}</div>
-                    <div className="text-gray-400 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
+                    <div className="text-gray-300 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
                     {(() => {
                       const dispatched = (userTeam?.players || []).filter(p => p.dispatchedThisCamp === 'university').length;
                       const max = DISPATCH_LIMITS.perTeamUniversity;
@@ -554,12 +554,12 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     })()}
                   </div>
                   {uniOptions.length === 0 ? (
-                    <div className="text-gray-400 text-sm text-center mb-3">OBのいる大学がありません</div>
+                    <div className="text-gray-300 text-sm text-center mb-3">OBのいる大学がありません</div>
                   ) : (
                     <div className="space-y-1.5 max-h-64 overflow-y-auto mb-3">
                       {uniOptions.map(uni => {
                         const canDispatch = uni.remaining > 0;
-                        const rankColors = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-400' };
+                        const rankColors = { S: 'text-yellow-400', A: 'text-orange-400', B: 'text-green-400', C: 'text-blue-400', D: 'text-gray-300' };
                         return (
                           <button
                             key={uni.universityId}
@@ -577,8 +577,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 <span className="text-white font-bold text-sm">{uni.universityName}</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-gray-400 text-xs">OB {uni.obCount}人</span>
-                                <span className={`text-xs font-bold ${canDispatch ? 'text-orange-400' : 'text-gray-500'}`}>
+                                <span className="text-gray-300 text-xs">OB {uni.obCount}人</span>
+                                <span className={`text-xs font-bold ${canDispatch ? 'text-orange-400' : 'text-gray-400'}`}>
                                   残{uni.remaining}/{uni.slots}枠
                                 </span>
                               </div>
@@ -612,7 +612,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 <h2 className="text-base font-bold text-white mb-3 text-center">{dest.icon} {dest.name}に派遣</h2>
                 <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
                   <div className="text-white font-bold text-lg mb-1">{player.name}</div>
-                  <div className="text-gray-400 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
+                  <div className="text-gray-300 text-xs">{POSITION_NAMES[player.position]} / {player.age}歳 / 総合力: {calcPlayerOverall(player)}</div>
                 </div>
                 {selectedUniName && (
                   <div className="bg-orange-900/30 border border-orange-500/30 rounded-lg p-2 mb-3 text-center">
@@ -650,10 +650,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <div key={r} className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
                 r < currentRound ? 'bg-green-600 text-white'
                   : r === currentRound ? 'bg-blue-600 text-white ring-2 ring-blue-400'
-                  : 'bg-gray-700 text-gray-500'
+                  : 'bg-gray-700 text-gray-400'
               }`}>{r}</div>
             ))}
-            <span className="text-gray-500 text-xs ml-1">{currentRound}/{MAX_CAMP_ROUNDS}</span>
+            <span className="text-gray-400 text-xs ml-1">{currentRound}/{MAX_CAMP_ROUNDS}</span>
           </div>
         </div>
 
@@ -671,7 +671,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <span className={`font-black text-lg ${isUp ? 'text-green-400' : 'text-red-400'}`}>
                 {isUp ? '↑' : '↓'} ランク{isUp ? '昇格' : '降格'}: {userChange.from} → {userChange.to}
               </span>
-              <span className="text-gray-400 text-xs ml-2">(注目度: {Math.round(userChange.reputation)})</span>
+              <span className="text-gray-300 text-xs ml-2">(注目度: {Math.round(userChange.reputation)})</span>
             </div>
           );
         })()}
@@ -688,7 +688,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <span className={`font-black text-lg ${isPromoted ? 'text-green-400' : 'text-red-400'}`}>
                 {isPromoted ? '↑' : '↓'} {isPromoted ? '昇格' : '降格'}: {isPromoted ? userPromo.promoted.from : userPromo.relegated.from} → {isPromoted ? userPromo.promoted.to : userPromo.relegated.to}
               </span>
-              <span className="text-gray-400 text-xs ml-2">({userPromo.league})</span>
+              <span className="text-gray-300 text-xs ml-2">({userPromo.league})</span>
             </div>
           );
         })()}
@@ -701,7 +701,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               {seasonData.staffRetirements.map((s, idx) => {
                 const roleNames = { coach: 'コーチ', manager: 'マネージャー', trainer: 'トレーナー' };
                 return (
-                  <div key={idx} className="text-xs text-gray-400">
+                  <div key={idx} className="text-xs text-gray-300">
                     <span className="text-white font-bold">{s.name}</span>
                     <span className="ml-1">({roleNames[s.role] || s.role} / {s.age}歳 / {s.grade}級)</span>
                     <span className="ml-1 text-orange-400">{s.reason === '定年退職' ? '定年退職' : '退職'}しました</span>
@@ -709,7 +709,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 );
               })}
             </div>
-            <div className="text-xs text-gray-500 mt-1">チーム運営画面からスタッフを補充できます</div>
+            <div className="text-xs text-gray-400 mt-1">チーム運営画面からスタッフを補充できます</div>
           </div>
         )}
 
@@ -726,7 +726,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 </div>
               ))}
             </div>
-            <div className="text-xs text-gray-500 mt-1">来季は予算内での運営を心がけましょう</div>
+            <div className="text-xs text-gray-400 mt-1">来季は予算内での運営を心がけましょう</div>
           </div>
         )}
 
@@ -754,10 +754,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   {items.map(it => (
                     <span key={it.label} className="text-gray-300">
                       {it.label}
-                      <span className={`font-bold ml-0.5 ${it.val >= 70 ? 'text-yellow-400' : it.val >= 40 ? 'text-green-400' : 'text-gray-400'}`}>
+                      <span className={`font-bold ml-0.5 ${it.val >= 70 ? 'text-yellow-400' : it.val >= 40 ? 'text-green-400' : 'text-gray-300'}`}>
                         {it.val}
                       </span>
-                      <span className="text-gray-600 ml-0.5">
+                      <span className="text-gray-400 ml-0.5">
                         ({it.label === 'モチベ管理'
                           ? (it.val >= 20 ? `+プロ意識` : '効果なし')
                           : it.label === 'フィットネス'
@@ -774,7 +774,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             })()}
             {/* プリセット一括設定 */}
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-              <span className="text-gray-400 text-xs font-bold">プリセット:</span>
+              <span className="text-gray-300 text-xs font-bold">プリセット:</span>
               {Object.entries(CAMP_PRESETS).map(([key, preset]) => (
                 <button
                   key={key}
@@ -785,8 +785,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   {preset.icon} {preset.name}
                 </button>
               ))}
-              <span className="text-gray-400 mx-1">|</span>
-              <span className="text-gray-400 text-xs font-bold">一括:</span>
+              <span className="text-gray-300 mx-1">|</span>
+              <span className="text-gray-300 text-xs font-bold">一括:</span>
               {Object.entries(TRAINING_MENUS).filter(([k, m]) => !['newpitch'].includes(k) && !m.intensive).map(([key, menu]) => (
                 <button
                   key={key}
@@ -816,7 +816,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     return (
                       <div key={idx} className="flex items-center gap-1 bg-gray-700/50 rounded px-2 py-0.5">
                         <span className={`font-bold text-xs ${p.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{p.name}</span>
-                        <span className="text-gray-500 text-xs">{dest?.icon} {uniName || dest?.name}</span>
+                        <span className="text-gray-400 text-xs">{dest?.icon} {uniName || dest?.name}</span>
                         <span className="text-orange-400 text-xs">（結果はキャンプ終了時）</span>
                       </div>
                     );
@@ -827,7 +827,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
             {/* 投手/野手フィルタ */}
             <div className="flex items-center gap-1.5 mb-2">
-              <span className="text-gray-400 text-xs font-bold">表示:</span>
+              <span className="text-gray-300 text-xs font-bold">表示:</span>
               {[
                 { key: 'all', label: '全員', count: allActivePlayers.length },
                 { key: 'pitcher', label: '投手', count: allActivePlayers.filter(p => p.position === 'pitcher').length },
@@ -839,7 +839,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
                     campFilter === f.key
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                      : 'bg-gray-700/60 text-gray-300 hover:text-gray-200 hover:bg-gray-700'
                   }`}
                 >
                   {f.label} <span className="opacity-60">{f.count}</span>
@@ -851,7 +851,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-700/80 text-gray-400 text-xs">
+                  <tr className="bg-gray-700/80 text-gray-300 text-xs">
                     {(() => {
                       const S = ({ k, w, children, title, align = 'center' }) => (
                         <th className={`py-1.5 px-1 ${align === 'left' ? 'text-left px-2' : 'text-center'} ${w || ''}`} title={title}>
@@ -922,7 +922,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         </td>
                         <td className="py-1 px-1 text-center text-gray-300 text-xs whitespace-nowrap">{player.age || 20}</td>
                         <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
-                          <span className={ph.build === 'large' ? 'text-orange-400' : ph.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
+                          <span className={ph.build === 'large' ? 'text-orange-400' : ph.build === 'small' ? 'text-cyan-400' : 'text-gray-300'}>
                             {ph.build === 'large' ? '大柄' : ph.build === 'small' ? '小柄' : '中肉'}
                           </span>
                         </td>
@@ -931,7 +931,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             const base = player.growthPotential ?? 1.0;
                             const mod = player.growthModifier || 0;
                             const effective = Math.max(0.3, Math.min(1.8, base + mod));
-                            const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-400';
+                            const color = effective >= 1.3 ? 'text-pink-400' : effective >= 1.2 ? 'text-red-400' : effective >= 1.1 ? 'text-orange-400' : effective >= 1.0 ? 'text-yellow-400' : effective >= 0.9 ? 'text-green-400' : effective >= 0.8 ? 'text-blue-400' : 'text-gray-300';
                             return (
                               <span className={color} title={`基礎:${base.toFixed(2)} 変動:${mod >= 0 ? '+' : ''}${mod.toFixed(2)}`}>
                                 {effective.toFixed(2)}
@@ -942,23 +942,23 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             const d = player.personality?.discipline ?? 50;
-                            const c = d >= 80 ? 'text-red-400' : d >= 60 ? 'text-orange-400' : d >= 40 ? 'text-yellow-400' : d >= 20 ? 'text-blue-400' : 'text-gray-400';
+                            const c = d >= 80 ? 'text-red-400' : d >= 60 ? 'text-orange-400' : d >= 40 ? 'text-yellow-400' : d >= 20 ? 'text-blue-400' : 'text-gray-300';
                             return <span className={c}>{d}</span>;
                           })()}
                         </td>
                         <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           {(() => {
                             const m = player.personality?.mental ?? 50;
-                            const c = m >= 80 ? 'text-red-400' : m >= 60 ? 'text-orange-400' : m >= 40 ? 'text-yellow-400' : m >= 20 ? 'text-blue-400' : 'text-gray-400';
+                            const c = m >= 80 ? 'text-red-400' : m >= 60 ? 'text-orange-400' : m >= 40 ? 'text-yellow-400' : m >= 20 ? 'text-blue-400' : 'text-gray-300';
                             return <span className={c}>{m}</span>;
                           })()}
                         </td>
                         <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
                           <span className={ph.throws === 'left' ? 'text-green-400' : 'text-gray-300'}>{ph.throws === 'left' ? '左' : '右'}</span>
-                          <span className="text-gray-500">/</span>
+                          <span className="text-gray-400">/</span>
                           <span className={b.bats === 'left' ? 'text-green-400' : b.bats === 'switch' ? 'text-purple-400' : 'text-gray-300'}>{b.bats === 'left' ? '左' : b.bats === 'switch' ? '両' : '右'}</span>
                         </td>
-                        <td className="py-1 px-1 text-center text-xs text-gray-400 whitespace-nowrap">
+                        <td className="py-1 px-1 text-center text-xs text-gray-300 whitespace-nowrap">
                           {({ overhand: 'オーバー', threeQuarter: 'スリー', sidearm: 'サイド', submarine: 'アンダー' }[p.form] || '-')}
                         </td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={b.meet||0} label="ミート" /></td>
@@ -978,10 +978,10 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.recovery||50} label="回復力" /></td>
                         <td className="py-1 px-1 text-center font-mono"><StatValue value={ph.muscle??50} label="体幹" /></td>
                         <td className="py-1 px-2 text-xs font-mono whitespace-nowrap">{getArsenalDisplay(player)}</td>
-                        <td className="py-1 px-2 text-xs font-mono text-gray-400 whitespace-nowrap">
+                        <td className="py-1 px-2 text-xs font-mono text-gray-300 whitespace-nowrap">
                           {(() => {
                             const prev = player.previousSeasonStats;
-                            if (!prev) return <span className="text-gray-500">-</span>;
+                            if (!prev) return <span className="text-gray-400">-</span>;
                             if (isPitcher(player)) {
                               const ip = prev.pitching?.inningsPitched || 0;
                               const era = ip > 0 ? ((prev.pitching?.earnedRuns || 0) / ip * 9).toFixed(2) : '-';
@@ -1125,7 +1125,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                     className={`px-1 py-0.5 rounded text-xs font-bold transition ${
                                       eligible
                                         ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
-                                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                        : 'bg-gray-700 text-gray-400 cursor-not-allowed'
                                     }`}
                                   >
                                     {dest.icon}
@@ -1162,7 +1162,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               </div>
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-700/50 text-gray-400 text-xs">
+                  <tr className="bg-gray-700/50 text-gray-300 text-xs">
                     <th className="py-1 px-2 text-left w-20">氏名</th>
                     <th className="py-1 px-2 text-left w-20">メイン</th>
                     <th className="py-1 px-2 text-left">メイン結果</th>
@@ -1188,7 +1188,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           <div className={`text-xs ${coachComment.color}`}>📋{coachComment.text}</div>
                         )}
                       </td>
-                      <td className="py-1 px-2 text-gray-500 text-xs">
+                      <td className="py-1 px-2 text-gray-400 text-xs">
                         {TRAINING_MENUS[result.trainingType]?.icon} {TRAINING_MENUS[result.trainingType]?.name}
                       </td>
                       <td className="py-1 px-2">
@@ -1203,7 +1203,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                   ? 'bg-yellow-500 text-black font-bold'
                                   : growth.growth > 0
                                     ? 'bg-green-700/80 text-green-100'
-                                    : 'bg-gray-600/50 text-gray-400'
+                                    : 'bg-gray-600/50 text-gray-300'
                               }`}
                             >
                               {growth.statName}: {growth.before}→{growth.after}
@@ -1214,11 +1214,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           ))}
                           {result.growthReport.length === 0 && (
-                            <span className="text-gray-500 text-xs">変化なし</span>
+                            <span className="text-gray-400 text-xs">変化なし</span>
                           )}
                         </div>
                       </td>
-                      <td className="py-1 px-2 text-gray-500 text-xs">
+                      <td className="py-1 px-2 text-gray-400 text-xs">
                         {result.subTrainingType && SUB_TRAINING_MENUS[result.subTrainingType] && (
                           <>{SUB_TRAINING_MENUS[result.subTrainingType].icon} {SUB_TRAINING_MENUS[result.subTrainingType].name}</>
                         )}
@@ -1235,7 +1235,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                     ? 'bg-teal-700/80 text-teal-100'
                                     : growth.growth < 0
                                       ? 'bg-red-700/80 text-red-100'
-                                      : 'bg-gray-600/50 text-gray-400'
+                                      : 'bg-gray-600/50 text-gray-300'
                               }`}
                             >
                               {growth.statName}: {growth.before}→{growth.after}
@@ -1245,7 +1245,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           ))}
                           {(!result.subGrowthReport || result.subGrowthReport.length === 0) && (
-                            <span className="text-gray-500 text-xs">変化なし</span>
+                            <span className="text-gray-400 text-xs">変化なし</span>
                           )}
                         </div>
                       </td>
@@ -1321,7 +1321,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </div>
                           )}
                         </div>
-                        <p className="text-gray-400 text-xs mb-4">キャンプを終了して成長結果を確認します。この操作は取り消せません。</p>
+                        <p className="text-gray-300 text-xs mb-4">キャンプを終了して成長結果を確認します。この操作は取り消せません。</p>
                         <div className="flex gap-3 justify-end">
                           <button onClick={() => setShowCampReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
                             戻る
@@ -1358,7 +1358,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                     <div key={idx} className="bg-gray-700/50 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`font-bold text-sm ${result.player.position === 'pitcher' ? 'text-red-400' : 'text-blue-300'}`}>{result.player.name}</span>
-                        <span className="text-gray-400 text-xs">{result.destination}</span>
+                        <span className="text-gray-300 text-xs">{result.destination}</span>
                         <span className={`px-2 py-0.5 rounded text-xs font-bold ${outcomeColor}`}>{outcomeLabel}</span>
                       </div>
                       {result.growthReport.length > 0 ? (
@@ -1372,7 +1372,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           ))}
                         </div>
                       ) : (
-                        <span className="text-gray-500 text-xs">成長なし... 派遣の成果は得られませんでした</span>
+                        <span className="text-gray-400 text-xs">成長なし... 派遣の成果は得られませんでした</span>
                       )}
                     </div>
                   );
@@ -1433,7 +1433,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto mb-3">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-gray-700/80 text-gray-400 text-xs">
+                    <tr className="bg-gray-700/80 text-gray-300 text-xs">
                       <th className="py-1.5 px-2 text-left w-20">氏名</th>
                       <th className="py-1.5 px-1 text-center w-9">ポジ</th>
                       {STAT_DEFS.map(sd => (
@@ -1471,7 +1471,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             </span>
                           </td>
                           <td className="py-1 px-1 text-center">
-                            <span className="text-xs text-gray-500">{POSITION_NAMES[player.position] || player.position}</span>
+                            <span className="text-xs text-gray-400">{POSITION_NAMES[player.position] || player.position}</span>
                           </td>
                           {diffs.map(d => {
                             const bgClass = d.diff >= 5 ? 'bg-yellow-400/15' : d.diff >= 3 ? 'bg-green-400/10' : d.diff < -2 ? 'bg-red-400/10' : '';
@@ -1482,7 +1482,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                     <span className={`font-bold text-xs ${d.diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
                                       {d.diff > 0 ? `+${d.diff}` : d.diff}
                                     </span>
-                                    <span className="text-gray-600 ml-0.5 text-xs">{d.after}</span>
+                                    <span className="text-gray-400 ml-0.5 text-xs">{d.after}</span>
                                     {d.naturalDiff !== 0 && (
                                       <span className={`ml-0.5 text-xs ${d.naturalDiff > 0 ? 'text-cyan-400' : 'text-red-300'}`}>
                                         ({d.naturalDiff > 0 ? `+${d.naturalDiff}` : d.naturalDiff})
@@ -1490,7 +1490,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                     )}
                                   </span>
                                 ) : (
-                                  <span className="text-gray-600">-</span>
+                                  <span className="text-gray-400">-</span>
                                 )}
                               </td>
                             );
@@ -1501,11 +1501,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                 {newPitches.map(t => getPitchTypeName(t)).join(', ')}
                               </span>
                             ) : (
-                              <span className="text-gray-500">-</span>
+                              <span className="text-gray-400">-</span>
                             )}
                           </td>
                           <td className="py-1 px-1 text-center">
-                            <span className={`font-bold text-xs ${totalGrowth >= 10 ? 'text-yellow-400' : totalGrowth >= 5 ? 'text-green-400' : totalGrowth > 0 ? 'text-blue-300' : 'text-gray-500'}`}>
+                            <span className={`font-bold text-xs ${totalGrowth >= 10 ? 'text-yellow-400' : totalGrowth >= 5 ? 'text-green-400' : totalGrowth > 0 ? 'text-blue-300' : 'text-gray-400'}`}>
                               {totalGrowth > 0 ? `+${totalGrowth}` : '-'}
                             </span>
                           </td>

@@ -43,7 +43,7 @@ export const getAbilityTextColor = (value) => {
   if (value >= 60) return 'text-yellow-400';   // B級
   if (value >= 50) return 'text-green-400';    // C級
   if (value >= 40) return 'text-blue-400';     // D級
-  return 'text-gray-400';                       // E級
+  return 'text-gray-300';                       // E級
 };
 
 /**

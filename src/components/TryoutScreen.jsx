@@ -285,7 +285,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
     <div className="p-6 bg-gray-900 min-h-screen">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-1">トライアウト</h1>
-        <p className="text-gray-500 text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>
+        <p className="text-gray-400 text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>
 
         <TutorialHint id="tryout-intro" title="選手を指名してチームを作る">
           自分の番になったら候補から1人ずつ指名します。<b className="text-cyan-200">投手・捕手・内野・外野をバランス良く</b>集めましょう（不足があれば警告が出ます）。若くて<b className="text-cyan-200">将来性（伸びしろ）</b>の高い選手を獲ると、育成で化ける可能性があります。候補の ⓘ で詳細能力を確認できます。
@@ -294,15 +294,15 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 p-5 mb-5">
           <div className="grid grid-cols-3 gap-4 text-white">
             <div>
-              <div className="text-xs text-gray-400 mb-1">現在のピック</div>
+              <div className="text-xs text-gray-300 mb-1">現在のピック</div>
               <div className="text-2xl font-bold">{currentPick + 1} / {draftOrder.length}</div>
             </div>
             <div>
-              <div className="text-xs text-gray-400 mb-1">指名チーム</div>
+              <div className="text-xs text-gray-300 mb-1">指名チーム</div>
               <div className="text-2xl font-bold">{currentTeam || '終了'}</div>
             </div>
             <div>
-              <div className="text-xs text-gray-400 mb-1">獲得選手数</div>
+              <div className="text-xs text-gray-300 mb-1">獲得選手数</div>
               <div className="text-2xl font-bold">{userRoster.length} 人</div>
             </div>
           </div>
@@ -352,7 +352,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               key={key}
               onClick={() => setViewTab(key)}
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                viewTab === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+                viewTab === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
               }`}
             >
               {label}
@@ -370,7 +370,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                 return (
                   <h3 className="text-white font-bold">
                     現在の編成 ({_total}/24人)
-                    {_existing > 0 && <span className="text-gray-400 text-xs font-normal ml-1">（現有{_existing}＋指名{userRoster.length}）</span>}
+                    {_existing > 0 && <span className="text-gray-300 text-xs font-normal ml-1">（現有{_existing}＋指名{userRoster.length}）</span>}
                   </h3>
                 );
               })()}
@@ -399,19 +399,19 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                 <>
                   <div className="grid grid-cols-4 gap-2">
                     <div className="bg-gray-700 rounded p-2 text-center">
-                      <div className="text-sm text-gray-400">投手</div>
+                      <div className="text-sm text-gray-300">投手</div>
                       <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.pitcher, 5, 10)} {positionCounts.pitcher}/10</div>
                     </div>
                     <div className="bg-gray-700 rounded p-2 text-center">
-                      <div className="text-sm text-gray-400">捕手</div>
+                      <div className="text-sm text-gray-300">捕手</div>
                       <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.catcher, 1, 2)} {positionCounts.catcher}/2</div>
                     </div>
                     <div className="bg-gray-700 rounded p-2 text-center">
-                      <div className="text-sm text-gray-400">内野手</div>
+                      <div className="text-sm text-gray-300">内野手</div>
                       <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.infielder, 4, 6)} {positionCounts.infielder}/6</div>
                     </div>
                     <div className="bg-gray-700 rounded p-2 text-center">
-                      <div className="text-sm text-gray-400">外野手</div>
+                      <div className="text-sm text-gray-300">外野手</div>
                       <div className="text-white font-bold text-lg">{getStatusIcon(positionCounts.outfielder, 3, 6)} {positionCounts.outfielder}/6</div>
                     </div>
                   </div>
@@ -527,7 +527,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                       })}
                     </div>
                   ) : (
-                    <div className="text-gray-400 text-center py-8">現有選手はいません（初回トライアウト）</div>
+                    <div className="text-gray-300 text-center py-8">現有選手はいません（初回トライアウト）</div>
                   )}
                 </>
               );
@@ -546,10 +546,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                   if (entry.skipped) {
                     return (
                       <div key={index} className="flex items-center gap-3 p-2 rounded bg-gray-800/50 opacity-60">
-                        <span className="text-gray-500 font-bold w-24 shrink-0">ドラフト{entry.round}位</span>
-                        <span className="text-gray-500 w-24 shrink-0">---</span>
-                        <span className="text-gray-600 w-16 shrink-0">{entry.reason}</span>
-                        <span className="text-gray-600">{entry.team}</span>
+                        <span className="text-gray-400 font-bold w-24 shrink-0">ドラフト{entry.round}位</span>
+                        <span className="text-gray-400 w-24 shrink-0">---</span>
+                        <span className="text-gray-400 w-16 shrink-0">{entry.reason}</span>
+                        <span className="text-gray-400">{entry.team}</span>
                       </div>
                     );
                   }
@@ -564,14 +564,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                       <span className="text-yellow-400 font-bold w-24 shrink-0">ドラフト{entry.round}位</span>
                       <span className="text-white font-bold w-24 shrink-0">{entry.player.name}</span>
                       <span className="text-gray-300 w-16 shrink-0">{positionLabel}</span>
-                      <span className="text-gray-400 w-12 shrink-0">{entry.player.age}歳</span>
-                      <span className={`font-bold ${isUserTeam ? 'text-blue-400' : 'text-gray-400'}`}>{entry.team}</span>
+                      <span className="text-gray-300 w-12 shrink-0">{entry.player.age}歳</span>
+                      <span className={`font-bold ${isUserTeam ? 'text-blue-400' : 'text-gray-300'}`}>{entry.team}</span>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="text-gray-400 text-center py-8">まだ指名がありません</div>
+              <div className="text-gray-300 text-center py-8">まだ指名がありません</div>
             )}
           </div>
         )}
@@ -593,7 +593,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                           {categoryPlayers.map(player => (
                             <div key={player.id} className="bg-gray-700 rounded p-2 text-white text-sm">
                               <div className="font-bold">{player.name}</div>
-                              <div className="text-xs text-gray-400">{getPositionName(player.position)} | {player.age}歳</div>
+                              <div className="text-xs text-gray-300">{getPositionName(player.position)} | {player.age}歳</div>
                             </div>
                           ))}
                         </div>
@@ -614,13 +614,13 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     <div key={teamName} className="bg-gray-700 rounded-lg p-4">
                       <h3 className="text-white font-bold mb-2 flex items-center justify-between">
                         <span>{teamName === 'ユーザー' ? 'あなたのチーム' : teamName}</span>
-                        <span className="text-sm text-gray-400">{roster.length}人</span>
+                        <span className="text-sm text-gray-300">{roster.length}人</span>
                       </h3>
                       <div className="space-y-1 max-h-48 overflow-y-auto">
                         {roster.map(player => (
                           <div key={player.id} className="text-sm text-gray-300 flex justify-between">
                             <span>{player.name}</span>
-                            <span className="text-gray-500">{getPositionName(player.position)}</span>
+                            <span className="text-gray-400">{getPositionName(player.position)}</span>
                           </div>
                         ))}
                       </div>
@@ -647,14 +647,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     key={tab.key}
                     onClick={() => setPositionTab(tab.key)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
-                      positionTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+                      positionTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
                     }`}
                   >
                     {tab.label}
                   </button>
                 ))}
               </div>
-              <div className="text-gray-400 text-sm ml-auto">候補者: {filteredCandidates.length} 人</div>
+              <div className="text-gray-300 text-sm ml-auto">候補者: {filteredCandidates.length} 人</div>
             </div>
 
             {/* おすすめ候補 */}
@@ -683,7 +683,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               if (needs.length === 0) return null;
               return (
                 <div className="bg-gray-800/60 rounded-xl border border-gray-700/50 p-3 mb-3">
-                  <div className="text-xs text-gray-400 font-bold mb-2">おすすめ候補</div>
+                  <div className="text-xs text-gray-300 font-bold mb-2">おすすめ候補</div>
                   <div className="flex gap-2 flex-wrap">
                     {needs.map(n => (
                       <div
@@ -700,7 +700,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                             {n.label} ({n.current}/{n.ideal})
                           </div>
                           <div className="text-white text-xs font-bold">{n.player.name}</div>
-                          <div className="text-gray-500 text-xs">
+                          <div className="text-gray-400 text-xs">
                             {POSITION_NAMES[n.player.position]} {n.player.age}歳
                             {n.player.position === 'pitcher'
                               ? ` ${n.player.pitching?.velocity || 0}km 制${n.player.pitching?.control || 0}`
@@ -717,7 +717,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
             <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 mb-5">
               <table className="w-full text-xs text-left">
-                <thead className="bg-gray-800 text-gray-400 text-xs sticky top-0 border-b border-gray-700/50">
+                <thead className="bg-gray-800 text-gray-300 text-xs sticky top-0 border-b border-gray-700/50">
                   <tr>
                     {[
                       { label: '名前', key: 'name', tip: null },
@@ -769,7 +769,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className="px-1 py-1 text-white font-bold whitespace-nowrap">
                           <button
                             onClick={(e) => { e.stopPropagation(); setDetailCandidate(player); }}
-                            className="mr-1 text-gray-400 hover:text-white align-middle"
+                            className="mr-1 text-gray-300 hover:text-white align-middle"
                             title="詳細を表示"
                           >ⓘ</button>
                           {player.name}
@@ -797,7 +797,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className="px-1 py-1 text-gray-300 whitespace-nowrap max-w-[8rem] truncate" title={getAffiliation(player)}>{getAffiliation(player)}</td>
                         <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{player.age}</td>
                         <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{POSITION_NAMES[player.position] || player.position}</td>
-                        <td className="px-1 py-1 text-gray-400 text-center whitespace-nowrap">{throwLabel}{batLabel}</td>
+                        <td className="px-1 py-1 text-gray-300 text-center whitespace-nowrap">{throwLabel}{batLabel}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.batting?.meet||0))}`}>{getAbilityRank(player.batting?.meet||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.batting?.power||0))}`}>{getAbilityRank(player.batting?.power||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.physical?.speed||0))}`}>{getAbilityRank(player.physical?.speed||0)}</td>
@@ -810,7 +810,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className="px-1 py-1 text-xs whitespace-nowrap">
                           {(() => {
                             const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');
-                            if (arsenal.length === 0) return <span className="text-gray-500">-</span>;
+                            if (arsenal.length === 0) return <span className="text-gray-400">-</span>;
                             return arsenal.map((a, i) => {
                               const rank = getAbilityRank(a.level || 0);
                               return <span key={i} className={getRankColor(rank)}>{i > 0 ? '/' : ''}{getPitchTypeName(a.type)}{rank}</span>;
@@ -826,10 +826,10 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                             const hintColor = sc.potentialLevel >= 5 ? 'text-red-400 font-bold'
                               : sc.potentialLevel >= 4 ? 'text-orange-400 font-bold'
                               : sc.potentialLevel <= 1 ? 'text-blue-400'
-                              : sc.potentialLevel <= 2 ? 'text-gray-500'
+                              : sc.potentialLevel <= 2 ? 'text-gray-400'
                               : '';
                             const talentColor = (sc.talentHint || '').includes('線が細') || (sc.talentHint || '').includes('不器用')
-                              ? 'text-gray-500' : 'text-emerald-400';
+                              ? 'text-gray-400' : 'text-emerald-400';
                             return (
                               <span>
                                 <span className="text-gray-300">{sc.text}</span>
@@ -873,7 +873,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           const rank = getAbilityRank(value || 0, !!opts.vel, !!opts.sta);
           return (
             <div className="flex items-center justify-between px-2 py-0.5">
-              <span className="text-gray-400 text-xs">{label}</span>
+              <span className="text-gray-300 text-xs">{label}</span>
               <span className="flex items-center gap-1.5">
                 <span className="text-gray-100 text-sm tabular-nums w-8 text-right">{value ?? '-'}</span>
                 <span className={`text-xs font-bold w-4 text-center ${getRankColor(rank)}`}>{rank}</span>
@@ -895,15 +895,15 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                 <span className="text-white font-bold text-lg">{p.name}</span>
                 <span className={`text-xs font-bold rounded px-1.5 py-0.5 ${srcBadge.c}`}>{srcBadge.t}</span>
                 <span className="text-sm text-gray-300">{POSITION_NAMES[p.position] || p.position} / {p.age}歳 / {throwLabel}{batLabel}</span>
-                <button onClick={() => setDetailCandidate(null)} className="ml-auto text-gray-400 hover:text-white text-lg">✕</button>
+                <button onClick={() => setDetailCandidate(null)} className="ml-auto text-gray-300 hover:text-white text-lg">✕</button>
               </div>
 
               <div className="text-xs text-gray-300 mb-3">
                 <div>
-                  <span className="text-gray-400">所属: </span><span className="text-white font-bold">{getAffiliation(p)}</span>
+                  <span className="text-gray-300">所属: </span><span className="text-white font-bold">{getAffiliation(p)}</span>
                   {career.filter(c => c.type !== 'achievement').length > 0 && (
                     <>
-                      <span className="ml-3 text-gray-400">経歴: </span>
+                      <span className="ml-3 text-gray-300">経歴: </span>
                       {career.filter(c => c.type !== 'achievement').map((c, i) => (
                         <span key={i} className="text-gray-200">{i > 0 ? ' → ' : ''}{c.label}</span>
                       ))}
@@ -940,9 +940,9 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                   {row('スタミナ', p.pitching?.stamina, { sta: true })}
                   {row('回転', p.pitching?.spinRate)}
                   <div className="mt-1 pt-1 border-t border-gray-700/60">
-                    <div className="text-xs text-gray-400 mb-0.5">変化球</div>
+                    <div className="text-xs text-gray-300 mb-0.5">変化球</div>
                     <div className="flex flex-wrap gap-1">
-                      {arsenal.length === 0 ? <span className="text-gray-600 text-xs">なし</span>
+                      {arsenal.length === 0 ? <span className="text-gray-400 text-xs">なし</span>
                         : arsenal.map((a, i) => {
                           const rank = getAbilityRank(a.level || 0);
                           return <span key={i} className={`text-xs ${getRankColor(rank)}`}>{getPitchTypeName(a.type)}{rank}</span>;
@@ -953,14 +953,14 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               </div>
 
               <div className="flex items-center gap-4 text-xs mb-3 px-1">
-                <span className="text-gray-400">成長力: <span className={`font-bold ${gpColor}`}>{gp.toFixed(2)}</span></span>
-                <span className="text-gray-400">知名度: <span className="text-gray-100 font-bold">{p.fame || 0}</span></span>
+                <span className="text-gray-300">成長力: <span className={`font-bold ${gpColor}`}>{gp.toFixed(2)}</span></span>
+                <span className="text-gray-300">知名度: <span className="text-gray-100 font-bold">{p.fame || 0}</span></span>
                 {p.isTwoWay && <span className="text-teal-300 font-bold">二刀流</span>}
               </div>
 
               {fitness.length > 0 && (
                 <div className="mb-3">
-                  <div className="text-xs text-gray-400 mb-1">守備適性</div>
+                  <div className="text-xs text-gray-300 mb-1">守備適性</div>
                   <div className="flex flex-wrap gap-1.5">
                     {fitness.map(([pos, val]) => (
                       <span key={pos} className={`text-xs px-1.5 py-0.5 rounded bg-gray-900/60 ${getRankColor(getAbilityRank(val))}`}>
@@ -976,7 +976,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                 const sc = typeof comment === 'string' ? { text: comment } : comment;
                 return (
                   <div className="bg-gray-900/50 rounded p-2 text-xs">
-                    <div className="text-gray-400 mb-0.5">スカウト所見</div>
+                    <div className="text-gray-300 mb-0.5">スカウト所見</div>
                     <span className="text-gray-200">{sc.text}</span>
                     {sc.talentHint && <span className="ml-1 text-emerald-400">{sc.talentHint}</span>}
                     {sc.potentialHint && <span className="ml-1 text-orange-400 font-bold">{sc.potentialHint}</span>}

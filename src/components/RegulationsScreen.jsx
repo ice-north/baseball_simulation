@@ -165,13 +165,13 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               <option value="tournament">4チームトーナメント</option>
             </select>
           </SettingRow>
-          <div className="text-xs text-gray-500 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
+          <div className="text-xs text-gray-400 py-1 pl-2">{getPlayoffFormatDescription(tempSettings.playoffFormat, tempSettings.leagueFormat)}</div>
           <SettingRow label="延長最大回数">
             <input type="number" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({ ...tempSettings, maxExtraInnings: parseInt(e.target.value) })} disabled={!canModify} min="0" max="30" className="bg-gray-700 text-white px-3 py-1.5 rounded text-sm w-20" />
           </SettingRow>
         </div>
         <div className="mt-3">
-          <button onClick={handleSaveSettings} disabled={!canModify} className={`w-full py-2 rounded-lg font-bold text-sm transition ${canModify ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-900 text-gray-600 cursor-not-allowed'}`}>
+          <button onClick={handleSaveSettings} disabled={!canModify} className={`w-full py-2 rounded-lg font-bold text-sm transition ${canModify ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-900 text-gray-400 cursor-not-allowed'}`}>
             設定を保存
           </button>
         </div>
@@ -245,7 +245,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {(tempSettings.teamNames || []).map((name, index) => (
                 <div key={index} className="flex items-center gap-1.5">
-                  <span className="text-gray-400 text-xs w-6">#{index + 1}</span>
+                  <span className="text-gray-300 text-xs w-6">#{index + 1}</span>
                   <input
                     type="text"
                     value={name}
@@ -265,7 +265,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               ))}
             </div>
           )}
-          <p className="text-gray-500 text-xs mt-2">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表で使用</p>
+          <p className="text-gray-400 text-xs mt-2">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表で使用</p>
         </div>
       )}
 

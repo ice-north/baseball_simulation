@@ -92,7 +92,7 @@ const GameFlowScreens = ({
       <div className="p-8 bg-gray-900 min-h-screen">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
-          <p className="text-gray-400 text-sm mb-6">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
+          <p className="text-gray-300 text-sm mb-6">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {leagueList.map(({ key, icon }) => {
               const leagueDef = INDEPENDENT_LEAGUES[key];
@@ -134,7 +134,7 @@ const GameFlowScreens = ({
                 <span className="text-3xl">🛠️</span>
                 <div>
                   <div className="text-lg font-bold text-white group-hover:text-green-400 transition">リーグ作成</div>
-                  <div className="text-xs text-gray-400">チーム数・試合数・ルールを自由に設定</div>
+                  <div className="text-xs text-gray-300">チーム数・試合数・ルールを自由に設定</div>
                 </div>
               </div>
               <div className="flex gap-3 text-xs text-gray-300 mt-2">
@@ -144,7 +144,7 @@ const GameFlowScreens = ({
             </button>
           </div>
           <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-800 text-sm transition">← 戻る</button>
+            <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-gray-800 text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
@@ -155,13 +155,13 @@ const GameFlowScreens = ({
   if (gameFlowState === 'newgame_team_select') {
     const leagueDef = INDEPENDENT_LEAGUES[selectedIndependentLeague];
     const teams = leagueDef?.teams || [];
-    const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-400' };
+    const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
     const RANK_LABELS = { S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興' };
     return (
       <div className="p-8 bg-gray-900 min-h-screen">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2">{leagueDef?.name}</h1>
-          <p className="text-gray-400 text-sm mb-6">監督を務めるチームを選んでください</p>
+          <p className="text-gray-300 text-sm mb-6">監督を務めるチームを選んでください</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {teams.map((team) => (
               <button key={team.id}
@@ -196,16 +196,16 @@ const GameFlowScreens = ({
               >
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-lg font-bold text-white group-hover:text-green-400 transition">{team.name}</div>
-                  <span className={`text-xs font-bold ${RANK_COLORS[team.rank] || 'text-gray-400'}`}>
+                  <span className={`text-xs font-bold ${RANK_COLORS[team.rank] || 'text-gray-300'}`}>
                     {team.rank} ({RANK_LABELS[team.rank] || ''})
                   </span>
                 </div>
-                <div className="text-xs text-gray-500">{team.city}</div>
+                <div className="text-xs text-gray-400">{team.city}</div>
               </button>
             ))}
           </div>
           <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_league_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-800 text-sm transition">← 戻る</button>
+            <button onClick={() => setGameFlowState('newgame_league_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-gray-800 text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
@@ -288,7 +288,7 @@ const GameFlowScreens = ({
         <div className="text-center">
           <div className="text-4xl mb-4">⚾</div>
           <div className="text-white text-xl font-bold mb-2">全チームを初期化中...</div>
-          <div className="text-gray-400 text-sm">179チームの選手を生成しています</div>
+          <div className="text-gray-300 text-sm">179チームの選手を生成しています</div>
           <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
           </div>
@@ -382,7 +382,7 @@ const GameFlowScreens = ({
         <div className="text-center">
           <div className="text-4xl mb-4">🎓</div>
           <div className="text-white text-xl font-bold mb-2">大学野球の世界を構築中...</div>
-          <div className="text-gray-400 text-sm">リーグチームと並行世界を生成しています</div>
+          <div className="text-gray-300 text-sm">リーグチームと並行世界を生成しています</div>
           <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
             <div className="h-full bg-amber-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
           </div>
@@ -465,7 +465,7 @@ const GameFlowScreens = ({
         <div className="text-center">
           <div className="text-4xl mb-4">⚾</div>
           <div className="text-white text-xl font-bold mb-2">平行世界を初期化中...</div>
-          <div className="text-gray-400 text-sm">社会人チーム179チーム＋独立リーグの選手を生成しています</div>
+          <div className="text-gray-300 text-sm">社会人チーム179チーム＋独立リーグの選手を生成しています</div>
           <div className="mt-4 w-48 h-1 bg-gray-700 rounded-full mx-auto overflow-hidden">
             <div className="h-full bg-green-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
           </div>

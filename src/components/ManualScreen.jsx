@@ -163,7 +163,7 @@ const ManualContent = ({ category }) => {
             <div className="bg-gray-700/50 rounded-lg p-3 mt-2">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-600 text-gray-400">
+                  <tr className="border-b border-gray-600 text-gray-300">
                     <th className="text-left py-1 px-2">パラメータ</th>
                     <th className="text-left py-1 px-2">対象</th>
                     <th className="text-left py-1 px-2">概要</th>
@@ -187,7 +187,7 @@ const ManualContent = ({ category }) => {
             スタメン出場（3打席以上）した野手は、体力に応じた疲労が蓄積する。代打や守備固めでは疲労は溜まらない。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">体力</th>
                   <th className="text-right py-1 px-2">100</th><th className="text-right py-1 px-2">80</th>
                   <th className="text-right py-1 px-2">60</th><th className="text-right py-1 px-2">40</th>
@@ -216,7 +216,7 @@ const ManualContent = ({ category }) => {
             </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">例: スタミナ120の投手</th>
                   <th className="text-right py-1 px-2">開始スタミナ</th>
                 </tr></thead>
@@ -234,7 +234,7 @@ const ManualContent = ({ category }) => {
             残りスタミナが25%を切ると降板となる。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">残スタミナ率</th>
                   <th className="text-right py-1 px-2">球速低下</th><th className="text-right py-1 px-2">制球低下</th>
                 </tr></thead>
@@ -270,7 +270,7 @@ const ManualContent = ({ category }) => {
             </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">疲労値</th>
                   <th className="text-right py-1 px-2">0</th><th className="text-right py-1 px-2">20</th>
                   <th className="text-right py-1 px-2">40</th><th className="text-right py-1 px-2">60</th>
@@ -301,7 +301,7 @@ const ManualContent = ({ category }) => {
             </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">回復力</th>
                   <th className="text-right py-1 px-2">20</th><th className="text-right py-1 px-2">40</th>
                   <th className="text-right py-1 px-2">50</th><th className="text-right py-1 px-2">70</th>
@@ -417,7 +417,7 @@ const ManualContent = ({ category }) => {
             各ロールに設定された球数上限に到達した時点で降板。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">ロール</th><th className="text-right py-1 px-2">球数上限</th>
                 </tr></thead>
                 <tbody className="text-gray-300">
@@ -455,7 +455,7 @@ const ManualContent = ({ category }) => {
             イニングが進むほど閾値が下がり、終盤では少しのダメージでも降板しやすくなる。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">イニング</th>
                   <th className="text-right py-1 px-2">1回</th><th className="text-right py-1 px-2">2回</th>
                   <th className="text-right py-1 px-2">3回</th><th className="text-right py-1 px-2">4回</th>
@@ -571,7 +571,7 @@ const ManualContent = ({ category }) => {
             新しい変化球の習得に挑戦する。習得する球種を選択可能。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">結果</th>
                   <th className="text-right py-1 px-2">確率</th>
                   <th className="text-right py-1 px-2">初期レベル</th>
@@ -581,7 +581,7 @@ const ManualContent = ({ category }) => {
                   <tr><td className="py-0.5 px-2 text-yellow-300">大成功</td><td className="text-right px-2">15%</td><td className="text-right px-2 text-green-400">Lv41〜60</td></tr>
                   <tr><td className="py-0.5 px-2 text-blue-300">成功</td><td className="text-right px-2">20%</td><td className="text-right px-2">Lv21〜40</td></tr>
                   <tr><td className="py-0.5 px-2 text-gray-300">習得</td><td className="text-right px-2">25%</td><td className="text-right px-2">Lv1〜20</td></tr>
-                  <tr><td className="py-0.5 px-2 text-red-400">失敗</td><td className="text-right px-2">30%</td><td className="text-right px-2 text-gray-500">習得不可</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-400">失敗</td><td className="text-right px-2">30%</td><td className="text-right px-2 text-gray-400">習得不可</td></tr>
                 </tbody>
               </table>
             </div>
@@ -638,7 +638,7 @@ const ManualContent = ({ category }) => {
             打席の左右やスイッチヒッターへの変更に挑戦する。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">変更パターン</th>
                   <th className="text-right py-1 px-2">成功率</th>
                   <th className="text-right py-1 px-2">失敗時ペナルティ</th>
@@ -662,7 +662,7 @@ const ManualContent = ({ category }) => {
             若いほど大きく成長し、20歳以下がピーク。28歳以降は衰えが始まる。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">年齢</th>
                   <th className="text-right py-1 px-2">〜20</th><th className="text-right py-1 px-2">〜22</th>
                   <th className="text-right py-1 px-2">〜25</th><th className="text-right py-1 px-2">〜28</th>
@@ -688,7 +688,7 @@ const ManualContent = ({ category }) => {
             22〜24歳が成長のピーク。フィジカル系より遅咲きで、30歳前後まで伸びやすい。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">年齢</th>
                   <th className="text-right py-1 px-2">〜21</th><th className="text-right py-1 px-2">〜24</th>
                   <th className="text-right py-1 px-2">〜27</th><th className="text-right py-1 px-2">〜30</th>
@@ -770,7 +770,7 @@ const ManualContent = ({ category }) => {
             技術系の能力が大幅に伸びる。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">対象</th>
                   <th className="text-left py-1 px-2">主な成長能力</th>
                 </tr></thead>
@@ -785,7 +785,7 @@ const ManualContent = ({ category }) => {
             フィジカル系の能力が大幅に伸びる。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">対象</th>
                   <th className="text-left py-1 px-2">主な成長能力</th>
                 </tr></thead>
@@ -801,7 +801,7 @@ const ManualContent = ({ category }) => {
             派遣の結果は「成長」と「飛躍」の2段階。失敗はない。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">結果</th>
                   <th className="text-right py-1 px-2">基本確率</th>
                   <th className="text-right py-1 px-2">成長倍率</th>
@@ -829,7 +829,7 @@ const ManualContent = ({ category }) => {
             派遣でも覚醒が発生する可能性がある。覚醒時はランダムな能力に+5〜12の追加ボーナス（倍率適用後）。
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
               <table className="w-full text-sm">
-                <thead><tr className="text-gray-400 border-b border-gray-600">
+                <thead><tr className="text-gray-300 border-b border-gray-600">
                   <th className="text-left py-1 px-2">派遣結果</th>
                   <th className="text-right py-1 px-2">覚醒発生率</th>
                 </tr></thead>
@@ -875,13 +875,13 @@ const ManualContent = ({ category }) => {
             <div className="bg-gray-700/50 rounded-lg p-2 mt-1">
               <table className="w-full text-sm">
                 <tbody className="text-gray-300">
-                  <tr><td className="py-0.5 px-2 text-pink-400 font-bold">S</td><td className="px-2">90〜99</td><td className="px-2 text-gray-400">超一流</td></tr>
-                  <tr><td className="py-0.5 px-2 text-red-400 font-bold">A</td><td className="px-2">80〜89</td><td className="px-2 text-gray-400">一流</td></tr>
-                  <tr><td className="py-0.5 px-2 text-orange-400 font-bold">B</td><td className="px-2">70〜79</td><td className="px-2 text-gray-400">好選手</td></tr>
-                  <tr><td className="py-0.5 px-2 text-yellow-400 font-bold">C</td><td className="px-2">60〜69</td><td className="px-2 text-gray-400">平均以上</td></tr>
-                  <tr><td className="py-0.5 px-2 text-green-400 font-bold">D</td><td className="px-2">50〜59</td><td className="px-2 text-gray-400">平均的</td></tr>
-                  <tr><td className="py-0.5 px-2 text-blue-400 font-bold">E</td><td className="px-2">40〜49</td><td className="px-2 text-gray-400">やや劣る</td></tr>
-                  <tr><td className="py-0.5 px-2 text-gray-400 font-bold">F</td><td className="px-2">1〜39</td><td className="px-2 text-gray-400">苦手</td></tr>
+                  <tr><td className="py-0.5 px-2 text-pink-400 font-bold">S</td><td className="px-2">90〜99</td><td className="px-2 text-gray-300">超一流</td></tr>
+                  <tr><td className="py-0.5 px-2 text-red-400 font-bold">A</td><td className="px-2">80〜89</td><td className="px-2 text-gray-300">一流</td></tr>
+                  <tr><td className="py-0.5 px-2 text-orange-400 font-bold">B</td><td className="px-2">70〜79</td><td className="px-2 text-gray-300">好選手</td></tr>
+                  <tr><td className="py-0.5 px-2 text-yellow-400 font-bold">C</td><td className="px-2">60〜69</td><td className="px-2 text-gray-300">平均以上</td></tr>
+                  <tr><td className="py-0.5 px-2 text-green-400 font-bold">D</td><td className="px-2">50〜59</td><td className="px-2 text-gray-300">平均的</td></tr>
+                  <tr><td className="py-0.5 px-2 text-blue-400 font-bold">E</td><td className="px-2">40〜49</td><td className="px-2 text-gray-300">やや劣る</td></tr>
+                  <tr><td className="py-0.5 px-2 text-gray-300 font-bold">F</td><td className="px-2">1〜39</td><td className="px-2 text-gray-300">苦手</td></tr>
                 </tbody>
               </table>
             </div>
@@ -903,7 +903,7 @@ const Entry = ({ title, range, children }) => (
   <div className="bg-gray-700/40 rounded-lg p-3">
     <div className="flex items-baseline gap-2 mb-1">
       <h4 className="text-yellow-300 font-bold text-sm">{title}</h4>
-      {range && <span className="text-xs text-gray-400 bg-gray-600/60 px-1.5 py-0.5 rounded">{range}</span>}
+      {range && <span className="text-xs text-gray-300 bg-gray-600/60 px-1.5 py-0.5 rounded">{range}</span>}
     </div>
     <div className="text-gray-300 text-sm leading-relaxed">{children}</div>
   </div>
@@ -919,7 +919,7 @@ const ManualScreen = ({ onBack }) => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">MANUAL</h1>
-            <span className="text-gray-400 text-sm">～ゲーム辞典～</span>
+            <span className="text-gray-300 text-sm">～ゲーム辞典～</span>
           </div>
           <button
             onClick={onBack}

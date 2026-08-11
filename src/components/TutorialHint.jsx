@@ -41,7 +41,7 @@ export default function TutorialHint({ id, title, children, className = '' }) {
           </button>
           <button
             onClick={() => setTutorialEnabled(false)}
-            className="text-xs text-gray-400 hover:text-gray-200 underline"
+            className="text-xs text-gray-300 hover:text-gray-200 underline"
           >
             ヒントを今後表示しない
           </button>

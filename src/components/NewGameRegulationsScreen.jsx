@@ -202,7 +202,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
       <div className="max-w-5xl mx-auto">
         <h1 className="text-4xl font-bold text-white mb-2">⚙️ レギュレーション設定</h1>
         {selectedLeague && (
-          <p className="text-gray-400 text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
+          <p className="text-gray-300 text-sm mb-6">※レギュレーションは毎年オフシーズンに変更することができます</p>
         )}
 
         <TutorialHint id="regulations-intro" title="リーグのルールを決める">
@@ -314,7 +314,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
               placeholder="例: 北海道フロンティアリーグ"
               className="w-full bg-gray-700 text-white rounded px-3 py-2 text-lg"
             />
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-xs text-gray-300 mt-2">
               あなたが立ち上げる独立リーグの名称です。日程画面やトレードのリーグ表示に使われます。
             </p>
           </div>
@@ -329,7 +329,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm font-bold transition"
               title="1つの地域から近い都市を選び、リーグ名も地域に合わせて生成します"
             >🎲 ランダム生成</button>
-            <span className="text-xs text-gray-400">近隣都市でまとめて生成されます</span>
+            <span className="text-xs text-gray-300">近隣都市でまとめて生成されます</span>
           </div>
           {tempSettings.leagueFormat === 'two' ? (
             <>
@@ -416,7 +416,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {tempSettings.teamNames.map((name, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <span className="text-gray-400 text-sm w-8">#{index + 1}</span>
+                  <span className="text-gray-300 text-sm w-8">#{index + 1}</span>
                   <input
                     type="text"
                     value={name}
@@ -436,12 +436,12 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
               ))}
             </div>
           )}
-          <p className="text-gray-500 text-xs mt-3">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表・ランキングで使用されます</p>
+          <p className="text-gray-400 text-xs mt-3">※正式名（最大15文字）はドラフト・記録画面で使用。略称（全角3文字まで）はカレンダー・順位表・ランキングで使用されます</p>
         </div>
 
         <div className="flex items-center justify-center gap-6">
           {onBack && (
-            <button onClick={onBack} className="text-gray-400 hover:text-white text-sm transition">
+            <button onClick={onBack} className="text-gray-300 hover:text-white text-sm transition">
               ← 戻る
             </button>
           )}

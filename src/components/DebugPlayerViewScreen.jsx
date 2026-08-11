@@ -172,7 +172,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
             <button onClick={onBack} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm">戻る</button>
           )}
           <h1 className="text-xl font-bold">デバッグ用 全選手閲覧</h1>
-          <span className="text-gray-400 text-sm">({sortedEntries.length} / {allEntries.length}人)</span>
+          <span className="text-gray-300 text-sm">({sortedEntries.length} / {allEntries.length}人)</span>
         </div>
       </div>
 
@@ -212,7 +212,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
       </div>
 
       {sortedEntries.length === 0 ? (
-        <div className="text-gray-500 text-center py-8">該当する選手がいません</div>
+        <div className="text-gray-400 text-center py-8">該当する選手がいません</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
@@ -223,7 +223,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
                     onClick={() => handleSort(col.key)}
                     className={`py-1 px-1 cursor-pointer hover:text-white select-none transition-colors ${col.w} ${
                       col.key === 'name' || col.key === 'source' ? 'text-left' : 'text-center'
-                    } ${sortKey === col.key ? 'text-cyan-400' : 'text-gray-400'}`}>
+                    } ${sortKey === col.key ? 'text-cyan-400' : 'text-gray-300'}`}>
                     {col.label}{sortKey === col.key ? (sortAsc ? '▲' : '▼') : ''}
                   </th>
                 ))}
@@ -256,7 +256,7 @@ function PlayerRow({ entry }) {
     return <span className={getAbilityColor(isVel ? Math.min(99, (v - 115) * 2.5) : v)}>{v}</span>;
   };
 
-  const gpColor = gp >= 1.3 ? 'text-red-400' : gp >= 1.1 ? 'text-orange-400' : gp >= 0.9 ? 'text-yellow-300' : gp >= 0.7 ? 'text-blue-400' : 'text-gray-500';
+  const gpColor = gp >= 1.3 ? 'text-red-400' : gp >= 1.1 ? 'text-orange-400' : gp >= 0.9 ? 'text-yellow-300' : gp >= 0.7 ? 'text-blue-400' : 'text-gray-400';
 
   return (
     <tr className="border-b border-gray-800 hover:bg-gray-800/50">
@@ -268,7 +268,7 @@ function PlayerRow({ entry }) {
       <td className="py-0.5 px-1 text-center text-gray-300">{BUILD_LABEL[player.physical?.build] || '-'}</td>
       <td className="py-0.5 px-1 text-center text-gray-300">{player.physical?.throws === 'left' ? '左' : '右'}</td>
       <td className="py-0.5 px-1 text-center text-gray-300">{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</td>
-      <td className="py-0.5 px-1 text-gray-400 truncate max-w-[7rem]" title={sourceLabel}>{sourceLabel}</td>
+      <td className="py-0.5 px-1 text-gray-300 truncate max-w-[7rem]" title={sourceLabel}>{sourceLabel}</td>
       <td className="py-0.5 px-1 text-center">{isPitcher && vel != null ? <C v={vel} isVel /> : <span className="text-gray-700">-</span>}</td>
       <td className="py-0.5 px-1 text-center">{isPitcher ? <C v={ctrl} /> : <span className="text-gray-700">-</span>}</td>
       <td className="py-0.5 px-1 text-center">{isPitcher ? <C v={stm} isVel={false} /> : <span className="text-gray-700">-</span>}</td>

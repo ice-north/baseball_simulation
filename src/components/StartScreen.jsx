@@ -65,7 +65,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
       <div className="text-center">
         <div className="mb-10">
           <h1 className="text-6xl font-bold text-white tracking-tight">NEXT STAGE</h1>
-          <p className="text-gray-500 text-sm mt-2 tracking-widest uppercase">Baseball Simulation</p>
+          <p className="text-gray-400 text-sm mt-2 tracking-widest uppercase">Baseball Simulation</p>
         </div>
 
         {/* 緊急バックアップ復旧（前回クラッシュ時に自動保存されたデータ） */}
@@ -99,7 +99,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                 className={`block w-80 px-6 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
                   slot
                     ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 {slot ? (
@@ -136,7 +136,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
             <button
               onClick={() => setShowSlotSelect(false)}
-              className="mt-4 text-gray-400 hover:text-gray-200 text-sm transition flex items-center gap-1"
+              className="mt-4 text-gray-300 hover:text-gray-200 text-sm transition flex items-center gap-1"
             >
               ← 戻る
             </button>
@@ -152,7 +152,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                 className={`block w-80 px-6 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
                   slot
                     ? 'bg-purple-600 hover:bg-purple-500 text-white'
-                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 {slot ? (
@@ -183,7 +183,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
             <button
               onClick={() => setShowEditSlotSelect(false)}
-              className="mt-4 text-gray-400 hover:text-gray-200 text-sm transition flex items-center gap-1"
+              className="mt-4 text-gray-300 hover:text-gray-200 text-sm transition flex items-center gap-1"
             >
               ← 戻る
             </button>
@@ -205,7 +205,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
               className={`w-80 px-8 py-4 rounded-xl font-bold text-xl transition-all shadow-lg active:scale-[0.98] ${
                 canContinue
                   ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/30'
-                  : 'bg-gray-700/40 text-gray-500 cursor-not-allowed shadow-none'
+                  : 'bg-gray-700/40 text-gray-400 cursor-not-allowed shadow-none'
               }`}
             >
               CONTINUE
@@ -231,7 +231,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
 
             <button
               onClick={onManual}
-              className="w-80 text-gray-500 hover:text-gray-300 px-8 py-2 rounded-xl text-sm transition-all"
+              className="w-80 text-gray-400 hover:text-gray-300 px-8 py-2 rounded-xl text-sm transition-all"
             >
               MANUAL
             </button>
@@ -239,11 +239,11 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
             {/* チュートリアル(ヒント)表示のON/OFF */}
             <button
               onClick={() => { const next = !tutorialOn; setTutorialEnabled(next); setTutorialOn(next); if (next) resetTutorialProgress(); }}
-              className="w-80 text-xs text-gray-500 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
+              className="w-80 text-xs text-gray-400 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
               title="ゲーム中に操作ヒントを表示するかどうか"
             >
               <span>💡 チュートリアル（操作ヒント）</span>
-              <span className={`font-bold px-2 py-0.5 rounded ${tutorialOn ? 'bg-cyan-700/60 text-cyan-200' : 'bg-gray-700 text-gray-400'}`}>
+              <span className={`font-bold px-2 py-0.5 rounded ${tutorialOn ? 'bg-cyan-700/60 text-cyan-200' : 'bg-gray-700 text-gray-300'}`}>
                 {tutorialOn ? 'ON' : 'OFF'}
               </span>
             </button>
@@ -251,11 +251,11 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
             {/* オートセーブのON/OFF */}
             <button
               onClick={() => { const next = !autosaveOn; setAutosaveEnabled(next); setAutosaveOn(next); }}
-              className="w-80 text-xs text-gray-500 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
+              className="w-80 text-xs text-gray-400 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
               title="月替わり・年替わりの節目で自動保存します"
             >
               <span>💾 オートセーブ</span>
-              <span className={`font-bold px-2 py-0.5 rounded ${autosaveOn ? 'bg-cyan-700/60 text-cyan-200' : 'bg-gray-700 text-gray-400'}`}>
+              <span className={`font-bold px-2 py-0.5 rounded ${autosaveOn ? 'bg-cyan-700/60 text-cyan-200' : 'bg-gray-700 text-gray-300'}`}>
                 {autosaveOn ? 'ON' : 'OFF'}
               </span>
             </button>
@@ -263,7 +263,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
             {/* 画面スケール（小さい画面で1画面に収める） */}
             <button
               onClick={() => setUiScaleState(cycleUiScale())}
-              className="w-80 text-xs text-gray-500 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
+              className="w-80 text-xs text-gray-400 hover:text-cyan-300 px-8 py-1.5 transition-all flex items-center justify-center gap-2"
               title="画面が横にはみ出す場合は「自動」または縮小を選ぶと1画面に収まります"
             >
               <span>🖥 画面スケール</span>
@@ -275,7 +275,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
         )}
 
         {!hasSaveData && !showSlotSelect && !showEditSlotSelect && (
-          <p className="text-xs text-gray-600 mt-8">SANDBOX: 成長・ドラフト・引退なし。自由にチームを編集してシーズンを戦うモード</p>
+          <p className="text-xs text-gray-400 mt-8">SANDBOX: 成長・ドラフト・引退なし。自由にチームを編集してシーズンを戦うモード</p>
         )}
       </div>
     </div>

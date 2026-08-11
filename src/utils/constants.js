@@ -387,8 +387,8 @@ export const getRankColor = (rank) => ({
   C: 'text-yellow-400',
   D: 'text-green-400',
   E: 'text-blue-400',
-  F: 'text-gray-400'
-}[rank] || 'text-gray-400');
+  F: 'text-gray-300'
+}[rank] || 'text-gray-300');
 
 /**
  * 能力値 → 色クラス（数値表示用）
@@ -433,7 +433,7 @@ export const getAbilityColor = (value) => {
   if (value >= 60) return 'text-yellow-400';
   if (value >= 50) return 'text-green-400';
   if (value >= 40) return 'text-blue-400';
-  return 'text-gray-400';
+  return 'text-gray-300';
 };
 
 const FIELD_POSITIONS_FOR_UTILITY = ['catcher', 'first', 'second', 'third', 'short', 'left', 'center', 'right'];

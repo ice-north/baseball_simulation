@@ -150,16 +150,16 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
 
   const BatsLabel = ({ bats }) => {
     const label = bats === 'left' ? '左' : bats === 'switch' ? '両' : '右';
-    const color = bats === 'left' ? 'text-blue-400' : bats === 'switch' ? 'text-purple-400' : 'text-gray-500';
+    const color = bats === 'left' ? 'text-blue-400' : bats === 'switch' ? 'text-purple-400' : 'text-gray-400';
     return <span className={`text-xs ${color} shrink-0 w-3`}>{label}</span>;
   };
 
   const BattingStats = ({ player }) => {
     const bs = player.seasonStats?.batting;
-    if (!bs || !bs.atBats) return <span className="text-gray-600 text-xs">-</span>;
+    if (!bs || !bs.atBats) return <span className="text-gray-400 text-xs">-</span>;
     const avg = (bs.hits / bs.atBats).toFixed(3);
     return (
-      <span className="text-xs text-gray-400 font-mono tabular-nums">
+      <span className="text-xs text-gray-300 font-mono tabular-nums">
         <span className="text-blue-300 inline-block w-9 text-right">{avg}</span>
         <span className="inline-block w-7 text-right">{bs.homeruns || 0}本</span>
         <span className="inline-block w-7 text-right">{bs.rbis || 0}点</span>
@@ -186,10 +186,10 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
           'bg-gray-800 hover:bg-gray-700 cursor-pointer'
         }`}
       >
-        <span className={`w-4 text-center font-mono shrink-0 text-xs ${isSwapCandidate ? 'text-blue-400' : 'text-gray-500'}`}>{order}</span>
+        <span className={`w-4 text-center font-mono shrink-0 text-xs ${isSwapCandidate ? 'text-blue-400' : 'text-gray-400'}`}>{order}</span>
         <PosBadge pos={pos} />
         <span className="font-bold text-white truncate shrink-0 text-xs" style={{width:'4rem'}}>{player.name}</span>
-        <span className="text-xs text-gray-500 shrink-0 w-4 text-right">{player.age || ''}</span>
+        <span className="text-xs text-gray-400 shrink-0 w-4 text-right">{player.age || ''}</span>
         <span className={`shrink-0 text-xs ${CONDITION_COLORS[cond]}`}>{CONDITION_ICONS[cond]}</span>
         <BatsLabel bats={player.batting?.bats || 'right'} />
         {pos !== 'pitcher' && <FatigueBar fatigue={player.fatigue} />}
@@ -199,7 +199,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         })()}
         <span className="flex-1" />
         {pos === 'pitcher' ? (
-          <span className="text-xs text-gray-400 font-mono">{player.pitching?.velocity || 0}<span className="text-gray-600">km</span></span>
+          <span className="text-xs text-gray-300 font-mono">{player.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
         ) : <BattingStats player={player} />}
         {isUser && isSelected && pos !== 'pitcher' && (
           <button onClick={(e) => { e.stopPropagation(); }} className="shrink-0 px-1 py-0.5 text-xs font-bold rounded bg-orange-600 text-white ml-0.5">交代</button>
@@ -232,7 +232,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
     >
       <PosBadge pos={player.position} />
       <span className="font-bold text-white shrink-0 truncate text-xs" style={{width:'4rem'}}>{player.name}</span>
-      <span className="text-xs text-gray-500 shrink-0 w-4 text-right">{player.age || ''}</span>
+      <span className="text-xs text-gray-400 shrink-0 w-4 text-right">{player.age || ''}</span>
       <span className={`shrink-0 text-xs ${CONDITION_COLORS[player.condition ?? CONDITION_LEVELS.NORMAL]}`}>
         {CONDITION_ICONS[player.condition ?? CONDITION_LEVELS.NORMAL]}
       </span>
@@ -261,9 +261,9 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         <span className="text-white truncate font-bold" style={{maxWidth:'3.5rem'}}>{pitcher.name}</span>
         {showRole && role && <span className="text-xs px-0.5 rounded bg-gray-700 text-gray-300">{roleLabel[role] || role}</span>}
         <FatigueBar fatigue={pitcher.fatigue} width={20} />
-        <span className="text-gray-400">{pitcher.pitching?.velocity || 0}<span className="text-gray-600">km</span></span>
+        <span className="text-gray-300">{pitcher.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
         <span className="flex-1" />
-        {era && <span className="text-gray-500">{era} {ps.wins||0}勝{ps.losses||0}敗{(ps.saves||0) > 0 ? ` ${ps.saves}S` : ''}</span>}
+        {era && <span className="text-gray-400">{era} {ps.wins||0}勝{ps.losses||0}敗{(ps.saves||0) > 0 ? ` ${ps.saves}S` : ''}</span>}
       </div>
     );
   };
@@ -281,10 +281,10 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
           </div>
           <div className="flex items-center gap-4">
             <span className={`font-bold ${isHome ? 'text-blue-400' : 'text-red-400'}`}>{isHome ? '🏠' : '✈️'} {userTeamName}</span>
-            <span className="text-xl text-gray-500 font-bold">VS</span>
+            <span className="text-xl text-gray-400 font-bold">VS</span>
             <span className={`font-bold ${!isHome ? 'text-blue-400' : 'text-red-400'}`}>{!isHome ? '🏠' : '✈️'} {opponentName}</span>
           </div>
-          <button onClick={() => setShowGameChoiceModal(false)} className="text-gray-500 hover:text-white text-lg px-2">✕</button>
+          <button onClick={() => setShowGameChoiceModal(false)} className="text-gray-400 hover:text-white text-lg px-2">✕</button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -292,7 +292,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
           <div className="space-y-2">
             {/* 先発投手選択 */}
             <div className="bg-gray-900 rounded-lg p-2.5 border border-gray-700">
-              <h3 className="text-xs font-bold text-gray-400 mb-1.5">先発投手選択</h3>
+              <h3 className="text-xs font-bold text-gray-300 mb-1.5">先発投手選択</h3>
               <div className="space-y-0.5">
                 {rotationStarters.map(pitcher => {
                   const isSelected = pitcher.id === currentStarter?.id;
@@ -313,11 +313,11 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                         {pitcher.physical?.throws === 'left' ? '左' : '右'}
                       </span>
                       <span className="text-white font-bold truncate" style={{maxWidth:'4rem'}}>{pitcher.name}</span>
-                      <span className="text-xs text-gray-500">{pitcher.age}</span>
+                      <span className="text-xs text-gray-400">{pitcher.age}</span>
                       <FatigueBar fatigue={f} width={24} />
-                      <span className="text-xs text-gray-400">{pitcher.pitching?.velocity || 0}<span className="text-gray-600">km</span></span>
-                      <span className="text-xs text-gray-400">制<span className="text-blue-300">{pitcher.pitching?.control || 0}</span></span>
-                      {era && <span className="text-xs text-gray-500 ml-auto">{era} {ps.wins||0}勝{ps.losses||0}敗</span>}
+                      <span className="text-xs text-gray-300">{pitcher.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
+                      <span className="text-xs text-gray-300">制<span className="text-blue-300">{pitcher.pitching?.control || 0}</span></span>
+                      {era && <span className="text-xs text-gray-400 ml-auto">{era} {ps.wins||0}勝{ps.losses||0}敗</span>}
                     </div>
                   );
                 })}
@@ -326,8 +326,8 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
 
             {/* スタメン */}
             <div className="bg-gray-900 rounded-lg p-2.5">
-              <h3 className="text-xs font-bold text-gray-400 mb-1">スタメン
-                <span className="text-gray-600 font-normal ml-1">
+              <h3 className="text-xs font-bold text-gray-300 mb-1">スタメン
+                <span className="text-gray-400 font-normal ml-1">
                   {selectedBench !== null ? '（交代先をタップ）' : swapTarget !== null ? '（入替先をタップ）' : '（タップで打順入替）'}
                 </span>
               </h3>
@@ -337,7 +337,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             {/* 控え */}
             <div className="bg-gray-900 rounded-lg p-2.5">
               <div className="flex items-center justify-between mb-1">
-                <h3 className="text-xs font-bold text-gray-400">
+                <h3 className="text-xs font-bold text-gray-300">
                   控え{swapTarget !== null
                     ? <span className="text-blue-400 ml-1">→ {swapTarget}番と交代</span>
                     : selectedBench !== null
@@ -346,17 +346,17 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                 </h3>
                 <div className="flex gap-1">
                   <button onClick={() => setBenchFilter('fielder')}
-                    className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'fielder' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>野手</button>
+                    className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'fielder' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>野手</button>
                   <button onClick={() => setBenchFilter('pitcher')}
-                    className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'pitcher' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>投手</button>
+                    className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'pitcher' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>投手</button>
                 </div>
               </div>
               <div className="space-y-0.5 text-xs">
                 {benchFilter === 'fielder' ? (
-                  benchFielders.length === 0 ? <div className="text-gray-500 text-center py-1">控え野手なし</div> :
+                  benchFielders.length === 0 ? <div className="text-gray-400 text-center py-1">控え野手なし</div> :
                   benchFielders.map(p => renderBenchPlayer(p))
                 ) : (
-                  benchPitchers.length === 0 ? <div className="text-gray-500 text-center py-1">控え投手なし</div> :
+                  benchPitchers.length === 0 ? <div className="text-gray-400 text-center py-1">控え投手なし</div> :
                   benchPitchers.map(p => renderPitcherRow(p, { showRole: true, teamRotation: rotation }))
                 )}
               </div>
@@ -385,16 +385,16 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     <div className="text-xs text-gray-300 space-y-1.5 flex-1">
                       {st && (
                         <div>
-                          <span className="text-gray-400">今季成績 </span>
+                          <span className="text-gray-300">今季成績 </span>
                           <span className="text-white font-bold tabular-nums">{w}勝{l}敗{dr > 0 ? `${dr}分` : ''}</span>
-                          {wr != null && <span className="text-gray-400 ml-1">（{wr.toFixed(3)}）</span>}
+                          {wr != null && <span className="text-gray-300 ml-1">（{wr.toFixed(3)}）</span>}
                         </div>
                       )}
                       {keyHitter && (
                         <div>
-                          <span className="text-gray-400">警戒打者 </span>
+                          <span className="text-gray-300">警戒打者 </span>
                           <span className="text-red-300 font-bold">{keyHitter.name}</span>
-                          <span className="text-gray-400 ml-1 tabular-nums">ミ{keyHitter.batting?.meet || 0}/パ{keyHitter.batting?.power || 0}</span>
+                          <span className="text-gray-300 ml-1 tabular-nums">ミ{keyHitter.batting?.meet || 0}/パ{keyHitter.batting?.power || 0}</span>
                         </div>
                       )}
                     </div>
@@ -404,7 +404,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             })()}
             {/* 相手先発投手 */}
             <div className="bg-gray-900 rounded-lg p-2.5 border border-gray-700">
-              <h3 className="text-xs font-bold text-gray-400 mb-1.5">相手先発投手</h3>
+              <h3 className="text-xs font-bold text-gray-300 mb-1.5">相手先発投手</h3>
               {opponentStarter ? (() => {
                 const ps = opponentStarter.seasonStats?.pitching;
                 const era = ps?.inningsPitched > 0 ? ((ps.earnedRuns || 0) / (ps.inningsPitched / 3) * 9).toFixed(2) : '-';
@@ -415,14 +415,14 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     </span>
                     <span className="text-xs px-1 py-0.5 rounded bg-gray-700 text-gray-300">{FORM_LABELS[opponentStarter.pitching?.form] || 'スリー'}</span>
                     <span className="text-white font-bold text-xs">{opponentStarter.name}</span>
-                    <span className="text-xs text-gray-500">{opponentStarter.age}</span>
-                    <div className="flex gap-1.5 text-xs text-gray-400">
-                      <span>{opponentStarter.pitching?.velocity || 0}<span className="text-gray-600">km</span></span>
+                    <span className="text-xs text-gray-400">{opponentStarter.age}</span>
+                    <div className="flex gap-1.5 text-xs text-gray-300">
+                      <span>{opponentStarter.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
                       <span>制<span className="text-blue-300">{opponentStarter.pitching?.control || 0}</span></span>
                       <span>ス<span className="text-green-300">{opponentStarter.pitching?.stamina || 0}</span></span>
                     </div>
                   </div>
-                  <div className="flex gap-1.5 text-xs text-gray-500 mt-1">
+                  <div className="flex gap-1.5 text-xs text-gray-400 mt-1">
                     <span>防<span className="text-orange-300">{era}</span></span>
                     <span>{ps?.wins || 0}勝{ps?.losses || 0}敗</span>
                     {(ps?.saves || 0) > 0 && <span>{ps.saves}S</span>}
@@ -436,27 +436,27 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                     </div>
                   )}
                 </>);
-              })() : <span className="text-gray-500 text-xs">情報なし</span>}
+              })() : <span className="text-gray-400 text-xs">情報なし</span>}
             </div>
 
             {/* 相手スタメン */}
             <div className="bg-gray-900 rounded-lg p-2.5">
-              <h3 className="text-xs font-bold text-gray-400 mb-1">相手スタメン</h3>
+              <h3 className="text-xs font-bold text-gray-300 mb-1">相手スタメン</h3>
               <div className="space-y-0.5">
                 {opponentStarters.length > 0
                   ? opponentStarters.map((p, i) => renderPlayerRow(p, i))
-                  : <div className="text-gray-500 text-center py-2 text-xs">ラインナップ未確定</div>}
+                  : <div className="text-gray-400 text-center py-2 text-xs">ラインナップ未確定</div>}
               </div>
             </div>
 
             {/* 相手控え投手 */}
             <div className="bg-gray-900 rounded-lg p-2.5">
-              <h3 className="text-xs font-bold text-gray-400 mb-1">相手控え投手</h3>
+              <h3 className="text-xs font-bold text-gray-300 mb-1">相手控え投手</h3>
               <div className="space-y-0.5">
                 {(() => {
                   const oppStarterIds = new Set(opponentStarters.map(p => p.id));
                   const oppBullpen = (opponentTeam?.players || []).filter(p => isPitcherPlayer(p) && !oppStarterIds.has(p.id));
-                  if (oppBullpen.length === 0) return <div className="text-gray-500 text-center py-1 text-xs">情報なし</div>;
+                  if (oppBullpen.length === 0) return <div className="text-gray-400 text-center py-1 text-xs">情報なし</div>;
                   const oppRotation = opponentTeam?.pitchingRotation;
                   return oppBullpen.slice(0, 8).map(p => renderPitcherRow(p, { showRole: true, teamRotation: oppRotation }));
                 })()}

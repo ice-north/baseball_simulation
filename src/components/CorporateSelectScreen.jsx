@@ -6,7 +6,7 @@ const RANK_COLORS = {
   A: 'text-red-400',
   B: 'text-blue-400',
   C: 'text-green-400',
-  D: 'text-gray-400',
+  D: 'text-gray-300',
 };
 
 const TYPE_LABELS = {
@@ -221,7 +221,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2 text-center">地区を選択</h1>
-          <p className="text-gray-400 mb-8 text-center">監督として就任する地区を選んでください</p>
+          <p className="text-gray-300 mb-8 text-center">監督として就任する地区を選んでください</p>
 
           <div className="grid grid-cols-3 gap-3">
             {REGIONS.map(region => {
@@ -235,7 +235,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                   className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-lg p-4 text-left transition"
                 >
                   <div className="text-white font-bold text-lg">{region.name}</div>
-                  <div className="text-gray-400 text-sm">{teams.length}チーム</div>
+                  <div className="text-gray-300 text-sm">{teams.length}チーム</div>
                   <div className="text-xs mt-1 space-x-2">
                     <span className="text-blue-400">企業:{corpCount}</span>
                     <span className="text-green-400">クラブ:{clubCount}</span>
@@ -246,7 +246,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
           </div>
 
           <div className="text-center mt-6">
-            <button onClick={onBack} className="text-gray-500 hover:text-gray-300 text-sm">
+            <button onClick={onBack} className="text-gray-400 hover:text-gray-300 text-sm">
               戻る
             </button>
           </div>
@@ -264,7 +264,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
         </h1>
         <p className="text-gray-300 mb-4 text-center text-sm">
           監督として就任するチームを選んでください
-          <span className="text-gray-400 ml-2">全{regionTeams.length}チーム</span>
+          <span className="text-gray-300 ml-2">全{regionTeams.length}チーム</span>
         </p>
 
         {/* 2列にして幅を使う。1列だと9チームでスクロールアウトしていた */}
@@ -304,16 +304,16 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                       <span className={`font-bold text-lg w-5 shrink-0 text-center ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
                       <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${typeInfo.color}`}>{typeInfo.label}</span>
                       <span className="text-white font-bold truncate min-w-0">{team.displayName}</span>
-                      <span className="text-gray-400 text-xs shrink-0">{team.city}</span>
+                      <span className="text-gray-300 text-xs shrink-0">{team.city}</span>
                       <span className="ml-auto flex items-center gap-2 shrink-0">
                         {/* 改名は常時出すと全行の視覚ノイズになるのでホバー時だけ */}
                         {!team.isCustom && (
                           <button onClick={(e) => startEditName(e, team)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-300 text-xs transition">改名</button>
+                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-blue-300 text-xs transition">改名</button>
                         )}
                         {team.displayName !== team.name && (
                           <button onClick={(e) => handleResetName(e, team.id)}
-                            className="text-gray-400 hover:text-yellow-300 text-xs">戻す</button>
+                            className="text-gray-300 hover:text-yellow-300 text-xs">戻す</button>
                         )}
                       </span>
                     </div>
@@ -334,7 +334,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
           })}
         </div>
 
-        <div className="text-xs text-gray-400 mt-2 text-center">
+        <div className="text-xs text-gray-300 mt-2 text-center">
           戦力＝所属選手の能力の目安 ／ 主力級＝突出した選手が出る確率 ／
           クラブはキャンプが無く成長も遅いぶん難しい
         </div>
@@ -343,10 +343,10 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
         {showCreateForm ? (
           <div className="mt-4 bg-gray-800 border border-purple-600 rounded-lg p-4">
             <h3 className="text-white font-bold mb-1">企業チームを立ち上げる</h3>
-            <p className="text-gray-400 text-xs mb-3">Dランクからのスタート。Dランクのクラブチーム1つと入れ替わります。</p>
+            <p className="text-gray-300 text-xs mb-3">Dランクからのスタート。Dランクのクラブチーム1つと入れ替わります。</p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="text-gray-400 text-xs">チーム名</label>
+                <label className="text-gray-300 text-xs">チーム名</label>
                 <input
                   type="text"
                   value={createForm.name}
@@ -357,7 +357,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
                 />
               </div>
               <div>
-                <label className="text-gray-400 text-xs">所在都市</label>
+                <label className="text-gray-300 text-xs">所在都市</label>
                 <input
                   type="text"
                   value={createForm.city}
@@ -369,13 +369,13 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
             </div>
             <div className="flex gap-2">
               <button onClick={handleCreateTeam} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2 rounded transition">作成してゲーム開始</button>
-              <button onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-white px-4 py-2">取消</button>
+              <button onClick={() => setShowCreateForm(false)} className="text-gray-300 hover:text-white px-4 py-2">取消</button>
             </div>
           </div>
         ) : (
           <button
             onClick={() => setShowCreateForm(true)}
-            className="mt-4 w-full border-2 border-dashed border-gray-600 hover:border-purple-500 text-gray-400 hover:text-purple-400 rounded-lg py-3 transition text-sm"
+            className="mt-4 w-full border-2 border-dashed border-gray-600 hover:border-purple-500 text-gray-300 hover:text-purple-400 rounded-lg py-3 transition text-sm"
           >
             + 企業チームを立ち上げる（Dランクスタート）
           </button>
@@ -384,7 +384,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
         <div className="flex justify-between items-center mt-4">
           <button
             onClick={() => { setSelectedRegion(null); setSelectedTeam(null); }}
-            className="text-gray-400 hover:text-white text-sm px-4 py-2"
+            className="text-gray-300 hover:text-white text-sm px-4 py-2"
           >
             地区選択に戻る
           </button>
@@ -499,7 +499,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
         <div key={`${team.id}-${refreshKey}`} className="bg-gray-800 border-2 border-indigo-500 rounded-lg p-4">
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <label className="text-gray-400 text-xs block mb-1">チーム名</label>
+              <label className="text-gray-300 text-xs block mb-1">チーム名</label>
               <input
                 type="text"
                 value={editForm.name}
@@ -509,7 +509,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs block mb-1">都市</label>
+              <label className="text-gray-300 text-xs block mb-1">都市</label>
               <input
                 type="text"
                 value={editForm.city}
@@ -521,7 +521,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
 
           <div className="grid grid-cols-3 gap-3 mb-3">
             <div>
-              <label className="text-gray-400 text-xs block mb-1">地域</label>
+              <label className="text-gray-300 text-xs block mb-1">地域</label>
               <select
                 value={editForm.region}
                 onChange={e => setEditForm(f => ({ ...f, region: e.target.value }))}
@@ -531,7 +531,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
               </select>
             </div>
             <div>
-              <label className="text-gray-400 text-xs block mb-1">種別</label>
+              <label className="text-gray-300 text-xs block mb-1">種別</label>
               <div className="flex gap-1">
                 {[['corporate', '企業'], ['club', 'クラブ']].map(([val, label]) => (
                   <button
@@ -540,14 +540,14 @@ const CorporateNameEditScreen = ({ onBack }) => {
                     className={`flex-1 px-2 py-1.5 rounded text-sm font-bold transition ${
                       editForm.type === val
                         ? val === 'corporate' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                   >{label}</button>
                 ))}
               </div>
             </div>
             <div>
-              <label className="text-gray-400 text-xs block mb-1">強さ</label>
+              <label className="text-gray-300 text-xs block mb-1">強さ</label>
               <div className="flex gap-1">
                 {['S', 'A', 'B', 'C', 'D'].map(r => (
                   <button
@@ -556,7 +556,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
                     className={`flex-1 px-1 py-1.5 rounded text-sm font-bold transition ${
                       editForm.rank === r
                         ? `${RANK_COLORS[r].replace('text-', 'bg-').replace('-400', '-600')} text-white`
-                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                   >{r}</button>
                 ))}
@@ -566,7 +566,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
 
           <div className="flex gap-2 items-center">
             <button onClick={() => saveEdit(team.id)} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-1.5 rounded text-sm transition">保存</button>
-            <button onClick={() => setEditingTeamId(null)} className="text-gray-400 hover:text-white text-sm px-3 py-1.5">取消</button>
+            <button onClick={() => setEditingTeamId(null)} className="text-gray-300 hover:text-white text-sm px-3 py-1.5">取消</button>
             {team.hasOverrides && !team.isCustom && (
               <button onClick={() => resetAll(team.id)} className="text-yellow-500 hover:text-yellow-400 text-sm px-3 py-1.5">初期値に戻す</button>
             )}
@@ -575,7 +575,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
                 <div className="flex items-center gap-2">
                   <span className="text-red-400 text-xs">削除しますか？</span>
                   <button onClick={() => handleDelete(team.id)} className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-1 rounded text-xs transition">削除</button>
-                  <button onClick={() => setConfirmDeleteId(null)} className="text-gray-400 hover:text-white text-xs">取消</button>
+                  <button onClick={() => setConfirmDeleteId(null)} className="text-gray-300 hover:text-white text-xs">取消</button>
                 </div>
               ) : (
                 <button onClick={() => setConfirmDeleteId(team.id)} className="text-red-500/60 hover:text-red-400 text-sm px-3 py-1.5">削除</button>
@@ -596,11 +596,11 @@ const CorporateNameEditScreen = ({ onBack }) => {
         <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${typeInfo.color}`}>{typeInfo.label}</span>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="text-white font-bold truncate">{team.name}</span>
-          <span className="text-gray-500 text-xs shrink-0">({team.city})</span>
+          <span className="text-gray-400 text-xs shrink-0">({team.city})</span>
           {team.isCustom && <span className="text-purple-400 text-xs shrink-0">追加</span>}
           {!team.isCustom && team.hasOverrides && <span className="text-indigo-400 text-xs shrink-0">変更済</span>}
         </div>
-        <span className="text-gray-600 text-xs opacity-0 group-hover:opacity-100 transition shrink-0">クリックで編集</span>
+        <span className="text-gray-400 text-xs opacity-0 group-hover:opacity-100 transition shrink-0">クリックで編集</span>
       </div>
     );
   };
@@ -610,7 +610,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
       <h3 className="text-white font-bold mb-3">チームを追加</h3>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
-          <label className="text-gray-400 text-xs block mb-1">チーム名</label>
+          <label className="text-gray-300 text-xs block mb-1">チーム名</label>
           <input
             type="text"
             value={addForm.name}
@@ -621,7 +621,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
           />
         </div>
         <div>
-          <label className="text-gray-400 text-xs block mb-1">都市</label>
+          <label className="text-gray-300 text-xs block mb-1">都市</label>
           <input
             type="text"
             value={addForm.city}
@@ -633,7 +633,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
       </div>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
-          <label className="text-gray-400 text-xs block mb-1">種別</label>
+          <label className="text-gray-300 text-xs block mb-1">種別</label>
           <div className="flex gap-1">
             {[['corporate', '企業'], ['club', 'クラブ']].map(([val, label]) => (
               <button
@@ -642,14 +642,14 @@ const CorporateNameEditScreen = ({ onBack }) => {
                 className={`flex-1 px-2 py-1.5 rounded text-sm font-bold transition ${
                   addForm.type === val
                     ? val === 'corporate' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
-                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >{label}</button>
             ))}
           </div>
         </div>
         <div>
-          <label className="text-gray-400 text-xs block mb-1">強さ</label>
+          <label className="text-gray-300 text-xs block mb-1">強さ</label>
           <div className="flex gap-1">
             {['S', 'A', 'B', 'C', 'D'].map(r => (
               <button
@@ -658,7 +658,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
                 className={`flex-1 px-1 py-1.5 rounded text-sm font-bold transition ${
                   addForm.rank === r
                     ? `${RANK_COLORS[r].replace('text-', 'bg-').replace('-400', '-600')} text-white`
-                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >{r}</button>
             ))}
@@ -667,7 +667,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
       </div>
       <div className="flex gap-2">
         <button onClick={handleAdd} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-1.5 rounded text-sm transition">追加</button>
-        <button onClick={() => setShowAddForm(false)} className="text-gray-400 hover:text-white text-sm px-3 py-1.5">取消</button>
+        <button onClick={() => setShowAddForm(false)} className="text-gray-300 hover:text-white text-sm px-3 py-1.5">取消</button>
       </div>
     </div>
   );
@@ -678,7 +678,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
       <div className="mt-4">
         <button
           onClick={() => setShowDeleted(prev => !prev)}
-          className="text-gray-500 hover:text-gray-300 text-sm flex items-center gap-1"
+          className="text-gray-400 hover:text-gray-300 text-sm flex items-center gap-1"
         >
           <span>{showDeleted ? '▼' : '▶'}</span>
           <span>削除済みチーム ({deletedTeams.length})</span>
@@ -688,7 +688,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
             {deletedTeams.map(team => (
               <div key={team.id} className="flex items-center gap-3 bg-gray-900/50 border border-gray-800 rounded-lg p-2.5 opacity-60">
                 <span className={`font-bold w-6 shrink-0 ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
-                <span className="text-gray-400 text-sm flex-1">{team.name} ({team.city})</span>
+                <span className="text-gray-300 text-sm flex-1">{team.name} ({team.city})</span>
                 <button
                   onClick={() => handleRestore(team.id)}
                   className="text-green-500 hover:text-green-400 text-xs px-2 py-1"
@@ -707,7 +707,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2 text-center">社会人チーム設定</h1>
-          <p className="text-gray-400 mb-4 text-center">チームの編集・追加・削除（全セーブ共通）</p>
+          <p className="text-gray-300 mb-4 text-center">チームの編集・追加・削除（全セーブ共通）</p>
 
           <div className="mb-4">
             <input
@@ -719,13 +719,13 @@ const CorporateNameEditScreen = ({ onBack }) => {
             />
           </div>
 
-          <p className="text-gray-400 text-sm mb-3">{filteredTeams.length}件の結果</p>
+          <p className="text-gray-300 text-sm mb-3">{filteredTeams.length}件の結果</p>
           <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
             {filteredTeams.map(team => renderTeamRow(team))}
           </div>
 
           <div className="text-center mt-4">
-            <button onClick={() => setSearchQuery('')} className="text-gray-400 hover:text-white px-4 py-2 text-sm">検索をクリア</button>
+            <button onClick={() => setSearchQuery('')} className="text-gray-300 hover:text-white px-4 py-2 text-sm">検索をクリア</button>
           </div>
         </div>
       </div>
@@ -736,7 +736,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-2 text-center">社会人チーム設定</h1>
-        <p className="text-gray-400 mb-4 text-center">チームの編集・追加・削除（全セーブ共通）</p>
+        <p className="text-gray-300 mb-4 text-center">チームの編集・追加・削除（全セーブ共通）</p>
 
         <div className="mb-4">
           <input
@@ -763,7 +763,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
                     className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-indigo-500 rounded-lg p-4 text-left transition"
                   >
                     <div className="text-white font-bold">{region.name}</div>
-                    <div className="text-gray-400 text-sm">{teams.length}チーム</div>
+                    <div className="text-gray-300 text-sm">{teams.length}チーム</div>
                     <div className="text-xs mt-1 space-x-2">
                       <span className="text-blue-400">企業:{corpCount}</span>
                       <span className="text-green-400">クラブ:{clubCount}</span>
@@ -777,7 +777,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
             {renderDeletedSection()}
 
             <div className="text-center mt-6">
-              <button onClick={onBack} className="text-gray-400 hover:text-white px-4 py-2">タイトルに戻る</button>
+              <button onClick={onBack} className="text-gray-300 hover:text-white px-4 py-2">タイトルに戻る</button>
             </div>
           </>
         ) : (
@@ -785,7 +785,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xl font-bold text-white">
                 {REGIONS.find(r => r.id === selectedRegion)?.name}
-                <span className="text-gray-400 text-sm font-normal ml-2">{regionTeams.length}チーム</span>
+                <span className="text-gray-300 text-sm font-normal ml-2">{regionTeams.length}チーム</span>
               </h2>
             </div>
             <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-1">
@@ -795,7 +795,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
             {showAddForm ? renderAddForm() : (
               <button
                 onClick={() => setShowAddForm(true)}
-                className="mt-3 w-full border-2 border-dashed border-gray-600 hover:border-purple-500 text-gray-400 hover:text-purple-400 rounded-lg py-2.5 transition text-sm"
+                className="mt-3 w-full border-2 border-dashed border-gray-600 hover:border-purple-500 text-gray-300 hover:text-purple-400 rounded-lg py-2.5 transition text-sm"
               >
                 + この地区にチームを追加
               </button>
@@ -804,7 +804,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
             {renderDeletedSection()}
 
             <div className="text-center mt-4">
-              <button onClick={() => { setSelectedRegion(null); setEditingTeamId(null); setShowAddForm(false); }} className="text-gray-400 hover:text-white px-4 py-2">地区選択に戻る</button>
+              <button onClick={() => { setSelectedRegion(null); setEditingTeamId(null); setShowAddForm(false); }} className="text-gray-300 hover:text-white px-4 py-2">地区選択に戻る</button>
             </div>
           </>
         )}

@@ -33,7 +33,7 @@ function AbilityStrip({ player }) {
     <div className="flex items-center gap-2 tabular-nums">
       {getKeyAbilities(player).map(a => (
         <span key={a.label} className="inline-flex items-baseline gap-0.5">
-          <span className="text-xs text-gray-400">{a.label}</span>
+          <span className="text-xs text-gray-300">{a.label}</span>
           <AbilityValue value={a.value} isVel={a.isVel} isSta={a.isSta} className="text-sm" />
         </span>
       ))}
@@ -177,7 +177,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
 
   // 列見出し（各カラム上部。行と同じ固定幅で揃える）
   const ColumnHeader = () => (
-    <div className="flex items-center gap-2 px-1 pb-1 mb-1 border-b border-gray-700 text-xs text-gray-400">
+    <div className="flex items-center gap-2 px-1 pb-1 mb-1 border-b border-gray-700 text-xs text-gray-300">
       <span className="w-6">守</span>
       <span className="w-5 text-center">総</span>
       <span className="w-24">選手</span>
@@ -204,7 +204,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
         onDrop={(e) => onDropPlayer(e, p.id)}
         className="flex items-center gap-2 py-0.5 rounded px-1"
       >
-        <span className="text-xs text-gray-400 w-6">{POSITION_NAMES[p.position] || ''}</span>
+        <span className="text-xs text-gray-300 w-6">{POSITION_NAMES[p.position] || ''}</span>
         <div className="w-5 flex-shrink-0"><OverallBadge player={p} /></div>
         <span className="text-sm text-white w-24 truncate">{p.name}</span>
         <span className="text-xs text-gray-300 w-9 text-right tabular-nums flex-shrink-0">{p.age}歳</span>
@@ -214,13 +214,13 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
         </div>
         {/* 現在の番号 */}
         <span className="w-7 text-right text-sm tabular-nums text-gray-300">
-          {orig != null ? orig : <span className="text-gray-600">―</span>}
+          {orig != null ? orig : <span className="text-gray-400">―</span>}
         </span>
         {/* 変化インジケーター */}
         <span className={`text-xs w-3 text-center ${changed ? 'text-cyan-400' : 'text-transparent'}`}>→</span>
         {/* 新番号 */}
         {empty ? (
-          <span className="w-11 h-7 flex items-center justify-center rounded border border-dashed border-gray-600 text-gray-500 text-xs">
+          <span className="w-11 h-7 flex items-center justify-center rounded border border-dashed border-gray-600 text-gray-400 text-xs">
             ―
           </span>
         ) : (
@@ -259,7 +259,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
       <div className="flex items-center gap-3 mb-2 flex-shrink-0">
         <h1 className="text-xl font-bold">背番号設定</h1>
         <span className="text-sm text-gray-300">{seasonData?.year || 1}年目・シーズン開始前</span>
-        <span className="text-xs text-gray-400 ml-1">{userTeamName}</span>
+        <span className="text-xs text-gray-300 ml-1">{userTeamName}</span>
         <button onClick={fillEmpties} className="ml-auto px-3 py-1.5 rounded text-xs font-bold bg-gray-700 hover:bg-gray-600 border border-gray-600">
           空きを自動で埋める
         </button>
@@ -267,7 +267,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
           全て自動割り当て
         </button>
       </div>
-      <p className="text-xs text-gray-400 mb-2 flex-shrink-0">
+      <p className="text-xs text-gray-300 mb-2 flex-shrink-0">
         右のトレイから番号を選手へドラッグして配置します。選手の番号を別の選手にドラッグすると入れ替え、トレイに戻すと解放されます（番号をクリックでも解放）。トレイには空き番号だけが並ぶため重複しません。
       </p>
 
@@ -313,7 +313,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
                 </span>
               ))}
               {poolNumbers.length === 0 && (
-                <span className="text-xs text-gray-500 py-2">空き番号はありません</span>
+                <span className="text-xs text-gray-400 py-2">空き番号はありません</span>
               )}
             </div>
           </div>
@@ -330,7 +330,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
           onClick={confirm}
           disabled={!allAssigned}
           className={`ml-auto px-6 py-2 rounded-lg font-bold text-sm transition ${
-            !allAssigned ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
+            !allAssigned ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
         >
           確定してシーズン開始 →
         </button>

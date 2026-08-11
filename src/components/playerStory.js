@@ -66,7 +66,7 @@ export function fameLabel(fame) {
   if (f >= 50) return { text: '評判が広まる', color: 'text-orange-300' };
   if (f >= 25) return { text: '地元で注目', color: 'text-blue-300' };
   if (f >= 8) return { text: '関係者に知られる', color: 'text-gray-300' };
-  return { text: '無名', color: 'text-gray-400' };
+  return { text: '無名', color: 'text-gray-300' };
 }
 
 // 選手のストーリーイベント配列（時系列昇順）を返す。

@@ -101,7 +101,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
 
       {/* 背番号 */}
       {player.number != null && (
-        <span className="w-6 flex-shrink-0 text-right tabular-nums text-xs font-bold text-gray-400">{player.number}</span>
+        <span className="w-6 flex-shrink-0 text-right tabular-nums text-xs font-bold text-gray-300">{player.number}</span>
       )}
       {/* 名前 */}
       <span className={`w-20 flex-shrink-0 font-medium truncate ${isStarter ? 'text-yellow-300' : 'text-white'}`}>
@@ -122,7 +122,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
             <Stat label="制球" value={player.pitching?.control || 0} />
             <Stat label="スタ" value={player.pitching?.stamina || 0} isSta />
             <span className="flex flex-col items-center w-9 flex-shrink-0">
-              <span className="text-xs text-gray-400 leading-none">変化</span>
+              <span className="text-xs text-gray-300 leading-none">変化</span>
               <span className="text-xs text-gray-300 leading-none mt-0.5 font-bold">{player.pitching?.arsenal?.length || 0}種</span>
             </span>
           </>
@@ -139,7 +139,7 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
 
       {/* 切替矢印 */}
       <span className={`flex-shrink-0 font-bold text-xs ml-1
-        ${blocked ? 'text-gray-600' : isActive ? 'text-red-400' : 'text-green-400'}`}>
+        ${blocked ? 'text-gray-400' : isActive ? 'text-red-400' : 'text-green-400'}`}>
         {isActive ? '▶' : '◀'}
       </span>
     </div>
@@ -158,7 +158,7 @@ const PosStats = ({ activePlayers }) => {
     <div className="mt-3 grid grid-cols-4 gap-2 text-xs text-center">
       {stats.map(({ label, count }) => (
         <div key={label} className="bg-gray-800/60 rounded p-2">
-          <div className="text-gray-400">{label}</div>
+          <div className="text-gray-300">{label}</div>
           <div className="text-white font-bold text-base">{count}</div>
         </div>
       ))}
@@ -257,7 +257,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold text-white">ロスター・スタメン管理</h1>
-          <p className="text-xs text-gray-400 mt-0.5">大学野球 公式試合ベンチ登録枠：最大 {ACTIVE_LIMIT} 名</p>
+          <p className="text-xs text-gray-300 mt-0.5">大学野球 公式試合ベンチ登録枠：最大 {ACTIVE_LIMIT} 名</p>
         </div>
         {activeTab === 'roster' && (
           <div className="flex items-center gap-3">
@@ -280,7 +280,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <button
           onClick={() => setActiveTab('roster')}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-            activeTab === 'roster' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+            activeTab === 'roster' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
           }`}
         >
           📋 ベンチ登録（{activePlayers.length}/{ACTIVE_LIMIT}）
@@ -288,7 +288,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <button
           onClick={() => setActiveTab('lineup')}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-            activeTab === 'lineup' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+            activeTab === 'lineup' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
           }`}
         >
           ⚾ スタメン設定
@@ -305,22 +305,22 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <>
           {/* 説明 + 並替 */}
           <div className="flex items-center gap-3 mb-3">
-            <div className="bg-gray-800/70 rounded px-3 py-2 text-xs text-gray-400 flex-1">
+            <div className="bg-gray-800/70 rounded px-3 py-2 text-xs text-gray-300 flex-1">
               選手をクリックして<span className="text-white font-medium">登録選手 ↔ ベンチ外</span>を切り替えます。
               <span className="text-yellow-400 ml-2">先発</span>表示中は変更不可。
               <span className="ml-3 text-green-400">■</span><span className="ml-0.5">高値</span>
               <span className="ml-2 text-yellow-300">■</span><span className="ml-0.5">平均</span>
-              <span className="ml-2 text-gray-500">■</span><span className="ml-0.5">低値</span>
+              <span className="ml-2 text-gray-400">■</span><span className="ml-0.5">低値</span>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0 bg-gray-800/70 rounded px-2 py-1.5">
-              <span className="text-xs text-gray-500 mr-1">並替:</span>
+              <span className="text-xs text-gray-400 mr-1">並替:</span>
               {[
                 { key: 'position', label: 'ポジション' },
                 { key: 'score',    label: 'スコア順' },
                 { key: 'year',     label: '学年順' },
               ].map(s => (
                 <button key={s.key} onClick={() => setSortMode(s.key)}
-                  className={`text-xs px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                  className={`text-xs px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
                   {s.label}
                 </button>
               ))}
@@ -334,7 +334,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-white">
                   登録選手
-                  <span className={`ml-1.5 ${isFull ? 'text-red-400' : 'text-gray-400'}`}>
+                  <span className={`ml-1.5 ${isFull ? 'text-red-400' : 'text-gray-300'}`}>
                     ({activePlayers.length}/{ACTIVE_LIMIT})
                   </span>
                 </h2>
@@ -343,11 +343,11 @@ const RosterScreen = ({ seasonData, gameMode }) => {
 
               <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
                 {activeGroups.length === 0
-                  ? <p className="text-gray-500 text-xs text-center py-8">登録選手なし</p>
+                  ? <p className="text-gray-400 text-xs text-center py-8">登録選手なし</p>
                   : activeGroups.map(({ pos, players: ps }, i) => (
                     <div key={pos || i}>
                       {pos && (
-                        <div className="text-xs font-bold text-gray-400 tracking-wider mb-0.5 px-1">
+                        <div className="text-xs font-bold text-gray-300 tracking-wider mb-0.5 px-1">
                           {POS_LABEL[pos] || pos}（{ps.length}）
                         </div>
                       )}
@@ -368,20 +368,20 @@ const RosterScreen = ({ seasonData, gameMode }) => {
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-white">
                   ベンチ外
-                  <span className="ml-1.5 text-gray-400">({inactivePlayers.length}名)</span>
+                  <span className="ml-1.5 text-gray-300">({inactivePlayers.length}名)</span>
                 </h2>
-                {isFull && <span className="text-xs text-gray-500">枠が満員のため追加不可</span>}
+                {isFull && <span className="text-xs text-gray-400">枠が満員のため追加不可</span>}
               </div>
 
               <div className="overflow-y-auto space-y-2.5 max-h-[680px] pr-0.5">
                 {inactiveGroups.length === 0
-                  ? <p className="text-gray-500 text-xs text-center py-8">
+                  ? <p className="text-gray-400 text-xs text-center py-8">
                       {players.length <= ACTIVE_LIMIT ? '全員が登録済み' : 'ベンチ外なし'}
                     </p>
                   : inactiveGroups.map(({ pos, players: ps }, i) => (
                     <div key={pos || i}>
                       {pos && (
-                        <div className="text-xs font-bold text-gray-400 tracking-wider mb-0.5 px-1">
+                        <div className="text-xs font-bold text-gray-300 tracking-wider mb-0.5 px-1">
                           {POS_LABEL[pos] || pos}（{ps.length}）
                         </div>
                       )}

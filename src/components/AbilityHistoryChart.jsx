@@ -45,7 +45,7 @@ export default function AbilityHistoryChart({ player, isPitcher }) {
   }, [player]);
 
   if (series.length < 2) {
-    return <div className="text-gray-400 text-sm text-center py-6">推移グラフはYear2以降・2シーズン分の記録から表示されます</div>;
+    return <div className="text-gray-300 text-sm text-center py-6">推移グラフはYear2以降・2シーズン分の記録から表示されます</div>;
   }
 
   const lines = isPitcher ? PITCHER_LINES : BATTER_LINES;
@@ -98,7 +98,7 @@ export default function AbilityHistoryChart({ player, isPitcher }) {
             <div key={ln.key} className="flex items-center gap-1.5 text-xs">
               <span className="inline-block w-3 h-0.5 rounded" style={{ background: ln.color }} />
               <span className="text-gray-300">{ln.label}</span>
-              <span className="text-gray-500 tabular-nums">
+              <span className="text-gray-400 tabular-nums">
                 {ln.vel ? `${player.pitching?.velocity || 0}km` : latest}
               </span>
             </div>

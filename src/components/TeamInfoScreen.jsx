@@ -10,8 +10,8 @@ import PlayerDetailModal from './PlayerDetailModal.jsx';
 const RECRUIT_TYPE_LABEL = {
   scouted: { label: '推薦', cls: 'text-blue-400' },
   selection: { label: 'セレクション', cls: 'text-green-400' },
-  recommended: { label: 'AI推薦', cls: 'text-gray-400' },
-  general: { label: '一般', cls: 'text-gray-500' },
+  recommended: { label: 'AI推薦', cls: 'text-gray-300' },
+  general: { label: '一般', cls: 'text-gray-400' },
 };
 
 const TeamInfoScreen = ({ gameMode }) => {
@@ -26,7 +26,7 @@ const TeamInfoScreen = ({ gameMode }) => {
 
   const team = TEAMS_DATA[selectedTeam];
   if (!team || !team.players) {
-    return <div className="text-gray-400 text-center p-8">チームデータがありません</div>;
+    return <div className="text-gray-300 text-center p-8">チームデータがありません</div>;
   }
   ensureTeamJerseyNumbers(team); // 背番号を（未設定なら）割り当て
 
@@ -136,19 +136,19 @@ const TeamInfoScreen = ({ gameMode }) => {
 
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <div className={`grid ${team.corporateData ? 'grid-cols-5' : 'grid-cols-3'} gap-4 text-white`}>
-            <div><div className="text-sm text-gray-400">総人数</div><div className="text-2xl font-bold">{team.players.length}人</div></div>
-            <div><div className="text-sm text-gray-400">投手</div><div className="text-2xl font-bold">{pitchers.length}人</div></div>
-            <div><div className="text-sm text-gray-400">野手</div><div className="text-2xl font-bold">{fielders.length}人</div></div>
+            <div><div className="text-sm text-gray-300">総人数</div><div className="text-2xl font-bold">{team.players.length}人</div></div>
+            <div><div className="text-sm text-gray-300">投手</div><div className="text-2xl font-bold">{pitchers.length}人</div></div>
+            <div><div className="text-sm text-gray-300">野手</div><div className="text-2xl font-bold">{fielders.length}人</div></div>
             {team.corporateData && (() => {
               const cd = team.corporateData;
-              const rankColor = { S: 'text-yellow-400', A: 'text-blue-400', B: 'text-green-400', C: 'text-gray-300', D: 'text-gray-500' }[cd.rank] || 'text-gray-300';
+              const rankColor = { S: 'text-yellow-400', A: 'text-blue-400', B: 'text-green-400', C: 'text-gray-300', D: 'text-gray-400' }[cd.rank] || 'text-gray-300';
               return (<>
                 <div>
-                  <div className="text-sm text-gray-400">ランク</div>
+                  <div className="text-sm text-gray-300">ランク</div>
                   <div className={`text-2xl font-black ${rankColor}`}>{cd.rank}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-400">注目度</div>
+                  <div className="text-sm text-gray-300">注目度</div>
                   <div className="flex items-center gap-2">
                     <div className="text-2xl font-bold">{Math.round(cd.reputation)}</div>
                     <div className="flex-1 max-w-[80px] bg-gray-700 rounded-full h-2.5 mt-1">
@@ -170,7 +170,7 @@ const TeamInfoScreen = ({ gameMode }) => {
         {/* 投手テーブル */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <h2 className="text-xl font-bold text-white mb-1">投手 ({pitchers.length}人)</h2>
-          <p className="text-xs text-gray-500 mb-3">クリックで詳細表示</p>
+          <p className="text-xs text-gray-400 mb-3">クリックで詳細表示</p>
           {pitchers.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-max w-full text-xs">
@@ -216,8 +216,8 @@ const TeamInfoScreen = ({ gameMode }) => {
                         <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{gradeLabel}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}</td>
-                        {isUniversity && <td className="px-2 py-1 text-gray-400 text-center whitespace-nowrap">{player.highSchool?.name || '—'}</td>}
-                        {isUniversity && <td className={`px-2 py-1 text-center whitespace-nowrap font-bold ${rt ? rt.cls : 'text-gray-600'}`}>{rt ? rt.label : '—'}</td>}
+                        {isUniversity && <td className="px-2 py-1 text-gray-300 text-center whitespace-nowrap">{player.highSchool?.name || '—'}</td>}
+                        {isUniversity && <td className={`px-2 py-1 text-center whitespace-nowrap font-bold ${rt ? rt.cls : 'text-gray-400'}`}>{rt ? rt.label : '—'}</td>}
                         <td className="px-2 py-1 text-center"><AbilityValue value={player.pitching?.velocity} isVel placeholder="-" /></td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.pitching?.control)}`}>{player.pitching?.control || '-'}</td>
                         <td className="px-2 py-1 text-center"><AbilityValue value={player.pitching?.stamina} isSta placeholder="-" /></td>
@@ -255,14 +255,14 @@ const TeamInfoScreen = ({ gameMode }) => {
               </table>
             </div>
           ) : (
-            <p className="text-gray-400 text-center py-4">投手がいません</p>
+            <p className="text-gray-300 text-center py-4">投手がいません</p>
           )}
         </div>
 
         {/* 野手テーブル */}
         <div className="bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-bold text-white mb-1">野手 ({fielders.length}人)</h2>
-          <p className="text-xs text-gray-500 mb-3">クリックで詳細表示</p>
+          <p className="text-xs text-gray-400 mb-3">クリックで詳細表示</p>
           {fielders.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -307,8 +307,8 @@ const TeamInfoScreen = ({ gameMode }) => {
                         <td className="px-2 py-1 text-gray-300 text-center">{POSITION_NAMES[player.position]}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{gradeLabel}</td>
                         <td className="px-2 py-1 text-gray-300 text-center">{player.physical?.throws === 'left' ? '左' : '右'}{player.batting?.bats === 'left' ? '左' : player.batting?.bats === 'switch' ? '両' : '右'}</td>
-                        {isUniversity && <td className="px-2 py-1 text-gray-400 text-center whitespace-nowrap">{player.highSchool?.name || '—'}</td>}
-                        {isUniversity && <td className={`px-2 py-1 text-center whitespace-nowrap font-bold ${rt ? rt.cls : 'text-gray-600'}`}>{rt ? rt.label : '—'}</td>}
+                        {isUniversity && <td className="px-2 py-1 text-gray-300 text-center whitespace-nowrap">{player.highSchool?.name || '—'}</td>}
+                        {isUniversity && <td className={`px-2 py-1 text-center whitespace-nowrap font-bold ${rt ? rt.cls : 'text-gray-400'}`}>{rt ? rt.label : '—'}</td>}
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.meet)}`}>{player.batting?.meet || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.batting?.power)}`}>{player.batting?.power || '-'}</td>
                         <td className={`px-2 py-1 text-center font-bold ${getAbilityColor(player.physical?.speed)}`}>{player.physical?.speed || '-'}</td>
@@ -333,7 +333,7 @@ const TeamInfoScreen = ({ gameMode }) => {
               </table>
             </div>
           ) : (
-            <p className="text-gray-400 text-center py-4">野手がいません</p>
+            <p className="text-gray-300 text-center py-4">野手がいません</p>
           )}
         </div>
       </div>

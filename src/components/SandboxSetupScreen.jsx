@@ -194,7 +194,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-orange-400">箱庭モード - チーム設定</h1>
-            <p className="text-sm text-gray-400 mt-1">各チームの選手を自由に設定してください（最低16人/チーム）</p>
+            <p className="text-sm text-gray-300 mt-1">各チームの選手を自由に設定してください（最低16人/チーム）</p>
           </div>
           <button
             onClick={() => {
@@ -208,7 +208,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
             className={`px-8 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
               canStart()
                 ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                : 'bg-gray-600 text-gray-300 cursor-not-allowed'
             }`}
           >
             シーズン開始 →
@@ -277,7 +277,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
 
           {/* 選手追加ボタン */}
           <div className="flex gap-1.5 flex-wrap mb-4">
-            <span className="text-gray-400 text-xs self-center mr-1">追加:</span>
+            <span className="text-gray-300 text-xs self-center mr-1">追加:</span>
             {POSITIONS.map(pos => (
               <button
                 key={pos}
@@ -298,15 +298,15 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   <div className="cursor-pointer flex-1 min-w-0" onClick={() => startEditPlayer(player)}>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-sm truncate">{player.name}</span>
-                      <span className="text-xs text-gray-400">{player.age}歳</span>
+                      <span className="text-xs text-gray-300">{player.age}歳</span>
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className="text-xs text-gray-300 mt-0.5">
                       {player.pitching?.velocity}km/h | 制球{player.pitching?.control} | スタ{player.pitching?.stamina}
                     </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); removePlayer(player.id); }}
-                    className="text-gray-500 hover:text-red-400 ml-2 opacity-0 group-hover:opacity-100 transition"
+                    className="text-gray-400 hover:text-red-400 ml-2 opacity-0 group-hover:opacity-100 transition"
                     title="削除"
                   >
                     ✕
@@ -325,15 +325,15 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   <div className="cursor-pointer flex-1 min-w-0" onClick={() => startEditPlayer(player)}>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-sm truncate">{player.name}</span>
-                      <span className="text-xs text-gray-400">{POSITION_NAMES[player.position]} | {player.age}歳</span>
+                      <span className="text-xs text-gray-300">{POSITION_NAMES[player.position]} | {player.age}歳</span>
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className="text-xs text-gray-300 mt-0.5">
                       ミ{player.batting?.meet} パ{player.batting?.power} 走{player.physical?.speed} 守{player.fielding?.defense}
                     </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); removePlayer(player.id); }}
-                    className="text-gray-500 hover:text-red-400 ml-2 opacity-0 group-hover:opacity-100 transition"
+                    className="text-gray-400 hover:text-red-400 ml-2 opacity-0 group-hover:opacity-100 transition"
                     title="削除"
                   >
                     ✕
@@ -351,13 +351,13 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
           <div className="bg-gray-800 rounded-lg p-5 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-white">選手編集</h2>
-              <button onClick={cancelEdit} className="text-gray-400 hover:text-white text-2xl">✕</button>
+              <button onClick={cancelEdit} className="text-gray-300 hover:text-white text-2xl">✕</button>
             </div>
 
             {/* 基本情報 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">名前</label>
+                <label className="block text-xs text-gray-300 mb-1">名前</label>
                 <div className="flex gap-1">
                   <input type="text" value={editFormData.name}
                     onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
@@ -372,13 +372,13 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">年齢</label>
+                <label className="block text-xs text-gray-300 mb-1">年齢</label>
                 <input type="number" min="16" max="50" value={editFormData.age || 22}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, age: Math.max(16, Math.min(50, parseInt(e.target.value) || 22)) }))}
                   className="w-full bg-gray-700 text-white px-2 py-1.5 rounded text-sm" />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">ポジション</label>
+                <label className="block text-xs text-gray-300 mb-1">ポジション</label>
                 <select value={editFormData.position}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, position: e.target.value }))}
                   className="w-full bg-gray-700 text-white px-2 py-1.5 rounded text-sm">
@@ -388,7 +388,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">打席 / 投げ手</label>
+                <label className="block text-xs text-gray-300 mb-1">打席 / 投げ手</label>
                 <div className="flex gap-1">
                   <select value={editFormData.batting?.bats || 'right'}
                     onChange={(e) => setEditFormData(prev => ({ ...prev, batting: { ...prev.batting, bats: e.target.value } }))}
@@ -580,14 +580,14 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
               <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2 flex-shrink-0">
                 <h3 className="text-white font-bold">🎓 OB名鑑</h3>
                 <span className="text-xs text-gray-300">プロへ送り出した歴代の教え子 {obs.length}名</span>
-                <span className="text-xs text-gray-400 ml-1">→「{activeTeam}」に追加</span>
-                <button onClick={() => setShowObPicker(false)} className="ml-auto text-gray-400 hover:text-white text-xl leading-none px-1">✕</button>
+                <span className="text-xs text-gray-300 ml-1">→「{activeTeam}」に追加</span>
+                <button onClick={() => setShowObPicker(false)} className="ml-auto text-gray-300 hover:text-white text-xl leading-none px-1">✕</button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto p-3">
                 {obs.length === 0 ? (
                   <div className="text-center py-10 text-gray-300 text-sm">
                     まだOBがいません。<br />
-                    <span className="text-gray-400">通常モードでドラフト指名された所属選手がここに蓄積されます。</span>
+                    <span className="text-gray-300">通常モードでドラフト指名された所属選手がここに蓄積されます。</span>
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -616,7 +616,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   </div>
                 )}
               </div>
-              <div className="px-4 py-2 border-t border-gray-700 text-xs text-gray-400 flex-shrink-0">
+              <div className="px-4 py-2 border-t border-gray-700 text-xs text-gray-300 flex-shrink-0">
                 指名時点の能力で復元されます。同じ選手を複数回追加することもできます。
               </div>
             </div>

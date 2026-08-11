@@ -46,11 +46,11 @@ export default function PotentialBadge({ player, compact = false, scoutAccuracy 
         </span>
         {fogged && <span className={`text-xs font-bold ${am.color}`} title={`スカウト精度: ${am.label}`}>{dots(am.dots)} {am.label}</span>}
         {p.matured ? (
-          <span className="ml-auto text-xs text-gray-400">完成期（伸びしろ僅少）</span>
+          <span className="ml-auto text-xs text-gray-300">完成期（伸びしろ僅少）</span>
         ) : (
           <span className="ml-auto text-xs text-gray-300 tabular-nums">
             予測ピーク <span className="font-bold text-white">{fogged ? `総合${peakR.lo}〜${peakR.hi}` : `総合${p.peak}`}</span>
-            <span className="text-gray-400"> ／ {p.peakAge}歳頃</span>
+            <span className="text-gray-300"> ／ {p.peakAge}歳頃</span>
           </span>
         )}
       </div>
@@ -60,7 +60,7 @@ export default function PotentialBadge({ player, compact = false, scoutAccuracy 
             {/* 現在→予測ピークのゲージ（0-99スケール） */}
             <div className="h-full bg-gray-500 rounded-full relative" style={{ width: `${p.current}%` }} />
           </div>
-          <span className="text-xs text-gray-400 tabular-nums">現{fogged ? `${currentR.lo}〜${currentR.hi}` : p.current}</span>
+          <span className="text-xs text-gray-300 tabular-nums">現{fogged ? `${currentR.lo}〜${currentR.hi}` : p.current}</span>
           {!fogged && <span className="text-xs text-green-400 font-bold tabular-nums">伸び+{p.upside}</span>}
         </div>
       )}

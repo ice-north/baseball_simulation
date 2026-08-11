@@ -6,7 +6,7 @@ const RANK_COLORS = {
   A: 'text-red-400',
   B: 'text-blue-400',
   C: 'text-green-400',
-  D: 'text-gray-400',
+  D: 'text-gray-300',
 };
 
 const RANK_LABELS = {
@@ -33,7 +33,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
-          <p className="text-gray-400 text-sm mb-6">所属するリーグを選んでください</p>
+          <p className="text-gray-300 text-sm mb-6">所属するリーグを選んでください</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {UNIVERSITY_REGIONS.map(region => {
@@ -50,18 +50,18 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
                     <div className="text-base font-bold text-white group-hover:text-amber-400 transition truncate mr-2">{region.name}</div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-sm font-bold px-1.5 py-0.5 rounded border ${RANK_BG[leagueRank]} ${RANK_COLORS[leagueRank]}`}>{leagueRank}</span>
-                      <span className="text-xs text-gray-500">{teams.length}校</span>
+                      <span className="text-xs text-gray-400">{teams.length}校</span>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 text-xs">
                     {teams.map(t => (
-                      <span key={t.id} className="bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-400">
+                      <span key={t.id} className="bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-300">
                         {t.name}<span className={`ml-1 ${RANK_COLORS[t.rank]}`}>{t.rank}</span>
                       </span>
                     ))}
                   </div>
                   {numDivisions >= 2 && (
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="text-xs text-gray-400 mt-1">
                       {Array.from({ length: numDivisions }, (_, d) => `${d + 1}部${perDiv}校`).join(' + ')}（入替制）
                     </div>
                   )}
@@ -71,7 +71,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
           </div>
 
           <div className="text-center mt-6">
-            <button onClick={onBack} className="text-gray-400 hover:text-white text-sm transition">← 戻る</button>
+            <button onClick={onBack} className="text-gray-300 hover:text-white text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
@@ -95,7 +95,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
         <div className="text-base font-bold text-white group-hover:text-amber-400 transition">{team.name}</div>
         <span className={`text-sm font-bold ${RANK_COLORS[team.rank]}`}>{team.rank}</span>
       </div>
-      <div className="text-xs text-gray-500 mt-1">{RANK_LABELS[team.rank]}</div>
+      <div className="text-xs text-gray-400 mt-1">{RANK_LABELS[team.rank]}</div>
     </button>
   );
 
@@ -103,13 +103,13 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
       <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-1">{selectedRegion.name}</h1>
-        <p className="text-gray-400 text-sm mb-6">監督を務めるチームを選んでください</p>
+        <p className="text-gray-300 text-sm mb-6">監督を務めるチームを選んでください</p>
 
         {hasDivisions ? (
           <>
             {Array.from({ length: numDivisions }, (_, d) => {
               const divTeams = teams.slice(d * perDiv, (d + 1) * perDiv);
-              const divColor = d === 0 ? 'text-amber-400' : 'text-gray-400';
+              const divColor = d === 0 ? 'text-amber-400' : 'text-gray-300';
               return (
                 <div key={d}>
                   <h3 className={`text-sm font-bold ${divColor} mb-2`}>{d + 1}部</h3>
@@ -128,7 +128,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
 
         <div className="flex justify-between items-center">
           <button onClick={() => { setSelectedRegion(null); setSelectedTeam(null); }}
-            className="text-gray-400 hover:text-white text-sm transition">← リーグ選択に戻る</button>
+            className="text-gray-300 hover:text-white text-sm transition">← リーグ選択に戻る</button>
           {selectedTeam && (
             <button onClick={() => onSelect(selectedTeam)}
               className="bg-amber-600 hover:bg-amber-500 text-white px-6 py-2 rounded-lg font-bold transition">

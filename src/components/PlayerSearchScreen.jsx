@@ -186,7 +186,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
       <div className="max-w-[1400px] mx-auto">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold">選手検索</h2>
-          <button onClick={onBack} className="text-gray-400 hover:text-white text-sm px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 transition">戻る</button>
+          <button onClick={onBack} className="text-gray-300 hover:text-white text-sm px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 transition">戻る</button>
         </div>
 
         {/* Source toggles */}
@@ -194,19 +194,19 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
           {SOURCES.map(s => (
             <button key={s.key}
               onClick={() => setSources(prev => ({ ...prev, [s.key]: !prev[s.key] }))}
-              className={`px-3 py-1 rounded text-xs font-bold transition ${sources[s.key] ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+              className={`px-3 py-1 rounded text-xs font-bold transition ${sources[s.key] ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
             >{s.label}</button>
           ))}
-          <span className="text-gray-500 text-xs self-center ml-2">|</span>
+          <span className="text-gray-400 text-xs self-center ml-2">|</span>
           {[{ key: 'all', label: '全ポジ' }, { key: 'pitcher', label: '投手' }, { key: 'fielder', label: '野手' },
             ...POSITION_ORDER.filter(p => p !== 'pitcher').map(p => ({ key: p, label: POSITION_NAMES[p] }))
           ].map(p => (
             <button key={p.key}
               onClick={() => setPosFilter(p.key)}
-              className={`px-2 py-1 rounded text-xs font-bold transition ${posFilter === p.key ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+              className={`px-2 py-1 rounded text-xs font-bold transition ${posFilter === p.key ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}
             >{p.label}</button>
           ))}
-          <button onClick={resetFilters} className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-400 hover:bg-red-700 hover:text-white transition ml-auto">リセット</button>
+          <button onClick={resetFilters} className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300 hover:bg-red-700 hover:text-white transition ml-auto">リセット</button>
         </div>
 
         {/* Name search */}
@@ -218,8 +218,8 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             placeholder="選手名・所属で検索..."
             className="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 w-64 focus:outline-none focus:border-blue-500"
           />
-          {nameQuery && <button onClick={() => setNameQuery('')} className="text-gray-500 hover:text-white text-sm">✕</button>}
-          <span className="text-gray-600 text-xs ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
+          {nameQuery && <button onClick={() => setNameQuery('')} className="text-gray-400 hover:text-white text-sm">✕</button>}
+          <span className="text-gray-400 text-xs ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
         </div>
 
         {/* Filters */}
@@ -232,7 +232,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
               const step = def.step ?? 1;
               return (
                 <div key={def.key} className={`flex flex-col gap-0.5 p-1.5 rounded ${f.enabled ? 'bg-gray-700' : 'bg-gray-800'}`}>
-                  <label className="flex items-center gap-1 text-xs text-gray-400">
+                  <label className="flex items-center gap-1 text-xs text-gray-300">
                     <input type="checkbox" checked={f.enabled}
                       onChange={e => updateFilter(def.key, 'enabled', e.target.checked)}
                       className="w-3 h-3" />
@@ -243,7 +243,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                       <input type="number" value={f.min} min={fMin} max={fMax} step={step}
                         onChange={e => updateFilter(def.key, 'min', def.decimal ? parseFloat(e.target.value) : parseInt(e.target.value))}
                         className="w-14 bg-gray-600 rounded px-1 py-0.5 text-white text-center" />
-                      <span className="text-gray-500">〜</span>
+                      <span className="text-gray-400">〜</span>
                       <input type="number" value={f.max} min={fMin} max={fMax} step={step}
                         onChange={e => updateFilter(def.key, 'max', def.decimal ? parseFloat(e.target.value) : parseInt(e.target.value))}
                         className="w-14 bg-gray-600 rounded px-1 py-0.5 text-white text-center" />
@@ -261,7 +261,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
           <table className="w-full text-xs">
             <thead>
               {/* グループ行 */}
-              <tr className="bg-gray-700/60 text-gray-500 text-xs border-b border-gray-600/50">
+              <tr className="bg-gray-700/60 text-gray-400 text-xs border-b border-gray-600/50">
                 <th colSpan={6} className="py-0.5 px-2 text-left text-gray-300 font-bold">選手</th>
                 <th colSpan={8} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-blue-300 font-bold">野手</th>
                 <th colSpan={3} className="py-0.5 px-1 text-center border-l border-gray-600/50 text-gray-300 font-bold">フィジカル</th>
@@ -316,7 +316,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   <td className="py-0.5 px-1 text-center text-gray-300">{POSITION_NAMES[p.position] || p.position}</td>
                   <td className="py-0.5 px-1 text-center text-gray-300">{p.age || '?'}</td>
                   <td className="py-0.5 px-1 text-center">
-                    <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-400'}>
+                    <span className={p.physical?.build === 'large' ? 'text-orange-400' : p.physical?.build === 'small' ? 'text-cyan-400' : 'text-gray-300'}>
                       {p.physical?.build === 'large' ? '大柄' : p.physical?.build === 'small' ? '小柄' : '中肉'}
                     </span>
                   </td>
@@ -329,7 +329,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                   <td className="py-0.5 px-1 text-center">
                     {p.position === 'catcher' && (p.catching?.lead ?? null) !== null
                       ? <StatVal value={p.catching?.lead || 0} />
-                      : <span className="text-gray-600">-</span>}
+                      : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.eye || 0} /></td>
                   <td className="py-0.5 px-1 text-center"><StatVal value={p.batting?.steal || 0} /></td>
@@ -343,22 +343,22 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                     {p.position === 'pitcher'
                       ? (() => {
                           const cnt = (p.pitching?.arsenal || []).filter(a => (a.level || 0) >= 20).length;
-                          const color = cnt >= 5 ? 'text-pink-400' : cnt >= 4 ? 'text-orange-400' : cnt >= 3 ? 'text-yellow-400' : cnt >= 2 ? 'text-gray-300' : 'text-gray-400';
+                          const color = cnt >= 5 ? 'text-pink-400' : cnt >= 4 ? 'text-orange-400' : cnt >= 3 ? 'text-yellow-400' : cnt >= 2 ? 'text-gray-300' : 'text-gray-300';
                           return <span className={`${color} font-bold`}>{cnt}</span>;
                         })()
-                      : <span className="text-gray-600">-</span>}
+                      : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="py-0.5 px-1 text-center border-l border-gray-700/50">
                     {(() => {
                       const g = p.growthPotential || 1.0;
-                      const color = g >= 1.3 ? 'text-pink-400' : g >= 1.15 ? 'text-orange-400' : g >= 1.0 ? 'text-yellow-400' : 'text-gray-400';
+                      const color = g >= 1.3 ? 'text-pink-400' : g >= 1.15 ? 'text-orange-400' : g >= 1.0 ? 'text-yellow-400' : 'text-gray-300';
                       return <span className={`${color} font-bold`}>{g.toFixed(2)}</span>;
                     })()}
                   </td>
                   <td className="py-0.5 px-1 text-center">
                     {(() => {
                       const d = p.personality?.discipline ?? 50;
-                      const color = d >= 80 ? 'text-pink-400' : d >= 65 ? 'text-orange-400' : d >= 50 ? 'text-yellow-400' : 'text-gray-400';
+                      const color = d >= 80 ? 'text-pink-400' : d >= 65 ? 'text-orange-400' : d >= 50 ? 'text-yellow-400' : 'text-gray-300';
                       return <span className={`${color} font-bold`}>{d}</span>;
                     })()}
                   </td>
@@ -393,7 +393,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={gameMode === 'university' ? 26 : 25} className="py-8 text-center text-gray-500">
+                <tr><td colSpan={gameMode === 'university' ? 26 : 25} className="py-8 text-center text-gray-400">
                   {sources.highschool && !sources.university && !sources.released && !sources.teams && highSchoolPool.players.length === 0
                     ? '高校生プールは4月に生成されます。4月以降に再度確認してください。'
                     : sources.highschool && highSchoolPool.players.length === 0

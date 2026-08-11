@@ -50,7 +50,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
       <h4 className="font-bold text-sm mb-3 text-gray-300">全ポジション一括設定</h4>
       <div className="grid grid-cols-1 gap-3">
         <div>
-          <label className="block text-xs font-semibold mb-1 text-gray-400">
+          <label className="block text-xs font-semibold mb-1 text-gray-300">
             守備力: <span className="text-blue-400">{defense.first.defense}</span>
           </label>
           <input
@@ -76,7 +76,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold mb-1 text-gray-400">
+          <label className="block text-xs font-semibold mb-1 text-gray-300">
             足: <span className="text-green-400">{defense.first.speed}</span>
           </label>
           <input
@@ -102,7 +102,7 @@ export const RenderBases = ({ defense, setDefense, bases }) => (
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold mb-1 text-gray-400">
+          <label className="block text-xs font-semibold mb-1 text-gray-300">
             肩: <span className="text-orange-400">{defense.first.arm}</span>
           </label>
           <input
@@ -336,7 +336,7 @@ export const StatHeader = ({ label, sortKey, sortActive, sortAsc, onClick, class
 // --- AbilityLegend 能力値凡例 ---
 export const AbilityLegend = ({ className = '' }) => (
   <div className={`flex items-center gap-1.5 text-xs ${className}`}>
-    <span className="text-gray-500 font-bold">能力:</span>
+    <span className="text-gray-400 font-bold">能力:</span>
     {[
       { min: 90, color: 'text-pink-400', label: '90+' },
       { min: 80, color: 'text-red-400', label: '80+' },
@@ -344,7 +344,7 @@ export const AbilityLegend = ({ className = '' }) => (
       { min: 60, color: 'text-yellow-400', label: '60+' },
       { min: 50, color: 'text-green-400', label: '50+' },
       { min: 40, color: 'text-blue-400', label: '40+' },
-      { min: 0, color: 'text-gray-400', label: '40未満' },
+      { min: 0, color: 'text-gray-300', label: '40未満' },
     ].map(t => (
       <span key={t.min} className={t.color}>{t.label}</span>
     ))}
@@ -384,7 +384,7 @@ export const TabBar = ({ tabs, activeKey, onChange, className = '' }) => (
         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
           activeKey === key
             ? 'bg-blue-600 text-white shadow-sm'
-            : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
+            : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
         }`}
       >
         {icon && <span className="text-base leading-none">{icon}</span>}
@@ -403,7 +403,7 @@ export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
       className="w-full px-4 py-3 flex justify-between items-center hover:bg-gray-700/40 transition text-left"
     >
       <span className="font-semibold text-gray-200">{title}</span>
-      <span className={`text-gray-400 text-xs transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+      <span className={`text-gray-300 text-xs transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
     </button>
     <div className={`grid transition-all duration-200 ease-in-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
       <div className="overflow-hidden">
@@ -432,10 +432,10 @@ export const SidebarButton = ({ view, icon, label, color = 'green', onActiveClic
       }}
       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2.5 ${
         isBlocked
-          ? 'text-gray-600 border-l-[3px] border-transparent cursor-not-allowed'
+          ? 'text-gray-400 border-l-[3px] border-transparent cursor-not-allowed'
           : isActive
           ? `${activeColors[color] || activeColors.green} border-l-[3px] shadow-sm`
-          : `text-gray-400 ${hoverColors[color] || hoverColors.green} border-l-[3px] border-transparent`
+          : `text-gray-300 ${hoverColors[color] || hoverColors.green} border-l-[3px] border-transparent`
       }`}
     >
       <span className="text-base w-5 text-center shrink-0">{icon}</span>
@@ -459,17 +459,17 @@ export const Sidebar = ({
   <div className="w-56 bg-gray-900/95 backdrop-blur text-white h-screen fixed left-0 top-0 flex flex-col border-r border-gray-700/50">
     <div className="px-4 py-4 border-b border-gray-700/50 bg-gray-800/30">
       <h2 className={`text-lg font-black tracking-tight ${gameMode === 'sandbox' ? 'text-orange-400' : 'text-green-400'}`}>⚾ {userTeamName}</h2>
-      <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
+      <div className="text-xs text-gray-300 mt-1 flex items-center gap-1.5">
         {gameMode === 'sandbox' && <span className="text-orange-400/80 bg-orange-400/10 px-1.5 py-0.5 rounded text-xs font-bold">箱庭</span>}
         {gameMode === 'university' && <span className="text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded text-xs font-bold">大学</span>}
         <span>{seasonData?.year || 1}年目</span>
-        <span className="text-gray-600">|</span>
+        <span className="text-gray-400">|</span>
         <span>{seasonData?.currentDate ? formatDate(seasonData.currentDate) : ''}</span>
       </div>
     </div>
 
     <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-      <div className="text-xs uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">進行</div>
+      <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">進行</div>
       <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
@@ -477,7 +477,7 @@ export const Sidebar = ({
       <SidebarButton view="team_ranking" icon="🏅" label="チームランキング" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
-      <div className="text-xs uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">チーム</div>
+      <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">チーム</div>
       <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
       {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
@@ -486,7 +486,7 @@ export const Sidebar = ({
       <SidebarButton view="player_search" icon="🔎" label="選手検索" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
-      <div className="text-xs uppercase tracking-widest text-gray-500 font-bold px-3 pt-1 pb-2">システム</div>
+      <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">システム</div>
       <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
     </nav>

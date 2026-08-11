@@ -325,7 +325,7 @@ export function PitchZoneLegend() {
   return (
     <div className="flex gap-3">
       <div className="flex flex-col gap-1">
-        <div className="text-xs text-gray-400">形＝球種</div>
+        <div className="text-xs text-gray-300">形＝球種</div>
         {PITCH_SHAPE_LEGEND.map(([shape, label]) => (
           <div key={shape} className="flex items-center gap-1.5">
             <Sw shape={shape} color="#cbd5e1" filled={false} />
@@ -334,14 +334,14 @@ export function PitchZoneLegend() {
         ))}
       </div>
       <div className="flex flex-col gap-1">
-        <div className="text-xs text-gray-400">色＝結果</div>
+        <div className="text-xs text-gray-300">色＝結果</div>
         {RESULT_COLOR_LEGEND.map(([color, label]) => (
           <div key={label} className="flex items-center gap-1.5">
             <Sw shape="circle" color={color} filled />
             <span className="text-xs text-gray-300 leading-none">{label}</span>
           </div>
         ))}
-        <div className="text-xs text-gray-400 pt-1 leading-tight">
+        <div className="text-xs text-gray-300 pt-1 leading-tight">
           塗り＝スイング<br />白丸＝最新<br />数字＝何球目
         </div>
       </div>

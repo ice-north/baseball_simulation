@@ -92,10 +92,10 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
           {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
           <h2 className="text-xl font-bold">注目選手ボード</h2>
         </div>
-        <div className="text-gray-400 text-center py-16">
+        <div className="text-gray-300 text-center py-16">
           <div className="text-5xl mb-4">🔭</div>
           <p className="text-lg mb-2">アマチュア候補がまだいません</p>
-          <p className="text-sm text-gray-500">高校生は4月に生成されます。シーズンが進むと注目選手が並びます。</p>
+          <p className="text-sm text-gray-400">高校生は4月に生成されます。シーズンが進むと注目選手が並びます。</p>
         </div>
       </div>
     );
@@ -108,10 +108,10 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
           {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}
           <h2 className="text-xl font-bold">注目選手ボード</h2>
           <span className="text-xs font-bold text-amber-200 bg-amber-900/50 border border-amber-600/50 rounded px-2 py-0.5">アマチュア将来性ランキング</span>
-          <span className="ml-auto text-gray-400 text-sm">上位 {prospects.length} 名</span>
+          <span className="ml-auto text-gray-300 text-sm">上位 {prospects.length} 名</span>
         </div>
       )}
-      <p className="text-xs text-gray-400 mb-3">
+      <p className="text-xs text-gray-300 mb-3">
         高校生プール＋大学3-4年生を<span className="text-cyan-300 font-bold">将来性（予測ピーク総合力）</span>で評価。今年の目玉を見つけましょう。※将来性はスカウト推定値で、実際の到達点は起用・育成で変動します。
       </p>
 
@@ -124,7 +124,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
         {['S', 'A', 'B', 'C', 'D'].map(g => (
           <div key={g} className="flex-1 text-center py-1.5 rounded border border-gray-700 bg-gray-800/60">
             <div className="text-sm font-bold text-gray-200">{g}級</div>
-            <div className="text-xs text-gray-400 tabular-nums">{gradeCount[g]}名</div>
+            <div className="text-xs text-gray-300 tabular-nums">{gradeCount[g]}名</div>
           </div>
         ))}
       </div>
@@ -144,7 +144,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
           ))}
         </div>
         <div className="flex gap-1 ml-auto">
-          <span className="text-xs text-gray-400 self-center">並び替え:</span>
+          <span className="text-xs text-gray-300 self-center">並び替え:</span>
           {[['potential', '将来性'], ['current', '現総合'], ['age', '年齢']].map(([v, l]) => (
             <button key={v} onClick={() => setSortKey(v)}
               className={`px-2 py-1 rounded text-xs font-medium ${sortKey === v ? 'bg-cyan-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{l}</button>
@@ -156,7 +156,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
         <table className="w-full text-sm border-collapse">
           <thead className="sticky top-0 bg-gray-900 z-10">
-            <tr className="text-gray-400 border-b border-gray-700 text-xs">
+            <tr className="text-gray-300 border-b border-gray-700 text-xs">
               <th className="text-right pr-2 py-2 w-10">#</th>
               <th className="text-left py-2 pl-1">選手</th>
               <th className="text-left py-2 w-14">区分</th>
@@ -177,7 +177,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
               return (
                 <tr key={x.player.id} className="border-b border-gray-800/50 hover:bg-gray-800/40 cursor-pointer"
                   onClick={() => setDetailPlayer(x.player)}>
-                  <td className={`text-right pr-2 py-1.5 font-mono ${i < 10 ? 'text-amber-400 font-bold' : 'text-gray-500'}`}>{i + 1}</td>
+                  <td className={`text-right pr-2 py-1.5 font-mono ${i < 10 ? 'text-amber-400 font-bold' : 'text-gray-400'}`}>{i + 1}</td>
                   <td className="pl-1 py-1.5 font-bold text-white whitespace-nowrap">{x.player.name}</td>
                   <td className="py-1.5"><span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${sb.cls}`}>{sb.label}</span></td>
                   <td className="py-1.5 text-gray-300 text-xs truncate max-w-[10rem]">{x.affiliation}</td>
@@ -200,7 +200,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="py-8 text-center text-gray-500">該当する選手がいません</td></tr>
+              <tr><td colSpan={9} className="py-8 text-center text-gray-400">該当する選手がいません</td></tr>
             )}
           </tbody>
         </table>
