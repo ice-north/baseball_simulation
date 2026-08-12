@@ -225,30 +225,60 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         return result;
       };
 
-      // 画面スケール（ズーム）: 'auto'はビューポート幅に合わせて自動縮小し、
-      // 情報量・レイアウトを保ったまま1画面に収める（横はみ出し・スクロールバー抑制）。
+      // 画面スケール（ズーム）: 'auto'はビューポートに合わせて自動縮小し、
+      // 情報量・レイアウトを保ったまま1画面に収める（はみ出し・スクロールバー抑制）。
+      //
+      // ⚠ **かつては横幅しか見ておらず、一度も発動していなかった**。
+      // レイアウトが flex/% の流動幅なので `root.scrollWidth` は常にビューポート幅と
+      // 一致し、`natural > vw` が成立しない。実測でも 1024px 幅で zoom は 1 のままだった。
+      // 実際に溢れるのは**縦**で、1536×864（Full HDの125%スケーリング。実世界で最も多い
+      // 構成のひとつ）ではブラウザの可視高が約730pxしかなく、試合画面が下へ切れていた。
+      //
+      // ⚠ **縦のフィットは「1画面に収める設計の画面」だけに掛けること**（`data-fit-height`）。
+      // 能力ランキングのように縦に読み進める画面（自然高1900px超）まで縮めると、
+      // 文字が小さくなるだけで何の得もない。
+      const refitRef = React.useRef(null);
       React.useEffect(() => {
+        let pending = 0;
         const applyFit = () => {
+          pending = 0;
           const root = document.getElementById('root');
           if (!root) return;
           const scale = getUiScale();
           if (scale !== 'auto') { root.style.zoom = scale; return; }
-          root.style.zoom = '1'; // 一旦等倍で自然幅を測る
-          const natural = root.scrollWidth;
-          const vw = document.documentElement.clientWidth;
-          root.style.zoom = natural > vw ? String(Math.max(0.5, vw / natural)) : '1';
+          root.style.zoom = '1'; // 一旦等倍で自然サイズを測る
+          const de = document.documentElement;
+          const vw = de.clientWidth, vh = de.clientHeight;
+          let z = root.scrollWidth > vw ? vw / root.scrollWidth : 1;
+          if (root.querySelector('[data-fit-height]') && root.scrollHeight > vh) {
+            z = Math.min(z, vh / root.scrollHeight);
+          }
+          // 下限0.7。これ以上縮めると text-xs(12px) が 8px 台になって読めない
+          root.style.zoom = z < 1 ? String(Math.max(0.7, z)) : '1';
         };
-        const schedule = () => requestAnimationFrame(applyFit);
+        // rAFで束ねる。1フレームに何度呼ばれても実測は1回
+        const schedule = () => { if (!pending) pending = requestAnimationFrame(applyFit); };
+        refitRef.current = schedule;
         schedule();
         window.addEventListener('resize', schedule);
         window.addEventListener(UISCALE_EVENT, schedule);
         return () => {
+          if (pending) cancelAnimationFrame(pending);
+          refitRef.current = null;
           window.removeEventListener('resize', schedule);
           window.removeEventListener(UISCALE_EVENT, schedule);
         };
-        // gameStarted はここより後で宣言されるため依存に入れない（TDZ回避）。
-        // 画面遷移(screenMode等)とresize/uiscalechangeで再フィットは十分カバーされる。
-      }, [screenMode, managementView, gameFlowState]);
+      }, []);
+
+      // ⚠ **依存配列を持たせない**（毎レンダー後に再フィット）。
+      // 以前は [screenMode, managementView, gameFlowState] だけを見ていたため、
+      // **画面内で中身の高さが変わっても再計算されなかった**。実際
+      // 「試合開始」を押すと gameStarted が変わって掲示板・采配パネルが増えるのに
+      // 再フィットが走らず、57px はみ出したまま切れていた（gameStarted は
+      // このフックより後で宣言されるので依存に入れられない、という事情もあった）。
+      // 打者交代・チュートリアルヒントの開閉でも高さは動くので、レンダーに追従させる。
+      // 実測は rAF で束ねてあるので1フレーム1回。
+      React.useEffect(() => { refitRef.current?.(); });
 
       // クラッシュ時の緊急保存用に、現在のゲーム状態を返すスナップショットを登録
       React.useEffect(() => {
@@ -2967,9 +2997,11 @@ if (newOuts === 3) {
 
           <div className={screenMode === 'management' && !['contract', 'tryout', 'offseason', 'camp', 'summer_camp', 'jersey', 'regulations_next', 'sandbox_next_regulations', 'sandbox_setup', 'edit', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement'].includes(managementView) ? 'ml-56' : ''}>
             {screenMode === 'game' ? (
-              <div className="p-2">
+              /* data-fit-height: 縦も1画面に収める対象。自動フィットが高さを見る印
+                 （縦に読み進める管理画面には付けないこと） */
+              <div className="p-1" data-fit-height>
           {/* 管理画面へボタン（采配モード中は非表示） */}
-          <div className="max-w-[1800px] mx-auto mb-2 flex justify-between items-center">
+          <div className="max-w-[1800px] mx-auto flex justify-between items-center">
             {managedGameInfo && (
               <span className="text-yellow-400 text-sm font-bold">
                 {formatDate(seasonData?.currentDate)} - 采配モード
@@ -3537,59 +3569,59 @@ if (newOuts === 3) {
 
               {/* 電光掲示板風スコアボード */}
               {gameStarted && (
-              <div className="bg-black rounded-lg p-1 font-mono border-4 border-gray-800 shadow-2xl overflow-hidden">
+              <div className="bg-black rounded-lg p-0.5 font-mono border-2 border-gray-800 shadow-2xl overflow-hidden">
                 {/* 上段: イニングスコア（電光掲示板風） */}
-                <div className="bg-black rounded-t overflow-x-auto p-1">
+                <div className="bg-black rounded-t overflow-x-auto p-0.5">
                   <table className="w-full text-center text-xs table-fixed">
                     {/* ヘッダー行 */}
                     <thead>
                       <tr className="border-b border-gray-700">
-                        <th className="py-1 px-1 text-left text-orange-400" style={{width: '20%'}}>TEAM</th>
+                        <th className="py-0.5 px-1 text-left text-orange-400" style={{width: '20%'}}>TEAM</th>
                         {inning <= 9 ? (
                           // 9回まで: 1-9回を表示
                           [1,2,3,4,5,6,7,8,9].map(i => (
-                            <th key={i} className={`py-1 px-0 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
+                            <th key={i} className={`py-0.5 px-0 font-normal ${inning === i ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: inning === i ? '0 0 8px #fb923c' : 'none'}}>{i}</th>
                           ))
                         ) : (
                           // 延長: 10回以降を表示（最大3イニング分）
                           [0,1,2].map(i => {
                             const extraInn = 10 + i;
                             return (
-                              <th key={i} className={`py-1 px-0 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
+                              <th key={i} className={`py-0.5 px-0 font-normal ${inning === extraInn ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: inning === extraInn ? '0 0 8px #fb923c' : 'none'}}>{extraInn}</th>
                             );
                           })
                         )}
-                        <th className="py-1 px-1 text-orange-400 font-bold border-l border-gray-700" style={{width: '8%'}}>計</th>
-                        <th className="py-1 px-1 text-orange-400" style={{width: '7%'}}>安</th>
-                        <th className="py-1 px-1 text-orange-400" style={{width: '7%'}}>失</th>
+                        <th className="py-0.5 px-1 text-orange-400 font-bold border-l border-gray-700" style={{width: '8%'}}>計</th>
+                        <th className="py-0.5 px-1 text-orange-400" style={{width: '7%'}}>安</th>
+                        <th className="py-0.5 px-1 text-orange-400" style={{width: '7%'}}>失</th>
                       </tr>
                     </thead>
                     <tbody>
                       {/* アウェイチーム */}
                       <tr className="border-b border-gray-800">
-                        <td className={`py-1 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
+                        <td className={`py-0.5 px-1 text-left font-bold truncate ${isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: isTopInning ? '0 0 8px #fb923c' : 'none'}}>{awayTeam.name}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => (
-                            <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                            <td key={i} className="py-0.5 px-0 text-orange-400 font-bold" style={{textShadow: inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                               {inningScores?.away?.[i] !== null && inningScores?.away?.[i] !== undefined ? inningScores.away[i] : ''}
                             </td>
                           ))
                         ) : (
                           // 延長（アウェイ）
                           [0,1,2].map(i => (
-                            <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                            <td key={i} className="py-0.5 px-0 text-orange-400 font-bold" style={{textShadow: extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                               {extraInningScores?.away?.[i] !== null && extraInningScores?.away?.[i] !== undefined ? extraInningScores.away[i] : ''}
                             </td>
                           ))
                         )}
-                        <td className="py-1 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
-                        <td className="py-1 px-1 text-orange-400">{teamHits?.away || 0}</td>
-                        <td className="py-1 px-1 text-orange-400">{teamErrors?.home || 0}</td>
+                        <td className="py-0.5 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.away || 0}</td>
+                        <td className="py-0.5 px-1 text-orange-400">{teamHits?.away || 0}</td>
+                        <td className="py-0.5 px-1 text-orange-400">{teamErrors?.home || 0}</td>
                       </tr>
                       {/* ホームチーム */}
                       <tr>
-                        <td className={`py-1 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
+                        <td className={`py-0.5 px-1 text-left font-bold truncate ${!isTopInning ? 'text-orange-300' : 'text-orange-500'}`} style={{textShadow: !isTopInning ? '0 0 8px #fb923c' : 'none'}}>{homeTeam.name}</td>
                         {inning <= 9 ? (
                           // 9回まで
                           [0,1,2,3,4,5,6,7,8].map(i => {
@@ -3597,7 +3629,7 @@ if (newOuts === 3) {
                             // 9回裏、ホームチームがリードしている場合に「X」を表示する判定
                             const showX = i === 8 && inning === 9 && !isTopInning && (score?.home || 0) > (score?.away || 0) && homeScore === null;
                             return (
-                              <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined || showX ? '0 0 6px #fb923c' : 'none'}}>
+                              <td key={i} className="py-0.5 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined || showX ? '0 0 6px #fb923c' : 'none'}}>
                                 {showX ? 'X' : (homeScore !== null && homeScore !== undefined ? homeScore : '')}
                               </td>
                             );
@@ -3607,22 +3639,22 @@ if (newOuts === 3) {
                           [0,1,2].map(i => {
                             const homeScore = extraInningScores?.home?.[i];
                             return (
-                              <td key={i} className="py-1 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined ? '0 0 6px #fb923c' : 'none'}}>
+                              <td key={i} className="py-0.5 px-0 text-orange-400 font-bold" style={{textShadow: homeScore !== null && homeScore !== undefined ? '0 0 6px #fb923c' : 'none'}}>
                                 {homeScore !== null && homeScore !== undefined ? homeScore : ''}
                               </td>
                             );
                           })
                         )}
-                        <td className="py-1 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
-                        <td className="py-1 px-1 text-orange-400">{teamHits?.home || 0}</td>
-                        <td className="py-1 px-1 text-orange-400">{teamErrors?.away || 0}</td>
+                        <td className="py-0.5 px-1 font-bold text-lg text-orange-300 border-l border-gray-700" style={{textShadow: '0 0 10px #fb923c'}}>{score?.home || 0}</td>
+                        <td className="py-0.5 px-1 text-orange-400">{teamHits?.home || 0}</td>
+                        <td className="py-0.5 px-1 text-orange-400">{teamErrors?.away || 0}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
                 
                 {/* 下段: BSO + 塁状況 + 投球数 + 球速（固定幅） */}
-                <div className="bg-black p-2 rounded-b flex items-center justify-between border-t border-gray-800">
+                <div className="bg-black p-1 rounded-b flex items-center justify-between border-t border-gray-800">
                   {/* BSO (3-2-2) 緑・黄・赤 - 固定幅 */}
                   <div className="flex flex-col gap-0.5 w-24 flex-shrink-0">
                     <div className="flex items-center gap-1">
@@ -3722,13 +3754,13 @@ if (newOuts === 3) {
 
               {/* 対戦カード & 操作ボタン */}
               {gameStarted && (
-              <div className="bg-surface-2 rounded-lg p-3 shadow-lg border border-gray-700/50">
+              <div className="bg-surface-2 rounded-lg p-2 shadow-lg border border-gray-700/50">
                 {/* 対戦カード。**チーム色分けは使わない**（表裏で意味が反転するため）。
                     守備側=amber / 攻撃側=cyan で采配パネルと語彙を揃える。
                     名前は白、数字は tabular-nums で「目に入りやすさ」を優先する */}
-                <div className="flex items-stretch gap-2 mb-3">
+                <div className="flex items-stretch gap-2 mb-2">
                   {/* ===== 守備側 ===== */}
-                  <div className="flex-1 min-w-0 bg-gray-900/50 rounded p-2 border-l-2 border-amber-600/70">
+                  <div className="flex-1 min-w-0 bg-gray-900/50 rounded px-2 py-1.5 border-l-2 border-amber-600/70">
                     <div className="flex items-baseline gap-2">
                       <span className="text-xs font-bold text-amber-300 shrink-0">守備</span>
                       <span className="text-xs text-gray-300 truncate">{isTopInning ? homeTeam.name : awayTeam.name}</span>
@@ -3778,7 +3810,7 @@ if (newOuts === 3) {
                   <div className="self-center text-lg font-bold text-gray-400 px-1 shrink-0">VS</div>
 
                   {/* ===== 攻撃側 ===== */}
-                  <div className="flex-1 min-w-0 bg-gray-900/50 rounded p-2 border-r-2 border-cyan-600/70">
+                  <div className="flex-1 min-w-0 bg-gray-900/50 rounded px-2 py-1.5 border-r-2 border-cyan-600/70">
                     <div className="flex items-baseline gap-2 justify-end">
                       <span className="text-xs text-gray-300 truncate">{isTopInning ? awayTeam.name : homeTeam.name}</span>
                       <span className="text-xs font-bold text-cyan-300 shrink-0">攻撃 {currentBatterOrder}番</span>
@@ -3830,11 +3862,11 @@ if (newOuts === 3) {
 
                 {/* 投球コース（投手視点）と投球ログ。図と文字を同じ行に並べて
                     「どこに来て何が起きたか」を目線を動かさずに追えるようにする */}
-                <div className="flex items-start gap-3 mb-3">
+                <div className="flex items-start gap-3 mb-2">
                   <div className="shrink-0">
                     {/* カウントは図のすぐ上に置く。配球を決める時に電光掲示板まで
                         目線を戻さずに済ませるため（掲示板側にも残してある） */}
-                    <div className="flex items-center gap-2 mb-1 h-4">
+                    <div className="flex items-center gap-2 mb-0.5 h-4">
                       {[['B', count?.balls || 0, 3, 'bg-green-500'],
                         ['S', count?.strikes || 0, 2, 'bg-yellow-400'],
                         ['O', outs, 2, 'bg-red-500']].map(([label, n, max, on]) => (
@@ -3856,22 +3888,24 @@ if (newOuts === 3) {
                         const key = pitchSeqRef.current.key;
                         return gameLog.filter(l => l.pitchLoc && l.paKey === key);
                       })()} />
-                    <div className="flex items-center justify-center gap-2 mt-1 text-xs text-gray-300">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: HEAT_HOT, opacity: 0.55 }} />得意
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: HEAT_COLD, opacity: 0.55 }} />苦手
-                      </span>
-                    </div>
                   </div>
                   {/* 投球ログ。コースの右いっぱいに広げる
                       （flex内のスクロール領域なので高さを明示すること） */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 mb-1 h-4">
+                    <div className="flex items-center gap-2 mb-0.5 h-4">
                       <span className="text-xs font-bold text-gray-300">投球ログ</span>
                       <span className="text-xs text-gray-300 tabular-nums">
                         この打席 {gameLog.filter(l => l.pitchLoc && l.paKey === pitchSeqRef.current.key).length}球
+                      </span>
+                      {/* コース図の凡例。図の下に1行取ると縦を20px食うので、
+                          空いているこの見出し行の右端へ寄せる（情報は減らさない） */}
+                      <span className="ml-auto flex items-center gap-2 text-xs text-gray-300">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ background: HEAT_HOT, opacity: 0.55 }} />得意
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-sm" style={{ background: HEAT_COLD, opacity: 0.55 }} />苦手
+                        </span>
                       </span>
                     </div>
                     <div className="h-[168px] overflow-y-auto text-xs space-y-0.5 pr-1">
@@ -3940,7 +3974,7 @@ if (newOuts === 3) {
                   const distPct = lastResult.distance ? Math.max(4, Math.min(100, (lastResult.distance / 140) * 100)) : 0;
                   // 1行に畳む。球種・球速は電光掲示板とログに出ているので繰り返さない
                   return (
-                    <div className={`rounded-lg px-3 py-1.5 border mb-2 flex items-center gap-3 ${S.box}`}>
+                    <div className={`rounded-lg px-3 py-1 border mb-1 flex items-center gap-3 ${S.box}`}>
                       <div className="shrink-0">
                         {S.icon && <span className="mr-1">{S.icon}</span>}
                         <span className={`font-bold text-lg ${S.text}`}>{d}</span>
@@ -3973,9 +4007,9 @@ if (newOuts === 3) {
                 {(() => {
                   const isUserBatting = (isTopInning ? awayTeam.name : homeTeam.name) === userTeamName;
                   const busy = isAutoSimulating || gameOver;
-                  const pick = (active, color) => `px-2.5 py-1 rounded text-xs font-bold transition ${
+                  const pick = (active, color) => `px-2.5 py-0.5 rounded text-xs font-bold transition ${
                     active ? `${color} text-white` : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`;
-                  const act = 'px-2.5 py-1 rounded text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed';
+                  const act = 'px-2.5 py-0.5 rounded text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed';
                   const row = 'flex items-center justify-center gap-1.5 flex-wrap';
                   const tag = (color) => `text-xs w-14 text-right ${color}`;
 
@@ -3983,7 +4017,7 @@ if (newOuts === 3) {
                   if (isUserBatting) {
                     const aiming = batGuessType !== 'auto' || batGuessZone !== 'auto';
                     return (
-                      <div className="bg-cyan-950/30 border border-cyan-800/40 rounded p-2 mb-2 space-y-1.5">
+                      <div className="bg-cyan-950/30 border border-cyan-800/40 rounded px-2 py-1 mb-1 space-y-1">
                         <div className={row}>
                           <span className={tag('text-cyan-300')}>打撃</span>
                           {[['take', '待て'], ['normal', 'おまかせ'], ['aggressive', '積極']].map(([v, label]) => (
@@ -4042,7 +4076,7 @@ if (newOuts === 3) {
                   const arsenal = getCurrentPitcher()?.pitches || [];
                   const obj = decidePitchObjective(bases, outs);
                   return (
-                    <div className="bg-amber-950/30 border border-amber-800/40 rounded p-2 mb-2 space-y-1.5">
+                    <div className="bg-amber-950/30 border border-amber-800/40 rounded px-2 py-1 mb-1 space-y-1">
                       <div className={row}>
                         <span className={tag('text-amber-300')}>配球</span>
                         <button onClick={() => setPitchTypeIndex('auto')} disabled={gameOver}
@@ -4085,23 +4119,23 @@ if (newOuts === 3) {
                   );
                 })()}
                 {/* 試合進行。采配（上）と進行（下）を分ける */}
-                <div className="flex justify-center items-center gap-2 flex-wrap border-t border-gray-700/60 pt-2">
+                <div className="flex justify-center items-center gap-2 flex-wrap border-t border-gray-700/60 pt-1">
                   <button onClick={throwPitch} disabled={isAutoSimulating || gameOver}
-                    className="btn-primary px-5 py-2 rounded disabled:opacity-50">
+                    className="btn-primary px-5 py-1.5 rounded disabled:opacity-50">
                     ⚾ 1球
                   </button>
                   <button onClick={() => startSimMode('out')} disabled={isAutoSimulating || gameOver}
-                    className="btn-secondary px-3 py-2 rounded text-sm disabled:opacity-50">
+                    className="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-50">
                     1アウトまで
                   </button>
                   <button onClick={() => startSimMode('end')} disabled={isAutoSimulating || gameOver}
-                    className="btn-secondary px-3 py-2 rounded text-sm disabled:opacity-50">
+                    className="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-50">
                     試合終了まで
                   </button>
                   <span className="w-px h-7 bg-gray-700 mx-1" />
                   <button onClick={() => setAutoManagerMode(!autoManagerMode)}
                     title="監督AIに采配を任せる"
-                    className={`px-3 py-2 rounded text-sm font-semibold transition ${
+                    className={`px-3 py-1.5 rounded text-sm font-semibold transition ${
                       autoManagerMode ? 'seg-on' : 'seg'
                     }`}>
                     🤖 {autoManagerMode ? 'AI ON' : 'AI OFF'}
@@ -4117,7 +4151,7 @@ if (newOuts === 3) {
                         setSubModalSelected(null);
                         setShowSubModal(true);
                       }}
-                      className="btn-secondary px-3 py-2 rounded text-sm font-semibold transition"
+                      className="btn-secondary px-3 py-1.5 rounded text-sm font-semibold transition"
                     >
                       選手交代
                     </button>

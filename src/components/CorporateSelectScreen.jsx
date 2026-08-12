@@ -94,7 +94,7 @@ const ModeSelectScreen = ({ onSelectIndependent, onSelectCorporate, onSelectUniv
   };
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center p-6">
-      <div className="max-w-6xl w-full mx-auto">
+      <div className="max-w-5xl w-full mx-auto">
         <h1 className="text-4xl font-bold text-white mb-1 text-center">GAME MODE</h1>
         <p className="text-gray-300 mb-8 text-center">
           どれも同じ1つの球界。違うのは
@@ -219,7 +219,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   if (!selectedRegion) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2 text-center">地区を選択</h1>
           <p className="text-gray-300 mb-8 text-center">監督として就任する地区を選んでください</p>
 
@@ -258,7 +258,7 @@ const CorporateTeamSelectScreen = ({ onSelect, onBack }) => {
   // チーム選択
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-1 text-center">
           {REGIONS.find(r => r.id === selectedRegion)?.name} のチーム
         </h1>
@@ -705,7 +705,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
   if (filteredTeams) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2 text-center">社会人チーム設定</h1>
           <p className="text-gray-300 mb-4 text-center">チームの編集・追加・削除（全セーブ共通）</p>
 
@@ -734,7 +734,7 @@ const CorporateNameEditScreen = ({ onBack }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-2 text-center">社会人チーム設定</h1>
         <p className="text-gray-300 mb-4 text-center">チームの編集・追加・削除（全セーブ共通）</p>
 

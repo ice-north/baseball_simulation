@@ -120,7 +120,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
   ];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-white mb-1">チーム運営</h1>
       <p className="text-xs text-gray-400 mb-4">{userTeamName} - {STAFF_GRADES[cd.rank]?.label || cd.rank}ランク</p>
 

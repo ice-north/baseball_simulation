@@ -31,7 +31,7 @@ const GLOBALS = new Set([
   'Number', 'Boolean', 'Date', 'RegExp', 'Error', 'TypeError', 'Promise', 'Set',
   'Map', 'WeakMap', 'WeakSet', 'Symbol', 'Infinity', 'NaN', 'undefined', 'globalThis',
   'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent',
-  'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame',
+  'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
   'localStorage', 'sessionStorage', 'indexedDB', 'fetch', 'alert', 'confirm', 'prompt',
   'Blob', 'File', 'FileReader', 'URL', 'TextEncoder', 'TextDecoder', 'Intl',
   'structuredClone', 'CompressionStream', 'DecompressionStream', 'Response', 'Request',

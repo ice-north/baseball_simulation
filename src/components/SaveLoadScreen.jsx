@@ -110,7 +110,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
   const slotNames = ['セーブスロット 1', 'セーブスロット 2', 'セーブスロット 3'];
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="p-8 max-w-3xl mx-auto">
       <h1 className="text-3xl font-bold mb-8 text-white">💾 セーブ＆ロード</h1>
 
       {/* ステータスメッセージ */}

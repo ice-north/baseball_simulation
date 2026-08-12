@@ -190,7 +190,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-orange-400">箱庭モード - チーム設定</h1>

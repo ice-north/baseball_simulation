@@ -31,7 +31,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
   if (!selectedRegion) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-8">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
           <p className="text-gray-300 text-sm mb-6">所属するリーグを選んでください</p>
 

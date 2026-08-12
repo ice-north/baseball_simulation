@@ -41,7 +41,7 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
     const q = qualifiers[selectedRegion];
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h1 className="text-2xl font-bold text-white mb-1">{q.regionName} 地区予選</h1>
           <p className="text-gray-300 text-sm mb-4">{q.teamDefs.length}チーム → {q.slots}枠</p>
 
@@ -72,7 +72,7 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-1 text-center">都市対抗野球 地区予選</h1>
         <p className="text-gray-300 mb-6 text-center">6月 ― 各地区の代表が決定しました</p>
 
@@ -126,7 +126,7 @@ const ToshitaikouMainScreen = ({ toshitaikou, userTeamName, onContinue }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-6">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-1 text-center">都市対抗野球大会 本戦</h1>
         <p className="text-gray-300 mb-6 text-center">8月 ― {mt.teams.length}チームによるトーナメント</p>
 
