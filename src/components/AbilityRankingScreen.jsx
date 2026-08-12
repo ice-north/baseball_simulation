@@ -7,7 +7,7 @@ import { universityPool, highSchoolPool } from '../season/universityPool.js';
 import { checkNPBDraftEligibility } from '../season/yearProgressionSystem.js';
 
 const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
-const RANK_BG = { S: 'bg-yellow-900/30 border-yellow-700/50', A: 'bg-red-900/20 border-red-700/50', B: 'bg-blue-900/20 border-blue-700/50', C: 'bg-green-900/20 border-green-700/50', D: 'bg-gray-800 border-gray-700/50' };
+const RANK_BG = { S: 'bg-yellow-900/30 border-yellow-700/50', A: 'bg-red-900/20 border-red-700/50', B: 'bg-blue-900/20 border-blue-700/50', C: 'bg-green-900/20 border-green-700/50', D: 'bg-surface-2 border-gray-700/50' };
 
 const getOverallColor = (v) => {
   if (v >= 70) return 'text-yellow-400';
@@ -407,7 +407,7 @@ const AbilityRankingScreen = () => {
 
   const renderPlayerTable = (playerList, showAmScouts = false) => {
     return (
-      <div className="bg-gray-800 rounded-lg overflow-hidden">
+      <div className="bg-surface-2 rounded-lg overflow-hidden">
         <table className="tabular-nums w-full text-sm">
           <thead>
             <tr className="text-gray-300 text-xs border-b border-gray-700">
@@ -468,7 +468,7 @@ const AbilityRankingScreen = () => {
   const currentSortOptions = getSortOptions(mode);
 
   return (
-    <div className="p-4 bg-gray-900 min-h-screen text-white">
+    <div className="p-4 bg-surface-1 min-h-screen text-white">
       <h1 className="text-2xl font-bold mb-1">📰 総合ランキング</h1>
       <p className="text-gray-300 text-xs mb-4">全チーム・全選手の能力ランキング</p>
 
@@ -482,7 +482,7 @@ const AbilityRankingScreen = () => {
           <button key={t.key}
             onClick={() => { setMode(t.key); setCategory('all'); setSortKey(t.key === 'highschool' ? 'draft' : 'overall'); }}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-              mode === t.key ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'
+              mode === t.key ? 'seg-on' : 'seg'
             }`}
           >{t.label}</button>
         ))}
@@ -497,7 +497,7 @@ const AbilityRankingScreen = () => {
               <button key={t.key}
                 onClick={() => { setCategory(t.key); setSortKey(mode === 'highschool' ? 'draft' : 'overall'); }}
                 className={`px-3 py-1.5 rounded text-sm font-bold transition ${
-                  category === t.key ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'
+                  category === t.key ? 'seg-on' : 'seg'
                 }`}
               >{t.label}</button>
             ))}
@@ -510,7 +510,7 @@ const AbilityRankingScreen = () => {
                 <button key={o.key}
                   onClick={() => setSortKey(o.key)}
                   className={`px-2 py-1 rounded text-xs font-bold transition ${
-                    sortKey === o.key ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'
+                    sortKey === o.key ? 'seg-on' : 'seg'
                   }`}
                 >{o.label}</button>
               ))}
@@ -518,7 +518,7 @@ const AbilityRankingScreen = () => {
             <div className="ml-auto flex gap-1">
               {[50, 100, 200].map(n => (
                 <button key={n} onClick={() => setLimit(n)}
-                  className={`px-2 py-1 rounded text-xs ${limit === n ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+                  className={`px-2 py-1 rounded text-xs ${limit === n ? 'bg-gray-600 text-white' : 'bg-surface-2 text-gray-400'}`}
                 >Top{n}</button>
               ))}
             </div>
@@ -566,8 +566,8 @@ const AbilityRankingScreen = () => {
                 onClick={() => setTeamRankFilter(t.key)}
                 className={`px-3 py-1.5 rounded text-xs font-bold transition ${
                   teamRankFilter === t.key
-                    ? (RANK_COLORS[t.key] ? `bg-gray-700 ${RANK_COLORS[t.key]}` : 'bg-green-700 text-white')
-                    : 'bg-gray-800 text-gray-300 hover:text-white'
+                    ? (RANK_COLORS[t.key] ? `seg-on ${RANK_COLORS[t.key]}` : 'seg-on')
+                    : 'seg'
                 }`}
               >{t.label}</button>
             ))}
@@ -577,7 +577,7 @@ const AbilityRankingScreen = () => {
             {filteredTeams.map((team, i) => {
               const typeInfo = TYPE_LABEL[team.type] || TYPE_LABEL.user;
               const rankKey = team.rank || (team.type === 'user' ? 'B' : null);
-              const bgClass = rankKey ? RANK_BG[rankKey] : 'bg-gray-800 border-gray-700/50';
+              const bgClass = rankKey ? RANK_BG[rankKey] : 'bg-surface-2 border-gray-700/50';
 
               return (
                 <div key={`${team.type}_${team.name}`} className={`rounded-lg border p-3 ${bgClass}`}>

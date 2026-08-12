@@ -2729,7 +2729,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     {rtRegionIds.map(rid => {
                       const rq = rtBrackets[rid]; const isUser = rid === rtData.userRegionId; const isActive = rid === rtActiveRegion;
                       return (<button key={rid} onClick={() => setSelectedRtRegionTab(rid)}
-                        className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${isActive ? 'bg-green-600 text-white' : isUser ? 'bg-green-900/50 text-green-300' : rq.phase === 'done' ? 'bg-gray-700/50 text-gray-400' : 'bg-gray-700/50 text-gray-300 hover:text-white'}`}>
+                        className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${isActive ? 'seg-on' : isUser ? 'seg ring-1 ring-cyan-700/60' : rq.phase === 'done' ? 'seg opacity-60' : 'seg'}`}>
                         {rq.regionName}{isUser ? '*' : ''}
                       </button>);
                     })}
@@ -2753,7 +2753,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     {regionIds.map(rid => {
                       const q = qualifiers[rid]; const isUser = rid === td.userRegionId; const isActive = rid === activeRegion;
                       return (<button key={rid} onClick={() => { setSelectedRegionTab(rid); setSelectedBracketTab('main'); }}
-                        className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${isActive ? 'bg-blue-600 text-white' : isUser ? 'bg-blue-900/50 text-blue-300' : q.phase === 'done' ? 'bg-gray-700/50 text-gray-400' : 'bg-gray-700/50 text-gray-300 hover:text-white'}`}>
+                        className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${isActive ? 'seg-on' : isUser ? 'seg ring-1 ring-cyan-700/60' : q.phase === 'done' ? 'seg opacity-60' : 'seg'}`}>
                         {q.regionName}{isUser ? '*' : ''}
                       </button>);
                     })}
@@ -2765,8 +2765,8 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     </div>
                     {hasLosers && (
                       <div className="flex gap-1 mb-2">
-                        <button onClick={() => setSelectedBracketTab('main')} className={`px-2 py-0.5 rounded text-xs font-bold transition ${!showingLosers ? 'bg-blue-600 text-white' : 'bg-gray-700/50 text-gray-300'}`}>地区予選</button>
-                        <button onClick={() => setSelectedBracketTab('losers')} className={`px-2 py-0.5 rounded text-xs font-bold transition ${showingLosers ? 'bg-orange-600 text-white' : 'bg-gray-700/50 text-gray-300'}`}>敗者復活</button>
+                        <button onClick={() => setSelectedBracketTab('main')} className={`px-2 py-0.5 rounded text-xs font-bold transition ${!showingLosers ? 'seg-on' : 'seg'}`}>地区予選</button>
+                        <button onClick={() => setSelectedBracketTab('losers')} className={`px-2 py-0.5 rounded text-xs font-bold transition ${showingLosers ? 'seg-on' : 'seg'}`}>敗者復活</button>
                       </div>
                     )}
                     {showingLosers ? renderBracketWithLines(activeQ.losersBracket, activeQ.teamDefsMap) : renderBracketWithLines(activeQ.mainBracket, activeQ.teamDefsMap)}
@@ -2940,7 +2940,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         return (
                           <tr key={team.team} className={`border-b border-gray-700/30 transition-colors hover:bg-gray-700/20 ${isUser ? 'bg-blue-900/30 hover:bg-blue-900/40' : ''} ${index === 0 && isLChampionDecided ? 'bg-yellow-900/15' : ''}`}>
                             <td className="py-1.5 px-0.5 text-center">
-                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${index === 0 ? 'bg-yellow-500/90 text-black' : index === 1 ? 'bg-gray-400/80 text-black' : index === 2 ? 'bg-orange-600/80 text-white' : 'bg-gray-700 text-gray-300'}`}>{index + 1}</span>
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${index === 0 ? 'bg-yellow-500/90 text-black' : index === 1 ? 'bg-gray-400/80 text-black' : index === 2 ? 'seg-on' : 'seg'}`}>{index + 1}</span>
                             </td>
                             <td className={`py-1.5 px-1 font-bold text-sm ${isUser ? 'text-yellow-300' : ''}`}>
                               {team.team}
@@ -3180,11 +3180,11 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                     <div className="flex gap-1 mb-3">
                       <button
                         onClick={() => setUniStandingsTab('spring')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${activeTab === 'spring' ? 'bg-green-700/60 text-green-300 border border-green-600/40' : 'bg-gray-700/40 text-gray-300 hover:text-gray-300'}`}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${activeTab === 'spring' ? 'seg-on border' : 'seg'}`}
                       >🌸 {springLabel}</button>
                       <button
                         onClick={() => setUniStandingsTab('fall')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${activeTab === 'fall' ? 'bg-orange-700/60 text-orange-300 border border-orange-600/40' : 'bg-gray-700/40 text-gray-300 hover:text-gray-300'}`}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${activeTab === 'fall' ? 'seg-on border' : 'seg'}`}
                       >🍂 {fallLabel}</button>
                     </div>
                   )}
@@ -3248,7 +3248,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
           {/* スポーツ新聞ボタン（ニュースが無い時のフォールバック） */}
           {newsFeed.length === 0 && (seasonData.results?.length || 0) > 0 && (
             <div className="mt-3 text-center">
-              <button onClick={() => setShowNewspaper(true)} className="text-xs font-bold text-yellow-400 bg-yellow-900/30 hover:bg-yellow-900/50 px-4 py-1.5 rounded-lg border border-yellow-700/30 transition-colors">
+              <button onClick={() => setShowNewspaper(true)} className="btn-warn text-xs px-4 py-1.5 rounded-lg border transition-colors">
                 📰 スポーツ新聞を読む
               </button>
             </div>
@@ -3259,7 +3259,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             <div className="bg-gradient-to-b from-gray-800/95 to-gray-900 rounded-2xl p-3 shadow-xl border border-gray-700/30 mt-3">
               <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5">
                 <span className="text-yellow-400">📰</span> ニュース＆状況
-                <button onClick={() => setShowNewspaper(true)} className="ml-auto text-xs font-bold text-yellow-400 bg-yellow-900/40 hover:bg-yellow-900/60 px-2 py-0.5 rounded-lg border border-yellow-700/40 transition-colors">
+                <button onClick={() => setShowNewspaper(true)} className="btn-warn ml-auto text-xs px-2 py-0.5 rounded-lg border transition-colors">
                   スポーツ新聞
                 </button>
               </h2>
@@ -3551,7 +3551,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                         const r = brackets[rid];
                         return (
                           <button key={rid} onClick={() => setUniRtRegionTab(rid)}
-                            className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${rid === activeId ? 'bg-green-600 text-white' : r.champion ? 'bg-gray-700/50 text-gray-400' : 'bg-gray-700/50 text-gray-300 hover:text-gray-200'}`}>
+                            className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${rid === activeId ? 'seg-on' : r.champion ? 'seg opacity-60' : 'seg'}`}>
                             {r.regionName}{r.champion ? '✓' : ''}
                           </button>
                         );
@@ -4035,7 +4035,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       {/* 夏の甲子園の結果。操作はできないが、ここで見た選手がスカウト・ドラフトに繋がる */}
       {koshienNotice && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setKoshienNotice(null)}>
-          <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 max-w-3xl w-full flex flex-col"
+          <div className="bg-surface-2 rounded-xl shadow-2xl border border-gray-700 max-w-3xl w-full flex flex-col"
                style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
             <div className="px-5 py-3 border-b border-gray-700 shrink-0">
               <div className="text-xs text-amber-300 font-bold tracking-widest">全国高等学校野球選手権</div>
@@ -4097,7 +4097,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
             </div>
             <div className="px-5 py-3 border-t border-gray-700 flex justify-end shrink-0">
               <button onClick={() => setKoshienNotice(null)}
-                className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-sm font-bold transition">
+                className="btn-warn px-4 py-2 rounded-lg text-sm transition">
                 閉じる
               </button>
             </div>
@@ -4108,7 +4108,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
       {/* フェーズ移行確認モーダル */}
       {pendingPhaseEvent && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 max-w-sm w-full">
+          <div className="bg-surface-2 rounded-xl shadow-2xl border border-gray-700 max-w-sm w-full">
             <div className="px-5 py-4 border-b border-gray-700">
               <h3 className="text-white font-bold text-lg">{pendingPhaseEvent.label}</h3>
               <p className="text-gray-300 text-sm mt-1">{pendingPhaseEvent.desc}</p>
@@ -4128,7 +4128,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   setPendingPhaseEvent(null);
                   if (onForceEvent) onForceEvent(evt);
                 }}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition"
+                className="btn-primary px-4 py-2 rounded-lg text-sm transition"
               >
                 進む
               </button>

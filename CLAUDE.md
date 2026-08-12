@@ -39,9 +39,15 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - スクロールが必要な領域は必ず **高さを明示**（`h-64`、`flex-1 min-h-0` 等）してから `overflow-y-auto` を付ける
 - `min-h-0` を忘れると flex子要素が親をはみ出してスクロールバーが出るため、flex内スクロール領域には必ず付ける
 
-### 4. デザイントークン（`src/index.css` の `:root`）
+### 4. デザイントークン（`src/index.css` の `:root` ＋ `tailwind.config.js`）
 - **アクセント色**: `var(--accent)`(cyan-400) / `var(--accent-strong)` / `var(--accent-soft)`。UIクローム・チャートに使う。**ランク色（pink/red/orange/yellow/green/blue/gray）とは役割を分離**すること
 - **サーフェス**: `var(--surface-0/1/2)`（最深部→gray-900→gray-800相当）
+- ⚠ **トークンは Tailwind のユーティリティとして生やしてある**（`bg-surface-2` / `text-accent`）。
+  CSS変数を定義しただけの頃は実使用が1〜2箇所しかなく（対して素の `bg-gray-800/900` が392箇所）、
+  トークンが有名無実だった。`tailwind.config.js` の `theme.extend.colors` で解決してある。
+  **ここに色を増やさないこと**——足すのはアクセントとサーフェスだけ
+- ⚠ 透明度付き（`bg-gray-800/30` 等）はCSS変数色では alpha が効かないので**素の色のまま**。
+  ベタ塗りだけ `bg-surface-*` に寄せてある
 - **チャート**: `var(--chart-grid)`（グリッド線・控えめ） / `var(--chart-axis)`（軸線）
 - **日本語フォント**: bodyでHiragino/Yu Gothic/Noto Sans JP等のシステムJPスタックを優先（webフォント不使用）
 - **数字揃え**: 桁を揃えたい表・スタッツには `.tnum`（`font-variant-numeric: tabular-nums`）または Tailwind の `tabular-nums`
@@ -52,7 +58,41 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
     日程進行（`DateProgressScreen`）
   - **1個ずつのカード（「プロ輩出数 12名」等）には要らない**。縦に比較する列でないと意味がない
 
-### 5. 能力の可視化
+### 5. ボタン・タブの語彙（`.btn-*` / `.seg`。`src/index.css`）
+素のTailwind色を各画面が好きに使った結果、ボタンの背景色が **13色・480箇所**に散っていた。
+とくに深刻だったのが**「このタブが選択されている」状態の色が画面ごとに違う**こと
+（日程=青 / 大学リーグ=緑 / 資料室=赤 / トレード=黄 / 成績=紫）。色が意味を運んでいなかった。
+
+| クラス | 役割 | 例 |
+|---|---|---|
+| `.btn-primary` | 前へ進む・確定・実行（**1画面に1つ**） | シーズン開始 / 試合采配 / 保存 |
+| `.btn-secondary` | 補助・切替・戻る | AIオーダー編成 / 1アウトまで / 選手交代 |
+| `.btn-danger` | 破壊的（削除・解雇・戦力外） | 削除 / 解雇 |
+| `.btn-warn` | 不可逆だが破壊ではない | 緊急セーブの復元 |
+| `.seg` / `.seg-on` | タブ・セグメントの選択状態 | 画面上部のタブ / フィルタ |
+
+- **余白・文字サイズは持たない**（既存の `px-4 py-2 text-sm` と併用する前提）
+- **無効化は `disabled` 属性に任せる**。`cond ? 'btn-primary' : '...cursor-not-allowed'` と
+  書くと無効時に背景が消えるので、**常に `btn-primary` を付けて `:disabled` に任せる**
+- ⚠ **ランク色・チーム色・結果の意味色とは別語彙**。そちらは素のTailwind色のままにする
+- ⚠ **`DraftResultScreen` は対象外**。抽選の赤い演出を持つ「見せ場」の画面で、
+  明るいカードと同居している（文字色の一括是正で外したのと同じ理由）
+
+#### 試合画面は 守備=amber / 攻撃=cyan（この語彙とは別）
+`.seg` を持ち込まないこと。ただし**パネル内で色が逸れていた3箇所は揃えた**:
+- 攻撃パネルの2行目「コース」だけ **teal** → cyan
+- 守備パネルの2行目「狙い」だけ **rose** → amber、「敬遠」の **indigo** → amber
+- 一発采配（盗塁・エンドラン・バント・スクイズ）の **緑と黄** → cyanの濃淡。
+  緑=ボール / 黄=ストライク という**結果の意味色と衝突**していたため。
+  走塁=`cyan-700/800` / 犠打=`cyan-900/950` で群は保つ
+- 場面バッジ（併殺狙い / 三振狙い）の emerald・sky も同じ理由で amber の濃淡へ
+
+#### サイドバーの選択色は1色
+`SidebarButton` は `color` prop で green/yellow/blue を出し分けていたが、実際に指定していたのは
+資料室の yellow 1箇所だけだった。**項目ごとに色を変えると「色＝現在地」の意味が壊れる**ので
+prop ごと削除し、選択中はアクセント（`seg-on` ＋ 左のアクセントバー）に統一した。
+
+### 6. 能力の可視化
 - **配色統一**: 能力値の色は共有 `AbilityValue`（球速=(v-115)×2.5・投手スタミナ=v/2 で正規化）に集約。生の `getAbilityColor(velocity/stamina)` は常に最大色になるので**使わない**
 - **レーダー**: `AbilityRadar`（`playerRadarAxes`/`teamRadarAxes`）で選手・チームの能力バランスを多角形表示。単一系列＝アクセント1色
 

@@ -31,6 +31,66 @@ body {
 /* 数字を等幅にして表・スタッツの桁を揃える補助クラス */
 .tnum { font-variant-numeric: tabular-nums; }
 
+/* ============================================================
+   ボタン／選択状態の語彙（`.btn-*` / `.seg`）
+
+   【なぜ必要か】素のTailwind色を各画面が好きに使った結果、
+   ボタンの背景色が **13色・480箇所** に散っていた。とくに深刻だったのが
+   **「このタブが選択されている」状態の色が画面ごとに違う**こと
+   （日程=青 / 大学リーグ=緑 / 資料室=赤 / トレード=黄 / 成績=紫）。
+   色が意味を運んでいないので、どれが主動作かも読み取れなかった。
+
+   色は「意味」にだけ使う:
+     .btn-primary   前へ進む・確定・実行     … アクセント(cyan)
+     .btn-secondary 補助・切替・戻る         … サーフェス(gray)
+     .btn-danger    破壊的（削除・解雇）     … red
+     .btn-warn      不可逆だが破壊ではない   … amber
+     .seg / .seg-on タブ・セグメントの選択状態
+
+   ⚠ **ランク色・チーム色・結果の意味色（緑=ボール/黄=ストライク/赤=アウト）とは
+   役割が別**。そちらは従来どおり素のTailwind色で書くこと。
+   ⚠ 采配モードの 守備=amber / 攻撃=cyan も別語彙（CLAUDE.md 参照）。
+
+   余白・文字サイズは持たない（既存の px-4 py-2 text-sm 等と併用するため）。
+   ============================================================ */
+@layer components {
+  .btn-primary {
+    background-color: var(--accent-strong);
+    color: #06232b;
+    font-weight: 700;
+  }
+  .btn-primary:hover:not(:disabled) { background-color: var(--accent); }
+
+  .btn-secondary {
+    background-color: var(--surface-2);
+    color: #e5e7eb;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+  }
+  .btn-secondary:hover:not(:disabled) { background-color: #374151; color: #fff; }
+
+  .btn-danger { background-color: #dc2626; color: #fff; font-weight: 700; }
+  .btn-danger:hover:not(:disabled) { background-color: #ef4444; }
+
+  .btn-warn { background-color: #d97706; color: #fff; font-weight: 700; }
+  .btn-warn:hover:not(:disabled) { background-color: #f59e0b; }
+
+  .btn-primary:disabled, .btn-secondary:disabled,
+  .btn-danger:disabled, .btn-warn:disabled {
+    background-color: #374151; color: #9ca3af;
+    border-color: transparent; cursor: not-allowed;
+  }
+
+  /* タブ／セグメント。未選択は沈め、選択だけをアクセントで持ち上げる */
+  .seg { background-color: var(--surface-2); color: #d1d5db; }
+  .seg:hover:not(:disabled) { background-color: #374151; color: #fff; }
+  .seg-on {
+    background-color: var(--accent-soft);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent-strong);
+    font-weight: 700;
+  }
+}
+
 #root {
   width: 100%;
   min-height: 100vh;

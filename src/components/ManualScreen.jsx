@@ -211,7 +211,7 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="疲労によるスタミナ低下">
             試合開始時のスタミナは、蓄積した疲労の分だけ最大値から差し引かれる（最低でも最大値の50%は確保）。
-            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
               開始スタミナ = max(最大スタミナ × 0.5, 最大スタミナ - 疲労値)
             </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
@@ -265,7 +265,7 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="疲労による能力低下">
             疲労は打者・投手の両方に影響する。ペナルティは二次曲線で増加し、疲労が高いほど加速度的に悪化する。
-            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
               能力低下 = 疲労² ÷ 670（小数点以下四捨五入）
             </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
@@ -296,7 +296,7 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="疲労の回復">
             日付が進むたびに全選手の疲労が回復する。回復量は「回復力」に依存する。
-            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
               1日の回復量 = 20 × (0.7 + 回復力 / 100 × 0.6)
             </code>
             <div className="bg-gray-700/50 rounded-lg p-2 mt-2">
@@ -337,7 +337,7 @@ const ManualContent = ({ category }) => {
             各守備位置での適性度。メインポジションは100、関連ポジションは65〜90、それ以外は30。
           </Entry>
           <Entry title="適性倍率の計算式">
-            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
               適性倍率 = 0.5 + (適性値 / 100) × 0.5
             </code>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
@@ -725,7 +725,7 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="覚醒の発生条件">
             覚醒率は経験値に依存する。
-            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
               覚醒率 = 経験値 ÷ 10（%）
             </code>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
@@ -815,7 +815,7 @@ const ManualContent = ({ category }) => {
           </Entry>
           <Entry title="経験値による飛躍率ボーナス">
             選手の経験値が高いほど飛躍の確率が上がる。
-            <code className="bg-gray-800 px-2 py-1 rounded text-sm text-green-300 block mt-1">
+            <code className="bg-surface-2 px-2 py-1 rounded text-sm text-green-300 block mt-1">
               飛躍率 = 40% + min(25%, 経験値÷200)
             </code>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
@@ -939,8 +939,7 @@ const ManualScreen = ({ onBack }) => {
                   onClick={() => setSelectedCategory(cat.id)}
                   className={`text-left px-3 py-2 rounded-lg text-sm transition ${
                     selectedCategory === cat.id
-                      ? 'bg-blue-600 text-white font-bold'
-                      : 'bg-gray-700/50 text-gray-300 hover:bg-gray-700'
+                      ? 'seg-on font-bold' : 'seg'
                   }`}
                 >
                   {cat.label}

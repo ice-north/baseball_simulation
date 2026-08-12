@@ -284,13 +284,13 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       return null;
     }
     return (
-      <div className="mt-2 p-2 bg-gray-800 rounded border border-orange-700/50">
+      <div className="mt-2 p-2 bg-surface-2 rounded border border-orange-700/50">
         <p className="text-xs text-orange-400 mb-1.5 font-bold">スタッフ枠が上限（{MAX_STAFF}名）です。入替えるスタッフを選んでください：</p>
         <div className="space-y-1">
           {staff.map(s => (
             <button key={s.id}
               onClick={() => selectStaffToReplace(playerId, s.id)}
-              className="w-full flex items-center gap-2 px-2 py-1 bg-gray-700 hover:bg-red-900/40 rounded text-left text-xs transition">
+              className="btn-danger w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs transition">
               <span className={`font-bold ${gradeColor(s.grade)}`}>{STAFF_GRADES[s.grade]?.label}</span>
               <span className="text-white">{s.name}</span>
               <span className="text-gray-300">{s.role === 'coach' ? 'コーチ' : s.role === 'manager' ? 'マネ' : 'トレ'}</span>
@@ -314,7 +314,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
 
   if (confirmed) {
     return (
-      <div className="p-4 bg-gray-900 min-h-screen">
+      <div className="p-4 bg-surface-1 min-h-screen">
         <h1 className="text-xl font-bold text-white mb-3">契約更改完了</h1>
         {totalRetirements + retireCount > 0 && (
           <div className="mb-4">
@@ -323,14 +323,14 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
             </h2>
             <div className="grid grid-cols-2 gap-1">
               {retirements.map(r => (
-                <div key={r.id} className="text-xs text-gray-300 bg-gray-800 p-1 rounded">
+                <div key={r.id} className="text-xs text-gray-300 bg-surface-2 p-1 rounded">
                   <span className="text-yellow-300">{POSITION_NAMES[r.position]}</span> {r.name}
                   <span className="text-gray-400 ml-1">({r.age}歳・{r.team})</span>
                   <span className="text-gray-400 ml-1">{r.reason}</span>
                 </div>
               ))}
               {activePlayers.filter(p => playerDecisions[p.id] === 'retire').map(p => (
-                <div key={p.id} className="text-xs text-gray-300 bg-gray-800 p-1 rounded">
+                <div key={p.id} className="text-xs text-gray-300 bg-surface-2 p-1 rounded">
                   <span className="text-yellow-300">{POSITION_NAMES[p.position]}</span> {p.name}
                   <span className="text-gray-400 ml-1">({p.age}歳・自チーム)</span>
                   <span className="text-gray-400 ml-1">引退勧告</span>
@@ -356,7 +356,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                 const preview = staffPreviews[pid];
                 if (!preview) return null;
                 return (
-                  <div key={pid} className="text-xs text-gray-300 bg-gray-800 p-1.5 rounded flex items-center gap-2">
+                  <div key={pid} className="text-xs text-gray-300 bg-surface-2 p-1.5 rounded flex items-center gap-2">
                     <span className={`font-bold ${gradeColor(preview.grade)}`}>{STAFF_GRADES[preview.grade]?.label}</span>
                     <span className="text-cyan-400">コーチ</span>
                     <span className="text-white font-medium">{preview.name}</span>
@@ -368,7 +368,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
             </div>
           </div>
         )}
-        <div className="mb-4 bg-gray-800 rounded p-3">
+        <div className="mb-4 bg-surface-2 rounded p-3">
           <div className="text-xs text-gray-300">来季ロスター: <span className="text-white font-bold">{contractCount}名</span></div>
           {!isClub && (
             <div className="text-xs text-gray-300 mt-1">
@@ -380,7 +380,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
         </div>
         <button
           onClick={onComplete}
-          className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
+          className="btn-primary mt-4 px-6 py-2 rounded"
         >
           {isClub ? '入部希望者の受付へ進む' : 'スカウト入団へ進む'}
         </button>
@@ -389,12 +389,12 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
   }
 
   return (
-    <div className="p-3 bg-gray-900 min-h-screen">
+    <div className="p-3 bg-surface-1 min-h-screen">
       <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目 11月末</h1>
       <p className="text-gray-300 text-xs mb-2">選手をクリックして「契約 → 解雇 → 引退」を切り替えてください</p>
 
       {/* 予算サマリー（クラブチームは予算なし） */}
-      {!isClub && <div className="mb-3 bg-gray-800 rounded-lg p-3">
+      {!isClub && <div className="mb-3 bg-surface-2 rounded-lg p-3">
         <div className="flex items-center gap-4 text-xs">
           <div>
             <span className="text-gray-300">総予算: </span>
@@ -438,7 +438,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                   <span className="text-gray-400 text-xs">{offer.duration}年契約</span>
                   <button
                     onClick={() => handleAcceptSponsor(offer, i)}
-                    className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded"
+                    className="btn-secondary px-3 py-1 text-xs rounded"
                   >
                     契約
                   </button>
@@ -476,8 +476,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                           }}
                           className={`ml-auto px-2 py-0.5 text-xs font-bold rounded transition ${
                             isConverting
-                              ? 'bg-cyan-700 text-cyan-100'
-                              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                              ? 'seg-on' : 'seg'
                           }`}
                         >
                           {isConverting ? 'コーチ就任' : 'スタッフ転向'}
@@ -506,7 +505,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
       {/* 選手一覧 */}
       <div className="overflow-x-auto mb-3">
         <table className="w-full text-xs text-gray-300 border-collapse">
-          <thead className="bg-gray-800 text-gray-300">
+          <thead className="bg-surface-2 text-gray-300">
             <tr>
               <th className="py-1 px-1 w-12 text-xs">判定</th>
               <SortHeader label="名前" sortKeyVal="name" />
@@ -538,7 +537,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                   className={`cursor-pointer border-b border-gray-800 transition ${
                     decision === 'release' ? 'bg-red-900/30 opacity-70' :
                     decision === 'retire' ? 'bg-yellow-900/20 opacity-70' :
-                    'hover:bg-gray-800'
+                    'hover:bg-surface-2'
                   }`}
                 >
                   <td className="py-0.5 px-1 text-center">
@@ -581,8 +580,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
                           onClick={(e) => { e.stopPropagation(); toggleStaffConversion(player.id); }}
                           className={`px-2 py-0.5 text-xs font-bold rounded transition ${
                             staffConversions[player.id]
-                              ? 'bg-cyan-700 text-cyan-100'
-                              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                              ? 'seg-on' : 'seg'
                           }`}
                         >
                           {staffConversions[player.id] ? 'コーチ就任確定' : 'スタッフとして残す'}
@@ -632,11 +630,7 @@ const CorporateDepartureScreen = ({ seasonData, allTeams, onComplete }) => {
           onClick={handleConfirm}
           disabled={replaceStaffFor !== null}
           className={`px-5 py-2 rounded font-bold text-sm ${
-            replaceStaffFor !== null
-              ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-              : !isClub && budgetBalance < 0
-                ? 'bg-red-700 hover:bg-red-600 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            !isClub && budgetBalance < 0 ? 'btn-danger' : 'btn-primary'
           }`}
         >
           {!isClub && budgetBalance < 0 ? '赤字のまま確定' : '契約更改を確定'}

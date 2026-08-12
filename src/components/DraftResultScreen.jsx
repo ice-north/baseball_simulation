@@ -1056,7 +1056,7 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
 
       <div className="text-center pt-2">
         <button onClick={onContinue}
-          className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-12 py-3.5 rounded-xl font-black text-lg transition-all duration-200 shadow-lg hover:shadow-blue-500/30 hover:scale-105 active:scale-95">
+          className="btn-primary px-12 py-3.5 rounded-xl font-black text-lg transition-all duration-200 shadow-lg hover:scale-105 active:scale-95">
           次へ進む →
         </button>
       </div>

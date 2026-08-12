@@ -435,7 +435,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
         <div className="flex gap-1">
           {[['all', '全て'], ['corporate', '社会人'], ['university', '大学'], ['independent', '独立']].map(([v, label]) => (
             <button key={v} onClick={() => setFilterType(v)}
-              className={`px-2 py-1 rounded text-xs font-medium ${filterType === v ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+              className={`px-2 py-1 rounded text-xs font-medium ${filterType === v ? 'seg-on' : 'seg'}`}>
               {label}
             </button>
           ))}
@@ -443,7 +443,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
         <div className="flex gap-1">
           {['all', 'S', 'A', 'B', 'C', 'D'].map(r => (
             <button key={r} onClick={() => setFilterRank(r)}
-              className={`px-2 py-1 rounded text-xs font-medium ${filterRank === r ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+              className={`px-2 py-1 rounded text-xs font-medium ${filterRank === r ? 'seg-on' : 'seg'}`}>
               {r === 'all' ? '全ランク' : r}
             </button>
           ))}
@@ -453,7 +453,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
           placeholder="チーム名検索..."
           value={searchText}
           onChange={e => setSearchText(e.target.value)}
-          className="px-2 py-1 rounded text-xs bg-gray-800 border border-gray-600 text-white placeholder-gray-500 w-32"
+          className="px-2 py-1 rounded text-xs bg-surface-2 border border-gray-600 text-white placeholder-gray-500 w-32"
         />
         <span className="text-xs text-gray-300 self-center">{filtered.length}件表示</span>
       </div>
@@ -461,7 +461,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
       {/* Ranking table */}
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 340px)' }}>
         <table className="w-full text-xs border-collapse tabular-nums">
-          <thead className="sticky top-0 bg-gray-900 z-10">
+          <thead className="sticky top-0 bg-surface-1 z-10">
             <tr className="text-gray-300 border-b border-gray-700">
               {(() => {
                 const cols = [

@@ -191,7 +191,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
     const remaining = candidates.length;
 
     return (
-      <div className="p-4 bg-gray-900 min-h-screen">
+      <div className="p-4 bg-surface-1 min-h-screen">
         <h1 className="text-2xl font-bold text-white mb-2">交渉結果</h1>
         <p className="text-sm text-gray-300 mb-5">
           {negotiationResults.length}名に打診 → {successes.length}名が入団承諾
@@ -264,11 +264,11 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         <div className="flex items-center gap-4">
           {remaining > 0 && (
             <button onClick={handleContinue}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm"
+              className="btn-primary px-6 py-2.5 rounded-lg text-sm"
             >追加交渉する (残り{remaining}名)</button>
           )}
           <button onClick={handleFinalize}
-            className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-sm"
+            className="btn-primary px-6 py-2.5 rounded-lg text-sm"
           >交渉を終了する</button>
         </div>
       </div>
@@ -277,7 +277,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
 
   if (phase === 'confirmed') {
     return (
-      <div className="p-4 bg-gray-900 min-h-screen">
+      <div className="p-4 bg-surface-1 min-h-screen">
         <h1 className="text-2xl font-bold text-white mb-4">スカウト入団完了</h1>
         {totalAcquired > 0 ? (
           <div className="mb-5">
@@ -313,14 +313,14 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           {totalAcquired > 0 && <span className="text-green-400 ml-2">(入団した選手はキャンプから合流します)</span>}
         </p>
         <button onClick={onComplete}
-          className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-base"
+          className="btn-primary px-8 py-2.5 rounded-lg text-base"
         >完了</button>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-gray-900 min-h-screen">
+    <div className="p-4 bg-surface-1 min-h-screen">
       <h1 className="text-2xl font-bold text-white mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
       <div className="flex items-center gap-5 text-sm text-gray-300 mb-3">
         <span>注目度: <span className={reputation >= 50 ? 'text-yellow-400 font-bold' : 'text-gray-300'}>{reputation}</span></span>
@@ -331,13 +331,13 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       </div>
 
       {scouts.length > 0 && (
-        <div className="mb-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
+        <div className="mb-3 p-3 bg-surface-2 rounded-lg border border-gray-700">
           <div className="text-sm text-gray-300 mb-2 font-bold">担当スカウト (交渉成功率に影響)</div>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setSelectedScoutId(null)}
               className={`px-3 py-1.5 rounded text-sm font-bold transition ${
-                !selectedScoutId ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:text-white'
+                !selectedScoutId ? 'seg-on' : 'seg'
               }`}
             >指定なし</button>
             {scouts.map(s => {
@@ -347,7 +347,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
                   key={s.id}
                   onClick={() => setSelectedScoutId(s.id)}
                   className={`px-3 py-1.5 rounded text-sm font-bold transition ${
-                    selectedScoutId === s.id ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:text-white'
+                    selectedScoutId === s.id ? 'seg-on' : 'seg'
                   }`}
                 >
                   {s.name}
@@ -366,7 +366,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
       {candidates.length > 0 ? (
         <div className="overflow-x-auto mb-4">
           <table className="w-full text-sm border-collapse">
-            <thead className="bg-gray-800 border-b border-gray-700">
+            <thead className="bg-surface-2 border-b border-gray-700">
               <tr className="text-left">
                 <th className="px-1.5 py-2 w-8"></th>
                 <SortHeader k="rec" label="推薦" />
@@ -484,9 +484,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           onClick={handleNegotiate}
           disabled={selectedIds.length === 0}
           className={`px-6 py-2.5 rounded-lg font-bold text-base ${
-            selectedIds.length > 0
-              ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+            'btn-primary'
           }`}
         >交渉開始 ({selectedIds.length}名)</button>
         <button onClick={handleSkip}

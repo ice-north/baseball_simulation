@@ -255,7 +255,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-900 text-white p-4">
+    <div className="h-screen flex flex-col bg-surface-1 text-white p-4">
       <div className="flex items-center gap-3 mb-2 flex-shrink-0">
         <h1 className="text-xl font-bold">背番号設定</h1>
         <span className="text-sm text-gray-300">{seasonData?.year || 1}年目・シーズン開始前</span>
@@ -330,7 +330,7 @@ export default function JerseyNumberScreen({ userTeamName, seasonData, onComplet
           onClick={confirm}
           disabled={!allAssigned}
           className={`ml-auto px-6 py-2 rounded-lg font-bold text-sm transition ${
-            !allAssigned ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
+            'btn-primary'}`}
         >
           確定してシーズン開始 →
         </button>

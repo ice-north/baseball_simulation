@@ -214,8 +214,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               onClick={() => setSelectedSaveSlot(idx)}
               className={`flex-1 p-2.5 rounded-xl text-left transition-all duration-150 ${
                 selectedSaveSlot === idx
-                  ? 'bg-blue-600 text-white ring-1 ring-blue-400 shadow-lg shadow-blue-900/40'
-                  : 'bg-gray-600/60 text-gray-300 hover:bg-gray-500/60'
+                  ? 'seg-on ring-1' : 'seg'
               }`}
             >
               <div className="font-bold text-sm">{name}</div>
@@ -233,7 +232,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
       </div>
       <button
         onClick={handleSaveToSlot}
-        className="w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold text-base transition-all duration-150 hover:shadow-lg hover:shadow-blue-900/30"
+        className="btn-primary w-full px-4 py-2.5 rounded-xl text-base transition-all duration-150 hover:shadow-lg"
       >
         {slotNames[selectedSaveSlot]}に保存
       </button>
@@ -389,7 +388,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           <div className="text-center">
             <button
               onClick={() => { if (onStartNextSeason) onStartNextSeason(); }}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:shadow-green-900/40 hover:scale-105 active:scale-95"
+              className="btn-primary px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:scale-105 active:scale-95"
             >
               キャンプへ進む →
             </button>
@@ -558,7 +557,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
               </span>
               <button
                 onClick={() => { setShowTransfer(v => !v); setTransferResult(null); }}
-                className="ml-auto px-4 py-1.5 rounded-lg text-sm font-bold bg-amber-600 hover:bg-amber-500 text-white transition"
+                className="btn-warn ml-auto px-4 py-1.5 rounded-lg text-sm transition"
               >
                 {showTransfer ? '閉じる' : '他チームの監督に就任する'}
               </button>
@@ -583,7 +582,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                         key={cat}
                         onClick={() => setTransferCat(transferCat === cat ? null : cat)}
                         className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                          transferCat === cat ? 'bg-amber-600 text-white' : 'bg-gray-600/60 text-gray-200 hover:bg-gray-500/60'
+                          transferCat === cat ? 'seg-on' : 'seg'
                         }`}
                       >
                         {CATEGORY_LABEL[cat]} <span className="opacity-80">{n}</span>
@@ -595,7 +594,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                     value={transferSearch}
                     onChange={(e) => setTransferSearch(e.target.value)}
                     placeholder="チーム名で検索…"
-                    className="ml-auto bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600 w-48"
+                    className="ml-auto bg-surface-2 text-white text-xs rounded px-2 py-1 border border-gray-600 w-48"
                   />
                 </div>
 
@@ -622,7 +621,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
                           <span className="text-amber-300 ml-auto hidden sm:block">{CATEGORY_LABEL[t.cat]}</span>
                           <button
                             onClick={() => handleTransfer(t.name)}
-                            className="bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold flex-shrink-0"
+                            className="btn-warn px-2 py-1 rounded flex-shrink-0"
                           >
                             就任
                           </button>
@@ -641,7 +640,7 @@ const OffSeasonScreen = ({ seasonData, setSeasonData, onSave, onStartNextSeason,
           <button
             onClick={handleAdvanceYear}
             disabled={processing}
-            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-600 disabled:to-gray-600 text-white px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:shadow-green-900/40 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="btn-primary px-12 py-4 rounded-xl font-black text-xl transition-all duration-200 shadow-xl hover:scale-105 active:scale-95 disabled:opacity-60"
           >
             {processing ? (
               <span className="flex items-center gap-2">

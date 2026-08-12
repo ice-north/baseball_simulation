@@ -124,7 +124,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
         ))}
       </div>
 
-      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+      <div className="bg-surface-2 rounded-lg p-6 mb-6">
         <h2 className="text-xl font-bold mb-4 text-white">チーム情報</h2>
         <div className="text-white">
           {editingTeamName ? (
@@ -138,7 +138,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
                 className="bg-gray-700 border border-gray-500 text-white px-3 py-1 rounded w-48 focus:border-blue-400 focus:outline-none"
                 autoFocus
               />
-              <button onClick={saveTeamName} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-sm">保存</button>
+              <button onClick={saveTeamName} className="btn-primary px-3 py-1 rounded text-sm">保存</button>
               <button onClick={() => setEditingTeamName(false)} className="text-gray-300 hover:text-white px-2 py-1 text-sm">取消</button>
             </div>
           ) : (
@@ -156,20 +156,20 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
               generatePitchingRotation(editingTeam);
               alert(`${editingTeam}のAIオーダー編成と投手ローテーションを設定しました！`);
             }}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-bold transition"
+            className="btn-secondary px-4 py-2 rounded transition"
           >
             🤖 AIオーダー編成
           </button>
           <button
             onClick={() => generateAllTeamsLineup()}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-bold transition"
+            className="btn-primary px-4 py-2 rounded transition"
           >
             🤖 全チーム一括編成
           </button>
         </div>
       </div>
 
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-surface-2 rounded-lg p-6">
         <h2 className="text-xl font-bold mb-4 text-white">選手一覧（{team.players.length}人）</h2>
         <div className="text-sm text-blue-400 mb-4">💡 選手カードをクリックして能力値を編集できます</div>
 
@@ -201,7 +201,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
 
       {editingPlayer && editFormData && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface-2 rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-3">
                 <input type="text" value={editFormData.name || ''}
@@ -422,7 +422,7 @@ const EditScreen = ({ generateOptimalLineup, generatePitchingRotation, generateA
 
             <div className="flex justify-end gap-4 mt-6">
               <button onClick={cancelEdit} className="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition">キャンセル</button>
-              <button onClick={savePlayerEdit} className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition">保存</button>
+              <button onClick={savePlayerEdit} className="btn-primary px-6 py-2 rounded transition">保存</button>
             </div>
           </div>
         </div>

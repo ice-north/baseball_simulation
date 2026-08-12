@@ -10,12 +10,12 @@ export const PositionControl = ({ position, label, defense, setDefense }) => {
       <button
         type="button"
         onClick={() => setShow(!show)}
-        className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 shadow-lg border-2 border-white"
+        className="btn-primary w-8 h-8 rounded-full text-xs shadow-lg border-2 border-white"
       >
         {label}
       </button>
       {show && (
-        <div className="absolute z-10 bg-gray-800 border border-gray-600 rounded-xl shadow-xl w-48 text-xs p-3"
+        <div className="absolute z-10 bg-surface-2 border border-gray-600 rounded-xl shadow-xl w-48 text-xs p-3"
              style={{left: '50%', transform: 'translateX(-50%)', marginTop: '4px'}}>
           <div className="mb-1.5">
             <label className="block font-bold text-gray-300">守:{defense[position].defense}</label>
@@ -303,7 +303,7 @@ export const Tooltip = ({ text, children, position = 'top' }) => {
     <span className="relative inline-flex" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
       {children}
       {show && text && (
-        <span className={`absolute z-50 px-2 py-1 rounded text-xs text-gray-100 bg-gray-900 border border-gray-700 shadow-lg whitespace-nowrap pointer-events-none ${posStyles[position] || posStyles.top}`}>
+        <span className={`absolute z-50 px-2 py-1 rounded text-xs text-gray-100 bg-surface-1 border border-gray-700 shadow-lg whitespace-nowrap pointer-events-none ${posStyles[position] || posStyles.top}`}>
           {text}
         </span>
       )}
@@ -383,8 +383,7 @@ export const TabBar = ({ tabs, activeKey, onChange, className = '' }) => (
         onClick={() => onChange(key)}
         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
           activeKey === key
-            ? 'bg-blue-600 text-white shadow-sm'
-            : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
+            ? 'seg-on' : 'seg'
         }`}
       >
         {icon && <span className="text-base leading-none">{icon}</span>}
@@ -418,11 +417,9 @@ export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
 // --- SidebarButton コンポーネント ---
 const BLOCKING_VIEWS = new Set(['draft', 'contract', 'tryout', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement']);
 
-export const SidebarButton = ({ view, icon, label, color = 'green', onActiveClick, screenMode, managementView, setScreenMode, setManagementView }) => {
+export const SidebarButton = ({ view, icon, label, onActiveClick, screenMode, managementView, setScreenMode, setManagementView }) => {
   const isActive = screenMode === 'management' && managementView === view;
   const isBlocked = screenMode === 'management' && BLOCKING_VIEWS.has(managementView) && !isActive;
-  const activeColors = { green: 'bg-green-600/20 text-green-300 border-green-400', yellow: 'bg-yellow-600/20 text-yellow-300 border-yellow-400', blue: 'bg-blue-600/20 text-blue-300 border-blue-400' };
-  const hoverColors = { green: 'hover:bg-green-900/20 hover:text-green-300', yellow: 'hover:bg-yellow-900/20 hover:text-yellow-300', blue: 'hover:bg-blue-900/20 hover:text-blue-300' };
   return (
     <button
       onClick={() => {
@@ -434,8 +431,8 @@ export const SidebarButton = ({ view, icon, label, color = 'green', onActiveClic
         isBlocked
           ? 'text-gray-400 border-l-[3px] border-transparent cursor-not-allowed'
           : isActive
-          ? `${activeColors[color] || activeColors.green} border-l-[3px] shadow-sm`
-          : `text-gray-300 ${hoverColors[color] || hoverColors.green} border-l-[3px] border-transparent`
+          ? 'seg-on border-l-[3px] border-l-[var(--accent)] shadow-sm'
+          : 'text-gray-300 hover:bg-gray-700/60 hover:text-white border-l-[3px] border-transparent'
       }`}
     >
       <span className="text-base w-5 text-center shrink-0">{icon}</span>
@@ -482,7 +479,7 @@ export const Sidebar = ({
       {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
       {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
       {gameMode !== 'corporate' && gameMode !== 'university' && <SidebarButton view="trade" icon="🔄" label="トレード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      <SidebarButton view="halloffame" icon="🏆" label="資料室" color="yellow" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="halloffame" icon="🏆" label="資料室" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="player_search" icon="🔎" label="選手検索" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>

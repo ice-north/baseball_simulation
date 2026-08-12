@@ -293,7 +293,7 @@ const ScheduleScreen = ({
     : { name: '', color: 'bg-gray-100', description: '' };
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-surface-1">
       <div className="max-w-7xl mx-auto px-4 py-5">
       {/* シーズンタイムライン */}
       {(() => {
@@ -375,11 +375,11 @@ const ScheduleScreen = ({
             この画面は閲覧専用とし、進行は日程進行画面へ誘導する。 */}
         <div className="flex items-center gap-3">
           {todayGames.some(g => g.home === userTeamName || g.away === userTeamName) ? (
-            <button onClick={onStartGame} className="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-lg shadow-green-600/20 border border-green-500/50">
+            <button onClick={onStartGame} className="btn-primary px-5 py-2 rounded-lg text-sm transition shadow-lg border">
               ⚾ 試合開始
             </button>
           ) : (
-            <button onClick={onGoToDateProgress} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition shadow-sm" title="日程進行画面で1日ずつ安全に進めます">
+            <button onClick={onGoToDateProgress} className="btn-primary px-5 py-2 rounded-lg text-sm transition shadow-sm" title="日程進行画面で1日ずつ安全に進めます">
               ▶ 日程を進める
             </button>
           )}
@@ -395,7 +395,7 @@ const ScheduleScreen = ({
         <select
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(Number(e.target.value))}
-          className="bg-gray-800 text-white text-sm font-bold px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 appearance-none text-center min-w-[5rem] cursor-pointer"
+          className="bg-surface-2 text-white text-sm font-bold px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 appearance-none text-center min-w-[5rem] cursor-pointer"
         >
           {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
             <option key={m} value={m}>{m}月{m === currentDate.month ? ' ●' : ''}</option>
@@ -407,7 +407,7 @@ const ScheduleScreen = ({
         >▶</button>
         <button
           onClick={() => setSelectedMonth(currentDate.month)}
-          className="px-2 py-1 rounded-lg text-xs font-semibold bg-blue-700/60 text-blue-200 hover:bg-blue-600 transition ml-1"
+          className="btn-primary px-2 py-1 rounded-lg text-xs font-semibold transition ml-1"
         >今月</button>
       </div>
 
@@ -438,7 +438,7 @@ const ScheduleScreen = ({
                     ? 'bg-orange-600 border-2 border-orange-400'
                     : day.opponent
                     ? 'bg-gray-700 hover:bg-gray-600 cursor-pointer'
-                    : 'bg-gray-900'
+                    : 'bg-surface-1'
                 }`}
               >
                 <div className={`text-xs mb-0.5 ${isCurrentDate ? 'text-white font-bold' : 'text-gray-300'}`}>
@@ -557,8 +557,7 @@ const ScheduleScreen = ({
             onClick={() => setScheduleTab(key)}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
               scheduleTab === key
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-gray-300 hover:text-gray-100 hover:bg-gray-700/60'
+                ? 'seg-on' : 'seg'
             }`}
           >
             <span>{icon}</span>
@@ -587,7 +586,7 @@ const ScheduleScreen = ({
           })();
 
           return (
-            <div className="bg-gray-800 rounded-lg p-6">
+            <div className="bg-surface-2 rounded-lg p-6">
               <h2 className={`text-2xl font-bold mb-4 ${titleColor || 'text-white'}`}>{title}</h2>
               <table className="tabular-nums w-full text-white">
                 <thead>

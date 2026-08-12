@@ -296,7 +296,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               </p>
             </div>
             <button onClick={handleSelectionFinalize}
-              className="px-4 py-2 rounded-lg font-bold text-sm bg-green-700 hover:bg-green-600 text-white transition">
+              className="btn-primary px-4 py-2 rounded-lg text-sm transition">
               確定してオフシーズンへ
             </button>
           </div>
@@ -335,7 +335,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
             <div className="text-center py-12">
               <p className="text-gray-400 text-lg mb-4">セレクション参加者がいません</p>
               <button onClick={handleSelectionFinalize}
-                className="px-6 py-2 rounded-xl font-bold text-white bg-green-700 hover:bg-green-600">
+                className="btn-primary px-6 py-2 rounded-xl">
                 オフシーズンへ
               </button>
             </div>
@@ -409,12 +409,12 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                           <td className="py-1.5 px-1">
                             {isPicked ? (
                               <button onClick={() => handleSelectionPick(p)}
-                                className="px-2 py-0.5 rounded text-xs font-bold bg-green-800 text-green-200 hover:bg-red-900 hover:text-red-200 transition">
+                                className="btn-primary px-2 py-0.5 rounded text-xs transition">
                                 合格 ✕
                               </button>
                             ) : canAdd ? (
                               <button onClick={() => handleSelectionPick(p)}
-                                className="px-2 py-0.5 rounded text-xs font-bold bg-gray-700 text-gray-300 hover:bg-green-800 hover:text-green-200 transition">
+                                className="btn-primary px-2 py-0.5 rounded text-xs transition">
                                 合格にする
                               </button>
                             ) : (
@@ -460,7 +460,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
             </div>
             {onComplete && (
               <button onClick={handleFinalize}
-                className="px-4 py-2 rounded-lg font-bold text-sm bg-green-700 hover:bg-green-600 text-white transition">
+                className="btn-primary px-4 py-2 rounded-lg text-sm transition">
                 推薦確定 → セレクションへ
               </button>
             )}
@@ -512,7 +512,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
               {highSchoolPool.players?.length > 0 ? 'スカウト候補が見つかりませんでした' : '高校生プールがまだ生成されていません (4月以降)'}
             </p>
             {onComplete && (
-              <button onClick={handleFinalize} className="px-6 py-2 rounded-xl font-bold text-white bg-green-700 hover:bg-green-600">
+              <button onClick={handleFinalize} className="btn-primary px-6 py-2 rounded-xl">
                 オフシーズンへ
               </button>
             )}
@@ -658,7 +658,7 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                         </td>
                         <td className="py-1.5 px-1">
                           {(p._npbDrafted || p._reservedBy) ? (
-                            <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-gray-800 text-gray-400">
+                            <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-surface-2 text-gray-400">
                               交渉不可
                             </span>
                           ) : p._gaugeComplete ? (
@@ -666,29 +666,27 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                               onClick={() => handleConfirmRecruit(p.id)}
                               disabled={remainingSlots <= 0}
                               className={`px-2 py-0.5 rounded text-xs font-black transition animate-pulse ${
-                                remainingSlots > 0
-                                  ? 'bg-green-600 text-white hover:bg-green-500 shadow-lg shadow-green-900/50'
-                                  : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                'btn-primary'
                               }`}>
                               {remainingSlots > 0 ? '✓ 推薦確定!' : '枠なし'}
                             </button>
                           ) : (onComplete && !p._npbDrafted && !p._reservedBy && (p._approachGauge || 0) >= 80 && remainingSlots > 0) ? (
                             <button
                               onClick={() => handleConfirmRecruit(p.id, true)}
-                              className="px-2 py-0.5 rounded text-xs font-black transition bg-yellow-600 text-white hover:bg-yellow-500 shadow-lg shadow-yellow-900/50">
+                              className="btn-warn px-2 py-0.5 rounded text-xs font-black transition shadow-lg">
                               推薦確定(80%+)
                             </button>
                           ) : (
                           <div className="flex gap-1">
                             <button onClick={() => handleWatch(p.id)}
                               className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${
-                                p._watching ? 'bg-yellow-700 text-yellow-200' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                p._watching ? 'seg-on' : 'seg'}`}
                               title={p._watching ? '注目解除' : '注目'}>
                               {p._watching ? '★注目中' : '☆注目'}
                             </button>
                             {canInvestigate && (
                               <button onClick={() => handleInvestigate(p.id)}
-                                className="px-1.5 py-0.5 rounded text-xs font-bold bg-cyan-800 text-cyan-200 hover:bg-cyan-700 transition">
+                                className="btn-primary px-1.5 py-0.5 rounded text-xs transition">
                                 調査
                               </button>
                             )}
@@ -699,13 +697,13 @@ const UniversityScoutScreen = ({ seasonData, onComplete, onBack }) => {
                             )}
                             {!p._approaching && canApproach && (
                               <button onClick={() => handleApproach(p.id)}
-                                className="px-1.5 py-0.5 rounded text-xs font-bold bg-blue-800 text-blue-200 hover:bg-blue-700 transition">
+                                className="btn-primary px-1.5 py-0.5 rounded text-xs transition">
                                 接近
                               </button>
                             )}
                             {p._approaching && (
                               <button onClick={() => handleStopApproach(p.id)}
-                                className="px-1.5 py-0.5 rounded text-xs font-bold bg-red-900 text-red-300 hover:bg-red-800 transition">
+                                className="btn-danger px-1.5 py-0.5 rounded text-xs transition">
                                 中断
                               </button>
                             )}

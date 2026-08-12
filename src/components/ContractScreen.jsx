@@ -215,7 +215,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
     .reduce((sum, [, arr]) => sum + arr.length, 0);
 
   return (
-    <div className="p-3 bg-gray-900 min-h-screen">
+    <div className="p-3 bg-surface-1 min-h-screen">
       <h1 className="text-xl font-bold text-white mb-1">契約更改 - {seasonData?.year || 1}年目</h1>
       <p className="text-gray-300 text-xs mb-1">自チームの選手を解雇できます。クリックで解雇/契約を切り替え。</p>
       <AbilityLegend className="mb-2" />
@@ -234,7 +234,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
           <div className="mb-3 overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-gray-800">
+              <thead className="bg-surface-2">
                 <tr className="border-b border-gray-600 text-xs text-gray-300">
                   <th className="py-1 px-1">状態</th>
                   <SortHeader label="名前" sortKeyVal="name" />
@@ -341,7 +341,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           <div className="flex gap-3">
             <button
               onClick={() => userReleased.length > 0 ? setShowReview(true) : handleConfirm()}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded font-bold text-sm"
+              className="btn-primary px-5 py-1.5 rounded text-sm"
             >
               契約更改を確定する
             </button>
@@ -358,7 +358,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
 
           {showReview && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowReview(false)}>
-              <div className="bg-gray-800 rounded-xl border border-gray-600 max-w-lg w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="bg-surface-2 rounded-xl border border-gray-600 max-w-lg w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h3 className="text-white font-bold text-lg mb-3">契約更改の確認</h3>
                 <div className="bg-gray-900/60 rounded-lg p-3 mb-3 max-h-48 overflow-y-auto">
                   <div className="text-gray-300 text-xs mb-2">解雇予定選手 ({userReleased.length}人)</div>
@@ -383,7 +383,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
                   <button onClick={() => setShowReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
                     戻る
                   </button>
-                  <button onClick={() => { setShowReview(false); handleConfirm(); }} className="bg-red-600 hover:bg-red-500 text-white px-5 py-1.5 rounded font-bold text-sm transition">
+                  <button onClick={() => { setShowReview(false); handleConfirm(); }} className="btn-danger px-5 py-1.5 rounded text-sm transition">
                     解雇を確定する
                   </button>
                 </div>
@@ -400,7 +400,7 @@ const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
           <p className="text-gray-300 mb-6">次はトライアウトで新選手を獲得できます。</p>
           <button
             onClick={() => { if (onComplete) onComplete(); }}
-            className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-lg font-bold text-lg"
+            className="btn-primary px-8 py-3 rounded-lg text-lg"
           >
             トライアウトへ進む
           </button>

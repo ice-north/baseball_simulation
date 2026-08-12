@@ -125,7 +125,7 @@ const TeamInfoScreen = ({ gameMode }) => {
           <h1 className="text-3xl font-bold text-white">チーム情報</h1>
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="bg-surface-2 rounded-lg p-6 mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">チーム選択</label>
           <select value={selectedTeam} onChange={(e) => { setSelectedTeam(e.target.value); setSelectedPlayer(null); }} className="w-full bg-gray-700 text-white rounded px-4 py-2">
             {Object.keys(TEAMS_DATA).map(teamName => (
@@ -134,7 +134,7 @@ const TeamInfoScreen = ({ gameMode }) => {
           </select>
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="bg-surface-2 rounded-lg p-6 mb-6">
           <div className={`grid ${team.corporateData ? 'grid-cols-5' : 'grid-cols-3'} gap-4 text-white`}>
             <div><div className="text-sm text-gray-300">総人数</div><div className="text-2xl font-bold">{team.players.length}人</div></div>
             <div><div className="text-sm text-gray-300">投手</div><div className="text-2xl font-bold">{pitchers.length}人</div></div>
@@ -162,13 +162,13 @@ const TeamInfoScreen = ({ gameMode }) => {
         </div>
 
         {/* チーム戦力レーダー */}
-        <div className="bg-gray-800 rounded-lg p-4 mb-6 flex flex-col items-center">
+        <div className="bg-surface-2 rounded-lg p-4 mb-6 flex flex-col items-center">
           <h2 className="text-sm font-bold text-gray-300 mb-1 self-start">チーム戦力</h2>
           <AbilityRadar axes={teamRadarAxes(team)} size={240} />
         </div>
 
         {/* 投手テーブル */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="bg-surface-2 rounded-lg p-6 mb-6">
           <h2 className="text-xl font-bold text-white mb-1">投手 ({pitchers.length}人)</h2>
           <p className="text-xs text-gray-400 mb-3">クリックで詳細表示</p>
           {pitchers.length > 0 ? (
@@ -210,7 +210,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                     const gradeLabel = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
                     const rt = RECRUIT_TYPE_LABEL[player.recruitType] || null;
                     return (
-                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-800'}`}
+                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-surface-2'}`}
                         onClick={() => setSelectedPlayer(player)}>
                         <td className="px-2 py-1 text-gray-300 text-center tabular-nums font-bold">{player.number ?? '-'}</td>
                         <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>
@@ -260,7 +260,7 @@ const TeamInfoScreen = ({ gameMode }) => {
         </div>
 
         {/* 野手テーブル */}
-        <div className="bg-gray-800 rounded-lg p-6">
+        <div className="bg-surface-2 rounded-lg p-6">
           <h2 className="text-xl font-bold text-white mb-1">野手 ({fielders.length}人)</h2>
           <p className="text-xs text-gray-400 mb-3">クリックで詳細表示</p>
           {fielders.length > 0 ? (
@@ -300,7 +300,7 @@ const TeamInfoScreen = ({ gameMode }) => {
                     const gradeLabel = player.universityYear ? `${player.universityYear}年` : `${player.age}歳`;
                     const rt = RECRUIT_TYPE_LABEL[player.recruitType] || null;
                     return (
-                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-gray-800'}`}
+                      <tr key={player.id} className={`cursor-pointer hover:bg-gray-500 transition ${index % 2 === 0 ? 'bg-gray-700' : 'bg-surface-2'}`}
                         onClick={() => setSelectedPlayer(player)}>
                         <td className="px-2 py-1 text-gray-300 text-center tabular-nums font-bold">{player.number ?? '-'}</td>
                         <td className="px-2 py-1 text-white font-medium whitespace-nowrap">{player.name}</td>

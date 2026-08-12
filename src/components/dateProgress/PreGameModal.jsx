@@ -182,8 +182,8 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
           !isUser ? 'bg-gray-800/60' :
           pos === 'pitcher' ? 'bg-gray-800/50 cursor-default' :
           isSelected ? 'bg-blue-900 ring-1 ring-blue-400 cursor-pointer' :
-          isSwapCandidate ? 'bg-gray-800 hover:bg-blue-900/50 ring-1 ring-blue-800/50 cursor-pointer' :
-          'bg-gray-800 hover:bg-gray-700 cursor-pointer'
+          isSwapCandidate ? 'bg-surface-2 hover:bg-blue-900/50 ring-1 ring-blue-800/50 cursor-pointer' :
+          'bg-surface-2 hover:bg-gray-700 cursor-pointer'
         }`}
       >
         <span className={`w-4 text-center font-mono shrink-0 text-xs ${isSwapCandidate ? 'text-blue-400' : 'text-gray-400'}`}>{order}</span>
@@ -202,7 +202,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
           <span className="text-xs text-gray-300 font-mono">{player.pitching?.velocity || 0}<span className="text-gray-400">km</span></span>
         ) : <BattingStats player={player} />}
         {isUser && isSelected && pos !== 'pitcher' && (
-          <button onClick={(e) => { e.stopPropagation(); }} className="shrink-0 px-1 py-0.5 text-xs font-bold rounded bg-orange-600 text-white ml-0.5">交代</button>
+          <button onClick={(e) => { e.stopPropagation(); }} className="btn-warn shrink-0 px-1 py-0.5 text-xs rounded ml-0.5">交代</button>
         )}
       </div>
     );
@@ -226,7 +226,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
       onClick={handleBenchClick}
       className={`flex items-center gap-1 rounded px-1.5 py-1 transition-all cursor-pointer ${
         isSelectedBench ? 'bg-blue-900 ring-1 ring-blue-400' :
-        canSwap ? 'bg-gray-800 hover:bg-blue-900 ring-1 ring-blue-800/50' :
+        canSwap ? 'bg-surface-2 hover:bg-blue-900 ring-1 ring-blue-800/50' :
         'bg-gray-800/60 hover:bg-gray-700'
       }`}
     >
@@ -291,7 +291,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
           {/* === 左カラム: 自チーム === */}
           <div className="space-y-2">
             {/* 先発投手選択 */}
-            <div className="bg-gray-900 rounded-lg p-2.5 border border-gray-700">
+            <div className="bg-surface-1 rounded-lg p-2.5 border border-gray-700">
               <h3 className="text-xs font-bold text-gray-300 mb-1.5">先発投手選択</h3>
               <div className="space-y-0.5">
                 {rotationStarters.map(pitcher => {
@@ -305,7 +305,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                       className={`flex items-center gap-1.5 rounded px-2 py-1 transition-all text-xs ${
                         isSelected ? 'bg-red-900/60 ring-1 ring-red-400' :
                         tooTired ? 'bg-gray-800/30 opacity-50 cursor-not-allowed' :
-                        'bg-gray-800 hover:bg-red-900/30 cursor-pointer'
+                        'bg-surface-2 hover:bg-red-900/30 cursor-pointer'
                       }`}
                     >
                       <span className={`w-3 h-3 rounded-full border-2 shrink-0 ${isSelected ? 'border-red-400 bg-red-400' : 'border-gray-600'}`} />
@@ -325,7 +325,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             </div>
 
             {/* スタメン */}
-            <div className="bg-gray-900 rounded-lg p-2.5">
+            <div className="bg-surface-1 rounded-lg p-2.5">
               <h3 className="text-xs font-bold text-gray-300 mb-1">スタメン
                 <span className="text-gray-400 font-normal ml-1">
                   {selectedBench !== null ? '（交代先をタップ）' : swapTarget !== null ? '（入替先をタップ）' : '（タップで打順入替）'}
@@ -335,7 +335,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             </div>
 
             {/* 控え */}
-            <div className="bg-gray-900 rounded-lg p-2.5">
+            <div className="bg-surface-1 rounded-lg p-2.5">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-xs font-bold text-gray-300">
                   控え{swapTarget !== null
@@ -346,9 +346,9 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                 </h3>
                 <div className="flex gap-1">
                   <button onClick={() => setBenchFilter('fielder')}
-                    className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'fielder' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>野手</button>
+                    className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'fielder' ? 'seg-on' : 'seg'}`}>野手</button>
                   <button onClick={() => setBenchFilter('pitcher')}
-                    className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'pitcher' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>投手</button>
+                    className={`text-xs px-1.5 py-0.5 rounded ${benchFilter === 'pitcher' ? 'seg-on' : 'seg'}`}>投手</button>
                 </div>
               </div>
               <div className="space-y-0.5 text-xs">
@@ -378,7 +378,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
                 if (r > keyRating) { keyRating = r; keyHitter = p; }
               }
               return (
-                <div className="bg-gray-900 rounded-lg p-2.5 border border-cyan-800/40">
+                <div className="bg-surface-1 rounded-lg p-2.5 border border-cyan-800/40">
                   <h3 className="text-xs font-bold text-cyan-300 mb-1">スカウトレポート — {opponentName}</h3>
                   <div className="flex items-center gap-3">
                     <AbilityRadar axes={teamRadarAxes(opponentTeam)} size={150} />
@@ -403,7 +403,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
               );
             })()}
             {/* 相手先発投手 */}
-            <div className="bg-gray-900 rounded-lg p-2.5 border border-gray-700">
+            <div className="bg-surface-1 rounded-lg p-2.5 border border-gray-700">
               <h3 className="text-xs font-bold text-gray-300 mb-1.5">相手先発投手</h3>
               {opponentStarter ? (() => {
                 const ps = opponentStarter.seasonStats?.pitching;
@@ -440,7 +440,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             </div>
 
             {/* 相手スタメン */}
-            <div className="bg-gray-900 rounded-lg p-2.5">
+            <div className="bg-surface-1 rounded-lg p-2.5">
               <h3 className="text-xs font-bold text-gray-300 mb-1">相手スタメン</h3>
               <div className="space-y-0.5">
                 {opponentStarters.length > 0
@@ -450,7 +450,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
             </div>
 
             {/* 相手控え投手 */}
-            <div className="bg-gray-900 rounded-lg p-2.5">
+            <div className="bg-surface-1 rounded-lg p-2.5">
               <h3 className="text-xs font-bold text-gray-300 mb-1">相手控え投手</h3>
               <div className="space-y-0.5">
                 {(() => {
@@ -468,7 +468,7 @@ const PreGameModal = ({ seasonData, userTeamName, formatDate, getStartingPitcher
         {/* ボタン */}
         <div className="flex gap-3 justify-center mt-4">
           <button onClick={() => handleGameChoice('manage')}
-            className="group bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-lg shadow-lg shadow-green-900/40 active:scale-95 flex items-center gap-2"
+            className="group btn-primary py-3 px-8 rounded-xl transition-all text-lg shadow-lg active:scale-95 flex items-center gap-2"
           >
             <span className="text-xl group-hover:scale-110 transition-transform">🎮</span>試合采配
           </button>

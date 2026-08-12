@@ -529,7 +529,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const dispatchedPlayers = sortedPlayers.filter(p => p.dispatchedThisCamp);
 
   return (
-    <div className="p-3 bg-gray-900 min-h-screen">
+    <div className="p-3 bg-surface-1 min-h-screen">
       <div className="max-w-full mx-auto">
         {/* 派遣確認モーダル */}
         {dispatchConfirm && (() => {
@@ -542,7 +542,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             const uniOptions = getUniversityDispatchOptions(userTeam);
             return (
               <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-                <div className="bg-gray-800 rounded-xl max-w-lg w-full p-5">
+                <div className="bg-surface-2 rounded-xl max-w-lg w-full p-5">
                   <h2 className="text-base font-bold text-white mb-3 text-center">🎓 派遣先大学を選択</h2>
                   <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
                     <div className="text-white font-bold text-lg mb-1">{player.name}</div>
@@ -608,7 +608,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
           const selectedUniName = dispatchConfirm.universityName;
           return (
             <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-              <div className="bg-gray-800 rounded-xl max-w-md w-full p-5">
+              <div className="bg-surface-2 rounded-xl max-w-md w-full p-5">
                 <h2 className="text-base font-bold text-white mb-3 text-center">{dest.icon} {dest.name}に派遣</h2>
                 <div className="bg-gray-700/60 rounded-lg p-3 mb-3 text-center">
                   <div className="text-white font-bold text-lg mb-1">{player.name}</div>
@@ -628,7 +628,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   <button onClick={() => setDispatchConfirm(null)} className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
                     キャンセル
                   </button>
-                  <button onClick={() => handleDispatch(dispatchConfirm.playerId, dispatchConfirm.destKey, dispatchConfirm.universityId)} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition">
+                  <button onClick={() => handleDispatch(dispatchConfirm.playerId, dispatchConfirm.destKey, dispatchConfirm.universityId)} className="btn-warn px-6 py-2 rounded-lg text-sm transition">
                     派遣する
                   </button>
                 </div>
@@ -649,8 +649,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             {Array.from({ length: MAX_CAMP_ROUNDS }, (_, i) => i + 1).map(r => (
               <div key={r} className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
                 r < currentRound ? 'bg-green-600 text-white'
-                  : r === currentRound ? 'bg-blue-600 text-white ring-2 ring-blue-400'
-                  : 'bg-gray-700 text-gray-400'
+                  : r === currentRound ? 'seg-on ring-2' : 'seg'
               }`}>{r}</div>
             ))}
             <span className="text-gray-400 text-xs ml-1">{currentRound}/{MAX_CAMP_ROUNDS}</span>
@@ -780,7 +779,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   key={key}
                   onClick={() => applyPreset(key)}
                   title={preset.desc}
-                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded px-2 py-0.5 text-xs text-gray-300 hover:text-blue-300 transition"
+                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded px-2 py-0.5 text-xs text-gray-300 hover:text-blue-300 transition"
                 >
                   {preset.icon} {preset.name}
                 </button>
@@ -807,7 +806,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
             {/* 派遣中の選手 */}
             {dispatchedPlayers.length > 0 && (
-              <div className="bg-gray-800 rounded-lg p-2 mb-2">
+              <div className="bg-surface-2 rounded-lg p-2 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-orange-400 text-xs font-bold">派遣中:</span>
                   {dispatchedPlayers.map((p, idx) => {
@@ -838,8 +837,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   onClick={() => setCampFilter(f.key)}
                   className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
                     campFilter === f.key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700/60 text-gray-300 hover:text-gray-200 hover:bg-gray-700'
+                      ? 'seg-on' : 'seg'
                   }`}
                 >
                   {f.label} <span className="opacity-60">{f.count}</span>
@@ -848,7 +846,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             </div>
 
             {/* 選手テーブル */}
-            <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto">
+            <div className="bg-surface-2 rounded-lg overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-700/80 text-gray-300 text-xs">
@@ -1123,9 +1121,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                     disabled={!eligible}
                                     title={eligible ? `${dest.name}に派遣\n${dest.desc}` : reason}
                                     className={`px-1 py-0.5 rounded text-xs font-bold transition ${
-                                      eligible
-                                        ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
-                                        : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                      'btn-primary cursor-pointer'
                                     }`}
                                   >
                                     {dest.icon}
@@ -1145,7 +1141,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             <div className="text-center mt-3">
               <button
                 onClick={handleExecuteTraining}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
               >
                 第{currentRound}クール練習を実行
               </button>
@@ -1156,7 +1152,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         {viewMode === 'results' && (
           <>
             {/* 練習結果 */}
-            <div className="bg-gray-800 rounded-lg overflow-hidden mb-3">
+            <div className="bg-surface-2 rounded-lg overflow-hidden mb-3">
               <div className="px-3 py-2 bg-gray-700/80 border-b border-gray-600">
                 <h2 className="text-sm font-bold text-white">第{currentRound}クール 練習結果</h2>
               </div>
@@ -1202,8 +1198,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                   : growth.isAwakening
                                   ? 'bg-yellow-500 text-black font-bold'
                                   : growth.growth > 0
-                                    ? 'bg-green-700/80 text-green-100'
-                                    : 'bg-gray-600/50 text-gray-300'
+                                    ? 'seg-on' : 'seg'
                               }`}
                             >
                               {growth.statName}: {growth.before}→{growth.after}
@@ -1234,8 +1229,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                                   : growth.growth > 0
                                     ? 'bg-teal-700/80 text-teal-100'
                                     : growth.growth < 0
-                                      ? 'bg-red-700/80 text-red-100'
-                                      : 'bg-gray-600/50 text-gray-300'
+                                      ? 'seg-on' : 'seg'
                               }`}
                             >
                               {growth.statName}: {growth.before}→{growth.after}
@@ -1260,7 +1254,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               {currentRound < MAX_CAMP_ROUNDS ? (
                 <button
                   onClick={handleNextRound}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                  className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
                 >
                   次のクールへ（第{currentRound + 1}クール）
                 </button>
@@ -1268,7 +1262,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 <>
                 <button
                   onClick={() => setShowCampReview(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                  className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
                 >
                   キャンプ終了 → 成長確認
                 </button>
@@ -1303,7 +1297,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                   };
                   return (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowCampReview(false)}>
-                      <div className="bg-gray-800 rounded-xl border border-gray-600 max-w-md w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                      <div className="bg-surface-2 rounded-xl border border-gray-600 max-w-md w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-white font-bold text-lg mb-3">キャンプ終了確認</h3>
                         <div className="bg-gray-900/60 rounded-lg p-3 mb-3 space-y-2 text-sm">
                           <div className="flex justify-between text-gray-300">
@@ -1326,7 +1320,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                           <button onClick={() => setShowCampReview(false)} className="px-4 py-1.5 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition">
                             戻る
                           </button>
-                          <button onClick={finalizeCamp} className="bg-green-600 hover:bg-green-500 text-white px-5 py-1.5 rounded font-bold text-sm transition">
+                          <button onClick={finalizeCamp} className="btn-primary px-5 py-1.5 rounded text-sm transition">
                             キャンプ終了
                           </button>
                         </div>
@@ -1342,7 +1336,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
         {viewMode === 'dispatchResults' && (
           <>
-            <div className="bg-gray-800 rounded-lg overflow-hidden mb-3">
+            <div className="bg-surface-2 rounded-lg overflow-hidden mb-3">
               <div className="px-3 py-2 bg-orange-700/80 border-b border-orange-600">
                 <h2 className="text-sm font-bold text-white">派遣結果報告</h2>
               </div>
@@ -1382,7 +1376,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
             <div className="text-center">
               <button
                 onClick={() => setViewMode('summary')}
-                className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
               >
                 成長確認へ
               </button>
@@ -1430,7 +1424,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 <span className="text-cyan-400">■ 自然成長()</span>
                 <span className="text-red-400">■ 衰退</span>
               </div>
-              <div className="bg-gray-800 rounded-lg overflow-hidden overflow-x-auto mb-3">
+              <div className="bg-surface-2 rounded-lg overflow-hidden overflow-x-auto mb-3">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-gray-700/80 text-gray-300 text-xs">
@@ -1518,7 +1512,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               <div className="text-center">
                 <button
                   onClick={onComplete}
-                  className="bg-green-600 hover:bg-green-700 text-white px-10 py-2.5 rounded-lg font-bold text-base transition shadow"
+                  className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"
                 >
                   {completeLabel}
                 </button>

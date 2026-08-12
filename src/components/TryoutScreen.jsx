@@ -282,7 +282,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
   const isUserTurn = currentTeam === 'ユーザー';
 
   return (
-    <div className="p-6 bg-gray-900 min-h-screen">
+    <div className="p-6 bg-surface-1 min-h-screen">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-1">トライアウト</h1>
         <p className="text-gray-400 text-sm mb-5">ドラフト形式で選手を指名してロスターを編成してください</p>
@@ -319,7 +319,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
           {!draftComplete && isUserTurn && userRoster.length > 0 && (
             <button
               onClick={() => finalizeDraft()}
-              className="mt-4 bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg font-semibold transition text-sm"
+              className="btn-danger mt-4 px-5 py-2 rounded-lg font-semibold transition text-sm"
             >
               指名終了
             </button>
@@ -332,7 +332,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               {!isInitialTryout && onComplete && (
                 <button
                   onClick={() => onComplete()}
-                  className="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg font-semibold transition text-sm"
+                  className="btn-primary px-5 py-2 rounded-lg font-semibold transition text-sm"
                 >
                   トライアウト終了 →
                 </button>
@@ -352,7 +352,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
               key={key}
               onClick={() => setViewTab(key)}
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                viewTab === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
+                viewTab === key ? 'seg-on' : 'seg'
               }`}
             >
               {label}
@@ -647,7 +647,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                     key={tab.key}
                     onClick={() => setPositionTab(tab.key)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
-                      positionTab === tab.key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
+                      positionTab === tab.key ? 'seg-on' : 'seg'
                     }`}
                   >
                     {tab.label}
@@ -717,7 +717,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
 
             <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 mb-5">
               <table className="w-full text-xs text-left">
-                <thead className="bg-gray-800 text-gray-300 text-xs sticky top-0 border-b border-gray-700/50">
+                <thead className="bg-surface-2 text-gray-300 text-xs sticky top-0 border-b border-gray-700/50">
                   <tr>
                     {[
                       { label: '名前', key: 'name', tip: null },
@@ -890,7 +890,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
         const career = p.careerHistory || [];
         return (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setDetailCandidate(null)}>
-            <div className="bg-gray-800 rounded-xl border border-gray-600 max-w-2xl w-full max-h-[85vh] overflow-y-auto p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-surface-2 rounded-xl border border-gray-600 max-w-2xl w-full max-h-[85vh] overflow-y-auto p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
               <div className="flex items-center gap-2 flex-wrap mb-3">
                 <span className="text-white font-bold text-lg">{p.name}</span>
                 <span className={`text-xs font-bold rounded px-1.5 py-0.5 ${srcBadge.c}`}>{srcBadge.t}</span>
@@ -913,7 +913,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                 {career.some(c => c.type === 'achievement') && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {career.filter(c => c.type === 'achievement').map((c, i) => (
-                      <span key={i} className={`rounded px-1.5 py-0.5 ${c.result === '優勝' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-700/50' : 'bg-gray-800 text-gray-300 border border-gray-600/50'}`}>
+                      <span key={i} className={`rounded px-1.5 py-0.5 ${c.result === '優勝' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-700/50' : 'bg-surface-2 text-gray-300 border border-gray-600/50'}`}>
                         🏆 {c.grade ? `${c.grade}年時 ` : ''}{c.team ? `${c.team} ` : ''}{c.tournament}{c.result}
                       </span>
                     ))}

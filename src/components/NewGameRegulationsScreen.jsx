@@ -198,7 +198,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
   };
 
   return (
-    <div className="p-8 bg-gray-900 min-h-screen">
+    <div className="p-8 bg-surface-1 min-h-screen">
       <div className="max-w-5xl mx-auto">
         <h1 className="text-4xl font-bold text-white mb-2">⚙️ レギュレーション設定</h1>
         {selectedLeague && (
@@ -210,7 +210,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
         </TutorialHint>
 
         {/* 詳細設定 */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="bg-surface-2 rounded-lg p-6 mb-6">
           <h2 className="text-xl font-bold mb-4 text-white">詳細設定（カスタマイズ可能）</h2>
           <div className="space-y-3 text-white">
             <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
@@ -299,12 +299,12 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
 
         {/* リーグ名設定（カスタムリーグのみ編集可） */}
         {!selectedLeague && (
-          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <div className="bg-surface-2 rounded-lg p-6 mb-6">
             <div className="flex items-center gap-3 mb-3">
               <h2 className="text-xl font-bold text-white">🏆 リーグ名</h2>
               <button
                 onClick={generateRandomLeagueName}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm font-bold transition"
+                className="btn-secondary px-3 py-1 rounded text-sm transition"
               >🎲 ランダム生成</button>
             </div>
             <input
@@ -321,12 +321,12 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
         )}
 
         {/* チーム名設定 */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="bg-surface-2 rounded-lg p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-xl font-bold text-white">📝 チーム名設定</h2>
             <button
               onClick={generateRandomTeamNames}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm font-bold transition"
+              className="btn-secondary px-3 py-1 rounded text-sm transition"
               title="1つの地域から近い都市を選び、リーグ名も地域に合わせて生成します"
             >🎲 ランダム生成</button>
             <span className="text-xs text-gray-300">近隣都市でまとめて生成されます</span>
@@ -445,7 +445,7 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
               ← 戻る
             </button>
           )}
-          <button onClick={handleStart} className="bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-lg font-bold text-xl transition">
+          <button onClick={handleStart} className="btn-primary px-12 py-4 rounded-lg text-xl transition">
             設定完了 - トライアウトへ
           </button>
         </div>

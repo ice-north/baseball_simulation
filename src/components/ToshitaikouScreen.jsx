@@ -48,7 +48,7 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
           <BracketView bracket={q.mainBracket} title="勝者側トーナメント" />
           {q.losersBracket && <BracketView bracket={q.losersBracket} title="敗者復活トーナメント" />}
 
-          <div className="bg-gray-800 rounded-lg p-3 mt-4">
+          <div className="bg-surface-2 rounded-lg p-3 mt-4">
             <h3 className="text-green-400 font-bold text-sm mb-1">代表チーム</h3>
             {q.qualifiedTeams.map((name, i) => {
               const def = q.teamDefsMap[name];
@@ -85,7 +85,7 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
                 key={regionId}
                 onClick={() => setSelectedRegion(regionId)}
                 className={`text-left p-3 rounded-lg border transition hover:border-blue-500 ${
-                  userInRegion ? 'bg-blue-900/30 border-blue-700' : 'bg-gray-800 border-gray-700'
+                  userInRegion ? 'bg-blue-900/30 border-blue-700' : 'bg-surface-2 border-gray-700'
                 }`}
               >
                 <div className="flex justify-between items-center mb-1">
@@ -110,7 +110,7 @@ const ToshitaikouQualifierScreen = ({ toshitaikou, userTeamName, onContinue }) =
         <div className="text-center mt-6">
           <button
             onClick={onContinue}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-3 rounded-lg transition"
+            className="btn-primary px-8 py-3 rounded-lg transition"
           >
             8月の本戦に向けて日程を進める
           </button>
@@ -149,7 +149,7 @@ const ToshitaikouMainScreen = ({ toshitaikou, userTeamName, onContinue }) => {
         <div className="text-center mt-6">
           <button
             onClick={onContinue}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-3 rounded-lg transition"
+            className="btn-primary px-8 py-3 rounded-lg transition"
           >
             日程に戻る
           </button>

@@ -394,7 +394,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
       <div className="overflow-y-auto max-h-[420px]">
         <table className="w-full text-left">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-gray-800 border-b border-gray-700/30 text-xs font-medium">
+            <tr className="bg-surface-2 border-b border-gray-700/30 text-xs font-medium">
               <th colSpan={3} className="py-0.5 pl-2 text-gray-400">選手情報</th>
               <th colSpan={2} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">打撃</th>
               <th colSpan={3} className="py-0.5 px-1 text-center text-cyan-400/60 border-l border-gray-700/30">フィジカル</th>
@@ -402,7 +402,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
               <th colSpan={2} className="py-0.5 px-1 text-center text-green-400/60 border-l border-gray-700/30">出場</th>
               <th className="py-0.5 px-1 text-center text-gray-400 border-l border-gray-700/30">総合</th>
             </tr>
-            <tr className="bg-gray-800 border-b border-gray-700/50 text-xs text-gray-300">
+            <tr className="bg-surface-2 border-b border-gray-700/50 text-xs text-gray-300">
               <th className="py-1 pl-2 text-left font-medium">名前</th>
               <th className="py-1 px-1 font-medium">守備</th>
               <th className="py-1 px-1 text-center font-medium">齢</th>
@@ -486,7 +486,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
         <button
           onClick={() => setTradeTab('propose')}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
-            tradeTab === 'propose' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
+            tradeTab === 'propose' ? 'seg-on' : 'seg'
           }`}
         >
           提案する
@@ -494,12 +494,12 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
         <button
           onClick={() => setTradeTab('inbox')}
           className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
-            tradeTab === 'inbox' ? 'bg-yellow-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
+            tradeTab === 'inbox' ? 'seg-on' : 'seg'
           }`}
         >
           受信提案
           {aiProposals.length > 0 && (
-            <span className="bg-red-500 text-white text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">
+            <span className="btn-danger text-xs w-4 h-4 rounded-full flex items-center justify-center">
               {aiProposals.length}
             </span>
           )}
@@ -559,7 +559,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
                   <div className="flex gap-2">
                     <button
                       onClick={() => acceptAIProposal(proposal)}
-                      className="px-4 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm font-semibold transition"
+                      className="btn-primary px-4 py-1.5 rounded-lg text-sm font-semibold transition"
                     >
                       承諾する
                     </button>
@@ -607,7 +607,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
             <div className="overflow-y-auto max-h-[420px]">
               <table className="w-full text-left">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-gray-800 border-b border-gray-700/30 text-xs font-medium">
+                  <tr className="bg-surface-2 border-b border-gray-700/30 text-xs font-medium">
                     <th colSpan={3} className="py-0.5 pl-2 text-gray-400">選手情報</th>
                     <th colSpan={2} className="py-0.5 px-1 text-center text-blue-400/60 border-l border-gray-700/30">打撃</th>
                     <th colSpan={3} className="py-0.5 px-1 text-center text-cyan-400/60 border-l border-gray-700/30">フィジカル</th>
@@ -615,7 +615,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
                     <th colSpan={2} className="py-0.5 px-1 text-center text-green-400/60 border-l border-gray-700/30">出場</th>
                     <th className="py-0.5 px-1 text-center text-gray-400 border-l border-gray-700/30">総合</th>
                   </tr>
-                  <tr className="bg-gray-800 border-b border-gray-700/50 text-xs text-gray-300">
+                  <tr className="bg-surface-2 border-b border-gray-700/50 text-xs text-gray-300">
                     <th className="py-1 pl-2 text-left font-medium">名前</th>
                     <th className="py-1 px-1 font-medium">守備</th>
                     <th className="py-1 px-1 text-center font-medium">齢</th>
@@ -665,9 +665,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
               onClick={executeTrade}
               disabled={!canTrade()}
               className={`px-6 py-2.5 rounded-lg font-semibold text-sm transition ${
-                canTrade()
-                  ? 'bg-yellow-600 text-white hover:bg-yellow-500'
-                  : 'bg-gray-700/60 text-gray-400 cursor-not-allowed'
+                'btn-primary'
               }`}
             >
               トレード提案

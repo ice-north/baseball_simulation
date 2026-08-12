@@ -35,7 +35,7 @@ export default function TutorialHint({ id, title, children, className = '' }) {
         <div className="mt-2 flex items-center gap-3">
           <button
             onClick={() => { markHintSeen(id); setVisible(false); }}
-            className="text-xs font-bold px-2.5 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white"
+            className="btn-primary text-xs px-2.5 py-1 rounded"
           >
             分かった
           </button>

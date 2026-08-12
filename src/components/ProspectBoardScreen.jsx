@@ -134,20 +134,20 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
         <div className="flex gap-1">
           {[['all', '全て'], ['highschool', '高校'], ['university', '大学']].map(([v, l]) => (
             <button key={v} onClick={() => setSourceFilter(v)}
-              className={`px-2 py-1 rounded text-xs font-medium ${sourceFilter === v ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{l}</button>
+              className={`px-2 py-1 rounded text-xs font-medium ${sourceFilter === v ? 'seg-on' : 'seg'}`}>{l}</button>
           ))}
         </div>
         <div className="flex gap-1">
           {[['all', '全'], ['pitcher', '投'], ['catcher', '捕'], ['infield', '内'], ['outfield', '外']].map(([v, l]) => (
             <button key={v} onClick={() => setPosFilter(v)}
-              className={`px-2 py-1 rounded text-xs font-medium ${posFilter === v ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{l}</button>
+              className={`px-2 py-1 rounded text-xs font-medium ${posFilter === v ? 'seg-on' : 'seg'}`}>{l}</button>
           ))}
         </div>
         <div className="flex gap-1 ml-auto">
           <span className="text-xs text-gray-300 self-center">並び替え:</span>
           {[['potential', '将来性'], ['current', '現総合'], ['age', '年齢']].map(([v, l]) => (
             <button key={v} onClick={() => setSortKey(v)}
-              className={`px-2 py-1 rounded text-xs font-medium ${sortKey === v ? 'bg-cyan-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{l}</button>
+              className={`px-2 py-1 rounded text-xs font-medium ${sortKey === v ? 'seg-on' : 'seg'}`}>{l}</button>
           ))}
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
       {/* ランキング表 */}
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
         <table className="w-full text-sm border-collapse">
-          <thead className="sticky top-0 bg-gray-900 z-10">
+          <thead className="sticky top-0 bg-surface-1 z-10">
             <tr className="text-gray-300 border-b border-gray-700 text-xs">
               <th className="text-right pr-2 py-2 w-10">#</th>
               <th className="text-left py-2 pl-1">選手</th>
@@ -190,7 +190,7 @@ export default function ProspectBoardScreen({ onBack, embedded = false }) {
                       <span className="text-xs text-cyan-300 font-bold">確定</span>
                     ) : (
                       <button onClick={() => investigate(x.player)}
-                        className="text-xs px-2 py-0.5 rounded bg-cyan-800/70 hover:bg-cyan-700 text-cyan-100 border border-cyan-600/50 font-bold"
+                        className="btn-primary text-xs px-2 py-0.5 rounded border"
                         title="調査するとスカウト精度が上がる">
                         調査<span className="opacity-60 ml-0.5">{lvl}/{MAX_SCOUT_LEVEL}</span>
                       </button>

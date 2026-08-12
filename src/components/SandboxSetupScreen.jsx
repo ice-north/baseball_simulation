@@ -206,9 +206,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
             }}
             disabled={!canStart()}
             className={`px-8 py-3 rounded-lg font-bold text-lg transition shadow-lg ${
-              canStart()
-                ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+              'btn-primary'
             }`}
           >
             シーズン開始 →
@@ -238,7 +236,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
         </div>
 
         {/* チーム操作 */}
-        <div className="bg-gray-800 rounded-lg p-4 mb-4">
+        <div className="bg-surface-2 rounded-lg p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-white">{team.name} - {team.players.length}人</h2>
             <div className="flex gap-2">
@@ -248,26 +246,26 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                   generatePitchingRotation(activeTeam);
                   forceUpdate();
                 }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                className="btn-secondary px-3 py-1.5 rounded text-sm transition"
               >
                 AIオーダー編成
               </button>
               <button
                 onClick={() => { generateAllTeamsLineup(); forceUpdate(); }}
-                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                className="btn-primary px-3 py-1.5 rounded text-sm transition"
               >
                 全チーム一括編成
               </button>
               <button
                 onClick={handleImportDraftedPlayers}
-                className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                className="btn-secondary px-3 py-1.5 rounded text-sm transition"
                 title="資料室からエクスポートしたドラフト指名選手JSONを読み込み"
               >
                 📤 ドラフト指名選手をインポート
               </button>
               <button
                 onClick={() => setShowObPicker(true)}
-                className="bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1.5 rounded text-sm font-bold transition"
+                className="btn-secondary px-3 py-1.5 rounded text-sm transition"
                 title="これまでプロへ送り出した歴代の教え子を呼び出す"
               >
                 🎓 OB名鑑から追加
@@ -348,7 +346,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
       {/* 選手編集モーダル */}
       {editingPlayer && editFormData && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-5 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface-2 rounded-lg p-5 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-white">選手編集</h2>
               <button onClick={cancelEdit} className="text-gray-300 hover:text-white text-2xl">✕</button>
@@ -565,7 +563,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
             {/* ボタン */}
             <div className="flex justify-end gap-3">
               <button onClick={cancelEdit} className="px-5 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition text-sm">キャンセル</button>
-              <button onClick={savePlayerEdit} className="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition text-sm font-bold">保存</button>
+              <button onClick={savePlayerEdit} className="btn-primary px-5 py-2 rounded transition text-sm">保存</button>
             </div>
           </div>
         </div>
@@ -576,7 +574,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
         const obs = getObRegistry();
         return (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowObPicker(false)}>
-            <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-3xl flex flex-col" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+            <div className="bg-surface-2 rounded-xl border border-gray-700 w-full max-w-3xl flex flex-col" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2 flex-shrink-0">
                 <h3 className="text-white font-bold">🎓 OB名鑑</h3>
                 <span className="text-xs text-gray-300">プロへ送り出した歴代の教え子 {obs.length}名</span>
@@ -606,7 +604,7 @@ const SandboxSetupScreen = ({ allTeams, onComplete, generateOptimalLineup, gener
                           <span className="text-gray-200 font-mono tabular-nums flex-1 truncate">{abil}</span>
                           <button
                             onClick={() => handleAddOb(ob)}
-                            className="bg-cyan-600 hover:bg-cyan-500 text-white px-2 py-1 rounded font-bold flex-shrink-0"
+                            className="btn-primary px-2 py-1 rounded flex-shrink-0"
                           >
                             追加
                           </button>

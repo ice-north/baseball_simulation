@@ -44,7 +44,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
               return (
                 <button key={region.id}
                   onClick={() => setSelectedRegion(region)}
-                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-500 rounded-xl p-4 text-left transition group"
+                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-amber-500 rounded-xl p-4 text-left transition group"
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-base font-bold text-white group-hover:text-amber-400 transition truncate mr-2">{region.name}</div>
@@ -87,7 +87,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
   const renderTeamButton = (team) => (
     <button key={team.id}
       onClick={() => setSelectedTeam(team)}
-      className={`bg-gray-800 hover:bg-gray-700 border rounded-lg p-4 text-left transition group ${
+      className={`bg-surface-2 hover:bg-gray-700 border rounded-lg p-4 text-left transition group ${
         selectedTeam?.id === team.id ? 'border-amber-400 bg-gray-700' : 'border-gray-700 hover:border-amber-500'
       }`}
     >
@@ -131,7 +131,7 @@ const UniversityTeamSelectScreen = ({ onSelect, onBack }) => {
             className="text-gray-300 hover:text-white text-sm transition">← リーグ選択に戻る</button>
           {selectedTeam && (
             <button onClick={() => onSelect(selectedTeam)}
-              className="bg-amber-600 hover:bg-amber-500 text-white px-6 py-2 rounded-lg font-bold transition">
+              className="btn-warn px-6 py-2 rounded-lg transition">
               {selectedTeam.name}で始める
             </button>
           )}

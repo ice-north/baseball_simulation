@@ -37,7 +37,7 @@ export function RankBadge({ value, isVel = false, isSta = false, className = '' 
   const rank = getAbilityRank(n, isVel, isSta);
   const color = getRankColor(rank);
   return (
-    <span className={`inline-flex items-center justify-center w-5 h-5 rounded font-mono font-extrabold text-xs bg-gray-800 border border-gray-700 ${color} ${className}`}>
+    <span className={`inline-flex items-center justify-center w-5 h-5 rounded font-mono font-extrabold text-xs bg-surface-2 border border-gray-700 ${color} ${className}`}>
       {rank}
     </span>
   );
@@ -77,7 +77,7 @@ export function OverallBadge({ player, className = '' }) {
   const rating = overallRating(player);
   if (rating == null) {
     return (
-      <span className={`inline-flex items-center justify-center w-5 h-5 rounded font-mono font-extrabold text-xs bg-gray-800 border border-gray-700 text-gray-400 ${className}`}>?</span>
+      <span className={`inline-flex items-center justify-center w-5 h-5 rounded font-mono font-extrabold text-xs bg-surface-2 border border-gray-700 text-gray-400 ${className}`}>?</span>
     );
   }
   return <RankBadge value={rating} className={className} />;

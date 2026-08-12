@@ -173,7 +173,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsTab('growth')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'growth' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              statsTab === 'growth' ? 'seg-on' : 'seg'
             }`}
           >
             成長
@@ -182,7 +182,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsTab('season')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'season' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              statsTab === 'season' ? 'seg-on' : 'seg'
             }`}
           >
             シーズン
@@ -190,7 +190,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsTab('career')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsTab === 'career' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              statsTab === 'career' ? 'seg-on' : 'seg'
             }`}
           >
             通算
@@ -199,7 +199,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsType('batting')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsType === 'batting' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              statsType === 'batting' ? 'seg-on' : 'seg'
             }`}
           >
             野手
@@ -207,7 +207,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
           <button
             onClick={() => setStatsType('pitching')}
             className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              statsType === 'pitching' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              statsType === 'pitching' ? 'seg-on' : 'seg'
             }`}
           >
             投手
@@ -227,7 +227,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
             <div className="overflow-x-auto">
               <table className="tabular-nums w-full text-xs text-left">
                 <thead>
-                  <tr className="bg-gray-800 border-b border-gray-700/50 text-xs text-gray-300">
+                  <tr className="bg-surface-2 border-b border-gray-700/50 text-xs text-gray-300">
                     <th className="py-2 px-3 font-medium">選手</th>
                     <th className="py-2 px-2 font-medium">守備</th>
                     <th className="py-2 px-2 font-medium text-center">齢</th>
@@ -287,7 +287,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       )}
 
       {statsType === 'batting' && (
-        <div className="bg-gray-800 rounded-lg p-3">
+        <div className="bg-surface-2 rounded-lg p-3">
           <h2 className="text-sm font-bold mb-2 text-white">
             {statsTab === 'season' ? 'シーズン' : '通算'}野手成績 (上位20)
           </h2>
@@ -356,7 +356,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
       )}
 
       {statsType === 'pitching' && (
-        <div className="bg-gray-800 rounded-lg p-3">
+        <div className="bg-surface-2 rounded-lg p-3">
           <h2 className="text-sm font-bold mb-2 text-white">
             {statsTab === 'season' ? 'シーズン' : '通算'}投手成績 (上位20)
           </h2>

@@ -82,8 +82,8 @@ const PlayerCard = ({ player, isActive, canActivate, isStarter, onClick }) => {
       className={`flex items-center gap-1.5 px-2 py-1.5 rounded border text-xs select-none transition-colors
         ${blocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
         ${isActive
-          ? 'bg-gray-800 border-gray-600 ' + (blocked ? '' : 'hover:bg-red-950/60')
-          : 'bg-gray-900 border-gray-700 ' + (blocked ? '' : 'hover:bg-green-950/60')}
+          ? 'bg-surface-2 border-gray-600 ' + (blocked ? '' : 'hover:bg-red-950/60')
+          : 'bg-surface-1 border-gray-700 ' + (blocked ? '' : 'hover:bg-green-950/60')}
         ${isStarter ? 'border-yellow-600/40' : ''}`}
     >
       {/* ポジションバッジ */}
@@ -267,7 +267,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
             </div>
             <button
               onClick={handleAutoSelect}
-              className="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded transition-colors"
+              className="btn-primary text-xs px-3 py-1.5 rounded transition-colors"
             >
               AI自動選択
             </button>
@@ -280,7 +280,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <button
           onClick={() => setActiveTab('roster')}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-            activeTab === 'roster' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
+            activeTab === 'roster' ? 'seg-on' : 'seg'
           }`}
         >
           📋 ベンチ登録（{activePlayers.length}/{ACTIVE_LIMIT}）
@@ -288,7 +288,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
         <button
           onClick={() => setActiveTab('lineup')}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-            activeTab === 'lineup' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-200 hover:bg-gray-700/60'
+            activeTab === 'lineup' ? 'seg-on' : 'seg'
           }`}
         >
           ⚾ スタメン設定
@@ -320,7 +320,7 @@ const RosterScreen = ({ seasonData, gameMode }) => {
                 { key: 'year',     label: '学年順' },
               ].map(s => (
                 <button key={s.key} onClick={() => setSortMode(s.key)}
-                  className={`text-xs px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                  className={`text-xs px-2 py-0.5 rounded transition-colors ${sortMode === s.key ? 'seg-on' : 'seg'}`}>
                   {s.label}
                 </button>
               ))}

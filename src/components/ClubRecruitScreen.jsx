@@ -63,9 +63,9 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
 
   if (confirmed) {
     return (
-      <div className="p-4 bg-gray-900 min-h-screen">
+      <div className="p-4 bg-surface-1 min-h-screen">
         <h1 className="text-xl font-bold text-white mb-3">入部受付完了</h1>
-        <div className="mb-4 bg-gray-800 rounded p-3">
+        <div className="mb-4 bg-surface-2 rounded p-3">
           <div className="text-xs text-gray-300">
             新規入部: <span className="text-green-400 font-bold">{acceptedCount}名</span>
           </div>
@@ -78,7 +78,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
             <h2 className="text-sm font-bold text-green-400 mb-2">入部選手</h2>
             <div className="grid grid-cols-2 gap-1">
               {candidates.filter(c => accepted[c.player.id]).map(c => (
-                <div key={c.player.id} className="text-xs text-gray-300 bg-gray-800 p-1.5 rounded">
+                <div key={c.player.id} className="text-xs text-gray-300 bg-surface-2 p-1.5 rounded">
                   <span className="text-yellow-300">{POSITION_NAMES[c.player.position]}</span>
                   <span className="ml-1 text-white font-bold">{c.player.name}</span>
                   <span className="text-gray-400 ml-1">({c.player.age}歳)</span>
@@ -89,7 +89,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
         )}
         <button
           onClick={onComplete}
-          className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
+          className="btn-primary mt-4 px-6 py-2 rounded"
         >
           オフシーズンへ進む
         </button>
@@ -98,7 +98,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
   }
 
   return (
-    <div className="p-4 bg-gray-900 min-h-screen">
+    <div className="p-4 bg-surface-1 min-h-screen">
       <h1 className="text-xl font-bold text-white mb-1">入部希望者</h1>
       <p className="text-gray-300 text-xs mb-4">
         プロや企業チームに入れなかった選手たちが入部を希望しています。受け入れる選手を選んでください。
@@ -111,7 +111,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
       </div>
 
       {candidates.length === 0 ? (
-        <div className="bg-gray-800 rounded-lg p-6 text-center">
+        <div className="bg-surface-2 rounded-lg p-6 text-center">
           <p className="text-gray-300">今年は入部希望者がいませんでした。</p>
         </div>
       ) : (
@@ -123,7 +123,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
               <div
                 key={player.id}
                 className={`border rounded-lg p-3 transition cursor-pointer ${
-                  isAccepted ? 'bg-green-900/30 border-green-600' : 'bg-gray-800 border-gray-700 hover:border-gray-500'
+                  isAccepted ? 'bg-green-900/30 border-green-600' : 'bg-surface-2 border-gray-700 hover:border-gray-500'
                 }`}
                 onClick={() => setAccepted(prev => ({ ...prev, [player.id]: !prev[player.id] }))}
               >
@@ -137,7 +137,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
                     </span>
                   </div>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                    isAccepted ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'
+                    isAccepted ? 'seg-on' : 'seg'
                   }`}>
                     {isAccepted ? '受入' : '見送り'}
                   </span>
@@ -173,7 +173,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
       <div className="mt-4 flex items-center gap-4">
         <button
           onClick={handleConfirm}
-          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold"
+          className="btn-primary px-6 py-2 rounded"
         >
           {acceptedCount > 0 ? `${acceptedCount}名を受け入れて確定` : '入部なしで確定'}
         </button>

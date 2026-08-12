@@ -160,7 +160,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
           <div className="flex gap-2 flex-wrap">
             {[0, 1, 2].map(i => (
               <button key={i} onClick={() => handleRestoreEmergency(i)}
-                className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold">
+                className="btn-warn px-3 py-1.5 rounded text-sm">
                 スロット{i + 1}へ復元
               </button>
             ))}
@@ -173,7 +173,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
       )}
 
       {/* 現在の進行状況 */}
-      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+      <div className="bg-surface-2 rounded-lg p-6 mb-6">
         <h2 className="text-xl font-bold text-white mb-4">📍 現在の進行状況</h2>
         {seasonData ? (
           <div className="text-gray-300">
@@ -188,7 +188,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
 
       {/* オートセーブ枠 */}
       {autosaveInfo && (
-        <div className="bg-gray-800 rounded-lg p-4 mb-4 border border-cyan-800/40">
+        <div className="bg-surface-2 rounded-lg p-4 mb-4 border border-cyan-800/40">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <div className="text-cyan-200 font-bold text-sm">💾 オートセーブ</div>
@@ -197,7 +197,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
               </div>
             </div>
             <button onClick={handleLoadAutosave} disabled={!onLoadAutosave}
-              className="px-4 py-2 rounded font-bold text-sm bg-cyan-700 hover:bg-cyan-600 text-white disabled:bg-gray-600 disabled:text-gray-400">
+              className="btn-primary px-4 py-2 rounded text-sm disabled: disabled:">
               オートセーブをロード
             </button>
           </div>
@@ -206,7 +206,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
       )}
 
       {/* 3つのセーブスロット */}
-      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+      <div className="bg-surface-2 rounded-lg p-6 mb-6">
         <h2 className="text-xl font-bold text-white mb-4">💾 セーブスロット</h2>
         <div className="space-y-4">
           {slotNames.map((name, idx) => {
@@ -231,7 +231,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                     onClick={() => handleSave(idx)}
                     disabled={!seasonData}
                     className={`flex-1 px-4 py-2 rounded font-bold transition ${
-                      seasonData ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                      'btn-primary'
                     }`}
                   >
                     {info ? '上書き保存' : '新規保存'}
@@ -240,7 +240,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                     onClick={() => handleLoad(idx)}
                     disabled={!info}
                     className={`flex-1 px-4 py-2 rounded font-bold transition ${
-                      info ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                      'btn-primary'
                     }`}
                   >
                     ロード
@@ -249,7 +249,7 @@ const SaveLoadScreen = ({ onSave, onLoad, onLoadAutosave, onDelete, saveSlots, s
                     onClick={() => handleDelete(idx)}
                     disabled={!info}
                     className={`px-4 py-2 rounded font-bold transition ${
-                      info ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                      'btn-primary'
                     }`}
                   >
                     🗑️

@@ -165,7 +165,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4">
+    <div className="min-h-screen bg-surface-1 text-white p-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           {onBack && (
@@ -182,7 +182,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
             key={tab.key}
             onClick={() => { setSourceFilter(tab.key); setAgeFilter(null); }}
             className={`px-3 py-1 rounded text-sm transition-colors ${
-              sourceFilter === tab.key ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              sourceFilter === tab.key ? 'seg-on' : 'seg'
             }`}
           >
             {tab.label}
@@ -194,18 +194,18 @@ export default function DebugPlayerViewScreen({ onBack }) {
         <input
           type="text" value={searchText} onChange={e => setSearchText(e.target.value)}
           placeholder="選手名で検索..."
-          className="w-64 px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          className="w-64 px-3 py-1.5 bg-surface-2 border border-gray-600 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
         />
       </div>
 
       <div className="flex flex-wrap gap-1 mb-4">
         <button onClick={() => setAgeFilter(null)}
-          className={`px-2 py-0.5 rounded text-xs transition-colors ${ageFilter === null ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+          className={`px-2 py-0.5 rounded text-xs transition-colors ${ageFilter === null ? 'seg-on' : 'seg'}`}>
           全年齢
         </button>
         {availableAges.map(age => (
           <button key={age} onClick={() => setAgeFilter(age)}
-            className={`px-2 py-0.5 rounded text-xs transition-colors ${ageFilter === age ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+            className={`px-2 py-0.5 rounded text-xs transition-colors ${ageFilter === age ? 'seg-on' : 'seg'}`}>
             {age}歳
           </button>
         ))}
@@ -216,7 +216,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
-            <thead className="sticky top-0 bg-gray-900">
+            <thead className="sticky top-0 bg-surface-1">
               <tr className="border-b border-gray-700">
                 {COLUMNS.map(col => (
                   <th key={col.key}

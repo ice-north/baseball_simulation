@@ -131,7 +131,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`px-4 py-2 text-sm font-bold rounded-t transition ${
-              tab === t.id ? 'bg-gray-800 text-white border-b-2 border-green-400' : 'text-gray-300 hover:text-gray-200'
+              tab === t.id ? 'bg-surface-2 text-white border-b-2 border-green-400' : 'text-gray-300 hover:text-gray-200'
             }`}
           >
             {t.label}
@@ -143,7 +143,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
       {tab === 'staff' && (
         <div>
           {/* チーム総合ボーナス */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-2">チームスタッフ総合力</h2>
             <div className="grid grid-cols-2 gap-x-6 gap-y-0">
               {Object.entries(STAFF_ABILITIES).map(([key, info]) => (
@@ -157,12 +157,12 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
 
           {/* スタッフ一覧 */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-gray-300">所属スタッフ ({staff.length}名)</h2>
               <button
                 onClick={handleOpenMarket}
-                className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded text-xs font-bold"
+                className="btn-primary px-3 py-1.5 rounded text-xs"
               >
                 スタッフ市場を見る
               </button>
@@ -229,8 +229,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                 }}
                                 className={`px-2.5 py-1 text-xs rounded transition ${
                                   s.role === roleKey
-                                    ? 'bg-green-700 text-white font-bold'
-                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                                    ? 'seg-on font-bold' : 'seg'
                                 }`}
                               >
                                 {rp.name}
@@ -239,7 +238,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           </div>
                           <button
                             onClick={(e) => { e.stopPropagation(); setConfirmFire(s); }}
-                            className="px-3 py-1 bg-red-800 hover:bg-red-700 text-red-200 rounded text-xs"
+                            className="btn-danger px-3 py-1 rounded text-xs"
                           >
                             解雇
                           </button>
@@ -254,7 +253,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
 
           {/* スタッフ市場 */}
           {marketStaff && (
-            <div className="bg-gray-800 rounded-lg p-4">
+            <div className="bg-surface-2 rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-bold text-gray-300">スタッフ市場</h2>
                 <div className="flex gap-2">
@@ -296,7 +295,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                     <span className="text-gray-300 w-16 text-right">{getStaffSalary(s)}万円</span>
                     <button
                       onClick={() => setConfirmHire(s)}
-                      className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded text-xs font-bold"
+                      className="btn-primary px-2 py-1 rounded text-xs"
                     >
                       雇用
                     </button>
@@ -312,7 +311,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
       {tab === 'scout' && (
         <div>
           {/* スカウト能力 */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">スカウト能力</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -342,7 +341,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
 
           {/* スカウト指示状況 */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">スカウト指示状況</h2>
             <p className="text-xs text-gray-400 mb-3">各スカウトにタスクを割り当てると、中止するまで繰り返し行動します</p>
 
@@ -430,7 +429,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             setDispatchMessage({ text: `${s.name}のタスクを中止しました`, ok: true });
                             setTimeout(() => setDispatchMessage(null), 3000);
                           }}
-                          className="ml-auto px-2.5 py-1 bg-red-800 hover:bg-red-700 text-red-200 rounded text-xs font-bold transition"
+                          className="btn-danger ml-auto px-2.5 py-1 rounded text-xs transition"
                         >
                           中止
                         </button>
@@ -484,7 +483,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                             setRefreshTick(t => t + 1);
                             setTimeout(() => setDispatchMessage(null), 3000);
                           }}
-                          className="px-2 py-0.5 rounded text-xs font-bold bg-cyan-700 hover:bg-cyan-600 text-white transition"
+                          className="btn-primary px-2 py-0.5 rounded text-xs transition"
                         >
                           自動調査
                         </button>
@@ -497,7 +496,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
 
           {/* 自動調査フィルタ */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-bold text-gray-300">自動調査フィルタ</h2>
                 <div className="flex gap-2">
@@ -506,7 +505,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                   )}
                   <button
                     onClick={() => setShowFilterPanel(!showFilterPanel)}
-                    className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs font-bold"
+                    className="btn-primary px-3 py-1 rounded text-xs"
                   >
                     {showFilterPanel ? '閉じる' : '設定'}
                   </button>
@@ -536,7 +535,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       <label className="text-xs text-gray-300 block mb-0.5">年齢（最小）</label>
                       <input type="number" min="15" max="40" value={filterDraft.ageMin}
                         onChange={e => setFilterDraft(f => ({ ...f, ageMin: e.target.value ? parseInt(e.target.value) : '' }))}
-                        className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                        className="w-16 bg-surface-2 border border-gray-600 rounded px-2 py-1 text-xs text-white"
                         placeholder="--" />
                     </div>
                     <span className="text-gray-400 text-xs pb-1">〜</span>
@@ -544,7 +543,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       <label className="text-xs text-gray-300 block mb-0.5">年齢（最大）</label>
                       <input type="number" min="15" max="40" value={filterDraft.ageMax}
                         onChange={e => setFilterDraft(f => ({ ...f, ageMax: e.target.value ? parseInt(e.target.value) : '' }))}
-                        className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white"
+                        className="w-16 bg-surface-2 border border-gray-600 rounded px-2 py-1 text-xs text-white"
                         placeholder="--" />
                     </div>
                   </div>
@@ -561,7 +560,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                           }))}
                           className={`px-2 py-0.5 rounded text-xs font-bold transition ${
                             (filterDraft.positions || []).includes(pos)
-                              ? 'bg-cyan-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              ? 'seg-on' : 'seg'
                           }`}
                         >
                           {POSITION_NAMES[pos] || pos}
@@ -593,7 +592,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                 ...f,
                                 abilities: { ...(f.abilities || {}), [key]: { ...(f.abilities?.[key] || {}), min: e.target.value ? parseInt(e.target.value) : null } }
                               }))}
-                              className="w-12 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs text-white"
+                              className="w-12 bg-surface-2 border border-gray-600 rounded px-1 py-0.5 text-xs text-white"
                               placeholder="下限" />
                             <span className="text-gray-400 text-xs">〜</span>
                             <input type="number" min="0" max={max || 99}
@@ -602,7 +601,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                 ...f,
                                 abilities: { ...(f.abilities || {}), [key]: { ...(f.abilities?.[key] || {}), max: e.target.value ? parseInt(e.target.value) : null } }
                               }))}
-                              className="w-12 bg-gray-800 border border-gray-600 rounded px-1 py-0.5 text-xs text-white"
+                              className="w-12 bg-surface-2 border border-gray-600 rounded px-1 py-0.5 text-xs text-white"
                               placeholder="上限" />
                           </div>
                         );
@@ -625,7 +624,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       setAutoInvestigationFilter(teamData, f);
                       setShowFilterPanel(false);
                       setRefreshTick(t => t + 1);
-                    }} className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded text-xs font-bold">
+                    }} className="btn-primary px-3 py-1.5 rounded text-xs">
                       フィルタを適用
                     </button>
                     <button onClick={() => {
@@ -717,7 +716,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               const getRateColor = (r) => r >= 80 ? 'text-pink-400' : r >= 70 ? 'text-red-400' : r >= 60 ? 'text-orange-400' : r >= 50 ? 'text-yellow-400' : r >= 40 ? 'text-green-400' : r >= 30 ? 'text-blue-400' : 'text-gray-300';
 
               return (
-                <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                <div className="bg-surface-2 rounded-lg p-4 mb-4">
                   <h3 className="text-sm font-bold text-yellow-400 mb-3">
                     発見選手一覧（{allPlayers.length}名）
                   </h3>
@@ -872,7 +871,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                                   setRefreshTick(t => t + 1);
                                   setTimeout(() => setDispatchMessage(null), 3000);
                                 }}
-                                className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold rounded transition">
+                                className="btn-primary px-2 py-1 text-xs rounded transition">
                                 {s.name} (眼{s.abilities?.scoutingEye || 0})
                               </button>
                             ))}
@@ -887,7 +886,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             })()}
 
           {/* スカウト入団スケジュール */}
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-surface-2 rounded-lg p-4">
             <h2 className="text-sm font-bold text-gray-300 mb-2">スカウト入団スケジュール</h2>
             <div className="text-xs text-gray-300 space-y-1">
               <div className="flex items-center gap-2">
@@ -922,7 +921,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
         const pipeStrengthColor = (s) => s >= 3 ? 'text-green-400' : s === 2 ? 'text-yellow-400' : 'text-gray-300';
         return (
           <div>
-            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+            <div className="bg-surface-2 rounded-lg p-4 mb-4">
               <h2 className="text-sm font-bold text-gray-300 mb-1">大学パイプ一覧</h2>
               <p className="text-xs text-gray-400 mb-3">
                 チーム内のOB（大学出身選手）を通じた大学との繋がりです。パイプがある大学にはキャンプで選手を派遣できます。
@@ -944,14 +943,14 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             </div>
 
             {pipes.length === 0 ? (
-              <div className="bg-gray-800 rounded-lg p-8 text-center">
+              <div className="bg-surface-2 rounded-lg p-8 text-center">
                 <p className="text-gray-300">大学出身の選手がいないため、パイプがありません。</p>
                 <p className="text-xs text-gray-400 mt-2">大卒選手をスカウトすると、その出身大学とのパイプが生まれます。</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {pipes.map(pipe => (
-                  <div key={pipe.universityId} className="bg-gray-800 rounded-lg p-4">
+                  <div key={pipe.universityId} className="bg-surface-2 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${gradeColor(pipe.rank)} bg-gray-700`}>{pipe.rank}</span>
@@ -1010,7 +1009,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
       {tab === 'finance' && (
         <div>
           {/* 予算サマリー */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">{seasonData?.year || 1}年目 予算</h2>
             <div className="grid grid-cols-5 gap-2 mb-3">
               <div className="bg-gray-750 rounded p-2">
@@ -1055,7 +1054,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
 
           {/* スポンサー一覧 */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">スポンサー契約</h2>
             {(cd.sponsors || []).length === 0 ? (
               <p className="text-xs text-gray-400 py-2 text-center">現在スポンサー契約はありません</p>
@@ -1082,7 +1081,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
 
           {/* 大会ボーナス条件 */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-2">大会成績ボーナス条件</h2>
             <div className="text-xs text-gray-300 space-y-1">
               <div className="flex justify-between"><span>都市対抗/日本選手権 優勝</span><span className="text-yellow-400 font-bold">+2,000万</span></div>
@@ -1094,7 +1093,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
           </div>
 
           {/* 人件費内訳 */}
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">人件費 <span className="text-red-400">{totalSalary.toLocaleString()}万円</span></h2>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className="bg-gray-750 rounded p-3">
@@ -1162,7 +1161,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             </details>
           </div>
 
-          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <div className="bg-surface-2 rounded-lg p-4 mb-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">注目度</h2>
             <div className="flex items-center gap-4 mb-3">
               <div className="flex-1">
@@ -1188,7 +1187,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
             </div>
           </div>
 
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-surface-2 rounded-lg p-4">
             <h2 className="text-sm font-bold text-gray-300 mb-3">チーム実績</h2>
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-gray-750 rounded p-3 text-center">
@@ -1211,7 +1210,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
       {/* 雇用確認モーダル */}
       {confirmHire && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setConfirmHire(null)}>
-          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-surface-2 rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white mb-3">スタッフ雇用確認</h3>
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -1241,7 +1240,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               <button
                 onClick={() => handleHire(confirmHire)}
                 disabled={staff.length >= MAX_STAFF}
-                className={`px-4 py-2 rounded text-sm font-bold ${staff.length >= MAX_STAFF ? 'bg-gray-600 text-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500 text-white'}`}
+                className={`px-4 py-2 rounded text-sm font-bold ${'btn-primary'}`}
               >
                 雇用する
               </button>
@@ -1253,7 +1252,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
       {/* 解雇確認モーダル */}
       {confirmFire && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setConfirmFire(null)}>
-          <div className="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-surface-2 rounded-lg p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white mb-3">解雇確認</h3>
             <p className="text-gray-300 mb-4">
               <span className="font-bold text-white">{confirmFire.name}</span>
@@ -1263,7 +1262,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
               <button onClick={() => setConfirmFire(null)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm">
                 キャンセル
               </button>
-              <button onClick={() => handleFire(confirmFire.id)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded text-sm font-bold">
+              <button onClick={() => handleFire(confirmFire.id)} className="btn-danger px-4 py-2 rounded text-sm">
                 解雇する
               </button>
             </div>
@@ -1278,7 +1277,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
         if (!target) return null;
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setFavoriteSelectId(null)}>
-            <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+            <div className="bg-surface-2 rounded-lg p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-bold text-white mb-1">担当スカウトを選択</h3>
               <p className="text-sm text-gray-300 mb-1">
                 <span className="text-yellow-400 font-bold">{target.name}</span>
@@ -1314,7 +1313,7 @@ const CorporateManagementScreen = ({ seasonData, gameMode }) => {
                       }}
                       disabled={isFull}
                       className={`w-full flex items-center justify-between p-3 rounded-lg transition text-left ${
-                        isFull ? 'bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-gray-750 hover:bg-gray-700'
+                        isFull ? 'bg-surface-2 text-gray-400 cursor-not-allowed' : 'bg-gray-750 hover:bg-gray-700'
                       }`}>
                       <div>
                         <div className="flex items-center gap-2">

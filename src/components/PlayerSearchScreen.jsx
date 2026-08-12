@@ -182,7 +182,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
   const StatVal = ({ value, isVel, isSta }) => <AbilityValue value={value} isVel={isVel} isSta={isSta} />;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4">
+    <div className="min-h-screen bg-surface-1 text-white p-4">
       <div className="max-w-[1400px] mx-auto">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold">選手検索</h2>
@@ -194,7 +194,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
           {SOURCES.map(s => (
             <button key={s.key}
               onClick={() => setSources(prev => ({ ...prev, [s.key]: !prev[s.key] }))}
-              className={`px-3 py-1 rounded text-xs font-bold transition ${sources[s.key] ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+              className={`px-3 py-1 rounded text-xs font-bold transition ${sources[s.key] ? 'seg-on' : 'seg'}`}
             >{s.label}</button>
           ))}
           <span className="text-gray-400 text-xs self-center ml-2">|</span>
@@ -203,10 +203,10 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
           ].map(p => (
             <button key={p.key}
               onClick={() => setPosFilter(p.key)}
-              className={`px-2 py-1 rounded text-xs font-bold transition ${posFilter === p.key ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+              className={`px-2 py-1 rounded text-xs font-bold transition ${posFilter === p.key ? 'seg-on' : 'seg'}`}
             >{p.label}</button>
           ))}
-          <button onClick={resetFilters} className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300 hover:bg-red-700 hover:text-white transition ml-auto">リセット</button>
+          <button onClick={resetFilters} className="btn-danger px-2 py-1 rounded text-xs transition ml-auto">リセット</button>
         </div>
 
         {/* Name search */}
@@ -216,14 +216,14 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
             value={nameQuery}
             onChange={e => setNameQuery(e.target.value)}
             placeholder="選手名・所属で検索..."
-            className="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 w-64 focus:outline-none focus:border-blue-500"
+            className="bg-surface-2 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 w-64 focus:outline-none focus:border-blue-500"
           />
           {nameQuery && <button onClick={() => setNameQuery('')} className="text-gray-400 hover:text-white text-sm">✕</button>}
           <span className="text-gray-400 text-xs ml-2">※ スカウト画面の能力値は推定値です。実際の数値と異なる場合があります</span>
         </div>
 
         {/* Filters */}
-        <div className="bg-gray-800 rounded-lg p-3 mb-3">
+        <div className="bg-surface-2 rounded-lg p-3 mb-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
             {FILTER_DEFS.map(def => {
               const f = filters[def.key];
@@ -231,7 +231,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
               const fMax = def.max ?? 99;
               const step = def.step ?? 1;
               return (
-                <div key={def.key} className={`flex flex-col gap-0.5 p-1.5 rounded ${f.enabled ? 'bg-gray-700' : 'bg-gray-800'}`}>
+                <div key={def.key} className={`flex flex-col gap-0.5 p-1.5 rounded ${f.enabled ? 'bg-gray-700' : 'bg-surface-2'}`}>
                   <label className="flex items-center gap-1 text-xs text-gray-300">
                     <input type="checkbox" checked={f.enabled}
                       onChange={e => updateFilter(def.key, 'enabled', e.target.checked)}
@@ -257,7 +257,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
 
         {/* Results */}
         <div className="text-xs text-gray-300 mb-1">{filtered.length}件{filtered.length >= 200 ? '（上位200件表示）' : ''}</div>
-        <div className="bg-gray-800 rounded-lg overflow-x-auto">
+        <div className="bg-surface-2 rounded-lg overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               {/* グループ行 */}
@@ -374,7 +374,7 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
                       {alreadyScouted
                         ? <span className="text-xs text-green-400 font-bold">済</span>
                         : <button
-                            className="text-xs px-1.5 py-0.5 bg-purple-700 hover:bg-purple-500 text-white rounded font-bold transition"
+                            className="btn-secondary text-xs px-1.5 py-0.5 rounded transition"
                             onClick={() => {
                               const teamData = TEAMS_DATA[userTeamName];
                               const uniRank = teamData?.universityData?.rank || 'C';

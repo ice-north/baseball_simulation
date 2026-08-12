@@ -3008,7 +3008,7 @@ if (newOuts === 3) {
           <div className="grid gap-2 max-w-[1800px] mx-auto" style={{gridTemplateColumns: gameStarted ? '3fr 5fr 3fr' : '5fr 3fr 5fr'}}>
 
             {/* ===== 左カラム: アウェイチーム ===== */}
-            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
+            <div className="bg-surface-1 rounded-lg p-2 text-white min-w-0 overflow-hidden">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
                 <h3 className="font-bold text-red-400">✈️ {awayTeam.name}</h3>
                 <span className="text-2xl font-bold text-red-400">{score?.away || 0}</span>
@@ -3038,8 +3038,7 @@ if (newOuts === 3) {
                               key={player.id}
                               onClick={() => handleSubstituteClick('away', player.id)}
                               className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-blue-600 text-white ring-2 ring-blue-400' :
-                                'bg-gray-800 hover:bg-gray-700'
+                                isSubSelected ? 'seg-on ring-2' : 'seg'
                               }`}
                             >
                               <div className="flex items-center gap-1">
@@ -3118,10 +3117,9 @@ if (newOuts === 3) {
                               onClick={() => !isSubbedOut && handleSubstituteClick('away', player.id)}
                               className={`p-1.5 rounded transition ${
                                 isSubbedOut
-                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
+                                  ? 'bg-surface-1 opacity-50 cursor-not-allowed'
                                   : isSubSelected
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
-                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
+                                    ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
@@ -3188,8 +3186,7 @@ if (newOuts === 3) {
                           isSubbedOut ? 'opacity-50 cursor-not-allowed' :
                           isCurrentBatter ? 'bg-yellow-500 text-black cursor-pointer' :
                           isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer' :
-                          isSelected ? 'bg-blue-600 text-white cursor-pointer' :
-                          'hover:bg-gray-800 cursor-pointer'
+                          isSelected ? 'seg-on cursor-pointer' : 'seg cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center gap-1.5 overflow-hidden">
@@ -3295,7 +3292,7 @@ if (newOuts === 3) {
                 <div className="mt-2">
                   <button
                     onClick={() => setShowBenchAway(!showBenchAway)}
-                    className="w-full p-2 bg-gray-800 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
+                    className="w-full p-2 bg-surface-2 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
                   >
                     <span>⚡ 選手交代</span>
                     <span>{showBenchAway ? '▼' : '▶'}</span>
@@ -3320,10 +3317,9 @@ if (newOuts === 3) {
                               onClick={() => !isSubbedOut && handleSubstituteClick('away', player.id)}
                               className={`p-1.5 rounded transition ${
                                 isSubbedOut
-                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
+                                  ? 'bg-surface-1 opacity-50 cursor-not-allowed'
                                   : isSubSelected
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
-                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
+                                    ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
@@ -3353,7 +3349,7 @@ if (newOuts === 3) {
                   <>
                     <div className="text-sm text-gray-300 mb-1 font-semibold">📊 試合スタッツ</div>
                     {/* 投手成績 */}
-                    <div className="bg-gray-800 rounded p-2 mb-1">
+                    <div className="bg-surface-2 rounded p-2 mb-1">
                       <div className="text-xs text-blue-400 mb-0.5">投手</div>
                       <div className="text-sm">
                         {(() => {
@@ -3417,7 +3413,7 @@ if (newOuts === 3) {
                       const velocityScore = Math.min(100, (pitcher.pitching.velocity - 100) * 2);
                       const staminaScore = Math.min(100, pitcher.pitching.stamina / 2);
                       return (
-                        <div className="bg-gray-800 rounded p-3 border-2 border-gray-700">
+                        <div className="bg-surface-2 rounded p-3 border-2 border-gray-700">
                           <div className="text-base text-white mb-2 font-bold flex items-center gap-2">
                             <span>⚾</span>
                             <span>{pitcher.name}</span>
@@ -3475,13 +3471,13 @@ if (newOuts === 3) {
 
               {/* 試合開始前の画面 */}
               {!gameStarted && (
-                <div className="bg-gray-900 rounded-lg p-4 text-white text-center">
+                <div className="bg-surface-1 rounded-lg p-4 text-white text-center">
                   <h2 className="text-2xl font-bold mb-3">⚾ 野球シミュレーター</h2>
                   <p className="text-sm text-blue-400 mb-1">👆 選手パネルクリック → スタメン⇔ベンチ交代</p>
                   <p className="text-sm text-purple-400 mb-4">🔄 守備位置クリック → 守備交換</p>
 
                   {/* 監督AI設定 */}
-                  <div className="mb-6 p-3 bg-gray-800 rounded-lg">
+                  <div className="mb-6 p-3 bg-surface-2 rounded-lg">
                     <div className="flex items-center justify-center gap-3">
                       <span className="text-sm font-semibold">🤖 監督AI</span>
                       <button
@@ -3532,7 +3528,7 @@ if (newOuts === 3) {
                         }))
                       }));
                     }}
-                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-12 rounded-lg text-xl transition shadow-lg"
+                    className="btn-primary py-4 px-12 rounded-lg text-xl transition shadow-lg"
                   >
                     ⚾ 試合開始
                   </button>
@@ -3632,14 +3628,14 @@ if (newOuts === 3) {
                     <div className="flex items-center gap-1">
                       <span className="w-4 text-xs text-green-500 font-bold">B</span>
                       {[0,1,2].map(i => (
-                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.balls || 0) ? 'bg-green-500 border-green-400' : 'bg-gray-900 border-gray-700'}`} 
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.balls || 0) ? 'bg-green-500 border-green-400' : 'bg-surface-1 border-gray-700'}`} 
                              style={{boxShadow: i < (count?.balls || 0) ? '0 0 6px #22c55e' : 'none'}} />
                       ))}
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="w-4 text-xs text-yellow-400 font-bold">S</span>
                       {[0,1].map(i => (
-                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.strikes || 0) ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < (count?.strikes || 0) ? 'bg-yellow-400 border-yellow-300' : 'bg-surface-1 border-gray-700'}`}
                              style={{boxShadow: i < (count?.strikes || 0) ? '0 0 6px #facc15' : 'none'}} />
                       ))}
                       <div className="w-4 h-4" />
@@ -3647,7 +3643,7 @@ if (newOuts === 3) {
                     <div className="flex items-center gap-1">
                       <span className="w-4 text-xs text-red-500 font-bold">O</span>
                       {[0,1].map(i => (
-                        <div key={i} className={`w-4 h-4 rounded-full border ${i < outs ? 'bg-red-500 border-red-400' : 'bg-gray-900 border-gray-700'}`}
+                        <div key={i} className={`w-4 h-4 rounded-full border ${i < outs ? 'bg-red-500 border-red-400' : 'bg-surface-1 border-gray-700'}`}
                              style={{boxShadow: i < outs ? '0 0 6px #ef4444' : 'none'}} />
                       ))}
                       <div className="w-4 h-4" />
@@ -3660,13 +3656,13 @@ if (newOuts === 3) {
                   {/* 塁状況（固定幅） */}
                   <div className="relative w-16 h-14 flex items-center justify-center flex-shrink-0">
                     {/* 二塁 */}
-                    <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-5 h-5 rotate-45 border ${bases[1] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                    <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-5 h-5 rotate-45 border ${bases[1] ? 'bg-yellow-400 border-yellow-300' : 'bg-surface-1 border-gray-700'}`}
                          style={{boxShadow: bases[1] ? '0 0 8px #facc15' : 'none'}} />
                     {/* 三塁 */}
-                    <div className={`absolute top-1/2 left-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[2] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                    <div className={`absolute top-1/2 left-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[2] ? 'bg-yellow-400 border-yellow-300' : 'bg-surface-1 border-gray-700'}`}
                          style={{boxShadow: bases[2] ? '0 0 8px #facc15' : 'none'}} />
                     {/* 一塁 */}
-                    <div className={`absolute top-1/2 right-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[0] ? 'bg-yellow-400 border-yellow-300' : 'bg-gray-900 border-gray-700'}`}
+                    <div className={`absolute top-1/2 right-1 -translate-y-1/2 w-5 h-5 rotate-45 border ${bases[0] ? 'bg-yellow-400 border-yellow-300' : 'bg-surface-1 border-gray-700'}`}
                          style={{boxShadow: bases[0] ? '0 0 8px #facc15' : 'none'}} />
                   </div>
                   
@@ -3726,7 +3722,7 @@ if (newOuts === 3) {
 
               {/* 対戦カード & 操作ボタン */}
               {gameStarted && (
-              <div className="bg-gray-800 rounded-lg p-3 shadow-lg border border-gray-700/50">
+              <div className="bg-surface-2 rounded-lg p-3 shadow-lg border border-gray-700/50">
                 {/* 対戦カード。**チーム色分けは使わない**（表裏で意味が反転するため）。
                     守備側=amber / 攻撃側=cyan で采配パネルと語彙を揃える。
                     名前は白、数字は tabular-nums で「目に入りやすさ」を優先する */}
@@ -3937,8 +3933,8 @@ if (newOuts === 3) {
                     hit: { box: 'border-green-500 bg-green-900/25', text: 'text-green-200', icon: '🟢' },
                     k: { box: 'border-red-500 bg-red-900/25', text: 'text-red-200', icon: '❌' },
                     bb: { box: 'border-blue-500 bg-blue-900/25', text: 'text-blue-200', icon: '🎫' },
-                    out: { box: 'border-gray-600 bg-gray-800', text: 'text-gray-200', icon: '' },
-                    neutral: { box: 'border-yellow-500/60 bg-gray-800', text: 'text-yellow-100', icon: '' },
+                    out: { box: 'border-gray-600 bg-surface-2', text: 'text-gray-200', icon: '' },
+                    neutral: { box: 'border-yellow-500/60 bg-surface-2', text: 'text-yellow-100', icon: '' },
                   }[cat];
                   // 打球の飛距離バー（0-140m目安）
                   const distPct = lastResult.distance ? Math.max(4, Math.min(100, (lastResult.distance / 140) * 100)) : 0;
@@ -4000,16 +3996,16 @@ if (newOuts === 3) {
                           <span className="text-xs text-gray-400">｜</span>
                           <button onClick={() => triggerSteal(throwPitch)} disabled={!bases[0] || busy}
                             title="一塁走者が次球で盗塁"
-                            className={`${act} bg-emerald-700 text-emerald-100 hover:bg-emerald-600`}>🏃 盗塁</button>
+                            className={`${act} bg-cyan-700 text-white hover:bg-cyan-600`}>🏃 盗塁</button>
                           <button onClick={() => triggerHitAndRun(throwPitch)} disabled={!bases[0] || outs >= 2 || busy}
                             title="走者を走らせ打者は必ず打ちにいく"
-                            className={`${act} bg-emerald-800 text-emerald-100 hover:bg-emerald-700`}>エンドラン</button>
+                            className={`${act} bg-cyan-800 text-cyan-50 hover:bg-cyan-700`}>エンドラン</button>
                           <button onClick={() => handleBunt()} disabled={busy}
                             title="送りバント"
-                            className={`${act} bg-yellow-700 text-yellow-100 hover:bg-yellow-600`}>バント</button>
+                            className={`${act} bg-cyan-900 text-cyan-100 hover:bg-cyan-800`}>バント</button>
                           <button onClick={() => handleBunt()} disabled={!bases[2] || outs > 1 || busy}
                             title="三塁走者を還すスクイズバント"
-                            className={`${act} bg-yellow-800 text-yellow-100 hover:bg-yellow-700`}>スクイズ</button>
+                            className={`${act} bg-cyan-950 text-cyan-100 hover:bg-cyan-900`}>スクイズ</button>
                         </div>
                         <div className={row}>
                           <span className={tag('text-cyan-300')}>狙い球</span>
@@ -4022,14 +4018,14 @@ if (newOuts === 3) {
                               className={pick(batGuessType === v, 'bg-cyan-700')}>{GUESS_TYPE_LABEL[v]}</button>
                           ))}
                           <span className="text-xs text-gray-400">｜</span>
-                          <span className={tag('text-teal-300')}>コース</span>
+                          <span className={tag('text-cyan-300')}>コース</span>
                           <button onClick={() => setBatGuessZone('auto')} disabled={gameOver}
                             title="コースは張らない"
-                            className={pick(batGuessZone === 'auto', 'bg-teal-700')}>おまかせ</button>
+                            className={pick(batGuessZone === 'auto', 'bg-cyan-700')}>おまかせ</button>
                           {['in', 'out', 'high', 'low'].map(v => (
                             <button key={v} onClick={() => setBatGuessZone(v)} disabled={gameOver}
                               title={`${GUESS_ZONE_LABEL[v]}に張る。その半面に来れば読み切れる`}
-                              className={pick(batGuessZone === v, 'bg-teal-700')}>{GUESS_ZONE_LABEL[v]}</button>
+                              className={pick(batGuessZone === v, 'bg-cyan-700')}>{GUESS_ZONE_LABEL[v]}</button>
                           ))}
                           {aiming && (
                             <span className="text-xs px-2 py-1 rounded bg-amber-900 text-amber-200"
@@ -4061,25 +4057,25 @@ if (newOuts === 3) {
                         ))}
                       </div>
                       <div className={row}>
-                        <span className={tag('text-rose-300')}>狙い</span>
+                        <span className={tag('text-amber-300')}>狙い</span>
                         <button onClick={() => setPitchAim('auto')} disabled={gameOver}
                           title="狙いも捕手のリードに任せる"
-                          className={pick(pitchAim === 'auto', 'bg-rose-700')}>おまかせ</button>
+                          className={pick(pitchAim === 'auto', 'bg-amber-700')}>おまかせ</button>
                         {['zone', 'edge', 'chase'].map(v => (
                           <button key={v} onClick={() => setPitchAim(v)} disabled={gameOver}
                             title={v === 'zone' ? 'ゾーンで勝負。ストライクは取れるが打たれやすい'
                               : v === 'edge' ? '際どいコース。打ち損じを誘うが四球のリスク'
                               : '誘い球（ボール球）。振らせれば凡打、見逃されれば四球に近づく'}
-                            className={pick(pitchAim === v, 'bg-rose-700')}>{AIM_LABEL[v]}</button>
+                            className={pick(pitchAim === v, 'bg-amber-700')}>{AIM_LABEL[v]}</button>
                         ))}
                         <span className="text-xs text-gray-400">｜</span>
                         <button onClick={() => triggerIntentionalWalk(throwPitch)} disabled={busy}
                           title="現在の打者を敬遠"
-                          className={`${act} bg-indigo-700 text-indigo-100 hover:bg-indigo-600`}>敬遠</button>
+                          className={`${act} bg-amber-800 text-amber-50 hover:bg-amber-700`}>敬遠</button>
                         {/* 場面から捕手が求める結果。プレイヤーは操作しないが何を狙っているかは見せる */}
                         {obj.goal !== 'normal' && (
                           <span className={`text-xs px-2 py-1 rounded ${
-                            obj.goal === 'groundball' ? 'bg-emerald-900 text-emerald-200' : 'bg-sky-900 text-sky-200'}`}
+                            obj.goal === 'groundball' ? 'bg-amber-900 text-amber-100' : 'bg-amber-950 text-amber-200 ring-1 ring-amber-700'}`}
                             title={OBJECTIVE_NOTE[obj.goal] + (obj.avoidWalk ? '（満塁なので押し出しを避ける）' : '')}>
                             {OBJECTIVE_LABEL[obj.goal]}{obj.avoidWalk ? '・押し出し回避' : ''}
                           </span>
@@ -4091,22 +4087,22 @@ if (newOuts === 3) {
                 {/* 試合進行。采配（上）と進行（下）を分ける */}
                 <div className="flex justify-center items-center gap-2 flex-wrap border-t border-gray-700/60 pt-2">
                   <button onClick={throwPitch} disabled={isAutoSimulating || gameOver}
-                    className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 disabled:opacity-50">
+                    className="btn-primary px-5 py-2 rounded disabled:opacity-50">
                     ⚾ 1球
                   </button>
                   <button onClick={() => startSimMode('out')} disabled={isAutoSimulating || gameOver}
-                    className="bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50">
+                    className="btn-secondary px-3 py-2 rounded text-sm disabled:opacity-50">
                     1アウトまで
                   </button>
                   <button onClick={() => startSimMode('end')} disabled={isAutoSimulating || gameOver}
-                    className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50">
+                    className="btn-secondary px-3 py-2 rounded text-sm disabled:opacity-50">
                     試合終了まで
                   </button>
                   <span className="w-px h-7 bg-gray-700 mx-1" />
                   <button onClick={() => setAutoManagerMode(!autoManagerMode)}
                     title="監督AIに采配を任せる"
                     className={`px-3 py-2 rounded text-sm font-semibold transition ${
-                      autoManagerMode ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                      autoManagerMode ? 'seg-on' : 'seg'
                     }`}>
                     🤖 {autoManagerMode ? 'AI ON' : 'AI OFF'}
                   </button>
@@ -4121,7 +4117,7 @@ if (newOuts === 3) {
                         setSubModalSelected(null);
                         setShowSubModal(true);
                       }}
-                      className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded text-sm font-semibold transition"
+                      className="btn-secondary px-3 py-2 rounded text-sm font-semibold transition"
                     >
                       選手交代
                     </button>
@@ -4205,7 +4201,7 @@ if (newOuts === 3) {
 
                 return (
                   <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => { setShowSubModal(false); setSubModalSelected(null); }}>
-                    <div className="bg-gray-900 rounded-xl p-4 max-w-lg w-full mx-4 border border-gray-600 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <div className="bg-surface-1 rounded-xl p-4 max-w-lg w-full mx-4 border border-gray-600 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="text-white font-bold text-lg">選手交代</h3>
                         <button onClick={() => { setShowSubModal(false); setSubModalSelected(null); }} className="text-gray-300 hover:text-white text-xl">&times;</button>
@@ -4223,7 +4219,7 @@ if (newOuts === 3) {
                             const fitness = calculateDefensiveFitness(p, p.position);
                             return (
                               <div key={p.id} onClick={() => handleModalClick(p.id)}
-                                className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-orange-600 ring-2 ring-orange-400' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                                className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-orange-600 ring-2 ring-orange-400' : 'bg-surface-2 hover:bg-gray-700'}`}>
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-gray-300 w-4 text-center text-xs">{p.battingOrder}</span>
                                   <span className={`w-6 text-center text-xs font-bold rounded ${getPositionColor(p.position)}`}>{posNames[p.position]}</span>
@@ -4252,7 +4248,7 @@ if (newOuts === 3) {
                               const isSelected = subModalSelected === p.id;
                               return (
                                 <div key={p.id} onClick={() => handleModalClick(p.id)}
-                                  className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-blue-600 ring-2 ring-blue-400' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                                  className={`p-1.5 rounded cursor-pointer transition ${isSelected ? 'bg-blue-600 ring-2 ring-blue-400' : 'bg-surface-2 hover:bg-gray-700'}`}>
                                   <div className="flex items-center gap-1.5">
                                     <span className={`w-6 text-center text-xs font-bold rounded ${getPositionColor(p.position)}`}>{posNames[p.position]}</span>
                                     <span className="text-white text-sm font-medium truncate flex-1">{p.name}</span>
@@ -4399,7 +4395,7 @@ if (newOuts === 3) {
                 const scrollText = scrollParts.join('　　');
 
                 return (
-                <div className="bg-gray-900 rounded-lg p-4 text-white">
+                <div className="bg-surface-1 rounded-lg p-4 text-white">
                   <h3 className="text-2xl font-bold mb-3 text-center text-yellow-400">🏆 試合終了</h3>
                   <div className="flex justify-center items-center gap-8 text-xl font-bold mb-4">
                     <div className="text-red-400">
@@ -4414,7 +4410,7 @@ if (newOuts === 3) {
                   </div>
 
                   {/* スクロールテロップ */}
-                  <div className="overflow-hidden bg-gray-800 rounded-lg mb-3 py-2">
+                  <div className="overflow-hidden bg-surface-2 rounded-lg mb-3 py-2">
                     <div className="whitespace-nowrap text-lg font-bold text-yellow-300" style={{
                       display: 'inline-block',
                       animation: 'marquee 12s linear infinite',
@@ -4510,7 +4506,7 @@ if (newOuts === 3) {
                     {managedGameInfo ? (
                       <button
                         onClick={handleManagedGameEnd}
-                        className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition text-lg"
+                        className="btn-warn py-3 px-8 rounded-lg transition text-lg"
                       >
                         結果確定・翌日へ
                       </button>
@@ -4522,7 +4518,7 @@ if (newOuts === 3) {
                           setSelectedBatterAway(null);
                           setSelectedBatterHome(null);
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                        className="btn-primary py-2 px-6 rounded-lg transition"
                       >
                         新しい試合
                       </button>
@@ -4534,7 +4530,7 @@ if (newOuts === 3) {
             </div>
 
             {/* ===== 右カラム: ホームチーム ===== */}
-            <div className="bg-gray-900 rounded-lg p-2 text-white min-w-0 overflow-hidden">
+            <div className="bg-surface-1 rounded-lg p-2 text-white min-w-0 overflow-hidden">
               <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
                 {/* 長いチーム名で2行にならないよう truncate。チーム色分けは使わない */}
                 <span className="text-2xl font-bold text-gray-100 tabular-nums shrink-0 mr-2">{score?.home || 0}</span>
@@ -4565,8 +4561,7 @@ if (newOuts === 3) {
                               key={player.id}
                               onClick={() => handleSubstituteClick('home', player.id)}
                               className={`p-1.5 rounded cursor-pointer transition ${
-                                isSubSelected ? 'bg-blue-600 text-white ring-2 ring-blue-400' :
-                                'bg-gray-800 hover:bg-gray-700'
+                                isSubSelected ? 'seg-on ring-2' : 'seg'
                               }`}
                             >
                               <div className="flex items-center gap-1">
@@ -4645,10 +4640,9 @@ if (newOuts === 3) {
                               onClick={() => !isSubbedOut && handleSubstituteClick('home', player.id)}
                               className={`p-1.5 rounded transition ${
                                 isSubbedOut
-                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
+                                  ? 'bg-surface-1 opacity-50 cursor-not-allowed'
                                   : isSubSelected
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
-                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
+                                    ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
@@ -4715,8 +4709,7 @@ if (newOuts === 3) {
                           isSubbedOut ? 'opacity-50 cursor-not-allowed' :
                           isCurrentBatter ? 'bg-yellow-500 text-black cursor-pointer' :
                           isSubSelected ? 'bg-orange-600 text-white ring-2 ring-orange-400 cursor-pointer' :
-                          isSelected ? 'bg-blue-600 text-white cursor-pointer' :
-                          'hover:bg-gray-800 cursor-pointer'
+                          isSelected ? 'seg-on cursor-pointer' : 'seg cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center gap-1.5 overflow-hidden">
@@ -4822,7 +4815,7 @@ if (newOuts === 3) {
                 <div className="mt-2">
                   <button
                     onClick={() => setShowBenchHome(!showBenchHome)}
-                    className="w-full p-2 bg-gray-800 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
+                    className="w-full p-2 bg-surface-2 hover:bg-gray-700 rounded text-sm text-orange-400 font-semibold transition flex items-center justify-between"
                   >
                     <span>⚡ 選手交代</span>
                     <span>{showBenchHome ? '▼' : '▶'}</span>
@@ -4847,10 +4840,9 @@ if (newOuts === 3) {
                               onClick={() => !isSubbedOut && handleSubstituteClick('home', player.id)}
                               className={`p-1.5 rounded transition ${
                                 isSubbedOut
-                                  ? 'bg-gray-900 opacity-50 cursor-not-allowed'
+                                  ? 'bg-surface-1 opacity-50 cursor-not-allowed'
                                   : isSubSelected
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 cursor-pointer'
-                                    : 'bg-gray-800 hover:bg-gray-700 cursor-pointer'
+                                    ? 'seg-on ring-2 cursor-pointer' : 'seg cursor-pointer'
                               }`}
                             >
                               <div className="flex items-center gap-1">
@@ -4880,7 +4872,7 @@ if (newOuts === 3) {
                   <>
                     <div className="text-sm text-gray-300 mb-1 font-semibold">📊 試合スタッツ</div>
                     {/* 投手成績 */}
-                    <div className="bg-gray-800 rounded p-2 mb-1">
+                    <div className="bg-surface-2 rounded p-2 mb-1">
                       <div className="text-xs text-blue-400 mb-0.5">投手</div>
                       <div className="text-sm">
                         {(() => {
@@ -4944,7 +4936,7 @@ if (newOuts === 3) {
                       const velocityScore = Math.min(100, (pitcher.pitching.velocity - 100) * 2);
                       const staminaScore = Math.min(100, pitcher.pitching.stamina / 2);
                       return (
-                        <div className="bg-gray-800 rounded p-3 border-2 border-gray-700">
+                        <div className="bg-surface-2 rounded p-3 border-2 border-gray-700">
                           <div className="text-base text-white mb-2 font-bold flex items-center gap-2">
                             <span>⚾</span>
                             <span>{pitcher.name}</span>
@@ -5001,7 +4993,7 @@ if (newOuts === 3) {
           {/* 選手編集モーダル */}
           {editingPlayer && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-gray-800 rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-700">
+              <div className="bg-surface-2 rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-700">
                 <div className="p-4">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold text-gray-100">{editingPlayer.name} を編集</h2>
@@ -5193,7 +5185,7 @@ if (newOuts === 3) {
                     <button onClick={() => setEditingPlayer(null)}
                       className="px-4 py-2 border border-gray-600 text-gray-200 rounded hover:bg-gray-700">キャンセル</button>
                     <button onClick={() => { updatePlayer(editingPlayer.id, editingPlayer); setEditingPlayer(null); }}
-                      className="px-20 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">保存</button>
+                      className="btn-primary px-20 py-2 rounded">保存</button>
                   </div>
                 </div>
               </div>
@@ -5203,9 +5195,9 @@ if (newOuts === 3) {
           {/* エディット画面 */}
           {showEditScreen && (
             <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-              <div className="bg-gray-900 rounded-lg w-full max-w-7xl max-h-[90vh] overflow-y-auto border border-gray-700">
+              <div className="bg-surface-1 rounded-lg w-full max-w-7xl max-h-[90vh] overflow-y-auto border border-gray-700">
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-6 sticky top-0 bg-gray-900 pb-4 border-b border-gray-700 z-10">
+                  <div className="flex justify-between items-center mb-6 sticky top-0 bg-surface-1 pb-4 border-b border-gray-700 z-10">
                     <h2 className="text-2xl font-bold text-gray-100">選手エディット</h2>
                     <button
                       onClick={() => setShowEditScreen(false)}
@@ -5222,7 +5214,7 @@ if (newOuts === 3) {
                     <h3 className="text-xl font-bold text-red-500 mb-4">✈️ {awayTeam.name}</h3>
                     <div className="space-y-6">
                       {awayTeam.players.map(player => (
-                        <div key={player.id} className="bg-gray-800 p-3 rounded-lg border border-gray-700/50">
+                        <div key={player.id} className="bg-surface-2 p-3 rounded-lg border border-gray-700/50">
                           <div className="mb-3">
                             <label className="block text-xs text-gray-300 mb-1">選手名</label>
                             <input
@@ -5486,7 +5478,7 @@ if (newOuts === 3) {
                     <h3 className="text-xl font-bold text-blue-500 mb-4">🏠 {homeTeam.name}</h3>
                     <div className="space-y-6">
                       {homeTeam.players.map(player => (
-                        <div key={player.id} className="bg-gray-800 p-3 rounded-lg border border-gray-700/50">
+                        <div key={player.id} className="bg-surface-2 p-3 rounded-lg border border-gray-700/50">
                           <div className="mb-3">
                             <label className="block text-xs text-gray-300 mb-1">選手名</label>
                             <input
@@ -5747,10 +5739,10 @@ if (newOuts === 3) {
                   </div>
 
                   {/* 閉じるボタン */}
-                  <div className="flex justify-end sticky bottom-0 bg-gray-900 pt-4 border-t border-gray-700">
+                  <div className="flex justify-end sticky bottom-0 bg-surface-1 pt-4 border-t border-gray-700">
                     <button
                       onClick={() => setShowEditScreen(false)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg"
+                      className="btn-primary py-3 px-8 rounded-lg"
                     >
                       完了
                     </button>

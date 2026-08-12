@@ -89,7 +89,7 @@ const GameFlowScreens = ({
       { key: 'kansai', icon: '🏯' },
     ];
     return (
-      <div className="p-8 bg-gray-900 min-h-screen">
+      <div className="p-8 bg-surface-1 min-h-screen">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2">リーグ選択</h1>
           <p className="text-gray-300 text-sm mb-6">プレイするリーグを選んでください。他のリーグは平行世界として同時に進行します。</p>
@@ -102,7 +102,7 @@ const GameFlowScreens = ({
                     selectedIndependentLeague = key;
                     setGameFlowState('newgame_team_select');
                   }}
-                  className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group"
+                  className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-5 text-left transition group"
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-3xl">{icon}</span>
@@ -128,7 +128,7 @@ const GameFlowScreens = ({
                 selectedIndependentLeague = null;
                 setGameFlowState('newgame_regulations');
               }}
-              className="bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-green-500 rounded-xl p-5 text-left transition group"
+              className="bg-surface-2 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-green-500 rounded-xl p-5 text-left transition group"
             >
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-3xl">🛠️</span>
@@ -144,7 +144,7 @@ const GameFlowScreens = ({
             </button>
           </div>
           <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-gray-800 text-sm transition">← 戻る</button>
+            <button onClick={() => setGameFlowState('newgame_mode_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-surface-2 text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>
@@ -158,7 +158,7 @@ const GameFlowScreens = ({
     const RANK_COLORS = { S: 'text-yellow-400', A: 'text-red-400', B: 'text-blue-400', C: 'text-green-400', D: 'text-gray-300' };
     const RANK_LABELS = { S: '超強豪', A: '強豪', B: '中堅', C: '育成型', D: '新興' };
     return (
-      <div className="p-8 bg-gray-900 min-h-screen">
+      <div className="p-8 bg-surface-1 min-h-screen">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold text-white mb-2">{leagueDef?.name}</h1>
           <p className="text-gray-300 text-sm mb-6">監督を務めるチームを選んでください</p>
@@ -192,7 +192,7 @@ const GameFlowScreens = ({
                     setGameFlowState('newgame_tryout');
                   }, 50);
                 }}
-                className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-green-500 rounded-xl p-5 text-left transition group"
+                className="bg-surface-2 hover:bg-gray-700 border border-gray-700 hover:border-green-500 rounded-xl p-5 text-left transition group"
               >
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-lg font-bold text-white group-hover:text-green-400 transition">{team.name}</div>
@@ -205,7 +205,7 @@ const GameFlowScreens = ({
             ))}
           </div>
           <div className="mt-6 text-center">
-            <button onClick={() => setGameFlowState('newgame_league_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-gray-800 text-sm transition">← 戻る</button>
+            <button onClick={() => setGameFlowState('newgame_league_select')} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-300 hover:text-gray-200 hover:bg-surface-2 text-sm transition">← 戻る</button>
           </div>
         </div>
       </div>

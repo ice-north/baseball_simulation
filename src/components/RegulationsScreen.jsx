@@ -86,7 +86,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-lg p-4 mb-3">
+      <div className="bg-surface-2 rounded-lg p-4 mb-3">
         <h2 className="text-sm font-bold mb-2 text-white">詳細設定</h2>
         <div className="space-y-0">
           <SettingRow label="DH制（指名打者）">
@@ -171,7 +171,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
           </SettingRow>
         </div>
         <div className="mt-3">
-          <button onClick={handleSaveSettings} disabled={!canModify} className={`w-full py-2 rounded-lg font-bold text-sm transition ${canModify ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-900 text-gray-400 cursor-not-allowed'}`}>
+          <button onClick={handleSaveSettings} disabled={!canModify} className={`w-full py-2 rounded-lg font-bold text-sm transition ${'btn-primary'}`}>
             設定を保存
           </button>
         </div>
@@ -179,7 +179,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
 
       {/* チーム名設定 */}
       {canModify && (
-        <div className="bg-gray-800 rounded-lg p-4 mb-3">
+        <div className="bg-surface-2 rounded-lg p-4 mb-3">
           <h2 className="text-sm font-bold mb-2 text-white">チーム名設定</h2>
           {tempSettings.leagueFormat === 'two' ? (
             <>
@@ -269,7 +269,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-lg p-4">
+      <div className="bg-surface-2 rounded-lg p-4">
         <h2 className="text-sm font-bold mb-2 text-white">現在の設定</h2>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-300">
           <div>DH制: <span className="text-white">{seasonData.settings.useDH ? '有効' : '無効'}</span></div>
@@ -293,7 +293,7 @@ const RegulationsScreen = ({ seasonData, setSeasonData, onConfirm }) => {
               setSeasonData(prev => ({ ...prev, settings: tempSettings }));
               onConfirm(tempSettings);
             }}
-            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold text-base transition shadow"
+            className="btn-primary px-8 py-3 rounded-lg text-base transition shadow"
           >
             確定 → キャンプへ進む
           </button>

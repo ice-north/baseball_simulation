@@ -140,7 +140,7 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-gray-800 rounded-lg p-6 max-w-5xl w-full mx-4 h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-surface-2 rounded-lg p-6 max-w-5xl w-full mx-4 h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4 flex-shrink-0">
           <h2 className="text-2xl font-bold text-white">
             {player.number != null && player.number <= 99 && <span className="text-gray-300 text-lg font-bold mr-1.5 tabular-nums">#{player.number}</span>}
@@ -212,7 +212,7 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
           return (
             <div className="flex flex-wrap gap-1 mb-4 flex-shrink-0">
               {achievements.map((a, i) => (
-                <span key={i} className={`text-xs rounded px-1.5 py-0.5 ${a.result === '優勝' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-700/50' : 'bg-gray-800 text-gray-300 border border-gray-600/50'}`}>
+                <span key={i} className={`text-xs rounded px-1.5 py-0.5 ${a.result === '優勝' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-700/50' : 'bg-surface-2 text-gray-300 border border-gray-600/50'}`}>
                   🏆 {a.grade ? `${a.grade}年時 ` : ''}{a.tournament}{a.result}
                 </span>
               ))}
@@ -468,7 +468,7 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
                       );
                     })}
                     {pitching.games > 0 && (
-                      <tr className="border-b border-gray-700 bg-gray-800 hover:bg-gray-700">
+                      <tr className="border-b border-gray-700 bg-surface-2 hover:bg-gray-700">
                         <td className="px-2 py-1 text-cyan-400 font-bold">今季</td>
                         <td className="px-2 py-1 text-center">{pitching.games || 0}</td>
                         <td className="px-2 py-1 text-center">{pitching.wins || 0}</td>
