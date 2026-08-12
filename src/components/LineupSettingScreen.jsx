@@ -1175,17 +1175,17 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
                 </div>
                 <div className="flex gap-1 mt-2">
                   {[
-                    { mode: 'standard', label: '標準', color: 'bg-gray-600 hover:bg-gray-500' },
-                    { mode: 'offense', label: '打撃重視', color: 'bg-red-800 hover:bg-red-700' },
-                    { mode: 'defense', label: '守備重視', color: 'bg-blue-800 hover:bg-blue-700' },
-                  ].map(({ mode, label, color }) => (
+                    { mode: 'standard', label: '標準' },
+                    { mode: 'offense', label: '打撃重視' },
+                    { mode: 'defense', label: '守備重視' },
+                  ].map(({ mode, label }) => (
                     <button key={mode} onClick={() => {
                       generateOptimalLineup(teamName, mode);
                       setSwapSource(null);
                       setSelectedBenchPlayer(null);
                       setSelectedBattingOrder(null);
                       setUpdateTrigger(prev => prev + 1);
-                    }} className={`${color} text-white text-xs px-2 py-1 rounded font-medium transition`}>
+                    }} className="btn-secondary text-xs px-2 py-1 rounded font-medium transition">
                       自動: {label}
                     </button>
                   ))}

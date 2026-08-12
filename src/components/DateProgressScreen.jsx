@@ -2569,17 +2569,15 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
                   {isTwoLeague && (
                     <div className="flex gap-1 ml-auto">
                       {[
-                        { key: 'all', label: '全体', color: 'bg-gray-600' },
-                        { key: 'l1', label: leagueNamesList[0], color: 'bg-blue-600' },
-                        { key: 'l2', label: leagueNamesList[1], color: 'bg-orange-600' },
+                        { key: 'all', label: '全体' },
+                        { key: 'l1', label: leagueNamesList[0] },
+                        { key: 'l2', label: leagueNamesList[1] },
                       ].map(opt => (
                         <button
                           key={opt.key}
                           onClick={() => setRankingLeague(opt.key)}
                           className={`px-2 py-0.5 rounded text-xs font-bold transition ${
-                            rankingLeague === opt.key
-                              ? `${opt.color} text-white`
-                              : 'bg-gray-700/50 text-gray-300 hover:text-white'
+                            rankingLeague === opt.key ? 'seg-on' : 'seg'
                           }`}
                         >{opt.label}</button>
                       ))}

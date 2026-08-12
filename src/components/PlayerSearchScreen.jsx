@@ -185,7 +185,6 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
     <div className="min-h-screen bg-surface-1 text-white p-4">
       {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
       <div className="max-w-7xl mx-auto">
-      <div className="max-w-[1400px] mx-auto">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold">選手検索</h2>
           <button onClick={onBack} className="text-gray-300 hover:text-white text-sm px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 transition">戻る</button>
@@ -409,7 +408,6 @@ const PlayerSearchScreen = ({ onBack, gameMode, userTeamName }) => {
 
         {selectedPlayer && <PlayerDetailModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />}
       </div>
-    </div>
     </div>
   );
 };
