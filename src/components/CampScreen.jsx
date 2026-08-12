@@ -1005,16 +1005,16 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             <select
                               value={currentTraining}
                               onChange={(e) => setAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
-                              className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-32"
+                              className="bg-gray-700 text-white text-xs px-1 py-1 rounded w-32"
                             >
                               {Object.entries(TRAINING_MENUS).filter(([, m]) => !m.intensive)
                                 .map(([key, menu]) => (
-                                <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                                <option key={key} value={key}>{menu.name}</option>
                               ))}
                               <option disabled>── 集中コース ──</option>
                               {Object.entries(TRAINING_MENUS).filter(([, m]) => m.intensive)
                                 .map(([key, menu]) => (
-                                <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                                <option key={key} value={key}>{menu.name}</option>
                               ))}
                             </select>
                             {showNewPitchSelect && availableNewPitches.length > 0 && (
@@ -1041,11 +1041,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             <select
                               value={subAssignments[player.id] || 'physique'}
                               onChange={(e) => setSubAssignments(prev => ({ ...prev, [player.id]: e.target.value }))}
-                              className="bg-gray-700 text-white text-xs px-1.5 py-1 rounded w-28"
+                              className="bg-gray-700 text-white text-xs px-1 py-1 rounded w-28"
                             >
                               {Object.entries(SUB_TRAINING_MENUS)
                                 .map(([key, menu]) => (
-                                <option key={key} value={key}>{menu.icon} {menu.name}</option>
+                                <option key={key} value={key}>{menu.name}</option>
                               ))}
                             </select>
                             {(subAssignments[player.id] || 'physique') === 'subposition' && (

@@ -134,8 +134,11 @@ const TeamInfoScreen = ({ gameMode }) => {
           </select>
         </div>
 
-        <div className="bg-surface-2 rounded-lg p-6 mb-6">
-          <div className={`grid ${team.corporateData ? 'grid-cols-5' : 'grid-cols-3'} gap-4 text-white`}>
+        {/* 内訳とレーダーを1枚に並べる。
+            以前は別々の全幅パネルで、内訳は3つの数字が1250pxに散り、
+            レーダーは1250pxのパネルの中で240pxしか使っていなかった */}
+        <div className="bg-surface-2 rounded-lg p-6 mb-6 flex flex-wrap items-start gap-6">
+          <div className={`grid ${team.corporateData ? 'grid-cols-5' : 'grid-cols-3'} gap-x-8 gap-y-3 text-white`}>
             <div><div className="text-sm text-gray-300">総人数</div><div className="text-2xl font-bold">{team.players.length}人</div></div>
             <div><div className="text-sm text-gray-300">投手</div><div className="text-2xl font-bold">{pitchers.length}人</div></div>
             <div><div className="text-sm text-gray-300">野手</div><div className="text-2xl font-bold">{fielders.length}人</div></div>
@@ -159,12 +162,12 @@ const TeamInfoScreen = ({ gameMode }) => {
               </>);
             })()}
           </div>
-        </div>
 
-        {/* チーム戦力レーダー */}
-        <div className="bg-surface-2 rounded-lg p-4 mb-6 flex flex-col items-center">
-          <h2 className="text-sm font-bold text-gray-300 mb-1 self-start">チーム戦力</h2>
-          <AbilityRadar axes={teamRadarAxes(team)} size={240} />
+          {/* チーム戦力レーダー */}
+          <div className="ml-auto">
+            <h2 className="text-sm font-bold text-gray-300 mb-1">チーム戦力</h2>
+            <AbilityRadar axes={teamRadarAxes(team)} size={240} />
+          </div>
         </div>
 
         {/* 投手テーブル */}
