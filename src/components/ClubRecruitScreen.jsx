@@ -64,6 +64,8 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
   if (confirmed) {
     return (
       <div className="p-4 bg-surface-1 min-h-screen">
+        {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
+        <div className="max-w-7xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-3">入部受付完了</h1>
         <div className="mb-4 bg-surface-2 rounded p-3">
           <div className="text-xs text-gray-300">
@@ -94,11 +96,14 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
           オフシーズンへ進む
         </button>
       </div>
+      </div>
     );
   }
 
   return (
     <div className="p-4 bg-surface-1 min-h-screen">
+      {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
+      <div className="max-w-7xl mx-auto">
       <h1 className="text-xl font-bold text-white mb-1">入部希望者</h1>
       <p className="text-gray-300 text-xs mb-4">
         プロや企業チームに入れなかった選手たちが入部を希望しています。受け入れる選手を選んでください。
@@ -178,6 +183,7 @@ const ClubRecruitScreen = ({ seasonData, onComplete }) => {
           {acceptedCount > 0 ? `${acceptedCount}名を受け入れて確定` : '入部なしで確定'}
         </button>
       </div>
+    </div>
     </div>
   );
 };

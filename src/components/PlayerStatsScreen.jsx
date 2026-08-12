@@ -166,7 +166,7 @@ const PlayerStatsScreen = ({ seasonData, allTeams, userTeamName }) => {
     : [];
 
   return (
-    <div className="p-4">
+    <div className="p-4 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-bold text-white">選手成績</h1>
         <div className="flex gap-1">

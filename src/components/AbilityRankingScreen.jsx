@@ -469,6 +469,9 @@ const AbilityRankingScreen = () => {
 
   return (
     <div className="p-4 bg-surface-1 min-h-screen text-white">
+      {/* 背景はビューポート全幅のまま、本文だけ 7xl で止める
+          （4Kだと列が2300pxに引き伸ばされて1行を目で追えなくなる） */}
+      <div className="max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold mb-1">📰 総合ランキング</h1>
       <p className="text-gray-300 text-xs mb-4">全チーム・全選手の能力ランキング</p>
 
@@ -619,6 +622,7 @@ const AbilityRankingScreen = () => {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 };

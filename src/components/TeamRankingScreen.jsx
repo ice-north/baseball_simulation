@@ -331,7 +331,7 @@ const TeamRankingScreen = ({ userTeamName, gameMode, seasonData, onBack }) => {
   enriched.forEach(e => { if (rankCounts[e.rank] !== undefined) rankCounts[e.rank]++; });
 
   return (
-    <div className="p-4 text-white">
+    <div className="p-4 text-white max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
         {onBack && <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">← 戻る</button>}

@@ -166,6 +166,8 @@ export default function DebugPlayerViewScreen({ onBack }) {
 
   return (
     <div className="min-h-screen bg-surface-1 text-white p-4">
+      {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
+      <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           {onBack && (
@@ -237,6 +239,7 @@ export default function DebugPlayerViewScreen({ onBack }) {
           </table>
         </div>
       )}
+    </div>
     </div>
   );
 }

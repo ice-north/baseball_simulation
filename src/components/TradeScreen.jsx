@@ -471,7 +471,7 @@ const TradeScreen = ({ userTeamName, seasonData, onBack }) => {
   };
 
   return (
-    <div className="p-6 min-h-screen">
+    <div className="p-6 min-h-screen max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-white">トレード</h1>
         {onBack && (

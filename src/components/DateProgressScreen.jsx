@@ -2117,7 +2117,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
   }
 
   return (
-    <div className="p-3 min-h-screen">
+    <div className="p-3 min-h-screen max-w-7xl mx-auto">
       <TutorialHint id="dateprogress-intro" title="シーズンの進め方">
         ここが基本画面です。<b className="text-cyan-200">日付を進める</b>と試合が自動で消化され、順位表・成績が更新されます。自分の試合は采配してプレイすることもできます。左サイドバーからロスター管理・注目選手などへ移動できます。
       </TutorialHint>

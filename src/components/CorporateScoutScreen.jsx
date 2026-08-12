@@ -192,6 +192,8 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
 
     return (
       <div className="p-4 bg-surface-1 min-h-screen">
+        {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
+        <div className="max-w-7xl mx-auto">
         <h1 className="text-2xl font-bold text-white mb-2">交渉結果</h1>
         <p className="text-sm text-gray-300 mb-5">
           {negotiationResults.length}名に打診 → {successes.length}名が入団承諾
@@ -272,12 +274,15 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           >交渉を終了する</button>
         </div>
       </div>
+      </div>
     );
   }
 
   if (phase === 'confirmed') {
     return (
       <div className="p-4 bg-surface-1 min-h-screen">
+        {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
+        <div className="max-w-7xl mx-auto">
         <h1 className="text-2xl font-bold text-white mb-4">スカウト入団完了</h1>
         {totalAcquired > 0 ? (
           <div className="mb-5">
@@ -316,11 +321,14 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
           className="btn-primary px-8 py-2.5 rounded-lg text-base"
         >完了</button>
       </div>
+      </div>
     );
   }
 
   return (
     <div className="p-4 bg-surface-1 min-h-screen">
+      {/* 背景は全幅のまま、本文だけ 7xl で止める（4Kで列が伸びきるのを防ぐ） */}
+      <div className="max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-white mb-2">スカウト交渉 - {seasonData?.year || 1}年目</h1>
       <div className="flex items-center gap-5 text-sm text-gray-300 mb-3">
         <span>注目度: <span className={reputation >= 50 ? 'text-yellow-400 font-bold' : 'text-gray-300'}>{reputation}</span></span>
@@ -492,6 +500,7 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         >獲得なしで進む</button>
       </div>
       {modalPlayer && <PlayerDetailModal player={modalPlayer} onClose={() => setModalPlayer(null)} />}
+    </div>
     </div>
   );
 };
