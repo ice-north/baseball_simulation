@@ -3973,7 +3973,7 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               </div>
 
               {hasContent ? (
-                <div className="overflow-y-auto flex-1 p-4" style={{ background: PAPER }}>
+                <div className="overflow-y-auto flex-1 min-h-0 p-4" style={{ background: PAPER }}>
                   {/* 速報ティッカー */}
                   {d.tournamentNews.length > 0 && (
                     <div className="rounded-sm px-3 py-2 mb-3 flex gap-3 items-center flex-wrap" style={{ background: '#7f1d1d' }}>

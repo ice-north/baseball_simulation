@@ -468,7 +468,7 @@ export const Sidebar = ({
       </div>
     </div>
 
-    <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+    <nav className="flex-1 min-h-0 overflow-y-auto px-2 py-3 space-y-0.5">
       <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">進行</div>
       <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
       <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />

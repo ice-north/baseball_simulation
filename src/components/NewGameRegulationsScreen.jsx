@@ -212,19 +212,19 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
         {/* 詳細設定 */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <h2 className="text-xl font-bold mb-4 text-white">詳細設定（カスタマイズ可能）</h2>
-          <div className="space-y-4 text-white">
-            <div className="flex items-center justify-between">
+          <div className="space-y-3 text-white">
+            <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">DH制</label>
-              <select value={tempSettings.useDH ? 'true' : 'false'} onChange={(e) => setTempSettings({...tempSettings, useDH: e.target.value === 'true'})} className="bg-gray-700 rounded px-3 py-2">
+              <select value={tempSettings.useDH ? 'true' : 'false'} onChange={(e) => setTempSettings({...tempSettings, useDH: e.target.value === 'true'})} className="bg-gray-700 rounded px-3 py-2 w-full">
                 <option value="true">有効</option>
                 <option value="false">無効</option>
               </select>
             </div>
-            {!selectedLeague && <div className="flex items-center justify-between">
+            {!selectedLeague && <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">チーム数</label>
-              <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value) || 4)} className="bg-gray-700 rounded px-3 py-2 w-24" />
+              <input type="number" min="2" max="12" value={tempSettings.teamsCount} onChange={(e) => handleTeamsCountChange(parseInt(e.target.value) || 4)} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums" />
             </div>}
-            {!selectedLeague && <div className="flex items-center justify-between">
+            {!selectedLeague && <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">リーグ形式</label>
               <select value={tempSettings.leagueFormat || 'single'} onChange={(e) => {
                 const newFormat = e.target.value;
@@ -247,18 +247,18 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
                   }
                 }
                 setTempSettings({...tempSettings, leagueFormat: newFormat, gamesPerSeason: adjustedGames});
-              }} className="bg-gray-700 rounded px-3 py-2">
+              }} className="bg-gray-700 rounded px-3 py-2 w-full">
                 <option value="single">1リーグ制</option>
                 <option value="two" disabled={tempSettings.teamsCount < 4}>2リーグ制（{Math.floor(tempSettings.teamsCount / 2)}チーム×2）</option>
               </select>
             </div>}
-            <div className="flex items-center justify-between">
+            <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">年間試合数</label>
-              <div className="flex items-center gap-2">
+              <div className="w-full">
                 <select
                   value={tempSettings.gamesPerSeason}
                   onChange={(e) => setTempSettings({...tempSettings, gamesPerSeason: parseInt(e.target.value)})}
-                  className="bg-gray-700 rounded px-3 py-2"
+                  className="bg-gray-700 rounded px-3 py-2 w-full"
                 >
                   {(() => {
                     const tc = tempSettings.teamsCount || 4;
@@ -282,17 +282,17 @@ const NewGameRegulationsScreen = ({ onComplete, onBack, selectedLeague = null })
                 </select>
               </div>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">プレーオフ形式</label>
-              <select value={tempSettings.playoffFormat} onChange={(e) => setTempSettings({...tempSettings, playoffFormat: e.target.value})} className="bg-gray-700 rounded px-3 py-2">
+              <select value={tempSettings.playoffFormat} onChange={(e) => setTempSettings({...tempSettings, playoffFormat: e.target.value})} className="bg-gray-700 rounded px-3 py-2 w-full">
                 <option value="short">3回戦制（2勝先取）</option>
                 <option value="full">5回戦制（3勝先取）</option>
                 <option value="tournament">4チームトーナメント</option>
               </select>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="grid grid-cols-[10rem_minmax(0,22rem)] items-center gap-4">
               <label className="font-medium">延長最大回数</label>
-              <input type="number" min="9" max="20" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({...tempSettings, maxExtraInnings: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24" />
+              <input type="number" min="9" max="20" value={tempSettings.maxExtraInnings} onChange={(e) => setTempSettings({...tempSettings, maxExtraInnings: parseInt(e.target.value)})} className="bg-gray-700 rounded px-3 py-2 w-24 tabular-nums" />
             </div>
           </div>
         </div>
