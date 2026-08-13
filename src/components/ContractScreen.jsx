@@ -71,8 +71,22 @@ const pitcherOverall = (p) =>
   Math.round((((p.pitching?.velocity||130) - 115) * 2.5 + (p.pitching?.control || 50) + ((p.pitching?.stamina || 100) / 2)) / 3);
 
 const ContractScreen = ({ seasonData, allTeams, onComplete }) => {
-  const teamNames = Object.keys(TEAMS_DATA || {});
-  const userTeamName = teamNames[0] || 'チームA';
+  const userTeamName = Object.keys(TEAMS_DATA || {})[0] || 'チームA';
+  // ⚠ **自リーグのチームだけを対象にすること**。
+  // 以前は `Object.keys(TEAMS_DATA)` を回しており、独立26 + 社会人300 + 大学234 =
+  // **560チーム全部**から毎年戦力外を出していた（1年目の実測で3090人）。
+  // それらは年度替わりの `releaseCPUCorporatePlayers`（社会人・独立）と
+  // `processUniversityTeamGraduation`（大学は卒業のみ）が既に担当しているので、
+  // ここで触ると二重処理になる。とくに**大学は戦力外という概念自体が無い**のに
+  // 1〜3年生が毎年3人ずつ消えていた（4年かけて育てる前提が崩れる）。
+  const teamNames = useMemo(() => {
+    const league = seasonData?.settings?.teamNames;
+    const scoped = Array.isArray(league) && league.length > 0
+      ? league.filter(n => TEAMS_DATA?.[n])
+      : [];
+    // 自チームは必ず含める（設定が壊れているセーブでも画面が空にならないように）
+    return scoped.includes(userTeamName) ? scoped : [userTeamName, ...scoped];
+  }, [seasonData, userTeamName]);
   const [releasedPlayers, setReleasedPlayers] = useState({});
   const [aiProcessed, setAiProcessed] = useState(false);
   const [confirmed, setConfirmed] = useState(false);

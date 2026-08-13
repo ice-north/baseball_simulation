@@ -360,12 +360,20 @@ const CORP_ROSTER_TARGET = { S: 35, A: 32, B: 28, C: 25, D: 18 };
 // CPU社会人チームの自動戦力外通告（非社会人モード用）
 // 社会人モードでは CorporateDepartureScreen が担当するため、
 // 独立・大学モードでのみ呼び出す
+//
+// ⚠ **1チームの戦力外は年1回・1箇所だけ**。担当は以下のとおり分かれている:
+//     自リーグ（プレイヤーが対戦するチーム）… `ContractScreen`（11/9）
+//     背景の社会人・独立                     … この関数（年度替わり）
+//     クラブ                                 … step 5.65
+//     大学                                   … `processUniversityTeamGraduation`（卒業のみ・放出なし）
+//   `excludeTeams` に自リーグを渡して二重処理を避ける。
 // ============================================================
-export function releaseCPUCorporatePlayers(allTeams, currentYear) {
+export function releaseCPUCorporatePlayers(allTeams, currentYear, excludeTeams = []) {
   const userTeamName = Object.keys(allTeams)[0];
+  const skip = new Set([userTeamName, ...excludeTeams]);
 
   for (const [teamName, team] of Object.entries(allTeams)) {
-    if (teamName === userTeamName) continue;
+    if (skip.has(teamName)) continue;   // 自チーム＋自リーグは ContractScreen が担当
     if (!team?.corporateData) continue;
     if (team.corporateData.type === 'club') continue;  // クラブは step 5.65 で管理
 

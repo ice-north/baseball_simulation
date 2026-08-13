@@ -7,13 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "node tools/sim-harness/scope-check.mjs && node tools/sim-harness/season-check.mjs && node tools/sim-harness/draft-check.mjs && node tools/sim-harness/bracket-check.mjs",
+    "check": "node tools/sim-harness/scope-check.mjs && node tools/sim-harness/season-check.mjs && node tools/sim-harness/draft-check.mjs && node tools/sim-harness/bracket-check.mjs && node tools/sim-harness/contract-scope-check.mjs",
     "check:season": "node tools/sim-harness/season-check.mjs",
     "check:draft": "node tools/sim-harness/draft-check.mjs",
     "check:bracket": "node tools/sim-harness/bracket-check.mjs",
     "check:progression": "node tools/sim-harness/progression-check.mjs",
     "check:full": "npm run check && node tools/sim-harness/progression-check.mjs",
-    "check:scope": "node tools/sim-harness/scope-check.mjs"
+    "check:scope": "node tools/sim-harness/scope-check.mjs",
+    "check:contract": "node tools/sim-harness/contract-scope-check.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",

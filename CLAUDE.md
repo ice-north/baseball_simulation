@@ -705,6 +705,39 @@ NEW GAME → 大学チーム選択 → キャンプ
 - **UI**: `src/components/UniversityScoutScreen.jsx`
 - **セーブ/ロード**: `WORLD_DATA._universityScout` に候補・獲得済みリストを保持。年度末にnullリセット
 
+## ⚠ 戦力外は「1チーム年1回・1箇所」だけ（`npm run check:contract`）
+選手が数年かけて育つ前提を守るため、**同じチームから年に二度放出してはいけない**。
+担当は以下のとおり分かれている。
+
+| 対象 | 担当 | 時期 |
+|---|---|---|
+| **自リーグ**（プレイヤーが対戦するチーム） | `ContractScreen`（独立） / `CorporateDepartureScreen`（社会人） | 11/9 |
+| 背景の社会人・独立 | `releaseCPUCorporatePlayers` | 年度替わり |
+| クラブ | `yearProgressionSystem` step 5.65 | 年度替わり |
+| **大学** | `processUniversityTeamGraduation`（**卒業のみ。放出しない**） | 年度替わり |
+
+### 踏んだ事故: 契約更改が全球界560チームを解雇していた
+`ContractScreen` が `Object.keys(TEAMS_DATA)` を回しており、独立26＋社会人300＋
+大学234の**全部**から毎年戦力外を出していた。実測 **3570人/年**。
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| 自リーグ（3チーム） | 11人 | **11人** |
+| **大学 234校** | **2411人** | **0人** |
+| 背景の社会人・独立 | 1148人 | 0人（年度替わりが担当） |
+
+- **大学が最悪だった**。判定に `総合力 < 35 → +25点` があり、年齢の項は
+  18〜22歳では0点なので、**能力の低い1年生がそのまま切られていた**。
+  1校あたり10.3人。4年かけて伸ばす前提が成立していなかった
+- ⚠ **2つの判定式は性格が逆**。`releaseCPUCorporatePlayers` は
+  `Math.min(該当者, 空き, 3)` で**0人もあり得る**が、`ContractScreen` は
+  `Math.max(AI_MIN_RELEASES, 該当者)` で**該当者ゼロでも3人切る**。
+  後者を他カテゴリに向けてはいけない
+- ⚠ **`progression-check` では捕まらない**。あれは年次進行の関数を直接呼ぶので、
+  React コンポーネント（`ContractScreen`）の中の処理を通らない。
+  采配モードが sim-harness で実行されないのと同じ構図。
+  `contract-scope-check.mjs` は判定式の同値コピーを置いて範囲だけを検証する
+
 ## クラブチームのプロ意識駆動成長 (`src/season/yearProgressionSystem.js`)
 - **設計思想**: クラブチームはキャンプも無く実践経験も少ないため、人工的な突出選手ブーストではなく、選手のプロ意識(discipline)×成長率(growthPotential)で数年かけてドラフト候補に成長する設計
 - **クラブ除外**: `corporateInit.js` の `proChance` / `standout` はクラブチーム(`type === 'club'`)を除外。初期能力は低い(RANK_SCALE D=0.58, C=0.70)

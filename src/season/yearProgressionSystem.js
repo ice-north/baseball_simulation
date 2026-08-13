@@ -1195,7 +1195,8 @@ export function advanceToNextYear(seasonData, allTeams) {
   // 5.75. CPU社会人・独立チームの自動戦力外通告（非社会人モードのみ）
   // 社会人モードは CorporateDepartureScreen の AI 放出処理が担当するため除外
   if (!seasonData.settings?.corporateMode) {
-    releaseCPUCorporatePlayers(teamsAfterRetirement, currentYear);
+    // 自リーグは ContractScreen（11/9）が担当済みなので除外する
+    releaseCPUCorporatePlayers(teamsAfterRetirement, currentYear, seasonData.settings?.teamNames || []);
   }
 
   // ━━━ 入団優先度: S社会人 → A社会人 → 独立リーグ → B社会人 → C/D社会人 → クラブ ━━━
