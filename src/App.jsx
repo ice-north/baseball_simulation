@@ -2990,7 +2990,7 @@ if (newOuts === 3) {
         <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800">
           {/* オートセーブ完了トースト */}
           {autoSaveFlash && (
-            <div className="fixed top-3 right-3 z-[60] bg-gray-900/90 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none animate-pulse">
+            <div className="fixed bottom-3 right-3 z-[60] bg-gray-900/95 border border-cyan-600/50 text-cyan-200 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg pointer-events-none">
               💾 オートセーブしました
             </div>
           )}
