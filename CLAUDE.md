@@ -9,6 +9,13 @@ Vite + React (JSX, no TypeScript), Tailwind CSS
 - **最小サイズは `text-xs`（12px）**。`text-[9px]`・`text-[10px]`・`text-[11px]` は使用禁止
 - データ表・ラベル類は `text-xs` 以上、本文は `text-sm` 以上を基本とする
 - 新規UIを書くときは必ず `text-xs` を下限として意識すること
+- ⚠ **SVG の `fontSize` もこの下限の対象**。Tailwind のクラス検査（`text-[Npx]` のgrep）を
+  すり抜けるので見落としやすい。実際にトーナメント表（`bracketRenderer.jsx`）が
+  **チーム名11px / スコア10px / 日付9px** で描かれており、都市対抗本戦の1画面に
+  **99箇所**あった。`viewBox` を持たない SVG は 1単位 = 1px なので literal に小さい
+  - 直すときは**文字だけ大きくしない**。`TEAM_H` / `NAME_W` / `PAD_BOTTOM` を
+    一緒に広げないと名前が枠からはみ出し、行が重なる
+    （compact時: TEAM_H 20→22 / NAME_W 170→196 / PAD_BOTTOM 18→20）
 
 ### 2. 文字色・コントラスト
 - **`text-gray-400`（低コントラスト）は原則禁止**。最低でも `text-gray-300` を使う

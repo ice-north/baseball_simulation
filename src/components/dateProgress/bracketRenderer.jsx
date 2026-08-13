@@ -9,17 +9,21 @@ export function renderBracketWithLines(bracket, teamDefsMap = null, userTeamName
     const firstRoundCount = rounds[0].length;
     const compact = firstRoundCount > 8;
 
-    const TEAM_H = compact ? 20 : 27;
+    // ⚠ **12px を下回らせないこと**（CLAUDE.md「最小サイズは text-xs（12px）」）。
+    // ここは SVG の fontSize なので Tailwind のクラス検査に引っかからず、
+    // 32チームの都市対抗本戦で チーム名11px / スコア10px / 日付9px になっていた
+    // （1画面に99箇所）。文字を大きくするぶん、名前の枠と行の高さも一緒に広げる。
+    const TEAM_H = compact ? 22 : 27;
     const MATCH_GAP = compact ? 4 : 6;
     const SLOT_H = TEAM_H * 2 + MATCH_GAP;
-    const NAME_W = compact ? 170 : 215;
+    const NAME_W = compact ? 196 : 215;
     const CONN_W = compact ? 30 : 44;
     const PAD_TOP = 8;
     const PAD_LEFT = 4;
-    const PAD_BOTTOM = 18;
-    const FONT = compact ? 11 : 13;
-    const SCORE_FONT = compact ? 10 : 12;
-    const DATE_FONT = compact ? 9 : 10;
+    const PAD_BOTTOM = 20;
+    const FONT = compact ? 12 : 13;
+    const SCORE_FONT = 12;
+    const DATE_FONT = 12;
     const WIN_COLOR = '#f97316';
     const DEF_COLOR = '#4b5563';
     const WIN_W = 2.5;
