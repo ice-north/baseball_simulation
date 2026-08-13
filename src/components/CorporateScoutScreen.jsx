@@ -305,11 +305,15 @@ const CorporateScoutScreen = ({ seasonData, allTeams, draftedPlayerIds = [], onC
         {totalAiRecruited > 0 && (
           <div className="mb-5">
             <h2 className="text-base font-bold text-blue-400 mb-3">他チームのスカウト獲得 ({totalAiRecruited}名)</h2>
-            {Object.entries(aiResults).map(([team, players]) => (
-              <div key={team} className="text-sm text-gray-300 mb-1.5">
-                {team}: {players.map(p => `${p.name}(${POSITION_NAMES[p.position]})`).join(', ')}
-              </div>
-            ))}
+            {/* 1列で並べると160チーム超で縦4000px近くなり、横は左400pxしか使わない。
+                多段にして1〜2画面に収める（情報は減らさない） */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1">
+              {Object.entries(aiResults).map(([team, players]) => (
+                <div key={team} className="text-sm text-gray-300">
+                  {team}: {players.map(p => `${p.name}(${POSITION_NAMES[p.position]})`).join(', ')}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

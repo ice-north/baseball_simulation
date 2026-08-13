@@ -736,7 +736,8 @@ NEW GAME → 大学チーム選択 → キャンプ
 
 | 対象 | 担当 | 時期 |
 |---|---|---|
-| **自リーグ**（プレイヤーが対戦するチーム） | `ContractScreen`（独立） / `CorporateDepartureScreen`（社会人） | 11/9 |
+| **自リーグ**（プレイヤーが対戦するチーム） | `ContractScreen`（独立） | 11/9 |
+| 社会人モードの社会人・独立 | `CorporateDepartureScreen` → `processCorporateRetirements` | 11/9 |
 | 背景の社会人・独立 | `releaseCPUCorporatePlayers` | 年度替わり |
 | クラブ | `yearProgressionSystem` step 5.65 | 年度替わり |
 | **大学** | `processUniversityTeamGraduation`（**卒業のみ。放出しない**） | 年度替わり |
@@ -758,6 +759,11 @@ NEW GAME → 大学チーム選択 → キャンプ
   `Math.min(該当者, 空き, 3)` で**0人もあり得る**が、`ContractScreen` は
   `Math.max(AI_MIN_RELEASES, 該当者)` で**該当者ゼロでも3人切る**。
   後者を他カテゴリに向けてはいけない
+- ⚠ **同じ穴が `processCorporateRetirements`（社会人モードの退団）にもあった**。
+  こちらも `Object.entries(allTeams)` を無条件で回しており、**実測4136名/年**。
+  内訳は大学234校から7人前後ずつ。`team.universityData` を除外して 690名/年 になった
+  （社会人・独立のみ。社会人モードでは `releaseCPUCorporatePlayers` が
+  `corporateMode` ガードでスキップされるので、この画面が唯一の担当で正しい）
 - ⚠ **`progression-check` では捕まらない**。あれは年次進行の関数を直接呼ぶので、
   React コンポーネント（`ContractScreen`）の中の処理を通らない。
   采配モードが sim-harness で実行されないのと同じ構図。

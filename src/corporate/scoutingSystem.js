@@ -33,6 +33,12 @@ export function processCorporateRetirements(allTeams, userTeamName) {
 
   Object.entries(allTeams).forEach(([teamName, team]) => {
     if (!team?.players) return;
+    // ⚠ **大学は対象外**。大学に戦力外という概念は無く、
+    // `processUniversityTeamGraduation`（卒業のみ）が担当する。
+    // 以前はここで全 TEAMS_DATA を回しており、234校から毎年7人前後——
+    // 実測で**4136名/年**（1〜3年生を能力で切っていた）を放出していた。
+    // 独立モードの `ContractScreen` で踏んだのと同じ穴。
+    if (team.universityData) return;
 
     const retired = [];
     team.players.forEach(player => {

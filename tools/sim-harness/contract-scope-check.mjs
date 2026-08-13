@@ -53,6 +53,17 @@ for (const [name, t] of Object.entries(TEAMS_DATA)) {
   else corp += n;
 }
 
+// 社会人モードの退団（CorporateDepartureScreen → processCorporateRetirements）も
+// 同じ穴を持っていた。大学が対象外になっているかを実物の関数で検証する
+const { processCorporateRetirements } = await import('../../src/corporate/scoutingSystem.js');
+const corpRes = processCorporateRetirements(TEAMS_DATA, userTeamName);
+let corpUni = 0, corpUniTeams = 0, corpOther = 0;
+for (const [name, ids] of Object.entries(corpRes.aiReleases || {})) {
+  const n = ids?.length || 0;
+  if (TEAMS_DATA[name]?.universityData) { corpUni += n; if (n) corpUniTeams++; }
+  else corpOther += n;
+}
+
 const r = new Report('契約更改が触るチームの範囲');
 r.info('世界のチーム数', `${teams}`);
 r.info('修正前の解雇数（全チーム）', `${all}人`);
@@ -62,4 +73,6 @@ r.info('修正後の解雇数（自リーグのみ）', `${scoped}人`);
 r.band('自リーグの戦力外', scoped, 0, 40, (v) => `${v}人`);
 r.assert('大学は対象外（卒業のみ）', uni === 0 || true, `大学${uni}人ぶんは対象から外れる`);
 r.assert('自リーグ以外は年度替わりが担当', scoped < all, `${all} → ${scoped} 人`);
+r.info('社会人モードの退団（実関数）', `${corpUni + corpOther}人`);
+r.assert('社会人の退団も大学を触らない', corpUni === 0, `大学から${corpUni}人（${corpUniTeams}校）`);
 r.print();
