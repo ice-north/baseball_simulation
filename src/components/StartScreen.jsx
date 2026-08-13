@@ -103,10 +103,10 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                 {slot ? (
                   <div>
                     <div>スロット {index + 1}</div>
-                    <div className="text-sm font-normal text-blue-200">
+                    <div className="text-sm font-normal opacity-80">
                       Year {slot.year} - {slot.date.month}月{slot.date.day}日{slot.teamName ? ` / ${slot.teamName}` : ''}
                     </div>
-                    <div className="text-xs font-normal text-gray-300">
+                    <div className="text-xs font-normal opacity-60">
                       {slot.timestamp ? new Date(slot.timestamp).toLocaleString('ja-JP') : ''}
                     </div>
                   </div>
@@ -125,7 +125,7 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                   className="btn-primary w-80 px-6 py-3 rounded-lg font-semibold text-sm border transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   💾 オートセーブから続ける
-                  <span className="text-cyan-400/70 text-xs font-normal">
+                  <span className="text-xs font-normal opacity-70">
                     {autosaveInfo.year ? `${autosaveInfo.year}年目` : ''}{autosaveInfo.date ? ` ${autosaveInfo.date.month}月` : ''}{fmtDate(autosaveInfo.timestamp) ? `・${fmtDate(autosaveInfo.timestamp)}` : ''}
                   </span>
                 </button>
@@ -154,10 +154,10 @@ const StartScreen = ({ onNewGame, onSandbox, onContinue, onEdit, onEditCorporate
                 {slot ? (
                   <div>
                     <div>スロット {index + 1}</div>
-                    <div className="text-sm font-normal text-purple-200">
+                    <div className="text-sm font-normal opacity-80">
                       Year {slot.year} - {slot.date.month}月{slot.date.day}日{slot.teamName ? ` / ${slot.teamName}` : ''}
                     </div>
-                    <div className="text-xs font-normal text-gray-300">
+                    <div className="text-xs font-normal opacity-60">
                       {slot.timestamp ? new Date(slot.timestamp).toLocaleString('ja-JP') : ''}
                     </div>
                   </div>
