@@ -1177,7 +1177,14 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
               </table>
             </div>
 
-            <div className="text-center mt-3">
+            {/* 進行ボタンは画面下に貼り付ける。
+                大学の56人ロスターだと内野手タブが23行になり、表の下に置くと
+                ボタンが1200px地点＝画面外に出て、全部スクロールしないと押せなかった。
+                ⚠ sticky は祖先に overflow:hidden があると効かない。ここは表の
+                コンテナ（overflow-hidden）の**外**なので成立している。
+                表が短いときは自然位置に収まる（sticky の性質） */}
+            <div className="sticky bottom-0 z-10 text-center mt-3 py-2 -mx-3 px-3
+                            bg-surface-1/95 backdrop-blur border-t border-gray-700/60">
               <button
                 onClick={handleExecuteTraining}
                 className="btn-primary px-10 py-2.5 rounded-lg text-base transition shadow"

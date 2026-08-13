@@ -2774,6 +2774,10 @@ NPB_CARRY）/ `judgeFielderReach`（CATCH・フェンス・pickOutfielder）/
   ⚠ **`position` は変えない**。キャンプ中だけの表示上の割り当てで、保存もしない
 - 移動した投手は**最も適性の高い守備位置のタブ**に入る（`fielderTabOf`）
 - 「全員に一括」はタブに関係なく全選手へ適用する（ラベルで明示）
+- **「クール練習を実行」は画面下に貼り付ける**（`sticky bottom-0`）。大学の56人
+  ロスターだと内野手タブが23行になり、表の下に置くとボタンが1200px地点＝画面外に出て、
+  全部スクロールしないと押せなかった。表が短いときは自然位置に収まる（sticky の性質）
+  - ⚠ `sticky` は祖先に `overflow:hidden` があると効かない。表のコンテナの**外**に置くこと
 
 ## キャンプ練習メニュー（`src/season/yearProgressionSystem.js`）
 
