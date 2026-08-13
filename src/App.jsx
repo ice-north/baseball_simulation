@@ -319,9 +319,20 @@ import { Sidebar, RenderBases, AccordionSection } from './components/GameUICompo
         initializeAllPlayersCondition();
 
         setScreenMode('management');
-        // オフシーズンで保存された場合はオフシーズン画面に戻す（12/1等の日付が日程画面に表示されるバグを防ぐ）
-        const savedPhase = saveData.seasonData?.phase;
-        if (savedPhase === 'off_season') {
+        // オフシーズン画面で保存したならそこへ戻す（12/1等の日付が日程画面に出るのを防ぐ）。
+        //
+        // ⚠ **`phase` で判定してはいけない**。`getCurrentPhase` は独立・社会人モードで
+        // **10/21〜11/29 の「イベントの谷間」も `off_season` を返す**（プレーオフ後、
+        // ドラフト前後、契約更改の前後…）。そのため 11/5 のセーブをロードすると
+        // 契約更改(11/9)・トライアウト/スカウト入団(11/10)・年度末決算(11/30)を
+        // まるごと飛ばして翌年へ進んでしまっていた（実測: 社会人・独立で再現。
+        // 大学モードは `universityMode` 分岐が 11/29 まで REGULAR_SEASON なので無事だった）。
+        // 保存時にどの画面を開いていたかは `managementView` に入っているのでそれを使う。
+        const savedView = saveData.managementView;
+        const d = saveData.seasonData?.currentDate;
+        // managementView を持たない旧セーブ向けの保険。12月以降だけオフシーズン扱い
+        const deepOffseason = (d?.month ?? 0) >= 12 || (d?.month === 11 && (d?.day ?? 0) >= 30);
+        if (savedView === 'offseason' || (!savedView && deepOffseason)) {
           setManagementView('offseason');
         } else {
           setManagementView('dateprogress');
