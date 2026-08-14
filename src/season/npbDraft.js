@@ -526,10 +526,13 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       // ⚠ 一芸指名のときは**総合点も偏差に直して重みを下げる**（HUNT_SCORE_W）。
       //    素点のまま足すと総合点の幅（8σ）に道具が埋もれ、一芸型が上がってこない
       const huntScore = (c) => {
-        const base = c.score + getBalancePenalty(npbTeam, c, teamDraftTracker);
-        if (!huntTool) return base;
-        return toolDevOf(c.toolDevs, huntTool)
-          + ((base - mainScoreStats.mean) / mainScoreStats.sd) * HUNT_SCORE_W;
+        const bal = getBalancePenalty(npbTeam, c, teamDraftTracker);
+        if (!huntTool) return c.score + bal;
+        // ⚠ バランスの減点だけは **HUNT_SCORE_W を掛けない**。0.35倍すると
+        //    +3.5σ の道具に押し切られ、投手だけを7人指名する球団が出る
+        return toolDevOf(c.toolDevs, huntTool, c.player.position)
+          + ((c.score - mainScoreStats.mean) / mainScoreStats.sd) * HUNT_SCORE_W
+          + bal / mainScoreStats.sd;
       };
       const ranked = huntTool ? [...remaining].sort((a, b) => huntScore(b) - huntScore(a)) : remaining;
       const searchWindow = ranked.slice(0, Math.max(8, Math.ceil(ranked.length * 0.15)));
@@ -580,10 +583,11 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       // 育成は「今は使えないが1つだけ図抜けている」を取りに行く枠なので最も道具寄り
       const huntTool = Math.random() < TOOL_HUNT_RATE_IKU ? pickHuntTool(npbTeam) : null;
       const huntScore = (c) => {
-        const base = c.ikuScore + getBalancePenalty(npbTeam, c, teamDraftTracker);
-        if (!huntTool) return base;
-        return toolDevOf(c.toolDevs, huntTool)
-          + ((base - ikuScoreStats.mean) / ikuScoreStats.sd) * HUNT_SCORE_W;
+        const bal = getBalancePenalty(npbTeam, c, teamDraftTracker);
+        if (!huntTool) return c.ikuScore + bal;
+        return toolDevOf(c.toolDevs, huntTool, c.player.position)
+          + ((c.ikuScore - ikuScoreStats.mean) / ikuScoreStats.sd) * HUNT_SCORE_W
+          + bal / ikuScoreStats.sd;
       };
       const ranked = huntTool ? [...remaining].sort((a, b) => huntScore(b) - huntScore(a)) : remaining;
       const searchWindow = ranked.slice(0, 20);

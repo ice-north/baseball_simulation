@@ -214,8 +214,43 @@ export const randomHuntTool = () => {
   return keys[Math.floor(Math.random() * keys.length)];
 };
 
-/** その道具の偏差（持たない群の選手は 0＝総合点だけで並ぶ） */
-export const toolDevOf = (devs, tool) => (devs && devs[tool]) || 0;
+/**
+ * ポジション別の守備価値。センターラインほど厚く、一塁・左翼は薄い。
+ *
+ * ⚠ **この表は `npbCareer.evaluateNpbAbility` と共有する**。スカウトが下位で
+ *    守備型を探すときの物差しと、プロで生き残れるかの物差しが別々だと
+ *    「一芸で獲ったのに評価されない」が再発する。表を二重に作らないこと。
+ */
+export const POSITION_GLOVE_WEIGHT = {
+  catcher: { def: 0.30, arm: 0.16, lead: 0.20 },
+  short:   { def: 0.30, arm: 0.10 },
+  center:  { def: 0.26, arm: 0.06 },
+  second:  { def: 0.24, arm: 0.05 },
+  third:   { def: 0.20, arm: 0.09 },
+  right:   { def: 0.16, arm: 0.11 },
+  left:    { def: 0.14, arm: 0.04 },
+  first:   { def: 0.10, arm: 0.02 },
+};
+// ⚠ **最大値で正規化する（倍率は必ず1以下）**。三塁を1.0にすると捕手が
+//    守備1.5倍・肩1.78倍になり、守備系の一芸指名40件のうち**31件が捕手**に集中して
+//    指名全体の捕手シェアが 8%→12%（実NPB 8%）に膨らんだ。
+//    「守る場所で価値が変わる」は**要らない場所を減点する**形で表現すれば足りる。
+const GLOVE_TOOL_KEY = { defense: 'def', arm: 'arm', lead: 'lead' };
+const GLOVE_REF = { def: 0.30, arm: 0.16, lead: 0.20 };
+/**
+ * その道具の偏差。
+ * ⚠ **守備系は守る場所で価値が変わる**。素の偏差だけで並べると
+ *    「守備90の一塁手」が「守備85の遊撃手」に勝ってしまい、
+ *    源田型（守れる遊撃）ではなく「動けないが捕球は上手い選手」が獲れる。
+ */
+export const toolDevOf = (devs, tool, position) => {
+  const d = (devs && devs[tool]) || 0;
+  const key = GLOVE_TOOL_KEY[tool];
+  if (!key || !position || d <= 0) return d;
+  const w = POSITION_GLOVE_WEIGHT[position];
+  if (!w) return d;
+  return d * ((w[key] || 0) / GLOVE_REF[key]);
+};
 
 /**
  * 指名理由に「一芸」として掲示するかどうか。
