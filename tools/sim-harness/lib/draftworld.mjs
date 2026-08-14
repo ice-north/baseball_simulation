@@ -89,6 +89,16 @@ export function runDraft(YEAR = 6, opts = {}) {
     };
   }
 
+  // 指名前の候補スナップショット。processNPBDraft は指名した選手をプールから
+  // 取り除くので、**呼ぶ前に**取らないと「指名された選手」が母集団から消える。
+  const candidateSnapshot = [...highSchoolPool.players];
+  for (const k of Object.keys(universityPool)) {
+    for (const e of (universityPool[k] || [])) candidateSnapshot.push(e.player);
+  }
+  for (const t of Object.values(allTeams)) {
+    for (const p of (t.players || [])) candidateSnapshot.push(p);
+  }
+
   // processNPBDraft は内部で診断用 console.log を多数出すため一時的に抑制する。
   const origLog = console.log;
   console.log = () => {};
@@ -106,6 +116,8 @@ export function runDraft(YEAR = 6, opts = {}) {
     total: drafted.length,
     // 指名結果そのもの（巡目別の中身を調べる検証で使う）
     picks: drafted,
+    // 指名前の全候補（「その道具の上位が指名されたか」の検証で使う）
+    candidates: candidateSnapshot,
     bySource: {
       highschool: s.highschool || 0,
       university: s.university || 0,

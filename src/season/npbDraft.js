@@ -12,7 +12,7 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 import { checkNPBDraftEligibility, checkHallOfFame, cleanupPlayerReferences, computeSeasonAwardBonuses } from './yearProgressionSystem.js';
 import { addToObRegistry } from '../game/obRegistry.js';
 import { buildToolNorms, toolProfile, toolHuntRateForRound, TOOL_HUNT_RATE_IKU,
-         TOOL_HUNT_BONUS, randomHuntTool, toolDevOf, isSpecialist,
+         HUNT_SCORE_W, scoreStats, randomHuntTool, toolDevOf, isSpecialist,
          TOOL_LABELS, TOOL_NOUNS } from '../game/scoutTools.js';
 
 /**
@@ -156,6 +156,8 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const MIN_IKU_SCORE = 65;
   const eligible = allCandidates.filter(c => c.score >= MIN_IKU_SCORE);
   const mainEligible = allCandidates.filter(c => c.score >= MIN_DRAFT_SCORE);
+  // 一芸指名で総合点を偏差に直すための分布（固定の表を持たず毎回測る）
+  const mainScoreStats = scoreStats(mainEligible.map(c => c.score));
 
   // 候補の質で本指名巡数を決定（良い候補が多いほど多巡）
   const mainCandPerTeam = Math.floor(mainEligible.length / numTeams);
@@ -232,7 +234,8 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     if (shownTool) reasons.push(TOOL_NOUNS[shownTool] || TOOL_LABELS[shownTool]);
     return {
       player, teamName, npbTeam, reasons, draftRound: roundLabel,
-      huntTool: huntTool || null, scoutTool: shownTool, spike: candidate.spike || 0,
+      huntTool: huntTool || null, huntToolDev: huntTool ? (devs[huntTool] || 0) : 0,
+      scoutTool: shownTool, spike: candidate.spike || 0,
       topTool: candidate.topTool || null,
       scoutToolLabel: shownTool ? (TOOL_LABELS[shownTool] || '') : '',
       scoutToolDev: shownTool ? (devs[shownTool] || 0) : 0,
@@ -520,15 +523,23 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       const huntTool = Math.random() < toolHuntRateForRound(pickOrder) ? pickHuntTool(npbTeam) : null;
       // ⚠ ロスターバランスの減点は**並べ替えにも掛けること**。窓の中でしか
       //    引かないと、道具の加点で窓が投手だけで埋まり、投手8割のチームが出る
-      const huntScore = (c) => c.score + getBalancePenalty(npbTeam, c, teamDraftTracker)
-        + (huntTool ? toolDevOf(c.toolDevs, huntTool) * TOOL_HUNT_BONUS : 0);
+      // ⚠ 一芸指名のときは**総合点も偏差に直して重みを下げる**（HUNT_SCORE_W）。
+      //    素点のまま足すと総合点の幅（8σ）に道具が埋もれ、一芸型が上がってこない
+      const huntScore = (c) => {
+        const base = c.score + getBalancePenalty(npbTeam, c, teamDraftTracker);
+        if (!huntTool) return base;
+        return toolDevOf(c.toolDevs, huntTool)
+          + ((base - mainScoreStats.mean) / mainScoreStats.sd) * HUNT_SCORE_W;
+      };
       const ranked = huntTool ? [...remaining].sort((a, b) => huntScore(b) - huntScore(a)) : remaining;
       const searchWindow = ranked.slice(0, Math.max(8, Math.ceil(ranked.length * 0.15)));
+      // 好み・ゆらぎは並べ替えと同じ単位にする（一芸指名では偏差、通常は素点）
+      const unit = huntTool ? mainScoreStats.sd : 1;
       let bestCand = null, bestPref = -Infinity;
       for (const c of searchWindow) {
         const prefBonus = getTeamPreferenceScore(npbTeam, c);
         const noise = (Math.random() - 0.5) * 10;
-        const pref = huntScore(c) + prefBonus * 0.7 + noise;
+        const pref = huntScore(c) + (prefBonus * 0.7 + noise) / unit;
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
       }
       if (!bestCand) continue;
@@ -556,6 +567,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       return { ...c, ikuScore };
     })
     .sort((a, b) => b.ikuScore - a.ikuScore);
+  const ikuScoreStats = scoreStats(ikuEligible.map(c => c.ikuScore));
 
   for (let ikuRound = 1; ikuRound <= maxIkuRounds; ikuRound++) {
     // 1巡目: ウェーバー（下位から）、2巡目: 逆ウェーバー（上位から）
@@ -567,15 +579,20 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       if (remaining.length === 0) continue;
       // 育成は「今は使えないが1つだけ図抜けている」を取りに行く枠なので最も道具寄り
       const huntTool = Math.random() < TOOL_HUNT_RATE_IKU ? pickHuntTool(npbTeam) : null;
-      const huntScore = (c) => c.ikuScore + getBalancePenalty(npbTeam, c, teamDraftTracker)
-        + (huntTool ? toolDevOf(c.toolDevs, huntTool) * TOOL_HUNT_BONUS : 0);
+      const huntScore = (c) => {
+        const base = c.ikuScore + getBalancePenalty(npbTeam, c, teamDraftTracker);
+        if (!huntTool) return base;
+        return toolDevOf(c.toolDevs, huntTool)
+          + ((base - ikuScoreStats.mean) / ikuScoreStats.sd) * HUNT_SCORE_W;
+      };
       const ranked = huntTool ? [...remaining].sort((a, b) => huntScore(b) - huntScore(a)) : remaining;
       const searchWindow = ranked.slice(0, 20);
+      const unit = huntTool ? ikuScoreStats.sd : 1;
       let bestCand = null, bestPref = -Infinity;
       for (const c of searchWindow) {
         const prefBonus = getTeamPreferenceScore(npbTeam, c);
         const noise = (Math.random() - 0.5) * 12;
-        const pref = huntScore(c) + prefBonus * 0.5 + noise;
+        const pref = huntScore(c) + (prefBonus * 0.5 + noise) / unit;
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
       }
       if (!bestCand) continue;
