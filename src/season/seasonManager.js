@@ -514,4 +514,37 @@ export const generateMonthCalendar = (year, month, schedule) => {
   return calendar;
 };
 
+
+// ============================================================
+// 規定打席・規定投球回（タイトルの資格）
+//
+// ⚠ **定義をここ以外に書かないこと**。以前は3箇所にバラバラの式があった:
+//     シーズン中のランキング(DateProgressScreen) … 試合数×3.1 / 試合数×1.0
+//     シーズン終了時のタイトル(processSeasonEnd)  … **100打数 / 30 固定**
+//     検証ハーネス(lib/stats.mjs)                 … 試合数×2.5 / 試合数×0.5
+//   その結果「防御率ランキング1位」と「防御率王」が別人になっていた。
+//
+// ⚠ **`inningsPitched` はアウト数を持っている**（`+= p.outs`、ERAは `×27/outs`）。
+//   タイトル側の `inningsPitched >= 30` は「30回」のつもりが**30アウト＝10回**で、
+//   実測75試合のシーズンで投手78人中74人が規定到達、
+//   **17.7回で防御率0.00の中継ぎが防御率王**になっていた（首位打者は.454）。
+//
+// 実NPB: 規定打席 = 試合数 × 3.1（**打席**であって打数ではない） /
+//        規定投球回 = 試合数 × 1.0（イニング）
+// ============================================================
+export const PA_PER_GAME = 3.1;
+export const INNINGS_PER_GAME = 1.0;
+
+/** 規定打席（打席数）。シーズン途中は進行度で按分する */
+export const qualifiedPA = (totalGames, progress = 1) =>
+  Math.max(1, Math.floor((totalGames || 0) * PA_PER_GAME * Math.max(0, Math.min(1, progress))));
+
+/** 規定投球回を**アウト数**で返す（seasonStats.pitching.inningsPitched と同じ単位） */
+export const qualifiedOuts = (totalGames, progress = 1) =>
+  Math.max(3, Math.floor((totalGames || 0) * INNINGS_PER_GAME * Math.max(0, Math.min(1, progress))) * 3);
+
+/** 打席数。打席そのものは保存していないので 打数+四球+死球 で近似する（犠打犠飛は未集計） */
+export const plateAppearances = (b) =>
+  (b?.atBats || 0) + (b?.walks || 0) + (b?.hitByPitch || 0);
+
 // ES module exports

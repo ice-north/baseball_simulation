@@ -1,3 +1,5 @@
+import { qualifiedPA, qualifiedOuts, plateAppearances } from '../../../src/season/seasonManager.js';
+
 // ============================================================
 // sim-harness 成績集計 & 不変条件チェック
 // ============================================================
@@ -44,16 +46,22 @@ export function aggregateStats(TEAMS_DATA, names) {
 // リーグの個人成績リーダー（規定到達者の最高/最多値）を求める。
 // 規定は「チーム試合数」から近似（打者=2.5打席/試合、投手=0.5回/試合）。
 // 破壊された物理/集計は「首位打者.500」「規定防御率0.00」のような外れ値として現れる。
-export function leagueLeaders(TEAMS_DATA, names) {
-  let teamGames = 0;
-  for (const n of names) {
-    for (const p of TEAMS_DATA[n].players) {
-      const g = p.seasonStats?.batting?.games || 0;
-      if (g > teamGames) teamGames = g;
+export function leagueLeaders(TEAMS_DATA, names, gamesPerTeam = 0) {
+  // ⚠ チームの試合数を「一番多く出た選手の出場数」で代用しない。
+  //    休養・併用で最多出場が試合数を下回るため規定が緩くなる。
+  //    呼び出し側がシーズンの長さを知っているので受け取る（未指定時のみ従来の近似）
+  let teamGames = gamesPerTeam;
+  if (!teamGames) {
+    for (const n of names) {
+      for (const p of TEAMS_DATA[n].players) {
+        const g = p.seasonStats?.batting?.games || 0;
+        if (g > teamGames) teamGames = g;
+      }
     }
   }
-  const minAB = Math.max(50, Math.round(teamGames * 2.5));
-  const minOuts = Math.max(60, Math.round(teamGames * 0.5) * 3);
+  // 規定はゲーム本体と同じ式を使う（別々に持つと検査が実物を見ていないことになる）
+  const minAB = qualifiedPA(teamGames);
+  const minOuts = qualifiedOuts(teamGames);
 
   let bestAvg = -1, bestAvgName = '-';
   let maxHR = -1, maxHRName = '-';
@@ -63,7 +71,7 @@ export function leagueLeaders(TEAMS_DATA, names) {
   for (const n of names) {
     for (const p of TEAMS_DATA[n].players) {
       const b = p.seasonStats?.batting;
-      if (b?.atBats >= minAB) {
+      if (plateAppearances(b) >= minAB) {
         qHitters++;
         const avg = b.hits / b.atBats;
         if (avg > bestAvg) { bestAvg = avg; bestAvgName = p.name; }

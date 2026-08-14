@@ -38,7 +38,7 @@ for (let s = 0; s < SEEDS; s++) {
   for (const k of Object.keys(st)) acc[k] = (acc[k] || 0) + st[k];
   const inv = checkInvariants(TEAMS_DATA, names);
   if (!inv.ok) invariantProblems.push(...inv.problems);
-  const ld = leagueLeaders(TEAMS_DATA, names);
+  const ld = leagueLeaders(TEAMS_DATA, names, GAMES);
   if (ld.bestAvg > ext.bestAvg) { ext.bestAvg = ld.bestAvg; ext.bestAvgName = ld.bestAvgName; }
   if (ld.maxHR > ext.maxHR) { ext.maxHR = ld.maxHR; ext.maxHRName = ld.maxHRName; }
   if (ld.bestERA != null && ld.bestERA < ext.bestERA) { ext.bestERA = ld.bestERA; ext.bestERAName = ld.bestERAName; }

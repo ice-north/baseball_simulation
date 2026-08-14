@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import { TEAMS_DATA, LEAGUE_SETTINGS, getTeamAbbreviation } from '../teams-data.js';
-import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay } from '../season/seasonManager.js';
+import { PHASE_INFO, SEASON_PHASES, formatDate, getDayOfWeek, getCurrentPhase, getNPBDraftDay, qualifiedPA, qualifiedOuts as qualifiedOutsFor, plateAppearances } from '../season/seasonManager.js';
 import { getScheduleByDate } from '../season/scheduleGenerator.js';
 import { progressDate, handlePhaseTransition, updatePlayoffProgress } from '../season/dateProgression.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
@@ -2479,15 +2479,16 @@ const DateProgressScreen = ({ seasonData, setSeasonData, onForceEvent, onSetupMa
               });
             });
 
-            // 規定打席・規定投球回をシーズン進行度に比例して算出
-            // NPB基準: 規定打席=試合数×3.1、規定投球回=試合数×1.0（イニング）
+            // 規定打席・規定投球回をシーズン進行度に比例して算出。
+            // 式は seasonManager に一本化してある（タイトル判定と同じものを使うこと。
+            // 別々に持っていた頃は「ランキング1位」と「◯◯王」が別人になっていた）
             const maxGamesPlayed = Math.max(...(standings.map(s => s.gamesPlayed || 0)), 1);
             const seasonProgress = Math.min(maxGamesPlayed / totalGames, 1);
-            const qualifiedAB = Math.max(Math.floor(totalGames * 3.1 * seasonProgress), 10);
-            const qualifiedInnings = Math.max(Math.floor(totalGames * 1.0 * seasonProgress), 3);
-            const qualifiedOuts = qualifiedInnings * 3;
+            const qualifiedAB = qualifiedPA(totalGames, seasonProgress);
+            const qualifiedOuts = qualifiedOutsFor(totalGames, seasonProgress);
+            const qualifiedInnings = Math.floor(qualifiedOuts / 3);
 
-            const battingQualified = allPlayers.filter(p => (p.seasonStats?.batting?.atBats || 0) >= qualifiedAB);
+            const battingQualified = allPlayers.filter(p => plateAppearances(p.seasonStats?.batting) >= qualifiedAB);
             const pitchingQualified = allPlayers.filter(p => (p.seasonStats?.pitching?.inningsPitched || 0) >= qualifiedOuts);
 
             const avgRanking = [...battingQualified]

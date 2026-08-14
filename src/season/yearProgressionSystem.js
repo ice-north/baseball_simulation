@@ -4,7 +4,7 @@
 // 年齢カーブによる成長・衰退システム
 // ============================================================
 
-import { createSeasonData, initializeStandings } from './seasonManager.js';
+import { createSeasonData, initializeStandings, qualifiedPA, qualifiedOuts, plateAppearances } from './seasonManager.js';
 import { processNpbCareers } from '../game/npbCareer.js';
 import { generateFullSeasonSchedule } from './scheduleGenerator.js';
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
@@ -138,8 +138,14 @@ export function processSeasonEnd(seasonData, allTeams) {
     ? Object.fromEntries(Object.entries(allTeams).filter(([name]) => eligibleTeamNames.includes(name)))
     : allTeams;
   const allPlayers = collectAllPlayers(filteredTeams);
-  const qualifiedBatters = allPlayers.filter(p => p.seasonStats.batting.atBats >= 100);
-  const qualifiedPitchers = allPlayers.filter(p => p.seasonStats.pitching.inningsPitched >= 30);
+  // 規定はシーズンの長さに連動させる（定義は seasonManager に一本化してある）。
+  // 以前は 100打数 / 30 の固定値で、しかも 30 は**アウト数＝10回**だったため
+  // 17回で防御率0.00の中継ぎが防御率王になっていた
+  const totalGames = seasonData.settings?.gamesPerSeason || seasonData.schedule?.length || 0;
+  const minPA = qualifiedPA(totalGames);
+  const minOuts = qualifiedOuts(totalGames);
+  const qualifiedBatters = allPlayers.filter(p => plateAppearances(p.seasonStats.batting) >= minPA);
+  const qualifiedPitchers = allPlayers.filter(p => (p.seasonStats.pitching.inningsPitched || 0) >= minOuts);
 
   const findLeader = (players, getValue, ascending = false) => {
     if (players.length === 0) return null;
@@ -805,7 +811,7 @@ export function finalizePlayerSeason(player, year) {
  * @param {Object} awards - 表彰結果
  * @returns {Object} - 更新されたチームデータ
  */
-export function recordAwardsToPlayers(allTeams, awards) {
+export function recordAwardsToPlayers(allTeams, awards, totalGames = 0) {
   const updatedTeams = {};
 
   // タイトル別の知名度上昇量
@@ -884,10 +890,14 @@ export function recordAwardsToPlayers(allTeams, awards) {
           fameGain += FAME_TITLE_2ND;
         }
 
-        // 規定到達で出場実績による微量加算（毎シーズン+2）
-        const batAB = player.seasonStats?.batting?.atBats || 0;
-        const pitIP = player.seasonStats?.pitching?.inningsPitched || 0;
-        if (batAB >= 100 || pitIP >= 30) {
+        // 規定到達で出場実績による微量加算（毎シーズン+2）。
+        // ⚠ 100打数 / 30（＝10回）の固定値だった頃は投手78人中74人に配られており、
+        //    「規定に届いた」という意味を持っていなかった
+        const minPA = qualifiedPA(totalGames);
+        const minOuts = qualifiedOuts(totalGames);
+        const pa = plateAppearances(player.seasonStats?.batting);
+        const pitOuts = player.seasonStats?.pitching?.inningsPitched || 0;
+        if (pa >= minPA || pitOuts >= minOuts) {
           fameGain += 2;
         }
 
@@ -1057,7 +1067,7 @@ export function advanceToNextYear(seasonData, allTeams) {
   const awards = seasonData.frozenAwards || processSeasonEnd(seasonData, allTeams);
 
   // 2. タイトルを選手に記録
-  let updatedTeams = recordAwardsToPlayers(allTeams, awards);
+  let updatedTeams = recordAwardsToPlayers(allTeams, awards, seasonData.settings?.gamesPerSeason || seasonData.schedule?.length || 0);
 
   // 2.5. 成長率変動を更新（疲労酷使ペナルティ・優勝ボーナス）
   updateGrowthModifiers(updatedTeams, awards);
@@ -1543,7 +1553,7 @@ export function advanceToNextYearSandbox(seasonData, allTeams) {
   const awards = seasonData.frozenAwards || processSeasonEnd(seasonData, allTeams);
 
   // 2. タイトルを選手に記録
-  let updatedTeams = recordAwardsToPlayers(allTeams, awards);
+  let updatedTeams = recordAwardsToPlayers(allTeams, awards, seasonData.settings?.gamesPerSeason || seasonData.schedule?.length || 0);
 
   // 3. シーズン統計を通算に加算してリセット
   updatedTeams = resetSeasonStats(updatedTeams, seasonData.year);
