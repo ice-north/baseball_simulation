@@ -745,6 +745,25 @@ NEW GAME → 大学チーム選択 → キャンプ
 - **UI**: `src/components/UniversityScoutScreen.jsx`
 - **セーブ/ロード**: `WORLD_DATA._universityScout` に候補・獲得済みリストを保持。年度末にnullリセット
 
+## ⚠ 強制イベントの画面はサイドバーを塞ぐ（`BLOCKING_VIEWS` / `isNavBlocked`）
+11/9 の契約更改・11/10 のトライアウト・10月のドラフト等は、開いている間
+サイドバーを押しても移動できない。素通りするとその年のイベントを飛ばせてしまうため。
+
+- ⚠ **`university_scout` だけ漏れていた**。11/29 の強制イベントなのにサイドバーで
+  抜けられ、その年の推薦入学が0名のまま進んでしまう状態だった
+- ⚠ ただし**推薦スカウトはシーズン中いつでも見に行ける画面でもある**ので、
+  常時ブロックすると戻れなくなる。**日付で判定する**こと（`isNavBlocked`。
+  `ManagementScreen` の `isForced` と同じ 11/29 以降という条件）
+
+## ⚠ 明治神宮・大学選手権は「TEAMS_DATA に無い大学」同士の対戦を含む
+27リーグの優勝校が集まるが、**自リーグ以外の大学は WORLD_DATA 側の簡易
+シミュレーションでしか存在しない**。`simulateQuickMatch` はランクベースの
+フォールバックを持っているので結果は正しく出る。
+
+- ⚠ **`autoSimulateGame` を確かめずに呼ばないこと**。0-0を返すついでに
+  `console.error` を毎試合出すので、**本物の不具合がログに埋もれる**。
+  `parallelWorldManager` と同じく呼ぶ前に `TEAMS_DATA[name]?.players` を見る
+
 ## ⚠ セーブのロード先は `phase` ではなく `managementView` で決める
 `getCurrentPhase` は独立・社会人モードで **10/21〜11/29 の「イベントの谷間」も
 `off_season` を返す**（プレーオフ後・ドラフト前後・契約更改の前後）。

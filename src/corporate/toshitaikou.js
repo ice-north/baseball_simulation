@@ -8,6 +8,7 @@
 
 import { getTeamsByRegion, getAllTeamsEffective } from './corporateTeamsData.js';
 import { autoSimulateGame } from '../game/autoSimulation.js';
+import { TEAMS_DATA } from '../teams-data.js';
 import { recordBracketAchievements } from '../season/achievements.js';
 
 // ============================================================
@@ -279,7 +280,12 @@ export function simulateQuickMatch(team1Def, team2Def) {
   const t1Name = team1Def.displayName || team1Def.name;
   const t2Name = team2Def.displayName || team2Def.name;
 
-  const result = autoSimulateGame(t1Name, t2Name, true);
+  // ⚠ **TEAMS_DATA にあるか先に確かめる**。明治神宮大会は27リーグの優勝校が集まるが、
+  // 自リーグ以外の大学は WORLD_DATA 側の簡易シミュレーションでしか存在しない。
+  // 確認せずに呼ぶと autoSimulateGame が毎試合 console.error を出す
+  // （0-0を返してランクベースに落ちるので結果は正しいが、本物の不具合が埋もれる）。
+  const bothExist = !!(TEAMS_DATA?.[t1Name]?.players && TEAMS_DATA?.[t2Name]?.players);
+  const result = bothExist ? autoSimulateGame(t1Name, t2Name, true) : null;
   if (result && (result.homeScore !== undefined) && (result.homeScore + result.awayScore > 0)) {
     const homeWon = result.homeScore > result.awayScore;
     return {

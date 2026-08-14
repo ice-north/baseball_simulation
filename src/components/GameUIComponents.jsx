@@ -415,11 +415,24 @@ export const AccordionSection = ({ title, isExpanded, onToggle, children }) => (
 );
 
 // --- SidebarButton コンポーネント ---
+// この画面を開いている間はサイドバーで抜けさせない（その年のイベントを飛ばせてしまうため）
 const BLOCKING_VIEWS = new Set(['draft', 'contract', 'tryout', 'corporate_departure', 'corporate_scout', 'club_recruit', 'budget_settlement']);
 
-export const SidebarButton = ({ view, icon, label, onActiveClick, screenMode, managementView, setScreenMode, setManagementView }) => {
+// ⚠ **推薦スカウトは日付で判定する**。シーズン中はサイドバーから随時見に行ける画面なので
+//   常時ブロックすると戻れなくなる。11/29 の強制イベントのときだけ抜けさせない
+//   （`ManagementScreen` の `isForced` と同じ条件。あちらは「戻る」ボタンを消している）。
+const isNavBlocked = (managementView, seasonData) => {
+  if (BLOCKING_VIEWS.has(managementView)) return true;
+  if (managementView === 'university_scout') {
+    const d = seasonData?.currentDate;
+    return d?.month === 11 && (d?.day ?? 0) >= 29;
+  }
+  return false;
+};
+
+export const SidebarButton = ({ view, icon, label, onActiveClick, screenMode, managementView, seasonData, setScreenMode, setManagementView }) => {
   const isActive = screenMode === 'management' && managementView === view;
-  const isBlocked = screenMode === 'management' && BLOCKING_VIEWS.has(managementView) && !isActive;
+  const isBlocked = screenMode === 'management' && isNavBlocked(managementView, seasonData) && !isActive;
   return (
     <button
       onClick={() => {
@@ -467,25 +480,25 @@ export const Sidebar = ({
 
     <nav className="flex-1 min-h-0 overflow-y-auto px-2 py-3 space-y-0.5">
       <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">進行</div>
-      <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="ranking" icon="📰" label="能力ランキング" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="team_ranking" icon="🏅" label="チームランキング" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="dateprogress" icon="📅" label="日程進行" onActiveClick={() => advanceDayRef.current?.()} screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="roster" icon="📋" label="ロスター管理" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="stats" icon="📊" label="選手成績" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="ranking" icon="📰" label="能力ランキング" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="team_ranking" icon="🏅" label="チームランキング" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
       <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">チーム</div>
-      <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      {gameMode !== 'corporate' && gameMode !== 'university' && <SidebarButton view="trade" icon="🔄" label="トレード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
-      <SidebarButton view="halloffame" icon="🏆" label="資料室" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="player_search" icon="🔎" label="選手検索" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="teaminfo" icon="👥" label="チーム情報" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      {gameMode === 'corporate' && !seasonData?.settings?.clubMode && <SidebarButton view="corporate_management" icon="🏢" label="チーム運営" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
+      {gameMode === 'university' && <SidebarButton view="university_scout" icon="🔍" label="スカウト" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
+      {gameMode !== 'corporate' && gameMode !== 'university' && <SidebarButton view="trade" icon="🔄" label="トレード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />}
+      <SidebarButton view="halloffame" icon="🏆" label="資料室" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="player_search" icon="🔎" label="選手検索" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
 
       <div className="border-t border-gray-700/40 my-2"></div>
       <div className="text-xs uppercase tracking-widest text-gray-400 font-bold px-3 pt-1 pb-2">システム</div>
-      <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
-      <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="save" icon="💾" label="セーブ＆ロード" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
+      <SidebarButton view="regulations" icon="⚙️" label="レギュレーション" screenMode={screenMode} managementView={managementView} seasonData={seasonData} setScreenMode={setScreenMode} setManagementView={setManagementView} />
     </nav>
   </div>
 );

@@ -341,7 +341,10 @@ export const autoSimulateGame = (homeTeamName, awayTeamName, isCupGame = false) 
 
   // TEAMS_DATAからチームデータを取得
   if (!TEAMS_DATA || !TEAMS_DATA[homeTeamName] || !TEAMS_DATA[awayTeamName]) {
-    console.error('チームデータが見つかりません');
+    // ⚠ どちらが欠けているか出さないと追えない（0-0引分で静かに返してしまうため）
+    const missing = [!TEAMS_DATA?.[homeTeamName] && homeTeamName, !TEAMS_DATA?.[awayTeamName] && awayTeamName]
+      .filter(Boolean).join(' / ');
+    console.error(`チームデータが見つかりません: ${missing}（${awayTeamName} @ ${homeTeamName}）`);
     return { homeScore: 0, awayScore: 0, result: '引分 0-0', winner: null };
   }
 
