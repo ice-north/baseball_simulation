@@ -104,6 +104,8 @@ export function runDraft(YEAR = 6, opts = {}) {
 
   return {
     total: drafted.length,
+    // 指名結果そのもの（巡目別の中身を調べる検証で使う）
+    picks: drafted,
     bySource: {
       highschool: s.highschool || 0,
       university: s.university || 0,

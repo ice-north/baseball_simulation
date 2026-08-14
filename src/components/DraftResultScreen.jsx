@@ -975,7 +975,10 @@ const DraftSummaryScreen = ({ draftedPlayers, nearMissPlayers, proBonus, draftBy
           <div className="space-y-2.5">
             {[...myTeamDrafted].sort((a, b) => sortRound(a.draftRound) - sortRound(b.draftRound)).map((entry, idx) => {
               const style = ROUND_STYLES[entry.draftRound] || (entry.draftRound.startsWith('育成') ? IKU_ROUND_STYLE : DEFAULT_ROUND_STYLE);
-              const filteredReasons = entry.reasons.filter(r => !/ミート|パワー|選球眼|走力|守備|肩力|盗塁|球速|制球|スタミナ|俊足/.test(r));
+              // 能力値そのものの列挙（「守備65」「球速148km」）だけを落とす。
+              // ⚠ **数字を伴うものに限ること**。能力名だけで弾くと
+              //    一芸指名の「守備のスペシャリスト」まで消える
+              const filteredReasons = entry.reasons.filter(r => !/(ミート|パワー|選球眼|走力|守備|肩力|盗塁|球速|制球力?|スタミナ|俊足|変化球)\d/.test(r));
               return (
                 <div key={idx} className={`draft-card bg-gray-700/60 rounded-xl p-3.5 ${style.border} ${style.glow}`} style={{ animationDelay: `${idx * 0.07}s` }}>
                   <div className="flex items-center gap-2.5 whitespace-nowrap overflow-hidden">

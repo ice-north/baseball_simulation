@@ -11,6 +11,9 @@ import { generateHighSchoolClass, universityPool, highSchoolPool, HIGH_SCHOOL_CL
 import { WORLD_DATA } from '../corporate/worldData.js';
 import { checkNPBDraftEligibility, checkHallOfFame, cleanupPlayerReferences, computeSeasonAwardBonuses } from './yearProgressionSystem.js';
 import { addToObRegistry } from '../game/obRegistry.js';
+import { buildToolNorms, toolProfile, toolHuntRateForRound, TOOL_HUNT_RATE_IKU,
+         TOOL_HUNT_BONUS, randomHuntTool, toolDevOf, isSpecialist,
+         TOOL_LABELS, TOOL_NOUNS } from '../game/scoutTools.js';
 
 /**
  * NPBドラフト処理（統一評価・グローバルTop-N方式）
@@ -127,6 +130,19 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     if (b) c.score += b;
   });
 
+  // === 「一芸」の計測（scoutTools.js）===
+  // 総合点だけで上から取ると必ず「全部そこそこ高い選手」が並ぶ。
+  // 下位・育成では1つの道具で勝負する選手を拾えるよう、
+  // 候補プールそのものから群×道具の平均・σを作り、各候補の尖りを付ける。
+  // ⚠ ここで足すのは**巡目ごとの並べ替えキー**だけ。`c.score`（＝選手の価値）は変えない。
+  const toolNorms = buildToolNorms(allCandidates, c => c.player);
+  allCandidates.forEach(c => {
+    const prof = toolProfile(c.player, toolNorms);
+    c.toolDevs = prof.devs;
+    c.topTool = prof.topTool;
+    c.spike = prof.spike;   // 表示（一芸バッジ）専用。指名の並べ替えには使わない
+  });
+
   // === 候補数の診断ログ ===
   const sourceCounts = { highschool: 0, university: 0, university_team: 0, corporate: 0, independent: 0 };
   allCandidates.forEach(c => { sourceCounts[c.source] = (sourceCounts[c.source] || 0) + 1; });
@@ -200,7 +216,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   const maxIkuRounds = Math.max(...NPB_TEAMS.map(t => teamDraftLimits[t].ikuPicks));
 
   // === 指名エントリ生成ヘルパー ===
-  const createDraftEntry = (candidate, npbTeam, roundLabel) => {
+  const createDraftEntry = (candidate, npbTeam, roundLabel, huntTool = null) => {
     const { player, teamName, score, bonus = 0, awards = [], source, hofResult } = candidate;
     const isPitcher = player.position === 'pitcher';
     const reasons = [];
@@ -208,8 +224,18 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     else if (source === 'university' || source === 'university_team') reasons.push(`大卒ドラフト: 総合力${Math.round(score)}pt`);
     else reasons.push(`${isPitcher ? '投手' : '野手'}力${Math.round(score)}pt`);
     if (bonus > 0) reasons.push(`成績ボーナス+${bonus}pt`);
+    // 一芸で拾った選手は「何を買ったか」を出す。総合点だけ出していると
+    // 下位指名が「なぜこの選手？」に見えてしまう
+    const devs = candidate.toolDevs || {};
+    const shownTool = (huntTool && isSpecialist(devs[huntTool], candidate.spike)) ? huntTool
+      : (isSpecialist(devs[candidate.topTool], candidate.spike) ? candidate.topTool : null);
+    if (shownTool) reasons.push(TOOL_NOUNS[shownTool] || TOOL_LABELS[shownTool]);
     return {
       player, teamName, npbTeam, reasons, draftRound: roundLabel,
+      huntTool: huntTool || null, scoutTool: shownTool, spike: candidate.spike || 0,
+      topTool: candidate.topTool || null,
+      scoutToolLabel: shownTool ? (TOOL_LABELS[shownTool] || '') : '',
+      scoutToolDev: shownTool ? (devs[shownTool] || 0) : 0,
       position: player.position, age: player.age,
       name: player.name, playerId: player.id,
       hallOfFame: hofResult?.isHallOfFame || false,
@@ -302,7 +328,10 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     ['highschool', 'university', 'university_team', 'corporate', 'independent'].forEach(s => {
       sourceBias[s] = (Math.random() - 0.5) * 14;     // -7〜+7: ソース別好み
     });
-    teamPreferences[team] = { pitcherBias, youthBias, powerBias, speedBias, sourceBias };
+    // 球団ごとに「欲しい道具」を1つ持つ。下位で一芸を買うとき、
+    // 12球団が同じ順に並べないための散らし（守備型を好む球団／強肩を好む球団…）。
+    const favoriteTool = randomHuntTool();
+    teamPreferences[team] = { pitcherBias, youthBias, powerBias, speedBias, sourceBias, favoriteTool };
   });
 
   const getTeamPreferenceScore = (team, candidate) => {
@@ -318,6 +347,14 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     }
     bonus += pref.sourceBias[candidate.source] || 0;
     return bonus;
+  };
+
+  // その指名で「探しに行く道具」を決める。6割は球団の好み、
+  // 残りはその場の必要（＝ランダム）。12球団が同じ道具に殺到しないための散らし。
+  const pickHuntTool = (team) => {
+    const fav = teamPreferences[team]?.favoriteTool;
+    if (fav && Math.random() < 0.6) return fav;
+    return randomHuntTool();
   };
 
   // セ・パ別に順位をランダム決定（NPBシーズンは未シミュレーションのため）
@@ -477,19 +514,26 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       if (limits.mainDone >= limits.mainPicks) continue;
       const remaining = mainEligible.filter(c => !takenIds.has(c.player.id));
       if (remaining.length === 0) continue;
-      const searchWindow = remaining.slice(0, Math.max(8, Math.ceil(remaining.length * 0.15)));
+      // ⚠ 道具の加点は**窓を切る前**に足すこと。`remaining` は総合点順なので、
+      //    窓を切ってから足しても、総合点の低い一芸型は最初から窓に入っていない。
+      const pickOrder = limits.mainDone + 1;
+      const huntTool = Math.random() < toolHuntRateForRound(pickOrder) ? pickHuntTool(npbTeam) : null;
+      // ⚠ ロスターバランスの減点は**並べ替えにも掛けること**。窓の中でしか
+      //    引かないと、道具の加点で窓が投手だけで埋まり、投手8割のチームが出る
+      const huntScore = (c) => c.score + getBalancePenalty(npbTeam, c, teamDraftTracker)
+        + (huntTool ? toolDevOf(c.toolDevs, huntTool) * TOOL_HUNT_BONUS : 0);
+      const ranked = huntTool ? [...remaining].sort((a, b) => huntScore(b) - huntScore(a)) : remaining;
+      const searchWindow = ranked.slice(0, Math.max(8, Math.ceil(ranked.length * 0.15)));
       let bestCand = null, bestPref = -Infinity;
       for (const c of searchWindow) {
         const prefBonus = getTeamPreferenceScore(npbTeam, c);
-        const balancePenalty = getBalancePenalty(npbTeam, c, teamDraftTracker);
         const noise = (Math.random() - 0.5) * 10;
-        const pref = c.score + prefBonus * 0.7 + noise + balancePenalty;
+        const pref = huntScore(c) + prefBonus * 0.7 + noise;
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
       }
       if (!bestCand) continue;
-      const pickOrder = limits.mainDone + 1;
       takenIds.add(bestCand.player.id);
-      draftedPlayers.push(createDraftEntry(bestCand, npbTeam, `ドラフト${pickOrder}位`));
+      draftedPlayers.push(createDraftEntry(bestCand, npbTeam, `ドラフト${pickOrder}位`, huntTool));
       updateDraftTracker(npbTeam, bestCand);
       limits.mainDone++;
     }
@@ -521,19 +565,23 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       if (limits.ikuDone >= limits.ikuPicks) continue;
       const remaining = ikuEligible.filter(c => !takenIds.has(c.player.id));
       if (remaining.length === 0) continue;
-      const searchWindow = remaining.slice(0, 20);
+      // 育成は「今は使えないが1つだけ図抜けている」を取りに行く枠なので最も道具寄り
+      const huntTool = Math.random() < TOOL_HUNT_RATE_IKU ? pickHuntTool(npbTeam) : null;
+      const huntScore = (c) => c.ikuScore + getBalancePenalty(npbTeam, c, teamDraftTracker)
+        + (huntTool ? toolDevOf(c.toolDevs, huntTool) * TOOL_HUNT_BONUS : 0);
+      const ranked = huntTool ? [...remaining].sort((a, b) => huntScore(b) - huntScore(a)) : remaining;
+      const searchWindow = ranked.slice(0, 20);
       let bestCand = null, bestPref = -Infinity;
       for (const c of searchWindow) {
         const prefBonus = getTeamPreferenceScore(npbTeam, c);
-        const balancePenalty = getBalancePenalty(npbTeam, c, teamDraftTracker);
         const noise = (Math.random() - 0.5) * 12;
-        const pref = c.ikuScore + prefBonus * 0.5 + noise + balancePenalty;
+        const pref = huntScore(c) + prefBonus * 0.5 + noise;
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
       }
       if (!bestCand) continue;
       const ikuPickRound = limits.ikuDone + 1;
       takenIds.add(bestCand.player.id);
-      draftedPlayers.push(createDraftEntry(bestCand, npbTeam, `育成${ikuPickRound}巡目`));
+      draftedPlayers.push(createDraftEntry(bestCand, npbTeam, `育成${ikuPickRound}巡目`, huntTool));
       updateDraftTracker(npbTeam, bestCand);
       limits.ikuDone++;
     }
