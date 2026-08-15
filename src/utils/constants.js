@@ -364,6 +364,34 @@ export const POSITION_NAMES_FULL = {
 /**
  * 能力値 → ランク変換（S〜F）
  */
+/**
+ * 「精神」グレード（S〜F）。
+ *
+ * 【なぜ数値を出さないか】プロ意識(`discipline`)は成長を最も大きく左右する
+ * （才能ランクの幅2.2に対し、意識20⇔90で2.2〜2.7ランク動く）。しかし
+ * **本来スカウトから見えるものではない**ので、生の数値は出さない。
+ * 精神系をひとまとめにした**大雑把な7段階**だけを見せる。
+ *
+ * ⚠ **プロ意識だけの言い換えにしないこと**。`mental`（度胸・勝負強さ）を
+ *    混ぜてあるので、グレードが高くても成長するとは限らない。
+ *    「Aだから伸びる」と読み切れない粗さが、見抜く余地を残す。
+ */
+export const mentalScore = (player) => {
+  const d = player?.personality?.discipline ?? 50;
+  const m = player?.personality?.mental ?? 50;
+  return d * 0.65 + m * 0.35;
+};
+export const getMentalGrade = (player) => {
+  const v = mentalScore(player);
+  if (v >= 76) return 'S';
+  if (v >= 67) return 'A';
+  if (v >= 59) return 'B';
+  if (v >= 51) return 'C';
+  if (v >= 43) return 'D';
+  if (v >= 34) return 'E';
+  return 'F';
+};
+
 export const getAbilityRank = (value, isPitcherVelocity = false, isStamina = false) => {
   let v = value;
   if (isPitcherVelocity) v = (value - 115) * 2.5;

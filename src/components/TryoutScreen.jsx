@@ -4,7 +4,7 @@ import { TEAMS_DATA } from '../teams-data.js';
 import { generateTryoutCandidates, generateSnakeDraftOrder, selectPlayerForAI, applyReputationBonus, updateReleasedPoolAfterTryout, removeDraftedFromClubTeams, generateScoutComment } from '../season/tryoutSystem.js';
 import { removeDraftedFromGraduatePools } from '../season/universityPool.js';
 import { getPitchTypeName } from '../season/yearProgressionSystem.js';
-import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex } from '../utils/constants.js';
+import { POSITION_NAMES, POSITION_NAMES_FULL, getAbilityRank, getRankColor, getPositionSortIndex, getMentalGrade, mentalScore } from '../utils/constants.js';
 import { INDEPENDENT_LEAGUES } from '../corporate/independentLeagueData.js';
 import { getLeagueRankFromTeams } from '../corporate/corporateInit.js';
 
@@ -253,6 +253,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
       case 'control': return p.pitching?.control || 0;
       case 'stamina': return p.pitching?.stamina || 0;
       case 'spinRate': return p.pitching?.spinRate ?? 50;
+      case 'mental': return mentalScore(p);
       case 'fielderOverall': return getFielderOverall(p);
       case 'pitcherOverall': return getPitcherOverall(p);
       case 'overall': default: {
@@ -500,6 +501,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                                     <th className="px-2 py-1">制</th>
                                     <th className="px-2 py-1">ス</th>
                                     <th className="px-2 py-1">回転</th>
+                                    <th className="px-2 py-1" title="プロ意識・度胸をまとめた大雑把な評価。成長を最も左右するが、正確には見抜けない">精神</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -517,6 +519,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                                       <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
                                       <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
                                       <td className={`px-2 py-1 ${getRankColor(getAbilityRank(player.pitching?.spinRate??50))}`}>{getAbilityRank(player.pitching?.spinRate??50)}</td>
+                                      <td className={`px-2 py-1 font-bold ${getRankColor(getMentalGrade(player))}`}>{getMentalGrade(player)}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -734,6 +737,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                       { label: '制', key: 'control', tip: '制球力' },
                       { label: 'ス', key: 'stamina', tip: 'スタミナ' },
                       { label: '回', key: 'spinRate', tip: '球の回転数' },
+                      { label: '精', key: 'mental', tip: '精神（プロ意識・度胸をまとめた大雑把な評価）。成長を最も左右するが正確には見抜けない' },
                       { label: '変化球', key: null, tip: '習得変化球' },
                       { label: '野', key: 'fielderOverall', tip: '野手総合力' },
                       { label: '投', key: 'pitcherOverall', tip: '投手総合力' },
@@ -807,6 +811,7 @@ const TryoutScreen = ({ seasonData, allTeams, isInitialTryout = false, onComplet
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.control||0))}`}>{getAbilityRank(player.pitching?.control||0)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.stamina||0, false, true))}`}>{getAbilityRank(player.pitching?.stamina||0, false, true)}</td>
                         <td className={`px-1 py-1 font-bold text-center ${getRankColor(getAbilityRank(player.pitching?.spinRate??50))}`}>{getAbilityRank(player.pitching?.spinRate??50)}</td>
+                        <td className={`px-1 py-1 font-bold text-center ${getRankColor(getMentalGrade(player))}`}>{getMentalGrade(player)}</td>
                         <td className="px-1 py-1 text-xs whitespace-nowrap">
                           {(() => {
                             const arsenal = (player.pitching?.arsenal || []).filter(a => a.type !== 'straight');

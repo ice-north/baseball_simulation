@@ -983,8 +983,20 @@ function applyUniversityGrowth(player, universityRank = null, universityTeamId =
     return Math.max(floor, 1.0 - (current - threshold) * rate);
   };
 
+  // プロ意識。**大学は他カテゴリよりマイルド**にする。
+  // 意図: 怠け者でも練習環境があり、ある程度は強制的に練習させられるので、
+  //       意識の差は出るが独立（0.55〜1.90）やクラブ（0.10〜2.60）ほど開かない。
+  // ⚠ **下限を切ることで「強制的に練習させられる環境」を表す**。
+  //    傾き 0.0048（下限なし）では4年間の幅が 3.1点＝0.31ランクしかなく、
+  //    マイルドを通り越して事実上無効だった。
+  //   意識20→0.78(下限) / 50→1.00 / 80→1.39 / 100→1.65
+  //   参考: 独立 0.55〜1.90 / クラブ 0.10〜2.60 と比べて感度は約半分、
+  //         かつ怠けても0.78より下がらない（＝落ちはしない）。
+  const discipline = player.personality?.discipline ?? 50;
+  const disciplineMult = Math.max(0.78, 1.0 + (discipline - 50) * 0.013);
+
   const grow = (current, base, spec, cap = 99, threshold = null, rate = 0.05) => {
-    let amount = base * gp * rankMult * specMult(spec) * (0.7 + Math.random() * 0.6);
+    let amount = base * gp * rankMult * disciplineMult * specMult(spec) * (0.7 + Math.random() * 0.6);
     if (threshold != null) {
       amount *= decayMult(current, threshold, rate);
     }

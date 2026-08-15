@@ -697,6 +697,15 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     const youngPlayers = team.players.filter(p => p.age <= 25);
     let boostedCount = 0;
     youngPlayers.forEach(player => {
+      // 同僚がプロへ行くと、自分にも手が届くと分かってプロ意識がわずかに上がる。
+      // ⚠ **わずかに**。プロ意識はその選手の個性であって、鍛えて作るものではない。
+      //    指名1人につき +0〜1（既に高い選手ほど上がらない）。
+      if (player.personality) {
+        const d = player.personality.discipline ?? 50;
+        if (d < 92 && Math.random() < 0.35 * count) {
+          player.personality.discipline = Math.min(95, d + 1);
+        }
+      }
       const boostAmount = Math.floor(Math.random() * 3) + 1;
       if (player.position === 'pitcher') {
         const stat = ['control', 'stamina'][Math.floor(Math.random() * 2)];
