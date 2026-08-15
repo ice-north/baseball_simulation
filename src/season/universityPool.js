@@ -720,11 +720,16 @@ export function getHighSchoolTryoutCandidates(count, qualityBias = 0) {
   const pool = (highSchoolPool.players || []).filter(p => !p._universityReserved);
   if (pool.length === 0 || count <= 0) return [];
   const scored = pool.map(p => ({ p, s: evaluatePlayerPotential(p) })).sort((a, b) => b.s - a.s);
-  // エリート層(上位8%: NPB/大学S/A志望)は避け、独立適性の中位帯から抽出
-  // 注目度が高いほど上位寄り(start↓/end↓)の帯から抽出する
+  // リーグの格・注目度(qualityBias)が「**どの層から来るか**」を決める。
+  // ⚠ 帯は**ランクごとに明確に分離する**こと。旧値（bias 0で8〜60% / bias 1で2〜45%）は
+  //    ほぼ重なっており、実測でDリーグとSリーグの受験者の質がほとんど同じだった
+  //    （ミート平均 27.2 対 29.8）。能力の上限を撤廃した以上、リーグの格は
+  //    この帯だけで表現される——ここが効かないと「昇格しても何も変わらない」になる。
+  //    bias 0(D) → 上位30〜68% / 0.5(B) → 17〜44% / 1.0(S) → 5〜20%
+  // エリートの最上位（NPB/大学S志望）は独立に来ないので start に下限を残す。
   const bias = Math.max(0, Math.min(1, qualityBias));
-  const start = Math.floor(scored.length * (0.08 - 0.06 * bias));
-  const end = Math.max(start + count, Math.floor(scored.length * (0.60 - 0.15 * bias)));
+  const start = Math.floor(scored.length * (0.30 - 0.25 * bias));
+  const end = Math.max(start + count, Math.floor(scored.length * (0.68 - 0.48 * bias)));
   const band = _shuffleInPlace(scored.slice(start, end));
   return band.slice(0, count).map(({ p }) => {
     const c = _cloneForTryout(p);
@@ -755,10 +760,12 @@ export function getUniversitySeniorTryoutCandidates(currentYear, count, qualityB
   }
   if (seniors.length === 0) return [];
   const scored = seniors.map(e => ({ e, s: evaluatePlayerPotential(e.player) })).sort((a, b) => b.s - a.s);
-  // エリート(社会人/NPB志望)上位は避け中位帯から（注目度が高いほど上位寄り）
+  // エリート(社会人/NPB志望)上位は避け、リーグの格に応じた帯から
+  // （高校生プールと同じ考え方。帯はランクごとに分離する）
   const bias = Math.max(0, Math.min(1, qualityBias));
-  const start = Math.floor(scored.length * (0.15 - 0.12 * bias));
-  const band = _shuffleInPlace(scored.slice(start));
+  const start = Math.floor(scored.length * (0.28 - 0.24 * bias));
+  const end = Math.max(start + count, Math.floor(scored.length * (0.75 - 0.45 * bias)));
+  const band = _shuffleInPlace(scored.slice(start, end));
   return band.slice(0, count).map(({ e }) => {
     // 既存プールで所属大学が未設定（旧不具合で配属されなかった）の場合はランク相当の大学を補填
     if (!e.universityTeamName) {

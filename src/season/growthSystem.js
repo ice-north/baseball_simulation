@@ -239,7 +239,15 @@ export function applyCorporatePlayerGrowth(allTeams) {
       const disciplineMult = isClub
         ? Math.max(0.10, Math.pow(Math.max(0, (discipline - 55) / 45), 1.9) * 2.6)
         : isIndependent
-          ? 1.0 + Math.max(0, (discipline - 50) * 0.020)
+          // 独立は**プロ**なので、球団が面倒を見るのではなく本人の自主性で伸びる。
+          // ⚠ 旧式は `Math.max(0, …)` で下向きが無く、**プロ意識50以下は全員ちょうど1.0**
+          //    だった（discipline は N(50,18) なので半分の選手が下振れを受けない）。
+          //    それは「環境が補完する社会人」の形であって、プロの形ではない。
+          //    上側の傾きは据え置きなのでリーグ全体の戦力は上がらない（下側だけ薄くなる）。
+          //    20→0.55 / 30→0.70 / 40→0.85 / 50→1.00 / 70→1.40 / 90→1.80
+          ? (discipline >= 50
+              ? 1.0 + (discipline - 50) * 0.020
+              : Math.max(0.40, 1.0 + (discipline - 50) * 0.015))
           // 企業: 設備・指導者・実戦がすべて揃う。3カテゴリで最も環境が良い
           //   discipline 50→1.0x, 70→1.44x, 90→1.88x
           : 1.0 + Math.max(0, (discipline - 50) * 0.022);

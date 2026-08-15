@@ -85,47 +85,42 @@ function effectiveTryoutRank(baseRank) {
 }
 
 /**
- * リーグの格に応じて選手の能力を上限・スケールする（トライアウト受験者を「そのリーグ相応」にする）。
- * 初回・年次いずれの候補にも共通適用。プールから来た候補はクローンに適用するため元選手は不変。
- * ランクは現在の自リーグ格（優勝で昇格すると上限も上がる＝良い選手が受けに来る）。
+ * リーグの格は「**どの層の選手が受けに来るか**」だけを決める。
+ *
+ * ⚠ **能力に上限やスケールを掛けてはいけない**（旧 `applyLeagueRankScaling` を撤廃）。
+ *    旧実装はランク別に 球速・制球・ミート・パワー・選球眼へ上限を掛け、
+ *    さらに守備・走力を 0.58〜0.98 倍していた。**帯で絞ったうえに能力も削る二重制限**で、
+ *      ・走力100の快足が D リーグでは 58 に潰される
+ *      ・球速150の投手が C リーグでは 133 で頭打ち
+ *    と、**尖った選手ほど削られて一芸型が入って来られなかった**。
+ *    現実には格下リーグにも「1つだけ図抜けた選手」は普通に来る。
+ *
+ * 代わりに、ランクを抽出帯（`qualityBias`）に写す。帯が上がれば良い選手が来るし、
+ * 帯の中にどんな形の選手が居るかは母集団のまま——尖った選手はそのまま尖って来る。
  */
-function applyLeagueRankScaling(player, rank, boost = false) {
+const RANK_BAND_BIAS = { S: 0.90, A: 0.70, B: 0.50, C: 0.30, D: 0.12 };
+const rankBandBias = (rank) => RANK_BAND_BIAS[rank] ?? 0.30;
+
+/**
+ * 生成候補（初回トライアウト）だけに使う、リーグの格の**平行移動**。
+ * 上限でも倍率でもないので、能力の差＝選手の形は保たれる。
+ */
+const RANK_LEVEL_SHIFT = { S: 6, A: 0, B: -8, C: -16, D: -24 };
+function applyLeagueLevelShift(player, rank) {
   if (!rank || !player) return;
-  const IL_VEL_CAP = { S: 152, A: 146, B: 140, C: 133, D: 126 };
-  const IL_CTRL_CAP = { S: 72, A: 65, B: 58, C: 48, D: 38 };
-  const IL_BAT_CAP = { S: 68, A: 60, B: 52, C: 44, D: 36 };
-  const IL_SCALE = { S: 0.98, A: 0.90, B: 0.80, C: 0.70, D: 0.58 };
-  const vc = IL_VEL_CAP[rank] ?? 145;
-  const cc = IL_CTRL_CAP[rank] ?? 55;
-  const bc = IL_BAT_CAP[rank] ?? 50;
-  const sc = IL_SCALE[rank] ?? 0.85;
-  const jitter = (n) => n + Math.floor(Math.random() * 4);
-  // boost（格上の逸材）: プールの素材が低くても、そのランク上位級まで引き上げる（floor）。
-  // 通常候補は上限のみ（floorなし）。
-  const clampAbility = (val, cap, floorRatio) => {
-    let v = Math.min(val || 0, jitter(cap));
-    if (boost) v = Math.max(v, Math.round(cap * floorRatio) + Math.floor(Math.random() * 4));
-    return v;
+  const d = RANK_LEVEL_SHIFT[rank] ?? -10;
+  if (d === 0) return;
+  const shift = (obj, key, amount, lo = 1, hi = 99) => {
+    if (!obj || typeof obj[key] !== 'number') return;
+    obj[key] = Math.max(lo, Math.min(hi, Math.round(obj[key] + amount)));
   };
-  if (player.position === 'pitcher' && player.pitching) {
-    player.pitching.velocity = boost
-      ? Math.max(Math.min(player.pitching.velocity || 0, jitter(vc)), Math.round(vc * 0.96) + Math.floor(Math.random() * 4))
-      : Math.min(player.pitching.velocity || 0, jitter(vc));
-    player.pitching.control = clampAbility(player.pitching.control, cc, 0.80);
-  }
-  if (player.batting) {
-    player.batting.meet = clampAbility(player.batting.meet, bc, 0.82);
-    player.batting.power = clampAbility(player.batting.power, bc, 0.75);
-    player.batting.eye = Math.min(player.batting.eye || 0, bc + Math.floor(Math.random() * 3));
-  }
-  if (player.fielding && typeof player.fielding.defense === 'number') {
-    player.fielding.defense = boost
-      ? Math.max(Math.round(player.fielding.defense * sc), Math.round((IL_BAT_CAP[rank] ?? 50) * 0.8))
-      : Math.round(player.fielding.defense * sc);
-  }
-  if (player.physical && typeof player.physical.speed === 'number') {
-    player.physical.speed = Math.round((player.physical.speed || 0) * sc);
-  }
+  shift(player.batting, 'meet', d); shift(player.batting, 'power', d);
+  shift(player.batting, 'eye', d);  shift(player.batting, 'steal', d * 0.6);
+  shift(player.fielding, 'defense', d);
+  shift(player.physical, 'speed', d * 0.6); shift(player.physical, 'arm', d * 0.6);
+  shift(player.pitching, 'control', d);
+  // 球速は km スケールなので効きを弱める（D で約 -11km）
+  shift(player.pitching, 'velocity', d * 0.45, 105, 168);
 }
 
 /**
@@ -355,7 +350,11 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
       }
     };
 
-    applyLeagueRankScaling(player, effectiveTryoutRank(independentLeagueRank));
+    // 初回トライアウトの候補は生成物なので、帯から引くことができない。
+    // リーグの格は**平行移動**で表す（上限や倍率ではない）。
+    // ⚠ 倍率だと 走力100 の快足が D リーグで 58 に潰れる。差が保たれる加算なら
+    //    格下リーグでも「1つだけ図抜けた選手」がそのまま図抜けたまま来る。
+    applyLeagueLevelShift(player, effectiveTryoutRank(independentLeagueRank));
 
     player.scoutComment = generateScoutComment(player);
     candidates.push(player);
@@ -539,20 +538,14 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   const uniCount = Math.max(Math.round(total * uniShare), 6);
   const hsCount = Math.max(Math.round(total * hsShare), 5);
   const faCount = Math.max(Math.round(total * faShare), 3);
-  const qualityBias = t;
-  // 受験者はすべてクローンなので、リーグの格に合わせて能力をスケールしてから登録する。
-  // （全国プールから来た中位級を、そのリーグ相応に抑える。Dリーグには中位級は来ない）
-  // ただし約10%は「格上の逸材」= 上位帯から抽出し1つ上のランク基準でスケールして混ぜる。
-  //   意図: 同格で埋もれるより、少し格下のリーグで試合に出て活躍・目立つほうが賢い選択、という選手。
-  // ※初回生成候補は generateRandomFillCandidates 内で既にスケール済みのため二重適用しない。
-  const upRank = independentLeagueRank
-    ? RANK_ORDER[Math.min(RANK_ORDER.length - 1, RANK_ORDER.indexOf(independentLeagueRank) + 1)]
-    : independentLeagueRank;
-  const gemBias = Math.min(1, qualityBias + 0.5); // 上位帯から抽出
-  const scaleToLeague = (arr) => {
-    if (independentLeagueRank) arr.forEach(c => applyLeagueRankScaling(c, independentLeagueRank));
-    return arr;
-  };
+  // リーグの格は**どの層から引くか**だけを決める（`RANK_BAND_BIAS`）。
+  // ⚠ 能力に上限や倍率を掛けない。帯で絞ったうえに能力も削ると二重制限になり、
+  //    一芸型（走力100・ミート30 のような選手）が真っ先に削られて来られなくなる。
+  // 注目度(t) は帯をさらに少しだけ上へ動かす（リーグを育てる動機付け）。
+  const qualityBias = Math.max(0, Math.min(1, rankBandBias(independentLeagueRank) + t * 0.25));
+  // 約10%は「格上の逸材」＝もう一段上の帯から引く。
+  //   意図: 同格で埋もれるより、少し格下のリーグで試合に出て活躍するほうが賢いという選手。
+  const gemBias = Math.min(1, qualityBias + 0.25);
   // 通常枠（90%）とgem枠（10%）に分割
   const split = (n) => { const gem = Math.max(1, Math.round(n * 0.1)); return { main: Math.max(0, n - gem), gem }; };
   const hsS = split(hsCount), uniS = split(uniCount);
@@ -560,17 +553,17 @@ export function generateTryoutCandidates(year, teamCount, isInitial = false, ind
   const drawHS = (n, bias) => balanceByPosition(getHighSchoolTryoutCandidates(n * TRYOUT_OVERDRAW, bias), n);
   const drawUni = (n, bias) => balanceByPosition(getUniversitySeniorTryoutCandidates(year, n * TRYOUT_OVERDRAW, bias), n);
   // 1. 高校卒業予定
-  scaleToLeague(drawHS(hsS.main, qualityBias)).forEach(addCandidate);
-  drawHS(hsS.gem, gemBias).forEach(c => { applyLeagueRankScaling(c, upRank, true); c._gem = true; addCandidate(c); });
+  drawHS(hsS.main, qualityBias).forEach(addCandidate);
+  drawHS(hsS.gem, gemBias).forEach(c => { c._gem = true; addCandidate(c); });
   // 2. 大学4年生（卒業予定・NPB未指名）
-  scaleToLeague(drawUni(uniS.main, qualityBias)).forEach(addCandidate);
-  drawUni(uniS.gem, gemBias).forEach(c => { applyLeagueRankScaling(c, upRank, true); c._gem = true; addCandidate(c); });
+  drawUni(uniS.main, qualityBias).forEach(addCandidate);
+  drawUni(uniS.gem, gemBias).forEach(c => { c._gem = true; addCandidate(c); });
   // 3. FA組（リリースプール ＋ クラブチーム選手）
   //    FA枠の半分はクラブチームのプロ志向選手から供給する
   const clubCount = Math.max(Math.round(faCount * 0.5), 2);
   const releasedCount = Math.max(faCount - clubCount, 2);
-  scaleToLeague(getReleasedCandidatesFromPool(releasedCount)).forEach(addCandidate);
-  scaleToLeague(getClubTryoutCandidates(clubCount)).forEach(addCandidate);
+  getReleasedCandidatesFromPool(releasedCount).forEach(addCandidate);
+  getClubTryoutCandidates(clubCount).forEach(addCandidate);
 
   // 4. 安全網: 実在候補が極端に少ない場合のみ生成で補完（通常は発生しない）
   const minCandidates = teamCount * 4;
