@@ -20,9 +20,29 @@ const CATEGORY_TO_STAFF_ABILITY = {
 };
 
 
+// ============================================================
+// メニューが「何のために」効くか（`serves`）
+//
+// ⚠ **キャンプの判断は物差しによって答えが逆になる**。実測（1チームだけ
+//    3年鍛えて90試合×4シード / 同じ選手を3年鍛えてドラフト評価）:
+//
+//      メニュー   勝率     得点   失点  ｜ ドラフト評価
+//      打撃練習   0.640    4.18   2.79 ｜ **286〜298（最善）**
+//      ノック     0.673    3.43  **2.06** ｜ 270〜285
+//      走塁練習  **0.682**  3.52   2.35 ｜ 260〜278（最低）
+//
+//    **チームを勝たせるなら守備・走塁、選手をドラフトへ送り出すなら打撃**。
+//    走塁が勝率で最良なのは、走力が `judgeFielderReach` の守備範囲にも効くため。
+//    この対立は既にモデルに存在していたが、**画面に何も出ていなかった**ので
+//    プレイヤーには「打撃を選んでおけば良い」ようにしか見えなかった。
+//    ⚠ 片方の物差しだけで係数を較正しないこと。
+const SERVE_WIN = '勝敗';
+const SERVE_DRAFT = 'ドラフト';
+
 /**
  * 練習メニュー定義
  * 各練習メニューは特定の能力値を成長させる
+ * `serves`: 実測でどちらの目的に効くか（上記）
  */
 export const TRAINING_MENUS = {
   batting: {
@@ -30,6 +50,7 @@ export const TRAINING_MENUS = {
     icon: '🏏',
     description: 'ミートを強化、パワー・選球眼・バントを微増',
     targets: ['meet', 'power', 'eye', 'bunt'],
+    serves: SERVE_DRAFT,   // 実測: 得点+0.75/試合だが失点+0.73。ドラフト評価は最善
     // 能力ごとの成長倍率: パワーは才能依存のため半減、選球眼は副次効果として半減
     // ミートは1.0倍維持（+0〜2）、パワー/選球眼/バントは0.3〜0.5倍（+0〜1）
     growthMultipliers: { power: 0.7, eye: 0.5, bunt: 0.3 },
@@ -40,6 +61,7 @@ export const TRAINING_MENUS = {
     icon: '🏃',
     description: '走力・盗塁・バントを強化',
     targets: ['speed', 'steal', 'bunt'],
+    serves: SERVE_WIN,     // 実測: 勝率0.682で最良（走力は守備範囲にも効く）
     growthMultipliers: { speed: 0.75, bunt: 0.5 },
     category: 'batting'
   },
@@ -48,6 +70,7 @@ export const TRAINING_MENUS = {
     icon: '🧤',
     description: '守備力と肩力を強化（投手野手共通）',
     targets: ['defense', 'arm'],
+    serves: SERVE_WIN,     // 実測: 失点2.06で最少
     growthMultipliers: { arm: 1.5 },
     category: 'fielding'
   },

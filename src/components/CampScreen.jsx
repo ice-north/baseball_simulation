@@ -809,6 +809,11 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 </button>
               ))}
               <span className="text-gray-300 mx-1">|</span>
+              <span className="text-gray-300 text-xs font-bold"
+                    title="実測: 守備・走塁を鍛えると失点が減って勝率が上がる（0.673/0.682 対 0.640）。打撃を鍛えると得点は増えるがドラフト評価向き。">
+                ⚖ 勝敗を取るか、ドラフトを取るか
+              </span>
+              <span className="text-gray-300 mx-1">|</span>
               <span className="text-gray-300 text-xs font-bold" title="タブに関係なく全選手に適用します">全員に一括:</span>
               {Object.entries(TRAINING_MENUS).filter(([k, m]) => !['newpitch'].includes(k) && !m.intensive).map(([key, menu]) => (
                 <button
@@ -1031,7 +1036,9 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             >
                               {Object.entries(TRAINING_MENUS).filter(([, m]) => !m.intensive)
                                 .map(([key, menu]) => (
-                                <option key={key} value={key}>{menu.name}</option>
+                                <option key={key} value={key}>
+                                  {menu.name}{menu.serves ? `（${menu.serves}）` : ''}
+                                </option>
                               ))}
                               <option disabled>── 集中コース ──</option>
                               {Object.entries(TRAINING_MENUS).filter(([, m]) => m.intensive)
