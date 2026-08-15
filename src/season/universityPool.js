@@ -12,6 +12,7 @@ import { assignHighSchool } from '../data/highSchoolData.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { generateHandedness } from '../utils/handedness.js';
 import { releasedPlayersPool, TEAMS_DATA } from '../teams-data.js';
+import { buildToolNorms, toolProfile } from '../game/scoutTools.js';
 import { addToReleasedPool, replaceReleasedPool } from '../state/pools.js';
 import { addToRoster } from '../state/roster.js';
 import { WORLD_DATA } from '../corporate/worldData.js';
@@ -599,6 +600,18 @@ export function distributeHighSchoolGraduates(enrollYear) {
   }));
   scored.sort((a, b) => b.score - a.score);
 
+  // === 進路は「水準」だけでなく「形」でも決まる（弱者の兵法）===
+  // 総合能力に優れた選手は大学・社会人へ進んで万能を目指し、
+  // 一芸型は独立・クラブへ進んでその武器を磨く。
+  // ⚠ 物差しは候補プールそのものから作る（`scoutTools`。表を二重に作らない）。
+  const toolNorms = buildToolNorms(players);
+  const spikeCache = new Map();
+  const spikeOf = (p) => {
+    // `shape`（足切りなし）を使う。`spike` だと能力の低い一芸型が全員0になる
+    if (!spikeCache.has(p.id)) spikeCache.set(p.id, toolProfile(p, toolNorms).shape || 0);
+    return spikeCache.get(p.id);
+  };
+
   // === 即戦力志望型 独立直行 ===
   // B〜C帯スコア範囲で成長力が高い選手が、大学4年待ちより独立リーグを選ぶ
   // (4年待てない即戦力志向 + 社会人S/Aには届かないがBには行きたくない層)
@@ -612,7 +625,9 @@ export function distributeHighSchoolGraduates(enrollYear) {
     const gp = p.growthPotential || 1.0;
     if (gp < 1.05) continue;
     // 成長力が高いほど独立を選ぶ確率が上がる（gp1.05→3%, gp1.20→9%, gp1.35→15%）
-    const prob = Math.min(0.18, (gp - 1.0) * 0.60);
+    // 一芸型はさらに独立を選びやすい（大学で4年かけて万能を目指すより、
+    // 試合に出て武器で勝負するほうが自分に向いていると分かっている）
+    const prob = Math.min(0.30, (gp - 1.0) * 0.60 * (1 + spikeOf(p) * 0.5));
     if (Math.random() < prob) {
       p.age = Math.max(p.age || 18, 19);
       p.origin = 'independent_impatient';
@@ -639,23 +654,35 @@ export function distributeHighSchoolGraduates(enrollYear) {
     const corpCount = Math.floor(uniCount * corpRatio / (1 - corpRatio - indRatio));
     const indCount = Math.floor(uniCount * indRatio / (1 - corpRatio - indRatio));
     const slotCount = Math.min(uniCount + corpCount + indCount, total - cursor);
+    // 同じランク帯（＝ほぼ同じ水準）の中では、**形**で進路が分かれる。
+    // ⚠ 大学・社会人・独立をこの順に並べてはいけない。社会人と独立は枠が小さく
+    //    隣り合うので、尖り順に切ると**社会人と独立がほぼ同じ集団になる**
+    //    （実測 尖り 社会人2.34 対 独立2.28）。
+    //    「総合力に優れるほど大学・社会人、一芸ほど独立」なので、
+    //    **先に独立へ一芸型を抜いてから**、残りを従来どおり成績順に大学・社会人へ配る。
     const slice = remaining.slice(cursor, cursor + slotCount);
     cursor += slotCount;
+    const bySpike = [...slice].sort((a, b) => spikeOf(b.player) - spikeOf(a.player));
+    const toIndependent = new Set(bySpike.slice(0, indCount).map(e => e.player.id));
+    const rest = slice.filter(e => !toIndependent.has(e.player.id));   // 成績順のまま
 
-    slice.forEach((entry, i) => {
+    for (const entry of bySpike.slice(0, indCount)) {
+      const p = entry.player;
+      p.age = Math.max(p.age || 18, 19);
+      p.origin = 'independent_candidate';
+      p._destinationRank = rank;
+      independent.push(p);
+    }
+    rest.forEach((entry, i) => {
       const p = entry.player;
       p.age = Math.max(p.age || 18, 19);
       if (i < uniCount) {
         p._destinationRank = rank;
         university[rank].push(p);
-      } else if (i < uniCount + corpCount) {
+      } else {
         p.origin = 'corporate_candidate';
         p._destinationRank = rank;
         corporate.push(p);
-      } else {
-        p.origin = 'independent_candidate';
-        p._destinationRank = rank;
-        independent.push(p);
       }
     });
   }

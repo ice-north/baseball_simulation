@@ -120,11 +120,16 @@ export function toolProfile(player, norms) {
     sum += d; cnt++;
     if (d > top) { top = d; topTool = t.key; }
   }
+  // `shape` は足切りなしの「自分の中での突出」。
+  // ⚠ **進路の振り分けにはこちらを使う**。`spike` はプール平均+0.9σ を下回ると 0 に
+  //    なるので、**能力の低い一芸型（走力だけ速い高校生など）が全員 0 になる**。
+  //    ドラフトのバッジは「本当にスバ抜けているか」を見たいので足切りが要るが、
+  //    アマチュアの進路は「その選手の中で何が武器か」の話で、水準は別の軸。
+  const shape = cnt ? Math.min(SPIKE_CAP, Math.max(0, top - sum / cnt)) : 0;
   if (!cnt || top < TOP_MIN) {
-    return { spike: 0, top: cnt ? top : 0, topTool: null, label: '', noun: '', devs };
+    return { spike: 0, shape, top: cnt ? top : 0, topTool: null, label: '', noun: '', devs };
   }
-  const spike = Math.min(SPIKE_CAP, Math.max(0, top - sum / cnt));
-  return { spike, top, topTool, label: TOOL_LABELS[topTool] || '', noun: TOOL_NOUNS[topTool] || '', devs };
+  return { spike: shape, shape, top, topTool, label: TOOL_LABELS[topTool] || '', noun: TOOL_NOUNS[topTool] || '', devs };
 }
 
 // ============================================================

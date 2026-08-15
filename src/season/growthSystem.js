@@ -135,6 +135,42 @@ export function applyFreeAgentGrowth(pool) {
 }
 
 // --- 社会人/独立チーム選手の実戦経験による成長 ---
+// ============================================================
+// カテゴリごとの育成の性格（「弱者の兵法」）
+//
+// 進路によって鍛えられる場所が違う、というのがこのゲームの階層の意味。
+//   大学   … 総合力（`applyUniversityGrowth` 側。specialties で7分野）
+//   社会人 … **技術**。設備と指導者があるので制球・ミート・選球眼・守備が伸びる
+//   独立   … **一芸**。試合に出て武器で勝負するしかない。長所が伸び短所は放置
+//   クラブ … **基礎体力**。技術指導者が居ないので走・肩・スタミナしか伸びない
+//
+// ⚠ **これは「弱者の兵法」の実体**。総合力に優れた高校生は大学・社会人へ進んで
+//   さらに万能になり、一芸型は独立・クラブへ進んでその一芸が磨かれる。
+//   一芸型が数年後にドラフトの下位・育成で拾われる（`scoutTools` の一芸指名）
+//   という経路は、ここで武器が磨かれて初めて成立する。
+//
+// ⚠ 従来は3カテゴリとも同じ傾斜（長所×1.4 / 短所×0.7）だった。
+//   カテゴリを分けても選手の中身が同じになるので、進路に意味が無かった。
+// ⚠ **`topN` を分けるのが要**。従来は全カテゴリ「上位2つが長所」だった。
+//    独立の一芸は文字どおり **1つ**なので topN=1 にしないと尖らない
+//    （実測: 上位2つのままだと 独立の尖り1.50 対 社会人1.46 とほぼ差が出なかった）。
+const CATEGORY_GROWTH = {
+  // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
+  independent: { topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  // 社会人: 技術系に厚く、フィジカルは伸びにくい。傾斜そのものは穏やか
+  corporate: {
+    topN: 2, strength: 1.25, weak: 0.85,
+    focus: { control: 1.5, meet: 1.5, eye: 1.4, defense: 1.4,
+             velocity: 0.7, speed: 0.7, arm: 0.8, stamina: 0.9, power: 0.9 },
+  },
+  // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
+  club: {
+    topN: 2, strength: 1.2, weak: 0.9,
+    focus: { velocity: 1.6, speed: 1.8, arm: 1.8, stamina: 1.6, power: 1.4,
+             control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6 },
+  },
+};
+
 export function applyCorporatePlayerGrowth(allTeams) {
   const decayMult = (current, threshold, rate) => {
     if (current < threshold) return 1.0;
@@ -218,11 +254,22 @@ export function applyCorporatePlayerGrowth(allTeams) {
           { key: 'defense', val: player.fielding?.defense || 0 },
         ];
       }
-      statEntries.sort((a, b) => b.val - a.val);
-      const strengthKeys = new Set(statEntries.slice(0, 2).map(e => e.key));
+      // カテゴリごとの育成の性格（`CATEGORY_GROWTH`）。
+      // 従来は3カテゴリすべてが同じ傾斜（長所×1.4 / 短所×0.7）だった。
+      const prof = CATEGORY_GROWTH[isClub ? 'club' : isIndependent ? 'independent' : 'corporate'];
+      // ⚠ **傾斜は grow() の base（能力ごとの伸びやすさ）を覆せる強さが要る**。
+      //    base はミート3.0 対 走力0.5 と6倍の開きがあるので、旧値（長所1.4 / 短所0.7）
+      //    では「長所の走力 0.5×1.4=0.7」より「短所のミート 3.0×0.7=2.1」の方が
+      //    3倍速く伸びていた。**長所を指定しているのに短所が伸びる**状態だった。
+      // カテゴリの得意分野を掛けてから並べる（社会人は技術を、クラブは体力を長所と見る）
+      statEntries.sort((a, b) =>
+        (b.val * (prof.focus?.[b.key] ?? 1.0)) - (a.val * (prof.focus?.[a.key] ?? 1.0)));
+      const strengthKeys = new Set(statEntries.slice(0, prof.topN).map(e => e.key));
       const weakKeys = new Set(statEntries.slice(-2).map(e => e.key));
-      // 長所×1.4, 普通×1.0, 短所×0.7
-      const specMult = (key) => strengthKeys.has(key) ? 1.4 : weakKeys.has(key) ? 0.7 : 1.0;
+      const specMult = (key) => {
+        const shape = strengthKeys.has(key) ? prof.strength : weakKeys.has(key) ? prof.weak : 1.0;
+        return shape * (prof.focus?.[key] ?? 1.0);
+      };
 
       const grow = (current, base, key, cap = 99, threshold = null, rate = 0.05) => {
         if (effectiveFactor >= 0) {
