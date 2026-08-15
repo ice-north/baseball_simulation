@@ -114,12 +114,15 @@ function generateHighSchoolPlayer(id) {
   // === 才能ランク（連続分布）===
   const talentRoll = Math.random() * 100;
   let tier, off;
-  if (talentRoll < 1)        { tier = 'S'; off = 22; }
-  else if (talentRoll < 4)   { tier = 'A'; off = 15; }
-  else if (talentRoll < 12)  { tier = 'B'; off = 7; }
+  // ⚠ オフセットの幅＝才能ランクの差。旧値（S+22〜E-4 の26点）では
+  //    `calculatePlayerRank` の素点で S39.9 対 E23.1 の **16.8点 = 1.7ランク**しかなく、
+  //    「才能ランクの差が小さい」と感じる水準だった。35点に広げて約2.4ランクにする。
+  if (talentRoll < 1)        { tier = 'S'; off = 28; }
+  else if (talentRoll < 4)   { tier = 'A'; off = 19; }
+  else if (talentRoll < 12)  { tier = 'B'; off = 9; }
   else if (talentRoll < 28)  { tier = 'C'; off = 2; }
   else if (talentRoll < 68)  { tier = 'D'; off = 0; }
-  else                       { tier = 'E'; off = -4; }
+  else                       { tier = 'E'; off = -7; }
 
   // === Phase 2: 基礎身体能力を先に生成（投手/野手決定の材料）===
   let baseArm = Math.max(1, Math.round(nrm(38, 14) + off * 0.5 + buildMod.arm));
@@ -397,6 +400,10 @@ function generateHighSchoolPlayer(id) {
     isTwoWay,
     twoWaySubPosition,
     growthPotential,
+    // 生成時の才能ランク（S〜E）。育成の効きを測る基準として保持する。
+    // ⚠ これは「生まれ持ったもの」であって現在の実力ではない。
+    //    実力の表示は `calculatePlayerRank`（能力から毎回計算）を使うこと。
+    talentTier: tier,
     growthModifier: 0,
     personality: {
       discipline: Math.max(1, Math.min(100, Math.round(50 + (Math.sqrt(-2 * Math.log(Math.random() || 0.001)) * Math.cos(2 * Math.PI * Math.random())) * 18))),

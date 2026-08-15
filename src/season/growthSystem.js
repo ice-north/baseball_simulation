@@ -211,12 +211,26 @@ export function applyCorporatePlayerGrowth(allTeams) {
       // 年齢因子: 18歳→+1.0、zeroAgeで0に線形減衰、以降マイナス（下限-2.0）
       const ageFactor = Math.max(-2.0, 1.0 - (age - 18) / Math.max(1, zeroAge - 18));
 
-      // 練習による衰え補填: discipline 60以上から衰えをカバー可能
-      // discipline 80→+0.25, 100→+0.50
-      const practiceOffset = Math.max(0, (discipline - 60) * 0.0125);
+      // 練習量による上下。**育成の幅の主役はここ**。
+      // ⚠ 旧式は `Math.max(0, (disc-60)×0.0125)` で上向きだけ、しかも最大 +0.50。
+      //    実測で「怠ける(意識20)⇔頑張る(意識90)」の4年間の差が **5.5点**
+      //    （`calculatePlayerRank` の素点。1ランク=10点）＝ **0.55ランク**しかなく、
+      //    才能ランクが実力をほぼ決めていた。
+      //    両側にして中心を55に置く。意識50前後の選手の伸びは従来どおりで、
+      //    上と下だけが開く＝**リーグ平均は動かさず幅だけ広げる**。
+      // 下向きは上向きより急にする。**怠けた選手は「伸びない」ではなく「落ちる」**。
+      // 上向きだけを強めても、才能の高い選手が怠けたときに何も起きない
+      // （実測: 上向きだけだと 才能Sが4年で 39.9→38.6 とほぼ不変だった）。
+      // ⚠ **中心は discipline の平均(50)に置くこと**。55に置いたら中央値の選手が
+      //    毎年わずかに負側へ入り、6年でリーグ平均が 42.7→36.7 と崩れた。
+      //      意識20 → -2.85 / 50 → 0（従来と同じ） / 70 → +0.90 / 90 → +1.80
+      const practiceOffset = discipline >= 50
+        ? (discipline - 50) * 0.045
+        : (discipline - 50) * 0.095;
 
       // 実効成長因子: 0以上は成長・維持期、マイナスは衰退期
-      const effectiveFactor = ageFactor + practiceOffset;
+      // ⚠ 下限を切ること。切らないと 30代の意識の低い選手が年 -6 ずつ崩壊する
+      const effectiveFactor = Math.max(-2.2, ageFactor + practiceOffset);
 
       // プロ意識による成長倍率（環境ごとに自主性の重要度が異なる）
       //
@@ -301,7 +315,11 @@ export function applyCorporatePlayerGrowth(allTeams) {
           return Math.min(cap, current + Math.round(amount));
         } else {
           // 衰退期: 純粋な衰え（disciplineMultは乗算しない）
-          const declineAmount = base * Math.abs(effectiveFactor) * 0.5 * (0.6 + Math.random() * 0.6);
+          // ⚠ 減衰の強さは**プロ意識で変える**。一律に上げると平均的なベテランまで
+          //    早く終わり、6年でリーグ平均が6点下がった。落ちるのは怠けた選手だけ。
+          //      意識50→0.56 / 30→0.80 / 20→0.92（意識55以上は従来どおり0.5）
+          const declineRate = 0.5 + Math.max(0, 55 - discipline) * 0.012;
+          const declineAmount = base * Math.abs(effectiveFactor) * declineRate * (0.6 + Math.random() * 0.6);
           return Math.max(1, current - Math.round(declineAmount));
         }
       };
