@@ -157,16 +157,20 @@ export function applyFreeAgentGrowth(pool) {
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
   independent: { topN: 1, strength: 2.6, weak: 0.20, focus: null },
-  // 社会人: 技術系に厚く、フィジカルは伸びにくい。傾斜そのものは穏やか
+  // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
+  // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
+  //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
+  //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
+  //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    topN: 2, strength: 1.25, weak: 0.85,
-    focus: { control: 1.5, meet: 1.5, eye: 1.4, defense: 1.4,
-             velocity: 0.7, speed: 0.7, arm: 0.8, stamina: 0.9, power: 0.9 },
+    topN: 2, strength: 1.3, weak: 0.85,
+    focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8,
+             velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    topN: 2, strength: 1.2, weak: 0.9,
-    focus: { velocity: 1.6, speed: 1.8, arm: 1.8, stamina: 1.6, power: 1.4,
+    topN: 2, strength: 1.25, weak: 0.9,
+    focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6 },
   },
 };
@@ -226,13 +230,19 @@ export function applyCorporatePlayerGrowth(allTeams) {
       //
       // 企業: 環境が補完。disciplineの影響は控えめ（緩やかな線形）
       //   discipline 50→1.0x, 70→1.3x, 90→1.6x
-      // クラブ: discipline 80未満は成長ほぼなし。90+(上位1%)で初めて有意な成長。95+(上位0.4%)でドラフト候補級
-      //   discipline 80→0.05(下限), 85→0.078, 90→0.625, 95→2.11, 100→5.0
+      // クラブ: 指導者が居ないので伸びるかどうかは本人次第。
+      // ⚠ 旧式は3乗の**崖**で、discipline 85（上位3%）でも 0.078 とほぼゼロ。
+      //   意識の高い選手と平凡な選手が**区別できていなかった**（どちらも実質0）。
+      //   指数を緩めて「65あたりから見える差が付き、上限は低いまま」の曲線にする:
+      //     55→0.10(下限) / 65→0.19 / 75→0.63 / 85→1.31 / 95→2.16 / 100→2.60
+      //   平均(50)では従来どおりほぼ伸びない＝クラブが弱い場所である性格は変えない。
       const disciplineMult = isClub
-        ? Math.max(0.05, Math.pow(Math.max(0, (discipline - 80) / 20), 3.0) * 5.0)
+        ? Math.max(0.10, Math.pow(Math.max(0, (discipline - 55) / 45), 1.9) * 2.6)
         : isIndependent
           ? 1.0 + Math.max(0, (discipline - 50) * 0.020)
-          : 1.0 + Math.max(0, (discipline - 50) * 0.015);
+          // 企業: 設備・指導者・実戦がすべて揃う。3カテゴリで最も環境が良い
+          //   discipline 50→1.0x, 70→1.44x, 90→1.88x
+          : 1.0 + Math.max(0, (discipline - 50) * 0.022);
 
       // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
       // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
