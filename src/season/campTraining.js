@@ -896,7 +896,7 @@ export function calcSecondAffinity(arsenal) {
  * @param {string} [newPitchType] - 新球種習得時の球種キー
  * @returns {Object} - 成長結果 { player, growthReport }
  */
-export function executeCampTraining(player, trainingType, newPitchType, staffBonus = null, awakeningMult = 1.0) {
+export function executeCampTraining(player, trainingType, newPitchType, staffBonus = null, awakeningMult = 1.0, moodMult = 1.0) {
   const menu = TRAINING_MENUS[trainingType];
   if (!menu) {
     console.warn(`Unknown training type: ${trainingType}`);
@@ -1087,7 +1087,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
       baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
         * talentMult * aptitudeFactor * physiqueMult * disciplineMult
-        * campPotMult * coachingMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
+        * campPotMult * coachingMult * moodMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
       isAwakening = false;
       awakeningGrowth = 0;
     } else {
@@ -1096,7 +1096,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
       const statMultiplier = menu.growthMultipliers?.[targetStat] ?? 1.0;
       const physFitMult = isPhysical ? fitnessMult : 1.0;
       const battCoachMult = targetStat === 'control' ? batteryMult : 1.0;
-      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * physFitMult * battCoachMult * stopAgeGate);
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * statMultiplier * talentMult * aptitudeFactor * physiqueMult * disciplineMult * campPotMult * coachingMult * moodMult * physFitMult * battCoachMult * stopAgeGate);
       if ((targetStat === 'stamina' || targetStat === 'bodyStamina') && baseGrowth < 1) baseGrowth = 1;
       // 覚醒判定（経験値 × プロ意識の相乗効果）
       // discipline < 30: 努力しない選手は飛躍しない（係数0）
@@ -1308,19 +1308,23 @@ export function applyBatteryMentalEffect(players, staffBonus) {
   return reports;
 }
 
-export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null, awakeningMult = 1.0) {
+/**
+ * @param {Object} [moodMults] - { [playerId]: 倍率 } 選手の希望と指示の噛み合い
+ *   （`trainingPolicy.moodMultiplier`）。指示が正しいかとは別で、**やる気にだけ**効く。
+ */
+export function executeTeamCampTraining(team, trainingAssignments, newPitchSelections = {}, staffBonus = null, awakeningMult = 1.0, moodMults = {}) {
   const allReports = [];
   const updatedPlayers = team.players.map(player => {
     const trainingType = trainingAssignments[player.id];
     if (!trainingType) {
       const autoTraining = player.position === 'pitcher' ? 'control' : 'batting';
-      const { player: trained, growthReport } = executeCampTraining(player, autoTraining, undefined, staffBonus, awakeningMult);
+      const { player: trained, growthReport } = executeCampTraining(player, autoTraining, undefined, staffBonus, awakeningMult, moodMults[player.id] ?? 1.0);
       allReports.push({ player: trained, trainingType: autoTraining, growthReport });
       return trained;
     }
 
     const newPitchType = trainingType === 'newpitch' ? newPitchSelections[player.id] : undefined;
-    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType, staffBonus, awakeningMult);
+    const { player: trained, growthReport } = executeCampTraining(player, trainingType, newPitchType, staffBonus, awakeningMult, moodMults[player.id] ?? 1.0);
     allReports.push({ player: trained, trainingType, growthReport });
     return trained;
   });

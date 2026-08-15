@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import TutorialHint from './TutorialHint.jsx';
 import { TEAMS_DATA } from '../teams-data.js';
+import { DIRECTIONS, PHASES, resolveTraining, moodMultiplier, describeMood, playerWish } from '../season/trainingPolicy.js';
 import { TRAINING_MENUS, SUB_TRAINING_MENUS, executeTeamCampTraining, executeSubTraining, ALL_PITCH_TYPES, getPitchTypeName, FORM_PITCH_AFFINITY, calcSecondAffinity, DISPATCH_DESTINATIONS, DISPATCH_LIMITS, checkDispatchEligibility, executeDispatchTraining, resolveDispatchTraining, calcPlayerOverall, applyMotivationEffect, applyBatteryMentalEffect, getUniversityDispatchOptions, getAvailableDispatchKeys } from '../season/yearProgressionSystem.js';
 import { POSITION_NAMES, POSITION_ORDER, getAbilityColor } from '../utils/constants.js';
 import { AbilityValue } from './AbilityValue.jsx';
@@ -252,6 +253,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
   const currentYear = seasonData?.year || 1;
 
   const [currentRound, setCurrentRound] = useState(1);
+  const [policyDir, setPolicyDir] = useState('balanced');
+  const [policyPhase, setPolicyPhase] = useState('skill');
   const [assignments, setAssignments] = useState(() => {
     const init = {};
     userTeam?.players?.forEach(p => {
@@ -378,6 +381,17 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
     return ALL_PITCH_TYPES.filter(t => !existing.includes(t));
   };
 
+  // 育成方針（方向性 × フェーズ）。既定値を作るだけで、個別の上書きは残る。
+  const applyPolicy = (dir, phase) => {
+    setPolicyDir(dir); setPolicyPhase(phase);
+    const newAssign = {}; const newSubAssign = {};
+    userTeam?.players?.forEach(p => {
+      const r = resolveTraining(p, dir, phase);
+      newAssign[p.id] = r.main; newSubAssign[p.id] = r.sub;
+    });
+    setAssignments(newAssign); setSubAssignments(newSubAssign);
+  };
+
   const applyPreset = (presetKey) => {
     const preset = CAMP_PRESETS[presetKey];
     if (!preset) return;
@@ -402,8 +416,13 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
 
     const userStaffBonus = userTeam.corporateData?.staff ? getTeamStaffBonus(userTeam.corporateData.staff) : null;
     const awakeningMult = gameMode === 'university' ? 0.5 : gameMode === 'independent' ? 1.5 : 1.0;
+    // 選手の希望と指示の噛み合い＝やる気。
+    // ⚠ **希望どおりが正解ではない**。指示が正しいかは選手の水準と目的が決めるもので、
+    //    ここは効率（身が入るか）にだけ効く。指導者が当たりということもある。
+    const moodMults = {};
+    userTeam.players.forEach(p => { moodMults[p.id] = moodMultiplier(p, policyDir, policyPhase); });
     const { updatedTeam, allReports } = executeTeamCampTraining(
-      userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult
+      userTeam, finalAssignments, newPitchSelections, userStaffBonus, awakeningMult, moodMults
     );
     TEAMS_DATA[userTeamName] = updatedTeam;
 
@@ -795,17 +814,31 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                 </div>
               );
             })()}
-            {/* プリセット一括設定 */}
+            {/* 育成方針（方向性 × フェーズ）。選んだ時点で全選手のメニューが埋まり、
+                個別に上書きもできる。⚠ 旧プリセット5種はこの2軸を平らに潰した
+                部分集合だった（弱点克服=短所 / 長所強化=長所 / フィジカル・技術=フェーズ）
+                ので、二重にせずこちらへ集約してある。 */}
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-              <span className="text-gray-300 text-xs font-bold">プリセット:</span>
-              {Object.entries(CAMP_PRESETS).map(([key, preset]) => (
+              <span className="text-gray-300 text-xs font-bold" title="選手の希望と噛み合うとやる気が上がります">育成方針:</span>
+              {Object.values(DIRECTIONS).map(d => (
                 <button
-                  key={key}
-                  onClick={() => applyPreset(key)}
-                  title={preset.desc}
-                  className="btn-secondary rounded px-2 py-0.5 text-xs transition"
+                  key={d.key}
+                  onClick={() => applyPolicy(d.key, policyPhase)}
+                  title={d.description}
+                  className={`rounded px-2 py-0.5 text-xs transition ${policyDir === d.key ? 'seg seg-on' : 'seg'}`}
                 >
-                  {preset.icon} {preset.name}
+                  {d.icon} {d.name}
+                </button>
+              ))}
+              <span className="text-gray-300 mx-0.5">×</span>
+              {Object.values(PHASES).map(ph => (
+                <button
+                  key={ph.key}
+                  onClick={() => applyPolicy(policyDir, ph.key)}
+                  title={ph.description}
+                  className={`rounded px-2 py-0.5 text-xs transition ${policyPhase === ph.key ? 'seg seg-on' : 'seg'}`}
+                >
+                  {ph.icon} {ph.name}
                 </button>
               ))}
               <span className="text-gray-300 mx-1">|</span>
@@ -891,6 +924,7 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                         <S k="growth" w="w-10" title="成長率 (基礎+変動)">成長</S>
                         <S k="discipline" w="w-8" title="プロ意識">プ意</S>
                         <S k="mental" w="w-8" title="精神力">精神</S>
+                        <th className="py-1.5 px-1 text-center w-14" title="この選手が今の方針をどう受け止めているか。希望と噛み合うと効率が上がる（正しい指示かどうかとは別）">意欲</th>
                         <th className="py-1.5 px-1 text-center w-8">投/打</th>
                         {isPitchTab && <th className="py-1.5 px-1 text-center w-12">フォーム</th>}
                         {!isPitchTab && <S k="meet" w="w-12">ミート</S>}
@@ -976,6 +1010,15 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
                             const m = player.personality?.mental ?? 50;
                             const c = m >= 80 ? 'text-red-400' : m >= 60 ? 'text-orange-400' : m >= 40 ? 'text-yellow-400' : m >= 20 ? 'text-blue-400' : 'text-gray-300';
                             return <span className={c}>{m}</span>;
+                          })()}
+                        </td>
+                        <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
+                          {(() => {
+                            const mood = describeMood(player, policyDir, policyPhase);
+                            const w = playerWish(player);
+                            const c = mood.tone === 'good' ? 'text-green-400' : mood.tone === 'bad' ? 'text-orange-400' : 'text-gray-300';
+                            return <span className={c}
+                              title={`本人の希望: ${DIRECTIONS[w.direction].name} × ${PHASES[w.phase].name}`}>{mood.label}</span>;
                           })()}
                         </td>
                         <td className="py-1 px-1 text-center text-xs whitespace-nowrap">
