@@ -7,6 +7,11 @@ import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedVa
 import { PITCHING_FORM_EFFECTS, getPitchTypeName } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 
+// 集中練習が1点に集約する倍率。通常メニューは3〜4能力に分散するので、
+// ここが 1.0 だと「集中しても総量は同じ・他能力に減点だけ付く」＝常に損になる。
+// 分散先の数（3〜4）より小さくしてあるのは、集中には減点という別の代償があるため。
+const INTENSIVE_FOCUS = 2.4;
+
 // 練習カテゴリ → スタッフ指導能力のマッピング
 const CATEGORY_TO_STAFF_ABILITY = {
   batting: 'battingCoach',
@@ -1045,9 +1050,21 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     let baseGrowth, isAwakening, awakeningGrowth;
 
     if (menu.intensive && menu.penaltyPool) {
-      // 集中練習: +1確定、50%で+1〜2上乗せ
-      const bonus = Math.random() < 0.5 ? (Math.floor(Math.random() * 2) + 1) : 0;
-      baseGrowth = 1 + bonus;
+      // 集中練習＝「長所を伸ばす」の実体。
+      // ⚠ 以前はここが **+1確定・50%で+1〜2 の固定値**で、年齢・プロ意識・
+      //    コーチ・成長力・体格をすべて**素通り**していた。1クールあたり約1.75しか
+      //    入らないのに他能力に減点が付くので、**どの水準の選手でも
+      //    「満遍なく」に負ける**（実測 ドラフト評価 211 対 230）。
+      //    集中する意味が数字の上で一度も無かった。
+      // 通常メニューと同じ式で出してから1点に集約する。これで
+      //   ・能力が低い（減衰なし）→ 集中が満額入って一芸が作れる
+      //   ・能力が高い（75以上で4%/pt減衰）→ 集中しても伸びず、満遍なくが勝つ
+      // という反転が**既存の減衰カーブだけで**成立する（新しい係数を作らない）。
+      const rawBase = (Math.floor(Math.random() * 3) + 1) * ageMultiplier * expBonus;
+      const rawFocus = (Math.floor(Math.random() * 4) + 1) * ageMultiplier * expBonus;
+      baseGrowth = Math.round((rawBase + rawFocus) * 0.14 * INTENSIVE_FOCUS
+        * talentMult * aptitudeFactor * physiqueMult * disciplineMult
+        * campPotMult * coachingMult * (isPhysical ? fitnessMult : 1.0) * stopAgeGate);
       isAwakening = false;
       awakeningGrowth = 0;
     } else {
