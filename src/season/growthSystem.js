@@ -162,14 +162,14 @@ export function applyFreeAgentGrowth(pool) {
 //    ハーネス**が要る（`loop.mjs` 相当）。それを作るまで触らないこと。
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
-  independent: { level: 1.0, topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  independent: { level: 1.34, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
   // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
   //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
   //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
   //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    level: 1.0, topN: 2, strength: 1.3, weak: 0.85,
+    level: 0.64, topN: 2, strength: 1.3, weak: 0.85,
     focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },

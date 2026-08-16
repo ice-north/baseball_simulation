@@ -14,9 +14,9 @@
 //
 // 終了コード: 全PASSで0、FAILで1。
 //
-// 【限界】新規ロスター前提のスナップショット検証のため、多年次の discipline
-// 主導成長でクラブ選手が徐々にドラフト級へ育つダイナミクスは対象外。
-// それは将来のプログレッション・ハーネス（advanceToNextYear をフル世界で回す）で扱う。
+// 【growYears】社会人・独立・クラブは4年ぶん `applyCorporatePlayerGrowth` を
+// 回してから指名する。これが無いと生成直後のロスターを指名することになり、
+// カテゴリ別の成長を変えても構成比が動かない（＝較正できない）。
 // ============================================================
 
 import './lib/bootstrap.mjs';
@@ -29,7 +29,11 @@ console.log(`\n▶ NPBドラフト比率検証: ${SEEDS}シード`);
 const sum = { total: 0, club: 0, eligibleUniversity: 0,
               highschool: 0, university: 0, corporate: 0, independent: 0 };
 for (let s = 0; s < SEEDS; s++) {
-  const r = runDraft(6);
+  // ⚠ **growYears を必ず指定すること**。0 だと社会人・独立・クラブが
+  //    「生成した直後のロスター」のまま指名され、`applyCorporatePlayerGrowth` を
+  //    一度も通らない。カテゴリ別の成長を変えても構成比が1%も動かず、
+  //    実ゲームと食い違う（実際にこれで空振りした）。
+  const r = runDraft(6, { growYears: 4 });
   sum.total += r.total;
   sum.club += r.club;
   sum.eligibleUniversity += r.eligibleUniversity;
@@ -51,9 +55,9 @@ r.assert('全ソースが指名に出現', avg(sum.highschool) > 0 && avg(sum.un
 
 // --- 参考: フル内訳 vs CLAUDE.md目標(高30/大35/社20/独14) ---
 r.info('高校',   `${avg(sum.highschool).toFixed(0)}名 (${pct(sum.highschool).toFixed(0)}%)  目標30%`);
-r.info('大学',   `${avg(sum.university).toFixed(0)}名 (${pct(sum.university).toFixed(0)}%)  目標35%`);
-r.info('社会人', `${avg(sum.corporate).toFixed(0)}名 (${pct(sum.corporate).toFixed(0)}%)  目標20%`);
-r.info('独立',   `${avg(sum.independent).toFixed(0)}名 (${pct(sum.independent).toFixed(0)}%)  目標14%`);
+r.info('大学',   `${avg(sum.university).toFixed(0)}名 (${pct(sum.university).toFixed(0)}%)  目標40%`);
+r.info('社会人', `${avg(sum.corporate).toFixed(0)}名 (${pct(sum.corporate).toFixed(0)}%)  目標15%`);
+r.info('独立',   `${avg(sum.independent).toFixed(0)}名 (${pct(sum.independent).toFixed(0)}%)  目標10%`);
 r.info('クラブ', `${avg(sum.club).toFixed(1)}名 (設計目標: 年約2名)`);
 r.print();
 

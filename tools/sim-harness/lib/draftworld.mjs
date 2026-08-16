@@ -19,6 +19,7 @@ const { generateHighSchoolClass, enrollInUniversity, processUniversityYear,
         highSchoolPool, universityPool, clearUniversityPool, clearHighSchoolPool } =
   await import(SRC + '/season/universityPool.js');
 const { generateCorporateRoster } = await import(SRC + '/corporate/corporateInit.js');
+const { applyCorporatePlayerGrowth } = await import(SRC + '/season/growthSystem.js');
 const { processNPBDraft } = await import(SRC + '/season/npbDraft.js');
 
 const UNIV_RANKS = ['S', 'A', 'B', 'C', 'C', 'D'];
@@ -33,7 +34,16 @@ export function runDraft(YEAR = 6, opts = {}) {
     corpTeams = 40,
     clubTeams = 15,
     indieTeams = 26,
-    univCohortSize = 560,
+    // ⚠ 実ゲームの `distributeHighSchoolGraduates` は毎年 **2230人**を大学へ送る。
+    //    560 だと大学プールが実際の1/4しかなく、大学の指名シェアが構造的に
+    //    低く出る（母集団が小さいので上位に食い込む人数が足りない）。
+    univCohortSize = 2230,
+    // 社会人・独立・クラブを何年ぶん育ててから指名するか。
+    // ⚠ **0 だと `applyCorporatePlayerGrowth` を一度も呼ばない**。
+    //    ロスターを作ってすぐ指名するので、カテゴリ別の成長を変えても
+    //    構成比が1%も動かない（実際にこれで空振りした）。
+    //    社会人・独立・クラブの構成比を較正するときは必ず 3〜4 を指定すること。
+    growYears = 0,
   } = opts;
 
   clearUniversityPool();
@@ -87,6 +97,36 @@ export function runDraft(YEAR = 6, opts = {}) {
       corporateData: { type: 'independent', rank, reputation: 20 },
       players: generateCorporateRoster({ id: 'il_' + i, rank, type: 'independent' }, YEAR),
     };
+  }
+
+  // === 社会人・独立・クラブを growYears 年ぶん育てる ===
+  // 実ゲームは毎年 applyCorporatePlayerGrowth を通るので、それを再現する。
+  // 加齢で抜けた分は高卒新人（19歳）で補充し、年齢構成を定常に保つ。
+  if (growYears > 0) {
+    const intakePool = generateHighSchoolClass(YEAR - growYears, 4000);
+    let intakeIdx = 0;
+    for (let y = 0; y < growYears; y++) {
+      for (const t of Object.values(allTeams)) {
+        for (const p of (t.players || [])) {
+          p.seasonStats = p.position === 'pitcher'
+            ? { pitching: { gamesStarted: 12, gamesRelieved: 8 } }
+            : { batting: { atBats: 240 } };
+        }
+      }
+      applyCorporatePlayerGrowth(allTeams);
+      for (const t of Object.values(allTeams)) {
+        if (!t.players) continue;
+        t.players.forEach(p => { p.age = (p.age || 22) + 1; });
+        const kept = t.players.filter(p => (p.age || 22) < 30);
+        const need = t.players.length - kept.length;
+        for (let i = 0; i < need && intakeIdx < intakePool.length; i++) {
+          const rookie = JSON.parse(JSON.stringify(intakePool[intakeIdx++]));
+          rookie.age = 19;
+          kept.push(rookie);
+        }
+        t.players = kept;
+      }
+    }
   }
 
   // 指名前の候補スナップショット。processNPBDraft は指名した選手をプールから
