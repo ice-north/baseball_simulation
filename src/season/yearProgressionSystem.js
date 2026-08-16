@@ -395,11 +395,14 @@ export function checkNPBDraftEligibility(player, awardBonus = 0) {
 
   // 年齢ボーナス（若い選手の将来性を評価）
   // 実際のNPBドラフトでは高校生が1巡目の3-5人を占める
-  const ageBonusMap = { 18: 33, 19: 27, 20: 15, 21: 8, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
+  // ⚠ **カテゴリ加点を全廃したので、構成比を決めるのはこの年齢カーブと成長だけ**。
+  //    高卒の +33 は「素材への投機」として大きすぎ、高校生が指名の45%を占めていた
+  //    （プールの81%が高校生なので、少しの下駄でも大量に通ってしまう）。
+  const ageBonusMap = { 18: 16, 19: 14, 20: 10, 21: 7, 22: 5, 23: 2, 24: 0, 25: -10, 26: -22, 27: -35, 28: -50, 29: -65 };
   const ageBonus = ageBonusMap[age] !== undefined ? ageBonusMap[age] : (age < 18 ? 33 : -65);
 
   // 将来性投影倍率（若い選手の能力を伸びしろ込みで評価）
-  const potentialMult = age <= 18 ? 1.22 : age <= 19 ? 1.15 : age <= 20 ? 1.06 : age <= 21 ? 1.02 : 1.0;
+  const potentialMult = age <= 18 ? 1.10 : age <= 19 ? 1.07 : age <= 20 ? 1.03 : age <= 21 ? 1.01 : 1.0;
 
   // 成長力ボーナス（若い選手ほど成長力が大きく評価される）
   const gp = player.growthPotential || 1.0;

@@ -22,9 +22,10 @@ import { buildToolNorms, toolProfile, toolHuntRateForRound, TOOL_HUNT_RATE_IKU,
  * 統一スコアで評価して上位~120名をドラフト指名する。
  * 各ソースの比率は選手の質から自然に決まる。
  *
- * 目標比率（タレント調整の指標）:
- *   高校30%, 大学35%, 社会人20%, 独立14%, その他1%
- *   1位は高校+大学80%, 社会人20%が自然に実現される（生成能力差による）
+ * 目標比率: 高校30% / 大学40% / 社会人15% / 独立10% / クラブ2%、投手50% / 野手50%
+ * ⚠ **カテゴリ加点は置かない**。構成比は「そのカテゴリに何人いて、どれだけ
+ *    育っているか」だけで決まるべきで、加点として許すのは**年齢**だけ。
+ *    投打・捕手の比率は**母集団**（高校生プールの生成率）で作る。
  *
  * @param {Object} allTeams - TEAMS_DATA
  * @param {number} gameYear - 現在のゲーム年度
@@ -76,12 +77,9 @@ export function processNPBDraft(allTeams, gameYear = 1) {
       }
       // 独立リーグ: 年齢制限なし（1年目から指名対象）
       const baseBonus = awardBonusMap[player.id]?.bonus || 0;
-      // 大卒社会人経験ボーナス: age25-26はageBonus(-10〜-22)を補正
-      const hasUniHistoryForBonus = source === 'corporate' && player.careerHistory?.some(h => h.type === 'university');
-      const corpExpBonus = hasUniHistoryForBonus && player.age >= 25 && player.age <= 26
-        ? Math.max(0, (27 - player.age) * 5)  // 25歳:+10, 26歳:+5
-        : 0;
-      const bonus = baseBonus + corpExpBonus;
+      // ⚠ 旧「大卒社会人経験ボーナス」（age25-26に+10/+5）も撤廃。
+      //    カテゴリ別の加点なので、年齢だけで調整するという方針から外れる。
+      const bonus = baseBonus;
       const awards = awardBonusMap[player.id]?.awards || [];
       const { totalScore } = checkNPBDraftEligibility(player, bonus);
       const isClub = source === 'corporate' && team.corporateData?.type === 'club';
@@ -118,17 +116,10 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     });
   });
 
-  // === ソース別の指名到達性補正 ===
-  // 独立リーグ選手は年齢的に将来性倍率(potentialMult)や年齢ボーナスが乗らず、
-  // 素材が良くてもスコアが低く出るため、掲載上位でも指名までほとんど届かなかった
-  // （掲載選手の指名率: 独立19% ⇔ 高校/社会人ほぼ100%）。
-  // ソース内順位は保ったまま一律で底上げし、「注目選手の約8割がいずれ指名される／
-  // 漏れた選手は次カテゴリで飛躍して再挑戦」という設計に近づける。
-  const SOURCE_DRAFT_BONUS = { independent: 35 };
-  allCandidates.forEach(c => {
-    const b = SOURCE_DRAFT_BONUS[c.source];
-    if (b) c.score += b;
-  });
+  // ⚠ **ソース別の加点は置かない**（旧 `SOURCE_DRAFT_BONUS = { independent: 35 }` を撤廃）。
+  // 指名の構成比は「そのカテゴリに何人いて、どれだけ育っているか」だけで決まるべきで、
+  // 出身で下駄を履かせると育成の良し悪しが結果に出なくなる。
+  // 加点として残してよいのは**年齢**（`ageBonus` / `potentialMult`）だけ。
 
   // === 「一芸」の計測（scoutTools.js）===
   // 総合点だけで上から取ると必ず「全部そこそこ高い選手」が並ぶ。

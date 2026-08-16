@@ -129,8 +129,13 @@ function generateHighSchoolPlayer(id) {
   let baseSpeed = Math.max(1, Math.round(nrm(35, 14) + buildMod.speed));
 
   // === Phase 3: 投手/野手を肩力ベースで決定 ===
-  // 肩が強いほど投手になる確率が上がる（全体で約40%が投手）
-  let pitcherChance = cl(0.12 + baseArm * 0.007, 0.10, 0.75);
+  // 肩が強いほど投手になる確率が上がる。
+  // ⚠ **指名の投打比率はここで決まる**。`deviationValue` が群（投手/捕手/野手）
+  //    ごとに偏差値化しているので、カテゴリ加点が無ければ
+  //    **指名比率はプール比率にほぼ一致する**（実測 プール投手41% → 指名も41%）。
+  //    実NPBの支配下登録は約半分が投手なので、母集団も50%に合わせる。
+  //    ⚠ 加点(`DRAFT_DEMAND`)で寄せないこと——価値の物差しが歪む。
+  let pitcherChance = cl(0.185 + baseArm * 0.0076, 0.13, 0.79);
   if (throws === 'left') pitcherChance = cl(pitcherChance + 0.10, 0.10, 0.80);
   const isPitcher = Math.random() < pitcherChance;
 
@@ -159,7 +164,8 @@ function generateHighSchoolPlayer(id) {
     position = weightedPick(w);
   } else {
     const w = {
-      catcher: 12 + Math.max(0, baseArm - 35) * 0.4 + (build === 'large' ? 5 : build === 'small' ? -5 : 0),
+      // 捕手も同じ理由で母集団の比率が指名比率になる。実NPBの捕手は約8%
+      catcher: 21 + Math.max(0, baseArm - 35) * 0.5 + (build === 'large' ? 6 : build === 'small' ? -5 : 0),
       first:   10 + (build === 'large' ? 10 : build === 'small' ? -3 : 0) + Math.max(0, 40 - baseSpeed) * 0.3,
       second:  12 + Math.max(0, baseSpeed - 30) * 0.3 + (build === 'small' ? 8 : build === 'large' ? -5 : 0),
       third:   12 + Math.max(0, baseArm - 30) * 0.3 + (build === 'large' ? 3 : 0),

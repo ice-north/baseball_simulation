@@ -154,22 +154,28 @@ export function applyFreeAgentGrowth(pool) {
 // ⚠ **`topN` を分けるのが要**。従来は全カテゴリ「上位2つが長所」だった。
 //    独立の一芸は文字どおり **1つ**なので topN=1 にしないと尖らない
 //    （実測: 上位2つのままだと 独立の尖り1.50 対 社会人1.46 とほぼ差が出なかった）。
+// `level`: カテゴリごとの成長水準。指名の構成比を合わせるための調整点。
+// ⚠ **まだ較正していない（全て1.0）**。draft-check のワールドは
+//    `generateCorporateRoster` でロスターを作ってすぐ指名するため
+//    `applyCorporatePlayerGrowth` を一度も呼ばず、ここを動かしても測定に映らない。
+//    社会人・独立・クラブの構成比を合わせるには、**年次成長を回してから指名する
+//    ハーネス**が要る（`loop.mjs` 相当）。それを作るまで触らないこと。
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
-  independent: { topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  independent: { level: 1.0, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
   // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
   //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
   //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
   //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    topN: 2, strength: 1.3, weak: 0.85,
+    level: 1.0, topN: 2, strength: 1.3, weak: 0.85,
     focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    topN: 2, strength: 1.25, weak: 0.9,
+    level: 1.0, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6 },
   },
@@ -310,7 +316,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
           // （負のgpで"成長"が衰退に反転する二重衰退を防ぐ）。プロ意識で維持期に
           // 入ったベテランは、加齢カーブ(applyAgeCurveChanges)のみが衰退を担う。
           const gpGrow = Math.max(0.15, gp);
-          let amount = base * gpGrow * rankMult * disciplineMult * effectiveFactor * specMult(key) * (0.6 + Math.random() * 0.6);
+          let amount = base * gpGrow * rankMult * (prof.level ?? 1.0) * disciplineMult * effectiveFactor * specMult(key) * (0.6 + Math.random() * 0.6);
           if (threshold != null) amount *= decayMult(current, threshold, rate);
           return Math.min(cap, current + Math.round(amount));
         } else {
