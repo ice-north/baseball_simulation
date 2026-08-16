@@ -326,7 +326,20 @@ export function generateScoutCandidates(teamData, year) {
   const uniPool = getUniversityScoutPool(year);
   const relPool = getReleasedScoutPool();
   const hsPool = getHighSchoolScoutPool();
-  const allPool = [...uniPool, ...relPool, ...hsPool];
+  // クラブからの引き上げ。**これが無いとクラブは行き止まりになる**。
+  // クラブは「どこにも入団できなかった選手の受け皿」で、稀に非常に意識の高い
+  // 選手が紛れ込んで突然変異のように伸びる。プロまで届かなくても
+  // **社会人へ拾われて次の階層へ上がる**流れを作る。
+  // ⚠ 既存の `getClubScoutPool`（視察用）を再利用する——同じプールの取得を
+  //    二重に書かない。社会人が獲る年齢帯だけに絞る。
+  const clubPool = getClubScoutPool().filter(e => {
+    const age = e.player?.age || 22;
+    return age >= 19 && age <= 27;
+  });
+  // ⚠ source は `club_team` のまま使うこと。`removeFromPool` がこの名前で
+  //    移籍元のロスターから削除する。別名にすると**クラブに残ったまま
+  //    社会人にも登録される**（二重登録）。
+  const allPool = [...uniPool, ...relPool, ...hsPool, ...clubPool];
 
   if (allPool.length === 0) return [];
 
