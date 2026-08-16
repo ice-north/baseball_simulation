@@ -599,12 +599,33 @@ function removeFromPool(player) {
 }
 
 /**
+ * 入団時に「どこから来たか」を経歴へ残す。
+ *
+ * 【なぜ必要か】経歴が全部追えると、指名された社会人の経歴に「クラブ」があって
+ * 「苦労したんだな」と分かる——それ自体が読み物になる。
+ * ⚠ 経歴を残すのは `_poolRef` を消す**前**。消した後だと出身が分からなくなる。
+ */
+function pushOriginHistory(recruit, ref, year) {
+  if (!ref) return;
+  if (!recruit.careerHistory) recruit.careerHistory = [];
+  const has = (t) => recruit.careerHistory.some(h => h.type === t);
+  if (ref.source === 'club_team' && ref.teamName && !has('club')) {
+    recruit.careerHistory.push({ type: 'club', year, label: ref.teamName });
+  } else if (ref.source === 'independent' && ref.teamName && !has('independent')) {
+    recruit.careerHistory.push({ type: 'independent', year, label: ref.teamName });
+  } else if (ref.source === 'corporate_team' && ref.teamName) {
+    recruit.careerHistory.push({ type: 'corporate', year, label: ref.teamName });
+  }
+}
+
+/**
  * ユーザーがスカウト候補者を獲得
  * プールから除去し、チームに追加
  */
 export function recruitPlayer(team, player) {
   removeFromPool(player);
   const recruit = { ...player };
+  const originRef = player._poolRef;
   delete recruit.scoutAccuracy;
   delete recruit.scoutedAbilities;
   delete recruit._poolRef;
@@ -613,6 +634,7 @@ export function recruitPlayer(team, player) {
   recruit.isStarter = false;
   recruit.battingOrder = 0;
   recruit.fatigue = 0;
+  pushOriginHistory(recruit, originRef, null);
   if (!recruit.careerHistory) recruit.careerHistory = [];
   recruit.careerHistory.push({ type: 'corporate', year: null, label: team.name });
   addToRoster(team, recruit);
@@ -1397,6 +1419,7 @@ export function pickRandomDestination(player, excludeTeam) {
 function recruitPlayerToTeam(team, player) {
   removeFromPool(player);
   const recruit = { ...player };
+  const originRef = player._poolRef;
   delete recruit.scoutAccuracy;
   delete recruit.scoutedAbilities;
   delete recruit._poolRef;
@@ -1408,6 +1431,7 @@ function recruitPlayerToTeam(team, player) {
   recruit.isStarter = false;
   recruit.battingOrder = 0;
   recruit.fatigue = 0;
+  pushOriginHistory(recruit, originRef, null);
   if (!recruit.careerHistory) recruit.careerHistory = [];
   recruit.careerHistory.push({ type: 'corporate', year: null, label: team.name });
   addToRoster(team, recruit);

@@ -175,7 +175,7 @@ const CATEGORY_GROWTH = {
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    level: 1.0, topN: 2, strength: 1.25, weak: 0.9,
+    level: 0.86, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6 },
   },

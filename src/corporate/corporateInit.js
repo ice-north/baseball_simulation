@@ -589,7 +589,13 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     if (uniName && !p.careerHistory.some(h => h.type === 'university')) {
       p.careerHistory.push({ type: 'university', label: uniName });
     }
-    p.careerHistory.push({ type: 'corporate', label: teamDef.name || teamDef.displayName });
+    // ⚠ 経歴の type は**そのチームの種別**にすること。クラブ・独立の選手まで
+    //    `corporate` で積むと、経歴を見ても「どこで苦労したか」が分からない。
+    //    ラベルが無いと `[corporate]undefined` という壊れたチップが出る。
+    const originType = teamDef.type === 'club' ? 'club'
+      : teamDef.type === 'independent' ? 'independent' : 'corporate';
+    const originLabel = teamDef.name || teamDef.displayName || teamDef.id;
+    if (originLabel) p.careerHistory.push({ type: originType, label: originLabel });
   });
 
   // 二刀流選手の保証（1-2人）

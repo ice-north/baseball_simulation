@@ -192,7 +192,9 @@ export default function PlayerDetailModal({ player, onClose, scoutAccuracy = 1 }
             steps.push({ label: `${player.draftInfo.year}年目 ${player.draftInfo.round}巡目入団`, type: 'draft' });
           }
           if (steps.length === 0) return null;
-          const typeColor = { highschool: 'bg-gray-600', university: 'bg-blue-900/60 text-blue-300', corporate: 'bg-green-900/60 text-green-300', independent: 'bg-orange-900/60 text-orange-300', released: 'bg-red-900/60 text-red-300', draft: 'bg-yellow-900/60 text-yellow-300' };
+          // club は「どこにも入団できなかった選手の受け皿」。経歴にこれが挟まっていると
+          // 「苦労してここまで来た」と一目で分かる
+          const typeColor = { highschool: 'bg-gray-600', university: 'bg-blue-900/60 text-blue-300', corporate: 'bg-green-900/60 text-green-300', independent: 'bg-orange-900/60 text-orange-300', club: 'bg-purple-900/60 text-purple-300', club_join: 'bg-purple-900/60 text-purple-300', released: 'bg-red-900/60 text-red-300', draft: 'bg-yellow-900/60 text-yellow-300' };
           return (
             <div className="flex items-center gap-1 text-sm mb-4 flex-wrap flex-shrink-0">
               {steps.map((s, i) => (
