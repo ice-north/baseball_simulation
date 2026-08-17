@@ -331,15 +331,39 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
     return clamp(Math.round(val * scale) + j, 1, 99);
   };
 
+  // ============================================================
+  // 「実在しない水準」だけを畳む（`taperLow`）
+  //
+  // ⚠ **倍率スケール（RANK_SCALE 0.58〜0.95）は左の裾を0へ引きずる**。
+  //    守備30の候補が D ランクでは 17、守備10なら 6 になり、実測で
+  //    社会人・独立の野手の約1割が**守備20未満＝小学生以下**だった
+  //    （能力値の水準: 20=小学生 / 30=中学生 / 40=高校生 / 50=大学生 / 60=プロ）。
+  //    走力8・肩7・制球1 のように「走れない・投げられない・ストライクが入らない」
+  //    選手がチームに載っていた。
+  //
+  // ⚠ **`clamp` で下限を切ってはいけない**。平均が押し上がってリーグの較正が動く
+  //    （守備で試算すると clamp(28) は平均 +2.3）。境より下だけを境に向かって
+  //    圧縮すれば、**中央値と99%点は完全に不変**のまま最小値だけが上がる（平均 +0.9）。
+  //
+  // ⚠ 対象は **全員が必ずやる身体動作**（守る・走る・投げる）に限る。
+  //    ミート・パワー・選球眼・走塁・バント・**制球**には入れない——
+  //    「守備の名手で打てない」「ノーコンだが速い」という一芸型を潰してしまうため。
+  // ⚠ 実際に制球へ入れたら **防御率 -0.27 / BB/9 -0.51** と実害が出た。
+  //    制球は捨ててよい能力（ノーコン速球派は成立する）なので対象外にしてある。
+  const IMPLAUSIBLE_FLOOR = 20;   // これ未満は小学生以下＝そもそも競技として成立しない
+  const TAPER_K = 0.25;           // 境より下をどれだけ残すか（0=全員が境、1=無変更）
+  const taperLow = (val, floor = IMPLAUSIBLE_FLOOR) =>
+    val >= floor ? val : Math.max(1, Math.round(floor - (floor - val) * TAPER_K));
+
   candidates.forEach(p => {
     p.batting.meet = scaleAndJitter(p.batting.meet, 6);
     p.batting.power = scaleAndJitter(p.batting.power, 6);
     p.batting.eye = scaleAndJitter(p.batting.eye, 5);
     p.batting.steal = scaleAndJitter(p.batting.steal, 5);
     // 走力・体力・回復はランクに依存しない（生まれ持った身体能力）
-    p.physical.speed = clamp(p.physical.speed + randInt(-8, 8) + randInt(-5, 5), 1, 99);
-    p.physical.arm = scaleAndJitter(p.physical.arm, 5);
-    p.fielding.defense = scaleAndJitter(p.fielding.defense, 5);
+    p.physical.speed = taperLow(clamp(p.physical.speed + randInt(-8, 8) + randInt(-5, 5), 1, 99));
+    p.physical.arm = taperLow(scaleAndJitter(p.physical.arm, 5));
+    p.fielding.defense = taperLow(scaleAndJitter(p.fielding.defense, 5));
     p.physical.bodyStamina = clamp((p.physical.bodyStamina || 50) + randInt(-8, 8) + randInt(-5, 5), 15, 99);
     p.physical.recovery = clamp((p.physical.recovery || 50) + randInt(-8, 8) + randInt(-5, 5), 15, 99);
 
