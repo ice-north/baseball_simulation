@@ -12,7 +12,7 @@ import { WORLD_DATA } from '../corporate/worldData.js';
 import { checkNPBDraftEligibility, checkHallOfFame, cleanupPlayerReferences, computeSeasonAwardBonuses } from './yearProgressionSystem.js';
 import { addToObRegistry } from '../game/obRegistry.js';
 import { buildToolNorms, toolProfile, toolHuntRateForRound, TOOL_HUNT_RATE_IKU,
-         HUNT_SCORE_W, scoreStats, randomHuntTool, toolDevOf, isSpecialist,
+         huntScoreWeight, scoreStats, randomHuntTool, toolDevOf, isSpecialist,
          TOOL_LABELS, TOOL_NOUNS } from '../game/scoutTools.js';
 
 /**
@@ -521,8 +521,11 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         if (!huntTool) return c.score + bal;
         // ⚠ バランスの減点だけは **HUNT_SCORE_W を掛けない**。0.35倍すると
         //    +3.5σ の道具に押し切られ、投手だけを7人指名する球団が出る
+        // ⚠ 総合点の重みは**年齢で上げる**（`huntScoreWeight`）。
+        //    一芸だけで通すのは高卒の素材買いの話で、年上の一芸型には
+        //    土台も要求しないと下位指名のラインが年齢とともに下がる
         return toolDevOf(c.toolDevs, huntTool, c.player.position)
-          + ((c.score - mainScoreStats.mean) / mainScoreStats.sd) * HUNT_SCORE_W
+          + ((c.score - mainScoreStats.mean) / mainScoreStats.sd) * huntScoreWeight(c.player.age)
           + bal / mainScoreStats.sd;
       };
       const ranked = huntTool ? [...remaining].sort((a, b) => huntScore(b) - huntScore(a)) : remaining;
@@ -577,7 +580,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         const bal = getBalancePenalty(npbTeam, c, teamDraftTracker);
         if (!huntTool) return c.ikuScore + bal;
         return toolDevOf(c.toolDevs, huntTool, c.player.position)
-          + ((c.ikuScore - ikuScoreStats.mean) / ikuScoreStats.sd) * HUNT_SCORE_W
+          + ((c.ikuScore - ikuScoreStats.mean) / ikuScoreStats.sd) * huntScoreWeight(c.player.age)
           + bal / ikuScoreStats.sd;
       };
       const ranked = huntTool ? [...remaining].sort((a, b) => huntScore(b) - huntScore(a)) : remaining;

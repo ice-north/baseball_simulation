@@ -195,6 +195,21 @@ export const toolHuntRateForRound = (round) =>
 /** 一芸指名のとき、総合点(偏差)を道具の偏差に対してどれだけ重く見るか */
 export const HUNT_SCORE_W = 0.35;
 
+// ⚠ **年齢が上がるほど「道具だけ」では通さない**。
+//   甲斐拓也・周東佑京のような一芸指名は**高卒の話**で、素材に賭けている。
+//   同じことを26歳の社会人にやると「他は平凡なまま歳だけ取った選手」を
+//   下位で拾うことになり、**下位・育成の指名ラインが年齢とともに下がる**。
+//   実測（能力偏差値の下限）: 22歳 68.4 に対し 24〜29歳 59.3〜64.6 で、
+//   **その年齢帯のプール平均(59〜63)すら下回っていた**。
+//   総合点の重みを年齢で上げると、年上の一芸型には「道具＋土台」を要求できる。
+//   若い一芸型（甲斐・周東型）の経路は 0.35 のまま残る。
+const HUNT_SCORE_W_MATURE = 0.90;
+export function huntScoreWeight(age = 20) {
+  if (age <= 19) return HUNT_SCORE_W;
+  if (age >= 26) return HUNT_SCORE_W_MATURE;
+  return HUNT_SCORE_W + (HUNT_SCORE_W_MATURE - HUNT_SCORE_W) * (age - 19) / 7;
+}
+
 /** 総合点の平均・σ（候補プールから毎回作る。ここでも固定の表は持たない） */
 export function scoreStats(scores) {
   const n = scores.length || 1;
