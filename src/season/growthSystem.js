@@ -69,6 +69,21 @@ export function updateGrowthModifiers(allTeams, awards) {
 //    ミート83（NPB主力級）まで伸びていた。順序（技術は伸びる・走力と肩は
 //    才能で決まる）は正しいので、**上位の base だけを詰める**。
 //      ミート 3.0→1.9 / 制球 3.0→1.9 / 守備 2.5→1.7 / 選球眼 2.0→1.5
+// 成長率は **天井の高さ**でも効く。才能のある選手はプロ級(70)を超えてからも伸び、
+// 才能のない選手は早く頭打ちになる。
+// ⚠ **`decayMult` は正の delta にしか掛からない**ので、衰え始める年齢は動かない。
+//    基礎成長のピークを上げる案（`BASAL_PEAK`）は総成長量そのものを増やして
+//    しまい、衰え始めの散らばりも縮める。天井なら成長の「上限」だけを動かせる。
+//    gp0.6 → 閾値64.4 / gp1.0 → 70 / gp1.4 → 75.6
+const POTENTIAL_CEILING_W = 40;
+const POTENTIAL_RATE_W = 1.35;
+const gpClamp = (gp) => Math.max(0.3, Math.min(1.8, gp ?? 1.0));
+/** プロ級(70)から減衰が始まる位置。才能があるほど遅い */
+export const growthThreshold = (base, gp = 1.0) => base + (gpClamp(gp) - 1.0) * POTENTIAL_CEILING_W;
+/** 減衰の速さ。才能があるほど緩やか＝天井が高い（実効の頭打ちは threshold + 0.9/rate） */
+export const growthDecayRate = (base, gp = 1.0) =>
+  Math.max(0.005, base * (1 - (gpClamp(gp) - 1.0) * POTENTIAL_RATE_W));
+
 const STAT_GROWTH = {
   meet:     { base: 1.9, cap: 99,  threshold: 70, rate: 0.05 },
   power:    { base: 1.5, cap: 99,  threshold: 70, rate: 0.05 },
@@ -110,7 +125,7 @@ export function applyFreeAgentGrowth(pool) {
       const g = STAT_GROWTH[key];
       const delta = g.base * baseMult * (basal + practice) * FA_GAIN * (0.6 + Math.random() * 0.6);
       if (delta >= 0) {
-        return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, g.threshold, g.rate)));
+        return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
       }
       return Math.max(1, current + Math.round(dampDecline(current, delta)));
     };
@@ -178,8 +193,8 @@ export function applyFreeAgentGrowth(pool) {
 //    26/31/36 に開く。**基礎は「何もしなくても少しは伸びる」程度でよい**。
 const BASAL_PEAK = 0.14;       // ピーク時の基礎成長（成長率1.0のとき）
 const BASAL_PEAK_END = 22;
-const BASAL_GP_SHIFT = 4;      // 成長率でピークの終わりが前後する（gp1.4→25.6歳）
-const BASAL_DECAY = 0.086;     // ピーク以降、1歳ごとの落ち幅
+const BASAL_GP_SHIFT = 7;      // 成長率でピークの終わりが前後する（gp1.4→24.8歳 / gp0.6→19.2歳）
+const BASAL_DECAY = 0.100;     // ピーク以降、1歳ごとの落ち幅
 const BASAL_ACCEL = 0.015;     // 下り坂はわずかに加速する
 const BASAL_FLOOR = -1.8;
 
@@ -204,7 +219,7 @@ export function basalGrowth(age, gp = 1.0) {
 //   20→0.13 / 50→0.50 / 70→0.75 / 90→1.00 / 100→1.13
 // ⚠ 幅を狭めると衰え始める年齢の散らばりが消える。この幅が
 //   「20代中盤で終わる者」と「30代後半まで現役の者」を分けている。
-const DISC_TRAIN_W = 1.25;
+const DISC_TRAIN_W = 1.45;
 export function disciplineTrainMult(discipline = 50) {
   return Math.max(0, (discipline - 10) / 100) * DISC_TRAIN_W;
 }
@@ -255,20 +270,20 @@ const dampDecline = (current, delta) => Math.max(delta, -Math.max(1, current * D
 // 実際に回してから指名する（0 だと成長を一度も通らず、ここを動かしても測定に映らない）。
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
-  independent: { volume: 1.34, gain: 2.00, topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  independent: { volume: 1.34, gain: 1.76, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
   // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
   //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
   //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
   //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    volume: 0.64, gain: 2.10, topN: 2, strength: 1.3, weak: 0.85,
+    volume: 0.64, gain: 1.78, topN: 2, strength: 1.3, weak: 0.85,
     focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    volume: 0.86, gain: 1.60, topN: 2, strength: 1.25, weak: 0.9,
+    volume: 0.86, gain: 1.44, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6 },
   },
@@ -306,7 +321,12 @@ export function applyCorporatePlayerGrowth(allTeams) {
       const activity = player.position === 'pitcher'
         ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
         : (player.seasonStats?.batting?.atBats || 0);
-      const activityMult = 0.75 + Math.min(0.5, activity / 400);   // 0.75〜1.25
+      // ⚠ 旧式 `0.75 + min(0.5, activity/400)` は **200打席で上限に張り付いた**。
+      //    レギュラーも準レギュラーも同じ 1.25 になり、出場量が結果を
+      //    ほとんど説明しなかった（実測の説明力 0.8%）。
+      //    レギュラー(240打席)の値は 1.25 のまま据え置き、**下を伸ばす**。
+      //    控えは 0.45＝レギュラーの36%しか練習量を得られない。
+      const activityMult = 0.55 + Math.min(0.95, activity / 300);   // 0.55〜1.50
       const practice = (prof.volume ?? 1.0) * activityMult * disciplineTrainMult(discipline);
 
       // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
@@ -352,7 +372,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
         const delta = g.base * baseMult * (basal + practice * specMult(specKey))
           * rankMult * (prof.gain ?? 1.0) * (0.6 + Math.random() * 0.6);
         if (delta >= 0) {
-          return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, g.threshold, g.rate)));
+          return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
         }
         return Math.max(1, current + Math.round(dampDecline(current, delta)));
       };
