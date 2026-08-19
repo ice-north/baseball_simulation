@@ -75,8 +75,16 @@ export function updateGrowthModifiers(allTeams, awards) {
 //    基礎成長のピークを上げる案（`BASAL_PEAK`）は総成長量そのものを増やして
 //    しまい、衰え始めの散らばりも縮める。天井なら成長の「上限」だけを動かせる。
 //    gp0.6 → 閾値64.4 / gp1.0 → 70 / gp1.4 → 75.6
-const POTENTIAL_CEILING_W = 40;
-const POTENTIAL_RATE_W = 1.35;
+// ⚠ **強くしすぎると社会人のトップがNPB超えになる**。
+//    一度 40 / 1.35 にしたところ、成長率1.4の選手の実効天井が **125**（＝上限なし）
+//    になり、社会人リーグに 守備99・制球97・ミート99 が現れた。
+//    NPBレギュラー相当は ミート58 / 制球60 / 球速146 なので、
+//    「努力で伸びる能力」だけがプロを追い越す形になっていた。
+//    実効天井（減衰が1割まで落ちる位置）が gp0.6→80 / 1.0→88 / 1.4→94 に収まる値にする。
+// ⚠ 成長率の説明力は**この天井ではなく `BASAL_GP_SHIFT` がほとんど稼いでいる**。
+//    天井を 0 にしても 6.1%（12なら6.3%）で、強めても副作用しか増えない。
+const POTENTIAL_CEILING_W = 12;
+const POTENTIAL_RATE_W = 0.20;
 const gpClamp = (gp) => Math.max(0.3, Math.min(1.8, gp ?? 1.0));
 /** プロ級(70)から減衰が始まる位置。才能があるほど遅い */
 export const growthThreshold = (base, gp = 1.0) => base + (gpClamp(gp) - 1.0) * POTENTIAL_CEILING_W;
@@ -193,7 +201,7 @@ export function applyFreeAgentGrowth(pool) {
 //    26/31/36 に開く。**基礎は「何もしなくても少しは伸びる」程度でよい**。
 const BASAL_PEAK = 0.14;       // ピーク時の基礎成長（成長率1.0のとき）
 const BASAL_PEAK_END = 22;
-const BASAL_GP_SHIFT = 7;      // 成長率でピークの終わりが前後する（gp1.4→24.8歳 / gp0.6→19.2歳）
+const BASAL_GP_SHIFT = 11;      // 成長率でピークの終わりが前後する（gp1.4→24.8歳 / gp0.6→19.2歳）
 const BASAL_DECAY = 0.100;     // ピーク以降、1歳ごとの落ち幅
 const BASAL_ACCEL = 0.015;     // 下り坂はわずかに加速する
 const BASAL_FLOOR = -1.8;
