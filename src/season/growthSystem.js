@@ -33,12 +33,14 @@ export function updateGrowthModifiers(allTeams, awards) {
     veteranBonus = Math.min(0.06, Math.round(veteranBonus * 1000) / 1000);
 
     team.players.forEach(player => {
-      // 年齢による成長ポテンシャル減衰: 24歳から(age-23)*0.05ずつ加速
       const age = player.age || 18;
-      if (age >= 24) {
-        const agePenalty = (age - 23) * 0.05;
-        player.growthPotential = Math.round(((player.growthPotential || 1.0) - agePenalty) * 100) / 100;
-      }
+      // ⚠ **`growthPotential` を年齢で減衰させないこと**。
+      //    旧実装は毎年 `-(age-23)*0.05` を積んでおり、30歳で累計 -1.40。
+      //    つまり **30代の選手は全員 gp が 0 付近に潰れ**、個性が消えたうえ、
+      //    年齢の効果が `basalGrowth` / `getAgeGrowthBase` と合わせて
+      //    **3箇所**に重なっていた（衰退が三重に掛かる）。
+      //    成長率は「その選手の素の伸びやすさ」という不変の個性として残し、
+      //    年齢はカーブ側が単独で担う。
 
       // シーズン中に蓄積された変動を半減して次年度に引き継ぎ（徐々にゼロに戻る）
       let modifier = (player.growthModifier || 0) * 0.5;
@@ -57,7 +59,13 @@ export function updateGrowthModifiers(allTeams, awards) {
   });
 }
 
-// --- 自由契約選手の自主トレ成長（クラブ相当: discipline主導・環境なし） ---
+// --- 自由契約選手の自主トレ成長 ---
+// ⚠ **成長の式を二重に持たないこと**。以前はここだけ旧式（`zeroAge` の分岐＋
+//    discipline の3乗の崖）が残っており、他が変わっても取り残されていた。
+//    「チームが無い」ことは **練習量(`FA_VOLUME`)と環境(`FA_GAIN`)が低い**
+//    という形で表す。プロ意識の効き方（`disciplineTrainMult`）は共通。
+const FA_VOLUME = 0.55;   // 自主トレのみ。実戦も指導者も無い
+const FA_GAIN = 0.80;     // 環境も無い（チーム所属のランクD 0.80 相当）
 export function applyFreeAgentGrowth(pool) {
   const decayMult = (current, threshold, rate) => {
     if (current < threshold) return 1.0;
@@ -66,38 +74,21 @@ export function applyFreeAgentGrowth(pool) {
 
   for (const player of pool) {
     const age = player.age || 25;
-    if (age > 38) continue;
-
     const gp = player.growthPotential || 1.0;
     const discipline = player.personality?.discipline ?? 50;
 
-    // growthPotential の加齢減衰（updateGrowthModifiers と同ロジック）
-    if (age >= 24) {
-      const agePenalty = (age - 23) * 0.05;
-      player.growthPotential = Math.round(((player.growthPotential || 1.0) - agePenalty) * 100) / 100;
-    }
+    // ⚠ growthPotential は年齢で減衰させない（`updateGrowthModifiers` の注記を参照）
     player.growthModifier = Math.max(-0.3, Math.round((player.growthModifier || 0) * 0.5 * 100) / 100);
 
-    // 成長ゼロ年齢（クラブと同計算: 試合活動ゼロ扱い）
-    const discBonus = Math.min(2, Math.max(0, (discipline - 60) * 0.05));
-    const zeroAge = Math.min(32, Math.max(22, Math.round(26 + (gp - 1.0) * 15) + Math.floor(discBonus)));
-    const ageFactor = Math.max(-2.0, 1.0 - (age - 18) / Math.max(1, zeroAge - 18));
-    const practiceOffset = Math.max(0, (discipline - 60) * 0.0125);
-    const effectiveFactor = ageFactor + practiceOffset;
-
-    // クラブと同じ discipline 曲線（べき乗）: discipline 90 未満はほぼ成長なし
-    const disciplineMult = Math.max(0.05, Math.pow(Math.max(0, (discipline - 80) / 20), 3.0) * 5.0);
-
-    // ランクなし（チームなし）= D相当の 0.80 を適用
-    const rankMult = 0.80;
+    const basal = basalGrowth(age, gp);
+    const practice = FA_VOLUME * disciplineTrainMult(discipline);
 
     const grow = (current, base, cap, threshold, rate) => {
-      if (effectiveFactor >= 0) {
-        const amount = base * gp * rankMult * disciplineMult * effectiveFactor * (0.6 + Math.random() * 0.6);
-        return Math.min(cap, current + Math.round(amount * decayMult(current, threshold, rate)));
-      } else {
-        return Math.max(1, current - Math.round(base * Math.abs(effectiveFactor) * 0.5 * (0.6 + Math.random() * 0.6)));
+      const delta = base * (basal + practice) * FA_GAIN * (0.6 + Math.random() * 0.6);
+      if (delta >= 0) {
+        return Math.min(cap, current + Math.round(delta * decayMult(current, threshold, rate)));
       }
+      return Math.max(1, current + Math.round(delta));
     };
 
     if (player.position === 'pitcher') {
@@ -134,6 +125,66 @@ export function applyFreeAgentGrowth(pool) {
   }
 }
 
+// ============================================================
+// 実成長 = 基礎成長 + 練習成長
+//
+// 【住み分け】
+//   成長率(growthPotential) … **基礎成長**。何もしなくても身体が育つ／衰える分。
+//                              年齢の関数で、あるところからマイナスへ入る。
+//   プロ意識(discipline)    … **練習成長に乗算**するもの。常に 0 以上。
+//
+// 基礎がマイナスへ入っても練習成長が上回れば伸び、釣り合えばステイ、
+// 基礎の衰えが練習成長を超えたら**プロ意識が高くても衰える**。
+// これで「20代中盤で衰える者」と「30代後半でも活躍する者」が同居する。
+//
+// ⚠ **旧実装は `effectiveFactor >= 0` で成長式と衰退式を切り替えていた**。
+//    衰退式に `gp` が入っておらず、**プロ意識が低い選手は成長率がまったく
+//    効かなかった**（意識0だと gp1.4 と gp0.6 が19歳から同じ -22.6/年）。
+//    実測で母集団の3〜5割（19歳で30% / 28歳で55%）がその分岐に居た。
+//    分岐を無くして和の符号だけで決めれば、両方が常に生きる。
+// ============================================================
+
+// 基礎成長のピークは **平坦**（18〜22歳）。身体的には18歳の方が伸びるので、
+// 24歳に山を作らない。
+//
+// ⚠ **ピークの高さと衰え始めの散らばりはトレードオフ**。衰え始める年齢は
+//    `基礎 = -練習` で決まるので、ピークが高いほどプロ意識の差が埋もれる。
+//    実測: ピーク0.35 では 意識20/50/90 の衰え始めが 32/36/衰えず に潰れた
+//    （練習量の差より基礎の下駄の方が大きいため）。0.14 まで下げて初めて
+//    26/31/36 に開く。**基礎は「何もしなくても少しは伸びる」程度でよい**。
+const BASAL_PEAK = 0.14;       // ピーク時の基礎成長（成長率1.0のとき）
+const BASAL_PEAK_END = 22;
+const BASAL_GP_SHIFT = 4;      // 成長率でピークの終わりが前後する（gp1.4→25.6歳）
+const BASAL_DECAY = 0.086;     // ピーク以降、1歳ごとの落ち幅
+const BASAL_ACCEL = 0.015;     // 下り坂はわずかに加速する
+const BASAL_FLOOR = -1.8;
+
+/**
+ * 基礎成長。練習と無関係に身体が育つ／衰える分。
+ *
+ * ⚠ **`growthPotential` は年齢を含まない素の個性として渡すこと**。
+ *    年齢の効果はこの関数が単独で担う（`applyAgeCurveChanges` の
+ *    `getAgeGrowthBase` と合わせて2箇所。それ以外に年齢の項を作らない）。
+ */
+export function basalGrowth(age, gp = 1.0) {
+  const g = Math.max(0.3, Math.min(1.8, gp));
+  const peak = g * BASAL_PEAK;
+  const peakEnd = BASAL_PEAK_END + (g - 1) * BASAL_GP_SHIFT;
+  if (age <= peakEnd) return peak;
+  const x = age - peakEnd;
+  return Math.max(BASAL_FLOOR, peak - BASAL_DECAY * x * (1 + BASAL_ACCEL * x));
+}
+
+// 練習成長に掛かるプロ意識の倍率。**常に 0 以上**（練習は身体を削らない）。
+// 意識10以下は「練習しない」＝基礎成長だけで生きる選手。
+//   20→0.13 / 50→0.50 / 70→0.75 / 90→1.00 / 100→1.13
+// ⚠ 幅を狭めると衰え始める年齢の散らばりが消える。この幅が
+//   「20代中盤で終わる者」と「30代後半まで現役の者」を分けている。
+const DISC_TRAIN_W = 1.25;
+export function disciplineTrainMult(discipline = 50) {
+  return Math.max(0, (discipline - 10) / 100) * DISC_TRAIN_W;
+}
+
 // --- 社会人/独立チーム選手の実戦経験による成長 ---
 // ============================================================
 // カテゴリごとの育成の性格（「弱者の兵法」）
@@ -154,28 +205,37 @@ export function applyFreeAgentGrowth(pool) {
 // ⚠ **`topN` を分けるのが要**。従来は全カテゴリ「上位2つが長所」だった。
 //    独立の一芸は文字どおり **1つ**なので topN=1 にしないと尖らない
 //    （実測: 上位2つのままだと 独立の尖り1.50 対 社会人1.46 とほぼ差が出なかった）。
-// `level`: カテゴリごとの成長水準。指名の構成比を合わせるための調整点。
-// ⚠ **まだ較正していない（全て1.0）**。draft-check のワールドは
-//    `generateCorporateRoster` でロスターを作ってすぐ指名するため
-//    `applyCorporatePlayerGrowth` を一度も呼ばず、ここを動かしても測定に映らない。
-//    社会人・独立・クラブの構成比を合わせるには、**年次成長を回してから指名する
-//    ハーネス**が要る（`loop.mjs` 相当）。それを作るまで触らないこと。
+// カテゴリの調整点は **2つあり、役割が違う**。混同しないこと。
+//
+//   `volume` … **練習量**。和の内側（`基礎 + 練習×volume`）に入るので、
+//              動かすと **衰え始める年齢が動く**（練習が基礎の衰えを打ち消すため）。
+//              「そのカテゴリの選手は何歳まで伸びるか」を決める。
+//   `gain`   … **環境の質**。和の外側に掛かるので **符号を変えない**＝
+//              衰え始める年齢は動かさず、成長・衰退の**振れ幅だけ**を変える。
+//              「そのカテゴリの選手はどれだけ速く伸びるか」を決める。
+//
+// ⚠ 指名の構成比を合わせるときは `gain` を動かすこと。`volume` で合わせると
+//    衰え始める年齢まで一緒に動き、30代の選手像が壊れる（独立を volume で
+//    2倍にすると衰え始めが38歳になり、ベテランが誰も衰えなくなる）。
+// ⚠ **基礎成長に `volume` は掛からない**。身体が勝手に育つ分は所属先で変わらない。
+// draft-check は `growYears` を指定して `applyCorporatePlayerGrowth` を
+// 実際に回してから指名する（0 だと成長を一度も通らず、ここを動かしても測定に映らない）。
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
-  independent: { level: 1.34, topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  independent: { volume: 1.34, gain: 1.78, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
   // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
   //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
   //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
   //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    level: 0.64, topN: 2, strength: 1.3, weak: 0.85,
+    volume: 0.64, gain: 1.78, topN: 2, strength: 1.3, weak: 0.85,
     focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    level: 0.86, topN: 2, strength: 1.25, weak: 0.9,
+    volume: 0.86, gain: 1.35, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6 },
   },
@@ -197,80 +257,24 @@ export function applyCorporatePlayerGrowth(allTeams) {
     const rank = team.corporateData?.rank || (isIndependent ? 'C' : 'D');
     const rankMult = { S: 1.15, A: 1.05, B: 1.0, C: 0.90, D: 0.80 }[rank] || 1.0;
 
+    // カテゴリごとの育成の性格（`CATEGORY_GROWTH`）。
+    // 従来は3カテゴリすべてが同じ傾斜（長所×1.4 / 短所×0.7）だった。
+    const prof = CATEGORY_GROWTH[isClub ? 'club' : isIndependent ? 'independent' : 'corporate'];
+
     for (const player of team.players) {
       const age = player.age || 25;
-      if (age > 38) continue;  // これ以降の衰退は applyAgeCurveChanges が単独で担う
       const gp = player.growthPotential || 1.0;
       const discipline = player.personality?.discipline ?? 50;
 
-      // 成長ゼロ年齢: gp(個人差) + 試合活動量 + プロ意識で延長
-      // gp=0.8→23歳, gp=1.0→26歳, gp=1.2→29歳（基準）+ 最大+4歳
+      // 実成長 = 基礎成長 + 練習成長（**分岐なし。和の符号がすべて**）。
+      // 設計は冒頭の「実成長 = 基礎成長 + 練習成長」の節を参照。
+      const basal = basalGrowth(age, gp);
+      // 実戦に出ているほど練習量が増える（出場も練習のうち）
       const activity = player.position === 'pitcher'
         ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
         : (player.seasonStats?.batting?.atBats || 0);
-      const gameBonus = Math.min(2, activity / 200);                            // 試合活動: 最大+2歳
-      const discBonus = Math.min(2, Math.max(0, (discipline - 60) * 0.05));    // プロ意識: 最大+2歳
-      const zeroAge = Math.min(32, Math.max(22,
-        Math.round(26 + (gp - 1.0) * 15) + Math.floor(gameBonus + discBonus)
-      ));
-
-      // 年齢因子: 18歳→+1.0、zeroAgeで0に線形減衰、以降マイナス（下限-2.0）
-      const ageFactor = Math.max(-2.0, 1.0 - (age - 18) / Math.max(1, zeroAge - 18));
-
-      // 練習量による上下。**育成の幅の主役はここ**。
-      // ⚠ 旧式は `Math.max(0, (disc-60)×0.0125)` で上向きだけ、しかも最大 +0.50。
-      //    実測で「怠ける(意識20)⇔頑張る(意識90)」の4年間の差が **5.5点**
-      //    （`calculatePlayerRank` の素点。1ランク=10点）＝ **0.55ランク**しかなく、
-      //    才能ランクが実力をほぼ決めていた。
-      //    両側にして中心を55に置く。意識50前後の選手の伸びは従来どおりで、
-      //    上と下だけが開く＝**リーグ平均は動かさず幅だけ広げる**。
-      // 下向きは上向きより急にする。**怠けた選手は「伸びない」ではなく「落ちる」**。
-      // 上向きだけを強めても、才能の高い選手が怠けたときに何も起きない
-      // （実測: 上向きだけだと 才能Sが4年で 39.9→38.6 とほぼ不変だった）。
-      // ⚠ **中心は discipline の平均(50)に置くこと**。55に置いたら中央値の選手が
-      //    毎年わずかに負側へ入り、6年でリーグ平均が 42.7→36.7 と崩れた。
-      //      意識20 → -2.85 / 50 → 0（従来と同じ） / 70 → +0.90 / 90 → +1.80
-      const practiceOffset = discipline >= 50
-        ? (discipline - 50) * 0.045
-        : (discipline - 50) * 0.095;
-
-      // 実効成長因子: 0以上は成長・維持期、マイナスは衰退期
-      // ⚠ 下限を切ること。切らないと 30代の意識の低い選手が年 -6 ずつ崩壊する
-      const effectiveFactor = Math.max(-2.2, ageFactor + practiceOffset);
-
-      // プロ意識による成長倍率（環境ごとに自主性の重要度が異なる）
-      //
-      // クラブ: 自主鍛錬のみ。べき乗曲線でdiscipline 70あたりから実用的な成長
-      //   discipline 50→0.27x, 60→0.75x, 70→1.38x, 80→2.12x, 90→2.96x, 100→3.90x
-      //   ランクD(×0.80)込み実質: 60→0.60x, 70→1.10x, 80→1.70x, 90→2.37x
-      //
-      // 独立: キャンプあり。disciplineがcamp効果を増幅（やや急峻な線形）
-      //   discipline 50→1.0x, 70→1.4x, 90→1.8x
-      //   ランクC(×0.90)込み実質: 50→0.90x, 70→1.26x, 90→1.62x
-      //
-      // 企業: 環境が補完。disciplineの影響は控えめ（緩やかな線形）
-      //   discipline 50→1.0x, 70→1.3x, 90→1.6x
-      // クラブ: 指導者が居ないので伸びるかどうかは本人次第。
-      // ⚠ 旧式は3乗の**崖**で、discipline 85（上位3%）でも 0.078 とほぼゼロ。
-      //   意識の高い選手と平凡な選手が**区別できていなかった**（どちらも実質0）。
-      //   指数を緩めて「65あたりから見える差が付き、上限は低いまま」の曲線にする:
-      //     55→0.10(下限) / 65→0.19 / 75→0.63 / 85→1.31 / 95→2.16 / 100→2.60
-      //   平均(50)では従来どおりほぼ伸びない＝クラブが弱い場所である性格は変えない。
-      const disciplineMult = isClub
-        ? Math.max(0.10, Math.pow(Math.max(0, (discipline - 55) / 45), 1.9) * 2.6)
-        : isIndependent
-          // 独立は**プロ**なので、球団が面倒を見るのではなく本人の自主性で伸びる。
-          // ⚠ 旧式は `Math.max(0, …)` で下向きが無く、**プロ意識50以下は全員ちょうど1.0**
-          //    だった（discipline は N(50,18) なので半分の選手が下振れを受けない）。
-          //    それは「環境が補完する社会人」の形であって、プロの形ではない。
-          //    上側の傾きは据え置きなのでリーグ全体の戦力は上がらない（下側だけ薄くなる）。
-          //    20→0.55 / 30→0.70 / 40→0.85 / 50→1.00 / 70→1.40 / 90→1.80
-          ? (discipline >= 50
-              ? 1.0 + (discipline - 50) * 0.020
-              : Math.max(0.40, 1.0 + (discipline - 50) * 0.015))
-          // 企業: 設備・指導者・実戦がすべて揃う。3カテゴリで最も環境が良い
-          //   discipline 50→1.0x, 70→1.44x, 90→1.88x
-          : 1.0 + Math.max(0, (discipline - 50) * 0.022);
+      const activityMult = 0.75 + Math.min(0.5, activity / 400);   // 0.75〜1.25
+      const practice = (prof.volume ?? 1.0) * activityMult * disciplineTrainMult(discipline);
 
       // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
       // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
@@ -292,9 +296,6 @@ export function applyCorporatePlayerGrowth(allTeams) {
           { key: 'defense', val: player.fielding?.defense || 0 },
         ];
       }
-      // カテゴリごとの育成の性格（`CATEGORY_GROWTH`）。
-      // 従来は3カテゴリすべてが同じ傾斜（長所×1.4 / 短所×0.7）だった。
-      const prof = CATEGORY_GROWTH[isClub ? 'club' : isIndependent ? 'independent' : 'corporate'];
       // ⚠ **傾斜は grow() の base（能力ごとの伸びやすさ）を覆せる強さが要る**。
       //    base はミート3.0 対 走力0.5 と6倍の開きがあるので、旧値（長所1.4 / 短所0.7）
       //    では「長所の走力 0.5×1.4=0.7」より「短所のミート 3.0×0.7=2.1」の方が
@@ -310,24 +311,14 @@ export function applyCorporatePlayerGrowth(allTeams) {
       };
 
       const grow = (current, base, key, cap = 99, threshold = null, rate = 0.05) => {
-        if (effectiveFactor >= 0) {
-          // 成長・維持期: disciplineMultを乗算。
-          // gpは加齢で大きくマイナスになりうるが、成長方向では下限0.15で扱う
-          // （負のgpで"成長"が衰退に反転する二重衰退を防ぐ）。プロ意識で維持期に
-          // 入ったベテランは、加齢カーブ(applyAgeCurveChanges)のみが衰退を担う。
-          const gpGrow = Math.max(0.15, gp);
-          let amount = base * gpGrow * rankMult * (prof.level ?? 1.0) * disciplineMult * effectiveFactor * specMult(key) * (0.6 + Math.random() * 0.6);
-          if (threshold != null) amount *= decayMult(current, threshold, rate);
+        // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
+        const delta = base * (basal + practice * specMult(key))
+          * rankMult * (prof.gain ?? 1.0) * (0.6 + Math.random() * 0.6);
+        if (delta >= 0) {
+          const amount = threshold != null ? delta * decayMult(current, threshold, rate) : delta;
           return Math.min(cap, current + Math.round(amount));
-        } else {
-          // 衰退期: 純粋な衰え（disciplineMultは乗算しない）
-          // ⚠ 減衰の強さは**プロ意識で変える**。一律に上げると平均的なベテランまで
-          //    早く終わり、6年でリーグ平均が6点下がった。落ちるのは怠けた選手だけ。
-          //      意識50→0.56 / 30→0.80 / 20→0.92（意識55以上は従来どおり0.5）
-          const declineRate = 0.5 + Math.max(0, 55 - discipline) * 0.012;
-          const declineAmount = base * Math.abs(effectiveFactor) * declineRate * (0.6 + Math.random() * 0.6);
-          return Math.max(1, current - Math.round(declineAmount));
         }
+        return Math.max(1, current + Math.round(delta));
       };
 
       if (player.position === 'pitcher') {
@@ -365,12 +356,25 @@ export function applyCorporatePlayerGrowth(allTeams) {
   }
 }
 
+// `applyCorporatePlayerGrowth` が「基礎成長＋練習成長」で面倒を見る能力。
+// ⚠ **年齢カーブと二重に掛けないこと**。社会人・独立・クラブの選手は
+//    両方の関数を通るので、重なった能力に年齢カーブまで掛けると
+//    衰退が二重になり、30代の選手が実際の倍の速さで落ちる。
+//    残り（回復力・体力・盗塁・バント、および投手の打撃能力）は
+//    corporate 側が触らないので、こちらが単独で担う。
+const CORPORATE_OWNED_STATS = {
+  pitcher: new Set(['control', 'stamina', 'velocity', 'arm']),
+  fielder: new Set(['meet', 'power', 'eye', 'speed', 'arm', 'defense']),
+};
+
 // --- 年齢カーブによる成長・衰退 ---
 export function applyAgeCurveChanges(allTeams) {
   const updatedTeams = {};
   const ageReports = [];
 
   Object.entries(allTeams).forEach(([teamName, team]) => {
+    // 社会人・独立・クラブは applyCorporatePlayerGrowth が年齢カーブごと担当する
+    const corporateGrown = !!(team?.corporateData || team?.independentLeagueId);
     updatedTeams[teamName] = {
       ...team,
       players: team.players.map(player => {
@@ -379,7 +383,11 @@ export function applyAgeCurveChanges(allTeams) {
         const changes = [];
 
         // 全能力について年齢カーブを適用
-        const allStats = [...PHYSICAL_STATS, ...TECHNICAL_STATS];
+        const owned = corporateGrown
+          ? CORPORATE_OWNED_STATS[player.position === 'pitcher' ? 'pitcher' : 'fielder']
+          : null;
+        const allStats = [...PHYSICAL_STATS, ...TECHNICAL_STATS]
+          .filter(s => !owned || !owned.has(s));
 
         allStats.forEach(stat => {
           const isPhysical = PHYSICAL_STATS.includes(stat);
