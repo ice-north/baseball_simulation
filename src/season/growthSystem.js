@@ -59,6 +59,29 @@ export function updateGrowthModifiers(allTeams, awards) {
   });
 }
 
+// 能力ごとの伸びやすさ（`grow()` の base）と、プロ級で減衰が始まる閾値。
+// ⚠ **2つの成長関数で共有すること**。以前は `applyCorporatePlayerGrowth` と
+//    `applyFreeAgentGrowth` に同じ数字が別々に書かれており、片方だけ直る事故が待っていた。
+//
+// ⚠ **base は `focus` / `strength` と掛け算で重なる**。社会人のミートは
+//    base 3.0 × focus 1.9 × 長所 1.3 = 7.41、走力は 0.5 × 0.8 × 0.85 = 0.34 で
+//    **22倍**の開きがあった。技術系だけが独走して、平均的な社会人が
+//    ミート83（NPB主力級）まで伸びていた。順序（技術は伸びる・走力と肩は
+//    才能で決まる）は正しいので、**上位の base だけを詰める**。
+//      ミート 3.0→1.9 / 制球 3.0→1.9 / 守備 2.5→1.7 / 選球眼 2.0→1.5
+const STAT_GROWTH = {
+  meet:     { base: 1.9, cap: 99,  threshold: 70, rate: 0.05 },
+  power:    { base: 1.5, cap: 99,  threshold: 70, rate: 0.05 },
+  eye:      { base: 1.5, cap: 99,  threshold: 70, rate: 0.05 },
+  defense:  { base: 1.7, cap: 99,  threshold: 70, rate: 0.05 },
+  speed:    { base: 0.5, cap: 99,  threshold: 80, rate: 0.03 },
+  arm:      { base: 0.5, cap: 99,  threshold: 80, rate: 0.03 },
+  armP:     { base: 1.0, cap: 99,  threshold: 80, rate: 0.03 },  // 投手の肩
+  control:  { base: 1.9, cap: 99,  threshold: 70, rate: 0.05 },
+  stamina:  { base: 2.0, cap: 200, threshold: 80, rate: 0.03 },
+  velocity: { base: 0.5, cap: null, threshold: 150, rate: 0.20 },
+};
+
 // --- 自由契約選手の自主トレ成長 ---
 // ⚠ **成長の式を二重に持たないこと**。以前はここだけ旧式（`zeroAge` の分岐＋
 //    discipline の3乗の崖）が残っており、他が変わっても取り残されていた。
@@ -83,37 +106,38 @@ export function applyFreeAgentGrowth(pool) {
     const basal = basalGrowth(age, gp);
     const practice = FA_VOLUME * disciplineTrainMult(discipline);
 
-    const grow = (current, base, cap, threshold, rate) => {
-      const delta = base * (basal + practice) * FA_GAIN * (0.6 + Math.random() * 0.6);
+    const grow = (current, key, baseMult = 1, capOverride = null) => {
+      const g = STAT_GROWTH[key];
+      const delta = g.base * baseMult * (basal + practice) * FA_GAIN * (0.6 + Math.random() * 0.6);
       if (delta >= 0) {
-        return Math.min(cap, current + Math.round(delta * decayMult(current, threshold, rate)));
+        return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, g.threshold, g.rate)));
       }
       return Math.max(1, current + Math.round(dampDecline(current, delta)));
     };
 
     if (player.position === 'pitcher') {
       if (player.pitching) {
-        player.pitching.control  = grow(player.pitching.control,  3.0, 99,  70, 0.05);
-        player.pitching.stamina  = grow(player.pitching.stamina,  2.0, 200, 80, 0.03);
-        const velCap     = getVelocityCap(player.physical?.arm || 50);
+        player.pitching.control = grow(player.pitching.control, 'control');
+        player.pitching.stamina = grow(player.pitching.stamina, 'stamina');
         const velCatchup = getVelocityCatchupMult(player.physical?.arm || 50, player.pitching.velocity);
-        player.pitching.velocity = grow(player.pitching.velocity, 0.5 * velCatchup, velCap, 150, 0.20);
+        player.pitching.velocity = grow(player.pitching.velocity, 'velocity',
+          velCatchup, getVelocityCap(player.physical?.arm || 50));
       }
       if (player.physical) {
-        player.physical.arm = grow(player.physical.arm, 1.0, 99, 80, 0.03);
+        player.physical.arm = grow(player.physical.arm, 'armP');
       }
     } else {
       if (player.batting) {
-        player.batting.meet    = grow(player.batting.meet,  3.0, 99, 70, 0.05);
-        player.batting.power   = grow(player.batting.power, 1.5, 99, 70, 0.05);
-        player.batting.eye     = grow(player.batting.eye,   2.0, 99, 70, 0.05);
+        player.batting.meet  = grow(player.batting.meet,  'meet');
+        player.batting.power = grow(player.batting.power, 'power');
+        player.batting.eye   = grow(player.batting.eye,   'eye');
       }
       if (player.physical) {
-        player.physical.speed = grow(player.physical.speed, 0.5, 99, 80, 0.03);
-        player.physical.arm   = grow(player.physical.arm,   0.5, 99, 80, 0.03);
+        player.physical.speed = grow(player.physical.speed, 'speed');
+        player.physical.arm   = grow(player.physical.arm,   'arm');
       }
       if (player.fielding) {
-        player.fielding.defense = grow(player.fielding.defense, 2.5, 99, 70, 0.05);
+        player.fielding.defense = grow(player.fielding.defense, 'defense');
       }
     }
 
@@ -231,20 +255,20 @@ const dampDecline = (current, delta) => Math.max(delta, -Math.max(1, current * D
 // 実際に回してから指名する（0 だと成長を一度も通らず、ここを動かしても測定に映らない）。
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
-  independent: { volume: 1.34, gain: 1.78, topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  independent: { volume: 1.34, gain: 2.00, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
   // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
   //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
   //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
   //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    volume: 0.64, gain: 1.78, topN: 2, strength: 1.3, weak: 0.85,
+    volume: 0.64, gain: 2.10, topN: 2, strength: 1.3, weak: 0.85,
     focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    volume: 0.86, gain: 1.35, topN: 2, strength: 1.25, weak: 0.9,
+    volume: 0.86, gain: 1.60, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6 },
   },
@@ -319,39 +343,43 @@ export function applyCorporatePlayerGrowth(allTeams) {
         return shape * (prof.focus?.[key] ?? 1.0);
       };
 
-      const grow = (current, base, key, cap = 99, threshold = null, rate = 0.05) => {
+      // key は STAT_GROWTH のキー。specKey は長所/短所・カテゴリ得意分野の判定に使う
+      // 能力名（投手の肩 'armP' は 'arm' として見る）。
+      const grow = (current, key, baseMult = 1, capOverride = null) => {
+        const g = STAT_GROWTH[key];
+        const specKey = key === 'armP' ? 'arm' : key;
         // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
-        const delta = base * (basal + practice * specMult(key))
+        const delta = g.base * baseMult * (basal + practice * specMult(specKey))
           * rankMult * (prof.gain ?? 1.0) * (0.6 + Math.random() * 0.6);
         if (delta >= 0) {
-          const amount = threshold != null ? delta * decayMult(current, threshold, rate) : delta;
-          return Math.min(cap, current + Math.round(amount));
+          return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, g.threshold, g.rate)));
         }
         return Math.max(1, current + Math.round(dampDecline(current, delta)));
       };
 
       if (player.position === 'pitcher') {
         if (player.pitching) {
-          player.pitching.control = grow(player.pitching.control, 3.0, 'control', 99, 70, 0.05);
-          player.pitching.stamina = grow(player.pitching.stamina, 2.0, 'stamina', 200, 80, 0.03);
+          player.pitching.control = grow(player.pitching.control, 'control');
+          player.pitching.stamina = grow(player.pitching.stamina, 'stamina');
           const ypVelCatchup = getVelocityCatchupMult(player.physical?.arm || 50, player.pitching.velocity);
-          player.pitching.velocity = grow(player.pitching.velocity, 0.5 * ypVelCatchup, 'velocity', getVelocityCap(player.physical?.arm || 50), 150, 0.20);
+          player.pitching.velocity = grow(player.pitching.velocity, 'velocity',
+            ypVelCatchup, getVelocityCap(player.physical?.arm || 50));
         }
         if (player.physical) {
-          player.physical.arm = grow(player.physical.arm, 1.0, 'arm', 99, 80, 0.03);
+          player.physical.arm = grow(player.physical.arm, 'armP');
         }
       } else {
         if (player.batting) {
-          player.batting.meet = grow(player.batting.meet, 3.0, 'meet', 99, 70, 0.05);
-          player.batting.power = grow(player.batting.power, 1.5, 'power', 99, 70, 0.05);
-          player.batting.eye = grow(player.batting.eye, 2.0, 'eye', 99, 70, 0.05);
+          player.batting.meet = grow(player.batting.meet, 'meet');
+          player.batting.power = grow(player.batting.power, 'power');
+          player.batting.eye = grow(player.batting.eye, 'eye');
         }
         if (player.physical) {
-          player.physical.speed = grow(player.physical.speed, 0.5, 'speed', 99, 80, 0.03);
-          player.physical.arm = grow(player.physical.arm, 0.5, 'arm', 99, 80, 0.03);
+          player.physical.speed = grow(player.physical.speed, 'speed');
+          player.physical.arm = grow(player.physical.arm, 'arm');
         }
         if (player.fielding) {
-          player.fielding.defense = grow(player.fielding.defense, 2.5, 'defense', 99, 70, 0.05);
+          player.fielding.defense = grow(player.fielding.defense, 'defense');
         }
       }
 
