@@ -88,7 +88,7 @@ export function applyFreeAgentGrowth(pool) {
       if (delta >= 0) {
         return Math.min(cap, current + Math.round(delta * decayMult(current, threshold, rate)));
       }
-      return Math.max(1, current + Math.round(delta));
+      return Math.max(1, current + Math.round(dampDecline(current, delta)));
     };
 
     if (player.position === 'pitcher') {
@@ -184,6 +184,15 @@ const DISC_TRAIN_W = 1.25;
 export function disciplineTrainMult(discipline = 50) {
   return Math.max(0, (discipline - 10) / 100) * DISC_TRAIN_W;
 }
+
+// 1年で失える割合の上限。**衰えても「小学生以下」までは落ちない**。
+// ⚠ 下限でクランプしてはいけない（`corporateInit.taperLow` と同じ理由。
+//    平均が押し上がってリーグの較正が動く）。**落ち幅を現在値に比例させる**と、
+//    符号は変わらないので「衰え始める年齢」は完全に不変のまま、
+//    崩壊だけが止まる。旧実装も新実装も、練習しない選手のミートが
+//    最終的に **1** まで落ちていた（旧は27歳、新は40歳で到達）。
+const DECLINE_MAX_RATE = 0.055;
+const dampDecline = (current, delta) => Math.max(delta, -Math.max(1, current * DECLINE_MAX_RATE));
 
 // --- 社会人/独立チーム選手の実戦経験による成長 ---
 // ============================================================
@@ -318,7 +327,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
           const amount = threshold != null ? delta * decayMult(current, threshold, rate) : delta;
           return Math.min(cap, current + Math.round(amount));
         }
-        return Math.max(1, current + Math.round(delta));
+        return Math.max(1, current + Math.round(dampDecline(current, delta)));
       };
 
       if (player.position === 'pitcher') {
