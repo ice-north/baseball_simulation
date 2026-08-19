@@ -150,9 +150,26 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   // 一芸指名で総合点を偏差に直すための分布（固定の表を持たず毎回測る）
   const mainScoreStats = scoreStats(mainEligible.map(c => c.score));
 
-  // 候補の質で本指名巡数を決定（良い候補が多いほど多巡）
-  const mainCandPerTeam = Math.floor(mainEligible.length / numTeams);
-  const baseMainRounds = mainCandPerTeam >= 8 ? 6 : mainCandPerTeam >= 6 ? 5 : 4;
+  // === 指名枠は「プロ入り水準の候補が何人いるか」で決まる ===
+  // 規定の上限は年間120名。**プロ入り水準の能力がありながらライバルに
+  // 押し出されて指名漏れする**のを防ぐため、豊作の年は枠を広げる。
+  //
+  // ⚠ 旧実装は `mainEligible.length / 12` で巡数を決めていたが、
+  //    `MIN_DRAFT_SCORE = 80` は候補の大半が超えるので **常に上限の6巡**になり、
+  //    「候補の質で枠が動く」という仕組みが一度も発火していなかった。
+  // ⚠ **評価点の分布は極端に平ら**（実測: 60位272点 → 200位246点で26点しかない）。
+  //    しきい値をわずかに動かすだけで人数が倍近く動くので、
+  //    必ず MIN/MAX でクランプすること。
+  //    実測の人数: ≥255→150人 / ≥260→120人 / ≥265→92人 / ≥270→71人
+  const PRO_LINE = 255;
+  const MAX_TOTAL_PICKS = 120;   // 年間120名までという規定
+  const MIN_TOTAL_PICKS = 84;
+  const proCount = allCandidates.filter(c => c.score >= PRO_LINE).length;
+  const targetTotal = Math.max(MIN_TOTAL_PICKS, Math.min(MAX_TOTAL_PICKS, proCount));
+  const targetIku = Math.round(targetTotal * 0.22);
+  const baseMainRounds = Math.max(4, Math.min(8,
+    Math.round((targetTotal - targetIku) / numTeams)));
+  const baseIkuPicks = Math.max(1, Math.round(targetIku / numTeams));
 
   // 球団ごとの指名枠を個別に設定
   const IKU_HEAVY_TEAMS = new Set(['読売ジャイアンツ', 'ソフトバンクホークス', '西武ライオンズ', 'オリックス・バファローズ']);
@@ -160,12 +177,14 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   NPB_TEAMS.forEach(team => {
     // 本指名: baseMainRounds ± 1のバラつき
     const mainVariance = Math.floor(Math.random() * 3) - 1;
-    const mainPicks = Math.max(3, Math.min(7, baseMainRounds + mainVariance));
-    // 育成: 全球団が参加。育成積極球団は2-4名、それ以外は1-2名
+    // ⚠ 上限は 7 では足りない。枠を120まで広げても
+    //    `Math.min(7, …)` で刈られて実際の指名数が増えなかった
+    const mainPicks = Math.max(3, Math.min(9, baseMainRounds + mainVariance));
+    // 育成: 全球団が参加。育成積極球団は+1〜2名多く取る
     const isIkuHeavy = IKU_HEAVY_TEAMS.has(team);
-    const ikuPicks = isIkuHeavy
-      ? 2 + Math.floor(Math.random() * 3)
-      : 1 + Math.floor(Math.random() * 2);
+    const ikuPicks = Math.max(1, baseIkuPicks + (isIkuHeavy
+      ? 1 + Math.floor(Math.random() * 2)
+      : Math.floor(Math.random() * 2) - 1));
     teamDraftLimits[team] = { mainPicks, ikuPicks, mainDone: 0, ikuDone: 0 };
   });
   const eligibleSourceCounts = { highschool: 0, university: 0, corporate: 0, independent: 0 };
@@ -175,7 +194,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   });
   const totalMainSlots = Object.values(teamDraftLimits).reduce((s, t) => s + t.mainPicks, 0);
   const totalIkuSlots = Object.values(teamDraftLimits).reduce((s, t) => s + t.ikuPicks, 0);
-  console.log(`[NPBDraft Year${gameYear}] eligible(≥${MIN_IKU_SCORE}): 高校${eligibleSourceCounts.highschool} 大学${eligibleSourceCounts.university} 社会人${eligibleSourceCounts.corporate} 独立${eligibleSourceCounts.independent} 合計${eligible.length} / 本指名枠=${totalMainSlots} 育成枠=${totalIkuSlots}`);
+  console.log(`[NPBDraft Year${gameYear}] プロ入り水準(≥${PRO_LINE})=${proCount}名 → 枠${targetTotal}名 / eligible(≥${MIN_IKU_SCORE}): 高校${eligibleSourceCounts.highschool} 大学${eligibleSourceCounts.university} 社会人${eligibleSourceCounts.corporate} 独立${eligibleSourceCounts.independent} 合計${eligible.length} / 本指名枠=${totalMainSlots} 育成枠=${totalIkuSlots}`);
 
   // === スコア分布の診断ログ ===
   const scoresBySource = { highschool: [], university: [], corporate: [], independent: [] };
@@ -504,6 +523,9 @@ export function processNPBDraft(allTeams, gameYear = 1) {
   for (let round = 1; round < maxMainRounds; round++) {
     const teamOrder = round % 2 === 1 ? waiverOrder : reverseWaiverOrder;
     for (const npbTeam of teamOrder) {
+      // ⚠ 規定の上限。球団ごとの枠のばらつき(±1)で合計が超えうるので
+      //    実際の指名数でも止める（targetTotal のクランプだけでは足りない）
+      if (draftedPlayers.length >= MAX_TOTAL_PICKS) break;
       const limits = teamDraftLimits[npbTeam];
       if (limits.mainDone >= limits.mainPicks) continue;
       const remaining = mainEligible.filter(c => !takenIds.has(c.player.id));
@@ -566,7 +588,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
     .sort((a, b) => b.ikuScore - a.ikuScore);
   const ikuScoreStats = scoreStats(ikuEligible.map(c => c.ikuScore));
 
-  for (let ikuRound = 1; ikuRound <= maxIkuRounds; ikuRound++) {
+  for (let ikuRound = 1; ikuRound <= maxIkuRounds && draftedPlayers.length < MAX_TOTAL_PICKS; ikuRound++) {
     // 1巡目: ウェーバー（下位から）、2巡目: 逆ウェーバー（上位から）
     const teamOrder = ikuRound % 2 === 1 ? waiverOrder : reverseWaiverOrder;
     for (const npbTeam of teamOrder) {
@@ -594,6 +616,7 @@ export function processNPBDraft(allTeams, gameYear = 1) {
         if (pref > bestPref) { bestPref = pref; bestCand = c; }
       }
       if (!bestCand) continue;
+      if (draftedPlayers.length >= MAX_TOTAL_PICKS) break;
       const ikuPickRound = limits.ikuDone + 1;
       takenIds.add(bestCand.player.id);
       draftedPlayers.push(createDraftEntry(bestCand, npbTeam, `育成${ikuPickRound}巡目`, huntTool));
