@@ -734,3 +734,92 @@ export function applyAgeCurveChanges(allTeams) {
 
   return { updatedTeams, ageReports };
 }
+
+// ============================================================
+// 加齢によるポジション転向
+//
+// 現実では捕手が30代で一塁へ、遊撃が三塁へ、中堅が両翼へ移る。守備範囲と
+// 肩が落ちた選手を同じ場所に置き続けられないからで、**守備の難易度には
+// はっきりした序列がある**（`POSITION_GLOVE_WEIGHT` と同じ順序）。
+//
+// ⚠ 旧実装では加齢で `positionFitness` も `position` も動かず、
+//    **34歳の遊撃手が遊撃を守り続けていた**。
+// ⚠ **`lineupGenerator` と戦わないこと**。あちらは `positionFitness` を見て
+//    打順の守備位置を決め、`p.position` を恒久的に上書きする。だからここでは
+//    **適性そのものを動かす**——難しい場所の適性を落とし、移った先を上げる。
+//    そうすれば編成側が自然に配置し直す。
+// ============================================================
+
+/** 守備位置ごとの要求水準（守備・走力）。序列は POSITION_GLOVE_WEIGHT と同じ */
+const POSITION_DEMAND = {
+  catcher: { def: 56, speed: 0 },
+  short:   { def: 58, speed: 50 },
+  center:  { def: 53, speed: 56 },
+  second:  { def: 52, speed: 44 },
+  third:   { def: 46, speed: 36 },
+  right:   { def: 42, speed: 38 },
+  left:    { def: 38, speed: 34 },
+  first:   { def: 28, speed: 0 },
+};
+/** 転向先の候補（易しい方へ1段ずつ） */
+const POSITION_LADDER = {
+  catcher: ['first', 'third', 'left'],
+  short:   ['third', 'second', 'left'],
+  center:  ['right', 'left'],
+  second:  ['third', 'first'],
+  third:   ['first', 'left'],
+  right:   ['left', 'first'],
+  left:    ['first'],
+  first:   [],
+};
+// これ未満は転向しない（衰えではなく編成の都合になってしまう）。
+// ⚠ **ポジションごとに違う**。実データの転向年齢は 捕手32-35 / 遊撃30-33 /
+//    中堅30-32。一律28にすると全ポジション中央29歳と早すぎた。
+const CONVERT_AGE = { catcher: 32, short: 30, center: 30, second: 30,
+                      third: 31, right: 31, left: 31 };
+const CONVERT_RATE = 0.40;       // 条件を満たした年に転向する確率
+const CONVERT_MARGIN = 5;        // 要求水準をこれだけ下回ったら転向を検討
+
+/**
+ * 加齢で守備範囲が落ちた選手を易しい守備位置へ移す。
+ * 全カテゴリ（自チーム含む）が対象。年度替わりに1回だけ呼ぶこと。
+ */
+export function applyPositionShifts(allTeams) {
+  const shifts = [];
+  for (const [teamName, team] of Object.entries(allTeams || {})) {
+    // ⚠ **捕手を枯渇させないこと**。捕手が2人を切ると `lineupGenerator` が
+    //    適性30の外野手を捕手に置く（「守備位置と適正のズレ」の節と同じ症状）。
+    const catcherCount = (team?.players || []).filter(p => p.position === 'catcher').length;
+    let catchersLeft = catcherCount;
+    for (const player of (team?.players || [])) {
+      if (player.position === 'pitcher' || player.position === 'first') continue;
+      const age = player.age || 25;
+      if (age < (CONVERT_AGE[player.position] ?? 31)) continue;
+      const demand = POSITION_DEMAND[player.position];
+      if (!demand) continue;
+      const def = player.fielding?.defense ?? 50;
+      const speed = player.physical?.speed ?? 50;
+      const shortOnDef = def < demand.def - CONVERT_MARGIN;
+      const shortOnSpeed = demand.speed > 0 && speed < demand.speed - CONVERT_MARGIN;
+      if (!shortOnDef && !shortOnSpeed) continue;
+      if (Math.random() >= CONVERT_RATE) continue;
+      if (player.position === 'catcher' && catchersLeft <= 2) continue;
+      // 今の能力で務まる最初の転向先を探す
+      const to = (POSITION_LADDER[player.position] || []).find(pos => {
+        const d = POSITION_DEMAND[pos];
+        return def >= d.def - CONVERT_MARGIN && (d.speed === 0 || speed >= d.speed - CONVERT_MARGIN);
+      }) || (POSITION_LADDER[player.position] || [])[0];
+      if (!to) continue;
+      const from = player.position;
+      if (from === 'catcher') catchersLeft--;
+      player.position = to;
+      if (player.positionFitness) {
+        // 移った先はすぐ務まる（易しい方へ動くため）。元の場所の適性は落ちる
+        player.positionFitness[to] = Math.max(player.positionFitness[to] ?? 30, 78);
+        player.positionFitness[from] = Math.max(20, Math.round((player.positionFitness[from] ?? 100) * 0.75));
+      }
+      shifts.push({ teamName, name: player.name, age, from, to });
+    }
+  }
+  return shifts;
+}

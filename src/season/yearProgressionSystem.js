@@ -23,10 +23,10 @@ import { addToReleasedPool, replaceReleasedPool, removeFromReleasedPoolByIds } f
 import { addToRoster, replaceRoster } from '../state/roster.js';
 // 成長・衰退の計算は growthSystem.js に抽出。内部利用のため import し、
 // 従来 export されていた3関数は互換性維持のため再エクスポートする。
-import { updateGrowthModifiers, applyFreeAgentGrowth, applyCorporatePlayerGrowth, applyAgeCurveChanges } from './growthSystem.js';
+import { updateGrowthModifiers, applyFreeAgentGrowth, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts } from './growthSystem.js';
 // CPU並行世界のロスター管理（大学卒業/新入生・社会人/独立の戦力外/補充）は rosterProgression.js に抽出
 import { processUniversityTeamGraduation, releaseCPUCorporatePlayers, replenishCorporateRosters, replenishIndependentLeagueRosters } from './rosterProgression.js';
-export { updateGrowthModifiers, applyCorporatePlayerGrowth, applyAgeCurveChanges };
+export { updateGrowthModifiers, applyCorporatePlayerGrowth, applyAgeCurveChanges, applyPositionShifts };
 import { updateAllTeamReputations, updateAllRanks, advanceSponsors, applyReputationDecay, applyUniversityReputationDecay, resetIndependentLeagueSchedules } from '../corporate/corporateInit.js';
 import { extractTournamentSeeds } from '../corporate/toshitaikou.js';
 import { advanceStaffYear } from '../corporate/staffData.js';
@@ -1134,6 +1134,9 @@ export function advanceToNextYear(seasonData, allTeams) {
 
   // 4.6. 社会人/独立チームの若手選手に実戦経験による成長を適用
   applyCorporatePlayerGrowth(updatedTeams);
+
+  // 4.65. 加齢で守備範囲が落ちた選手を易しい守備位置へ移す（捕手→一塁、遊撃→三塁…）
+  const positionShifts = applyPositionShifts(updatedTeams);
 
   // 4.7. 自由契約選手の自主トレ成長（クラブ所属と同等: discipline主導・環境なし）
   applyFreeAgentGrowth(releasedPlayersPool);
