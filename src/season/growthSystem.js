@@ -104,23 +104,23 @@ export const growthDecayRate = (base, gp = 1.0) =>
 //    `npbCareer` は既に加齢プロファイルを別に持っている（肩0.5 / 走塁0.6 /
 //    リードは落ちない）ので、こちらもそれに揃える。
 const STAT_GROWTH = {
-  meet:     { base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 1.15 },
-  power:    { base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.30 },
-  eye:      { base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.12 },
-  defense:  { base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 1.25 },
-  speed:    { base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 2.00 },
-  arm:      { base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 1.45 },
-  armP:     { base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 0.85 },  // 投手の肩
-  control:  { base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.50 },
+  meet:     { ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.92 },
+  power:    { ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.38 },
+  eye:      { ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.12 },
+  defense:  { ref: 50, base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 1.08 },
+  speed:    { ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 2.00 },
+  arm:      { ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 1.45 },
+  armP:     { ref: 50, base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 0.72 },  // 投手の肩
+  control:  { ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.50 },
   stamina:  { base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 0.95 },
   velocity: { base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 1.80 },
   // ⚠ **変化球とリードは長らく年次成長の対象外だった**。社会人・独立・クラブの
   //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
   //    （大学プールだけが `applyUniversityGrowth` で伸ばしていた）。
   //    どちらも「実戦で最も磨かれる」ものなので、実戦成長の対象に入れる。
-  breaking: { base: 1.3, cap: 100, threshold: 70, rate: 0.04, decline: 0.20 },
+  breaking: { ref: 50, base: 1.3, cap: 100, threshold: 70, rate: 0.04, decline: 0.20 },
   // リードは経験の積み上げ。**加齢で落ちない**（`npbCareer` の加齢処理と同じ扱い）
-  lead:     { base: 1.1, cap: 95,  threshold: 70, rate: 0.05, decline: 0 },
+  lead:     { ref: 50, base: 1.1, cap: 95,  threshold: 70, rate: 0.05, decline: 0 },
 };
 
 // --- 自由契約選手の自主トレ成長 ---
@@ -153,7 +153,7 @@ export function applyFreeAgentGrowth(pool) {
       if (delta >= 0) {
         return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
       }
-      return Math.max(1, current + Math.round(dampDecline(current, delta * (g.decline ?? 1))));
+      return Math.max(1, current + Math.round(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
     };
 
     if (player.position === 'pitcher') {
@@ -258,6 +258,19 @@ export function disciplineTrainMult(discipline = 50) {
 //    最終的に **1** まで落ちていた（旧は27歳、新は40歳で到達）。
 const DECLINE_MAX_RATE = 0.055;
 const dampDecline = (current, delta) => Math.max(delta, -Math.max(1, current * DECLINE_MAX_RATE));
+
+// ⚠ **衰えは能力値に比例させること**。`grow()` の delta は `base × 年齢係数` で
+//    決まる**絶対量**なので、そのままだと「走力95でも走力40でも年 -1」になり、
+//    **水準が高い選手ほど減衰率(%)が小さくなる**（実測 31→39歳で
+//    走力30 -29.9% 対 走力90 -15.5%）。実際は一流のスプリンターも平凡な走者も
+//    30代で同じ割合を失う。`ref` を基準に比例させると水準に依らず一定になる。
+// ⚠ `ref` を持たない能力（スタミナ・球速）は**スケールが違う**ので絶対量のまま
+//    （球速135を基準に比例させると120km投手と150km投手で失う km/h が倍違う）。
+const DECLINE_SCALE_CLAMP = [0.55, 1.9];
+const declineScale = (current, ref) => {
+  if (!ref) return 1;
+  return Math.max(DECLINE_SCALE_CLAMP[0], Math.min(DECLINE_SCALE_CLAMP[1], current / ref));
+};
 
 // --- 社会人/独立チーム選手の実戦経験による成長 ---
 // ============================================================
@@ -420,7 +433,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
             current + Math.round(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
         }
 
-        return Math.max(1, current + Math.round(dampDecline(current, delta * (g.decline ?? 1))));
+        return Math.max(1, current + Math.round(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
       };
 
       if (player.position === 'pitcher') {
