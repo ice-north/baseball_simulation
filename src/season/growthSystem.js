@@ -86,6 +86,20 @@ export function updateGrowthModifiers(allTeams, awards) {
 // 年次成長に掛ける体格補正の幅。毎年・全能力に掛かるので、キャンプ(1.0)より弱くする
 const PHYSIQUE_W = 0.30;
 
+// 【若いほど吸収が速い】練習成長の年齢係数。
+// ⚠ 旧実装は **19歳と23歳の伸びがほぼ同じ**だった（19歳比 94%）。
+//    実データの打者は 23-25歳で 20-22歳の約半分、26-27歳でほぼ0まで落ちる。
+//    プロ1〜3年目に技術が一気に伸びる、という当たり前が出ていなかった。
+// ⚠ **成長方向にだけ掛けること**（`physiqueMultFor` と同じ扱い）。練習項そのものに
+//    掛けると `基礎 + 練習 = 0` の交点が動き、**衰え始める年齢が変わってしまう**。
+//    正の delta にだけ掛ければ衰え始めは完全に不変（実測で 27/29/32/34/36/37 が一致）。
+// ⚠ 到達点は**ほぼ変わらない。早く着くだけ**（平均ケースのミートのピーク 78→75）。
+//    「22歳で成長が止まる」わけではない。
+//    実測の19歳比: 21歳82% / 23歳60% / 25歳43% / 27歳31% / 29歳23%
+const YOUTH_MULT = { 18: 1.95, 19: 1.85, 20: 1.68, 21: 1.50, 22: 1.32, 23: 1.16,
+                     24: 1.07, 25: 1.00, 26: 0.95, 27: 0.90, 28: 0.87 };
+const youthMult = (age) => YOUTH_MULT[age] ?? (age < 18 ? 1.95 : 0.85);
+
 // 新球種の習得。⚠ **大学プールにしか無かった**。社会人・独立・クラブの投手は
 // キャンプ以外に球種を増やす経路が無く、実測で12年進化させても球種数が
 // **3.00 固定**のままだった。持ち球の「幅」は打者の読み合い
@@ -132,16 +146,16 @@ export const growthDecayRate = (base, gp = 1.0) =>
 //    `npbCareer` は既に加齢プロファイルを別に持っている（肩0.5 / 走塁0.6 /
 //    リードは落ちない）ので、こちらもそれに揃える。
 const STAT_GROWTH = {
-  meet:     { ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.92 },
-  power:    { ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.38 },
+  meet:     { ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 1.15 },
+  power:    { ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.46 },
   eye:      { ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.12 },
-  defense:  { ref: 50, base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 1.08 },
-  speed:    { ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 2.00 },
-  arm:      { ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 1.45 },
-  armP:     { ref: 50, base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 0.72 },  // 投手の肩
-  control:  { ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.50 },
-  stamina:  { base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 0.95 },
-  velocity: { base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 1.80 },
+  defense:  { ref: 50, base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 1.30 },
+  speed:    { ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 2.60 },
+  arm:      { ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 1.85 },
+  armP:     { ref: 50, base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 0.92 },  // 投手の肩
+  control:  { ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.62 },
+  stamina:  { base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 1.15 },
+  velocity: { base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 2.30 },
   // ⚠ **変化球とリードは長らく年次成長の対象外だった**。社会人・独立・クラブの
   //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
   //    （大学プールだけが `applyUniversityGrowth` で伸ばしていた）。
@@ -337,20 +351,20 @@ const declineScale = (current, ref) => {
 // 実際に回してから指名する（0 だと成長を一度も通らず、ここを動かしても測定に映らない）。
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
-  independent: { volume: 1.34, gain: 1.16, topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  independent: { volume: 1.34, gain: 0.98, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
   // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
   //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
   //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
   //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    volume: 0.64, gain: 1.28, topN: 2, strength: 1.3, weak: 0.85,
+    volume: 0.64, gain: 1.06, topN: 2, strength: 1.3, weak: 0.85,
     focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8, breaking: 1.8, lead: 1.7,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    volume: 0.86, gain: 0.72, topN: 2, strength: 1.25, weak: 0.9,
+    volume: 0.86, gain: 0.52, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6, breaking: 0.5, lead: 0.5 },
   },
@@ -456,7 +470,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
           //    この関数が担当する能力は `applyAgeCurveChanges` の対象外に
           //    してあるので、ここで掛けないと体幹・器用さが効かなくなる
           //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
-          const phys = physiqueMultFor(player, specKey, PHYSIQUE_W);
+          const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * youthMult(age);
           return Math.min(capOverride ?? g.cap,
             current + Math.round(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
         }
