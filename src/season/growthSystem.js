@@ -330,6 +330,34 @@ const stochasticRound = (v) => {
   return f + (Math.random() < (v - f) ? 1 : 0);
 };
 
+// ============================================================
+// 【プラトーとブレイクスルー】年ごとの伸びに**記憶**を持たせる
+//
+// ⚠ 旧実装の年次ノイズは `0.6 + random()*0.6` の**独立同分布**で、
+//    隣接年の自己相関が実測 **0.026**（＝ほぼ無相関）だった。毎年ほぼ同じ幅で
+//    単調に伸びるので、「2年伸び悩んで3年目に化ける」「フォームを崩して1年落ちる」
+//    という育成で最も判断の難しい局面が存在しなかった。
+//    実データの選手の年次成長は自己相関 0.2〜0.35（伸びる年は続く）。
+//
+// AR(1) の「充実度」を選手に持たせる。**平均1を保つ**ので、
+// リーグの水準・指名の構成比は動かない（振れ方だけが変わる）。
+// `_growthForm` は選手オブジェクトに載るのでセーブされる。
+const FORM_RHO = 0.35;    // 前年をどれだけ引き継ぐか
+const FORM_W = 0.38;      // 伸び幅への効き
+// ⚠ **独立ノイズを絞って、そのぶんを記憶のあるノイズへ移すこと**。
+//    `0.6 + random()*0.6`（σ/平均 0.19）を残したまま form を足しても、
+//    独立成分が自己相関を薄めて 0.06 までしか上がらなかった。
+//    平均0.9は保ったまま幅だけ狭める（`0.75 + random()*0.3`）。
+const YEAR_NOISE_LO = 0.75, YEAR_NOISE_W = 0.30;
+function advanceGrowthForm(player) {
+  const u1 = Math.random() || 0.001, u2 = Math.random();
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  const prev = player._growthForm ?? 0;
+  const next = FORM_RHO * prev + Math.sqrt(1 - FORM_RHO * FORM_RHO) * z;
+  player._growthForm = Math.max(-2.5, Math.min(2.5, next));
+  return Math.max(0.10, 1 + player._growthForm * FORM_W);
+}
+
 const DECLINE_SCALE_CLAMP = [0.55, 1.9];
 const declineScale = (current, ref) => {
   if (!ref) return 1;
@@ -420,6 +448,8 @@ export function applyCorporatePlayerGrowth(allTeams) {
       // 実成長 = 基礎成長 + 練習成長（**分岐なし。和の符号がすべて**）。
       // 設計は冒頭の「実成長 = 基礎成長 + 練習成長」の節を参照。
       const basal = basalGrowth(age, gp);
+      // その年の充実度（前年を引き継ぐ）。⚠ 成長方向にだけ掛ける
+      const formMult = advanceGrowthForm(player);
       // 実戦に出ているほど練習量が増える（出場も練習のうち）
       const activity = player.position === 'pitcher'
         ? (player.seasonStats?.pitching?.gamesStarted || 0) * 20 + (player.seasonStats?.pitching?.gamesRelieved || 0) * 3
@@ -487,13 +517,13 @@ export function applyCorporatePlayerGrowth(allTeams) {
         // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
         const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
         const delta = g.base * baseMult * (statBasal + practice * specMult(specKey))
-          * rankMult * (prof.gain ?? 1.0) * (0.6 + Math.random() * 0.6);
+          * rankMult * (prof.gain ?? 1.0) * (YEAR_NOISE_LO + Math.random() * YEAR_NOISE_W);
         if (delta >= 0) {
           // ⚠ 体格補正は**成長方向にだけ**掛ける（衰退には効かない）。
           //    この関数が担当する能力は `applyAgeCurveChanges` の対象外に
           //    してあるので、ここで掛けないと体幹・器用さが効かなくなる
           //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
-          const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * youthMult(age);
+          const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * youthMult(age) * formMult;
           return Math.min(capOverride ?? g.cap,
             current + stochasticRound(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
         }
