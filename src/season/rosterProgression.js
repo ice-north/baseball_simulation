@@ -326,7 +326,7 @@ function generateFreshmanPlayer(id, teamRank, isRecommended) {
     batting: { meet, power, eye, bats, steal, bunt: Math.max(5, Math.round(meet * 0.4 + speed * 0.3 + Math.random() * 15)) },
     physical: { speed, arm, throws, bodyStamina: 40 + Math.floor(Math.random() * 20), recovery: 40 + Math.floor(Math.random() * 20), muscle: 30 + Math.floor(Math.random() * 20), dexterity: 30 + Math.floor(Math.random() * 20) },
     fielding: { defense },
-    catching: { lead: position === 'catcher' ? generateCatcherLead() : 10 },
+    catching: { lead: position === 'catcher' ? generateCatcherLead(19) : 10 },
     pitching: { velocity, control, stamina, form: forms[formIdx], arsenal },
     traits: [],
     positionFitness,

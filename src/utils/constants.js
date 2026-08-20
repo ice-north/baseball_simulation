@@ -496,9 +496,16 @@ export const getUtilityScore = (player) => {
  * 平均は据え置き（リーグ全体の成績は変わらない）。
  *   ±1σ: 30〜66 / ±2σ: 12〜84 / 90超は約1%
  */
-export const generateCatcherLead = () => {
+// リードは**経験の積み上げ**なので、生成時点でも年齢で水準が違う。
+// ⚠ **傾きは年次成長のリード成長率と揃えること**（実測 意識55 で約 +1.8/年）。
+//    揃えないと「生成された30歳の捕手」と「19歳から育った30歳の捕手」が別水準になる。
+// ⚠ 年齢を渡さない場合は 25歳相当（母集団の中央付近）。ここを動かすと
+//    リーグ全体のリード平均が動き、防御率が動く（リード18→81 で -0.31）。
+const LEAD_AGE_SLOPE = 1.8;
+export const generateCatcherLead = (age = 25) => {
   const u1 = Math.random() || 0.0001;
   const u2 = Math.random();
   const normal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  return Math.max(5, Math.min(95, Math.round(48 + normal * 18)));
+  const ageShift = Math.max(-6, Math.min(8, (age ?? 25) - 25)) * LEAD_AGE_SLOPE;
+  return Math.max(5, Math.min(95, Math.round(54 + ageShift + normal * 16)));
 };

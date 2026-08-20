@@ -395,7 +395,7 @@ function generateHighSchoolPlayer(id) {
     },
     fielding: { defense: abilities.defense },
     catching: {
-      lead: position === 'catcher' ? generateCatcherLead() : r(10, 30)
+      lead: position === 'catcher' ? generateCatcherLead(18) : r(10, 30)
     },
     pitching: {
       velocity: abilities.velocity, control: abilities.control,

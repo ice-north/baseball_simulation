@@ -298,7 +298,7 @@ function generateRandomFillCandidates(count, year, independentLeagueRank) {
         defense: abilities.defense
       },
       catching: {
-        lead: position === 'catcher' ? generateCatcherLead() : Math.floor(Math.random() * 26) + 20
+        lead: position === 'catcher' ? generateCatcherLead(age) : Math.floor(Math.random() * 26) + 20
       },
       pitching: {
         velocity: abilities.velocity,

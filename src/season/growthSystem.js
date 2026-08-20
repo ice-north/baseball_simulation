@@ -95,17 +95,32 @@ export const growthThreshold = (base, gp = 1.0) => base + (gpClamp(gp) - 1.0) * 
 export const growthDecayRate = (base, gp = 1.0) =>
   Math.max(0.005, base * (1 - (gpClamp(gp) - 1.0) * POTENTIAL_RATE_W));
 
+//
+// ⚠ **`decline` は衰退方向だけに掛かる別プロファイル**。成長の速さと衰えの速さは
+//    まったく別の話で、成長の `base` を流用すると実データと逆になる。
+//    実測（ピーク→38歳）では パワー **-34%**（実 -10%）/ 選球眼 **-17%**（実 ほぼ0%）と
+//    落ちすぎ、走力 -16%（実 -22%）と落ちなさすぎだった。
+//    **「体力から落ち、技術は残る」**という基本が出ていなかった。
+//    `npbCareer` は既に加齢プロファイルを別に持っている（肩0.5 / 走塁0.6 /
+//    リードは落ちない）ので、こちらもそれに揃える。
 const STAT_GROWTH = {
-  meet:     { base: 1.9, cap: 99,  threshold: 70, rate: 0.05 },
-  power:    { base: 1.5, cap: 99,  threshold: 70, rate: 0.05 },
-  eye:      { base: 1.5, cap: 99,  threshold: 70, rate: 0.05 },
-  defense:  { base: 1.7, cap: 99,  threshold: 70, rate: 0.05 },
-  speed:    { base: 0.5, cap: 99,  threshold: 80, rate: 0.03 },
-  arm:      { base: 0.5, cap: 99,  threshold: 80, rate: 0.03 },
-  armP:     { base: 1.0, cap: 99,  threshold: 80, rate: 0.03 },  // 投手の肩
-  control:  { base: 1.9, cap: 99,  threshold: 70, rate: 0.05 },
-  stamina:  { base: 2.0, cap: 200, threshold: 80, rate: 0.03 },
-  velocity: { base: 0.5, cap: null, threshold: 150, rate: 0.20 },
+  meet:     { base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 1.15 },
+  power:    { base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.30 },
+  eye:      { base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.12 },
+  defense:  { base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 1.25 },
+  speed:    { base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 2.00 },
+  arm:      { base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 1.45 },
+  armP:     { base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 0.85 },  // 投手の肩
+  control:  { base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.50 },
+  stamina:  { base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 0.95 },
+  velocity: { base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 1.80 },
+  // ⚠ **変化球とリードは長らく年次成長の対象外だった**。社会人・独立・クラブの
+  //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
+  //    （大学プールだけが `applyUniversityGrowth` で伸ばしていた）。
+  //    どちらも「実戦で最も磨かれる」ものなので、実戦成長の対象に入れる。
+  breaking: { base: 1.3, cap: 100, threshold: 70, rate: 0.04, decline: 0.20 },
+  // リードは経験の積み上げ。**加齢で落ちない**（`npbCareer` の加齢処理と同じ扱い）
+  lead:     { base: 1.1, cap: 95,  threshold: 70, rate: 0.05, decline: 0 },
 };
 
 // --- 自由契約選手の自主トレ成長 ---
@@ -138,7 +153,7 @@ export function applyFreeAgentGrowth(pool) {
       if (delta >= 0) {
         return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
       }
-      return Math.max(1, current + Math.round(dampDecline(current, delta)));
+      return Math.max(1, current + Math.round(dampDecline(current, delta * (g.decline ?? 1))));
     };
 
     if (player.position === 'pitcher') {
@@ -281,22 +296,22 @@ const dampDecline = (current, delta) => Math.max(delta, -Math.max(1, current * D
 // 実際に回してから指名する（0 だと成長を一度も通らず、ここを動かしても測定に映らない）。
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
-  independent: { volume: 1.34, gain: 1.76, topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  independent: { volume: 1.34, gain: 1.16, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
   // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
   //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
   //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
   //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    volume: 0.64, gain: 1.78, topN: 2, strength: 1.3, weak: 0.85,
-    focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8,
+    volume: 0.64, gain: 1.28, topN: 2, strength: 1.3, weak: 0.85,
+    focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8, breaking: 1.8, lead: 1.7,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    volume: 0.86, gain: 1.44, topN: 2, strength: 1.25, weak: 0.9,
+    volume: 0.86, gain: 1.02, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
-             control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6 },
+             control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6, breaking: 0.5, lead: 0.5 },
   },
 };
 
@@ -367,7 +382,20 @@ export function applyCorporatePlayerGrowth(allTeams) {
       // カテゴリの得意分野を掛けてから並べる（社会人は技術を、クラブは体力を長所と見る）
       statEntries.sort((a, b) =>
         (b.val * (prof.focus?.[b.key] ?? 1.0)) - (a.val * (prof.focus?.[a.key] ?? 1.0)));
-      const strengthKeys = new Set(statEntries.slice(0, prof.topN).map(e => e.key));
+      // ⚠ **一芸（topN=1）は毎年引き直してはいけない**。年ごとにその時点の1位が
+      //    長所判定を受けるので、結果的に全能力が順番に伸びて**万能になる**
+      //    （実測: 有望素材＋意識100 の独立選手が32歳で
+      //     ミート88/パワー87/走力86/守備88）。一芸の設計と逆。
+      //    最初に決めた1つを持ち続ける（`_sharpenedTool` は選手に載るのでセーブされる）。
+      let strengthKeys;
+      if (prof.topN === 1) {
+        if (!player._sharpenedTool || !statEntries.some(e => e.key === player._sharpenedTool)) {
+          player._sharpenedTool = statEntries[0].key;
+        }
+        strengthKeys = new Set([player._sharpenedTool]);
+      } else {
+        strengthKeys = new Set(statEntries.slice(0, prof.topN).map(e => e.key));
+      }
       const weakKeys = new Set(statEntries.slice(-2).map(e => e.key));
       const specMult = (key) => {
         const shape = strengthKeys.has(key) ? prof.strength : weakKeys.has(key) ? prof.weak : 1.0;
@@ -392,7 +420,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
             current + Math.round(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
         }
 
-        return Math.max(1, current + Math.round(dampDecline(current, delta)));
+        return Math.max(1, current + Math.round(dampDecline(current, delta * (g.decline ?? 1))));
       };
 
       if (player.position === 'pitcher') {
@@ -406,6 +434,11 @@ export function applyCorporatePlayerGrowth(allTeams) {
         if (player.physical) {
           player.physical.arm = grow(player.physical.arm, 'armP');
         }
+        // 変化球: 実戦で投げ込むほど精度が上がる。ストレートは対象外
+        for (const pitch of (player.pitching?.arsenal || [])) {
+          if (pitch.type === 'straight') continue;
+          pitch.level = grow(pitch.level, 'breaking');
+        }
       } else {
         if (player.batting) {
           player.batting.meet = grow(player.batting.meet, 'meet');
@@ -418,6 +451,9 @@ export function applyCorporatePlayerGrowth(allTeams) {
         }
         if (player.fielding) {
           player.fielding.defense = grow(player.fielding.defense, 'defense');
+        }
+        if (player.position === 'catcher' && player.catching) {
+          player.catching.lead = grow(player.catching.lead ?? 30, 'lead');
         }
       }
 
