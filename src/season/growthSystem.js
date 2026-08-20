@@ -155,15 +155,15 @@ export const growthDecayRate = (base, gp = 1.0) =>
 //    実データのピーク: 走力22-24 / 肩24-26 / パワー27-29 / ミート26-27 /
 //                     守備26-28 / 選球眼28-32（晩成）/ 球速24-26 / 制球28-32
 const STAT_GROWTH = {
-  meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.92 },
-  power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 2.00 },
+  meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.66 },
+  power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 1.78 },
   eye:      { peak: 2, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.25 },
-  defense:  { peak: -1, ref: 50, base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 1.00 },
-  speed:    { peak: 4, ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 6.40 },
-  arm:      { peak: 6, ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 8.50 },
-  armP:     { peak: 6, ref: 50, base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 4.60 },  // 投手の肩
-  control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.62 },
-  stamina:  { peak: 2, base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 1.80 },
+  defense:  { peak: -1, ref: 50, base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 0.80 },
+  speed:    { peak: 4, ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 5.70 },
+  arm:      { peak: 6, ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 6.20 },
+  armP:     { peak: 6, ref: 50, base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 3.30 },  // 投手の肩
+  control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.44 },
+  stamina:  { peak: 2, base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 1.48 },
   velocity: { peak: 5, base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 6.00 },
   // ⚠ **変化球とリードは長らく年次成長の対象外だった**。社会人・独立・クラブの
   //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
@@ -196,7 +196,7 @@ export function applyFreeAgentGrowth(pool) {
     player.growthModifier = Math.max(-0.3, Math.round((player.growthModifier || 0) * 0.5 * 100) / 100);
 
     const basal = basalGrowth(age, gp);
-    const practice = FA_VOLUME * disciplineTrainMult(discipline);
+    const practice = FA_VOLUME * disciplineTrainMult(discipline) * youthMult(age);
 
     const grow = (current, key, baseMult = 1, capOverride = null) => {
       const g = STAT_GROWTH[key];
@@ -460,7 +460,14 @@ export function applyCorporatePlayerGrowth(allTeams) {
       //    レギュラー(240打席)の値は 1.25 のまま据え置き、**下を伸ばす**。
       //    控えは 0.45＝レギュラーの36%しか練習量を得られない。
       const activityMult = 0.55 + Math.min(0.95, activity / 300);   // 0.55〜1.50
-      const practice = (prof.volume ?? 1.0) * activityMult * disciplineTrainMult(discipline);
+      // ⚠ **若年前倒しは練習項にだけ掛けること**。「若いほど吸収が速い」は
+      //    **練習の吸収**の話で、基礎成長は `basalGrowth` が自前の年齢カーブを
+      //    持っている。実成長全体に掛けると**年齢の効果を二重に計上**する。
+      //    練習項の中に入れると `基礎 + 練習 = 0` の交点が動くので、
+      //    **衰え始める年齢の再較正とセット**になる（年配ほど練習で衰えを
+      //    抑えられなくなる＝実際の関係と同じ向き）。
+      const practice = (prof.volume ?? 1.0) * activityMult
+        * disciplineTrainMult(discipline) * youthMult(age);
 
       // 長所特化倍率: 選手の能力値の相対的な高さで成長に傾斜をかける
       // 長所(上位)はより伸び、短所は伸びにくい → 分業制・専門化を再現
@@ -523,7 +530,7 @@ export function applyCorporatePlayerGrowth(allTeams) {
           //    この関数が担当する能力は `applyAgeCurveChanges` の対象外に
           //    してあるので、ここで掛けないと体幹・器用さが効かなくなる
           //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
-          const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * youthMult(age) * formMult;
+          const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * formMult;
           return Math.min(capOverride ?? g.cap,
             current + stochasticRound(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
         }
