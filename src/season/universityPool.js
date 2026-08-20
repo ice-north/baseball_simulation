@@ -221,9 +221,9 @@ function generateHighSchoolPlayer(id) {
       if (isSideOrUnder) velocity -= 3;
       if (throws === 'left') velocity -= 3;
       abilities = {
-        meet:  g(36, 8, 0.8, 15, 'meet'),
-        power: g(28, 10, 0.7, 8, 'power'),
-        eye:   g(33, 8, 0.7, 10, 'eye'),
+        meet:  g(46, 8, 0.8, 15, 'meet'),
+        power: g(39, 10, 0.7, 8, 'power'),
+        eye:   g(45, 8, 0.7, 10, 'eye'),
         steal: Math.max(1, Math.round(nrm(24, 8) + buildMod.steal * 0.7)),
         speed: baseSpeed,
         arm: twoWayArm,
@@ -239,9 +239,9 @@ function generateHighSchoolPlayer(id) {
       const twoWayArm = Math.max(10, baseArm + r(10, 20));
       const velCap = getVelocityCap(twoWayArm); // 野手二刀流は肩力依存の自然な球速上限を維持
       abilities = {
-        meet: Math.max(5, Math.round(nrm(22, 9) + off)),
-        power: Math.max(8, Math.round(nrm(21, 10) + off + buildMod.power)),
-        eye: Math.max(5, Math.round(nrm(20, 8) + off * 0.8)),
+        meet: Math.max(5, Math.round(nrm(35, 9) + off)),
+        power: Math.max(8, Math.round(nrm(32, 10) + off + buildMod.power)),
+        eye: Math.max(5, Math.round(nrm(32, 8) + off * 0.8)),
         steal: Math.max(1, Math.round(nrm(22, 8) + off * 0.4 + buildMod.steal)),
         speed: baseSpeed,
         arm: twoWayArm,
@@ -294,9 +294,9 @@ function generateHighSchoolPlayer(id) {
     const velCap = getVelocityCap(armValue);
     abilities = isPositionCandidate ? {
       // 野手向き投手: 打撃能力は準野手レベル、転向候補
-      meet:  g(30, 9, 0.7, 12, 'meet'),
-      power: g(28, 11, 0.6, 8, 'power'),
-      eye:   g(27, 8, 0.6, 8, 'eye'),
+      meet:  g(40, 9, 0.7, 12, 'meet'),
+      power: g(39, 11, 0.6, 8, 'power'),
+      eye:   g(39, 8, 0.6, 8, 'eye'),
       steal: Math.max(1, Math.round(nrm(24, 9) + buildMod.steal * 0.8)),
       speed: baseSpeed,
       arm: armValue,
@@ -308,9 +308,9 @@ function generateHighSchoolPlayer(id) {
       stamina: Math.max(60, stamina)
     } : {
       // 通常投手: 打撃は野手より低いが、チームの中心選手らしく一定の素質あり
-      meet:  g(20, 8, 0.4, 5, 'meet'),
-      power: g(19, 10, 0.4, 6, 'power'),
-      eye:   g(20, 7, 0.4, 5, 'eye'),
+      meet:  g(30, 8, 0.4, 5, 'meet'),
+      power: g(30, 10, 0.4, 6, 'power'),
+      eye:   g(32, 7, 0.4, 5, 'eye'),
       steal: Math.max(1, Math.round(nrm(18, 8) + buildMod.steal * 0.6)),
       speed: baseSpeed,
       arm: armValue,
@@ -352,9 +352,15 @@ function generateHighSchoolPlayer(id) {
     baseSpeed = Math.max(1, baseSpeed + physMod.speedAdj);
     baseArm   = Math.max(1, baseArm   + physMod.armAdj);
 
-    let meet = Math.round(nrm(19, athSigma('meet', 9)) + athAdd('meet', 9) + off + pm.meet);
-    let power = Math.round(nrm(18, athSigma('power', 12)) + athAdd('power', 12) + off + buildMod.power + pm.power);
-    let eye = Math.round(nrm(18, athSigma('eye', 8)) + athAdd('eye', 8) + off * 0.8 + pm.eye);
+    // ⚠ **打撃だけ「小学生水準」で生成されていた**。能力値の物差し
+    //    （20=小学生 / 30=中学生 / 40=高校生 / 50=大学生 / 60=プロ及第点）に対し、
+    //    走力36.7・肩38.9・守備39.5 と身体系は高校生水準なのに、
+    //    ミート20.1・パワー20.9・選球眼19.0 と打撃だけ小学生水準だった。
+    //    その結果、リーグが高校生出身で埋まると**打撃だけが取り残されて打低になる**
+    //    （定常リーグ 打率.222 対 初期ロスター.248）。高校生水準へ引き上げる。
+    let meet = Math.round(nrm(29, athSigma('meet', 9)) + athAdd('meet', 9) + off + pm.meet);
+    let power = Math.round(nrm(27, athSigma('power', 12)) + athAdd('power', 12) + off + buildMod.power + pm.power);
+    let eye = Math.round(nrm(28, athSigma('eye', 8)) + athAdd('eye', 8) + off * 0.8 + pm.eye);
     let defense = Math.round(nrm(38, athSigma('defense', 13)) + athAdd('defense', 13) + off * 0.6 + buildMod.defense + pm.defense);
     let steal = Math.round(nrm(22, athSigma('steal', 9)) + athAdd('steal', 9) + off * 0.4 + buildMod.steal + pm.steal);
 

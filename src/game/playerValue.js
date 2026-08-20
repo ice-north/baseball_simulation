@@ -51,9 +51,9 @@ const W_SUB = 0.6;
 //    実際、投手の生成率を 41%→51% にした後に測ると 実測131/60 対 設定109/46 で、
 //    投手の指名シェアがプール比率より6pt高く出ていた。
 export const VALUE_DIST = {
-  P: { mean: 130, sd: 51 },
-  C: { mean: 118, sd: 39 },
-  F: { mean: 123, sd: 38 },
+  P: { mean: 127, sd: 48 },
+  C: { mean: 138, sd: 41 },
+  F: { mean: 144, sd: 38 },
 };
 
 // ⚠ **σは年齢帯ごとに持つこと**。年齢帯で幅が違う（高校生投手32 / 社会人投手34 など）ので、
@@ -61,9 +61,9 @@ export const VALUE_DIST = {
 // （上位120人の投手がプール比率42%に対して**20%**しか入らなかった）。
 // 「年齢による水準の差は残し、幅だけ揃える」のが正しい切り分け。
 export const BAND_SD = {
-  'P|young': 31, 'P|mid': 36, 'P|mature': 49,
-  'C|young': 25, 'C|mid': 28, 'C|mature': 41,
-  'F|young': 25, 'F|mid': 27, 'F|mature': 38,
+  'P|young': 31, 'P|mid': 33, 'P|mature': 45,
+  'C|young': 31, 'C|mid': 31, 'C|mature': 40,
+  'F|young': 31, 'F|mid': 30, 'F|mature': 37,
 };
 
 // 偏差値をドラフト評価の桁に合わせる係数。
