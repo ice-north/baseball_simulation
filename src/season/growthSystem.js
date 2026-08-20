@@ -9,7 +9,7 @@
 
 import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getRecoveryAgeBase, getStatPath, getStatName, getNestedValue, setNestedValue, MUSCLE_STATS, DEXTERITY_STATS, physiqueMultFor } from './growthUtils.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
-import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
+import { PITCHING_FORM_EFFECTS, FORM_PITCH_SYNERGY } from '../utils/constants.js';
 
 // --- 成長率(growthModifier/growthPotential)の年度更新 ---
 export function updateGrowthModifiers(allTeams, awards) {
@@ -85,6 +85,34 @@ export function updateGrowthModifiers(allTeams, awards) {
 //    天井を 0 にしても 6.1%（12なら6.3%）で、強めても副作用しか増えない。
 // 年次成長に掛ける体格補正の幅。毎年・全能力に掛かるので、キャンプ(1.0)より弱くする
 const PHYSIQUE_W = 0.30;
+
+// 新球種の習得。⚠ **大学プールにしか無かった**。社会人・独立・クラブの投手は
+// キャンプ以外に球種を増やす経路が無く、実測で12年進化させても球種数が
+// **3.00 固定**のままだった。持ち球の「幅」は打者の読み合い
+// （`arsenal.effectiveArsenalSize`）に直結するので、引き出しが増えないと
+// 何年経っても同じ投手のままになる。
+// 技術の場所である社会人が最も高く、指導者の居ないクラブは稀。
+const NEW_PITCH_RATE = { corporate: 0.10, independent: 0.05, club: 0.02 };
+const ALL_PITCH_TYPES = ['slider', 'curve', 'fork', 'changeup', 'sinker', 'shoot',
+                         'cutter', 'splitter', 'twoSeam', 'palm', 'knuckle'];
+function tryLearnNewPitch(player, categoryKey, discipline) {
+  const arsenal = player.pitching?.arsenal;
+  if (!arsenal) return;
+  // プロ意識が高いほど新しい球に手を出す（意識50で基準）
+  const rate = (NEW_PITCH_RATE[categoryKey] ?? 0.05) * (0.5 + discipline / 100);
+  if (Math.random() >= rate) return;
+  const have = new Set(arsenal.map(a => a.type));
+  const affinity = FORM_PITCH_SYNERGY[player.pitching?.form] || [];
+  let pool = affinity.filter(t => !have.has(t));
+  if (pool.length === 0) pool = ALL_PITCH_TYPES.filter(t => !have.has(t));
+  if (pool.length === 0) return;
+  const type = pool[Math.floor(Math.random() * pool.length)];
+  const isAffinity = affinity.includes(type);
+  const id = arsenal.length > 0 ? Math.max(...arsenal.map(a => a.id || 0)) + 1 : 1;
+  // ⚠ 覚えたては Lv10〜25。CLAUDE.md の実測では **Lv10 は防御率がほぼ変わらず
+  //    四球だけ +0.9 増える**＝覚えたてはむしろ損。磨いて初めて価値が出る。
+  arsenal.push({ id, type, level: Math.floor(Math.random() * 16) + (isAffinity ? 12 : 6) });
+}
 
 const POTENTIAL_CEILING_W = 12;
 const POTENTIAL_RATE_W = 0.20;
@@ -452,6 +480,8 @@ export function applyCorporatePlayerGrowth(allTeams) {
           if (pitch.type === 'straight') continue;
           pitch.level = grow(pitch.level, 'breaking');
         }
+        // 持ち球そのものが増えることもある（若いうちほど手を出す）
+        if (age <= 28) tryLearnNewPitch(player, isClub ? 'club' : isIndependent ? 'independent' : 'corporate', discipline);
       } else {
         if (player.batting) {
           player.batting.meet = grow(player.batting.meet, 'meet');

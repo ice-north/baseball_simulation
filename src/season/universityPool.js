@@ -5,7 +5,7 @@
 // ============================================================
 
 import { generateRandomPlayerName } from '../data/playerNames.js';
-import { generateCatcherLead } from '../utils/constants.js';
+import { generateCatcherLead, taperLow } from '../utils/constants.js';
 import { generatePositionFitness, generateRandomArsenal, generateTwoWayPositionFitness } from './tryoutSystem.js';
 import { getUniversityGrowthMultiplier, UNIVERSITY_TEAMS, getUniversityTeamsByRank } from '../university/universityTeamsData.js';
 import { assignHighSchool } from '../data/highSchoolData.js';
@@ -141,8 +141,10 @@ function generateHighSchoolPlayer(id) {
   else                       { tier = 'E'; off = -7; }
 
   // === Phase 2: 基礎身体能力を先に生成（投手/野手決定の材料）===
-  let baseArm = Math.max(1, Math.round(nrm(38, athSigma('arm', 14)) + athAdd('arm', 14) + off * 0.5 + buildMod.arm));
-  let baseSpeed = Math.max(1, Math.round(nrm(35, athSigma('speed', 14)) + athAdd('speed', 14) + buildMod.speed));
+  // ⚠ 走る・投げるは**全員が必ずやる身体動作**なので、実在しない水準（20未満）は畳む。
+  //    以前は高校生プールが素通りで、ドラフト1〜2位に**走力8**の選手が出ていた。
+  let baseArm = taperLow(Math.max(1, Math.round(nrm(38, athSigma('arm', 14)) + athAdd('arm', 14) + off * 0.5 + buildMod.arm)));
+  let baseSpeed = taperLow(Math.max(1, Math.round(nrm(35, athSigma('speed', 14)) + athAdd('speed', 14) + buildMod.speed)));
 
   // === Phase 3: 投手/野手を肩力ベースで決定 ===
   // 肩が強いほど投手になる確率が上がる。
@@ -225,7 +227,7 @@ function generateHighSchoolPlayer(id) {
         steal: Math.max(1, Math.round(nrm(24, 8) + buildMod.steal * 0.7)),
         speed: baseSpeed,
         arm: twoWayArm,
-        defense: g(42, 10, 0.5, 5, 'defense'),
+        defense: taperLow(g(42, 10, 0.5, 5, 'defense')),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
         recovery: g(62, 9, 0, 42),
         velocity: Math.max(110, Math.min(twoWayVelCap, velocity)),
@@ -298,7 +300,7 @@ function generateHighSchoolPlayer(id) {
       steal: Math.max(1, Math.round(nrm(24, 9) + buildMod.steal * 0.8)),
       speed: baseSpeed,
       arm: armValue,
-      defense: g(40, 10, 0.5, 5, 'defense'),
+      defense: taperLow(g(40, 10, 0.5, 5, 'defense')),
       bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(62, 9, 0, 42),
       velocity: Math.max(110, Math.min(velCap, velocity)),
@@ -312,7 +314,7 @@ function generateHighSchoolPlayer(id) {
       steal: Math.max(1, Math.round(nrm(18, 8) + buildMod.steal * 0.6)),
       speed: baseSpeed,
       arm: armValue,
-      defense: g(36, 10, 0.4, 1, 'defense'),
+      defense: taperLow(g(36, 10, 0.4, 1, 'defense')),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(62, 9, 0, 42),
       velocity: Math.max(110, Math.min(velCap, velocity)),
@@ -365,8 +367,8 @@ function generateHighSchoolPlayer(id) {
     abilities = {
       meet: Math.max(5, meet), power: Math.max(8, power),
       eye: Math.max(5, eye), steal: Math.max(1, steal),
-      speed: Math.max(1, baseSpeed), arm: Math.max(1, baseArm),
-      defense: Math.max(1, defense),
+      speed: taperLow(Math.max(1, baseSpeed)), arm: taperLow(Math.max(1, baseArm)),
+      defense: taperLow(Math.max(1, defense)),
       bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(62, 9, 0, 42),
       velocity: Math.max(90, Math.round(nrm(85 + baseArm * 0.6, 5))),

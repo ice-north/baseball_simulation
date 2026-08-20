@@ -23,6 +23,7 @@
 
 import { generateTryoutCandidates, selectPlayerForAI, generateScoutComment } from '../season/tryoutSystem.js';
 import { generateRandomPlayerName } from '../data/playerNames.js';
+import { taperLow } from '../utils/constants.js';
 import { generateStaff, STAFF_GRADE_CAP } from './staffData.js';
 import { getTeamsByRegion, REGIONS, getAllTeamsEffective } from './corporateTeamsData.js';
 import { initializeWorld, WORLD_DATA } from './worldData.js';
@@ -350,10 +351,7 @@ export const generateCorporateRoster = (teamDef, year = 1, sizeOverride = null) 
   //    「守備の名手で打てない」「ノーコンだが速い」という一芸型を潰してしまうため。
   // ⚠ 実際に制球へ入れたら **防御率 -0.27 / BB/9 -0.51** と実害が出た。
   //    制球は捨ててよい能力（ノーコン速球派は成立する）なので対象外にしてある。
-  const IMPLAUSIBLE_FLOOR = 20;   // これ未満は小学生以下＝そもそも競技として成立しない
-  const TAPER_K = 0.25;           // 境より下をどれだけ残すか（0=全員が境、1=無変更）
-  const taperLow = (val, floor = IMPLAUSIBLE_FLOOR) =>
-    val >= floor ? val : Math.max(1, Math.round(floor - (floor - val) * TAPER_K));
+  // `taperLow` は utils/constants.js に一本化してある（高校生プールと共有）
 
   candidates.forEach(p => {
     p.batting.meet = scaleAndJitter(p.batting.meet, 6);
