@@ -85,11 +85,27 @@ function applyAging(a) {
   let delta;
   if (age <= 24) delta = (2.6 - (age - 18) * 0.25) * gp;
   else if (age <= 28) delta = 0.5 * gp;
-  else delta = -(age - 28) * 0.75;
+  // ⚠ 衰退の傾きは 0.75 では急すぎた（10年で累計 -41点）。実データ基準の
+  //    減衰率（能力の -2〜-22%）に合わせて 0.22 にし、能力ごとの差は
+  //    `DECLINE_MULT` で付ける。
+  else delta = -(age - 28) * 0.22;
 
+  // ⚠ **成長と衰退で同じプロファイルを使ってはいけない**。アマ側
+  //    （`growthSystem.STAT_GROWTH[].decline`）で直したのと同じ欠陥がここにもあった。
+  //    実測（28→38歳）: ミート **-76%** / 選球眼 **-76%** / 制球 **-79%** / 走力 -48% と
+  //    38歳の選手がミート60→14 まで落ちていた。しかも**順序が逆**で、
+  //    コメントに「制球は歳を取っても保たれやすい」と書いてあるのに
+  //    制球(1.15)が球速(0.55)の2倍速く落ちていた。
+  //    衰退側はアマ側と同じ実データ基準（走力-22 / 肩-15 / スタミナ-15 /
+  //    パワー-10 / 守備-10 / ミート-8 / 球速-8 / 制球-3 / 選球眼-2%）に揃える。
+  const DECLINE_MULT = {
+    velocity: 0.97, control: 0.15, stamina: 1.05,
+    meet: 0.40, power: 0.45, eye: 0.09, speed: 1.09, steal: 1.00, arm: 0.74, defense: 0.50,
+  };
   const bump = (obj, key, mult = 1, lo = 1, hi = 100) => {
     if (!obj || obj[key] == null) return;
-    const v = obj[key] + delta * mult * (0.6 + Math.random() * 0.8);
+    const m = delta < 0 ? (DECLINE_MULT[key] ?? mult) : mult;
+    const v = obj[key] + delta * m * (0.6 + Math.random() * 0.8);
     obj[key] = Math.max(lo, Math.min(hi, Math.round(v)));
   };
 
