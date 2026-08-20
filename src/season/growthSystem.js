@@ -145,24 +145,33 @@ export const growthDecayRate = (base, gp = 1.0) =>
 //    **「体力から落ち、技術は残る」**という基本が出ていなかった。
 //    `npbCareer` は既に加齢プロファイルを別に持っている（肩0.5 / 走塁0.6 /
 //    リードは落ちない）ので、こちらもそれに揃える。
+// ⚠ **`peak` はピーク年齢のずらし（年）**。これが無いと
+//    **ピーク年齢と成長速度が同じパラメーターで決まってしまう**。
+//    成長量 = base × (基礎 + 練習 × 実効重み) で基礎は全能力共通なので、
+//    **実効重みが小さい能力ほど早く交点に達する**。実測でピーク年齢が
+//    実効重みときれいに並んでいた（ミート4.69→27歳 / 走力0.34→**19歳**）。
+//    その結果 **走力と肩は高校を出た瞬間が最高**で、あとは落ちるだけだった。
+//    「伸びにくい」ことと「ピークが早い」ことは別の話なので、軸を分ける。
+//    実データのピーク: 走力22-24 / 肩24-26 / パワー27-29 / ミート26-27 /
+//                     守備26-28 / 選球眼28-32（晩成）/ 球速24-26 / 制球28-32
 const STAT_GROWTH = {
-  meet:     { ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 1.15 },
-  power:    { ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.46 },
-  eye:      { ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.12 },
-  defense:  { ref: 50, base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 1.30 },
-  speed:    { ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 2.60 },
-  arm:      { ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 1.85 },
-  armP:     { ref: 50, base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 0.92 },  // 投手の肩
-  control:  { ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.62 },
-  stamina:  { base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 1.15 },
-  velocity: { base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 2.30 },
+  meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.92 },
+  power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 2.00 },
+  eye:      { peak: 2, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.25 },
+  defense:  { peak: -1, ref: 50, base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 1.00 },
+  speed:    { peak: 4, ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 6.40 },
+  arm:      { peak: 6, ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 8.50 },
+  armP:     { peak: 6, ref: 50, base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 4.60 },  // 投手の肩
+  control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.62 },
+  stamina:  { peak: 2, base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 1.80 },
+  velocity: { peak: 5, base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 6.00 },
   // ⚠ **変化球とリードは長らく年次成長の対象外だった**。社会人・独立・クラブの
   //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
   //    （大学プールだけが `applyUniversityGrowth` で伸ばしていた）。
   //    どちらも「実戦で最も磨かれる」ものなので、実戦成長の対象に入れる。
-  breaking: { ref: 50, base: 1.3, cap: 100, threshold: 70, rate: 0.04, decline: 0.20 },
+  breaking: { peak: 4, ref: 50, base: 1.3, cap: 100, threshold: 70, rate: 0.04, decline: 0.20 },
   // リードは経験の積み上げ。**加齢で落ちない**（`npbCareer` の加齢処理と同じ扱い）
-  lead:     { ref: 50, base: 1.1, cap: 95,  threshold: 70, rate: 0.05, decline: 0 },
+  lead:     { peak: 6, ref: 50, base: 1.1, cap: 95,  threshold: 70, rate: 0.05, decline: 0 },
 };
 
 // --- 自由契約選手の自主トレ成長 ---
@@ -191,11 +200,12 @@ export function applyFreeAgentGrowth(pool) {
 
     const grow = (current, key, baseMult = 1, capOverride = null) => {
       const g = STAT_GROWTH[key];
-      const delta = g.base * baseMult * (basal + practice) * FA_GAIN * (0.6 + Math.random() * 0.6);
+      const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
+      const delta = g.base * baseMult * (statBasal + practice) * FA_GAIN * (0.6 + Math.random() * 0.6);
       if (delta >= 0) {
-        return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
+        return Math.min(capOverride ?? g.cap, current + stochasticRound(delta * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
       }
-      return Math.max(1, current + Math.round(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
+      return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
     };
 
     if (player.position === 'pitcher') {
@@ -273,10 +283,10 @@ const BASAL_FLOOR = -1.8;
  *    年齢の効果はこの関数が単独で担う（`applyAgeCurveChanges` の
  *    `getAgeGrowthBase` と合わせて2箇所。それ以外に年齢の項を作らない）。
  */
-export function basalGrowth(age, gp = 1.0) {
+export function basalGrowth(age, gp = 1.0, peakShift = 0) {
   const g = Math.max(0.3, Math.min(1.8, gp));
   const peak = g * BASAL_PEAK;
-  const peakEnd = BASAL_PEAK_END + (g - 1) * BASAL_GP_SHIFT;
+  const peakEnd = BASAL_PEAK_END + (g - 1) * BASAL_GP_SHIFT + peakShift;
   if (age <= peakEnd) return peak;
   const x = age - peakEnd;
   return Math.max(BASAL_FLOOR, peak - BASAL_DECAY * x * (1 + BASAL_ACCEL * x));
@@ -308,6 +318,18 @@ const dampDecline = (current, delta) => Math.max(delta, -Math.max(1, current * D
 //    30代で同じ割合を失う。`ref` を基準に比例させると水準に依らず一定になる。
 // ⚠ `ref` を持たない能力（スタミナ・球速）は**スケールが違う**ので絶対量のまま
 //    （球速135を基準に比例させると120km投手と150km投手で失う km/h が倍違う）。
+// ⚠ **確率的丸め**。`Math.round` は 0.5 未満の成長を毎年 0 に潰す。
+//    実測で走力の年間成長は **0.364** しかなく、`Math.round` で
+//    **一度も伸びないまま19歳がピーク**になっていた（肩・球速も同じ）。
+//    base の小さい能力（走力0.5 / 肩0.5 / 球速0.5）は構造的にこれを踏む。
+//    端数の確率で切り上げれば**期待値が正確に保たれる**（0.36 なら36%で+1）。
+//    ⚠ 下限クランプや base の引き上げで代用しないこと——前者は平均を歪め、
+//      後者は「走力は才能で決まる」という設計（実効重みの序列）を壊す。
+const stochasticRound = (v) => {
+  const f = Math.floor(v);
+  return f + (Math.random() < (v - f) ? 1 : 0);
+};
+
 const DECLINE_SCALE_CLAMP = [0.55, 1.9];
 const declineScale = (current, ref) => {
   if (!ref) return 1;
@@ -351,20 +373,20 @@ const declineScale = (current, ref) => {
 // 実際に回してから指名する（0 だと成長を一度も通らず、ここを動かしても測定に映らない）。
 const CATEGORY_GROWTH = {
   // 独立: たった1つの武器に極端に寄せる。それ以外はほとんど伸びない
-  independent: { volume: 1.34, gain: 0.98, topN: 1, strength: 2.6, weak: 0.20, focus: null },
+  independent: { volume: 1.34, gain: 0.88, topN: 1, strength: 2.6, weak: 0.20, focus: null },
   // 社会人: **技術で完成させる場所**。3カテゴリで技術系が最も伸びる。
   // ⚠ フィジカルを 0.7 まで下げたうえ技術も 1.5 止まりだったため、
   //    高卒→社会人ルート（19→22歳の3年）が**全進路で最弱**になっていた
   //    （実測 ドラフト到達 3〜6% 対 大学21〜24%）。実業団は設備も指導者も
   //    実戦もあるのだから、技術に関しては大学を上回って良い。
   corporate: {
-    volume: 0.64, gain: 1.06, topN: 2, strength: 1.3, weak: 0.85,
+    volume: 0.64, gain: 0.90, topN: 2, strength: 1.3, weak: 0.85,
     focus: { control: 1.9, meet: 1.9, eye: 1.8, defense: 1.8, breaking: 1.8, lead: 1.7,
              velocity: 0.8, speed: 0.8, arm: 0.9, stamina: 1.0, power: 1.0 },
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    volume: 0.86, gain: 0.28, topN: 2, strength: 1.25, weak: 0.9,
+    volume: 0.86, gain: 0.24, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6, breaking: 0.5, lead: 0.5 },
   },
@@ -463,7 +485,8 @@ export function applyCorporatePlayerGrowth(allTeams) {
         const g = STAT_GROWTH[key];
         const specKey = key === 'armP' ? 'arm' : key;
         // 基礎は無方向（身体が勝手に育つ）。練習だけがカテゴリの性格を受ける
-        const delta = g.base * baseMult * (basal + practice * specMult(specKey))
+        const statBasal = g.peak ? basalGrowth(age, gp, g.peak) : basal;
+        const delta = g.base * baseMult * (statBasal + practice * specMult(specKey))
           * rankMult * (prof.gain ?? 1.0) * (0.6 + Math.random() * 0.6);
         if (delta >= 0) {
           // ⚠ 体格補正は**成長方向にだけ**掛ける（衰退には効かない）。
@@ -472,10 +495,10 @@ export function applyCorporatePlayerGrowth(allTeams) {
           //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
           const phys = physiqueMultFor(player, specKey, PHYSIQUE_W) * youthMult(age);
           return Math.min(capOverride ?? g.cap,
-            current + Math.round(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
+            current + stochasticRound(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
         }
 
-        return Math.max(1, current + Math.round(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
+        return Math.max(1, current + stochasticRound(dampDecline(current, delta * (g.decline ?? 1) * declineScale(current, g.ref))));
       };
 
       if (player.position === 'pitcher') {
