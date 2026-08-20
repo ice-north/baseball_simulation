@@ -5,6 +5,28 @@
 export const PHYSICAL_STATS = ['speed', 'arm', 'stamina', 'velocity', 'bodyStamina', 'recovery'];
 export const TECHNICAL_STATS = ['meet', 'power', 'eye', 'control', 'defense', 'steal', 'bunt'];
 
+
+// 体幹(muscle)・器用さ(dexterity)がどの能力の成長に効くか。
+// ⚠ **3箇所に同じ配列が別々に書かれていた**（`applyAgeCurveChanges` /
+//    `campTraining` / 年次成長）。物差しを二重に作らないこと。
+export const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
+export const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal', 'bunt'];
+
+/**
+ * 成長方向にのみ掛ける体格補正（既定 0.5〜1.5倍）。衰退には効かない。
+ *
+ * ⚠ **`w` で効きの幅を変えられる**。同じ倍率でも「掛かる回数」が違うため。
+ *    キャンプは1クールで1能力にしか掛からないが、年次成長は**毎年・全能力**に
+ *    掛かるので、同じ 0.5〜1.5 を使うと累積が桁違いになる
+ *    （実測: 7年で 体幹20と100の差が +14.6。キャンプ経由は +6）。
+ */
+export function physiqueMultFor(player, stat, w = 1.0) {
+  let raw = 1.0;
+  if (MUSCLE_STATS.includes(stat)) raw = 0.5 + ((player?.physical?.muscle ?? 50) / 100);
+  else if (DEXTERITY_STATS.includes(stat)) raw = 0.5 + ((player?.physical?.dexterity ?? 50) / 100);
+  return 1.0 + (raw - 1.0) * w;
+}
+
 export function getAgeGrowthBase(age, isPhysical) {
   if (isPhysical) {
     if (age <= 20) return 0.8;

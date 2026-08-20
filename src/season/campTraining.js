@@ -3,7 +3,7 @@
 // メイン練習・サブ練習・チーム一括実行
 // ============================================================
 
-import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
+import { PHYSICAL_STATS, getAgeGrowthBase, getStatPath, getStatName, getNestedValue, setNestedValue, physiqueMultFor } from './growthUtils.js';
 import { PITCHING_FORM_EFFECTS, getPitchTypeName } from '../utils/constants.js';
 import { syncPositionToFitness, getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 
@@ -1053,16 +1053,7 @@ export function executeCampTraining(player, trainingType, newPitchType, staffBon
     const talentMult = TALENT_STAT_MULTIPLIERS[targetStat] ?? 1.0;
 
     // 体幹/器用さによる成長方向の補正（0.5〜1.5倍）
-    const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
-    const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal', 'bunt'];
-    const muscle = player.physical?.muscle ?? 50;
-    const dexterity = player.physical?.dexterity ?? 50;
-    let physiqueMult = 1.0;
-    if (MUSCLE_STATS.includes(targetStat)) {
-      physiqueMult = 0.5 + (muscle / 100) * 1.0;
-    } else if (DEXTERITY_STATS.includes(targetStat)) {
-      physiqueMult = 0.5 + (dexterity / 100) * 1.0;
-    }
+    const physiqueMult = physiqueMultFor(player, targetStat);
     // プロ意識による練習効率（プロ意識0=50%, 50=100%, 100=150%）
     const discipline = player.personality?.discipline ?? 50;
     const disciplineMult = 0.5 + (discipline / 100) * 1.0;

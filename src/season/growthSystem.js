@@ -7,7 +7,7 @@
 // ヘルパーのみに依存し、他の年間進行ロジックには依存しない（循環参照なし）。
 // ============================================================
 
-import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getRecoveryAgeBase, getStatPath, getStatName, getNestedValue, setNestedValue } from './growthUtils.js';
+import { PHYSICAL_STATS, TECHNICAL_STATS, getAgeGrowthBase, getRecoveryAgeBase, getStatPath, getStatName, getNestedValue, setNestedValue, MUSCLE_STATS, DEXTERITY_STATS, physiqueMultFor } from './growthUtils.js';
 import { getVelocityCap, getVelocityCatchupMult } from '../utils/physics.js';
 import { PITCHING_FORM_EFFECTS } from '../utils/constants.js';
 
@@ -83,6 +83,9 @@ export function updateGrowthModifiers(allTeams, awards) {
 //    実効天井（減衰が1割まで落ちる位置）が gp0.6→80 / 1.0→88 / 1.4→94 に収まる値にする。
 // ⚠ 成長率の説明力は**この天井ではなく `BASAL_GP_SHIFT` がほとんど稼いでいる**。
 //    天井を 0 にしても 6.1%（12なら6.3%）で、強めても副作用しか増えない。
+// 年次成長に掛ける体格補正の幅。毎年・全能力に掛かるので、キャンプ(1.0)より弱くする
+const PHYSIQUE_W = 0.30;
+
 const POTENTIAL_CEILING_W = 12;
 const POTENTIAL_RATE_W = 0.20;
 const gpClamp = (gp) => Math.max(0.3, Math.min(1.8, gp ?? 1.0));
@@ -380,8 +383,15 @@ export function applyCorporatePlayerGrowth(allTeams) {
         const delta = g.base * baseMult * (basal + practice * specMult(specKey))
           * rankMult * (prof.gain ?? 1.0) * (0.6 + Math.random() * 0.6);
         if (delta >= 0) {
-          return Math.min(capOverride ?? g.cap, current + Math.round(delta * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
+          // ⚠ 体格補正は**成長方向にだけ**掛ける（衰退には効かない）。
+          //    この関数が担当する能力は `applyAgeCurveChanges` の対象外に
+          //    してあるので、ここで掛けないと体幹・器用さが効かなくなる
+          //    （実測: 体幹20と100の7年後の差が 3.3 → 0.1 に潰れていた）。
+          const phys = physiqueMultFor(player, specKey, PHYSIQUE_W);
+          return Math.min(capOverride ?? g.cap,
+            current + Math.round(delta * phys * decayMult(current, growthThreshold(g.threshold, gp), growthDecayRate(g.rate, gp))));
         }
+
         return Math.max(1, current + Math.round(dampDecline(current, delta)));
       };
 
@@ -470,16 +480,7 @@ export function applyAgeCurveChanges(allTeams) {
           const ageTalentMult = AGE_TALENT_MULT[stat] ?? 1.0;
 
           // 体幹/器用さによる成長方向の補正（成長方向のみ適用、衰退には影響しない）
-          const MUSCLE_STATS = ['power', 'arm', 'speed', 'velocity', 'bodyStamina'];
-          const DEXTERITY_STATS = ['meet', 'eye', 'defense', 'control', 'steal'];
-          const muscle = player.physical?.muscle ?? 50;
-          const dexterity = player.physical?.dexterity ?? 50;
-          let physiqueMult = 1.0;
-          if (MUSCLE_STATS.includes(stat)) {
-            physiqueMult = 0.5 + (muscle / 100) * 1.0;
-          } else if (DEXTERITY_STATS.includes(stat)) {
-            physiqueMult = 0.5 + (dexterity / 100) * 1.0;
-          }
+          const physiqueMult = physiqueMultFor(player, stat);
 
           const effectiveRaw = (player.growthPotential ?? 1.0) + (player.growthModifier || 0);
           const growthPotential = Math.max(0, Math.min(1.8, effectiveRaw));
