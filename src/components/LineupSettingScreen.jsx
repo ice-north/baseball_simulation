@@ -1153,6 +1153,10 @@ const LineupSettingScreen = ({ teamName, onBack }) => {
           <TutorialHint id="lineup-dnd" title="スタメンの組み方">
             右の控え選手を<b className="text-cyan-200">ドラッグ＆ドロップ</b>で打順枠へ入れられます。枠どうしをドラッグすれば打順の入れ替え、控えへ戻せば外せます（クリック操作も可）。「自動」ボタンで最適オーダーを組むこともできます。
           </TutorialHint>
+          <TutorialHint id="lineup-playing-time" title="起用は育成でもある">
+            <b className="text-cyan-200">試合に出た選手ほど伸びます。</b>1年フル出場した若手は、ほとんど出番の無かった選手の<b className="text-cyan-200">2倍以上</b>成長します（実測: 300打席で能力合計 +12.7 に対し、0打席では +5.8）。
+            いま勝つために主力を並べるか、数年後のために若手を我慢して使うか——<b className="text-cyan-200">スタメンを決めることは育成方針を決めること</b>でもあります。
+          </TutorialHint>
           <div className="grid grid-cols-12 gap-4">
             {/* 左側: スタメン (4/12) */}
             <div className="bg-gray-800/80 rounded-xl border border-gray-700/50 col-span-4 overflow-hidden">

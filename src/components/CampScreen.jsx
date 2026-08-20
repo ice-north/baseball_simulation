@@ -700,7 +700,8 @@ const CampScreen = ({ onComplete, allTeams, seasonData, gameMode, maxRounds = 4,
         </div>
 
         <TutorialHint id="camp-intro" title="キャンプで選手を育てる">
-          各クールごとに選手へ<b className="text-cyan-200">メイン練習＋サブ練習</b>を割り当てて能力を伸ばします。若い選手ほど伸びやすく、<b className="text-cyan-200">プロ意識</b>が高いほど成長します。体力を鍛えると疲労に強く選手寿命が延びます。Year2以降は有望株を<b className="text-cyan-200">派遣</b>に出して大きく伸ばすこともできます。
+          各クールごとに選手へ<b className="text-cyan-200">メイン練習＋サブ練習</b>を割り当てて能力を伸ばします。<b className="text-cyan-200">若い選手ほど伸びやすく</b>（19歳の伸びは25歳の2倍以上）、<b className="text-cyan-200">精神</b>グレードが高いほど練習が身につきます。
+          <br />選手が伸びるのは練習だけではありません。<b className="text-cyan-200">シーズン中に試合へ出た量も同じくらい効きます</b>——1年フル出場した若手は、出番の無かった選手の2倍以上成長します。体力を鍛えると疲労に強く選手寿命が延びます。Year2以降は有望株を<b className="text-cyan-200">派遣</b>に出して大きく伸ばすこともできます。
         </TutorialHint>
 
         {/* ランク変動通知 */}
