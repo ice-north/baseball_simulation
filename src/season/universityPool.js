@@ -111,6 +111,22 @@ function generateHighSchoolPlayer(id) {
     return mu + sigma * Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * b);
   };
 
+  // === 共通の運動能力因子（五ツール型を生まれさせる）===
+  // ⚠ 旧実装は能力を**独立に**引いていたため、能力どうしの相関がほぼ0だった
+  //    （実測: 走力-肩 -0.03 / 走力-守備 0.10 / ミート-パワー 0.17）。
+  //    実データのツール間相関は 0.2〜0.4 で、特に運動能力系（走力・肩・守備）は
+  //    互いに高い。相関が無いと**「走攻守そろった逸材」も「全部だめな選手」も
+  //    出ない**——全員が凸凹の寄せ集めになり、ドラフト1位の見た目が地味になる。
+  // ⚠ **周辺分布を変えないこと**。共通因子を足すだけだと各能力の分散が増えて
+  //    リーグの較正が動く。σ を √(1-af²) に絞って合計の分散を保つ。
+  const ath = nrm(0, 1);
+  const ATH = {   // 各能力が運動能力因子から受け取る割合（相関 = af_i × af_j）
+    speed: 0.60, arm: 0.60, defense: 0.50, steal: 0.50, power: 0.45, bodyStamina: 0.40,
+    meet: 0.30, eye: 0.25, velocity: 0.35, control: 0.15, stamina: 0.30, recovery: 0.25,
+  };
+  const athAdd = (stat, sigma) => ath * sigma * (ATH[stat] ?? 0);
+  const athSigma = (stat, sigma) => sigma * Math.sqrt(1 - (ATH[stat] ?? 0) ** 2);
+
   // === 才能ランク（連続分布）===
   const talentRoll = Math.random() * 100;
   let tier, off;
@@ -125,8 +141,8 @@ function generateHighSchoolPlayer(id) {
   else                       { tier = 'E'; off = -7; }
 
   // === Phase 2: 基礎身体能力を先に生成（投手/野手決定の材料）===
-  let baseArm = Math.max(1, Math.round(nrm(38, 14) + off * 0.5 + buildMod.arm));
-  let baseSpeed = Math.max(1, Math.round(nrm(35, 14) + buildMod.speed));
+  let baseArm = Math.max(1, Math.round(nrm(38, athSigma('arm', 14)) + athAdd('arm', 14) + off * 0.5 + buildMod.arm));
+  let baseSpeed = Math.max(1, Math.round(nrm(35, athSigma('speed', 14)) + athAdd('speed', 14) + buildMod.speed));
 
   // === Phase 3: 投手/野手を肩力ベースで決定 ===
   // 肩が強いほど投手になる確率が上がる。
@@ -186,8 +202,11 @@ function generateHighSchoolPlayer(id) {
   }
 
   // === Phase 5: 能力生成 ===
-  const g = (mu, sigma, tf = 0, floor = 1) =>
-    Math.max(floor, Math.round(nrm(mu, sigma) + off * tf));
+  /** stat 名を渡すと運動能力因子が乗る。渡さなければ従来どおり独立 */
+  const g = (mu, sigma, tf = 0, floor = 1, stat = null) =>
+    Math.max(floor, Math.round(
+      nrm(mu, stat ? athSigma(stat, sigma) : sigma)
+      + (stat ? athAdd(stat, sigma) : 0) + off * tf));
 
   let abilities;
   if (isTwoWay) {
@@ -200,13 +219,13 @@ function generateHighSchoolPlayer(id) {
       if (isSideOrUnder) velocity -= 3;
       if (throws === 'left') velocity -= 3;
       abilities = {
-        meet:  g(36, 8, 0.8, 15),
-        power: g(28, 10, 0.7, 8),
-        eye:   g(33, 8, 0.7, 10),
+        meet:  g(36, 8, 0.8, 15, 'meet'),
+        power: g(28, 10, 0.7, 8, 'power'),
+        eye:   g(33, 8, 0.7, 10, 'eye'),
         steal: Math.max(1, Math.round(nrm(24, 8) + buildMod.steal * 0.7)),
         speed: baseSpeed,
         arm: twoWayArm,
-        defense: g(42, 10, 0.5, 5),
+        defense: g(42, 10, 0.5, 5, 'defense'),
         bodyStamina: g(47 + buildMod.bodyStamina, 10, 0, 15),
         recovery: g(62, 9, 0, 42),
         velocity: Math.max(110, Math.min(twoWayVelCap, velocity)),
@@ -273,13 +292,13 @@ function generateHighSchoolPlayer(id) {
     const velCap = getVelocityCap(armValue);
     abilities = isPositionCandidate ? {
       // 野手向き投手: 打撃能力は準野手レベル、転向候補
-      meet:  g(30, 9, 0.7, 12),
-      power: g(28, 11, 0.6, 8),
-      eye:   g(27, 8, 0.6, 8),
+      meet:  g(30, 9, 0.7, 12, 'meet'),
+      power: g(28, 11, 0.6, 8, 'power'),
+      eye:   g(27, 8, 0.6, 8, 'eye'),
       steal: Math.max(1, Math.round(nrm(24, 9) + buildMod.steal * 0.8)),
       speed: baseSpeed,
       arm: armValue,
-      defense: g(40, 10, 0.5, 5),
+      defense: g(40, 10, 0.5, 5, 'defense'),
       bodyStamina: g(46 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(62, 9, 0, 42),
       velocity: Math.max(110, Math.min(velCap, velocity)),
@@ -287,13 +306,13 @@ function generateHighSchoolPlayer(id) {
       stamina: Math.max(60, stamina)
     } : {
       // 通常投手: 打撃は野手より低いが、チームの中心選手らしく一定の素質あり
-      meet:  g(20, 8, 0.4, 5),
-      power: g(19, 10, 0.4, 6),
-      eye:   g(20, 7, 0.4, 5),
+      meet:  g(20, 8, 0.4, 5, 'meet'),
+      power: g(19, 10, 0.4, 6, 'power'),
+      eye:   g(20, 7, 0.4, 5, 'eye'),
       steal: Math.max(1, Math.round(nrm(18, 8) + buildMod.steal * 0.6)),
       speed: baseSpeed,
       arm: armValue,
-      defense: g(36, 10, 0.4, 1),
+      defense: g(36, 10, 0.4, 1, 'defense'),
       bodyStamina: g(45 + buildMod.bodyStamina, 10, 0, 15),
       recovery: g(62, 9, 0, 42),
       velocity: Math.max(110, Math.min(velCap, velocity)),
@@ -331,11 +350,11 @@ function generateHighSchoolPlayer(id) {
     baseSpeed = Math.max(1, baseSpeed + physMod.speedAdj);
     baseArm   = Math.max(1, baseArm   + physMod.armAdj);
 
-    let meet = Math.round(nrm(19, 9) + off + pm.meet);
-    let power = Math.round(nrm(18, 12) + off + buildMod.power + pm.power);
-    let eye = Math.round(nrm(18, 8) + off * 0.8 + pm.eye);
-    let defense = Math.round(nrm(38, 13) + off * 0.6 + buildMod.defense + pm.defense);
-    let steal = Math.round(nrm(22, 9) + off * 0.4 + buildMod.steal + pm.steal);
+    let meet = Math.round(nrm(19, athSigma('meet', 9)) + athAdd('meet', 9) + off + pm.meet);
+    let power = Math.round(nrm(18, athSigma('power', 12)) + athAdd('power', 12) + off + buildMod.power + pm.power);
+    let eye = Math.round(nrm(18, athSigma('eye', 8)) + athAdd('eye', 8) + off * 0.8 + pm.eye);
+    let defense = Math.round(nrm(38, athSigma('defense', 13)) + athAdd('defense', 13) + off * 0.6 + buildMod.defense + pm.defense);
+    let steal = Math.round(nrm(22, athSigma('steal', 9)) + athAdd('steal', 9) + off * 0.4 + buildMod.steal + pm.steal);
 
     if (specialty === 'speedster') { baseSpeed += r(14, 26); steal += r(10, 18); }
     else if (specialty === 'slugger') power += r(14, 26);
