@@ -155,30 +155,30 @@ export const growthDecayRate = (base, gp = 1.0) =>
 //    実データのピーク: 走力22-24 / 肩24-26 / パワー27-29 / ミート26-27 /
 //                     守備26-28 / 選球眼28-32（晩成）/ 球速24-26 / 制球28-32
 export const STAT_GROWTH = {
-  meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.66 },
-  power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 1.78 },
-  eye:      { peak: 2, ref: 50, base: 1.5, cap: 99,  threshold: 70, rate: 0.05, decline: 0.25 },
-  defense:  { peak: -1, ref: 50, base: 1.7, cap: 99,  threshold: 70, rate: 0.05, decline: 0.80 },
-  speed:    { peak: 4, ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 5.70 },
-  arm:      { peak: 6, ref: 50, base: 0.5, cap: 99,  threshold: 80, rate: 0.03, decline: 6.20 },
-  armP:     { peak: 6, ref: 50, base: 1.0, cap: 99,  threshold: 80, rate: 0.03, decline: 3.30 },  // 投手の肩
-  control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 70, rate: 0.05, decline: 0.44 },
-  stamina:  { peak: 2, base: 2.0, cap: 200, threshold: 80, rate: 0.03, decline: 1.48 },
-  velocity: { peak: 5, base: 0.5, cap: null, threshold: 150, rate: 0.20, decline: 6.00 },
+  meet:     { peak: -1, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, decline: 0.66 },
+  power:    { peak: 6, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, decline: 1.78 },
+  eye:      { peak: 2, ref: 50, base: 1.5, cap: 99,  threshold: 52, rate: 0.05, decline: 0.25 },
+  defense:  { peak: -1, ref: 50, base: 1.7, cap: 99,  threshold: 52, rate: 0.05, decline: 0.80 },
+  speed:    { peak: 4, ref: 50, base: 0.5, cap: 99,  threshold: 62, rate: 0.03, decline: 5.70 },
+  arm:      { peak: 6, ref: 50, base: 0.5, cap: 99,  threshold: 62, rate: 0.03, decline: 6.20 },
+  armP:     { peak: 6, ref: 50, base: 1.0, cap: 99,  threshold: 62, rate: 0.03, decline: 3.30 },  // 投手の肩
+  control:  { peak: 1, ref: 50, base: 1.9, cap: 99,  threshold: 52, rate: 0.05, decline: 0.44 },
+  stamina:  { peak: 2, base: 2.0, cap: 200, threshold: 62, rate: 0.03, decline: 1.48 },
+  velocity: { peak: 5, base: 0.5, cap: null, threshold: 142, rate: 0.20, decline: 6.00 },
   // 体力・体幹・器用さ。年次成長では直接伸ばさないが、**大学とキャンプが使うので
   // 物差しはここに置く**（進路で「体力60」の意味が変わらないようにするため）。
-  bodyStamina: { peak: 2, ref: 50, base: 1.15, cap: 99, threshold: 80, rate: 0.03, decline: 1.00 },
-  muscle:      { peak: 4, ref: 50, base: 0.77, cap: 99, threshold: 80, rate: 0.03, decline: 0.60 },
-  dexterity:   { peak: 4, ref: 50, base: 0.77, cap: 99, threshold: 80, rate: 0.03, decline: 0.40 },
+  bodyStamina: { peak: 2, ref: 50, base: 1.15, cap: 99, threshold: 62, rate: 0.03, decline: 1.00 },
+  muscle:      { peak: 4, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 0.60 },
+  dexterity:   { peak: 4, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 0.40 },
   // 回復力は加齢で落ちる一方（`getRecoveryAgeBase` が別に担当）。ここは成長側だけ
-  recovery:    { peak: 2, ref: 50, base: 0.77, cap: 99, threshold: 80, rate: 0.03, decline: 1.20 },
+  recovery:    { peak: 2, ref: 50, base: 0.77, cap: 99, threshold: 62, rate: 0.03, decline: 1.20 },
   // ⚠ **変化球とリードは長らく年次成長の対象外だった**。社会人・独立・クラブの
   //    投手は7年経ってもスライダーLv30のまま、捕手はリード40のままだった
   //    （大学プールだけが `applyUniversityGrowth` で伸ばしていた）。
   //    どちらも「実戦で最も磨かれる」ものなので、実戦成長の対象に入れる。
-  breaking: { peak: 4, ref: 50, base: 1.3, cap: 100, threshold: 70, rate: 0.04, decline: 0.20 },
+  breaking: { peak: 4, ref: 50, base: 1.3, cap: 100, threshold: 52, rate: 0.04, decline: 0.20 },
   // リードは経験の積み上げ。**加齢で落ちない**（`npbCareer` の加齢処理と同じ扱い）
-  lead:     { peak: 6, ref: 50, base: 1.1, cap: 95,  threshold: 70, rate: 0.05, decline: 0 },
+  lead:     { peak: 6, ref: 50, base: 1.1, cap: 95,  threshold: 52, rate: 0.05, decline: 0 },
 };
 
 // --- 自由契約選手の自主トレ成長 ---
@@ -421,7 +421,7 @@ const CATEGORY_GROWTH = {
   },
   // クラブ: 基礎体力だけ。技術は独学なのでほとんど伸びない
   club: {
-    volume: 0.86, gain: 0.15, topN: 2, strength: 1.25, weak: 0.9,
+    volume: 0.86, gain: 0.06, topN: 2, strength: 1.25, weak: 0.9,
     focus: { velocity: 1.7, speed: 1.9, arm: 1.9, stamina: 1.7, power: 1.5,
              control: 0.5, meet: 0.5, eye: 0.5, defense: 0.6, breaking: 0.5, lead: 0.5 },
   },
